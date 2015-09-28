@@ -116,7 +116,7 @@ if __name__ == "__main__":
     n_total = len(test_to_run)
     env = os.environ
     # disable false positive due to new (with_alignment(...)) ...
-    env['ASAN_OPTIONS'] = 'alloc_dealloc_mismatch=0'
+    env['ASAN_OPTIONS'] = 'alloc_dealloc_mismatch=0,detect_leaks=0'
     for n, test in enumerate(test_to_run):
         path = test[0]
         prefix = '[%d/%d]' % (n + 1, n_total)
