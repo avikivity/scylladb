@@ -212,10 +212,10 @@ public:
     }
 
     virtual future<> require_column_has_value(const sstring& table_name,
-                                      std::vector<boost::any> pk,
-                                      std::vector<boost::any> ck,
+                                      std::vector<data_value> pk,
+                                      std::vector<data_value> ck,
                                       const sstring& column_name,
-                                      boost::any expected) override {
+                                      data_value expected) override {
         auto& db = _db->local();
         auto& cf = db.find_column_family(ks_name, table_name);
         auto schema = cf.schema();
