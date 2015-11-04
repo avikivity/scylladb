@@ -385,7 +385,7 @@ protected:
     virtual size_t native_value_size() const = 0;
     virtual size_t native_value_alignment() const = 0;
     virtual void native_value_copy(const void* from, void* to) const = 0;
-    virtual void native_value_move(const void* from, void* to) const = 0;
+    virtual void native_value_move(void* from, void* to) const = 0;
     virtual void* native_value_clone(const void* from) const = 0;
     virtual void native_value_destroy(void* object) const = 0;
     virtual void native_value_delete(void* object) const = 0;
@@ -462,8 +462,8 @@ protected:
     virtual void native_value_copy(const void* from, void* to) const override {
         new (to) native_type(*reinterpret_cast<const native_type*>(from));
     }
-    virtual void native_value_move(const void* from, void* to) const override {
-        new (to) native_type(std::move(*reinterpret_cast<const native_type*>(from)));
+    virtual void native_value_move(void* from, void* to) const override {
+        new (to) native_type(std::move(*reinterpret_cast<native_type*>(from)));
     }
     virtual void native_value_destroy(void* object) const override {
         reinterpret_cast<native_type*>(object)->~native_type();
@@ -763,7 +763,7 @@ protected:
     virtual size_t native_value_size() const override;
     virtual size_t native_value_alignment() const override;
     virtual void native_value_copy(const void* from, void* to) const override;
-    virtual void native_value_move(const void* from, void* to) const override;
+    virtual void native_value_move(void* from, void* to) const override;
     virtual void native_value_destroy(void* object) const override;
     virtual void* native_value_clone(const void* object) const override;
     virtual void native_value_delete(void* object) const override;
