@@ -23,6 +23,7 @@
 #include "database.hh"
 #include "types.hh"
 #include "utils/serialization.hh"
+#include "atomic_cell.hh"
 
 typedef uint32_t count_type; // Me thinks 32-bits are enough for "normal" count purposes.
 
@@ -130,16 +131,6 @@ db::serializer<atomic_cell_view>::serializer(const atomic_cell_view& c)
 template<>
 void db::serializer<atomic_cell_view>::write(output& out, const atomic_cell_view& t) {
     bytes_view_serializer::write(out, t.serialize());
-}
-
-template<>
-void db::serializer<atomic_cell_view>::read(atomic_cell_view& c, input& in) {
-    c = atomic_cell_view::from_bytes(bytes_view_serializer::read(in));
-}
-
-template<>
-atomic_cell_view db::serializer<atomic_cell_view>::read(input& in) {
-    return atomic_cell_view::from_bytes(bytes_view_serializer::read(in));
 }
 
 template<>

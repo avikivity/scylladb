@@ -24,6 +24,7 @@
 #include "query-request.hh"
 #include "query-result.hh"
 #include "utils/data_input.hh"
+#include "atomic_cell.hh"
 
 // Refer to query-result.hh for the query result format
 

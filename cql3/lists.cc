@@ -287,14 +287,14 @@ lists::setter_by_index::execute(mutation& m, const exploded_clustering_prefix& p
     list_type_impl::mutation mut;
     mut.cells.reserve(1);
     if (!value) {
-        mut.cells.emplace_back(to_bytes(eidx), params.make_dead_cell());
+        mut.cells.emplace_back(to_bytes(eidx), params.make_dead_cell(ltype->get_elements_type()));
     } else {
         if (value->size() > std::numeric_limits<uint16_t>::max()) {
             throw exceptions::invalid_request_exception(
                     sprint("List value is too long. List values are limited to %d bytes but %d bytes value provided",
                             std::numeric_limits<uint16_t>::max(), value->size()));
         }
-        mut.cells.emplace_back(to_bytes(eidx), params.make_cell(*value));
+        mut.cells.emplace_back(to_bytes(eidx), params.make_cell(*value, ltype->get_elements_type()));
     }
     auto smut = ltype->serialize_mutation_form(mut);
     m.set_cell(prefix, column, atomic_cell_or_collection::from_collection_mutation(std::move(smut)));
@@ -329,13 +329,13 @@ lists::do_append(shared_ptr<term> t,
             auto uuid1 = utils::UUID_gen::get_time_UUID_bytes();
             auto uuid = bytes(reinterpret_cast<const int8_t*>(uuid1.data()), uuid1.size());
             // FIXME: can e be empty?
-            appended.cells.emplace_back(std::move(uuid), params.make_cell(*e));
+            appended.cells.emplace_back(std::move(uuid), params.make_cell(*e, ltype->get_elements_type()));
         }
         m.set_cell(prefix, column, ltype->serialize_mutation_form(appended));
     } else {
         // for frozen lists, we're overwriting the whole cell value
         if (!value) {
-            m.set_cell(prefix, column, params.make_dead_cell());
+            m.set_cell(prefix, column, params.make_dead_cell(column.type));
         } else {
             auto&& to_add = list_value->_elements;
             auto deref = [] (const bytes_opt& v) { return *v; };
@@ -364,14 +364,14 @@ lists::prepender::execute(mutation& m, const exploded_clustering_prefix& prefix,
     mut.cells.reserve(lvalue->get_elements().size());
     // We reverse the order of insertion, so that the last element gets the lastest time
     // (lists are sorted by time)
+    auto&& ltype = static_cast<const list_type_impl*>(column.type.get());
     for (auto&& v : lvalue->_elements | boost::adaptors::reversed) {
         auto&& pt = precision_time::get_next(time);
         auto uuid = utils::UUID_gen::get_time_UUID_bytes(pt.millis.time_since_epoch().count(), pt.nanos);
-        mut.cells.emplace_back(bytes(uuid.data(), uuid.size()), params.make_cell(*v));
+        mut.cells.emplace_back(bytes(uuid.data(), uuid.size()), params.make_cell(*v, ltype->get_elements_type()));
     }
     // now reverse again, to get the original order back
     std::reverse(mut.cells.begin(), mut.cells.end());
-    auto&& ltype = static_cast<const list_type_impl*>(column.type.get());
     m.set_cell(prefix, column, atomic_cell_or_collection::from_collection_mutation(ltype->serialize_mutation_form(std::move(mut))));
 }
 
@@ -419,8 +419,8 @@ lists::discarder::execute(mutation& m, const exploded_clustering_prefix& prefix,
                                 [ltype, value] (auto&& v) { return ltype->get_elements_type()->equal(*v, value); })
                                          != to_discard.end();
         };
-        if (cell.second.is_live() && have_value(cell.second.value())) {
-            mnew.cells.emplace_back(bytes(cell.first.begin(), cell.first.end()), params.make_dead_cell());
+        if (cell.second.is_live() && have_value(cell.second.serialize())) {
+            mnew.cells.emplace_back(bytes(cell.first.begin(), cell.first.end()), make_dead_cell(params));
         }
     }
     auto mnew_ser = ltype->serialize_mutation_form(mnew);
@@ -455,7 +455,7 @@ lists::discarder_by_index::execute(mutation& m, const exploded_clustering_prefix
         throw exceptions::invalid_request_exception(sprint("List index %d out of bound, list has size %d", idx, deserialized.cells.size()));
     }
     collection_type_impl::mutation mut;
-    mut.cells.emplace_back(to_bytes(deserialized.cells[idx].first), params.make_dead_cell());
+    mut.cells.emplace_back(to_bytes(deserialized.cells[idx].first), params.make_dead_cell(ltype->get_elements_type()));
     m.set_cell(prefix, column, ltype->serialize_mutation_form(mut));
 }
 

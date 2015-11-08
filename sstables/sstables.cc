@@ -986,14 +986,14 @@ void sstable::write_cell(file_writer& out, atomic_cell_view cell) {
         column_mask mask = column_mask::expiration;
         uint32_t ttl = cell.ttl().count();
         uint32_t expiration = cell.expiry().time_since_epoch().count();
-        disk_string_view<uint32_t> cell_value { cell.value() };
+        disk_string_view<uint32_t> cell_value { cell.serialize() };
 
         write(out, mask, ttl, expiration, timestamp, cell_value);
     } else {
         // regular cell
 
         column_mask mask = column_mask::none;
-        disk_string_view<uint32_t> cell_value { cell.value() };
+        disk_string_view<uint32_t> cell_value { cell.serialize() };
 
         write(out, mask, timestamp, cell_value);
     }

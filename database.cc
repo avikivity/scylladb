@@ -1360,7 +1360,8 @@ compare_atomic_cell_for_merge(atomic_cell_view left, atomic_cell_view right) {
         return left.is_live() ? -1 : 1;
     }
     if (left.is_live()) {
-        auto c = compare_unsigned(left.value(), right.value());
+        // FIXME: avoid serializtion if equal
+        auto c = compare_unsigned(left.serialize(), right.serialize());
         if (c != 0) {
             return c;
         }
@@ -1484,7 +1485,14 @@ std::unordered_set<sstring> database::get_initial_tokens() {
 }
 
 std::ostream& operator<<(std::ostream& out, const atomic_cell_or_collection& c) {
-    return out << to_hex(c._data);
+    switch (c._data.which()) {
+    case 0:
+        return out << to_hex(boost::get<const atomic_cell&>(c._data).serialize());
+    case 1:
+        return out << to_hex(boost::get<const managed_bytes&>(c._data));
+        default:
+    abort();
+    }
 }
 
 std::ostream& operator<<(std::ostream& os, const mutation& m) {
@@ -1634,10 +1642,10 @@ operator<<(std::ostream& os, const exploded_clustering_prefix& ecp) {
 }
 
 std::ostream&
-operator<<(std::ostream& os, const atomic_cell_view& acv) {
+operator<<(std::ostream& os, const atomic_cell& acv) {
     if (acv.is_live()) {
         return fprint(os, "atomic_cell{%s;ts=%d;expiry=%d,ttl=%d}",
-            to_hex(acv.value()),
+            to_hex(acv.serialize()),
             acv.timestamp(),
             acv.is_live_and_has_ttl() ? acv.expiry().time_since_epoch().count() : -1,
             acv.is_live_and_has_ttl() ? acv.ttl().count() : 0);
@@ -1645,11 +1653,6 @@ operator<<(std::ostream& os, const atomic_cell_view& acv) {
         return fprint(os, "atomic_cell{DEAD;ts=%d;deletion_time=%d}",
             acv.timestamp(), acv.deletion_time().time_since_epoch().count());
     }
-}
-
-std::ostream&
-operator<<(std::ostream& os, const atomic_cell& ac) {
-    return os << atomic_cell_view(ac);
 }
 
 future<>
@@ -2081,4 +2084,54 @@ std::ostream& operator<<(std::ostream& os, const keyspace_metadata& m) {
     os << ", userTypes=" << m._user_types;
     os << "}";
     return os;
+}
+
+bytes
+atomic_cell::serialize() const {
+    uint32_t size = 1 + 8;
+    uint8_t flags = 0;
+    std::experimental::optional<data_value> tmp;
+    if (_live) {
+        flags |= 1;
+        if (_has_ttl) {
+            flags |= 2;
+            size += 8;
+        }
+        tmp = value(); // FIXME: don't convert types
+        size += tmp->serialized_size();
+    } else {
+        size += 12;
+    }
+    bytes ret(bytes::initialized_later(), size);
+    data_output out(ret);
+    out.write(flags);
+    out.write(_timestamp);
+    out.write(_expiry_or_deletion_time.time_since_epoch().count());
+    if (_has_ttl) {
+        out.write(_ttl.count());
+    }
+    if (_live) {
+        // FIXME: avoid serializing size when possible
+        db::serializer<bytes_view>::write(out, tmp->serialize());
+    }
+    return ret;
+}
+
+atomic_cell
+atomic_cell::from_bytes(data_type type, bytes_view v) {
+    auto flags = read_simple<uint8_t>(v);
+    bool live = flags & 1;
+    bool has_ttl = flags & 2;
+    auto timestamp = read_simple<api::timestamp_type>(v);
+    auto expiry_or_deletion_time = gc_clock::time_point(gc_clock::duration(read_simple<int32_t>(v)));
+    std::experimental::optional<gc_clock::duration> ttl;
+    if (has_ttl) {
+        ttl = gc_clock::duration(read_simple<int32_t>(v));
+    }
+    if (live) {
+        auto val = type->deserialize(v);
+        return make_live(timestamp, std::move(val), ttl);
+    } else {
+        return make_dead(timestamp, expiry_or_deletion_time, std::move(type));
+    }
 }

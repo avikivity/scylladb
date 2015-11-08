@@ -27,22 +27,10 @@
 #include "gc_clock.hh"
 #include "utils/managed_bytes.hh"
 #include "net/byteorder.hh"
+#include "types.hh"
+#include <boost/variant.hpp>
 #include <cstdint>
 #include <iostream>
-
-template<typename T>
-static inline
-void set_field(managed_bytes& v, unsigned offset, T val) {
-    reinterpret_cast<net::packed<T>*>(v.begin() + offset)->raw = net::hton(val);
-}
-
-template<typename T>
-static inline
-T get_field(const bytes_view& v, unsigned offset) {
-    return net::ntoh(*reinterpret_cast<const net::packed<T>*>(v.begin() + offset));
-}
-
-class atomic_cell_or_collection;
 
 /*
  * Represents atomic cell layout. Works on serialized form.
@@ -52,98 +40,67 @@ class atomic_cell_or_collection;
  *  <live>  := <int8_t:flags><int64_t:timestamp>(<int32_t:expiry><int32_t:ttl>)?<value>
  *  <dead>  := <int8_t:    0><int64_t:timestamp><int32_t:deletion_time>
  */
-class atomic_cell_type final {
+class atomic_cell {
 private:
-    static constexpr int8_t DEAD_FLAGS = 0;
-    static constexpr int8_t LIVE_FLAG = 0x01;
-    static constexpr int8_t EXPIRY_FLAG = 0x02; // When present, expiry field is present. Set only for live cells
-    static constexpr unsigned flags_size = 1;
-    static constexpr unsigned timestamp_offset = flags_size;
-    static constexpr unsigned timestamp_size = 8;
-    static constexpr unsigned expiry_offset = timestamp_offset + timestamp_size;
-    static constexpr unsigned expiry_size = 4;
-    static constexpr unsigned deletion_time_offset = timestamp_offset + timestamp_size;
-    static constexpr unsigned deletion_time_size = 4;
-    static constexpr unsigned ttl_offset = expiry_offset + expiry_size;
-    static constexpr unsigned ttl_size = 4;
-private:
-    static bool is_live(const bytes_view& cell) {
-        return cell[0] != DEAD_FLAGS;
-    }
-    static bool is_live_and_has_ttl(const bytes_view& cell) {
-        return cell[0] & EXPIRY_FLAG;
-    }
-    static bool is_dead(const bytes_view& cell) {
-        return cell[0] == DEAD_FLAGS;
-    }
-    // Can be called on live and dead cells
-    static api::timestamp_type timestamp(const bytes_view& cell) {
-        return get_field<api::timestamp_type>(cell, timestamp_offset);
-    }
-    // Can be called on live cells only
-    static bytes_view value(bytes_view cell) {
-        auto expiry_field_size = bool(cell[0] & EXPIRY_FLAG) * (expiry_size + ttl_size);
-        auto value_offset = flags_size + timestamp_size + expiry_field_size;
-        cell.remove_prefix(value_offset);
-        return cell;
-    }
-    // Can be called only when is_dead() is true.
-    static gc_clock::time_point deletion_time(const bytes_view& cell) {
-        assert(is_dead(cell));
-        return gc_clock::time_point(gc_clock::duration(
-            get_field<int32_t>(cell, deletion_time_offset)));
-    }
-    // Can be called only when is_live_and_has_ttl() is true.
-    static gc_clock::time_point expiry(const bytes_view& cell) {
-        assert(is_live_and_has_ttl(cell));
-        auto expiry = get_field<int32_t>(cell, expiry_offset);
-        return gc_clock::time_point(gc_clock::duration(expiry));
-    }
-    // Can be called only when is_live_and_has_ttl() is true.
-    static gc_clock::duration ttl(const bytes_view& cell) {
-        assert(is_live_and_has_ttl(cell));
-        return gc_clock::duration(get_field<int32_t>(cell, ttl_offset));
-    }
-    static managed_bytes make_dead(api::timestamp_type timestamp, gc_clock::time_point deletion_time) {
-        managed_bytes b(managed_bytes::initialized_later(), flags_size + timestamp_size + deletion_time_size);
-        b[0] = DEAD_FLAGS;
-        set_field(b, timestamp_offset, timestamp);
-        set_field(b, deletion_time_offset, deletion_time.time_since_epoch().count());
-        return b;
-    }
-    static managed_bytes make_live(api::timestamp_type timestamp, bytes_view value) {
-        auto value_offset = flags_size + timestamp_size;
-        managed_bytes b(managed_bytes::initialized_later(), value_offset + value.size());
-        b[0] = LIVE_FLAG;
-        set_field(b, timestamp_offset, timestamp);
-        std::copy_n(value.begin(), value.size(), b.begin() + value_offset);
-        return b;
-    }
-    static managed_bytes make_live(api::timestamp_type timestamp, bytes_view value, gc_clock::time_point expiry, gc_clock::duration ttl) {
-        auto value_offset = flags_size + timestamp_size + expiry_size + ttl_size;
-        managed_bytes b(managed_bytes::initialized_later(), value_offset + value.size());
-        b[0] = EXPIRY_FLAG | LIVE_FLAG;
-        set_field(b, timestamp_offset, timestamp);
-        set_field(b, expiry_offset, expiry.time_since_epoch().count());
-        set_field(b, ttl_offset, ttl.count());
-        std::copy_n(value.begin(), value.size(), b.begin() + value_offset);
-        return b;
-    }
-    template<typename ByteContainer>
-    friend class atomic_cell_base;
-    friend class atomic_cell;
-};
-
-template<typename ByteContainer>
-class atomic_cell_base {
-protected:
-    ByteContainer _data;
-protected:
-    atomic_cell_base(ByteContainer&& data) : _data(std::forward<ByteContainer>(data)) { }
-    atomic_cell_base(const ByteContainer& data) : _data(data) { }
+    bool _live : 1;  // bit 0 in flags
+    bool _has_ttl : 1; // bit 1 in flags
+    api::timestamp_type _timestamp = 0;
+    gc_clock::time_point _expiry_or_deletion_time = {};  // _expiry if _has_ttl, deletion_time is !_live
+    gc_clock::duration _ttl { 0 }; // if _live && _has_ttl
+    data_type _type;
+    void* _value = nullptr;  // using data_type storage_* methods
 public:
+    atomic_cell() {
+        _live = _has_ttl = false;
+    }
+    atomic_cell(const atomic_cell& x)
+            : _live(x._live), _has_ttl(x._has_ttl), _timestamp(x._timestamp)
+            , _expiry_or_deletion_time(x._expiry_or_deletion_time), _ttl(x._ttl)
+            , _type(x._type) {
+        auto& alctr = current_allocator();
+        _value = alctr.alloc(_type->storage_migrate_fn(),
+                _type->storage_size(),
+                _type->storage_alignment());
+        try {
+            _type->storage_copy(x._value, _value);
+        } catch (...) {
+            alctr.free(_value);
+            throw;
+        }
+    }
+    atomic_cell(atomic_cell&& x) noexcept
+            : _live(x._live), _has_ttl(x._has_ttl), _timestamp(x._timestamp)
+            , _expiry_or_deletion_time(x._expiry_or_deletion_time), _type(std::move(x._type))
+            , _value(x._value) {
+        x._type = nullptr;
+        x._value = nullptr;
+    }
+    ~atomic_cell() {
+        if (_value) {
+            _type->storage_destroy(_value);
+            current_allocator().free(_value);
+        }
+    }
+    atomic_cell& operator=(const atomic_cell& x) {
+        if (this != &x) {
+            auto n = x;
+            std::swap(n, *this);
+        }
+        return *this;
+    }
+    atomic_cell& operator=(atomic_cell&& x) noexcept {
+        if (this != &x) {
+            auto n = std::move(x);
+            std::swap(n, *this);
+        }
+        return *this;
+    }
+    const data_type& type() const { return _type; }
     bool is_live() const {
-        return atomic_cell_type::is_live(_data);
+        return _live;
+    }
+    bool is_live_and_has_ttl() const {
+        return _has_ttl;
     }
     bool is_live(tombstone t) const {
         return is_live() && !is_covered_by(t);
@@ -151,88 +108,116 @@ public:
     bool is_live(tombstone t, gc_clock::time_point now) const {
         return is_live() && !is_covered_by(t) && !has_expired(now);
     }
-    bool is_live_and_has_ttl() const {
-        return atomic_cell_type::is_live_and_has_ttl(_data);
+    bool is_dead() const {
+        return !_live;
     }
     bool is_dead(gc_clock::time_point now) const {
-        return atomic_cell_type::is_dead(_data) || has_expired(now);
+        return is_dead() || has_expired(now);
     }
     bool is_covered_by(tombstone t) const {
         return timestamp() <= t.timestamp;
     }
     // Can be called on live and dead cells
     api::timestamp_type timestamp() const {
-        return atomic_cell_type::timestamp(_data);
+        return _timestamp;
     }
     // Can be called on live cells only
-    bytes_view value() const {
-        return atomic_cell_type::value(_data);
-    }
-    // Can be called only when is_dead(gc_clock::time_point)
-    gc_clock::time_point deletion_time() const {
-        return !is_live() ? atomic_cell_type::deletion_time(_data) : expiry() - ttl();
-    }
-    // Can be called only when is_live_and_has_ttl()
-    gc_clock::time_point expiry() const {
-        return atomic_cell_type::expiry(_data);
-    }
-    // Can be called only when is_live_and_has_ttl()
-    gc_clock::duration ttl() const {
-        return atomic_cell_type::ttl(_data);
+    data_value value() const {
+        auto* mem = ::operator new(_type->native_value_size());
+        try {
+            _type->storage_copy_to_native(_value, mem);
+            return data_value(mem, _type);
+        } catch (...) {
+            ::operator delete(mem);
+            throw;
+        }
     }
     // Can be called on live and dead cells
     bool has_expired(gc_clock::time_point now) const {
         return is_live_and_has_ttl() && expiry() < now;
     }
-    bytes_view serialize() const {
-        return _data;
+    // Can be called only when is_dead() is true.
+    gc_clock::time_point deletion_time() const {
+        assert(is_dead());
+        return _expiry_or_deletion_time;
     }
-};
-
-class atomic_cell_view final : public atomic_cell_base<bytes_view> {
-    atomic_cell_view(bytes_view data) : atomic_cell_base(data) {}
-public:
-    static atomic_cell_view from_bytes(bytes_view data) { return atomic_cell_view(data); }
-
-    friend class atomic_cell;
-    friend std::ostream& operator<<(std::ostream& os, const atomic_cell_view& acv);
-};
-
-class atomic_cell final : public atomic_cell_base<managed_bytes> {
-    atomic_cell(managed_bytes b) : atomic_cell_base(std::move(b)) {}
-public:
-    atomic_cell(const atomic_cell&) = default;
-    atomic_cell(atomic_cell&&) = default;
-    atomic_cell& operator=(const atomic_cell&) = default;
-    atomic_cell& operator=(atomic_cell&&) = default;
-    static atomic_cell from_bytes(managed_bytes b) {
-        return atomic_cell(std::move(b));
+    // Can be called only when is_live_and_has_ttl() is true.
+    gc_clock::time_point expiry() const {
+        assert(is_live_and_has_ttl());
+        return _expiry_or_deletion_time;
     }
-    atomic_cell(atomic_cell_view other) : atomic_cell_base(managed_bytes{other._data}) {}
-    operator atomic_cell_view() const {
-        return atomic_cell_view(_data);
+    // Can be called only when is_live_and_has_ttl() is true.
+    gc_clock::duration ttl() const {
+        assert(is_live_and_has_ttl());
+        return gc_clock::duration(_ttl);
     }
-    static atomic_cell make_dead(api::timestamp_type timestamp, gc_clock::time_point deletion_time) {
-        return atomic_cell_type::make_dead(timestamp, deletion_time);
+    bool operator==(const atomic_cell& x) const {
+        auto simple =
+             _live == x._live
+             && _has_ttl == x._has_ttl
+             && _timestamp == x._timestamp
+             && _expiry_or_deletion_time == x._expiry_or_deletion_time
+             && _ttl == x._ttl
+             && _type == x._type // FIXME: illegal to compare otherwise?
+             && bool(_value) == bool(x._value);
+        if (!simple) {
+            return false;
+        }
+        // FIXME: compare natively
+        auto v1 = _type->decompose(value());
+        auto v2 = x._type->decompose(value());
+        return v1 == v2;
     }
-    static atomic_cell make_live(api::timestamp_type timestamp, bytes_view value) {
-        return atomic_cell_type::make_live(timestamp, value);
+    bool operator!=(const atomic_cell& x) const {
+        return !operator==(x);
     }
-    static atomic_cell make_live(api::timestamp_type timestamp, bytes_view value,
-        gc_clock::time_point expiry, gc_clock::duration ttl)
-    {
-        return atomic_cell_type::make_live(timestamp, value, expiry, ttl);
+    bytes serialize() const;
+    static atomic_cell from_bytes(data_type type, bytes_view v);
+    static atomic_cell make_dead(api::timestamp_type timestamp, gc_clock::time_point deletion_time, data_type type) {
+        auto ret = atomic_cell();
+        ret._live = false;
+        ret._timestamp = timestamp;
+        ret._expiry_or_deletion_time = deletion_time;
+        ret._type = std::move(type);
+        return ret;
     }
-    static atomic_cell make_live(api::timestamp_type timestamp, bytes_view value, ttl_opt ttl) {
+    static atomic_cell make_live(api::timestamp_type timestamp, data_value value) {
+        auto ret = atomic_cell();
+        ret._live = true;
+        ret._has_ttl = false;
+        ret._timestamp = timestamp;
+        ret._type = value.type();
+        auto& alctr = current_allocator();
+        auto v = alctr.alloc(ret._type->storage_migrate_fn(),
+                ret._type->storage_size(),
+                ret._type->storage_alignment());
+        try {
+            ret._type->storage_move_from_native(value._value, v);
+            ret._value = v;
+        } catch (...) {
+            alctr.free(v);
+            throw;
+        }
+        return ret;
+    }
+    static atomic_cell make_live(api::timestamp_type timestamp, data_value value, gc_clock::time_point expiry, gc_clock::duration ttl) {
+        auto ret = make_live(timestamp, std::move(value));
+        ret._has_ttl = true;
+        ret._expiry_or_deletion_time = expiry;
+        ret._ttl = ttl;
+        return ret;
+    }
+    static atomic_cell make_live(api::timestamp_type timestamp, data_value value, ttl_opt ttl) {
         if (!ttl) {
-            return atomic_cell_type::make_live(timestamp, value);
+            return make_live(timestamp, std::move(value));
         } else {
-            return atomic_cell_type::make_live(timestamp, value, gc_clock::now() + *ttl, *ttl);
+            return make_live(timestamp, std::move(value), gc_clock::now() + *ttl, *ttl);
         }
     }
-    friend class atomic_cell_or_collection;
-    friend std::ostream& operator<<(std::ostream& os, const atomic_cell& ac);
+    friend std::ostream& operator<<(std::ostream&, const atomic_cell&);
 };
+
+using atomic_cell_view = const atomic_cell&;
 
 class collection_mutation_view;
 
@@ -275,7 +260,7 @@ class serializer;
 // A variant type that can hold either an atomic_cell, or a serialized collection.
 // Which type is stored is determined by the schema.
 class atomic_cell_or_collection final {
-    managed_bytes _data;
+    boost::variant<atomic_cell, managed_bytes> _data;
 
     template<typename T>
     friend class db::serializer;
@@ -283,21 +268,44 @@ private:
     atomic_cell_or_collection(managed_bytes&& data) : _data(std::move(data)) {}
 public:
     atomic_cell_or_collection() = default;
-    atomic_cell_or_collection(atomic_cell ac) : _data(std::move(ac._data)) {}
-    static atomic_cell_or_collection from_atomic_cell(atomic_cell data) { return { std::move(data._data) }; }
-    atomic_cell_view as_atomic_cell() const { return atomic_cell_view::from_bytes(_data); }
+    atomic_cell_or_collection(atomic_cell ac) : _data(std::move(ac)) {}
+    static atomic_cell_or_collection from_atomic_cell(atomic_cell data) { return { std::move(data) }; }
+    atomic_cell_view as_atomic_cell() const { return boost::get<atomic_cell_view>(_data); }
     atomic_cell_or_collection(collection_mutation cm) : _data(std::move(cm.data)) {}
     explicit operator bool() const {
-        return !_data.empty();
+        if (_data.empty()) {
+            return false;
+        }
+        switch (_data.which()) {
+        case 0: {
+            auto& x = boost::get<const managed_bytes&>(_data);
+            return !x.empty();
+        }
+        case 1:
+            return !as_atomic_cell().serialize().empty();
+        default:
+            abort();
+        }
     }
     static atomic_cell_or_collection from_collection_mutation(collection_mutation data) {
         return std::move(data.data);
     }
     collection_mutation_view as_collection_mutation() const {
-        return collection_mutation_view{_data};
+        return collection_mutation_view{boost::get<const managed_bytes&>(_data)};
     }
-    bytes_view serialize() const {
-        return _data;
+    bytes serialize() const {
+        switch (_data.which()) {
+        case 0: {
+            auto& x = boost::get<const managed_bytes&>(_data);
+            bytes ret(bytes::initialized_later(), x.size());
+            std::copy(x.begin(), x.end(), ret.begin());
+            return ret;
+        }
+        case 1:
+            return as_atomic_cell().serialize();
+        default:
+            abort();
+        }
     }
     bool operator==(const atomic_cell_or_collection& other) const {
         return _data == other._data;
@@ -307,7 +315,7 @@ public:
 
 class column_definition;
 
-int compare_atomic_cell_for_merge(atomic_cell_view left, atomic_cell_view right);
+int compare_atomic_cell_for_merge(const atomic_cell_view left, atomic_cell_view right);
 void merge_column(const column_definition& def,
         atomic_cell_or_collection& old,
         const atomic_cell_or_collection& neww);

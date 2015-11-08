@@ -63,7 +63,7 @@ public:
                 _w.write<gc_clock::rep>(std::numeric_limits<gc_clock::rep>::max());
             }
         }
-        _w.write_blob(c.value());
+        _w.write_blob(c.serialize());
     }
 
     void add(collection_mutation_view v) {

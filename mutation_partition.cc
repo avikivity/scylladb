@@ -1037,7 +1037,7 @@ bool row::compact_and_expire(const schema& s, column_kind kind, tombstone tomb, 
             if (cell.is_covered_by(tomb)) {
                 erase = true;
             } else if (cell.has_expired(query_time)) {
-                c = atomic_cell::make_dead(cell.timestamp(), cell.deletion_time());
+                c = atomic_cell::make_dead(cell.timestamp(), cell.deletion_time(), def.type);
             } else if (!cell.is_live()) {
                 erase = cell.timestamp() < max_purgeable && cell.deletion_time() < gc_before;
             } else {

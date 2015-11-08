@@ -33,10 +33,11 @@
 #include "db_clock.hh"
 #include "bytes.hh"
 #include "log.hh"
-#include "atomic_cell.hh"
 #include "serialization_format.hh"
 #include "tombstone.hh"
 #include "to_string.hh"
+#include "utils/allocation_strategy.hh"
+#include "utils/managed_bytes.hh"
 #include <boost/range/adaptor/transformed.hpp>
 #include <boost/range/algorithm/for_each.hpp>
 #include <boost/range/numeric.hpp>
@@ -46,6 +47,12 @@
 
 class tuple_type_impl;
 class big_decimal;
+
+class atomic_cell;
+using atomic_cell_view = const atomic_cell&;
+
+class collection_mutation;
+class collection_mutation_view;
 
 namespace cql3 {
 
@@ -238,6 +245,7 @@ public:
     }
     size_t serialized_size() const;
     void serialize(bytes::iterator& out) const;
+    bytes serialize();
     friend inline bool operator==(const data_value& x, const data_value& y);
     friend inline bool operator!=(const data_value& x, const data_value& y);
     friend class abstract_type;
@@ -256,6 +264,7 @@ public:
     friend data_value make_list_value(data_type, std::vector<data_value>);
     friend data_value make_map_value(data_type, std::vector<std::pair<data_value, data_value>>);
     friend data_value make_user_value(data_type, std::vector<data_value>);
+    friend class atomic_cell;
 };
 
 class serialized_compare;
@@ -394,9 +403,21 @@ protected:
     static const void* get_value_ptr(const data_value& v) {
         return v._value;
     }
+protected:
+    // storage_* methods are similar to native_value_*, but for the data type used in cache
+    virtual size_t storage_size() const = 0;
+    virtual size_t storage_alignment() const = 0;
+    virtual void storage_copy(const void* from, void* to) const = 0;
+    virtual void storage_move(void* from, void* to) const = 0;
+    virtual void storage_move_from_native(void* from, void* to) const = 0;
+    virtual void storage_copy_to_native(const void* from, void* to) const = 0;
+    virtual void storage_destroy(void* object) const = 0;
+    virtual const migrate_fn_type* storage_migrate_fn() const = 0;
+
     friend void write_collection_value(bytes::iterator& out, serialization_format sf, data_type type, const data_value& value);
     friend class tuple_type_impl;
     friend class data_value;
+    friend class atomic_cell;
     friend class reversed_type_impl;
     template <typename T> friend const T& value_cast(const data_value& value);
     template <typename T> friend T&& value_cast(data_value&& value);
@@ -443,15 +464,63 @@ T&& value_cast(data_value&& value) {
     return std::move(*reinterpret_cast<T*>(value._value));
 }
 
+enum serialize_in_cache { yes, no };
+
+template <typename NativeType, serialize_in_cache>
+struct storage_type_traits;
+
+template <typename NativeType>
+struct storage_type_traits<NativeType, serialize_in_cache::yes> {
+    using type = managed_bytes;
+    static managed_bytes native_to_storage(const NativeType& x, const abstract_type* type) {
+        managed_bytes ret(managed_bytes::initialized_later(), type->serialized_size(&x));
+        auto out = ret.begin();
+        type->serialize(&x, out);
+        return ret;
+    }
+    static NativeType storage_to_native(const managed_bytes& x, const abstract_type* type) {
+        auto value = type->deserialize(x);
+        return value_cast<NativeType>(std::move(value));
+    }
+};
+
+template <typename NativeType>
+struct storage_type_traits<NativeType, serialize_in_cache::no> {
+    using type = NativeType;
+    static NativeType&& native_to_storage(NativeType&& x, const abstract_type* type) {
+        return std::move(x);
+    }
+    static const NativeType& native_to_storage(const NativeType& x, const abstract_type* type) {
+        return x;
+    }
+    static NativeType&& storage_to_native(NativeType&& x, const abstract_type* type) {
+        return std::move(x);
+    }
+    static const NativeType& storage_to_native(const NativeType& x, const abstract_type* type) {
+        return x;
+    }
+};
+
 // CRTP: implements translation between a native_type (C++ type) to abstract_type
 // AbstractType is parametrized because we want a
 //    abstract_type -> collection_type_impl -> map_type
 // type hierarchy, and native_type is only known at the last step.
-template <typename NativeType, typename AbstractType = abstract_type>
+template <typename NativeType,
+          serialize_in_cache ser = serialize_in_cache::yes,
+          typename AbstractType = abstract_type>
 class concrete_type : public AbstractType {
 public:
     using native_type = NativeType;
+    using storage_traits = storage_type_traits<NativeType, ser>;
+    using storage_type = typename storage_traits::type;
     using AbstractType::AbstractType;
+private:
+    struct storage_migrate_fn_type : public migrate_fn_type {
+        virtual void migrate(void* src, void* dst, size_t size) const noexcept {
+            new (dst) storage_type(std::move(*reinterpret_cast<storage_type*>(src)));
+        }
+    };
+    storage_migrate_fn_type _storage_migrate_fn;
 protected:
     virtual size_t native_value_size() const override {
         return sizeof(native_type);
@@ -476,6 +545,34 @@ protected:
     }
     virtual const std::type_info& native_typeid() const override {
         return typeid(native_type);
+    }
+    virtual size_t storage_size() const override {
+        return sizeof(storage_type);
+    }
+    virtual size_t storage_alignment() const override {
+        return alignof(storage_type);
+    }
+    virtual void storage_copy(const void* from, void* to) const override {
+        new (to) storage_type(*reinterpret_cast<const storage_type*>(from));
+    }
+    virtual void storage_move(void* from, void* to) const override {
+        new (to) storage_type(std::move(*reinterpret_cast<storage_type*>(from)));
+    }
+    virtual void storage_move_from_native(void* from, void* to) const override {
+        auto n_from = reinterpret_cast<native_type*>(from);
+        auto s_to = reinterpret_cast<storage_type*>(to);
+        new (s_to) storage_type(storage_traits::native_to_storage(std::move(*n_from), this));
+    }
+    virtual void storage_copy_to_native(const void* from, void* to) const override {
+        auto s_from = reinterpret_cast<const storage_type*>(from);
+        auto n_to = reinterpret_cast<native_type*>(to);
+        new (n_to) native_type(storage_traits::storage_to_native(*s_from, this));
+    }
+    virtual void storage_destroy(void* object) const override {
+        reinterpret_cast<storage_type*>(object)->~storage_type();
+    }
+    virtual const migrate_fn_type* storage_migrate_fn() const override {
+        return &_storage_migrate_fn;
     }
 protected:
     data_value make_value(std::unique_ptr<NativeType> value) const {
@@ -572,10 +669,11 @@ public:
     };
 
     const kind& _kind;
+    data_type _value_type;
 
 protected:
-    explicit collection_type_impl(sstring name, const kind& k)
-            : abstract_type(std::move(name)), _kind(k) {}
+    explicit collection_type_impl(sstring name, const kind& k, data_type value_type)
+            : abstract_type(std::move(name)), _kind(k), _value_type(std::move(value_type)) {}
     virtual sstring cql3_type_name() const = 0;
 public:
     // representation of a collection mutation, key/value pairs, value is a mutation itself
@@ -589,7 +687,7 @@ public:
     };
     struct mutation_view {
         tombstone tomb;
-        std::vector<std::pair<bytes_view, atomic_cell_view>> cells;
+        std::vector<std::pair<bytes_view, atomic_cell>> cells;
         mutation materialize() const;
     };
     virtual data_type name_comparator() const = 0;
@@ -768,11 +866,19 @@ protected:
     virtual void* native_value_clone(const void* object) const override;
     virtual void native_value_delete(void* object) const override;
     virtual const std::type_info& native_typeid() const override;
+    virtual size_t storage_size() const override;
+    virtual size_t storage_alignment() const override;
+    virtual void storage_copy(const void* from, void* to) const override;
+    virtual void storage_move(void* from, void* to) const override;
+    virtual void storage_move_from_native(void* from, void* to) const override;
+    virtual void storage_copy_to_native(const void* from, void* to) const override;
+    virtual void storage_destroy(void* object) const override;
+    virtual const migrate_fn_type* storage_migrate_fn() const override;
 };
 using reversed_type = shared_ptr<const reversed_type_impl>;
 
 template <typename NativeType>
-using concrete_collection_type = concrete_type<NativeType, collection_type_impl>;
+using concrete_collection_type = concrete_type<NativeType, serialize_in_cache::yes, collection_type_impl>;
 
 class map_type_impl final : public concrete_collection_type<std::vector<std::pair<data_value, data_value>>> {
     using map_type = shared_ptr<const map_type_impl>;

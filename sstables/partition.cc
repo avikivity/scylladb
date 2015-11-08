@@ -278,19 +278,21 @@ public:
         }
     }
 
-    atomic_cell make_atomic_cell(uint64_t timestamp, bytes_view value, uint32_t ttl, uint32_t expiration) {
+    atomic_cell make_atomic_cell(uint64_t timestamp, bytes_view value, uint32_t ttl, uint32_t expiration,
+            const column_definition* cdef) {
+        auto v = cdef->type->deserialize(value);
         if (ttl) {
-            return atomic_cell::make_live(timestamp, value,
+            return atomic_cell::make_live(timestamp, std::move(v),
                 gc_clock::time_point(gc_clock::duration(expiration)), gc_clock::duration(ttl));
         } else {
-            return atomic_cell::make_live(timestamp, value);
+            return atomic_cell::make_live(timestamp, std::move(v));
         }
     }
 
     virtual void consume_cell(bytes_view col_name, bytes_view value, int64_t timestamp, int32_t ttl, int32_t expiration) override {
         struct column col(*_schema, col_name);
 
-        auto ac = make_atomic_cell(timestamp, value, ttl, expiration);
+        auto ac = make_atomic_cell(timestamp, value, ttl, expiration, col.cdef);
         auto clustering_prefix = exploded_clustering_prefix(std::move(col.clustering));
 
         if (col.collection_extra_data.size()) {
@@ -322,7 +324,7 @@ public:
     }
 
     void consume_deleted_cell(column &col, int64_t timestamp, gc_clock::time_point ttl) {
-        auto ac = atomic_cell::make_dead(timestamp, ttl);
+        auto ac = atomic_cell::make_dead(timestamp, ttl, col.cdef->type);
 
         auto clustering_prefix = exploded_clustering_prefix(std::move(col.clustering));
         if (col.collection_extra_data.size()) {

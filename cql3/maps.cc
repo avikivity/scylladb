@@ -299,10 +299,10 @@ maps::setter_by_key::execute(mutation& m, const exploded_clustering_prefix& pref
                        std::numeric_limits<uint16_t>::max(),
                        value->size()));
     }
-    auto avalue = value ? params.make_cell(*value) : params.make_dead_cell();
+    auto ctype = static_pointer_cast<const map_type_impl>(column.type);
+    auto avalue = value ? params.make_cell(*value, ctype->get_values_type()) : params.make_dead_cell(ctype->get_values_type());
     map_type_impl::mutation update = { {}, { { std::move(to_bytes(*key)), std::move(avalue) } } };
     // should have been verified as map earlier?
-    auto ctype = static_pointer_cast<const map_type_impl>(column.type);
     auto col_mut = ctype->serialize_mutation_form(std::move(update));
     m.set_cell(prefix, column, std::move(col_mut));
 }
@@ -325,20 +325,20 @@ maps::do_put(mutation& m, const exploded_clustering_prefix& prefix, const update
             return;
         }
 
-        for (auto&& e : map_value->map) {
-            mut.cells.emplace_back(e.first, params.make_cell(e.second));
-        }
         auto ctype = static_pointer_cast<const map_type_impl>(column.type);
+        for (auto&& e : map_value->map) {
+            mut.cells.emplace_back(e.first, params.make_cell(e.second, ctype->get_values_type()));
+        }
         auto col_mut = ctype->serialize_mutation_form(std::move(mut));
         m.set_cell(prefix, column, std::move(col_mut));
     } else {
         // for frozen maps, we're overwriting the whole cell
         if (!value) {
-            m.set_cell(prefix, column, params.make_dead_cell());
+            m.set_cell(prefix, column, params.make_dead_cell(column.type));
         } else {
             auto v = map_type_impl::serialize_partially_deserialized_form({map_value->map.begin(), map_value->map.end()},
                     serialization_format::internal());
-            m.set_cell(prefix, column, params.make_cell(std::move(v)));
+            m.set_cell(prefix, column, params.make_cell(std::move(v), column.type));
         }
     }
 }
@@ -353,8 +353,8 @@ maps::discarder_by_key::execute(mutation& m, const exploded_clustering_prefix& p
     auto ckey = dynamic_pointer_cast<constants::value>(std::move(key));
     assert(ckey);
     collection_type_impl::mutation mut;
-    mut.cells.emplace_back(*ckey->_bytes, params.make_dead_cell());
     auto mtype = static_cast<const map_type_impl*>(column.type.get());
+    mut.cells.emplace_back(*ckey->_bytes, params.make_dead_cell(mtype->get_values_type()));
     m.set_cell(prefix, column, mtype->serialize_mutation_form(mut));
 }
 

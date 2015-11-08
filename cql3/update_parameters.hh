@@ -121,11 +121,11 @@ public:
         }
     }
 
-    atomic_cell make_dead_cell() const {
-        return atomic_cell::make_dead(_timestamp, _local_deletion_time);
+    atomic_cell make_dead_cell(data_type type) const {
+        return atomic_cell::make_dead(_timestamp, _local_deletion_time, std::move(type));
     }
 
-    atomic_cell make_cell(bytes_view value) const {
+    atomic_cell make_cell(bytes_view value, data_type type) const {
         auto ttl = _ttl;
 
         if (ttl.count() <= 0) {
@@ -133,9 +133,9 @@ public:
         }
 
         if (ttl.count() > 0) {
-            return atomic_cell::make_live(_timestamp, value, _local_deletion_time + ttl, ttl);
+            return atomic_cell::make_live(_timestamp, type->deserialize(value), _local_deletion_time + ttl, ttl);
         } else {
-            return atomic_cell::make_live(_timestamp, value);
+            return atomic_cell::make_live(_timestamp, type->deserialize(value));
         }
     };
 

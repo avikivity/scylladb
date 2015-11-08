@@ -244,6 +244,7 @@ sets::adder::do_add(mutation& m, const exploded_clustering_prefix& row_key, cons
     auto&& value = t->bind(params._options);
     auto set_value = dynamic_pointer_cast<sets::value>(std::move(value));
     auto set_type = dynamic_pointer_cast<const set_type_impl>(column.type);
+    auto&& etype = set_type->get_elements_type();
     if (column.type->is_multi_cell()) {
         // FIXME: mutation_view? not compatible with params.make_cell().
         collection_type_impl::mutation mut;
@@ -253,7 +254,7 @@ sets::adder::do_add(mutation& m, const exploded_clustering_prefix& row_key, cons
         }
 
         for (auto&& e : set_value->_elements) {
-            mut.cells.emplace_back(e, params.make_cell({}));
+            mut.cells.emplace_back(e, params.make_cell({}, etype));
         }
         auto smut = set_type->serialize_mutation_form(mut);
 
@@ -264,9 +265,9 @@ sets::adder::do_add(mutation& m, const exploded_clustering_prefix& row_key, cons
                 {set_value->_elements.begin(), set_value->_elements.end()},
                 serialization_format::internal());
         if (set_value->_elements.empty()) {
-            m.set_cell(row_key, column, params.make_dead_cell());
+            m.set_cell(row_key, column, params.make_dead_cell(set_type));
         } else {
-            m.set_cell(row_key, column, params.make_cell(std::move(v)));
+            m.set_cell(row_key, column, params.make_cell(std::move(v), set_type));
         }
     }
 }
@@ -282,7 +283,7 @@ sets::discarder::execute(mutation& m, const exploded_clustering_prefix& row_key,
 
     collection_type_impl::mutation mut;
     auto kill = [&] (bytes idx) {
-        mut.cells.push_back({std::move(idx), params.make_dead_cell()});
+        mut.cells.push_back({std::move(idx), make_dead_cell(params)});
     };
     // This can be either a set or a single element
     auto cvalue = dynamic_pointer_cast<constants::value>(value);

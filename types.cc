@@ -27,6 +27,7 @@
 #include "net/ip.hh"
 #include "database.hh"
 #include "utils/serialization.hh"
+#include "utils/data_output.hh"
 #include "combine.hh"
 #include <cmath>
 #include <sstream>
@@ -1175,6 +1176,30 @@ public:
     virtual const std::type_info& native_typeid() const {
         fail(unimplemented::cause::COUNTERS);
     }
+    virtual size_t storage_size() const override {
+        fail(unimplemented::cause::COUNTERS);
+    }
+    virtual size_t storage_alignment() const override {
+        fail(unimplemented::cause::COUNTERS);
+    }
+    virtual void storage_copy(const void* from, void* to) const override {
+        fail(unimplemented::cause::COUNTERS);
+    }
+    virtual void storage_move(void* from, void* to) const override {
+        fail(unimplemented::cause::COUNTERS);
+    }
+    virtual void storage_move_from_native(void* from, void* to) const override {
+        fail(unimplemented::cause::COUNTERS);
+    }
+    virtual void storage_copy_to_native(const void* from, void* to) const override {
+        fail(unimplemented::cause::COUNTERS);
+    }
+    virtual void storage_destroy(void* object) const override {
+        fail(unimplemented::cause::COUNTERS);
+    }
+    virtual const migrate_fn_type* storage_migrate_fn() const override {
+        fail(unimplemented::cause::COUNTERS);
+    }
 };
 
 struct empty_type_impl : abstract_type {
@@ -1237,6 +1262,30 @@ struct empty_type_impl : abstract_type {
     virtual const std::type_info& native_typeid() const {
         // Can't happen
         abort();
+    }
+    virtual size_t storage_size() const override {
+        abort();;
+    }
+    virtual size_t storage_alignment() const override {
+        abort();;
+    }
+    virtual void storage_copy(const void* from, void* to) const override {
+        abort();;
+    }
+    virtual void storage_move(void* from, void* to) const override {
+        abort();;
+    }
+    virtual void storage_move_from_native(void* from, void* to) const override {
+        abort();;
+    }
+    virtual void storage_copy_to_native(const void* from, void* to) const override {
+        abort();;
+    }
+    virtual void storage_destroy(void* object) const override {
+        abort();;
+    }
+    virtual const migrate_fn_type* storage_migrate_fn() const override {
+        abort();;
     }
 };
 
@@ -1397,7 +1446,8 @@ map_type_impl::get_instance(data_type keys, data_type values, bool is_multi_cell
 }
 
 map_type_impl::map_type_impl(data_type keys, data_type values, bool is_multi_cell)
-        : concrete_type("org.apache.cassandra.db.marshal.MapType(" + keys->name() + "," + values->name() + ")", kind::map)
+        : concrete_type("org.apache.cassandra.db.marshal.MapType(" + keys->name() + "," + values->name() + ")", kind::map,
+                values)
         , _keys(std::move(keys))
         , _values(std::move(values))
         , _is_multi_cell(is_multi_cell) {
@@ -1548,7 +1598,7 @@ map_type_impl::to_value(mutation_view mut, serialization_format sf) const {
     for (auto&& e : mut.cells) {
         if (e.second.is_live(mut.tomb)) {
             tmp.emplace_back(e.first);
-            tmp.emplace_back(e.second.value());
+            tmp.emplace_back(e.second.serialize());
         }
     }
     return pack(tmp.begin(), tmp.end(), tmp.size() / 2, sf);
@@ -1594,8 +1644,8 @@ auto collection_type_impl::deserialize_mutation_form(collection_mutation_view cm
         auto ksize = read_simple<uint32_t>(in);
         auto key = read_simple_bytes(in, ksize);
         auto vsize = read_simple<uint32_t>(in);
-        auto value = atomic_cell_view::from_bytes(read_simple_bytes(in, vsize));
-        ret.cells.emplace_back(key, value);
+        auto value = atomic_cell::from_bytes(_value_type, read_simple_bytes(in, vsize));
+        ret.cells.emplace_back(key, std::move(value));
     }
     assert(in.empty());
     return ret;
@@ -1623,7 +1673,7 @@ bool collection_type_impl::is_any_live(collection_mutation_view cm, tombstone to
         auto ksize = read_simple<uint32_t>(in);
         in.remove_prefix(ksize);
         auto vsize = read_simple<uint32_t>(in);
-        auto value = atomic_cell_view::from_bytes(read_simple_bytes(in, vsize));
+        auto value = atomic_cell::from_bytes(_value_type, read_simple_bytes(in, vsize));
         if (value.is_live(tomb, now)) {
             return true;
         }
@@ -1679,7 +1729,7 @@ bool collection_type_impl::mutation::compact_and_expire(tombstone base_tomb, gc_
         }
         if (cell.has_expired(query_time)) {
             survivors.emplace_back(std::make_pair(
-                std::move(name_and_cell.first), atomic_cell::make_dead(cell.timestamp(), cell.deletion_time())));
+                std::move(name_and_cell.first), atomic_cell::make_dead(cell.timestamp(), cell.deletion_time(), cell.type())));
         } else if (!cell.is_live()) {
             if (cell.timestamp() >= max_purgeable || cell.deletion_time() >= gc_before) {
                 survivors.emplace_back(std::move(name_and_cell));
@@ -1845,7 +1895,7 @@ set_type_impl::get_instance(data_type elements, bool is_multi_cell) {
 }
 
 set_type_impl::set_type_impl(data_type elements, bool is_multi_cell)
-        : concrete_type("org.apache.cassandra.db.marshal.SetType(" + elements->name() + ")", kind::set)
+        : concrete_type("org.apache.cassandra.db.marshal.SetType(" + elements->name() + ")", kind::set, elements)
         , _elements(std::move(elements))
         , _is_multi_cell(is_multi_cell) {
 }
@@ -2005,7 +2055,7 @@ list_type_impl::get_instance(data_type elements, bool is_multi_cell) {
 }
 
 list_type_impl::list_type_impl(data_type elements, bool is_multi_cell)
-        : concrete_type("org.apache.cassandra.db.marshal.ListType(" + elements->name() + ")", kind::list)
+        : concrete_type("org.apache.cassandra.db.marshal.ListType(" + elements->name() + ")", kind::list, elements)
         , _elements(std::move(elements))
         , _is_multi_cell(is_multi_cell) {
 }
@@ -2146,7 +2196,7 @@ list_type_impl::to_value(mutation_view mut, serialization_format sf) const {
     tmp.reserve(mut.cells.size());
     for (auto&& e : mut.cells) {
         if (e.second.is_live(mut.tomb)) {
-            tmp.emplace_back(e.second.value());
+            tmp.emplace_back(e.second.serialize());
         }
     }
     return pack(tmp.begin(), tmp.end(), tmp.size(), sf);
@@ -2383,6 +2433,46 @@ reversed_type_impl::native_typeid() const {
     return _underlying_type->native_typeid();
 }
 
+size_t
+reversed_type_impl::storage_size() const {
+    return _underlying_type->storage_size();
+}
+
+size_t
+reversed_type_impl::storage_alignment() const {
+    return _underlying_type->storage_alignment();
+}
+
+void
+reversed_type_impl::storage_copy(const void* from, void* to) const {
+    return _underlying_type->storage_copy(from, to);
+}
+
+void
+reversed_type_impl::storage_move(void* from, void* to) const {
+    return _underlying_type->storage_move(from, to);
+}
+
+void
+reversed_type_impl::storage_move_from_native(void* from, void* to) const {
+    return _underlying_type->storage_move_from_native(from, to);
+}
+
+void
+reversed_type_impl::storage_copy_to_native(const void* from, void* to) const {
+    return _underlying_type->storage_copy_to_native(from, to);
+}
+
+void
+reversed_type_impl::storage_destroy(void* object) const {
+    return _underlying_type->storage_destroy(object);
+}
+
+const migrate_fn_type*
+reversed_type_impl::storage_migrate_fn() const {
+    return _underlying_type->storage_migrate_fn();
+}
+
 thread_local const shared_ptr<const abstract_type> int32_type(make_shared<int32_type_impl>());
 thread_local const shared_ptr<const abstract_type> long_type(make_shared<long_type_impl>());
 thread_local const shared_ptr<const abstract_type> ascii_type(make_shared<ascii_type_impl>());
@@ -2479,6 +2569,14 @@ data_value::data_value(boost::multiprecision::cpp_int v) : data_value(make_new(v
 }
 
 data_value::data_value(big_decimal v) : data_value(make_new(decimal_type, v)) {
+}
+
+bytes
+data_value::serialize() {
+    bytes ret(bytes::initialized_later(), serialized_size());
+    auto out = ret.begin();
+    serialize(out);
+    return ret;
 }
 
 data_value

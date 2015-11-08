@@ -44,8 +44,9 @@ mutation_partition_view::accept(const schema& schema, mutation_partition_visitor
         auto id = in.read<column_id>();
 
         if (schema.static_column_at(id).is_atomic()) {
-            auto&& v = atomic_cell_view_serializer::read(in);
-            visitor.accept_static_cell(id, v);
+            auto&& v = bytes_view_serializer::read(in);
+            auto& col = schema.column_at(column_kind::static_column, id);
+            visitor.accept_static_cell(id, atomic_cell::from_bytes(col.type, v));
         } else {
             auto&& v = collection_mutation_view_serializer::read(in);
             visitor.accept_static_cell(id, v);
@@ -80,8 +81,9 @@ mutation_partition_view::accept(const schema& schema, mutation_partition_visitor
             auto id = in.read<column_id>();
 
             if (schema.regular_column_at(id).is_atomic()) {
-                auto&& v = atomic_cell_view_serializer::read(in);
-                visitor.accept_row_cell(id, v);
+                auto&& v = bytes_view_serializer::read(in);
+                auto&& col = schema.column_at(column_kind::regular_column, id);
+                visitor.accept_row_cell(id, atomic_cell::from_bytes(col.type, v));
             } else {
                 auto&& v = collection_mutation_view_serializer::read(in);
                 visitor.accept_row_cell(id, v);

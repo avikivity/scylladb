@@ -106,6 +106,7 @@ template<> void serializer<tombstone>::read(tombstone&, input&);
 
 template<> serializer<atomic_cell_view>::serializer(const atomic_cell_view &);
 template<> void serializer<atomic_cell_view>::write(output&, const type&);
+// declared but not defined; schema dependent
 template<> void serializer<atomic_cell_view>::read(atomic_cell_view&, input&);
 template<> atomic_cell_view serializer<atomic_cell_view>::read(input&);
 

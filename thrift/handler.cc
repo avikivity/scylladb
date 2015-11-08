@@ -211,7 +211,7 @@ public:
                                 if (cell.is_live()) { // FIXME: we should actually use tombstone information from all levels
                                     Column col;
                                     col.__set_name(bytes_to_string(def.name()));
-                                    col.__set_value(bytes_to_string(cell.value()));
+                                    col.__set_value(bytes_to_string(cell.serialize()));
                                     col.__set_timestamp(cell.timestamp());
                                     // FIXME: set ttl
                                     ColumnOrSuperColumn v;
