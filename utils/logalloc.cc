@@ -211,6 +211,9 @@ struct segment {
 
 inline bool
 segment_occupancy_descending_less_compare::operator()(segment* s1, segment* s2) const {
+    if (s2->occupancy() == s1->occupancy()) {
+        return s2 < s1;
+    }
     return s2->occupancy() < s1->occupancy();
 }
 

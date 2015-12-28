@@ -131,6 +131,10 @@ public:
     occupancy_stats(size_t free_space, size_t total_space)
         : _free_space(free_space), _total_space(total_space) { }
 
+    bool operator==(const occupancy_stats& other) const {
+        return used_fraction() == other.used_fraction();
+    }
+
     bool operator<(const occupancy_stats& other) const {
         return used_fraction() < other.used_fraction();
     }
