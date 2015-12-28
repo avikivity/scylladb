@@ -38,7 +38,7 @@ def build_pretty_printer():
     pp.add_printer('uuid', r'^utils::UUID$', uuid_printer)
     return pp
 
-gdb.printing.register_pretty_printer(gdb.current_objfile(), build_pretty_printer())
+#gdb.printing.register_pretty_printer(gdb.current_objfile(), build_pretty_printer())
 
 def cpus():
     return int(gdb.parse_and_eval('smp::count'))
@@ -176,9 +176,28 @@ class scylla_lsa(gdb.Command):
             region = region + 1
 
 
+def verify_boost_binomial_heap(heap, validate):
+    size = int(heap['size_'])
+    gdb.write('heap size: {size}\n'.format(**locals()))
+                    
+class scylla_verify_lsa(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'scylla verify_lsa_region', gdb.COMMAND_USER, gdb.COMPLETE_EXPRESSION)
+    def invoke(self, arg, from_tty):
+        lsa = gdb.parse_and_eval('logalloc::shard_segment_pool')
+        descriptor = lsa['_segments']['_M_impl']['_M_start']
+        base = int(lsa['_segments_base'])
+        region = gdb.parse_and_eval(arg)
+        seg_heap = region['_segments']
+        def validate_heap_invariant(self, n1, n2):
+            pass
+        verify_boost_binomial_heap(heap=seg_heap, validate=validate_heap_invariant) 
+
+
 scylla()
 scylla_databases()
 scylla_keyspaces()
 scylla_column_families()
 scylla_memory()
 scylla_lsa()
+scylla_verify_lsa()
