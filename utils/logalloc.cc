@@ -35,6 +35,24 @@
 
 standard_allocation_strategy standard_allocation_strategy_instance;
 
+//xx
+template <typename Tag>
+class recursion_guard {
+    static thread_local bool _active; //ffl
+public:
+    recursion_guard() {
+        assert(!_active);
+        _active = true;
+    }
+    ~recursion_guard() {
+        assert(_active);
+        _active = false;
+    }
+};
+
+template <typename Tag>
+thread_local bool recursion_guard<Tag>::_active;
+
 namespace logalloc {
 
 struct segment;
@@ -551,6 +569,7 @@ segment::heap_handle() {
 // object.
 //
 class region_impl : public allocation_strategy {
+    using recursion_guard = ::recursion_guard<region_impl>;
     static constexpr float max_occupancy_for_compaction = 0.85; // FIXME: make configurable
     static constexpr size_t max_managed_object_size = segment::size * 0.1;
 
@@ -809,6 +828,7 @@ public:
     explicit region_impl(region_group* group = nullptr)
         : _group(group), _id(next_id())
     {
+        recursion_guard rg;
         tracker_instance._impl->register_region(this);
         if (group) {
             group->add(this);
@@ -816,6 +836,7 @@ public:
     }
 
     virtual ~region_impl() {
+        recursion_guard rg;
         tracker_instance._impl->unregister_region(this);
 
         _segments.sanity_check();
@@ -872,6 +893,7 @@ public:
     }
 
     virtual void* alloc(allocation_strategy::migrate_fn migrator, size_t size, size_t alignment) override {
+        recursion_guard rg;
         compaction_lock _(*this);
         if (size > max_managed_object_size) {
             auto ptr = standard_allocator().alloc(migrator, size, alignment);
@@ -891,6 +913,7 @@ public:
     }
 
     virtual void free(void* obj) noexcept override {
+        recursion_guard rg;
         compaction_lock _(*this);
         segment* seg = shard_segment_pool.containing_segment(obj);
 
@@ -934,6 +957,7 @@ public:
     // to refer to this region.
     // Doesn't invalidate references to allocated objects.
     void merge(region_impl& other) {
+        recursion_guard rg;
         compaction_lock dct1(*this);
         compaction_lock dct2(other);
         degroup_temporarily dgt1(this);
@@ -971,6 +995,7 @@ public:
 
     // Returns occupancy of the sparsest compactible segment.
     occupancy_stats min_occupancy() const {
+        recursion_guard rg;
         const_cast<segment_heap&>(_segments).sanity_check();
         if (_segments.empty()) {
             return {};
@@ -980,6 +1005,7 @@ public:
 
     // Tries to release one full segment back to the segment pool.
     void compact() {
+        recursion_guard rg;
         if (!is_compactible()) {
             return;
         }
@@ -1002,6 +1028,7 @@ public:
     // Compacts everything. Mainly for testing.
     // Invalidates references to allocated objects.
     void full_compaction() {
+        recursion_guard rg;
         compaction_lock _(*this);
         logger.debug("Full compaction, {}", occupancy());
         close_and_open();
