@@ -19,6 +19,8 @@
  * along with Scylla.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define BOOST_HEAP_SANITYCHECKS
+
 #include <boost/range/algorithm/heap_algorithm.hpp>
 #include <boost/range/algorithm/remove.hpp>
 #include <boost/heap/binomial_heap.hpp>
@@ -743,7 +745,9 @@ private:
 
         auto heap_node = &shard_segment_pool.descriptor(_active)._heap_node._node;
         segment_heap_allocator::prepare(heap_node);
+        _segments.sanity_check();
         auto handle = _segments.push(_active);
+        _segments.sanity_check();
         _active->set_heap_handle(handle);
         _active = nullptr;
     }
@@ -814,9 +818,12 @@ public:
     virtual ~region_impl() {
         tracker_instance._impl->unregister_region(this);
 
+        _segments.sanity_check();
+
         while (!_segments.empty()) {
             segment* seg = _segments.top();
             _segments.pop();
+            _segments.sanity_check();
             assert(seg->is_empty());
             free_segment(seg);
         }
@@ -824,6 +831,7 @@ public:
             assert(_active->is_empty());
             free_segment(_active);
         }
+        _segments.sanity_check();
         if (_group) {
             _group->del(this);
         }
@@ -856,6 +864,7 @@ public:
     //    while (is_compactible()) { compact(); }
     //
     bool is_compactible() const {
+        const_cast<segment_heap&>(_segments).sanity_check();
         return _reclaiming_enabled
             && (_closed_occupancy.free_space() >= 2 * segment::size)
             && (_closed_occupancy.used_fraction() < max_occupancy_for_compaction)
@@ -897,6 +906,7 @@ public:
         }
 
         segment_descriptor& seg_desc = shard_segment_pool.descriptor(seg);
+        _segments.sanity_check();
 
         auto desc = reinterpret_cast<object_descriptor*>(reinterpret_cast<uintptr_t>(obj) - sizeof(object_descriptor));
         desc->mark_dead();
@@ -910,11 +920,13 @@ public:
         if (seg != _active) {
             _segments.increase(seg_desc.heap_handle());
             if (seg_desc.is_empty()) {
+                _segments.sanity_check();
                 _segments.erase(seg_desc.heap_handle());
                 free_segment(seg);
             } else {
                 _closed_occupancy += seg_desc.occupancy();
             }
+            _segments.sanity_check();
         }
     }
 
@@ -939,7 +951,13 @@ public:
             other.close_active();
         }
 
+        _segments.sanity_check();
+        other._segments.sanity_check();
+
         _segments.merge(other._segments);
+
+        _segments.sanity_check();
+        other._segments.sanity_check();
 
         _closed_occupancy += other._closed_occupancy;
         _non_lsa_occupancy += other._non_lsa_occupancy;
@@ -953,6 +971,7 @@ public:
 
     // Returns occupancy of the sparsest compactible segment.
     occupancy_stats min_occupancy() const {
+        const_cast<segment_heap&>(_segments).sanity_check();
         if (_segments.empty()) {
             return {};
         }
@@ -970,9 +989,11 @@ public:
         auto in_use = shard_segment_pool.segments_in_use();
 
         while (shard_segment_pool.segments_in_use() >= in_use) {
+            _segments.sanity_check();
             segment* seg = _segments.top();
             logger.debug("Compacting segment {} from region {}, {}", seg, id(), seg->occupancy());
             _segments.pop();
+            _segments.sanity_check();
             _closed_occupancy -= seg->occupancy();
             compact(seg);
         }
@@ -985,7 +1006,9 @@ public:
         logger.debug("Full compaction, {}", occupancy());
         close_and_open();
         segment_heap all;
+        _segments.sanity_check();
         std::swap(all, _segments);
+        _segments.sanity_check();
         _closed_occupancy = {};
         while (!all.empty()) {
             segment* seg = all.top();
