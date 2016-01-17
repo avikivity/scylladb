@@ -2700,7 +2700,7 @@ void storage_proxy::init_messaging_service() {
                     });
                 }).then([reply_to, shard, response_id] {
                     auto& ms = net::get_local_messaging_service();
-                    ms.send_mutation_done(net::messaging_service::msg_addr{reply_to, shard}, shard, response_id).then_wrapped([] (future<> f) {
+                    return ms.send_mutation_done(net::messaging_service::msg_addr{reply_to, shard}, shard, response_id).then_wrapped([] (future<> f) {
                         f.ignore_ready_future();
                     });
                     // return void, no need to wait for send to complete
