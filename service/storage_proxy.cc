@@ -2691,7 +2691,7 @@ void storage_proxy::init_messaging_service() {
         });
     });
     ms.register_mutation([] (const rpc::client_info& cinfo, frozen_mutation in, std::vector<gms::inet_address> forward, gms::inet_address reply_to, unsigned shard, storage_proxy::response_id_type response_id) {
-        do_with(std::move(in), get_local_shared_storage_proxy(), [&cinfo, forward = std::move(forward), reply_to, shard, response_id] (const frozen_mutation& m, shared_ptr<storage_proxy>& p) {
+        return do_with(std::move(in), get_local_shared_storage_proxy(), [&cinfo, forward = std::move(forward), reply_to, shard, response_id] (const frozen_mutation& m, shared_ptr<storage_proxy>& p) {
             return when_all(
                 // mutate_locally() may throw, putting it into apply() converts exception to a future.
                 futurize<void>::apply([&p, &m, reply_to, &cinfo] {
@@ -2714,17 +2714,18 @@ void storage_proxy::init_messaging_service() {
                         f.ignore_ready_future();
                     });
                 })
-            );
-        }).discard_result();
-
-        return net::messaging_service::no_wait();
+            ).then_wrapped([] (future<std::tuple<future<>, future<>>>&& f) {
+                // ignore ressult, since we'll be returning them via MUTATION_DONE verbs
+                return net::messaging_service::no_wait();
+            });
+        });
     });
     ms.register_mutation_done([] (const rpc::client_info& cinfo, unsigned shard, storage_proxy::response_id_type response_id) {
         auto& from = cinfo.retrieve_auxiliary<gms::inet_address>("baddr");
-        get_storage_proxy().invoke_on(shard, [from, response_id] (storage_proxy& sp) {
+        return get_storage_proxy().invoke_on(shard, [from, response_id] (storage_proxy& sp) {
             sp.got_response(response_id, from);
+            return net::messaging_service::no_wait();
         });
-        return net::messaging_service::no_wait();
     });
     ms.register_read_data([] (const rpc::client_info& cinfo, query::read_command cmd, query::partition_range pr) {
         return do_with(std::move(pr), get_local_shared_storage_proxy(), [&cinfo, cmd = make_lw_shared<query::read_command>(std::move(cmd))] (const query::partition_range& pr, shared_ptr<storage_proxy>& p) {
