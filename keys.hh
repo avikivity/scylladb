@@ -572,7 +572,20 @@ public:
     }
 
     friend std::ostream& operator<<(std::ostream& out, const partition_key& pk);
+    template <typename Func>
+    friend auto with_linearized(const partition_key& pk, Func&& func);
 };
+
+template <typename Func>
+inline
+auto
+with_linearized(const partition_key& pk, Func&& func) {
+    return with_linearized(pk.representation(), [&func, &pk] (const bytes::value_type* data) {
+        return with_allocator(standard_allocator(), [&] {
+            return func(partition_key_view::from_bytes(bytes_view(data, pk.representation().size())));
+        });
+    });
+}
 
 class exploded_clustering_prefix {
     std::vector<bytes> _v;
