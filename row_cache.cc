@@ -450,7 +450,7 @@ future<> row_cache::update(memtable& m, partition_presence_checker presence_chec
                             entry.partition().apply(*_schema, std::move(mem_e.partition()), *mem_e.schema());
                             _tracker.touch(entry);
                             _tracker.on_merge();
-                        } else if (presence_checker(mem_e.key().key()) ==
+                        } else if (with_linearized(mem_e.key().key(), presence_checker) ==
                                    partition_presence_checker_result::definitely_doesnt_exist) {
                             cache_entry* entry = current_allocator().construct<cache_entry>(
                                 mem_e.schema(), std::move(mem_e.key()), std::move(mem_e.partition()));
