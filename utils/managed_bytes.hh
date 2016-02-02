@@ -345,7 +345,31 @@ public:
         }
         *this = managed_bytes(*this);
     }
+
+    template <typename Func>
+    friend auto with_linearized(const managed_bytes& b, Func&& func);
 };
+
+// Run func(data) on b, where const bytes::value_type* data is a linearized version of b,
+// copied if necessary.
+template <typename Func>
+inline
+auto
+with_linearized(const managed_bytes& b, Func&& func) {
+    std::unique_ptr<bytes::value_type[]> tmp;
+    const bytes::value_type* data;
+    if (!b.external() || !b._u.ptr->next) {
+        data = b.data();
+    } else {
+        tmp.reset(new bytes::value_type[b.size()]);
+        data = tmp.get();
+        auto p = tmp.get();
+        for (auto blob = b._u.ptr; blob; blob = blob->next) {
+            p = std::copy_n(blob->data, blob->frag_size, p);
+        }
+    }
+    return func(data);
+}
 
 namespace std {
 
