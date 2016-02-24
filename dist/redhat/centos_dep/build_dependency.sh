@@ -1,6 +1,11 @@
 #!/bin/sh -e
 export RPMBUILD=`pwd`/build/rpmbuild
 
+CURL_ARGS=()
+if [ -n "$JENKINS_URL" ]; then
+    CURL_ARGS=("--silent")
+fi
+
 do_install()
 {
     pkg=$1
@@ -9,7 +14,8 @@ do_install()
 }
 
 curl() {
-    command curl --location "$@"
+    echo curl "${CURL_ARGS[@]}" "$@"
+    command curl "${CURL_ARGS[@]}" "$@"
 }
 
 sudo yum install -y curl yum-utils rpm-build rpmdevtools gcc gcc-c++ make patch
