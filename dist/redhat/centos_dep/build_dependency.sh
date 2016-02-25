@@ -79,7 +79,7 @@ do_install scylla-binutils-2.25-15.el7.centos.x86_64.rpm
 if [ ! -f $RPMBUILD/RPMS/x86_64/scylla-isl-0.14-4.el7.centos.x86_64.rpm ]; then
     rpm --define "_topdir $RPMBUILD" -ivh build/srpms/isl-0.14-4.fc23.src.rpm
     patch $RPMBUILD/SPECS/isl.spec < dist/redhat/centos_dep/isl.diff
-    yum-buildep $RPMBUILD/SPECS/isl.spec
+    yum-builddep -y $RPMBUILD/SPECS/isl.spec
     rpmbuild --define "_topdir $RPMBUILD" -ba $RPMBUILD/SPECS/isl.spec
 fi
 do_install scylla-isl-0.14-4.el7.centos.x86_64.rpm
