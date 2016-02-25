@@ -8,8 +8,8 @@ fi
 
 do_install()
 {
-    pkg=$1
-    sudo yum install -y $RPMBUILD/RPMS/*/$pkg 2> build/err || if [ "`cat build/err`" != "Error: Nothing to do" ]; then cat build/err; exit 1;fi
+    local pkgs=$(ls $RPMBUILD/RPMS/*/$pkg | grep -v debuginfo)
+    sudo yum install -y "${pkgs[@]}" 2> build/err || if [ "`cat build/err`" != "Error: Nothing to do" ]; then cat build/err; exit 1;fi
     echo Install $name done
 }
 
