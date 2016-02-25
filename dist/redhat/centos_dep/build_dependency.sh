@@ -61,6 +61,7 @@ sudo ln -sf /usr/bin/python3.4 /usr/bin/python3
 
 if [ ! -f $RPMBUILD/RPMS/noarch/scylla-env-1.0-1.el7.centos.noarch.rpm ]; then
     cd dist/redhat/centos_dep
+    mkdir -p $RPMBUILD/SOURCES/
     tar cpf $RPMBUILD/SOURCES/scylla-env-1.0.tar scylla-env-1.0
     cd -
     yum-builddep -y dist/redhat/centos_dep/scylla-env.spec
