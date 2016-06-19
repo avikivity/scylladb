@@ -1372,6 +1372,19 @@ database::setup_collectd() {
                 , "total_operations", "total_reads")
                 , scollectd::make_typed(scollectd::data_type::DERIVE, _stats->total_reads)
     ));
+
+    _collectd.push_back(
+        scollectd::add_polled_metric(scollectd::type_instance_id("database"
+                , scollectd::per_cpu_plugin_instance
+                , "queue_length", "active_reads")
+                , scollectd::make_typed(scollectd::data_type::GAUGE, [this] { return max_concurrent_reads() - _read_concurrency_sem.current(); })
+    ));
+    _collectd.push_back(
+        scollectd::add_polled_metric(scollectd::type_instance_id("database"
+                , scollectd::per_cpu_plugin_instance
+                , "queue_length", "queued_reads")
+                , scollectd::make_typed(scollectd::data_type::GAUGE, [this] { return _read_concurrency_sem.waiters(); })
+    ));
 }
 
 database::~database() {
