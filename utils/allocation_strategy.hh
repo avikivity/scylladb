@@ -80,6 +80,23 @@ protected:
 public:
     using migrate_fn = const migrate_fn_type*;
 
+    // Used a range of allocation sizes, for variable-sized data structures
+    // The allocator will try to allocate as close to max as it comfortably can,
+    // and will return no less than min.
+    struct size_range {
+        size_t min;
+        size_t max;
+    };
+
+    // Used to return a variable size allocation
+    struct variable_size_allocation {
+        void* memory;
+        size_t size;
+    };
+
+    // Used as a placeholder for the actual size in variable-sized allocations
+    struct size_placeholder {};
+
     virtual ~allocation_strategy() {}
 
     //
@@ -92,6 +109,16 @@ public:
     // Doesn't invalidate references to objects allocated with this strategy.
     //
     virtual void* alloc(migrate_fn, size_t size, size_t alignment) = 0;
+
+    // Allocates space for a variable-sized new ManagedObject. The caller must
+    // construct the object before compaction runs. "size" is the amount of space
+    // to reserve, as a byte range.
+    //
+    // Throws std::bad_alloc on allocation failure.
+    //
+    // Doesn't invalidate references to objects allocated with this strategy.
+    //
+    virtual variable_size_allocation alloc(migrate_fn, size_range size, size_t alignment) = 0;
 
     // Releases storage for the object. Doesn't invoke object's destructor.
     // Doesn't invalidate references to objects allocated with this strategy.
@@ -111,6 +138,22 @@ public:
         }
     }
 
+    // Like alloc() but also constructs the object with a migrator using
+    // standard move semantics. Object size will vary according to constraints
+    // in "size" argument and memory availablility.  Allocates respecting object's
+    // alignment requirement. An actual argument of type size_placeholder will be
+    // replaced by the actual size of the allocation.
+    template<typename T, typename... Args>
+    T* variable_size_construct(size_range size, Args&&... args) {
+        auto storage = alloc(&standard_migrator<T>::object, size, alignof(T));
+        try {
+            return new (storage.memory) T(replace_placeholder(storage.size, std::forward<Args>(args))...);
+        } catch (...) {
+            free(storage.memory);
+            throw;
+        }
+    }
+
     // Destroys T and releases its storage.
     // Doesn't invalidate references to allocated objects.
     template<typename T>
@@ -122,9 +165,17 @@ public:
     size_t preferred_max_contiguous_allocation() const {
         return _preferred_max_contiguous_allocation;
     }
+private:
+    template <typename T>
+    static decltype(auto) replace_placeholder(size_t size, T&& arg) {
+        return std::forward<T>(arg);
+    };
+    static size_t replace_placeholder(size_t size, size_placeholder placeholder) {
+        return size;
+    }
 };
 
-class standard_allocation_strategy : public allocation_strategy {
+class standard_allocation_strategy final : public allocation_strategy {
 public:
     virtual void* alloc(migrate_fn, size_t size, size_t alignment) override {
         // ASAN doesn't intercept aligned_alloc() and complains on free().
@@ -133,6 +184,10 @@ public:
             throw std::bad_alloc();
         }
         return ret;
+    }
+
+    virtual variable_size_allocation alloc(migrate_fn mig, size_range size, size_t alignment) override {
+        return { alloc(mig, size.max, alignment), size.max };
     }
 
     virtual void free(void* obj) override {

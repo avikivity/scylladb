@@ -1147,6 +1147,16 @@ private:
         return obj;
     }
 
+    size_t available_in_segment(size_range size, size_t alignment) const {
+        auto offset = _active ? _active_offset : 0;
+        size_t obj_offset = align_up(offset + sizeof(object_descriptor), alignment);
+        if (obj_offset + size.min > segment_size) {
+            // Object won't fit in current segment, simulate opening a new one
+            obj_offset = align_up(sizeof(object_descriptor), alignment);
+        }
+        return std::min(size.max, segment_size - obj_offset);
+    }
+
     template<typename Func>
     void for_each_live(segment* seg, Func&& func) {
         static_assert(std::is_same<void, std::result_of_t<Func(object_descriptor*, void*)>>::value, "bad Func signature");
@@ -1331,6 +1341,15 @@ public:
         } else {
             return alloc_small(migrator, (segment::size_type) size, alignment);
         }
+    }
+
+    virtual variable_size_allocation alloc(migrate_fn migrator, size_range size, size_t alignment) override {
+        if (size.min > max_managed_object_size) {
+            return { alloc(migrator, size.max, alignment), size.max };
+        }
+        compaction_lock _(*this);
+        auto actual_size = available_in_segment(size, alignment);
+        return { alloc_small(migrator, actual_size, alignment), actual_size };
     }
 
     virtual void free(void* obj) noexcept override {
