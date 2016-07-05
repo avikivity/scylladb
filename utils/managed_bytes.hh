@@ -40,10 +40,10 @@ struct blob_storage {
     blob_storage* next;
     char_type data[];
 
-    blob_storage(blob_storage** backref, size_type size, size_type frag_size) noexcept
+    blob_storage(blob_storage** backref, size_type size, size_type bs_size) noexcept
         : backref(backref)
         , size(size)
-        , frag_size(frag_size)
+        , frag_size(bs_size - sizeof(blob_storage))
         , next(nullptr)
     {
         *unaligned_cast<blob_storage**>(backref) = this;
@@ -107,9 +107,6 @@ private:
     bool external() const {
         return _u.small.size < 0;
     }
-    size_t max_seg(allocation_strategy& alctr) {
-        return alctr.preferred_max_contiguous_allocation() - sizeof(blob_storage);
-    }
     void free_chain(blob_storage* p) noexcept {
         if (p->next && _linearization_context._nesting) {
             _linearization_context.forget(p);
@@ -161,20 +158,17 @@ public:
         } else {
             _u.small.size = -1;
             auto& alctr = current_allocator();
-            auto maxseg = max_seg(alctr);
-            auto now = std::min(size_t(size), maxseg);
-            void* p = alctr.alloc(&standard_migrator<blob_storage>::object,
-                sizeof(blob_storage) + now, alignof(blob_storage));
-            auto first = new (p) blob_storage(&_u.ptr, size, now);
+            auto first = alctr.variable_size_construct<blob_storage>(
+                    allocation_strategy::size_range{sizeof(blob_storage) + 16, sizeof(blob_storage) + size},
+                    &_u.ptr, size, allocation_strategy::size_placeholder());
             auto last = first;
-            size -= now;
+            size -= last->frag_size;
             try {
                 while (size) {
-                    auto now = std::min(size_t(size), maxseg);
-                    void* p = alctr.alloc(&standard_migrator<blob_storage>::object,
-                        sizeof(blob_storage) + now, alignof(blob_storage));
-                    last = new (p) blob_storage(&last->next, 0, now);
-                    size -= now;
+                    last = alctr.variable_size_construct<blob_storage>(
+                            allocation_strategy::size_range{sizeof(blob_storage) + 16, sizeof(blob_storage) + size},
+                            &last->next, 0, allocation_strategy::size_placeholder());
+                    size -= last->frag_size;
                 }
             } catch (...) {
                 free_chain(first);
