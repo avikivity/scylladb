@@ -263,6 +263,32 @@ unsigned shard_of(const token& t) {
     return global_partitioner().shard_of(t);
 }
 
+std::experimental::optional<ring_position_range_and_shard>
+ring_position_range_sharder::next(const schema& s) {
+    if (_done) {
+        return {};
+    }
+    auto start = _range.start();
+    auto end = _range.end();
+    auto shard = start ? shard_of(start->value().token()) : 0;
+    auto shard_boundary_token = _partitioner.token_for_next_shard(start ? start->value().token() : minimum_token());
+    auto shard_boundary = ring_position::starting_at(shard_boundary_token);
+    if (!_range.end() || shard_boundary.less_compare(s, _range.end()->value())) {
+        // split the range at end_of_shard
+        end = std::experimental::make_optional(range_bound<ring_position>(shard_boundary, false));
+        _range = range<ring_position>(
+                std::experimental::make_optional(range_bound<ring_position>(shard_boundary, true)),
+                _range.end());
+        if (shard_boundary_token == maximum_token()) {
+            _done = true;
+        }
+    } else {
+        _done = true;
+    }
+    auto ret = ring_position_range_and_shard{range<ring_position>(std::move(start), std::move(end)), shard};
+    return std::experimental::make_optional(std::move(ret));
+}
+
 int ring_position_comparator::operator()(const ring_position& lh, const ring_position& rh) const {
     return lh.tri_compare(s, rh);
 }
