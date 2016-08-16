@@ -262,6 +262,11 @@ public:
     virtual unsigned shard_of(const token& t) const = 0;
 
     /**
+     * Gets the first token greater than `t` that is not in the same shard as `t`.
+     */
+    virtual token token_for_next_shard(const token& t) const = 0;
+
+    /**
      * @return bytes that represent the token as required by get_token_validator().
      */
     virtual bytes token_to_bytes(const token& t) const {
