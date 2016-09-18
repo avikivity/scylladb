@@ -39,7 +39,7 @@
 #pragma once
 
 #include "core/sstring.hh"
-#include "query-request.hh"
+#include "range.hh"
 #include "dht/i_partitioner.hh"
 #include <vector>
 
@@ -49,10 +49,10 @@ class stream_request {
 public:
     using token = dht::token;
     sstring keyspace;
-    std::vector<query::range<token>> ranges;
+    std::vector<nonwrapping_range<token>> ranges;
     std::vector<sstring> column_families;
     stream_request() = default;
-    stream_request(sstring _keyspace, std::vector<query::range<token>> _ranges, std::vector<sstring> _column_families)
+    stream_request(sstring _keyspace, std::vector<nonwrapping_range<token>> _ranges, std::vector<sstring> _column_families)
         : keyspace(std::move(_keyspace))
         , ranges(std::move(_ranges))
         , column_families(std::move(_column_families)) {

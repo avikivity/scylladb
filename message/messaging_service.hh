@@ -64,7 +64,7 @@ namespace dht {
 }
 
 namespace query {
-    using partition_range = range<ring_position>;
+    using partition_range = nonwrapping_range<ring_position>;
     class read_command;
     class result;
 }
@@ -230,14 +230,14 @@ public:
     void register_stream_mutation(std::function<future<> (const rpc::client_info& cinfo, UUID plan_id, frozen_mutation fm, unsigned dst_cpu_id, rpc::optional<bool>)>&& func);
     future<> send_stream_mutation(msg_addr id, UUID plan_id, frozen_mutation fm, unsigned dst_cpu_id, bool fragmented);
 
-    void register_stream_mutation_done(std::function<future<> (const rpc::client_info& cinfo, UUID plan_id, std::vector<range<dht::token>> ranges, UUID cf_id, unsigned dst_cpu_id)>&& func);
-    future<> send_stream_mutation_done(msg_addr id, UUID plan_id, std::vector<range<dht::token>> ranges, UUID cf_id, unsigned dst_cpu_id);
+    void register_stream_mutation_done(std::function<future<> (const rpc::client_info& cinfo, UUID plan_id, std::vector<nonwrapping_range<dht::token>> ranges, UUID cf_id, unsigned dst_cpu_id)>&& func);
+    future<> send_stream_mutation_done(msg_addr id, UUID plan_id, std::vector<nonwrapping_range<dht::token>> ranges, UUID cf_id, unsigned dst_cpu_id);
 
     void register_complete_message(std::function<future<> (const rpc::client_info& cinfo, UUID plan_id, unsigned dst_cpu_id)>&& func);
     future<> send_complete_message(msg_addr id, UUID plan_id, unsigned dst_cpu_id);
 
     // Wrapper for REPAIR_CHECKSUM_RANGE verb
-    void register_repair_checksum_range(std::function<future<partition_checksum> (sstring keyspace, sstring cf, range<dht::token> range, rpc::optional<repair_checksum> hash_version)>&& func);
+    void register_repair_checksum_range(std::function<future<partition_checksum> (sstring keyspace, sstring cf, nonwrapping_range<dht::token> range, rpc::optional<repair_checksum> hash_version)>&& func);
     void unregister_repair_checksum_range();
     future<partition_checksum> send_repair_checksum_range(msg_addr id, sstring keyspace, sstring cf, range<dht::token> range, repair_checksum hash_version);
 

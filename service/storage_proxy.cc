@@ -2905,7 +2905,7 @@ get_restricted_ranges(locator::token_metadata& tm, const schema& s, query::parti
     dht::ring_position_comparator cmp(s);
 
     // special case for bounds containing exactly 1 token
-    if (start_token(range) == end_token(range) && !range.is_wrap_around(cmp)) {
+    if (start_token(range) == end_token(range)) {
         if (start_token(range).is_minimum()) {
             return {};
         }
@@ -2915,13 +2915,7 @@ get_restricted_ranges(locator::token_metadata& tm, const schema& s, query::parti
     std::vector<query::partition_range> ranges;
 
     auto add_range = [&ranges, &cmp] (query::partition_range&& r) {
-        if (r.is_wrap_around(cmp)) {
-            auto unwrapped = r.unwrap();
-            ranges.emplace_back(std::move(unwrapped.second)); // Append in split order
-            ranges.emplace_back(std::move(unwrapped.first));
-        } else {
-            ranges.emplace_back(std::move(r));
-        }
+        ranges.emplace_back(std::move(r));
     };
 
     // divide the queryRange into pieces delimited by the ring
