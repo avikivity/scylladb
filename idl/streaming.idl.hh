@@ -23,7 +23,7 @@ namespace streaming {
 
 class stream_request {
     sstring keyspace;
-    std::vector<query::range<dht::token>> ranges;
+    std::vector<nonwrapping_range<dht::token>> ranges;
     std::vector<sstring> column_families;
 };
 

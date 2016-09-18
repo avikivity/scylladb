@@ -71,30 +71,34 @@ static std::vector<db::system_keyspace::range_estimates> estimates_for(const col
     std::vector<db::system_keyspace::range_estimates> estimates;
     estimates.reserve(local_ranges.size());
 
-    std::vector<query::partition_range> unwrapped;
     // Each range defines both bounds.
     for (auto& range : local_ranges) {
         int64_t count{0};
         utils::estimated_histogram hist{0};
-        unwrapped.clear();
-        if (range.is_wrap_around(dht::ring_position_comparator(*cf.schema()))) {
-            auto uw = range.unwrap();
-            unwrapped.push_back(std::move(uw.first));
-            unwrapped.push_back(std::move(uw.second));
-        } else {
-            unwrapped.push_back(range);
-        }
-        for (auto&& uwr : unwrapped) {
-            for (auto&& sstable : cf.select_sstables(uwr)) {
-                count += sstable->get_estimated_key_count();
-                hist.merge(sstable->get_stats_metadata().estimated_row_size);
-            }
+        for (auto&& sstable : cf.select_sstables(range)) {
+            count += sstable->get_estimated_key_count();
+            hist.merge(sstable->get_stats_metadata().estimated_row_size);
         }
         estimates.emplace_back(db::system_keyspace::range_estimates{
                 range.start()->value().token(),
                 range.end()->value().token(),
                 count,
                 count > 0 ? hist.mean() : 0});
+    }
+    // Merge first and last ranges as we expect a wrap-around range
+    boost::sort(estimates, [] (const system_keyspace::range_estimates& a, const system_keyspace::range_estimates& b) {
+        return a.range_start_token < b.range_start_token;
+    });
+    if (estimates.size() > 1 && estimates[0].range_start_token == dht::minimum_token()) {
+        auto& ef = estimates.front();
+        auto& eb = estimates.back();
+        ef.range_start_token = std::move(eb.range_start_token);
+        auto pc = ef.partitions_count + eb.partitions_count;
+        if (pc) {
+            ef.mean_partition_size = (ef.mean_partition_size * ef.partitions_count + eb.mean_partition_size * eb.partitions_count) / pc;
+        }
+        ef.partitions_count = pc;
+        estimates.pop_back();
     }
 
     return estimates;

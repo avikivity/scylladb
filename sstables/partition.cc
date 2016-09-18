@@ -1151,7 +1151,7 @@ mutation_reader sstable::read_range_rows(schema_ptr schema,
         return std::make_unique<mutation_reader::impl>();
     }
     return read_range_rows(std::move(schema),
-        query::range<dht::ring_position>::make(
+        nonwrapping_range<dht::ring_position>::make(
             dht::ring_position::starting_at(min_token),
             dht::ring_position::ending_at(max_token)), query::full_slice, pc);
 }
@@ -1161,10 +1161,6 @@ sstable::read_range_rows(schema_ptr schema,
                          const query::partition_range& range,
                          const query::partition_slice& slice,
                          const io_priority_class& pc) {
-    if (query::is_wrap_around(range, *schema)) {
-        fail(unimplemented::cause::WRAP_AROUND);
-    }
-
     auto start = [this, range, schema, &pc] {
         return range.start() ? (range.start()->is_inclusive()
                  ? lower_bound(schema, range.start()->value(), pc)
