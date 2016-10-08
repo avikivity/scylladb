@@ -78,7 +78,7 @@ public:
 
     void start();
 
-    void append_ranges(const std::vector<range<dht::token>>& ranges);
+    void append_ranges(const std::vector<nonwrapping_range<dht::token>>& ranges);
 };
 
 } // namespace streaming

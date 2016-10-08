@@ -555,10 +555,6 @@ column_family::make_streaming_reader(schema_ptr s,
                            const query::partition_range& range) const {
     auto& slice = query::full_slice;
     auto& pc = service::get_local_streaming_read_priority();
-    if (query::is_wrap_around(range, *s)) {
-        // make_combined_reader() can't handle streams that wrap around yet.
-        fail(unimplemented::cause::WRAP_AROUND);
-    }
 
     std::vector<mutation_reader> readers;
     readers.reserve(_memtables->size() + 1);

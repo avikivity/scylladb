@@ -171,7 +171,7 @@ void stream_transfer_task::start() {
     });
 }
 
-void stream_transfer_task::append_ranges(const std::vector<range<dht::token>>& ranges) {
+void stream_transfer_task::append_ranges(const std::vector<nonwrapping_range<dht::token>>& ranges) {
     _ranges.insert(_ranges.end(), ranges.begin(), ranges.end());
 }
 
