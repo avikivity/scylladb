@@ -45,17 +45,27 @@
 
 namespace streaming {
 
+std::vector<nonwrapping_range<dht::token>> unwrap(std::vector<wrapping_range<dht::token>>&& v);
+std::vector<wrapping_range<dht::token>> wrap(const std::vector<nonwrapping_range<dht::token>>& v);
+
 class stream_request {
 public:
     using token = dht::token;
     sstring keyspace;
     std::vector<nonwrapping_range<token>> ranges;
+    // For compatibility with <= 1.4, we send wrapping ranges (though they will never wrap).
+    std::vector<wrapping_range<token>> ranges_compat() const {
+        return wrap(ranges);
+    }
     std::vector<sstring> column_families;
     stream_request() = default;
     stream_request(sstring _keyspace, std::vector<nonwrapping_range<token>> _ranges, std::vector<sstring> _column_families)
         : keyspace(std::move(_keyspace))
         , ranges(std::move(_ranges))
         , column_families(std::move(_column_families)) {
+    }
+    stream_request(sstring _keyspace, std::vector<wrapping_range<token>> _ranges, std::vector<sstring> _column_families)
+        : stream_request(std::move(_keyspace), unwrap(std::move(_ranges)), std::move(_column_families)) {
     }
     friend std::ostream& operator<<(std::ostream& os, const stream_request& r);
 };
