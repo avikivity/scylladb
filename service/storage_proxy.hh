@@ -52,6 +52,12 @@
 #include "utils/estimated_histogram.hh"
 #include "tracing/trace_state.hh"
 
+namespace compat {
+
+class one_or_two_partition_ranges;
+
+}
+
 namespace service {
 
 class abstract_write_response_handler;
@@ -311,6 +317,16 @@ public:
     future<foreign_ptr<lw_shared_ptr<reconcilable_result>>> query_mutations_locally(
         schema_ptr, lw_shared_ptr<query::read_command> cmd, const query::partition_range&,
         tracing::trace_state_ptr trace_state = nullptr);
+
+
+    future<foreign_ptr<lw_shared_ptr<reconcilable_result>>> query_mutations_locally(
+        schema_ptr, lw_shared_ptr<query::read_command> cmd, const compat::one_or_two_partition_ranges&,
+        tracing::trace_state_ptr trace_state = nullptr);
+
+    future<foreign_ptr<lw_shared_ptr<reconcilable_result>>> query_mutations_locally(
+            schema_ptr s, lw_shared_ptr<query::read_command> cmd, const std::vector<query::partition_range>& pr,
+            tracing::trace_state_ptr trace_state = nullptr);
+
 
     future<> stop();
 

@@ -41,32 +41,6 @@
 
 namespace streaming {
 
-std::vector<nonwrapping_range<dht::token>>
-unwrap(std::vector<wrapping_range<dht::token>>&& v) {
-    std::vector<nonwrapping_range<dht::token>> ret;
-    ret.reserve(v.size() + 1);
-    for (auto&& wr : v) {
-        if (wr.is_wrap_around(dht::token_comparator())) {
-            auto&& p = std::move(wr).unwrap();
-            ret.push_back(nonwrapping_range<dht::token>(std::move(p.first)));
-            ret.push_back(nonwrapping_range<dht::token>(std::move(p.second)));
-        } else {
-            ret.push_back(nonwrapping_range<dht::token>(std::move(wr)));
-        }
-    }
-    return ret;
-}
-
-std::vector<wrapping_range<dht::token>>
-wrap(const std::vector<nonwrapping_range<dht::token>>& v) {
-    std::vector<wrapping_range<dht::token>> ret;
-    ret.reserve(v.size());
-    for (auto&& nwr : v) {
-        ret.push_back(v);
-    }
-    return ret;
-}
-
 std::ostream& operator<<(std::ostream& os, const stream_request& sr) {
     os << "[ ks = " << sr.keyspace << " cf =  ";
     for (auto& cf : sr.column_families) {

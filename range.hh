@@ -451,6 +451,10 @@ public:
     explicit nonwrapping_range(wrapping_range<T>&& r)
         : _range(std::move(r))
     { }
+    // Can only be called if !r.is_wrap_around().
+    explicit nonwrapping_range(const wrapping_range<T>& r)
+        : _range(r)
+    { }
     operator wrapping_range<T>() const & {
         return _range;
     }

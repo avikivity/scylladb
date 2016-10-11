@@ -41,12 +41,10 @@
 #include "core/sstring.hh"
 #include "range.hh"
 #include "dht/i_partitioner.hh"
+#include "partition_range_compat.hh"
 #include <vector>
 
 namespace streaming {
-
-std::vector<nonwrapping_range<dht::token>> unwrap(std::vector<wrapping_range<dht::token>>&& v);
-std::vector<wrapping_range<dht::token>> wrap(const std::vector<nonwrapping_range<dht::token>>& v);
 
 class stream_request {
 public:
@@ -55,7 +53,7 @@ public:
     std::vector<nonwrapping_range<token>> ranges;
     // For compatibility with <= 1.4, we send wrapping ranges (though they will never wrap).
     std::vector<wrapping_range<token>> ranges_compat() const {
-        return wrap(ranges);
+        return compat::wrap(ranges);
     }
     std::vector<sstring> column_families;
     stream_request() = default;
@@ -65,7 +63,7 @@ public:
         , column_families(std::move(_column_families)) {
     }
     stream_request(sstring _keyspace, std::vector<wrapping_range<token>> _ranges, std::vector<sstring> _column_families)
-        : stream_request(std::move(_keyspace), unwrap(std::move(_ranges)), std::move(_column_families)) {
+        : stream_request(std::move(_keyspace), compat::unwrap(std::move(_ranges)), std::move(_column_families)) {
     }
     friend std::ostream& operator<<(std::ostream& os, const stream_request& r);
 };
