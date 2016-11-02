@@ -289,6 +289,24 @@ ring_position_range_sharder::next(const schema& s) {
     return std::move(ret);
 }
 
+ring_position_range_vector_sharder::ring_position_range_vector_sharder(std::vector<nonwrapping_range<ring_position>> ranges)
+        : _ranges(std::move(ranges))
+        , _current_range(_ranges.begin()) {
+    next_range();
+}
+
+stdx::optional<ring_position_range_and_shard>
+ring_position_range_vector_sharder::next(const schema& s) {
+    if (!_current_sharder) {
+        return stdx::nullopt;
+    }
+    auto ret = _current_sharder->next(s);
+    if (!ret) {
+        next_range();
+    }
+    return ret;
+}
+
 int ring_position_comparator::operator()(const ring_position& lh, const ring_position& rh) const {
     return lh.tri_compare(s, rh);
 }
