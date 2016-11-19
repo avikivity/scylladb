@@ -613,6 +613,8 @@ future<> parse(random_access_reader& in, statistics& s) {
                     return parse<compaction_metadata>(in, s.contents[val.first]);
                 case metadata_type::Stats:
                     return parse<stats_metadata>(in, s.contents[val.first]);
+                case metadata_type::Sharding:
+                    return parse<sharding_metadata>(in, s.contents[val.first]);
                 default:
                     sstlog.warn("Invalid metadata type at Statistics file: {} ", int(val.first));
                     return make_ready_future<>();
@@ -646,6 +648,9 @@ inline void write(file_writer& out, statistics& s) {
                 break;
             case metadata_type::Stats:
                 write<stats_metadata>(out, s.contents[val.key]);
+                break;
+            case metadata_type::Sharding:
+                write<sharding_metadata>(out, s.contents[val.key]);
                 break;
             default:
                 sstlog.warn("Invalid metadata type at Statistics file: {} ", int(val.key));
@@ -1811,11 +1816,38 @@ sstable_writer::sstable_writer(sstable& sst, const schema& s, uint64_t estimated
     _components_writer.emplace(_sst, _schema, *_writer, estimated_partitions, max_sstable_size, _pc);
 }
 
+void
+sstable::create_sharding_metadata() {
+    set_first_and_last_keys();
+    auto range = query::partition_range(dht::ring_position(get_first_decorated_key()),
+            dht::ring_position(get_last_decorated_key()));
+    auto sharder = dht::ring_position_range_sharder(std::move(range));
+    auto sm = sharding_metadata();
+    auto rpras = sharder.next(*_schema);
+    while (rpras) {
+        if (rpras->shard == engine().cpu_id()) {
+            // we know left/right are not infinite
+            auto&& left = rpras->ring_range.start()->value();
+            auto&& right = rpras->ring_range.end()->value();
+            auto&& left_token = left.token();
+            auto left_exclusive = !left.has_key() && left.bound() == dht::ring_position::token_bound::end;
+            auto&& right_token = right.token();
+            auto right_exclusive = !right.has_key() && right.bound() == dht::ring_position::token_bound::start;
+            sm.token_ranges.elements.push_back({
+                {left_exclusive, to_bytes(bytes_view(left_token._data))},
+                {right_exclusive, to_bytes(bytes_view(right_token._data))}});
+        }
+        rpras = sharder.next(*_schema);
+    }
+    _statistics.contents.emplace(metadata_type::Sharding, std::make_unique<sharding_metadata>(std::move(sm)));
+}
+
 void sstable_writer::consume_end_of_stream()
 {
     _components_writer->consume_end_of_stream();
     _components_writer = stdx::nullopt;
     finish_file_writer();
+    _sst.create_sharding_metadata();
     _sst.write_summary(_pc);
     _sst.write_filter(_pc);
     _sst.write_statistics(_pc);
@@ -2446,6 +2478,37 @@ uint64_t sstable::estimated_keys_for_range(const nonwrapping_range<dht::token>& 
     // adjust for the current sampling level
     uint64_t estimated_keys = sample_key_count * ((downsampling::BASE_SAMPLING_LEVEL * _summary.header.min_index_interval) / _summary.header.sampling_level);
     return std::max(uint64_t(1), estimated_keys);
+}
+
+std::vector<unsigned>
+sstable::get_shards_for_this_sstable() const {
+    std::unordered_set<unsigned> shards;
+    std::vector<nonwrapping_range<dht::ring_position>> token_ranges;
+    auto entry = _statistics.contents.find(metadata_type::Sharding);
+    if (entry == _statistics.contents.end()) {
+        token_ranges.push_back(nonwrapping_range<dht::ring_position>(
+                dht::ring_position::starting_at(get_first_decorated_key().token()),
+                dht::ring_position::ending_at(get_last_decorated_key().token())));
+    } else {
+        auto sm = static_cast<const sharding_metadata*>(entry->second.get());
+        auto disk_token_range_to_ring_position_range = [] (const disk_token_range& dtr) {
+            auto t1 = dht::token(dht::token::kind::key, managed_bytes(bytes_view(dtr.left.token)));
+            auto t2 = dht::token(dht::token::kind::key, managed_bytes(bytes_view(dtr.right.token)));
+            return nonwrapping_range<dht::ring_position>(
+                    (dtr.left.exclusive ? dht::ring_position::ending_at : dht::ring_position::starting_at)(std::move(t1)),
+                    (dtr.right.exclusive ? dht::ring_position::starting_at : dht::ring_position::ending_at)(std::move(t2)));
+        };
+        token_ranges = boost::copy_range<std::vector<nonwrapping_range<dht::ring_position>>>(
+                sm->token_ranges.elements
+                | boost::adaptors::transformed(disk_token_range_to_ring_position_range));
+    }
+    auto sharder = dht::ring_position_range_vector_sharder(std::move(token_ranges));
+    auto rpras = sharder.next(*_schema);
+    while (rpras) {
+        shards.insert(rpras->shard);
+        rpras = sharder.next(*_schema);
+    }
+    return boost::copy_range<std::vector<unsigned>>(shards);
 }
 
 std::ostream&

@@ -590,6 +590,7 @@ private:
     void write_collection(file_writer& out, const composite& clustering_key, const column_definition& cdef, collection_mutation_view collection);
 
     stdx::optional<std::pair<uint64_t, uint64_t>> get_sample_indexes_for_range(const nonwrapping_range<dht::token>& range);
+    void create_sharding_metadata();
 public:
     future<> read_toc();
 
@@ -642,6 +643,7 @@ public:
         const compaction_metadata& s = *static_cast<compaction_metadata *>(p.get());
         return s;
     }
+    std::vector<unsigned> get_shards_for_this_sstable() const;
 
     uint32_t get_sstable_level() const {
         return get_stats_metadata().sstable_level;
