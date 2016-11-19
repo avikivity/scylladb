@@ -590,6 +590,7 @@ private:
     void write_collection(file_writer& out, const composite& clustering_key, const column_definition& cdef, collection_mutation_view collection);
 
     stdx::optional<std::pair<uint64_t, uint64_t>> get_sample_indexes_for_range(const nonwrapping_range<dht::token>& range);
+    void create_sharding_metadata();
 public:
     future<> read_toc();
 

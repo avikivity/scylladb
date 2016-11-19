@@ -1816,11 +1816,14 @@ sstable_writer::sstable_writer(sstable& sst, const schema& s, uint64_t estimated
     _components_writer.emplace(_sst, _schema, *_writer, estimated_partitions, max_sstable_size, _pc);
 }
 
+
+
 void sstable_writer::consume_end_of_stream()
 {
     _components_writer->consume_end_of_stream();
     _components_writer = stdx::nullopt;
     finish_file_writer();
+    _sst.create_sharding_metadata();
     _sst.write_summary(_pc);
     _sst.write_filter(_pc);
     _sst.write_statistics(_pc);
