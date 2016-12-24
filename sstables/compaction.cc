@@ -50,6 +50,7 @@
 
 #include "core/future-util.hh"
 #include "core/pipe.hh"
+#include <seastar/core/scheduling.hh>
 
 #include "sstables.hh"
 #include "compaction.hh"
@@ -72,9 +73,9 @@ class sstable_reader final : public ::mutation_reader::impl {
     shared_sstable _sst;
     mutation_reader _reader;
 public:
-    sstable_reader(shared_sstable sst, schema_ptr schema)
+    sstable_reader(shared_sstable sst, schema_ptr schema, seastar::scheduling_group sg = {})
             : _sst(std::move(sst))
-            , _reader(_sst->read_rows(schema, service::get_local_compaction_priority()))
+            , _reader(_sst->read_rows(schema, service::get_local_compaction_priority(), sg))
             {}
     virtual future<streamed_mutation_opt> operator()() override {
         return _reader.read().handle_exception([sst = _sst] (auto ep) {
@@ -223,8 +224,10 @@ public:
 // are created using the "sstable_creator" object passed by the caller.
 future<std::vector<shared_sstable>>
 compact_sstables(std::vector<shared_sstable> sstables, column_family& cf, std::function<shared_sstable()> creator,
-                 uint64_t max_sstable_size, uint32_t sstable_level, bool cleanup) {
-    return seastar::async([sstables = std::move(sstables), &cf, creator = std::move(creator), max_sstable_size, sstable_level, cleanup] () mutable {
+                 uint64_t max_sstable_size, uint32_t sstable_level, bool cleanup, seastar::scheduling_group sg) {
+    seastar::thread_attributes attr;
+    attr.sched_group = sg;
+    return seastar::async(attr, [sstables = std::move(sstables), &cf, creator = std::move(creator), max_sstable_size, sstable_level, cleanup, sg] () mutable {
         // keep a immutable copy of sstable set because selector needs it alive
         // and also sstables created after compaction shouldn't be considered.
         const sstable_set s = cf.get_sstable_set();
@@ -247,7 +250,7 @@ compact_sstables(std::vector<shared_sstable> sstables, column_family& cf, std::f
         auto schema = cf.schema();
         for (auto sst : sstables) {
             // We also capture the sstable, so we keep it alive while the read isn't done
-            readers.emplace_back(make_mutation_reader<sstable_reader>(sst, schema));
+            readers.emplace_back(make_mutation_reader<sstable_reader>(sst, schema, sg));
             // FIXME: If the sstables have cardinality estimation bitmaps, use that
             // for a better estimate for the number of partitions in the merged
             // sstable than just adding up the lengths of individual sstables.

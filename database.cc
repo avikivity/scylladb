@@ -1349,7 +1349,7 @@ column_family::compact_sstables(sstables::compaction_descriptor descriptor, bool
                 return sst;
         };
         return sstables::compact_sstables(*sstables_to_compact, *this, create_sstable, descriptor.max_sstable_bytes, descriptor.level,
-                cleanup).then([this, sstables_to_compact] (auto new_sstables) {
+                cleanup, _config.compaction_scheduling_group).then([this, sstables_to_compact] (auto new_sstables) {
             _compaction_strategy.notify_completion(*sstables_to_compact, new_sstables);
             return this->rebuild_sstable_list(new_sstables, *sstables_to_compact);
         });
@@ -1738,16 +1738,17 @@ future<> distributed_loader::populate_column_family(distributed<database>& db, s
 
 utils::UUID database::empty_version = utils::UUID_gen::get_name_UUID(bytes{});
 
-database::database() : database(db::config())
+database::database() : database(db::config(), seastar::scheduling_group())
 {}
 
-database::database(const db::config& cfg)
+database::database(const db::config& cfg, seastar::scheduling_group compaction_scheduling_group)
     : _stats(make_lw_shared<db_stats>())
     , _cfg(std::make_unique<db::config>(cfg))
     // Allow system tables a pool of 10 MB memory to write, but never block on other regions.
     , _system_dirty_memory_manager(*this, 10 << 20)
     , _dirty_memory_manager(*this, memory::stats().total_memory() * 0.45)
     , _streaming_dirty_memory_manager(*this, memory::stats().total_memory() * 0.10)
+    , _compaction_scheduling_group(compaction_scheduling_group)
     , _version(empty_version)
     , _enable_incremental_backups(cfg.incremental_backups())
 {
@@ -2312,6 +2313,7 @@ keyspace::make_column_family_config(const schema& s, const db::config& db_config
     cfg.cf_stats = _config.cf_stats;
     cfg.enable_incremental_backups = _config.enable_incremental_backups;
     cfg.max_cached_partition_size_in_bytes = db_config.max_cached_partition_size_in_kb() * 1024;
+    cfg.compaction_scheduling_group = _config.compaction_scheduling_group;
 
     return cfg;
 }
@@ -2990,6 +2992,7 @@ database::make_keyspace_config(const keyspace_metadata& ksm) {
     cfg.streaming_read_concurrency_config.timeout = {};
     cfg.cf_stats = &_cf_stats;
     cfg.enable_incremental_backups = _enable_incremental_backups;
+    cfg.compaction_scheduling_group = _compaction_scheduling_group;
     return cfg;
 }
 

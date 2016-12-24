@@ -164,7 +164,7 @@ public:
     // The function returns a future which completes after all the data has
     // been fed into the consumer. The caller needs to ensure the "consumer"
     // object lives until then (e.g., using the do_with() idiom).
-    future<> data_consume_rows_at_once(row_consumer& consumer, uint64_t pos, uint64_t end);
+    future<> data_consume_rows_at_once(row_consumer& consumer, uint64_t pos, uint64_t end, seastar::scheduling_group sg);
 
     // disk_read_range describes a byte ranges covering part of an sstable
     // row that we need to read from disk. Usually this is the whole byte
@@ -218,12 +218,12 @@ public:
     // The caller must ensure (e.g., using do_with()) that the context object,
     // as well as the sstable, remains alive as long as a read() is in
     // progress (i.e., returned a future which hasn't completed yet).
-    data_consume_context data_consume_rows(row_consumer& consumer, disk_read_range toread);
+    data_consume_context data_consume_rows(row_consumer& consumer, disk_read_range toread, seastar::scheduling_group sg);
 
-    data_consume_context data_consume_single_partition(row_consumer& consumer, disk_read_range toread);
+    data_consume_context data_consume_single_partition(row_consumer& consumer, disk_read_range toread, seastar::scheduling_group sg);
 
     // Like data_consume_rows() with bounds, but iterates over whole range
-    data_consume_context data_consume_rows(row_consumer& consumer);
+    data_consume_context data_consume_rows(row_consumer& consumer, seastar::scheduling_group sg);
 
     static component_type component_from_sstring(sstring& s);
     static version_types version_from_sstring(sstring& s);
@@ -261,14 +261,16 @@ public:
         schema_ptr schema,
         const key& k,
         const query::partition_slice& slice = query::full_slice,
-        const io_priority_class& pc = default_priority_class());
+        const io_priority_class& pc = default_priority_class(),
+        seastar::scheduling_group sg = {});
 
     // Returns a mutation_reader for given range of partitions
     mutation_reader read_range_rows(
         schema_ptr schema,
         const dht::partition_range& range,
         const query::partition_slice& slice = query::full_slice,
-        const io_priority_class& pc = default_priority_class());
+        const io_priority_class& pc = default_priority_class(),
+        seastar::scheduling_group sg = {});
 
     // read_rows() returns each of the rows in the sstable, in sequence,
     // converted to a "mutation" data structure.
@@ -281,7 +283,7 @@ public:
     // The caller must ensure (e.g., using do_with()) that the context object,
     // as well as the sstable, remains alive as long as a read() is in
     // progress (i.e., returned a future which hasn't completed yet).
-    mutation_reader read_rows(schema_ptr schema, const io_priority_class& pc = default_priority_class());
+    mutation_reader read_rows(schema_ptr schema, const io_priority_class& pc = default_priority_class(), seastar::scheduling_group sg = {});
 
     // Write sstable components from a memtable.
     future<> write_components(memtable& mt, bool backup = false,

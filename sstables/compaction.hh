@@ -102,7 +102,7 @@ namespace sstables {
     // cleaning operation, and compaction history will not be updated.
     future<std::vector<shared_sstable>> compact_sstables(std::vector<shared_sstable> sstables,
             column_family& cf, std::function<shared_sstable()> creator,
-            uint64_t max_sstable_size, uint32_t sstable_level, bool cleanup = false);
+            uint64_t max_sstable_size, uint32_t sstable_level, bool cleanup = false, seastar::scheduling_group sg = {});
 
     // Return the most interesting bucket applying the size-tiered strategy.
     std::vector<sstables::shared_sstable>

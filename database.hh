@@ -405,6 +405,7 @@ public:
         restricted_mutation_reader_config streaming_read_concurrency_config;
         ::cf_stats* cf_stats = nullptr;
         uint64_t max_cached_partition_size_in_bytes;
+        seastar::scheduling_group compaction_scheduling_group;
     };
     struct no_commitlog {};
     struct stats {
@@ -999,6 +1000,7 @@ public:
         restricted_mutation_reader_config read_concurrency_config;
         restricted_mutation_reader_config streaming_read_concurrency_config;
         ::cf_stats* cf_stats = nullptr;
+        seastar::scheduling_group compaction_scheduling_group;
     };
 private:
     std::unique_ptr<locator::abstract_replication_strategy> _replication_strategy;
@@ -1107,6 +1109,8 @@ private:
     semaphore _system_read_concurrency_sem{max_system_concurrent_reads()};
     restricted_mutation_reader_config _system_read_concurrency_config;
 
+    seastar::scheduling_group _compaction_scheduling_group;
+
     std::unordered_map<sstring, keyspace> _keyspaces;
     std::unordered_map<utils::UUID, lw_shared_ptr<column_family>> _column_families;
     std::unordered_map<std::pair<sstring, sstring>, utils::UUID, utils::tuple_hash> _ks_cf_to_uuid;
@@ -1145,7 +1149,7 @@ public:
 
     future<> parse_system_tables(distributed<service::storage_proxy>&);
     database();
-    database(const db::config&);
+    database(const db::config&, seastar::scheduling_group compaction_scheduling_group);
     database(database&&) = delete;
     ~database();
 

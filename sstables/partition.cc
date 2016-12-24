@@ -692,24 +692,24 @@ struct sstable_data_source {
     data_consume_context _context;
     std::unique_ptr<index_reader> _index;
 
-    sstable_data_source(shared_sstable sst, mp_row_consumer&& consumer)
+    sstable_data_source(shared_sstable sst, mp_row_consumer&& consumer, seastar::scheduling_group sg)
         : _sst(std::move(sst))
         , _consumer(std::move(consumer))
-        , _context(_sst->data_consume_rows(_consumer))
+        , _context(_sst->data_consume_rows(_consumer, sg))
     { }
 
-    sstable_data_source(shared_sstable sst, mp_row_consumer&& consumer, sstable::disk_read_range toread, std::unique_ptr<index_reader> index)
+    sstable_data_source(shared_sstable sst, mp_row_consumer&& consumer, sstable::disk_read_range toread, std::unique_ptr<index_reader> index, seastar::scheduling_group sg)
         : _sst(std::move(sst))
         , _consumer(std::move(consumer))
-        , _context(_sst->data_consume_rows(_consumer, std::move(toread)))
+        , _context(_sst->data_consume_rows(_consumer, std::move(toread), sg))
         , _index(std::move(index))
     { }
 
     sstable_data_source(schema_ptr s, shared_sstable sst, const sstables::key& k, const io_priority_class& pc,
-            const query::partition_slice& slice, sstable::disk_read_range toread)
+            const query::partition_slice& slice, sstable::disk_read_range toread, seastar::scheduling_group sg)
         : _sst(std::move(sst))
         , _consumer(k, s, slice, pc)
-        , _context(_sst->data_consume_single_partition(_consumer, std::move(toread)))
+        , _context(_sst->data_consume_single_partition(_consumer, std::move(toread), sg))
     { }
 
     ~sstable_data_source() {
@@ -796,9 +796,10 @@ public:
 
     static future<streamed_mutation> create(schema_ptr s, shared_sstable sst, const sstables::key& k,
                                             const query::partition_slice& slice,
-                                            const io_priority_class& pc, sstable::disk_read_range toread)
+                                            const io_priority_class& pc, sstable::disk_read_range toread,
+                                            seastar::scheduling_group sg)
     {
-        auto ds = make_lw_shared<sstable_data_source>(s, sst, k, pc, slice, std::move(toread));
+        auto ds = make_lw_shared<sstable_data_source>(s, sst, k, pc, slice, std::move(toread), sg);
         return ds->_context.read().then([s, ds] {
             auto mut = ds->_consumer.get_mutation();
             assert(mut);
@@ -844,11 +845,12 @@ future<streamed_mutation_opt>
 sstables::sstable::read_row(schema_ptr schema,
                             const sstables::key& key,
                             const query::partition_slice& slice,
-                            const io_priority_class& pc) {
+                            const io_priority_class& pc,
+                            seastar::scheduling_group sg) {
 
     assert(schema);
 
-    return find_disk_ranges(schema, key, slice, pc).then([this, &key, &slice, &pc, schema] (disk_read_range toread) {
+    return find_disk_ranges(schema, key, slice, pc).then([this, &key, &slice, &pc, schema, sg] (disk_read_range toread) {
         if (!toread.found_row()) {
             _filter_tracker.add_false_positive();
         }
@@ -856,7 +858,7 @@ sstables::sstable::read_row(schema_ptr schema,
             return make_ready_future<streamed_mutation_opt>();
         }
         _filter_tracker.add_true_positive();
-        return sstable_streamed_mutation::create(schema, this->shared_from_this(), key, slice, pc, std::move(toread)).then([] (auto sm) {
+        return sstable_streamed_mutation::create(schema, this->shared_from_this(), key, slice, pc, std::move(toread), sg).then([] (auto sm) {
             return streamed_mutation_opt(std::move(sm));
         });
     });
@@ -1058,36 +1060,36 @@ private:
     std::function<future<lw_shared_ptr<sstable_data_source>> ()> _get_data_source;
 public:
     impl(shared_sstable sst, schema_ptr schema, sstable::disk_read_range toread,
-         const io_priority_class &pc)
+         const io_priority_class &pc, seastar::scheduling_group sg)
         : _pc(pc), _schema(schema)
         , _consumer(schema, query::full_slice, pc)
-        , _get_data_source([this, sst = std::move(sst), toread] {
-            auto ds = make_lw_shared<sstable_data_source>(std::move(sst), std::move(_consumer), std::move(toread), std::unique_ptr<index_reader>());
+        , _get_data_source([this, sst = std::move(sst), toread, sg] {
+            auto ds = make_lw_shared<sstable_data_source>(std::move(sst), std::move(_consumer), std::move(toread), std::unique_ptr<index_reader>(), sg);
             return make_ready_future<lw_shared_ptr<sstable_data_source>>(std::move(ds));
         }) { }
     impl(shared_sstable sst, schema_ptr schema,
-         const io_priority_class &pc)
+         const io_priority_class &pc, seastar::scheduling_group sg)
         : _pc(pc), _schema(schema)
         , _consumer(schema, query::full_slice, pc)
-        , _get_data_source([this, sst = std::move(sst)] {
-            auto ds = make_lw_shared<sstable_data_source>(std::move(sst), std::move(_consumer));
+        , _get_data_source([this, sst = std::move(sst), sg] {
+            auto ds = make_lw_shared<sstable_data_source>(std::move(sst), std::move(_consumer), sg);
             return make_ready_future<lw_shared_ptr<sstable_data_source>>(std::move(ds));
         }) { }
     impl(shared_sstable sst,
          schema_ptr schema,
          const dht::partition_range& pr,
          const query::partition_slice& slice,
-         const io_priority_class& pc)
+         const io_priority_class& pc, seastar::scheduling_group sg)
         : _pc(pc), _schema(schema)
         , _consumer(schema, slice, pc)
-        , _get_data_source([this, &pr, sst = std::move(sst)] () mutable {
+        , _get_data_source([this, &pr, sst = std::move(sst), sg] () mutable {
             auto index = std::make_unique<index_reader>(sst->get_index_reader(_pc));
             auto f = index->get_disk_read_range(*_schema, pr);
-            return f.then([this, index = std::move(index), sst = std::move(sst)] (sstable::disk_read_range drr) mutable {
+            return f.then([this, index = std::move(index), sst = std::move(sst), sg] (sstable::disk_read_range drr) mutable {
                 if (!drr.found_row()) {
                     _read_enabled = false;
                 }
-                return make_lw_shared<sstable_data_source>(std::move(sst), std::move(_consumer), std::move(drr), std::move(index));
+                return make_lw_shared<sstable_data_source>(std::move(sst), std::move(_consumer), std::move(drr), std::move(index), sg);
             });
         }) { }
     impl() : _read_enabled(false), _pc(default_priority_class()), _get_data_source() { }
@@ -1159,17 +1161,17 @@ future<> mutation_reader::fast_forward_to(const dht::partition_range& pr) {
     return _pimpl->fast_forward_to(pr);
 }
 
-mutation_reader sstable::read_rows(schema_ptr schema, const io_priority_class& pc) {
-    return std::make_unique<mutation_reader::impl>(shared_from_this(), schema, pc);
+mutation_reader sstable::read_rows(schema_ptr schema, const io_priority_class& pc, seastar::scheduling_group sg) {
+    return std::make_unique<mutation_reader::impl>(shared_from_this(), schema, pc, sg);
 }
 
 mutation_reader
 sstable::read_range_rows(schema_ptr schema,
                          const dht::partition_range& range,
                          const query::partition_slice& slice,
-                         const io_priority_class& pc) {
+                         const io_priority_class& pc, seastar::scheduling_group sg) {
     return std::make_unique<mutation_reader::impl>(
-        shared_from_this(), std::move(schema), range, slice, pc);
+        shared_from_this(), std::move(schema), range, slice, pc, sg);
 }
 
 }
