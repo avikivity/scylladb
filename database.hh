@@ -1072,6 +1072,15 @@ public:
     no_such_column_family(const sstring& ks_name, const sstring& cf_name);
 };
 
+
+class database_config {
+    seastar::scheduling_group memtable_scheduling_group;
+    seastar::scheduling_group compaction_scheduling_group;
+    seastar::scheduling_group commitlog_scheduling_group;
+    seastar::scheduling_group query_scheduling_group;
+    seastar::scheduling_group streaming_scheduling_group;
+};
+
 // Policy for distributed<database>:
 //   broadcast metadata writes
 //   local metadata reads
@@ -1109,7 +1118,7 @@ private:
     semaphore _system_read_concurrency_sem{max_system_concurrent_reads()};
     restricted_mutation_reader_config _system_read_concurrency_config;
 
-    seastar::scheduling_group _compaction_scheduling_group;
+    database_config _dbcfg;
 
     std::unordered_map<sstring, keyspace> _keyspaces;
     std::unordered_map<utils::UUID, lw_shared_ptr<column_family>> _column_families;
@@ -1149,7 +1158,7 @@ public:
 
     future<> parse_system_tables(distributed<service::storage_proxy>&);
     database();
-    database(const db::config&, seastar::scheduling_group compaction_scheduling_group);
+    database(const db::config&, database_config dbcfg);
     database(database&&) = delete;
     ~database();
 

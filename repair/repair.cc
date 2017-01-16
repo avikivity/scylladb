@@ -37,6 +37,7 @@
 
 #include <cryptopp/sha.h>
 #include <seastar/core/gate.hh>
+#include <seastar/core/scheduling.hh>
 
 static logging::logger logger("repair");
 
