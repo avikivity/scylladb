@@ -167,6 +167,41 @@ public:
     }
 };
 
+
+class decorated_key_equals_comparator {
+    const schema& _schema;
+public:
+    explicit decorated_key_equals_comparator(const schema& schema) : _schema(schema) {}
+    bool operator()(const dht::decorated_key& k1, const dht::decorated_key& k2) const {
+        return k1.equal(_schema, k2);
+    }
+};
+
+}
+
+namespace std {
+
+template <>
+struct hash<dht::decorated_key> {
+    size_t operator()(const dht::decorated_key& k) const {
+        size_t ret = 0;
+        const auto& b = k.token()._data;
+        if (b.size() <= sizeof(ret)) { // practically always
+            std::copy_n(b.data(), b.size(), reinterpret_cast<int8_t*>(&ret));
+        } else {
+            // Avoid linearization issues
+            for (unsigned i = 0; i <= sizeof(ret); ++i) {
+                reinterpret_cast<int8_t*>(&ret)[i] = b[i];
+            }
+        }
+        return ret;
+    }
+};
+
+}
+
+namespace dht {
+
 using decorated_key_opt = std::experimental::optional<decorated_key>;
 
 class i_partitioner {
