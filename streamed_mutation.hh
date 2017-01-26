@@ -23,6 +23,7 @@
 
 #include "mutation_partition.hh"
 #include "utils/optimized_optional.hh"
+#include <seastar/core/scheduling.hh>
 
 #include <experimental/optional>
 
@@ -549,11 +550,11 @@ concept bool StreamedMutationConsumer() {
 */
 template<typename Consumer>
 auto consume(streamed_mutation& m, Consumer consumer, seastar::scheduling_group sg) {
-    return do_with(std::move(consumer), [&m] (Consumer& c) {
+    return do_with(std::move(consumer), [&m, sg] (Consumer& c) {
         if (c.consume(m.partition_tombstone()) == stop_iteration::yes) {
             return make_ready_future().then([&] { return c.consume_end_of_stream(); });
         }
-        return repeat(sg, [&m, &c] {
+        return repeat([&m, &c] {
             if (m.is_buffer_empty()) {
                 if (m.is_end_of_stream()) {
                     return make_ready_future<stop_iteration>(stop_iteration::yes);

@@ -101,7 +101,7 @@ public:
     frozen_mutation consume_end_of_stream();
 };
 
-future<frozen_mutation> freeze(streamed_mutation sm);
+future<frozen_mutation> freeze(streamed_mutation sm, seastar::scheduling_group sg = {});
 
 static constexpr size_t default_frozen_fragment_size = 128 * 1024;
 

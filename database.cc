@@ -362,6 +362,7 @@ class range_sstable_reader final : public combined_mutation_reader {
     // Use a pointer instead of copying, so we don't need to regenerate the reader if
     // the priority changes.
     const io_priority_class& _pc;
+    seastar::schedling_group _sg;
     tracing::trace_state_ptr _trace_state;
     const query::partition_slice& _slice;
 private:
@@ -369,7 +370,7 @@ private:
         tracing::trace(_trace_state, "Reading partition range {} from sstable {}", *_pr, seastar::value_of([&sst] { return sst->get_filename(); }));
         // FIXME: make sstable::read_range_rows() return ::mutation_reader so that we can drop this wrapper.
         mutation_reader reader =
-            make_mutation_reader<sstable_range_wrapping_reader>(sst, _s, *_pr, _slice, _pc);
+            make_mutation_reader<sstable_range_wrapping_reader>(sst, _s, *_pr, _slice, _pc, _sg);
         if (sst->is_shared()) {
             reader = make_filtering_reader(std::move(reader), belongs_to_current_shard);
         }
@@ -381,11 +382,13 @@ public:
                          const dht::partition_range& pr,
                          const query::partition_slice& slice,
                          const io_priority_class& pc,
+                         seastar::scheduling_group sg,
                          tracing::trace_state_ptr trace_state)
         : _s(s)
         , _pr(&pr)
         , _sstables(std::move(sstables))
         , _pc(pc)
+        , _sg(sg)
         , _trace_state(std::move(trace_state))
         , _slice(slice)
     {
@@ -506,6 +509,7 @@ column_family::make_sstable_reader(schema_ptr s,
                                    const dht::partition_range& pr,
                                    const query::partition_slice& slice,
                                    const io_priority_class& pc,
+                                   seastar::scheduling_group sg,
                                    tracing::trace_state_ptr trace_state) const {
     // restricts a reader's concurrency if the configuration specifies it
     auto restrict_reader = [&] (mutation_reader&& in) {

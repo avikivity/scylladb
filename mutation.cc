@@ -301,18 +301,18 @@ public:
 };
 
 future<mutation_opt>
-mutation_from_streamed_mutation_with_limit(streamed_mutation sm, size_t limit) {
-    return do_with(std::move(sm), [limit] (auto& sm) {
-        return consume(sm, mutation_rebuilder<limit_mutation_size::yes>(sm, limit));
+mutation_from_streamed_mutation_with_limit(streamed_mutation sm, size_t limit, seastar::scheduling_group sg = {}) {
+    return do_with(std::move(sm), [limit, sg] (auto& sm) {
+        return consume(sm, mutation_rebuilder<limit_mutation_size::yes>(sm, limit), sg);
     });
 }
 
-future<mutation_opt> mutation_from_streamed_mutation(streamed_mutation_opt sm) {
+future<mutation_opt> mutation_from_streamed_mutation(streamed_mutation_opt sm, seastar::scheduling_group sg = {}) {
     if (!sm) {
         return make_ready_future<mutation_opt>();
     }
-    return do_with(std::move(*sm), [] (auto& sm) {
-        return consume(sm, mutation_rebuilder<limit_mutation_size::no>(sm));
+    return do_with(std::move(*sm), [sg] (auto& sm) {
+        return consume(sm, mutation_rebuilder<limit_mutation_size::no>(sm), sg);
     });
 }
 
