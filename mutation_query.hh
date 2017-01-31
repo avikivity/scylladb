@@ -126,9 +126,10 @@ future<reconcilable_result> mutation_query(
     uint32_t row_limit,
     uint32_t partition_limit,
     gc_clock::time_point query_time,
-    query::result_memory_accounter&& accounter = { });
+    query::result_memory_accounter&& accounter = { },
+    seastar::scheduling_group sg = {});
 
 future<> data_query(
     schema_ptr s, const mutation_source& source, const dht::partition_range& range,
     const query::partition_slice& slice, uint32_t row_limit, uint32_t partition_limit,
-    gc_clock::time_point query_time, query::result::builder& builder);
+    gc_clock::time_point query_time, query::result::builder& builder, seastar::scheduling_group sg);

@@ -282,7 +282,7 @@ public:
             ss.start(std::ref(*db));
             auto stop_storage_service = defer([&ss] { ss.stop().get(); });
 
-            db->start(std::move(*cfg)).get();
+            db->start(std::move(*cfg), database_config()).get();
             auto stop_db = defer([db] { db->stop().get(); });
 
             // FIXME: split

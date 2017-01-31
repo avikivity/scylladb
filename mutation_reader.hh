@@ -253,34 +253,34 @@ future<> consume(mutation_reader& reader, Consumer consumer) {
 class mutation_source {
     using partition_range = const dht::partition_range&;
     using io_priority = const io_priority_class&;
-    std::function<mutation_reader(schema_ptr, partition_range, const query::partition_slice&, io_priority, tracing::trace_state_ptr)> _fn;
+    std::function<mutation_reader(schema_ptr, partition_range, const query::partition_slice&, io_priority, seastar::scheduling_group, tracing::trace_state_ptr)> _fn;
 public:
-    mutation_source(std::function<mutation_reader(schema_ptr, partition_range, const query::partition_slice&, io_priority, tracing::trace_state_ptr)> fn)
+    mutation_source(std::function<mutation_reader(schema_ptr, partition_range, const query::partition_slice&, io_priority, seastar::scheduling_group, tracing::trace_state_ptr)> fn)
             : _fn(std::move(fn)) {}
-    mutation_source(std::function<mutation_reader(schema_ptr, partition_range, const query::partition_slice&, io_priority)> fn)
-        : _fn([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority pc, tracing::trace_state_ptr) {
-            return fn(s, range, slice, pc);
+    mutation_source(std::function<mutation_reader(schema_ptr, partition_range, const query::partition_slice&, io_priority, seastar::scheduling_group)> fn)
+        : _fn([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority pc, seastar::scheduling_group sg, tracing::trace_state_ptr) {
+            return fn(s, range, slice, pc, sg);
         }) {}
     mutation_source(std::function<mutation_reader(schema_ptr, partition_range, const query::partition_slice&)> fn)
-        : _fn([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority, tracing::trace_state_ptr) {
+        : _fn([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority, seastar::scheduling_group, tracing::trace_state_ptr) {
             return fn(s, range, slice);
         }) {}
     mutation_source(std::function<mutation_reader(schema_ptr, partition_range range)> fn)
-        : _fn([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice&, io_priority, tracing::trace_state_ptr) {
+        : _fn([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice&, io_priority, seastar::scheduling_group, tracing::trace_state_ptr) {
             return fn(s, range);
         }) {}
 
-    mutation_reader operator()(schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority pc, tracing::trace_state_ptr trace_state) const {
-        return _fn(std::move(s), range, slice, pc, std::move(trace_state));
+    mutation_reader operator()(schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority pc, seastar::scheduling_group sg, tracing::trace_state_ptr trace_state) const {
+        return _fn(std::move(s), range, slice, pc, sg, std::move(trace_state));
     }
-    mutation_reader operator()(schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority pc) const {
-        return _fn(std::move(s), range, slice, pc, nullptr);
+    mutation_reader operator()(schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority pc, seastar::scheduling_group sg) const {
+        return _fn(std::move(s), range, slice, pc, sg, nullptr);
     }
     mutation_reader operator()(schema_ptr s, partition_range range, const query::partition_slice& slice) const {
-        return _fn(std::move(s), range, slice, default_priority_class(), nullptr);
+        return _fn(std::move(s), range, slice, default_priority_class(), seastar::scheduling_group(), nullptr);
     }
     mutation_reader operator()(schema_ptr s, partition_range range) const {
-        return _fn(std::move(s), range, query::full_slice, default_priority_class(), nullptr);
+        return _fn(std::move(s), range, query::full_slice, default_priority_class(), seastar::scheduling_group(), nullptr);
     }
 };
 
@@ -430,4 +430,5 @@ stable_flattened_mutations_consumer<FlattenedConsumer> make_stable_flattened_mut
 mutation_reader
 make_multi_range_reader(schema_ptr s, mutation_source source, const dht::partition_range_vector& ranges,
                         const query::partition_slice& slice, const io_priority_class& pc = default_priority_class(),
+                        seastar::scheduling_group sg = {},
                         tracing::trace_state_ptr trace_state = nullptr);

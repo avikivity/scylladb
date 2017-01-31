@@ -287,15 +287,15 @@ public:
 
     // Write sstable components from a memtable.
     future<> write_components(memtable& mt, bool backup = false,
-                              const io_priority_class& pc = default_priority_class(), bool leave_unsealed = false);
+                              const io_priority_class& pc = default_priority_class(), seastar::scheduling_group sg = {}, bool leave_unsealed = false);
 
     future<> write_components(::mutation_reader mr,
             uint64_t estimated_partitions, schema_ptr schema, uint64_t max_sstable_size, bool backup = false,
-            const io_priority_class& pc = default_priority_class(), bool leave_unsealed = false);
+            const io_priority_class& pc = default_priority_class(), seastar::scheduling_group sg = {}, bool leave_unsealed = false);
 
     sstable_writer get_writer(const schema& s, uint64_t estimated_partitions, uint64_t max_sstable_size,
                               bool backup = false, const io_priority_class& pc = default_priority_class(),
-                              bool leave_unsealed = false);
+                              seastar::scheduling_group sg = {}, bool leave_unsealed = false);
 
     future<> seal_sstable(bool backup);
 
@@ -780,14 +780,15 @@ class components_writer {
     stdx::optional<key> _partition_key;
 private:
     size_t get_offset();
-    file_writer index_file_writer(sstable& sst, const io_priority_class& pc);
+    file_writer index_file_writer(sstable& sst, const io_priority_class& pc, seastar::scheduling_group sg);
     void ensure_tombstone_is_written() {
         if (!_tombstone_written) {
             consume(tombstone());
         }
     }
 public:
-    components_writer(sstable& sst, const schema& s, file_writer& out, uint64_t estimated_partitions, uint64_t max_sstable_size, const io_priority_class& pc);
+    components_writer(sstable& sst, const schema& s, file_writer& out, uint64_t estimated_partitions, uint64_t max_sstable_size, const io_priority_class& pc,
+            seastar::scheduling_group sg);
 
     void consume_new_partition(const dht::decorated_key& dk);
     void consume(tombstone t);
@@ -802,6 +803,7 @@ class sstable_writer {
     sstable& _sst;
     const schema& _schema;
     const io_priority_class& _pc;
+    seastar::scheduling_group _sg;
     bool _backup;
     bool _leave_unsealed;
     bool _compression_enabled;
@@ -812,7 +814,7 @@ private:
     void finish_file_writer();
 public:
     sstable_writer(sstable& sst, const schema& s, uint64_t estimated_partitions,
-                   uint64_t max_sstable_size, bool backup, bool leave_unsealed, const io_priority_class& pc);
+                   uint64_t max_sstable_size, bool backup, bool leave_unsealed, const io_priority_class& pc, seastar::scheduling_group sg);
     void consume_new_partition(const dht::decorated_key& dk) { return _components_writer->consume_new_partition(dk); }
     void consume(tombstone t) { _components_writer->consume(t); }
     stop_iteration consume(static_row&& sr) { return _components_writer->consume(std::move(sr)); }

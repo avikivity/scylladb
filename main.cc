@@ -426,12 +426,13 @@ int main(int ac, char** av) {
             init_storage_service(db);
             supervisor::notify("starting per-shard database core");
             // Note: changed from using a move here, because we want the config object intact.
-            auto compaction_scheduling_group = seastar::create_scheduling_group("compaction", 100).get0();
-            auto streaming_scheduling_group = seastar::create_scheduling_group("streaming", 20).get0();
-            auto query_scheduling_group = seastar::create_scheduling_group("query", 100).get0();
-            auto memtable_scheduling_group = seastar::create_scheduling_group("memtable", 100).get0();
-            auto commitlog_scheduling_group = seastar::create_scheduling_group("commitlog", 100).get0();
-            db.start(std::ref(*cfg), compaction_scheduling_group).get();
+            database_config dbcfg;
+            dbcfg.compaction_scheduling_group = seastar::create_scheduling_group("compaction", 100).get0();
+            dbcfg.streaming_scheduling_group = seastar::create_scheduling_group("streaming", 20).get0();
+            dbcfg.query_scheduling_group = seastar::create_scheduling_group("query", 100).get0();
+            dbcfg.memtable_scheduling_group = seastar::create_scheduling_group("memtable", 100).get0();
+            dbcfg.commitlog_scheduling_group = seastar::create_scheduling_group("commitlog", 100).get0();
+            db.start(std::ref(*cfg), dbcfg).get();
             engine().at_exit([&db, &return_value] {
                 // A shared sstable must be compacted by all shards before it can be deleted.
                 // Since we're stoping, that's not going to happen.  Cancel those pending

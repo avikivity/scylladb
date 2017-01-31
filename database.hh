@@ -405,7 +405,11 @@ public:
         restricted_mutation_reader_config streaming_read_concurrency_config;
         ::cf_stats* cf_stats = nullptr;
         uint64_t max_cached_partition_size_in_bytes;
+        seastar::scheduling_group memtable_scheduling_group;
         seastar::scheduling_group compaction_scheduling_group;
+        seastar::scheduling_group commitlog_scheduling_group;
+        seastar::scheduling_group query_scheduling_group;
+        seastar::scheduling_group streaming_scheduling_group;
     };
     struct no_commitlog {};
     struct stats {
@@ -626,6 +630,7 @@ public:
             const dht::partition_range& range = query::full_partition_range,
             const query::partition_slice& slice = query::full_slice,
             const io_priority_class& pc = default_priority_class(),
+            seastar::scheduling_group sg = {},
             tracing::trace_state_ptr trace_state = nullptr) const;
 
     // The streaming mutation reader differs from the regular mutation reader in that:
@@ -1001,7 +1006,11 @@ public:
         restricted_mutation_reader_config read_concurrency_config;
         restricted_mutation_reader_config streaming_read_concurrency_config;
         ::cf_stats* cf_stats = nullptr;
+        seastar::scheduling_group memtable_scheduling_group;
         seastar::scheduling_group compaction_scheduling_group;
+        seastar::scheduling_group commitlog_scheduling_group;
+        seastar::scheduling_group query_scheduling_group;
+        seastar::scheduling_group streaming_scheduling_group;
     };
 private:
     std::unique_ptr<locator::abstract_replication_strategy> _replication_strategy;
@@ -1074,7 +1083,7 @@ public:
 };
 
 
-class database_config {
+struct database_config {
     seastar::scheduling_group memtable_scheduling_group;
     seastar::scheduling_group compaction_scheduling_group;
     seastar::scheduling_group commitlog_scheduling_group;
@@ -1170,6 +1179,8 @@ public:
     db::commitlog* commitlog() const {
         return _commitlog.get();
     }
+
+    seastar::scheduling_group get_streaming_scheduling_group() const { return _dbcfg.streaming_scheduling_group; }
 
     compaction_manager& get_compaction_manager() {
         return _compaction_manager;

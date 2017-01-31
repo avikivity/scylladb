@@ -554,14 +554,16 @@ auto consume(streamed_mutation& m, Consumer consumer, seastar::scheduling_group 
         if (c.consume(m.partition_tombstone()) == stop_iteration::yes) {
             return make_ready_future().then([&] { return c.consume_end_of_stream(); });
         }
-        return repeat([&m, &c] {
+        return repeat([&m, &c, sg] {
             if (m.is_buffer_empty()) {
                 if (m.is_end_of_stream()) {
                     return make_ready_future<stop_iteration>(stop_iteration::yes);
                 }
                 return m.fill_buffer().then([] { return stop_iteration::no; });
             }
-            return make_ready_future<stop_iteration>(m.pop_mutation_fragment().consume(c));
+            return seastar::with_scheduling_group(sg, [&m, &c] {
+                return make_ready_future<stop_iteration>(m.pop_mutation_fragment().consume(c));
+            })();
         }).then([&c] {
             return c.consume_end_of_stream();
         });

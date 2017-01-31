@@ -185,6 +185,6 @@ boost::iterator_range<std::vector<mutation>::const_iterator> slice(
     const std::vector<mutation>& partitions,
     const dht::partition_range&);
 
-future<mutation_opt> mutation_from_streamed_mutation(streamed_mutation_opt sm);
+future<mutation_opt> mutation_from_streamed_mutation(streamed_mutation_opt sm, seastar::scheduling_group sg = {});
 future<mutation_opt>
-mutation_from_streamed_mutation_with_limit(streamed_mutation sm, size_t limit);
+mutation_from_streamed_mutation_with_limit(streamed_mutation sm, size_t limit, seastar::scheduling_group sg = {});

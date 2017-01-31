@@ -109,14 +109,15 @@ serialized_size(const T& object) {
     return size;
 }
 
-output_stream<char> make_checksummed_file_output_stream(file f, struct checksum& cinfo, uint32_t& full_file_checksum, bool checksum_file, file_output_stream_options options);
+output_stream<char> make_checksummed_file_output_stream(file f, struct checksum& cinfo, uint32_t& full_file_checksum, bool checksum_file, file_output_stream_options options,
+        seastar::scheduling_group sg);
 
 class checksummed_file_writer : public file_writer {
     checksum _c;
     uint32_t _full_checksum;
 public:
-    checksummed_file_writer(file f, file_output_stream_options options, bool checksum_file = false)
-            : file_writer(make_checksummed_file_output_stream(std::move(f), _c, _full_checksum, checksum_file, options))
+    checksummed_file_writer(file f, file_output_stream_options options, bool checksum_file = false, seastar::scheduling_group sg = {})
+            : file_writer(make_checksummed_file_output_stream(std::move(f), _c, _full_checksum, checksum_file, options, sg))
             , _c({uint32_t(std::min(size_t(DEFAULT_CHUNK_SIZE), size_t(options.buffer_size)))})
             , _full_checksum(init_checksum_adler32()) {}
 
@@ -139,16 +140,19 @@ class checksummed_file_data_sink_impl : public data_sink_impl {
     struct checksum& _c;
     uint32_t& _full_checksum;
     bool _checksum_file;
+    seastar::scheduling_group _sg;
 public:
-    checksummed_file_data_sink_impl(file f, struct checksum& c, uint32_t& full_file_checksum, bool checksum_file, file_output_stream_options options)
+    checksummed_file_data_sink_impl(file f, struct checksum& c, uint32_t& full_file_checksum, bool checksum_file, file_output_stream_options options, seastar::scheduling_group sg)
             : _out(make_file_output_stream(std::move(f), std::move(options)))
             , _c(c)
             , _full_checksum(full_file_checksum)
             , _checksum_file(checksum_file)
+            , _sg(sg)
             {}
 
     future<> put(net::packet data) { abort(); }
     virtual future<> put(temporary_buffer<char> buf) override {
+      return seastar::with_scheduling_group(_sg, [this, buf = std::move(buf)] () mutable {
         // bufs will usually be a multiple of chunk size, but this won't be the case for
         // the last buffer being flushed.
 
@@ -166,6 +170,7 @@ public:
         }
         auto f = _out.write(buf.begin(), buf.size());
         return f.then([buf = std::move(buf)] {});
+      })();
     }
 
     virtual future<> close() {
@@ -176,14 +181,15 @@ public:
 
 class checksummed_file_data_sink : public data_sink {
 public:
-    checksummed_file_data_sink(file f, struct checksum& cinfo, uint32_t& full_file_checksum, bool checksum_file, file_output_stream_options options)
-        : data_sink(std::make_unique<checksummed_file_data_sink_impl>(std::move(f), cinfo, full_file_checksum, checksum_file, std::move(options))) {}
+    checksummed_file_data_sink(file f, struct checksum& cinfo, uint32_t& full_file_checksum, bool checksum_file, file_output_stream_options options, seastar::scheduling_group sg)
+        : data_sink(std::make_unique<checksummed_file_data_sink_impl>(std::move(f), cinfo, full_file_checksum, checksum_file, std::move(options), sg)) {}
 };
 
 inline
-output_stream<char> make_checksummed_file_output_stream(file f, struct checksum& cinfo, uint32_t& full_file_checksum, bool checksum_file, file_output_stream_options options) {
+output_stream<char> make_checksummed_file_output_stream(file f, struct checksum& cinfo, uint32_t& full_file_checksum, bool checksum_file, file_output_stream_options options,
+        seastar::scheduling_group sg) {
     auto buffer_size = options.buffer_size;
-    return output_stream<char>(checksummed_file_data_sink(std::move(f), cinfo, full_file_checksum, checksum_file, std::move(options)), buffer_size, true);
+    return output_stream<char>(checksummed_file_data_sink(std::move(f), cinfo, full_file_checksum, checksum_file, std::move(options), sg), buffer_size, true);
 }
 
 // compressed_file_data_sink_impl works as a filter for a file output stream,
@@ -193,13 +199,16 @@ class compressed_file_data_sink_impl : public data_sink_impl {
     output_stream<char> _out;
     sstables::compression* _compression_metadata;
     size_t _pos = 0;
+    seastar::scheduling_group _sg;
 public:
-    compressed_file_data_sink_impl(file f, sstables::compression* cm, file_output_stream_options options)
+    compressed_file_data_sink_impl(file f, sstables::compression* cm, file_output_stream_options options, seastar::scheduling_group sg)
             : _out(make_file_output_stream(std::move(f), options))
-            , _compression_metadata(cm) {}
-
+            , _compression_metadata(cm)
+            , _sg(sg) {
+    }
     future<> put(net::packet data) { abort(); }
     virtual future<> put(temporary_buffer<char> buf) override {
+      return with_scheduling_group(_sg, [this, buf = std::move(buf)] () mutable {
         auto output_len = _compression_metadata->compress_max_size(buf.size());
         // account space for checksum that goes after compressed data.
         temporary_buffer<char> compressed(output_len + 4);
@@ -228,6 +237,7 @@ public:
 
         auto f = _out.write(compressed.get(), compressed.size());
         return f.then([compressed = std::move(compressed)] {});
+      })();
     }
     virtual future<> close() {
         return _out.close();
@@ -236,16 +246,16 @@ public:
 
 class compressed_file_data_sink : public data_sink {
 public:
-    compressed_file_data_sink(file f, sstables::compression* cm, file_output_stream_options options)
+    compressed_file_data_sink(file f, sstables::compression* cm, file_output_stream_options options, seastar::scheduling_group sg)
         : data_sink(std::make_unique<compressed_file_data_sink_impl>(
-                std::move(f), cm, options)) {}
+                std::move(f), cm, options, sg)) {}
 };
 
-static inline output_stream<char> make_compressed_file_output_stream(file f, file_output_stream_options options, sstables::compression* cm) {
+static inline output_stream<char> make_compressed_file_output_stream(file f, file_output_stream_options options, sstables::compression* cm, seastar::scheduling_group sg) {
     // buffer of output stream is set to chunk length, because flush must
     // happen every time a chunk was filled up.
     auto outer_buffer_size = cm->uncompressed_chunk_length();
-    return output_stream<char>(compressed_file_data_sink(std::move(f), cm, options), outer_buffer_size, true);
+    return output_stream<char>(compressed_file_data_sink(std::move(f), cm, options, sg), outer_buffer_size, true);
 }
 
 }

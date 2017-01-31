@@ -86,7 +86,7 @@ struct send_info {
         , id(id_)
         , dst_cpu_id(dst_cpu_id_) {
         auto& cf = db.find_column_family(this->cf_id);
-        reader = cf.make_streaming_reader(cf.schema(), this->prs);
+        reader = cf.make_streaming_reader(cf.schema(), this->prs, db.get_streaming_scheduling_group());
     }
 };
 

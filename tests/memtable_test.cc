@@ -171,7 +171,7 @@ SEASTAR_TEST_CASE(test_virtual_dirty_accounting_on_flush) {
         std::vector<size_t> virtual_dirty_values;
         virtual_dirty_values.push_back(mgr.virtual_dirty_memory());
 
-        auto flush_reader_check = assert_that(mt->make_flush_reader(s, service::get_local_priority_manager().memtable_flush_priority()));
+        auto flush_reader_check = assert_that(mt->make_flush_reader(s, service::get_local_priority_manager().memtable_flush_priority(), seastar::scheduling_group()));
         flush_reader_check.produces(current_ring[0]);
         virtual_dirty_values.push_back(mgr.virtual_dirty_memory());
         flush_reader_check.produces(current_ring[1]);
@@ -298,13 +298,13 @@ SEASTAR_TEST_CASE(test_segment_migration_during_flush) {
         std::vector<size_t> virtual_dirty_values;
         virtual_dirty_values.push_back(mgr.virtual_dirty_memory());
 
-        auto rd = mt->make_flush_reader(s, service::get_local_priority_manager().memtable_flush_priority());
+        auto rd = mt->make_flush_reader(s, service::get_local_priority_manager().memtable_flush_priority(), seastar::scheduling_group());
 
         auto consume_mutation = [] (streamed_mutation_opt part) {
             assert(part);
             consume(*part, function_invoking_consumer{[] {
                 logalloc::shard_tracker().full_compaction();
-            }}).get();
+            }}, seastar::scheduling_group()).get();
         };
 
         for (int i = 0; i < partitions; ++i) {

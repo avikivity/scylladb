@@ -122,7 +122,7 @@ public:
     // Requires: !wide_partition()
     streamed_mutation read(row_cache&, const schema_ptr&, const query::partition_slice&);
     // May return disengaged optional if the partition is empty.
-    future<streamed_mutation_opt> read_wide(row_cache&, schema_ptr, const query::partition_slice&, const io_priority_class&);
+    future<streamed_mutation_opt> read_wide(row_cache&, schema_ptr, const query::partition_slice&, const io_priority_class&, seastar::scheduling_group);
     bool continuous() const { return _flags._continuous; }
     void set_continuous(bool value) { _flags._continuous = value; }
     bool wide_partition() const { return _flags._wide_partition; }
@@ -283,6 +283,7 @@ private:
     mutation_reader make_scanning_reader(schema_ptr,
                                          const dht::partition_range&,
                                          const io_priority_class& pc,
+                                         seastar::scheduling_group sg,
                                          const query::partition_slice& slice,
                                          tracing::trace_state_ptr trace_state);
     void on_hit();
@@ -335,6 +336,7 @@ public:
                                 const dht::partition_range& = query::full_partition_range,
                                 const query::partition_slice& slice = query::full_slice,
                                 const io_priority_class& = default_priority_class(),
+                                seastar::scheduling_group sg = {},
                                 tracing::trace_state_ptr trace_state = nullptr);
 
     const stats& stats() const { return _stats; }

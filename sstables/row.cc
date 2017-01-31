@@ -412,31 +412,25 @@ public:
 class data_consume_context::impl {
 private:
     shared_sstable _sst;
-    struct data_consume_rows_context_and_scheduled_function_thereof {
-        data_consume_rows_context dcrc;
-        seastar::scheduled_function<std::reference_wrapper<data_consume_rows_context>> sf;
-        data_consume_rows_context_and_scheduled_function_thereof(data_consume_rows_context&& dcrc, seastar::scheduling_group sg)
-                : dcrc(std::move(dcrc)), sf(sg, std::ref(this->dcrc)) {}
-    };
-    std::unique_ptr<data_consume_rows_context_and_scheduled_function_thereof> _ctx;
+    std::unique_ptr<seastar::scheduled_function<data_consume_rows_context>> _ctx;
 public:
     impl(shared_sstable sst, row_consumer& consumer, input_stream<char>&& input, uint64_t start,
              uint64_t maxlen, std::experimental::optional<sstable::disk_read_range::row_info> ri,
              seastar::scheduling_group sg)
         : _sst(std::move(sst))
-        , _ctx(std::make_unique<data_consume_rows_context_and_scheduled_function_thereof>(data_consume_rows_context(consumer, std::move(input), start, maxlen, ri), sg))
+        , _ctx(std::make_unique<seastar::scheduled_function<data_consume_rows_context>>(sg, data_consume_rows_context(consumer, std::move(input), start, maxlen, ri)))
     { }
     ~impl() {
         if (_ctx) {
-            auto f = _ctx->dcrc.close();
+            auto f = _ctx->unwrap().close();
             f.handle_exception([ctx = std::move(_ctx), sst = std::move(_sst)] (auto) { });
         }
     }
     future<> read() {
-        return _ctx->dcrc.consume_input(_ctx->sf);
+        return _ctx->unwrap().consume_input(*_ctx);
     }
     future<> fast_forward_to(uint64_t begin, uint64_t end) {
-        return _ctx->dcrc.fast_forward_to(begin, end);
+        return _ctx->unwrap().fast_forward_to(begin, end);
     }
 };
 

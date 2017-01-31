@@ -1745,7 +1745,7 @@ size_t components_writer::get_offset() {
     }
 }
 
-file_writer components_writer::index_file_writer(sstable& sst, const io_priority_class& pc) {
+file_writer components_writer::index_file_writer(sstable& sst, const io_priority_class& pc, seastar::scheduling_group sg) {
     file_output_stream_options options;
     options.buffer_size = sst.sstable_buffer_size;
     options.io_priority_class = pc;
@@ -1767,11 +1767,11 @@ static const db::config& get_config() {
 
 components_writer::components_writer(sstable& sst, const schema& s, file_writer& out,
                                      uint64_t estimated_partitions, uint64_t max_sstable_size,
-                                     const io_priority_class& pc)
+                                     const io_priority_class& pc, seastar::scheduling_group sg)
     : _sst(sst)
     , _schema(s)
     , _out(out)
-    , _index(index_file_writer(sst, pc))
+    , _index(index_file_writer(sst, pc, sg))
     , _max_sstable_size(max_sstable_size)
     , _tombstone_written(false)
 {
@@ -1912,10 +1912,10 @@ void components_writer::consume_end_of_stream() {
             _sst._schema, _sst.get_first_decorated_key(), _sst.get_last_decorated_key());
 }
 
-future<> sstable::write_components(memtable& mt, bool backup, const io_priority_class& pc, bool leave_unsealed) {
+future<> sstable::write_components(memtable& mt, bool backup, const io_priority_class& pc, seastar::scheduling_group sg, bool leave_unsealed) {
     _collector.set_replay_position(mt.replay_position());
-    return write_components(mt.make_flush_reader(mt.schema(), pc),
-            mt.partition_count(), mt.schema(), std::numeric_limits<uint64_t>::max(), backup, pc, leave_unsealed);
+    return write_components(mt.make_flush_reader(mt.schema(), pc, sg),
+            mt.partition_count(), mt.schema(), std::numeric_limits<uint64_t>::max(), backup, pc, sg, leave_unsealed);
 }
 
 future<>
@@ -1951,10 +1951,10 @@ void sstable_writer::prepare_file_writer()
     options.write_behind = 10;
 
     if (!_compression_enabled) {
-        _writer = make_shared<checksummed_file_writer>(std::move(_sst._data_file), std::move(options), true);
+        _writer = make_shared<checksummed_file_writer>(std::move(_sst._data_file), std::move(options), true, _sg);
     } else {
         prepare_compression(_sst._components->compression, _schema);
-        _writer = make_shared<file_writer>(make_compressed_file_output_stream(std::move(_sst._data_file), std::move(options), &_sst._components->compression));
+        _writer = make_shared<file_writer>(make_compressed_file_output_stream(std::move(_sst._data_file), std::move(options), &_sst._components->compression, _sg));
     }
 }
 
@@ -1972,10 +1972,11 @@ void sstable_writer::finish_file_writer()
 }
 
 sstable_writer::sstable_writer(sstable& sst, const schema& s, uint64_t estimated_partitions,
-                               uint64_t max_sstable_size, bool backup, bool leave_unsealed, const io_priority_class& pc)
+                               uint64_t max_sstable_size, bool backup, bool leave_unsealed, const io_priority_class& pc, seastar::scheduling_group sg)
     : _sst(sst)
     , _schema(s)
     , _pc(pc)
+    , _sg(sg)
     , _backup(backup)
     , _leave_unsealed(leave_unsealed)
 {
@@ -1984,7 +1985,7 @@ sstable_writer::sstable_writer(sstable& sst, const schema& s, uint64_t estimated
     _sst.create_data().get();
     _compression_enabled = !_sst.has_component(sstable::component_type::CRC);
     prepare_file_writer();
-    _components_writer.emplace(_sst, _schema, *_writer, estimated_partitions, max_sstable_size, _pc);
+    _components_writer.emplace(_sst, _schema, *_writer, estimated_partitions, max_sstable_size, _pc, _sg);
 }
 
 void sstable_writer::consume_end_of_stream()
@@ -2017,15 +2018,17 @@ future<> sstable::seal_sstable(bool backup)
 }
 
 sstable_writer sstable::get_writer(const schema& s, uint64_t estimated_partitions, uint64_t max_sstable_size,
-                                   bool backup, const io_priority_class& pc, bool leave_unsealed)
+                                   bool backup, const io_priority_class& pc, seastar::scheduling_group sg, bool leave_unsealed)
 {
-    return sstable_writer(*this, s, estimated_partitions, max_sstable_size, backup, leave_unsealed, pc);
+    return sstable_writer(*this, s, estimated_partitions, max_sstable_size, backup, leave_unsealed, pc, sg);
 }
 
 future<> sstable::write_components(::mutation_reader mr,
-        uint64_t estimated_partitions, schema_ptr schema, uint64_t max_sstable_size, bool backup, const io_priority_class& pc, bool leave_unsealed) {
-    return seastar::async([this, mr = std::move(mr), estimated_partitions, schema = std::move(schema), max_sstable_size, backup, &pc, leave_unsealed] () mutable {
-        auto wr = get_writer(*schema, estimated_partitions, max_sstable_size, backup, pc, leave_unsealed);
+        uint64_t estimated_partitions, schema_ptr schema, uint64_t max_sstable_size, bool backup, const io_priority_class& pc, seastar::scheduling_group sg, bool leave_unsealed) {
+    seastar::thread_attributes attr;
+    attr.sched_group = sg;
+    return seastar::async(attr, [this, mr = std::move(mr), estimated_partitions, schema = std::move(schema), max_sstable_size, backup, &pc, sg, leave_unsealed] () mutable {
+        auto wr = get_writer(*schema, estimated_partitions, max_sstable_size, backup, pc, sg, leave_unsealed);
         consume_flattened_in_thread(mr, wr);
     });
 }

@@ -165,8 +165,9 @@ column_family::sstables_as_mutation_source() {
                                    const dht::partition_range& r,
                                    const query::partition_slice& slice,
                                    const io_priority_class& pc,
+                                   seastar::scheduling_group sg,
                                    tracing::trace_state_ptr trace_state) {
-        return make_sstable_reader(std::move(s), r, slice, pc, std::move(trace_state));
+        return make_sstable_reader(std::move(s), r, slice, pc, sg, std::move(trace_state));
     });
 }
 
@@ -362,7 +363,7 @@ class range_sstable_reader final : public combined_mutation_reader {
     // Use a pointer instead of copying, so we don't need to regenerate the reader if
     // the priority changes.
     const io_priority_class& _pc;
-    seastar::schedling_group _sg;
+    seastar::scheduling_group _sg;
     tracing::trace_state_ptr _trace_state;
     const query::partition_slice& _slice;
 private:
@@ -458,6 +459,7 @@ class single_key_sstable_reader final : public mutation_reader::impl {
     // Use a pointer instead of copying, so we don't need to regenerate the reader if
     // the priority changes.
     const io_priority_class& _pc;
+    seastar::scheduling_group _sg;
     const query::partition_slice& _slice;
     tracing::trace_state_ptr _trace_state;
 public:
@@ -468,6 +470,7 @@ public:
                               const partition_key& key,
                               const query::partition_slice& slice,
                               const io_priority_class& pc,
+                              seastar::scheduling_group sg,
                               tracing::trace_state_ptr trace_state)
         : _cf(cf)
         , _schema(std::move(schema))
@@ -476,6 +479,7 @@ public:
         , _sstables(std::move(sstables))
         , _sstable_histogram(sstable_histogram)
         , _pc(pc)
+        , _sg(sg)
         , _slice(slice)
         , _trace_state(std::move(trace_state))
     { }
@@ -488,7 +492,7 @@ public:
         return parallel_for_each(std::move(candidates),
             [this](const lw_shared_ptr<sstables::sstable>& sstable) {
                 tracing::trace(_trace_state, "Reading key {} from sstable {}", *_rp.key(), seastar::value_of([&sstable] { return sstable->get_filename(); }));
-                return sstable->read_row(_schema, _key, _slice, _pc).then([this](auto smo) {
+                return sstable->read_row(_schema, _key, _slice, _pc, _sg).then([this](auto smo) {
                     if (smo) {
                         _mutations.emplace_back(std::move(*smo));
                     }
@@ -532,10 +536,10 @@ column_family::make_sstable_reader(schema_ptr s,
             return make_empty_reader(); // range doesn't belong to this shard
         }
         return restrict_reader(make_mutation_reader<single_key_sstable_reader>(const_cast<column_family*>(this), std::move(s), _sstables,
-            _stats.estimated_sstable_per_read, *pos.key(), slice, pc, std::move(trace_state)));
+            _stats.estimated_sstable_per_read, *pos.key(), slice, pc, sg, std::move(trace_state)));
     } else {
         // range_sstable_reader is not movable so we need to wrap it
-        return restrict_reader(make_mutation_reader<range_sstable_reader>(std::move(s), _sstables, pr, slice, pc, std::move(trace_state)));
+        return restrict_reader(make_mutation_reader<range_sstable_reader>(std::move(s), _sstables, pr, slice, pc, sg, std::move(trace_state)));
     }
 }
 
@@ -582,6 +586,7 @@ column_family::make_reader(schema_ptr s,
                            const dht::partition_range& range,
                            const query::partition_slice& slice,
                            const io_priority_class& pc,
+                           seastar::scheduling_group sg,
                            tracing::trace_state_ptr trace_state) const {
     if (_virtual_reader) {
         return _virtual_reader(s, range, slice, pc, trace_state);
@@ -611,13 +616,13 @@ column_family::make_reader(schema_ptr s,
     // https://github.com/scylladb/scylla/issues/185
 
     for (auto&& mt : *_memtables) {
-        readers.emplace_back(mt->make_reader(s, range, slice, pc));
+        readers.emplace_back(mt->make_reader(s, range, slice, pc, sg));
     }
 
     if (_config.enable_cache) {
-        readers.emplace_back(_cache.make_reader(s, range, slice, pc, std::move(trace_state)));
+        readers.emplace_back(_cache.make_reader(s, range, slice, pc, sg, std::move(trace_state)));
     } else {
-        readers.emplace_back(make_sstable_reader(s, range, slice, pc, std::move(trace_state)));
+        readers.emplace_back(make_sstable_reader(s, range, slice, pc, sg, std::move(trace_state)));
     }
 
     return make_combined_reader(std::move(readers));
@@ -625,7 +630,7 @@ column_family::make_reader(schema_ptr s,
 
 mutation_reader
 column_family::make_streaming_reader(schema_ptr s,
-                           const dht::partition_range& range) const {
+                           const dht::partition_range& range, seastar::scheduling_group sg) const {
     auto& slice = query::full_slice;
     auto& pc = service::get_local_streaming_read_priority();
 
@@ -633,32 +638,32 @@ column_family::make_streaming_reader(schema_ptr s,
     readers.reserve(_memtables->size() + 1);
 
     for (auto&& mt : *_memtables) {
-        readers.emplace_back(mt->make_reader(s, range, slice, pc));
+        readers.emplace_back(mt->make_reader(s, range, slice, pc, sg));
     }
 
-    readers.emplace_back(make_sstable_reader(s, range, slice, pc, nullptr));
+    readers.emplace_back(make_sstable_reader(s, range, slice, pc, sg, nullptr));
 
     return make_combined_reader(std::move(readers));
 }
 
 mutation_reader
 column_family::make_streaming_reader(schema_ptr s,
-                           const dht::partition_range_vector& ranges) const {
+                           const dht::partition_range_vector& ranges, seastar::scheduling_group sg) const {
     auto& slice = query::full_slice;
     auto& pc = service::get_local_streaming_read_priority();
 
     auto source = mutation_source([this] (schema_ptr s, const dht::partition_range& range, const query::partition_slice& slice,
-                                      const io_priority_class& pc, tracing::trace_state_ptr trace_state) {
+                                      const io_priority_class& pc, seastar::scheduling_group sg, tracing::trace_state_ptr trace_state) {
         std::vector<mutation_reader> readers;
         readers.reserve(_memtables->size() + 1);
         for (auto&& mt : *_memtables) {
-            readers.emplace_back(mt->make_reader(s, range, slice, pc));
+            readers.emplace_back(mt->make_reader(s, range, slice, pc, sg));
         }
-        readers.emplace_back(make_sstable_reader(s, range, slice, pc, std::move(trace_state)));
+        readers.emplace_back(make_sstable_reader(s, range, slice, pc, sg, std::move(trace_state)));
         return make_combined_reader(std::move(readers));
     });
 
-    return make_multi_range_reader(s, std::move(source), ranges, slice, pc, nullptr);
+    return make_multi_range_reader(s, std::move(source), ranges, slice, pc, sg, nullptr);
 }
 
 future<std::vector<locked_cell>> column_family::lock_counter_cells(const mutation& m) {
@@ -979,7 +984,8 @@ future<> column_family::seal_active_streaming_memtable_big(streaming_memtable_bi
                 newtab->set_unshared();
 
                 auto&& priority = service::get_local_streaming_write_priority();
-                return newtab->write_components(*old, incremental_backups_enabled(), priority, true).then([this, newtab, old, &smb] {
+                auto sg = _config.streaming_scheduling_group;
+                return newtab->write_components(*old, incremental_backups_enabled(), priority, sg, true).then([this, newtab, old, &smb] {
                     smb.sstables.emplace_back(newtab);
                 }).handle_exception([] (auto ep) {
                     dblog.error("failed to write streamed sstable: {}", ep);
@@ -1353,7 +1359,7 @@ column_family::compact_sstables(sstables::compaction_descriptor descriptor, bool
                 return sst;
         };
         return sstables::compact_sstables(*sstables_to_compact, *this, create_sstable, descriptor.max_sstable_bytes, descriptor.level,
-                cleanup, _dbcfg.compaction_scheduling_group).then([this, sstables_to_compact] (auto new_sstables) {
+                cleanup, _config.compaction_scheduling_group).then([this, sstables_to_compact] (auto new_sstables) {
             _compaction_strategy.notify_completion(*sstables_to_compact, new_sstables);
             return this->rebuild_sstable_list(new_sstables, *sstables_to_compact);
         });
@@ -1742,7 +1748,7 @@ future<> distributed_loader::populate_column_family(distributed<database>& db, s
 
 utils::UUID database::empty_version = utils::UUID_gen::get_name_UUID(bytes{});
 
-database::database() : database(db::config(), database_config dbcfg)
+database::database() : database(db::config(), database_config())
 {}
 
 database::database(const db::config& cfg, database_config dbcfg)
@@ -2318,6 +2324,10 @@ keyspace::make_column_family_config(const schema& s, const db::config& db_config
     cfg.enable_incremental_backups = _config.enable_incremental_backups;
     cfg.max_cached_partition_size_in_bytes = db_config.max_cached_partition_size_in_kb() * 1024;
     cfg.compaction_scheduling_group = _config.compaction_scheduling_group;
+    cfg.memtable_scheduling_group = _config.memtable_scheduling_group;
+    cfg.streaming_scheduling_group = _config.streaming_scheduling_group;
+    cfg.query_scheduling_group = _config.query_scheduling_group;
+    cfg.commitlog_scheduling_group = _config.commitlog_scheduling_group;
 
     return cfg;
 }
@@ -2523,7 +2533,7 @@ column_family::query(schema_ptr s, const query::read_command& cmd, query::result
         return do_until(std::bind(&query_state::done, &qs), [this, &qs, trace_state = std::move(trace_state)] {
             auto&& range = *qs.current_partition_range++;
             return data_query(qs.schema, as_mutation_source(trace_state), range, qs.cmd.slice, qs.remaining_rows(),
-                              qs.remaining_partitions(), qs.cmd.timestamp, qs.builder);
+                              qs.remaining_partitions(), qs.cmd.timestamp, qs.builder, _config.query_scheduling_group);
         }).then([qs_ptr = std::move(qs_ptr), &qs] {
             return make_ready_future<lw_shared_ptr<query::result>>(
                     make_lw_shared<query::result>(qs.builder.build()));
@@ -2541,8 +2551,9 @@ column_family::as_mutation_source(tracing::trace_state_ptr trace_state) const {
     return mutation_source([this, trace_state = std::move(trace_state)] (schema_ptr s,
                                    const dht::partition_range& range,
                                    const query::partition_slice& slice,
-                                   const io_priority_class& pc) {
-        return this->make_reader(std::move(s), range, slice, pc, std::move(trace_state));
+                                   const io_priority_class& pc,
+                                   seastar::scheduling_group sg) {
+        return this->make_reader(std::move(s), range, slice, pc, sg, std::move(trace_state));
     });
 }
 
@@ -2997,6 +3008,11 @@ database::make_keyspace_config(const keyspace_metadata& ksm) {
     cfg.cf_stats = &_cf_stats;
     cfg.enable_incremental_backups = _enable_incremental_backups;
     cfg.compaction_scheduling_group = _dbcfg.compaction_scheduling_group;
+    cfg.memtable_scheduling_group = _dbcfg.memtable_scheduling_group;
+    cfg.streaming_scheduling_group = _dbcfg.streaming_scheduling_group;
+    cfg.query_scheduling_group = _dbcfg.query_scheduling_group;
+    cfg.commitlog_scheduling_group = _dbcfg.commitlog_scheduling_group;
+
     return cfg;
 }
 

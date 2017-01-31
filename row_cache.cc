@@ -278,18 +278,20 @@ class single_partition_populating_reader final : public mutation_reader::impl {
     mutation_source& _underlying;
     mutation_reader _delegate;
     const io_priority_class _pc;
+    seastar::scheduling_group _sg;
     const query::partition_slice& _slice;
     dht::partition_range _large_partition_range;
     mutation_reader _large_partition_reader;
     tracing::trace_state_ptr _trace_state;
 public:
     single_partition_populating_reader(schema_ptr s, row_cache& cache, mutation_source& underlying,
-        mutation_reader delegate, const io_priority_class pc, const query::partition_slice& slice, tracing::trace_state_ptr trace_state)
+        mutation_reader delegate, const io_priority_class pc, seastar::scheduling_group sg, const query::partition_slice& slice, tracing::trace_state_ptr trace_state)
         : _schema(std::move(s))
         , _cache(cache)
         , _underlying(underlying)
         , _delegate(std::move(delegate))
         , _pc(pc)
+        , _sg(sg)
         , _slice(slice)
         , _trace_state(std::move(trace_state))
     { }
@@ -319,7 +321,7 @@ public:
                         _cache._tracker.on_wide_partition_mispopulation();
                         _cache.mark_partition_as_wide(dk);
                         _large_partition_range = dht::partition_range::make_singular(std::move(dk));
-                        _large_partition_reader = _underlying(_schema, _large_partition_range, _slice, _pc, _trace_state);
+                        _large_partition_reader = _underlying(_schema, _large_partition_range, _slice, _pc, _sg, _trace_state);
                         return _large_partition_reader();
                     }
                 });
@@ -356,6 +358,7 @@ class just_cache_scanning_reader final {
     size_t _last_modification_count;
     const query::partition_slice& _slice;
     const io_priority_class _pc;
+    seastar::scheduling_group _sg;
 private:
     void update_iterators() {
         auto cmp = cache_entry::compare(_cache._schema);
@@ -397,8 +400,9 @@ public:
         bool continuous;
     };
     just_cache_scanning_reader(schema_ptr s, row_cache& cache, const dht::partition_range& range,
-                               const query::partition_slice& slice, const io_priority_class& pc)
-        : _schema(std::move(s)), _cache(cache), _range(range), _slice(slice), _pc(pc)
+                               const query::partition_slice& slice, const io_priority_class& pc,
+                               seastar::scheduling_group sg)
+        : _schema(std::move(s)), _cache(cache), _range(range), _slice(slice), _pc(pc), _sg(sg)
     { }
     future<cache_data> operator()() {
         return _cache._read_section(_cache._tracker.region(), [this] {
@@ -415,7 +419,7 @@ public:
             _cache.on_hit();
             cache_data cd { { }, ce.continuous() };
             if (ce.wide_partition()) {
-                return ce.read_wide(_cache, _schema, _slice, _pc).then([this, cd = std::move(cd)] (auto smopt) mutable {
+                return ce.read_wide(_cache, _schema, _slice, _pc, _sg).then([this, cd = std::move(cd)] (auto smopt) mutable {
                     if (smopt) {
                         cd.mut = std::move(*smopt);
                     } else {
@@ -438,6 +442,7 @@ class range_populating_reader {
     const query::partition_slice& _slice;
     utils::phased_barrier::phase_type _populate_phase;
     const io_priority_class& _pc;
+    seastar::scheduling_group _sg;
     tracing::trace_state_ptr _trace_state;
     mutation_reader _reader;
     bool _reader_created = false;
@@ -460,7 +465,7 @@ private:
                     return;
                 }
             }
-            _reader = _cache._underlying(_cache._schema, _range, query::full_slice, _pc, _trace_state);
+            _reader = _cache._underlying(_cache._schema, _range, query::full_slice, _pc, _sg, _trace_state);
         }
     }
 
@@ -471,7 +476,7 @@ private:
         _last_key.reset(dk, _populate_phase);
 
         _large_partition_range = dht::partition_range::make_singular(dk);
-        _large_partition_reader = _cache._underlying(_schema, _large_partition_range, _slice, _pc, _trace_state);
+        _large_partition_reader = _cache._underlying(_schema, _large_partition_range, _slice, _pc, _sg, _trace_state);
         return _large_partition_reader().then([this, dk = std::move(dk)] (auto smopt) mutable -> streamed_mutation_opt {
             _large_partition_reader = {};
             if (!smopt) {
@@ -512,6 +517,7 @@ public:
         schema_ptr schema,
         const query::partition_slice& slice,
         const io_priority_class& pc,
+        seastar::scheduling_group sg,
         tracing::trace_state_ptr trace_state)
         : _cache(cache)
         , _schema(std::move(schema))
@@ -564,7 +570,7 @@ public:
 
         if (!_reader_created || phase != _populate_phase) {
             _populate_phase = _cache._populate_phaser.phase();
-            _reader = _cache._underlying(_cache._schema, _range, query::full_slice, _pc, _trace_state);
+            _reader = _cache._underlying(_cache._schema, _range, query::full_slice, _pc, _sg, _trace_state);
             _reader_created = true;
             return make_ready_future();
         }
@@ -655,11 +661,12 @@ public:
                                     const dht::partition_range& range,
                                     const query::partition_slice& slice,
                                     const io_priority_class& pc,
+                                    seastar::scheduling_group sg,
                                     tracing::trace_state_ptr trace_state)
         : _pr(range)
         , _schema(s)
-        , _primary_reader(s, cache, range, slice, pc)
-        , _secondary_reader(cache, s, slice, pc, trace_state)
+        , _primary_reader(s, cache, range, slice, pc, sg)
+        , _secondary_reader(cache, s, slice, pc, sg, trace_state)
     { }
 
     future<streamed_mutation_opt> operator()() {
@@ -675,9 +682,10 @@ mutation_reader
 row_cache::make_scanning_reader(schema_ptr s,
                                 const dht::partition_range& range,
                                 const io_priority_class& pc,
+                                seastar::scheduling_group sg,
                                 const query::partition_slice& slice,
                                 tracing::trace_state_ptr trace_state) {
-    return make_mutation_reader<scanning_and_populating_reader>(std::move(s), *this, range, slice, pc, std::move(trace_state));
+    return make_mutation_reader<scanning_and_populating_reader>(std::move(s), *this, range, slice, pc, sg, std::move(trace_state));
 }
 
 mutation_reader
@@ -685,12 +693,13 @@ row_cache::make_reader(schema_ptr s,
                        const dht::partition_range& range,
                        const query::partition_slice& slice,
                        const io_priority_class& pc,
+                       seastar::scheduling_group sg,
                        tracing::trace_state_ptr trace_state) {
     if (range.is_singular()) {
         const query::ring_position& pos = range.start()->value();
 
         if (!pos.has_key()) {
-            return make_scanning_reader(std::move(s), range, pc, slice, std::move(trace_state));
+            return make_scanning_reader(std::move(s), range, pc, sg, slice, std::move(trace_state));
         }
 
         return _read_section(_tracker.region(), [&] {
@@ -703,7 +712,7 @@ row_cache::make_reader(schema_ptr s,
                 upgrade_entry(e);
                 mutation_reader reader;
                 if (e.wide_partition()) {
-                    reader = _underlying(s, range, slice, pc, std::move(trace_state));
+                    reader = _underlying(s, range, slice, pc, sg, std::move(trace_state));
                     _tracker.on_uncached_wide_partition();
                     on_miss();
                 } else {
@@ -713,7 +722,7 @@ row_cache::make_reader(schema_ptr s,
                 return reader;
             } else {
                 auto reader = make_mutation_reader<single_partition_populating_reader>(s, *this, _underlying,
-                    _underlying(_schema, range, query::full_slice, pc, trace_state), pc, slice, trace_state);
+                    _underlying(_schema, range, query::full_slice, pc, sg, trace_state), pc, sg, slice, trace_state);
                 on_miss();
                 return reader;
             }
@@ -721,7 +730,7 @@ row_cache::make_reader(schema_ptr s,
         });
     }
 
-    return make_scanning_reader(std::move(s), range, pc, slice, std::move(trace_state));
+    return make_scanning_reader(std::move(s), range, pc, sg, slice, std::move(trace_state));
 }
 
 row_cache::~row_cache() {
@@ -1014,19 +1023,20 @@ void row_cache::set_schema(schema_ptr new_schema) noexcept {
     _schema = std::move(new_schema);
 }
 
-future<streamed_mutation_opt> cache_entry::read_wide(row_cache& rc, schema_ptr s, const query::partition_slice& slice, const io_priority_class& pc) {
+future<streamed_mutation_opt> cache_entry::read_wide(row_cache& rc, schema_ptr s, const query::partition_slice& slice, const io_priority_class& pc, seastar::scheduling_group sg) {
     struct range_and_underlyig_reader {
         dht::partition_range _range;
         mutation_reader _reader;
         range_and_underlyig_reader(row_cache& rc, schema_ptr s, dht::partition_range pr,
-                                   const query::partition_slice& slice, const io_priority_class& pc)
+                                   const query::partition_slice& slice, const io_priority_class& pc,
+                                   seastar::scheduling_group sg)
                 : _range(std::move(pr))
-                , _reader(rc._underlying(s, _range, slice, pc))
+                , _reader(rc._underlying(s, _range, slice, pc, sg))
         { }
     };
     rc._tracker.on_uncached_wide_partition();
     auto pr = dht::partition_range::make_singular(_key);
-    return do_with(range_and_underlyig_reader(rc, s, std::move(pr), slice, pc), [] (auto& r_a_ur) {
+    return do_with(range_and_underlyig_reader(rc, s, std::move(pr), slice, pc, sg), [] (auto& r_a_ur) {
         return r_a_ur._reader();
     });
 }
