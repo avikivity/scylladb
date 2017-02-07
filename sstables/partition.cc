@@ -351,9 +351,7 @@ public:
     mp_row_consumer() : _slice(query::full_slice) {}
 
     virtual proceed consume_row_start(sstables::key_view key, sstables::deletion_time deltime) override {
-        print("consume_row_start\n");
         if (_key.empty() || key == _key) {
-            print("flushing previous mutation\n");
             _mutation = new_mutation { partition_key::from_exploded(key.explode(*_schema)), tombstone(deltime) };
             _is_mutation_end = false;
             _skip_partition = false;
@@ -366,7 +364,6 @@ public:
     }
 
     void flush() {
-        print("flush\n");
         flush_pending_collection(*_schema);
         // If _ready is already set we have a bug: get_mutation_fragment()
         // was not called, and below we will lose one clustering row!
@@ -528,7 +525,6 @@ public:
     }
 
     virtual proceed consume_deleted_cell(bytes_view col_name, sstables::deletion_time deltime) override {
-        print("consume_deleted_cell\n");
         if (_skip_partition) {
             return proceed::yes;
         }
@@ -573,7 +569,6 @@ public:
         return ret;
     }
     virtual proceed consume_row_end() override {
-        print("consume_row_end\n");
         flush();
         _is_mutation_end = true;
         return proceed::no;
@@ -614,7 +609,6 @@ public:
     virtual proceed consume_range_tombstone(
             bytes_view start_col, bytes_view end_col,
             sstables::deletion_time deltime) override {
-        print("consume_range_tombstone\n");
 
         if (_skip_partition) {
             return proceed::yes;
@@ -670,7 +664,6 @@ public:
     }
 
     stdx::optional<new_mutation> get_mutation() {
-        print("get_mutation (%d)\n", bool(_mutation));
         return move_and_disengage(_mutation);
     }
 
@@ -742,12 +735,6 @@ private:
         // Because of #1203 we may encounter sstables with range tombstones
         // placed earler than expected.
         if (_next_candidate || (_current_candidate && _finished)) {
-            print("read_next: have something in buffer already\n");
-            print("_current_candidate: %s\n", *_current_candidate);
-            if (_next_candidate) {
-                print("_next_candidate: %s\n", *_next_candidate);
-            }
-
             assert(_current_candidate);
             auto mf = _range_tombstones.get_next(*_current_candidate);
             if (!mf) {
@@ -763,7 +750,6 @@ private:
         return _ds->_context.read().then([this] {
             _finished = _ds->_consumer.get_and_reset_is_mutation_end();
             auto mf = _ds->_consumer.get_mutation_fragment();
-            print("read_next: read something, _finished %d mf %d\n", _finished, bool(mf));
             if (mf) {
                 if (mf->is_range_tombstone()) {
                     // If sstable uses promoted index it will repeat relevant range tombstones in
