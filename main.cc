@@ -427,11 +427,18 @@ int main(int ac, char** av) {
             supervisor::notify("starting per-shard database core");
             // Note: changed from using a move here, because we want the config object intact.
             database_config dbcfg;
-            dbcfg.compaction_scheduling_group = seastar::create_scheduling_group("compaction", 100).get0();
-            dbcfg.streaming_scheduling_group = seastar::create_scheduling_group("streaming", 20).get0();
-            dbcfg.query_scheduling_group = seastar::create_scheduling_group("query", 100).get0();
-            dbcfg.memtable_scheduling_group = seastar::create_scheduling_group("memtable", 100).get0();
-            dbcfg.commitlog_scheduling_group = seastar::create_scheduling_group("commitlog", 100).get0();
+            auto make_sched_group = [&] (sstring name, unsigned shares) {
+                if (cfg->cpu_scheduler()) {
+                    return seastar::create_scheduling_group(name, shares).get0();
+                } else {
+                    return seastar::scheduling_group();
+                }
+            };
+            dbcfg.compaction_scheduling_group = make_sched_group("compaction", 100);
+            dbcfg.streaming_scheduling_group = make_sched_group("streaming", 20);
+            dbcfg.query_scheduling_group = make_sched_group("query", 100);
+            dbcfg.memtable_scheduling_group = make_sched_group("memtable", 100);
+            dbcfg.commitlog_scheduling_group = make_sched_group("commitlog", 100);
             db.start(std::ref(*cfg), dbcfg).get();
             engine().at_exit([&db, &return_value] {
                 // A shared sstable must be compacted by all shards before it can be deleted.

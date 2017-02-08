@@ -750,6 +750,7 @@ public:
     val(prometheus_prefix, sstring, "scylla", Used, "Set the prefix of the exported Prometheus metrics. Changing this will break Scylla's dashboard compatibility, do not change unless you know what you are doing.") \
     val(abort_on_lsa_bad_alloc, bool, false, Used, "Abort when allocation in LSA region fails") \
     val(murmur3_partitioner_ignore_msb_bits, unsigned, 0, Used, "Number of most siginificant token bits to ignore in murmur3 partitioner; increase for very large clusters") \
+    val(cpu_scheduler, bool, false, Used, "Enable cpu scheduling (experimental)") \
     /* done! */
 
 #define _make_value_member(name, type, deflt, status, desc, ...)    \
