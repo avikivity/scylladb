@@ -43,6 +43,20 @@ namespace bi = boost::intrusive;
 
 standard_allocation_strategy standard_allocation_strategy_instance;
 
+std::vector<const migrate_fn_type*> static_migrators;
+
+uint32_t
+migrate_fn_type::register_migrator(const migrate_fn_type* m) {
+    static_migrators.push_back(m);
+    return static_migrators.size() - 1;
+}
+
+void
+migrate_fn_type::unregister_migrator(uint32_t index) {
+    static_migrators[index] = nullptr;
+    // reuse freed slots? no need now
+}
+
 namespace logalloc {
 
 struct segment;
@@ -935,111 +949,54 @@ class region_impl : public allocation_strategy {
     static constexpr float max_occupancy_for_compaction = 0.85; // FIXME: make configurable
     static constexpr float max_occupancy_for_compaction_on_idle = 0.93; // FIXME: make configurable
 
-    // single-byte flags
-    struct obj_flags {
-        static constexpr uint8_t live_flag = 0x01;
-        static constexpr uint8_t eos_flag = 0x02;
-        static constexpr size_t max_alignment = (0xff >> 2) + 1;
-
-        static uint8_t with_padding(uint8_t padding) {
-            assert(padding < max_alignment);
-            return uint8_t(padding << 2);
-        }
-
-        //
-        // bit 0: 0 = dead, 1 = live
-        // bit 1: when set, end-of-segment marker
-        // bits 2-7: The value represents padding in bytes between the end of previous object
-        //           and this object's descriptor. Must be smaller than object's alignment, so max alignment is 64.
-        uint8_t _value;
-
-        obj_flags(uint8_t value)
-            : _value(value)
-        { }
-
-        static obj_flags make_end_of_segment() {
-            return { eos_flag };
-        }
-
-        static obj_flags make_live(uint8_t padding) {
-            return obj_flags(live_flag | with_padding(padding));
-        }
-
-        static obj_flags make_padding(uint8_t padding) {
-            return obj_flags(with_padding(padding));
-        }
-
-        static obj_flags make_dead(uint8_t padding) {
-            return obj_flags(with_padding(padding));
-        }
-
-        // Number of bytes preceding this descriptor after the end of the previous object
-        uint8_t padding() const {
-            return _value >> 2;
-        }
-
-        bool is_live() const {
-            return _value & live_flag;
-        }
-
-        bool is_end_of_segment() const {
-            return _value & eos_flag;
-        }
-
-        void mark_dead() {
-            _value &= ~live_flag;
-        }
-    } __attribute__((packed));
-
     class object_descriptor {
     private:
-        obj_flags _flags;
-        uint8_t _alignment;
-        segment::size_type _size;
-        allocation_strategy::migrate_fn _migrator;
+        int32_t _n;  // negative: dead object of size -_n (incl. alignment and descriptor);
+                     // nonnegative: live object with migrator index _n
     public:
-        object_descriptor(allocation_strategy::migrate_fn migrator, segment::size_type size, uint8_t alignment, uint8_t padding)
-            : _flags(obj_flags::make_live(padding))
-            , _alignment(alignment)
-            , _size(size)
-            , _migrator(migrator)
+        object_descriptor(allocation_strategy::migrate_fn migrator)
+                : _n(migrator->index())
         { }
 
-        void mark_dead() {
-            _flags.mark_dead();
+        void mark_dead(size_t size) {
+            _n = -(sizeof(*this) + size);
         }
 
         allocation_strategy::migrate_fn migrator() const {
-            return _migrator;
+            return static_migrators[_n];
         }
 
         uint8_t alignment() const {
-            return _alignment;
+            return migrator()->align();
         }
 
         segment::size_type size() const {
-            return _size;
-        }
-
-        obj_flags flags() const {
-            return _flags;
+            if (_n < 0) {
+                return -_n;
+            } else {
+                uintptr_t start = reinterpret_cast<uintptr_t>(this);
+                auto end = start + sizeof(*this);
+                end = align_up<uintptr_t>(end, migrator()->align());
+                end += migrator()->size(reinterpret_cast<const void*>(end));
+                return end - start;
+            }
         }
 
         bool is_live() const {
-            return _flags.is_live();
-        }
-
-        bool is_end_of_segment() const {
-            return _flags.is_end_of_segment();
-        }
-
-        uint8_t padding() const {
-            return _flags.padding();
+            return _n >= 0;
         }
 
         friend std::ostream& operator<<(std::ostream& out, const object_descriptor& desc) {
-            return out << sprint("{flags = %x, migrator=%p, alignment=%d, size=%d}",
-                (int)desc._flags._value, (void*)desc._migrator, unsigned(desc._alignment), desc._size);
+            if (desc._n < 0) {
+                return out << sprint("{free %d}", -desc._n);
+            } else {
+                auto m = migrator();
+                auto x = reinterpret_cast<uintptr_t>(&desc) + sizeof(desc);
+                x = align_up(x, m->align());
+                auto obj = reinterpret_cast<const void*>(x);
+                return out << sprint("{migrator=%p, alignment=%d, size=%d}",
+                                      (void*)m, m->align(), m->size(obj));
+            }
         }
     } __attribute__((packed));
 private:
@@ -1092,15 +1049,12 @@ private:
             return alloc_small(migrator, size, alignment);
         }
 
-        auto descriptor_offset = obj_offset - sizeof(object_descriptor);
-        auto padding = descriptor_offset - _active_offset;
-
-        new (_active->at(_active_offset)) obj_flags(obj_flags::make_padding(padding));
-        new (_active->at(descriptor_offset)) object_descriptor(migrator, size, alignment, padding);
+        new (_active->at(_active_offset)) object_descriptor(migrator);
 
         void* obj = _active->at(obj_offset);
+        auto old_active_offset = _active_offset;
         _active_offset = obj_offset + size;
-        _active->record_alloc(size + sizeof(object_descriptor) + padding);
+        _active->record_alloc(_active_offset - old_active_offset);
         return obj;
     }
 
@@ -1111,13 +1065,8 @@ private:
         static_assert(std::is_same<void, std::result_of_t<Func(object_descriptor*, void*)>>::value, "bad Func signature");
 
         size_t offset = 0;
-        while (offset < segment::size) {
+        while (offset < segment::size - sizeof(object_descriptor)) {
             object_descriptor* desc = seg->at<object_descriptor>(offset);
-            offset += desc->flags().padding();
-            desc = seg->at<object_descriptor>(offset);
-            if (desc->is_end_of_segment()) {
-                break;
-            }
             offset += sizeof(object_descriptor);
             if (desc->is_live()) {
                 func(desc, seg->at(offset));
@@ -1301,7 +1250,7 @@ public:
         }
     }
 
-    virtual void free(void* obj) noexcept override {
+    virtual void free(void* obj, size_t size) noexcept override {
         compaction_lock _(*this);
         segment* seg = shard_segment_pool.containing_segment(obj);
 
@@ -1320,13 +1269,13 @@ public:
         segment_descriptor& seg_desc = shard_segment_pool.descriptor(seg);
 
         auto desc = reinterpret_cast<object_descriptor*>(reinterpret_cast<uintptr_t>(obj) - sizeof(object_descriptor));
-        desc->mark_dead();
+        desc->mark_dead(size);
 
         if (seg != _active) {
             _closed_occupancy -= seg->occupancy();
         }
 
-        seg_desc.record_free(desc->size() + sizeof(object_descriptor) + desc->padding());
+        seg_desc.record_free(size);
 
         if (seg != _active) {
             if (seg_desc.is_empty()) {
@@ -1346,7 +1295,7 @@ public:
             return standard_allocator().object_memory_size_in_allocator(obj);
         } else {
             auto desc = reinterpret_cast<object_descriptor*>(reinterpret_cast<uintptr_t>(obj) - sizeof(object_descriptor));
-            return sizeof(object_descriptor) + desc->size();
+            return desc->size();
         }
     }
 

@@ -25,21 +25,36 @@
 #include <seastar/core/memory.hh>
 #include <malloc.h>
 
+struct special_migrator_tag {};
+
+
 // A function used by compacting collectors to migrate objects during
 // compaction. The function should reconstruct the object located at src
 // in the location pointed by dst. The object at old location should be
 // destroyed. See standard_migrator() above for example. Both src and dst
 // are aligned as requested during alloc()/construct().
 class migrate_fn_type {
+    uint32_t _align = 0;
+    uint32_t _size = 0;
+    uint32_t _index;
+private:
+    static uint32_t register_migrator(const migrate_fn_type* m);
+    void unregister_migrator(uint32_t index);
 public:
-    virtual ~migrate_fn_type() {}
-    virtual void migrate(void* src, void* dst, size_t size) const noexcept = 0;
+    migrate_fn_type(special_migrator_tag) : _index(register_migrator(this)) {} // derived class must override size(), align()
+    migrate_fn_type(size_t align, size_t size) : _align(align), _size(size), _index(register_migrator(this)) {}
+    virtual ~migrate_fn_type() { unregister_migrator(_index); }
+    virtual void migrate(void* src, void* dsts) const noexcept = 0;
+    virtual size_t size(const void* obj) const { return _size; }
+    virtual size_t align() const { return _align; }
+    uint32_t index() const { return _index; }
 };
 
 template <typename T>
 class standard_migrator final : public migrate_fn_type {
 public:
-    virtual void migrate(void* src, void* dst, size_t) const noexcept override {
+    standard_migrator() : migrate_fn_type(alignof(T), sizeof(T)) {}
+    virtual void migrate(void* src, void* dst) const noexcept override {
         static_assert(std::is_nothrow_move_constructible<T>::value, "T must be nothrow move-constructible.");
         static_assert(std::is_nothrow_destructible<T>::value, "T must be nothrow destructible.");
 
