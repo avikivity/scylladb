@@ -949,13 +949,22 @@ class region_impl : public allocation_strategy {
     static constexpr float max_occupancy_for_compaction = 0.85; // FIXME: make configurable
     static constexpr float max_occupancy_for_compaction_on_idle = 0.93; // FIXME: make configurable
 
+    // Serialized object descriptor format:
+    //  byte0 byte1 ... byte[n-1]
+    //  bit0-bit6: ULEB128 significand
+    //  bit7 (all but last byte): 0
+    //  bit7 (last byte): 1
+    //
+    //  significand interpretation (value = n):
+    //     even:  dead object, size n/2 (excluding descriptor)
+    //     odd:   migrate_fn_type at index n/2
+    //     note 0 = dead object of size zero, so acts as a filler
     class object_descriptor {
     private:
-        int32_t _n;  // negative: dead object of size -_n (incl. alignment and descriptor);
-                     // nonnegative: live object with migrator index _n
+        uint32_t _n;
     public:
         object_descriptor(allocation_strategy::migrate_fn migrator)
-                : _n(migrator->index())
+                : _n(migrator->index() * 2 + 1)
         { }
 
         void mark_dead(size_t size) {
@@ -1249,6 +1258,8 @@ public:
             return alloc_small(migrator, (segment::size_type) size, alignment);
         }
     }
+
+    virtual size_t object_size_for_free
 
     virtual void free(void* obj, size_t size) noexcept override {
         compaction_lock _(*this);

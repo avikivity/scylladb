@@ -111,7 +111,11 @@ public:
 
     // Releases storage for the object. Doesn't invoke object's destructor.
     // Doesn't invalidate references to objects allocated with this strategy.
-    virtual void free(void*) = 0;
+    //
+    // If size is needed for free (in case the allocation strategy can't derive
+    // it based on other metadata), then object_size_for_free() should be
+    // implemented.
+    virtual void free(void* object, size_t size) = 0;
 
     // Returns the total immutable memory size used by the allocator to host
     // this object.  This will be at least the size of the object itself, plus
@@ -120,6 +124,12 @@ public:
     // The immutable overhead is the overhead that cannot change over the
     // lifetime of the object (such as padding, etc).
     virtual size_t object_memory_size_in_allocator(const void* obj) const noexcept = 0;
+
+    // Extracts the object size from a live object, to supply a following free().
+    // The returned value only has meaning for the free() call.
+    virtual size_t object_size_for_free(const void* obj) const noexcept {
+        return 0;
+    }
 
     // Like alloc() but also constructs the object with a migrator using
     // standard move semantics. Allocates respecting object's alignment
@@ -139,8 +149,9 @@ public:
     // Doesn't invalidate references to allocated objects.
     template<typename T>
     void destroy(T* obj) {
+        size_t size = object_size_for_free(obj);
         obj->~T();
-        free(obj);
+        free(obj, size);
     }
 
     size_t preferred_max_contiguous_allocation() const {
@@ -159,7 +170,7 @@ public:
         return ret;
     }
 
-    virtual void free(void* obj) override {
+    virtual void free(void* obj, size_t size) override {
         ::free(obj);
     }
 
