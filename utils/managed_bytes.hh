@@ -416,3 +416,6 @@ struct hash<managed_bytes> {
 };
 
 }
+
+// blob_storage is a variable-size type
+template <> size_t standard_migrator<blob_storage>::size(const void* obj) const;

@@ -62,6 +62,7 @@ public:
         new (static_cast<T*>(dst)) T(std::move(*src_t));
         src_t->~T();
     }
+    virtual size_t size(const void* obj) const { return migrate_fn_type::size(obj); } // allow easy specialization
     static standard_migrator object;  // would like to use variable templates, but only available in gcc 5
 };
 
@@ -140,7 +141,7 @@ public:
         try {
             return new (storage) T(std::forward<Args>(args)...);
         } catch (...) {
-            free(storage);
+            free(storage, sizeof(T));
             throw;
         }
     }

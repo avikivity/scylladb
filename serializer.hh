@@ -26,12 +26,13 @@
 #include <unordered_map>
 #include <experimental/optional>
 #include "enum_set.hh"
-#include "utils/managed_bytes.hh"
 #include "bytes_ostream.hh"
 #include "core/simple-stream.hh"
 #include "boost/variant/variant.hpp"
 #include "bytes_ostream.hh"
 #include "utils/input_stream.hh"
+
+class managed_bytes;
 
 namespace ser {
 using size_type = uint32_t;

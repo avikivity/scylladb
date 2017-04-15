@@ -47,6 +47,9 @@ private:
             }
             _backref->_data = _data;
         }
+        size_t storage_size() const {
+            return sizeof(*this) + _backref->_capacity;
+        }
     };
     union maybe_constructed {
         maybe_constructed() { }
@@ -58,6 +61,7 @@ private:
     size_type _size = 0;
     size_type _capacity = InternalSize;
     T* _data = reinterpret_cast<T*>(_internal.data());
+    friend class external;
 private:
     bool is_external() const {
         return _data != reinterpret_cast<const T*>(_internal.data());
@@ -76,7 +80,7 @@ private:
     void clear_and_release() noexcept {
         clear();
         if (is_external()) {
-            current_allocator().free(get_external());
+            current_allocator().free(get_external(), get_external()->storage_size());
         }
     }
 public:
@@ -184,7 +188,7 @@ public:
             _data[i].~T();
         }
         if (is_external()) {
-            current_allocator().free(get_external());
+            current_allocator().free(get_external(), get_external()->storage_size());
         }
         _data = data_ptr;
         _capacity = new_capacity;

@@ -22,6 +22,7 @@
 #pragma once
 
 #include "serializer.hh"
+#include "utils/managed_bytes.hh"
 #include <seastar/util/bool_class.hh>
 
 namespace ser {

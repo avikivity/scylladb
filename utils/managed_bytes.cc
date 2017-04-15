@@ -25,6 +25,13 @@
 
 thread_local managed_bytes::linearization_context managed_bytes::_linearization_context;
 
+template <>
+size_t
+standard_migrator<blob_storage>::size(const void* obj) const {
+    auto* bs = static_cast<const blob_storage*>(obj);
+    return sizeof(*bs) + bs->frag_size;
+}
+
 void
 managed_bytes::linearization_context::forget(const blob_storage* p) noexcept {
     _state.erase(p);
