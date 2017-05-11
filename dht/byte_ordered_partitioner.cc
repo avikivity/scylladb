@@ -162,21 +162,23 @@ byte_ordered_partitioner::shard_of(const token& t) const {
 }
 
 token
-byte_ordered_partitioner::token_for_next_shard(const token& t) const {
+byte_ordered_partitioner::token_for_next_shard(const token& t, shard_id shard, unsigned spans) const {
     switch (t._kind) {
-    case token::kind::before_all_keys:
-        return token_for_next_shard(token(token::kind::key, managed_bytes{int8_t(0)}));
     case token::kind::after_all_keys:
         return maximum_token();
+    case token::kind::before_all_keys:
     case token::kind::key:
-        auto s = shard_of(t) + 1;
-        if (s == _shard_count) {
+        auto orig = shard_of(t);
+        if (shard <= orig || spans != 1) {
             return maximum_token();
         }
-        auto e = (s << 8) / _shard_count;
+        auto e = (shard << 8) / _shard_count;
         // Division truncates; adjust
-        while (((e * _shard_count) >> 8) != s) {
+        while (((e * _shard_count) >> 8) != shard) {
             ++e;
+        }
+        while ((((e - 1) * _shard_count) >> 8) == shard) {
+            --e;
         }
         return token(token::kind::key, managed_bytes({int8_t(e)}));
     }

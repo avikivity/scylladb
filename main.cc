@@ -337,7 +337,7 @@ int main(int ac, char** av) {
                     cfg->log_to_stdout(), cfg->log_to_syslog());
             verify_rlimit(cfg->developer_mode());
             verify_adequate_memory_per_shard(cfg->developer_mode());
-            dht::set_global_partitioner(cfg->partitioner(), cfg->murmur3_partitioner_ignore_msb_bits());
+            dht::set_global_partitioner("org.apache.cassandra.dht.Murmur3Partitioner", 12);
             auto start_thrift = cfg->start_rpc();
             uint16_t api_port = cfg->api_port();
             ctx.api_dir = cfg->api_ui_dir();
