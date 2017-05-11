@@ -283,6 +283,54 @@ ring_position_range_sharder::next(const schema& s, stdx::optional<shard_id> shar
     return ring_position_range_and_shard{std::move(_range), shard};
 }
 
+
+ring_position_exponential_sharder::ring_position_exponential_sharder(nonwrapping_range<ring_position> rrp)
+        : _range(std::move(rrp)) {
+}
+
+
+stdx::optional<ring_position_exponential_sharder_result>
+ring_position_exponential_sharder::next(const schema& s) {
+    if (_first) {
+        auto sharder = ring_position_range_sharder(_range);
+        auto rpras = sharder.next(s);
+        if (!rpras) {
+            return stdx::nullopt;
+        }
+        _next_shard = (rpras->shard + 1) % smp::count;
+        _sharders[rpras->shard].emplace(std::move(sharder));
+        auto ret = ring_position_exponential_sharder_result{};
+        ret.per_shard_ranges.push_back(std::move(*rpras));
+        _first = false;
+        _spans_per_iteration *= 2;
+        return stdx::make_optional(std::move(ret));
+    }
+    auto ret = ring_position_exponential_sharder_result{};
+    ret.per_shard_ranges.reserve(std::min(_spans_per_iteration, smp::count));
+    ret.inorder = _spans_per_iteration <= smp::count;
+    unsigned spans_to_go = _spans_per_iteration;
+    for (auto i : boost::irange(0u, std::min(smp::count, _spans_per_iteration))) {
+        auto sharders_to_go = smp::count - i;
+        auto shard = _next_shard++ % smp::count;
+        if (!_sharders[shard]) {
+            _sharders[shard].emplace(ring_position_range_sharder(_range));
+        }
+        auto spans = spans_to_go / sharders_to_go;
+        spans += unsigned((sharders_to_go % sharders_to_go) != 0);
+        spans_to_go -= spans;
+        auto this_shard_result = _sharders[shard]->next(s, shard, spans);
+        if (!this_shard_result) {
+            break;
+        }
+        ret.per_shard_ranges.push_back(std::move(*this_shard_result));
+    }
+    if (ret.per_shard_ranges.empty()) {
+        return stdx::nullopt;
+    }
+    _spans_per_iteration *= 2;
+    return stdx::make_optional(std::move(ret));
+}
+
 ring_position_range_vector_sharder::ring_position_range_vector_sharder(dht::partition_range_vector ranges)
         : _ranges(std::move(ranges))
         , _current_range(_ranges.begin()) {
