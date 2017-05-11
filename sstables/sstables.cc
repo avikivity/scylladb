@@ -1723,7 +1723,7 @@ create_sharding_metadata(schema_ptr schema, const dht::decorated_key& first_key,
     auto range = dht::partition_range::make(dht::ring_position(first_key), dht::ring_position(last_key));
     auto sharder = dht::ring_position_range_sharder(std::move(range));
     auto sm = sharding_metadata();
-    auto rpras = sharder.next(*schema);
+    auto rpras = sharder.next(*schema, shard);
     while (rpras) {
         if (rpras->shard == shard) {
             // we know left/right are not infinite
@@ -1737,7 +1737,7 @@ create_sharding_metadata(schema_ptr schema, const dht::decorated_key& first_key,
                 {left_exclusive, to_bytes(bytes_view(left_token._data))},
                 {right_exclusive, to_bytes(bytes_view(right_token._data))}});
         }
-        rpras = sharder.next(*schema);
+        rpras = sharder.next(*schema, shard);
     }
     return sm;
 }
