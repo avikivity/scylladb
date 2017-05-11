@@ -260,13 +260,14 @@ unsigned shard_of(const token& t) {
 }
 
 stdx::optional<ring_position_range_and_shard>
-ring_position_range_sharder::next(const schema& s) {
+ring_position_range_sharder::next(const schema& s, stdx::optional<shard_id> shard_opt, unsigned spans) {
     if (_done) {
         return {};
     }
-    auto shard = _range.start() ? shard_of(_range.start()->value().token()) : global_partitioner().shard_of_minimum_token();
+    auto shard = shard_opt.value_or(
+            _range.start() ? shard_of(_range.start()->value().token()) : global_partitioner().shard_of_minimum_token());
     auto next_shard = shard + 1 < smp::count ? shard + 1 : 0;
-    auto shard_boundary_token = _partitioner.token_for_next_shard(_range.start() ? _range.start()->value().token() : minimum_token(), next_shard);
+    auto shard_boundary_token = _partitioner.token_for_next_shard(_range.start() ? _range.start()->value().token() : minimum_token(), next_shard, spans);
     auto shard_boundary = ring_position::starting_at(shard_boundary_token);
     if ((!_range.end() || shard_boundary.less_compare(s, _range.end()->value()))
             && shard_boundary_token != maximum_token()) {

@@ -570,7 +570,7 @@ public:
             : ring_position_range_sharder(global_partitioner(), std::move(rrp)) {}
     ring_position_range_sharder(const i_partitioner& partitioner, nonwrapping_range<ring_position> rrp)
             : _partitioner(partitioner), _range(std::move(rrp)) {}
-    stdx::optional<ring_position_range_and_shard> next(const schema& s);
+    stdx::optional<ring_position_range_and_shard> next(const schema& s, stdx::optional<shard_id> shard = {}, unsigned spans = 1);
 };
 
 struct ring_position_range_and_shard_and_element : ring_position_range_and_shard {
