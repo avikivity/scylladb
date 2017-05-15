@@ -396,3 +396,45 @@ BOOST_AUTO_TEST_CASE(test_split_after) {
     BOOST_REQUIRE_EQUAL(wr6.split_after(9, cmp), wr(b(9, false), b(5)));
 
 }
+
+BOOST_AUTO_TEST_CASE(test_overlaps_and_intersection) {
+    using nwr = nonwrapping_range<unsigned>;
+    using b = range_bound<unsigned>;
+    struct example {
+        nwr a, b;
+        stdx::optional<nwr> intersection;
+    };
+    auto incl = [] (unsigned v) { return b(v, true); };
+    auto excl = [] (unsigned v) { return b(v, false); };
+    auto none = [] () { return stdx::nullopt; };
+    auto test_cases = {
+            example{nwr{none(), none()},      nwr{none(), none()},    nwr{none(), none()}},
+            example{nwr{incl(3), incl(5)},    nwr{incl(4), incl(6)},  nwr{incl(4), incl(5)}},
+            example{nwr{incl(3), incl(4)},    nwr{incl(5), incl(6)},  {}},
+            example{nwr{incl(3), none()},     nwr{incl(5), none()},   nwr{incl(5), none()}},
+            example{nwr{none(), incl(3)},     nwr{none(), incl(5)},   nwr{none(), incl(3)}},
+            example{nwr{none(), incl(3)},     nwr{incl(5), none()},   {}},
+            example{nwr{none(), incl(5)},     nwr{incl(3), none()},   nwr{incl(3), incl(5)}},
+            example{nwr{none(), incl(4)},     nwr{incl(4), none()},   nwr{incl(4), incl(4)}},
+            example{nwr{none(), excl(4)},     nwr{incl(4), none()},   {}},
+            example{nwr{none(), excl(4)},     nwr{excl(4), none()},   {}},
+            example{nwr{incl(2), incl(4)},    nwr{incl(2), incl(4)},  nwr{incl(2), incl(4)}},
+            example{nwr{excl(2), none()},     nwr{incl(2), incl(4)},  nwr{excl(2), incl(4)}},
+            example{nwr{excl(2), none()},     nwr{excl(2), incl(4)},  nwr{excl(2), incl(4)}},
+            example{nwr{incl(2), excl(4)},    nwr{incl(2), incl(4)},  nwr{incl(2), excl(4)}},
+            example{nwr{incl(2), excl(4)},    nwr{incl(2), excl(4)},  nwr{incl(2), excl(4)}},
+    };
+    auto cmp = unsigned_comparator();
+    unsigned which = 0;
+    for (auto&& e : test_cases) {
+        print("checking: %d\n", which++);
+        BOOST_REQUIRE(e.a.overlaps(e.b, cmp) == bool(e.intersection));
+        if (e.intersection) {
+            BOOST_REQUIRE(e.a.intersection(e.b, cmp) == *e.intersection);
+        }
+        BOOST_REQUIRE(e.b.overlaps(e.a, cmp) == bool(e.intersection));
+        if (e.intersection) {
+            BOOST_REQUIRE(e.b.intersection(e.a, cmp) == *e.intersection);
+        }
+    }
+}
