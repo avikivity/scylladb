@@ -420,6 +420,62 @@ template<typename T>
 class nonwrapping_range {
     template <typename U>
     using optional = std::experimental::optional<U>;
+    template <typename Comparator>
+    struct lower_bound_less_comparator {
+        Comparator _cmp;
+        lower_bound_less_comparator(Comparator comparator) : _cmp(std::move(comparator)) {}
+        bool operator()(const optional<range_bound<T>>& a, const optional<range_bound<T>>& b) const {
+            auto a_empty = !a;
+            auto b_empty = !b;
+            if (a_empty != b_empty) {
+                return a_empty;
+            } else if (a_empty) {
+                return true;
+            } else {
+                return operator()(a.value(), b.value());
+            }
+        }
+        bool operator()(const range_bound<T>& a, const range_bound<T>& b) const {
+            auto r = _cmp(a.value(), b.value());
+            if (r < 0) {
+                return true;
+            } else if (r > 0) {
+                return false;
+            } else {
+                auto a_incl = a.is_inclusive();
+                auto b_incl = b.is_inclusive();
+                return unsigned(a_incl) > unsigned(b_incl);
+            }
+        }
+    };
+    template <typename Comparator>
+    struct upper_bound_less_comparator {
+        Comparator _cmp;
+        upper_bound_less_comparator(Comparator comparator) : _cmp(std::move(comparator)) {}
+        bool operator()(const optional<range_bound<T>>& a, const optional<range_bound<T>>& b) const {
+            auto a_empty = !a;
+            auto b_empty = !b;
+            if (a_empty != b_empty) {
+                return b_empty;
+            } else if (a_empty) {
+                return false;
+            } else {
+                return operator()(a.value(), b.value());
+            }
+        }
+        bool operator()(const range_bound<T>& a, const range_bound<T>& b) const {
+            auto r = _cmp(a.value(), b.value());
+            if (r < 0) {
+                return true;
+            } else if (r > 0) {
+                return false;
+            } else {
+                auto a_incl = a.is_inclusive();
+                auto b_incl = b.is_inclusive();
+                return unsigned(a_incl) < unsigned(b_incl);
+            }
+        }
+    };
 public:
     using bound = range_bound<T>;
 private:
@@ -472,6 +528,14 @@ public:
         return wrapping_range<T>::greater_than_or_equal(_range.end_bound(), other._range.start_bound(), cmp)
             && wrapping_range<T>::greater_than_or_equal(other._range.end_bound(), _range.start_bound(), cmp);
     }
+    // Return the intersection of two ranges; they must overlap.
+    // Comparator must define a total ordering on T.
+    template <typename Comparator>
+    nonwrapping_range intersection(const nonwrapping_range other, Comparator cmp) const {
+        return nonwrapping_range(std::max(start(), other.start(), lower_bound_less_comparator<Comparator>(cmp)),
+                std::min(end(), other.end(), upper_bound_less_comparator<Comparator>(cmp)));
+    }
+
     static nonwrapping_range make(bound start, bound end) {
         return nonwrapping_range({std::move(start)}, {std::move(end)});
     }
