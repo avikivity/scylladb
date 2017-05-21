@@ -24,7 +24,7 @@
 
 namespace cql_transport {
 
-static logging::logger logger("event_notifier");
+static logging::logger elogger("event_notifier");
 
 cql_server::event_notifier::event_notifier(uint16_t port)
     : _port{port}
@@ -103,12 +103,12 @@ void cql_server::event_notifier::on_create_view(const sstring& ks_name, const ss
 
 void cql_server::event_notifier::on_create_function(const sstring& ks_name, const sstring& function_name)
 {
-    logger.warn("{} event ignored", __func__);
+    elogger.warn("{} event ignored", __func__);
 }
 
 void cql_server::event_notifier::on_create_aggregate(const sstring& ks_name, const sstring& aggregate_name)
 {
-    logger.warn("{} event ignored", __func__);
+    elogger.warn("{} event ignored", __func__);
 }
 
 void cql_server::event_notifier::on_update_keyspace(const sstring& ks_name)
@@ -161,12 +161,12 @@ void cql_server::event_notifier::on_update_view(const sstring& ks_name, const ss
 
 void cql_server::event_notifier::on_update_function(const sstring& ks_name, const sstring& function_name)
 {
-    logger.warn("%s event ignored", __func__);
+    elogger.warn("%s event ignored", __func__);
 }
 
 void cql_server::event_notifier::on_update_aggregate(const sstring& ks_name, const sstring& aggregate_name)
 {
-    logger.warn("%s event ignored", __func__);
+    elogger.warn("%s event ignored", __func__);
 }
 
 void cql_server::event_notifier::on_drop_keyspace(const sstring& ks_name)
@@ -219,12 +219,12 @@ void cql_server::event_notifier::on_drop_view(const sstring& ks_name, const sstr
 
 void cql_server::event_notifier::on_drop_function(const sstring& ks_name, const sstring& function_name)
 {
-    logger.warn("%s event ignored", __func__);
+    elogger.warn("%s event ignored", __func__);
 }
 
 void cql_server::event_notifier::on_drop_aggregate(const sstring& ks_name, const sstring& aggregate_name)
 {
-    logger.warn("%s event ignored", __func__);
+    elogger.warn("%s event ignored", __func__);
 }
 
 void cql_server::event_notifier::on_join_cluster(const gms::inet_address& endpoint)

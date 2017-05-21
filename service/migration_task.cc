@@ -49,12 +49,12 @@
 
 namespace service {
 
-static logging::logger logger("migration_task");
+static logging::logger mlogger("migration_task");
 
 future<> migration_task::run_may_throw(distributed<service::storage_proxy>& proxy, const gms::inet_address& endpoint)
 {
     if (!gms::get_failure_detector().local().is_alive(endpoint)) {
-        logger.error("Can't send migration request: node {} is down.", endpoint);
+        mlogger.error("Can't send migration request: node {} is down.", endpoint);
         return make_ready_future<>();
     }
     netw::messaging_service::msg_addr id{endpoint, 0};
@@ -62,7 +62,7 @@ future<> migration_task::run_may_throw(distributed<service::storage_proxy>& prox
         try {
             std::rethrow_exception(e);
         } catch (const exceptions::configuration_exception& e) {
-            logger.error("Configuration exception merging remote schema: {}", e.what());
+            mlogger.error("Configuration exception merging remote schema: {}", e.what());
         }
     });
 }

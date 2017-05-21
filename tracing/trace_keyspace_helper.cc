@@ -47,7 +47,7 @@
 
 namespace tracing {
 
-static logging::logger logger("trace_keyspace_helper");
+static logging::logger tlogger("trace_keyspace_helper");
 
 const sstring trace_keyspace_helper::KEYSPACE_NAME("system_traces");
 const sstring trace_keyspace_helper::SESSIONS("sessions");
@@ -218,13 +218,13 @@ void trace_keyspace_helper::write_one_session_records(lw_shared_ptr<one_session_
             ++_stats.tracing_errors;
             std::rethrow_exception(ep);
         } catch (exceptions::overloaded_exception&) {
-            logger.warn("Too many nodes are overloaded to save trace events");
+            tlogger.warn("Too many nodes are overloaded to save trace events");
         } catch (bad_column_family& e) {
             if (_stats.bad_column_family_errors++ % bad_column_family_message_period == 0) {
-                logger.warn("Tracing is enabled but {}", e.what());
+                tlogger.warn("Tracing is enabled but {}", e.what());
             }
         } catch (std::logic_error& e) {
-            logger.error(e.what());
+            tlogger.error(e.what());
         } catch (...) {
             // TODO: Handle some more exceptions maybe?
         }
@@ -232,7 +232,7 @@ void trace_keyspace_helper::write_one_session_records(lw_shared_ptr<one_session_
 }
 
 void trace_keyspace_helper::write_records_bulk(records_bulk& bulk) {
-    logger.trace("Writing {} sessions", bulk.size());
+    tlogger.trace("Writing {} sessions", bulk.size());
     std::for_each(bulk.begin(), bulk.end(), [this] (records_bulk::value_type& one_session_records_ptr) {
         write_one_session_records(std::move(one_session_records_ptr));
     });
@@ -323,7 +323,7 @@ future<> trace_keyspace_helper::apply_events_mutation(lw_shared_ptr<one_session_
     }
 
     return _events.cache_table_info().then([this, records, &events_records] {
-        logger.trace("{}: storing {} events records", records->session_id, events_records.size());
+        tlogger.trace("{}: storing {} events records", records->session_id, events_records.size());
 
         std::vector<shared_ptr<cql3::statements::modification_statement>> modifications(events_records.size(), _events.insert_stmt());
         std::vector<std::vector<cql3::raw_value>> values;
@@ -368,13 +368,13 @@ future<> trace_keyspace_helper::flush_one_session_mutations(lw_shared_ptr<one_se
                 if (session_record_is_ready) {
 
                     // if session is finished - store a session and a session time index entries
-                    logger.trace("{}: going to store a session event", records->session_id);
+                    tlogger.trace("{}: going to store a session event", records->session_id);
                     return _sessions.insert(make_session_mutation_data, *records).then([this, records] {
                         if (!records->do_log_slow_query) {
                             return now();
                         }
                         auto start_time_id = utils::UUID_gen::get_time_UUID(make_monotonic_UUID_tp(_slow_query_last_nanos, records->session_rec.started_at));
-                        logger.trace("{}: going to store a slow query event", records->session_id);
+                        tlogger.trace("{}: going to store a slow query event", records->session_id);
                         return _slow_query_log.insert(make_slow_query_mutation_data, *records, start_time_id);
                     });
                 } else {

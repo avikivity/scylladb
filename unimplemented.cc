@@ -29,7 +29,7 @@ namespace unimplemented {
 
 static thread_local std::unordered_map<cause, bool> _warnings;
 
-static logging::logger logger("unimplemented");
+static logging::logger ulogger("unimplemented");
 
 std::ostream& operator<<(std::ostream& out, cause c) {
     switch(c) {
@@ -69,7 +69,7 @@ void warn(cause c) {
     auto i = _warnings.find(c);
     if (i == _warnings.end()) {
         _warnings.insert({c, true});
-        logger.debug("{}", c);
+        ulogger.debug("{}", c);
     }
 }
 
