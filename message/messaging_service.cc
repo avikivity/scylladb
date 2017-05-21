@@ -75,8 +75,9 @@
 #include "rpc/lz4_compressor.hh"
 #include "rpc/multi_algo_compressor_factory.hh"
 #include "partition_range_compat.hh"
+#include "stdx.hh"
 
-namespace net {
+namespace netw {
 
 // thunk from rpc serializers to generate serializers
 template <typename T, typename Output>
@@ -606,7 +607,6 @@ auto send_message_timeout(messaging_service* ms, messaging_verb verb, msg_addr i
 template <typename MsgIn, typename... MsgOut>
 auto send_message_timeout_and_retry(messaging_service* ms, messaging_verb verb, msg_addr id,
         std::chrono::seconds timeout, int nr_retry, std::chrono::seconds wait, MsgOut... msg) {
-    namespace stdx = std::experimental;
     using MsgInTuple = typename futurize_t<MsgIn>::value_type;
     return do_with(int(nr_retry), std::move(msg)..., [ms, verb, id, timeout, wait, nr_retry] (auto& retry, const auto&... messages) {
         return repeat_until_value([ms, verb, id, timeout, wait, nr_retry, &retry, &messages...] {

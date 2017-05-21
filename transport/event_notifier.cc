@@ -22,7 +22,7 @@
 #include "transport/server.hh"
 #include "core/gate.hh"
 
-namespace transport {
+namespace cql_transport {
 
 static logging::logger logger("event_notifier");
 
@@ -56,7 +56,7 @@ void cql_server::event_notifier::unregister_connection(cql_server::connection* c
 void cql_server::event_notifier::on_create_keyspace(const sstring& ks_name)
 {
     for (auto&& conn : _schema_change_listeners) {
-        using namespace transport;
+        using namespace cql_transport;
         with_gate(conn->_pending_requests_gate, [&] {
             return conn->write_response(conn->make_schema_change_event(event::schema_change{
                 event::schema_change::change_type::CREATED,
@@ -69,7 +69,7 @@ void cql_server::event_notifier::on_create_keyspace(const sstring& ks_name)
 void cql_server::event_notifier::on_create_column_family(const sstring& ks_name, const sstring& cf_name)
 {
     for (auto&& conn : _schema_change_listeners) {
-        using namespace transport;
+        using namespace cql_transport;
         with_gate(conn->_pending_requests_gate, [&] {
             return conn->write_response(conn->make_schema_change_event(event::schema_change{
                 event::schema_change::change_type::CREATED,
@@ -84,7 +84,7 @@ void cql_server::event_notifier::on_create_column_family(const sstring& ks_name,
 void cql_server::event_notifier::on_create_user_type(const sstring& ks_name, const sstring& type_name)
 {
     for (auto&& conn : _schema_change_listeners) {
-        using namespace transport;
+        using namespace cql_transport;
         with_gate(conn->_pending_requests_gate, [&] {
             return conn->write_response(conn->make_schema_change_event(event::schema_change{
                 event::schema_change::change_type::CREATED,
@@ -114,7 +114,7 @@ void cql_server::event_notifier::on_create_aggregate(const sstring& ks_name, con
 void cql_server::event_notifier::on_update_keyspace(const sstring& ks_name)
 {
     for (auto&& conn : _schema_change_listeners) {
-        using namespace transport;
+        using namespace cql_transport;
         with_gate(conn->_pending_requests_gate, [&] {
             return conn->write_response(conn->make_schema_change_event(event::schema_change{
                 event::schema_change::change_type::UPDATED,
@@ -127,7 +127,7 @@ void cql_server::event_notifier::on_update_keyspace(const sstring& ks_name)
 void cql_server::event_notifier::on_update_column_family(const sstring& ks_name, const sstring& cf_name, bool columns_changed)
 {
     for (auto&& conn : _schema_change_listeners) {
-        using namespace transport;
+        using namespace cql_transport;
         with_gate(conn->_pending_requests_gate, [&] {
             return conn->write_response(conn->make_schema_change_event(event::schema_change{
                 event::schema_change::change_type::UPDATED,
@@ -142,7 +142,7 @@ void cql_server::event_notifier::on_update_column_family(const sstring& ks_name,
 void cql_server::event_notifier::on_update_user_type(const sstring& ks_name, const sstring& type_name)
 {
     for (auto&& conn : _schema_change_listeners) {
-        using namespace transport;
+        using namespace cql_transport;
         with_gate(conn->_pending_requests_gate, [&] {
             return conn->write_response(conn->make_schema_change_event(event::schema_change{
                 event::schema_change::change_type::UPDATED,
@@ -172,7 +172,7 @@ void cql_server::event_notifier::on_update_aggregate(const sstring& ks_name, con
 void cql_server::event_notifier::on_drop_keyspace(const sstring& ks_name)
 {
     for (auto&& conn : _schema_change_listeners) {
-        using namespace transport;
+        using namespace cql_transport;
         with_gate(conn->_pending_requests_gate, [&] {
             return conn->write_response(conn->make_schema_change_event(event::schema_change{
                 event::schema_change::change_type::DROPPED,
@@ -185,7 +185,7 @@ void cql_server::event_notifier::on_drop_keyspace(const sstring& ks_name)
 void cql_server::event_notifier::on_drop_column_family(const sstring& ks_name, const sstring& cf_name)
 {
     for (auto&& conn : _schema_change_listeners) {
-        using namespace transport;
+        using namespace cql_transport;
         with_gate(conn->_pending_requests_gate, [&] {
             return conn->write_response(conn->make_schema_change_event(event::schema_change{
                 event::schema_change::change_type::DROPPED,
@@ -200,7 +200,7 @@ void cql_server::event_notifier::on_drop_column_family(const sstring& ks_name, c
 void cql_server::event_notifier::on_drop_user_type(const sstring& ks_name, const sstring& type_name)
 {
     for (auto&& conn : _schema_change_listeners) {
-        using namespace transport;
+        using namespace cql_transport;
         with_gate(conn->_pending_requests_gate, [&] {
             return conn->write_response(conn->make_schema_change_event(event::schema_change{
                 event::schema_change::change_type::DROPPED,
@@ -230,7 +230,7 @@ void cql_server::event_notifier::on_drop_aggregate(const sstring& ks_name, const
 void cql_server::event_notifier::on_join_cluster(const gms::inet_address& endpoint)
 {
     for (auto&& conn : _topology_change_listeners) {
-        using namespace transport;
+        using namespace cql_transport;
         with_gate(conn->_pending_requests_gate, [&] {
             return conn->write_response(conn->make_topology_change_event(event::topology_change::new_node(endpoint, _port)));
         });
@@ -240,7 +240,7 @@ void cql_server::event_notifier::on_join_cluster(const gms::inet_address& endpoi
 void cql_server::event_notifier::on_leave_cluster(const gms::inet_address& endpoint)
 {
     for (auto&& conn : _topology_change_listeners) {
-        using namespace transport;
+        using namespace cql_transport;
         with_gate(conn->_pending_requests_gate, [&] {
             return conn->write_response(conn->make_topology_change_event(event::topology_change::removed_node(endpoint, _port)));
         });
@@ -250,7 +250,7 @@ void cql_server::event_notifier::on_leave_cluster(const gms::inet_address& endpo
 void cql_server::event_notifier::on_move(const gms::inet_address& endpoint)
 {
     for (auto&& conn : _topology_change_listeners) {
-        using namespace transport;
+        using namespace cql_transport;
         with_gate(conn->_pending_requests_gate, [&] {
             return conn->write_response(conn->make_topology_change_event(event::topology_change::moved_node(endpoint, _port)));
         });
@@ -263,7 +263,7 @@ void cql_server::event_notifier::on_up(const gms::inet_address& endpoint)
     _last_status_change[endpoint] = event::status_change::status_type::UP;
     if (!was_up) {
         for (auto&& conn : _status_change_listeners) {
-            using namespace transport;
+            using namespace cql_transport;
             with_gate(conn->_pending_requests_gate, [&] {
                 return conn->write_response(conn->make_status_change_event(event::status_change::node_up(endpoint, _port)));
             });
@@ -277,7 +277,7 @@ void cql_server::event_notifier::on_down(const gms::inet_address& endpoint)
     _last_status_change[endpoint] = event::status_change::status_type::DOWN;
     if (!was_down) {
         for (auto&& conn : _status_change_listeners) {
-            using namespace transport;
+            using namespace cql_transport;
             with_gate(conn->_pending_requests_gate, [&] {
                 return conn->write_response(conn->make_status_change_event(event::status_change::node_down(endpoint, _port)));
             });

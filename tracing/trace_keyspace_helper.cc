@@ -336,7 +336,7 @@ future<> trace_keyspace_helper::apply_events_mutation(lw_shared_ptr<one_session_
             cql3::query_options::make_batch_options(cql3::query_options(db::consistency_level::ANY, std::experimental::nullopt, std::vector<cql3::raw_value>{}, false, cql3::query_options::specific_options::DEFAULT, cql_serialization_format::latest()), std::move(values)),
             cql3::statements::batch_statement(cql3::statements::batch_statement::type::UNLOGGED, std::move(modifications), cql3::attributes::none(), qp.get_cql_stats()),
             [this] (auto& batch_options, auto& batch) {
-                return batch.execute(service::get_storage_proxy(), _dummy_query_state, batch_options).then([] (shared_ptr<transport::messages::result_message> res) { return now(); });
+                return batch.execute(service::get_storage_proxy(), _dummy_query_state, batch_options).then([] (shared_ptr<cql_transport::messages::result_message> res) { return now(); });
             }
         );
     });
@@ -397,7 +397,7 @@ future<> trace_keyspace_helper::table_helper::cache_table_info() {
         _insert_stmt = nullptr;
     }
 
-    return cql3::get_local_query_processor().prepare(_insert_cql, _ks_helper.get_dummy_qs().get_client_state(), false).then([this] (shared_ptr<transport::messages::result_message::prepared> msg_ptr) {
+    return cql3::get_local_query_processor().prepare(_insert_cql, _ks_helper.get_dummy_qs().get_client_state(), false).then([this] (shared_ptr<cql_transport::messages::result_message::prepared> msg_ptr) {
         _prepared_stmt = std::move(msg_ptr->get_prepared());
         shared_ptr<cql3::cql_statement> cql_stmt = _prepared_stmt->statement;
         _insert_stmt = dynamic_pointer_cast<cql3::statements::modification_statement>(cql_stmt);

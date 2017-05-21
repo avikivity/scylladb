@@ -56,7 +56,7 @@
 #include <snappy-c.h>
 #include <lz4.h>
 
-namespace transport {
+namespace cql_transport {
 
 static logging::logger logger("cql_server");
 

@@ -1427,7 +1427,7 @@ future<> force_blocking_flush(sstring cfname) {
  * 3. files are present but you can't read them: bad
  */
 future<> check_health() {
-    using namespace transport::messages;
+    using namespace cql_transport::messages;
     sstring req = sprint("SELECT cluster_name FROM system.%s WHERE key=?", LOCAL);
     return execute_cql(req, sstring(LOCAL)).then([] (::shared_ptr<cql3::untyped_result_set> msg) {
         if (msg->empty() || !msg->one().has("cluster_name")) {
@@ -1589,7 +1589,7 @@ void make(database& db, bool durable, bool volatile_testing_only) {
 }
 
 future<utils::UUID> get_local_host_id() {
-    using namespace transport::messages;
+    using namespace cql_transport::messages;
     sstring req = sprint("SELECT host_id FROM system.%s WHERE key=?", LOCAL);
     return execute_cql(req, sstring(LOCAL)).then([] (::shared_ptr<cql3::untyped_result_set> msg) {
         auto new_id = [] {

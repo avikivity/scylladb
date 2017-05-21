@@ -1013,7 +1013,7 @@ void storage_service::on_remove(gms::inet_address endpoint) {
 
 void storage_service::on_dead(gms::inet_address endpoint, gms::endpoint_state state) {
     logger.debug("endpoint={} on_dead", endpoint);
-    net::get_local_messaging_service().remove_rpc_client(net::msg_addr{endpoint, 0});
+    netw::get_local_messaging_service().remove_rpc_client(netw::msg_addr{endpoint, 0});
     get_storage_service().invoke_on_all([endpoint] (auto&& ss) {
         for (auto&& subscriber : ss._lifecycle_subscribers) {
             try {
@@ -1686,7 +1686,7 @@ future<std::unordered_map<sstring, std::vector<sstring>>> storage_service::descr
     auto live_hosts = gms::get_local_gossiper().get_live_members();
     std::unordered_map<sstring, std::vector<sstring>> results;
     return map_reduce(std::move(live_hosts), [] (auto host) {
-        auto f0 = net::get_messaging_service().local().send_schema_check(net::msg_addr{ host, 0 });
+        auto f0 = netw::get_messaging_service().local().send_schema_check(netw::msg_addr{ host, 0 });
         return std::move(f0).then_wrapped([host] (auto f) {
             if (f.failed()) {
                 return std::pair<gms::inet_address, stdx::optional<utils::UUID>>(host, stdx::nullopt);
@@ -1777,7 +1777,7 @@ future<> storage_service::do_stop_ms() {
         return make_ready_future<>();
     }
     _ms_stopped = true;
-    return net::get_messaging_service().invoke_on_all([] (auto& ms) {
+    return netw::get_messaging_service().invoke_on_all([] (auto& ms) {
         return ms.stop();
     }).then([] {
         logger.info("messaging_service stopped");
@@ -2012,7 +2012,7 @@ future<> storage_service::start_native_transport() {
         if (ss._cql_server) {
             return make_ready_future<>();
         }
-        auto cserver = make_shared<distributed<transport::cql_server>>();
+        auto cserver = make_shared<distributed<cql_transport::cql_server>>();
         ss._cql_server = cserver;
 
         auto& cfg = ss._db.local().get_config();
@@ -2020,7 +2020,7 @@ future<> storage_service::start_native_transport() {
         auto addr = cfg.rpc_address();
         auto ceo = cfg.client_encryption_options();
         auto keepalive = cfg.rpc_keepalive();
-        transport::cql_load_balance lb = transport::parse_load_balance(cfg.load_balance());
+        cql_transport::cql_load_balance lb = transport::parse_load_balance(cfg.load_balance());
         return seastar::net::dns::resolve_name(addr).then([cserver, addr, port, lb, keepalive, ceo = std::move(ceo)] (seastar::net::inet_address ip) {
             return cserver->start(std::ref(service::get_storage_proxy()), std::ref(cql3::get_query_processor()), lb).then([cserver, port, addr, ip, ceo, keepalive]() {
                 // #293 - do not stop anything
@@ -2053,7 +2053,7 @@ future<> storage_service::start_native_transport() {
                     logger.info("Enabling encrypted CQL connections between client and server");
                 }
                 return f.then([cserver, addr, cred = std::move(cred), keepalive] {
-                    return cserver->invoke_on_all(&transport::cql_server::listen, addr, cred, keepalive);
+                    return cserver->invoke_on_all(&cql_transport::cql_server::listen, addr, cred, keepalive);
                 });
             });
         }).then([addr, port] {
@@ -2599,8 +2599,8 @@ future<> storage_service::send_replication_notification(inet_address remote) {
             return *done || !gms::get_local_failure_detector().is_alive(remote);
         },
         [done, remote, local] {
-            auto& ms = net::get_local_messaging_service();
-            net::msg_addr id{remote, 0};
+            auto& ms = netw::get_local_messaging_service();
+            netw::msg_addr id{remote, 0};
             return ms.send_replication_finished(id, local).then_wrapped([id, done] (auto&& f) {
                 try {
                     f.get();
@@ -3274,14 +3274,14 @@ future<> storage_service::keyspace_changed(const sstring& ks_name) {
 }
 
 void storage_service::init_messaging_service() {
-    auto& ms = net::get_local_messaging_service();
+    auto& ms = netw::get_local_messaging_service();
     ms.register_replication_finished([] (gms::inet_address from) {
         return get_local_storage_service().confirm_replication(from);
     });
 }
 
 void storage_service::uninit_messaging_service() {
-    auto& ms = net::get_local_messaging_service();
+    auto& ms = netw::get_local_messaging_service();
     ms.unregister_replication_finished();
 }
 

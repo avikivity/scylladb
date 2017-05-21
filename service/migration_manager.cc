@@ -72,9 +72,9 @@ future<> migration_manager::stop()
 
 void migration_manager::init_messaging_service()
 {
-    auto& ms = net::get_local_messaging_service();
+    auto& ms = netw::get_local_messaging_service();
     ms.register_definitions_update([this] (const rpc::client_info& cinfo, std::vector<frozen_mutation> m) {
-        auto src = net::messaging_service::get_source(cinfo);
+        auto src = netw::messaging_service::get_source(cinfo);
         do_with(std::move(m), get_local_shared_storage_proxy(), [src] (const std::vector<frozen_mutation>& mutations, shared_ptr<storage_proxy>& p) {
             return service::get_local_migration_manager().merge_schema_from(src, mutations);
         }).then_wrapped([src] (auto&& f) {
@@ -84,7 +84,7 @@ void migration_manager::init_messaging_service()
                 logger.debug("Applied definitions update from {}.", src);
             }
         });
-        return net::messaging_service::no_wait();
+        return netw::messaging_service::no_wait();
     });
     ms.register_migration_request([this] () {
         return db::schema_tables::convert_schema_to_mutations(get_storage_proxy()).finally([p = get_local_shared_storage_proxy()] {
@@ -98,7 +98,7 @@ void migration_manager::init_messaging_service()
 
 void migration_manager::uninit_messaging_service()
 {
-    auto& ms = net::get_local_messaging_service();
+    auto& ms = netw::get_local_messaging_service();
     ms.unregister_migration_request();
     ms.unregister_definitions_update();
     ms.unregister_schema_check();
@@ -193,9 +193,9 @@ future<> migration_manager::submit_migration_task(const gms::inet_address& endpo
     return service::migration_task::run_may_throw(get_storage_proxy(), endpoint);
 }
 
-future<> migration_manager::merge_schema_from(net::messaging_service::msg_addr id)
+future<> migration_manager::merge_schema_from(netw::messaging_service::msg_addr id)
 {
-    auto& ms = net::get_local_messaging_service();
+    auto& ms = netw::get_local_messaging_service();
     return ms.send_migration_request(std::move(id)).then([this, id] (std::vector<frozen_mutation> mutations) {
         return do_with(std::move(mutations), [this, id] (auto&& mutations) {
             return this->merge_schema_from(id, mutations);
@@ -203,7 +203,7 @@ future<> migration_manager::merge_schema_from(net::messaging_service::msg_addr i
     });
 }
 
-future<> migration_manager::merge_schema_from(net::messaging_service::msg_addr src, const std::vector<frozen_mutation>& mutations)
+future<> migration_manager::merge_schema_from(netw::messaging_service::msg_addr src, const std::vector<frozen_mutation>& mutations)
 {
     logger.debug("Applying schema mutations from {}", src);
     return map_reduce(mutations, [src](const frozen_mutation& fm) {
@@ -226,9 +226,9 @@ bool migration_manager::should_pull_schema_from(const gms::inet_address& endpoin
      * Don't request schema from nodes with a differnt or unknonw major version (may have incompatible schema)
      * Don't request schema from fat clients
      */
-    auto& ms = net::get_local_messaging_service();
+    auto& ms = netw::get_local_messaging_service();
     return ms.knows_version(endpoint)
-            && ms.get_raw_version(endpoint) == net::messaging_service::current_version
+            && ms.get_raw_version(endpoint) == netw::messaging_service::current_version
             && !gms::get_local_gossiper().is_gossip_only_member(endpoint);
 }
 
@@ -755,9 +755,9 @@ future<> migration_manager::announce(std::vector<mutation> mutations, bool annou
 
 future<> migration_manager::push_schema_mutation(const gms::inet_address& endpoint, const std::vector<mutation>& schema)
 {
-    net::messaging_service::msg_addr id{endpoint, 0};
+    netw::messaging_service::msg_addr id{endpoint, 0};
     auto fm = std::vector<frozen_mutation>(schema.begin(), schema.end());
-    return net::get_local_messaging_service().send_definitions_update(id, std::move(fm));
+    return netw::get_local_messaging_service().send_definitions_update(id, std::move(fm));
 }
 
 // Returns a future on the local application of the schema
@@ -768,9 +768,9 @@ future<> migration_manager::announce(std::vector<mutation> schema) {
         return parallel_for_each(live_members.begin(), live_members.end(), [&schema](auto& endpoint) {
             // only push schema to nodes with known and equal versions
             if (endpoint != utils::fb_utilities::get_broadcast_address() &&
-                net::get_local_messaging_service().knows_version(endpoint) &&
-                net::get_local_messaging_service().get_raw_version(endpoint) ==
-                net::messaging_service::current_version) {
+                netw::get_local_messaging_service().knows_version(endpoint) &&
+                netw::get_local_messaging_service().get_raw_version(endpoint) ==
+                netw::messaging_service::current_version) {
                 return push_schema_mutation(endpoint, schema);
             } else {
                 return make_ready_future<>();
@@ -866,7 +866,7 @@ public static class MigrationsSerializer implements IVersionedSerializer<Collect
 //
 // The endpoint is the node from which 's' originated.
 //
-static future<> maybe_sync(const schema_ptr& s, net::messaging_service::msg_addr endpoint) {
+static future<> maybe_sync(const schema_ptr& s, netw::messaging_service::msg_addr endpoint) {
     if (s->is_synced()) {
         return make_ready_future<>();
     }
@@ -891,19 +891,19 @@ static future<> maybe_sync(const schema_ptr& s, net::messaging_service::msg_addr
     });
 }
 
-future<schema_ptr> get_schema_definition(table_schema_version v, net::messaging_service::msg_addr dst) {
+future<schema_ptr> get_schema_definition(table_schema_version v, netw::messaging_service::msg_addr dst) {
     return local_schema_registry().get_or_load(v, [dst] (table_schema_version v) {
         logger.debug("Requesting schema {} from {}", v, dst);
-        auto& ms = net::get_local_messaging_service();
+        auto& ms = netw::get_local_messaging_service();
         return ms.send_get_schema_version(dst, v);
     });
 }
 
-future<schema_ptr> get_schema_for_read(table_schema_version v, net::messaging_service::msg_addr dst) {
+future<schema_ptr> get_schema_for_read(table_schema_version v, netw::messaging_service::msg_addr dst) {
     return get_schema_definition(v, dst);
 }
 
-future<schema_ptr> get_schema_for_write(table_schema_version v, net::messaging_service::msg_addr dst) {
+future<schema_ptr> get_schema_for_write(table_schema_version v, netw::messaging_service::msg_addr dst) {
     return get_schema_definition(v, dst).then([dst] (schema_ptr s) {
         return maybe_sync(s, dst).then([s] {
             return s;
