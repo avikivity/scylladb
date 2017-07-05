@@ -978,10 +978,10 @@ SEASTAR_TEST_CASE(test_compound_partition_key) {
                         "primary key (%s, p2 %s)",
                         cdef.name_as_text(), cdef.name_as_text(), cdef == p2 ? "" : "and p2 is not null",
                         cdef.name_as_text(), cdef == p1 ? "" : ", p1")));
-            maybe_failed(e.execute_cql(sprint(
-                        "create materialized view mv3_%s as select * from cf "
-                        "where %s is not null and p1 is not null %s "
-                        "primary key ((%s, p1), p2)",
+            maybe_failed(e.execute_cql(format(
+                        "create materialized view mv3_{} as select * from cf "
+                        "where {} is not null and p1 is not null {} "
+                        "primary key (({}, p1), p2)",
                         cdef.name_as_text(), cdef.name_as_text(), cdef == p2 ? "" : "and p2 is not null", cdef.name_as_text())));
         }
 
