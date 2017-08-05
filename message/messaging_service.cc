@@ -771,6 +771,18 @@ future<> messaging_service::send_complete_message(msg_addr id, UUID plan_id, uns
         streaming_timeout, plan_id, dst_cpu_id, failed);
 }
 
+
+// STREAM_RANGE_SYNC
+void messaging_service::register_stream_range_sync(std::function<future<> (const rpc::client_info& cinfo, UUID plan_id, sstring description, UUID table, dht::token_range_vector)>&& func) {
+    register_handler(this, messaging_verb::STREAM_RANGE_SYNC, std::move(func));
+}
+void messaging_service::unregister_stream_range_sync() {
+    _rpc->unregister_handler(messaging_verb::STREAM_RANGE_SYNC);
+}
+future<> messaging_service::send_stream_range_sync(msg_addr id, UUID plan_id, sstring description, UUID table, dht::token_range_vector ranges) {
+    return send_message<void>(this, messaging_verb::STREAM_RANGE_SYNC, id, plan_id, description, table, std::move(ranges));
+}
+
 void messaging_service::register_gossip_echo(std::function<future<> ()>&& func) {
     register_handler(this, messaging_verb::GOSSIP_ECHO, std::move(func));
 }

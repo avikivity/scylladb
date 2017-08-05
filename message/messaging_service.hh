@@ -103,12 +103,13 @@ enum class messaging_verb : int32_t {
     STREAM_MUTATION = 17,
     STREAM_MUTATION_DONE = 18,
     COMPLETE_MESSAGE = 19,
+    STREAM_RANGE_SYNC = 24,   // send me a range synchronously and don't return until done
     // end of streaming verbs
     REPAIR_CHECKSUM_RANGE = 20,
     GET_SCHEMA_VERSION = 21,
     SCHEMA_CHECK = 22,
     COUNTER_MUTATION = 23,
-    LAST = 24,
+    LAST = 25,
 };
 
 } // namespace netw
@@ -251,6 +252,11 @@ public:
 
     void register_complete_message(std::function<future<> (const rpc::client_info& cinfo, UUID plan_id, unsigned dst_cpu_id, rpc::optional<bool> failed)>&& func);
     future<> send_complete_message(msg_addr id, UUID plan_id, unsigned dst_cpu_id, bool failed = false);
+
+    void register_stream_range_sync(std::function<future<> (const rpc::client_info& cinfo, UUID plan_id, sstring description, UUID table, dht::token_range_vector)>&& func);
+    void unregister_stream_range_sync();
+    future<> send_stream_range_sync(msg_addr id, UUID plan_id, sstring description, UUID table, dht::token_range_vector ranges);
+
 
     // Wrapper for REPAIR_CHECKSUM_RANGE verb
     void register_repair_checksum_range(std::function<future<partition_checksum> (sstring keyspace, sstring cf, dht::token_range range, rpc::optional<repair_checksum> hash_version)>&& func);
