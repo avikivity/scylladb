@@ -54,10 +54,15 @@
 #include "message/messaging_service.hh"
 #include <seastar/net/dns.hh>
 #include "service/cache_hitrate_calculator.hh"
+#include "streaming/sync_stream.hh"
+#include "streaming/streaming_database_interface.hh"
 
 thread_local disk_error_signal_type commit_error;
 thread_local disk_error_signal_type general_disk_error;
 seastar::metrics::metric_groups app_metrics;
+
+static sharded<streaming::sync_stream_server> g_sync_stream_server;
+static sharded<streaming::sync_stream_client> g_sync_stream_client;
 
 using namespace std::chrono_literals;
 
@@ -269,6 +274,52 @@ verify_adequate_memory_per_shard(bool developer_mode) {
         throw std::runtime_error("configuration (memory per shard too low)");
     }
 }
+
+
+static
+dht::partition_range_vector as_partition_range_vector(const dht::token_range_vector& trv) {
+    return boost::copy_range<dht::partition_range_vector>(trv | boost::adaptors::transformed(dht::to_partition_range));
+}
+
+class database_streaming_data_source : public streaming::data_source {
+    database& _db;
+    using UUID = utils::UUID;
+public:
+    explicit database_streaming_data_source(database& db) : _db(db) {}
+    virtual mutation_reader make_reader(UUID table, const dht::partition_range_vector& ranges) override {
+        auto& cf = _db.find_column_family(table);
+        return cf.make_streaming_reader(cf.schema(), ranges);
+    }
+    future<> stop() {
+        return make_ready_future<>();
+    }
+};
+
+class database_streaming_data_sink : public streaming::data_sink {
+    database& _db;
+    using UUID = utils::UUID;
+public:
+    explicit database_streaming_data_sink(database& db) : _db(db) {}
+    // write side
+    virtual future<> put_mutation(UUID plan_id, const frozen_mutation& fm, bool fragmented) override {
+        abort(); // handled by STREAM_MUTATION handler of old API
+    }
+    // After put_mutation() is called with a plan_id (perhaps multiple times), must call commit_plan or abort_plan with same plan_id
+    virtual future<> commit_plan(UUID plan_id, UUID table, const dht::token_range_vector& ranges) override {
+        auto& cf = _db.find_column_family(table);
+        return cf.flush_streaming_mutations(plan_id, as_partition_range_vector(ranges));
+    }
+    virtual future<> abort_plan(UUID plan_id, UUID table, const dht::token_range_vector& ranges) override {
+        auto& cf = _db.find_column_family(table);
+        return cf.fail_streaming_mutations(plan_id);
+    }
+    future<> stop() {
+        return make_ready_future<>();
+    }
+};
+
+static sharded<database_streaming_data_source> g_database_streaming_data_source;
+static sharded<database_streaming_data_sink> g_database_streaming_data_sink;
 
 int main(int ac, char** av) {
   int return_value = 0;
@@ -614,6 +665,10 @@ int main(int ac, char** av) {
                     });
                 });
             }).get();
+            g_database_streaming_data_source.start(std::ref(db)).get();
+            g_database_streaming_data_sink.start(std::ref(db)).get();
+            g_sync_stream_client.start(std::ref(netw::get_messaging_service()), std::ref(g_database_streaming_data_sink)).get();
+            g_sync_stream_server.start(std::ref(netw::get_messaging_service()), std::ref(g_database_streaming_data_source)).get();
             supervisor::notify("starting storage service", true);
             auto& ss = service::get_local_storage_service();
             ss.init_server().get();
