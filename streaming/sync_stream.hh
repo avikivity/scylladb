@@ -26,11 +26,13 @@
 #include <seastar/core/sstring.hh>
 #include <seastar/core/sharded.hh>
 #include <seastar/core/gate.hh>
+#include <seastar/core/semaphore.hh>
 #include "gms/inet_address.hh"
 #include "dht/i_partitioner.hh"
 #include "utils/UUID.hh"
 #include "message/messaging_service_fwd.hh"
 #include "seastarx.hh"
+#include <unordered_map>
 
 class mutation_reader;
 class frozen_mutation;
@@ -59,6 +61,7 @@ class sync_stream_client {
     netw::messaging_service& _ms;
     data_sink& _sink;
     gate _gate;
+    std::unordered_map<gms::inet_address, semaphore> _per_server_limit;
 public:
     sync_stream_client(netw::messaging_service& ms, data_sink& sink);
     future<> stop();

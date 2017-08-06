@@ -88,6 +88,9 @@ sync_stream_client::stop() {
 future<>
 sync_stream_client::stream_ranges_sync(gms::inet_address from, UUID plan, sstring description, UUID table, dht::token_range_vector ranges) {
     return with_gate(_gate, [=, ranges = std::move(ranges)] {
+      auto& sem = _per_server_limit.emplace(from, semaphore{4}).first->second;
+      return with_semaphore(sem, 1, [=, ranges = std::move(ranges)] {
+        _gate.check();
         return _ms.send_stream_range_sync({from, 0}, plan, description, table, std::move(ranges)).then_wrapped([this, plan, table, ranges] (future<> result) {
             if (result.failed()) {
                 _sink.abort_plan(plan, table, ranges);
@@ -96,6 +99,7 @@ sync_stream_client::stream_ranges_sync(gms::inet_address from, UUID plan, sstrin
             }
             return result;
         });
+      });
     });
 }
 
