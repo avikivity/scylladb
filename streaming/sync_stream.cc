@@ -65,25 +65,101 @@ sync_stream_server::do_stream_receive_range_sync(gms::inet_address from, UUID pl
     });
 }
 
+namespace {
+
+// TODO: complete & donate to seastar
+struct background_work_manager {
+    unsigned nr_running = 0;
+    promise<> done;
+    std::exception_ptr error;
+    bool loop_exited = false;
+
+    // run func in the background, but keep track of it and don't set done until it is complete
+    template <typename Func>
+    future<> run_worker(Func func) {
+        if (error) {
+            // break out of the main loop
+            return make_exception_future<>(std::runtime_error("dropping streaming mutation due to previous error"));
+        }
+        ++nr_running;
+        func().then_wrapped([this] (future<> worker_ret) {
+            if (worker_ret.failed()) {
+                // We only keep track of the first error we see
+                if (!error) {
+                    error = worker_ret.get_exception();
+                } else {
+                    worker_ret.ignore_ready_future();
+                }
+            }
+            --nr_running;
+            // Are we the last worker to complete?
+            if (!nr_running) {
+                if (error) {
+                    // yes, signal error
+                    done.set_exception(std::move(error));
+                } else if (loop_exited) {
+                    // yes, signal all's well
+                    done.set_value();
+                }
+                // no, maybe another worker will be spawned
+            }
+        });
+        // Let worker run; run(), below, will wait for it.
+        return make_ready_future<>();
+    }
+
+    // run main_loop and keep track of workers too. Collect errors from
+    // either, and don't return until both the main loop and workers are done.
+    template <typename Func>
+    future<>
+    run(Func main_loop) {
+        return main_loop().then_wrapped([this] (future<> loop_ret) {
+            loop_exited = true;
+            if (!nr_running && !error) {
+                // all the workers already completed, so up to us
+                done.set_value();
+            }
+            done.get_future().then_wrapped([loop_ret = std::move(loop_ret)] (future<> worker_ret) mutable {
+                // loop_ret can be spurious, so priority to worker_ret
+                if (worker_ret.failed()) {
+                    loop_ret.ignore_ready_future();
+                    return worker_ret;
+                }
+                return std::move(loop_ret);
+            });
+        });
+    }
+};
+
+}
 
 future<>
 sync_stream_server::do_stream_range_sync_on_shard(gms::inet_address to, UUID plan_id, sstring description, UUID table, dht::token_range_vector ranges) {
-  return do_with(boost::copy_range<dht::partition_range_vector>(ranges | boost::adaptors::transformed(dht::to_partition_range)), [=] (dht::partition_range_vector& prs) {
-    return with_gate(_gate, [=, &prs] {
-        auto reader = _source.make_reader(table, prs);
-        return repeat([this, to, plan_id, reader = std::move(reader)] () mutable {
-            return reader().then([this, to, plan_id] (streamed_mutation_opt smo) {
+  return do_with(boost::copy_range<dht::partition_range_vector>(ranges | boost::adaptors::transformed(dht::to_partition_range)),
+          background_work_manager{},
+          [=] (dht::partition_range_vector& prs, background_work_manager& bwm) {
+    return with_gate(_gate, [=, &prs, &bwm] {
+      auto reader = _source.make_reader(table, prs);
+      return bwm.run([this, to, plan_id, &bwm, reader = std::move(reader)] () mutable {
+        return repeat([this, to, plan_id, &bwm, reader = std::move(reader)] () mutable {
+            return reader().then([this, to, plan_id, &bwm] (streamed_mutation_opt smo) {
                 _gate.check();
                 if (!smo) {
                     return make_ready_future<stop_iteration>(true);
                 }
-                return fragment_and_freeze(std::move(*smo), [this, to, plan_id] (frozen_mutation fm, bool fragmented ){
+                return fragment_and_freeze(std::move(*smo), [this, to, plan_id, &bwm] (frozen_mutation fm, bool fragmented ){
+                 return bwm.run_worker([this, fm = std::move(fm), to, plan_id, fragmented] () mutable {
+                  auto weight = std::min<size_t>(fm.representation().size(), window_size());
+                  return with_semaphore(_inflight_bytes, weight, [this, fm = std::move(fm), to, plan_id, fragmented] () mutable {
                     return _ms.send_stream_mutation({to, 0}, plan_id, fm, 0, fragmented);
+                  });
+                 });
                 }).then([] {
                     return stop_iteration::no;
                 });
             });
         });
+      });
     });
   });
 }

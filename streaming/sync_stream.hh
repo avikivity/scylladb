@@ -51,6 +51,8 @@ class sync_stream_server : public peering_sharded_service<sync_stream_server> {
     data_source& _source;
     sync_stream_client& _client;
     gate _gate;
+    static size_t window_size() { return 1 << 22; };
+    semaphore _inflight_bytes{window_size()};
 public:
     sync_stream_server(netw::messaging_service& ms, data_source& source, sync_stream_client& client);
     future<> stop();
