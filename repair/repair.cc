@@ -29,6 +29,7 @@
 #include "service/storage_service.hh"
 #include "service/priority_manager.hh"
 #include "message/messaging_service.hh"
+#include "streaming/sync_stream.hh"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -42,6 +43,13 @@
 
 static logging::logger rlogger("repair");
 
+static sharded<streaming::sync_stream_client>* g_stream_client;
+
+
+void repair_setup_sync_stream_client(sharded<streaming::sync_stream_client>& c) {
+    g_stream_client = &c;
+}
+
 class repair_info {
 public:
     seastar::sharded<database>& db;
@@ -54,8 +62,13 @@ public:
     std::vector<sstring> hosts;
     size_t nr_failed_ranges = 0;
     // Map of peer -> <cf, ranges>
-    std::unordered_map<gms::inet_address, std::unordered_map<sstring, dht::token_range_vector>> ranges_need_repair_in;
-    std::unordered_map<gms::inet_address, std::unordered_map<sstring, dht::token_range_vector>> ranges_need_repair_out;
+    struct repair_range {
+        gms::inet_address peer;
+        sstring cf;
+        dht::token_range_vector ranges;
+    };
+    std::vector<repair_range> ranges_need_repair_in;
+    std::vector<repair_range> ranges_need_repair_out;
     // FIXME: this "100" needs to be a parameter.
     uint64_t target_partitions = 100;
     // This affects how many ranges we put in a stream plan. The more the more
@@ -85,48 +98,6 @@ public:
         , data_centers(data_centers_)
         , hosts(hosts_) {
     }
-    future<> do_streaming() {
-        size_t ranges_in = 0;
-        size_t ranges_out = 0;
-        auto sp_in = make_lw_shared<streaming::stream_plan>(sprint("repair-in-id-%d-shard-%d-index-%d", id, shard, sp_index));
-        auto sp_out = make_lw_shared<streaming::stream_plan>(sprint("repair-out-id-%d-shard-%d-index-%d", id, shard, sp_index));
-
-        for (auto& x : ranges_need_repair_in) {
-            auto& peer = x.first;
-            for (auto& y : x.second) {
-                auto& cf = y.first;
-                auto& stream_ranges = y.second;
-                ranges_in += stream_ranges.size();
-                sp_in->request_ranges(peer, keyspace, std::move(stream_ranges), {cf});
-            }
-        }
-        ranges_need_repair_in.clear();
-        current_sub_ranges_nr_in = 0;
-
-        for (auto& x : ranges_need_repair_out) {
-            auto& peer = x.first;
-            for (auto& y : x.second) {
-                auto& cf = y.first;
-                auto& stream_ranges = y.second;
-                ranges_out += stream_ranges.size();
-                sp_out->transfer_ranges(peer, keyspace, std::move(stream_ranges), {cf});
-            }
-        }
-        ranges_need_repair_out.clear();
-        current_sub_ranges_nr_out = 0;
-
-        if (ranges_in || ranges_out) {
-            rlogger.info("Start streaming for repair id={}, shard={}, index={}, ranges_in={}, ranges_out={}", id, shard, sp_index, ranges_in, ranges_out);
-        }
-        sp_index++;
-
-        return sp_in->execute().discard_result().then([sp_in, sp_out] {
-                return sp_out->execute().discard_result();
-        }).handle_exception([] (auto ep) {
-            rlogger.warn("repair's stream failed: {}", ep);
-            return make_exception_future(ep);
-        });
-    }
     void check_failed_ranges() {
         if (nr_failed_ranges) {
             rlogger.info("repair {} on shard {} failed - {} ranges failed", id, shard, nr_failed_ranges);
@@ -139,22 +110,14 @@ public:
         const ::dht::token_range& range,
         const std::vector<gms::inet_address>& neighbors_in,
         const std::vector<gms::inet_address>& neighbors_out) {
-        rlogger.debug("Add cf {}, range {}, current_sub_ranges_nr_in {}, current_sub_ranges_nr_out {}", cf, range, current_sub_ranges_nr_in, current_sub_ranges_nr_out);
-        return sp_parallelism_semaphore.wait(1).then([this, cf, range, neighbors_in, neighbors_out] {
-            for (const auto& peer : neighbors_in) {
-                ranges_need_repair_in[peer][cf].emplace_back(range);
-                current_sub_ranges_nr_in++;
-            }
-            for (const auto& peer : neighbors_out) {
-                ranges_need_repair_out[peer][cf].emplace_back(range);
-                current_sub_ranges_nr_out++;
-            }
-            if (current_sub_ranges_nr_in >= sub_ranges_to_stream || current_sub_ranges_nr_out >= sub_ranges_to_stream) {
-                return do_streaming();
-            }
-            return make_ready_future<>();
-        }).finally([this] {
-            sp_parallelism_semaphore.signal(1);
+        auto cfid = db.local().find_uuid(keyspace, cf);
+        auto ranges = dht::token_range_vector({range});
+        return parallel_for_each(neighbors_in, [&] (gms::inet_address peer) {
+            return g_stream_client->local().stream_receive_ranges_sync(peer, utils::make_random_uuid(), "streaming in repair", cfid, ranges);
+        }).then([cfid, ranges, neighbors_out] {
+            return parallel_for_each(neighbors_out, [&] (gms::inet_address peer) {
+                return g_stream_client->local().stream_ranges_sync(peer, utils::make_random_uuid(), "streaming in repair", cfid, ranges);
+            });
         });
     }
 };
@@ -1019,10 +982,6 @@ static future<> repair_ranges(repair_info ri) {
                     }
                 });
             });
-        }).then([&ri] {
-            // Do streaming for the remaining ranges we do not stream in
-            // repair_cf_range
-            return ri.do_streaming();
         }).then([&ri] {
             ri.check_failed_ranges();
             return make_ready_future<>();

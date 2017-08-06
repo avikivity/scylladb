@@ -119,3 +119,9 @@ struct hash<partition_checksum> {
     }
 };
 }
+
+namespace streaming {
+class sync_stream_client;
+}
+
+void repair_setup_sync_stream_client(sharded<streaming::sync_stream_client>& c);
