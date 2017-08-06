@@ -44,17 +44,21 @@ using UUID = utils::UUID;
 class data_source;
 class data_sink;
 
+class sync_stream_client;
+
 class sync_stream_server : public peering_sharded_service<sync_stream_server> {
     netw::messaging_service& _ms;
     data_source& _source;
+    sync_stream_client& _client;
     gate _gate;
 public:
-    sync_stream_server(netw::messaging_service& ms, data_source& source);
+    sync_stream_server(netw::messaging_service& ms, data_source& source, sync_stream_client& client);
     future<> stop();
 private:
     // server side:
     future<> do_stream_range_sync(gms::inet_address to, UUID plan, sstring description, UUID table, dht::token_range_vector ranges);
     future<> do_stream_range_sync_on_shard(gms::inet_address to, UUID plan, sstring description, UUID table, dht::token_range_vector ranges);
+    future<> do_stream_receive_range_sync(gms::inet_address to, UUID plan, sstring description, UUID table, dht::token_range_vector ranges);
 };
 
 class sync_stream_client {
@@ -62,12 +66,14 @@ class sync_stream_client {
     data_sink& _sink;
     gate _gate;
     std::unordered_map<gms::inet_address, semaphore> _per_server_limit;
+    std::unordered_map<gms::inet_address, semaphore> _per_server_limit_receive;
 public:
     sync_stream_client(netw::messaging_service& ms, data_sink& sink);
     future<> stop();
 public:
     // client side:
     future<> stream_ranges_sync(gms::inet_address from, UUID plan, sstring description, UUID table, dht::token_range_vector ranges);
+    future<> stream_receive_ranges_sync(gms::inet_address to, UUID plan, sstring description, UUID table, dht::token_range_vector ranges);
 };
 
 }

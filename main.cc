@@ -668,7 +668,8 @@ int main(int ac, char** av) {
             g_database_streaming_data_source.start(std::ref(db)).get();
             g_database_streaming_data_sink.start(std::ref(db)).get();
             g_sync_stream_client.start(std::ref(netw::get_messaging_service()), std::ref(g_database_streaming_data_sink)).get();
-            g_sync_stream_server.start(std::ref(netw::get_messaging_service()), std::ref(g_database_streaming_data_source)).get();
+            g_sync_stream_server.start(std::ref(netw::get_messaging_service()), std::ref(g_database_streaming_data_source),
+                    std::ref(g_sync_stream_client)).get();
             supervisor::notify("starting storage service", true);
             auto& ss = service::get_local_storage_service();
             ss.init_server().get();

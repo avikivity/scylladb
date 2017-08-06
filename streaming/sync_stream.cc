@@ -29,18 +29,23 @@
 
 namespace streaming {
 
-sync_stream_server::sync_stream_server(netw::messaging_service& ms, data_source& source)
+sync_stream_server::sync_stream_server(netw::messaging_service& ms, data_source& source, sync_stream_client& client)
         : _ms(ms)
-        , _source(source) {
+        , _source(source)
+        , _client(client) {
     // FIXME: unregister
     ms.register_stream_range_sync([this] (const rpc::client_info& cinfo, UUID plan_id, sstring description, UUID table, dht::token_range_vector ranges) {
         return do_stream_range_sync(cinfo.addr, plan_id, description, table, std::move(ranges));
+    });
+    ms.register_stream_receive_range_sync([this] (const rpc::client_info& cinfo, UUID plan_id, sstring description, UUID table, dht::token_range_vector ranges) {
+        return do_stream_receive_range_sync(cinfo.addr, plan_id, description, table, std::move(ranges));
     });
 }
 
 future<>
 sync_stream_server::stop() {
     _ms.unregister_stream_range_sync();
+    _ms.unregister_stream_receive_range_sync();
     return _gate.close();
 }
 
@@ -49,6 +54,14 @@ sync_stream_server::do_stream_range_sync(gms::inet_address to, UUID plan_id, sst
     // FIXME: sharded_from_this()!
     return with_gate(_gate, [=, ranges = std::move(ranges)] {
         return container().invoke_on_all(&sync_stream_server::do_stream_range_sync_on_shard, to, plan_id, description, table, ranges);
+    });
+}
+
+future<>
+sync_stream_server::do_stream_receive_range_sync(gms::inet_address from, UUID plan_id, sstring description, UUID table, dht::token_range_vector ranges) {
+    // FIXME: sharded_from_this()!
+    return with_gate(_gate, [=, ranges = std::move(ranges)] {
+        return _client.stream_ranges_sync(from, plan_id, description, table, std::move(ranges));
     });
 }
 
@@ -100,6 +113,17 @@ sync_stream_client::stream_ranges_sync(gms::inet_address from, UUID plan, sstrin
             return result;
         });
       });
+    });
+}
+
+future<>
+sync_stream_client::stream_receive_ranges_sync(gms::inet_address to, UUID plan, sstring description, UUID table, dht::token_range_vector ranges) {
+    return with_gate(_gate, [=, ranges = std::move(ranges)] {
+        auto& sem = _per_server_limit_receive.emplace(to, semaphore{4}).first->second;
+        return with_semaphore(sem, 1, [=, ranges = std::move(ranges)] {
+            _gate.check();
+            return _ms.send_stream_receive_range_sync({to, 0}, plan, description, table, std::move(ranges));
+        });
     });
 }
 
