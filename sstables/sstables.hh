@@ -23,6 +23,7 @@
 #pragma once
 
 #include "version.hh"
+#include "shared_sstable.hh"
 #include "core/file.hh"
 #include "core/fstream.hh"
 #include "core/future.hh"
@@ -159,7 +160,7 @@ static constexpr inline size_t default_sstable_buffer_size() {
     return 128 * 1024;
 }
 
-lw_shared_ptr<sstable> make_sstable(schema_ptr schema, sstring dir, int64_t generation, sstable_version_types v, sstable_format_types f, gc_clock::time_point now = gc_clock::now(),
+shared_sstable make_sstable(schema_ptr schema, sstring dir, int64_t generation, sstable_version_types v, sstable_format_types f, gc_clock::time_point now = gc_clock::now(),
             io_error_handler_gen error_handler_gen = default_io_error_handler_gen(), size_t buffer_size = default_sstable_buffer_size());
 
 class sstable : public enable_lw_shared_from_this<sstable> {
@@ -748,9 +749,6 @@ public:
     friend class mutation_reader::impl;
 };
 
-using shared_sstable = lw_shared_ptr<sstable>;
-using sstable_list = std::unordered_set<shared_sstable>;
-
 struct entry_descriptor {
     sstring ks;
     sstring cf;
@@ -898,3 +896,6 @@ struct sstable_open_info {
 future<> init_metrics();
 
 }
+
+
+#include <seastar/core/shared_ptr_incomplete.hh>
