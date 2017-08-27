@@ -23,7 +23,10 @@
 #pragma once
 
 #include "sstables.hh"
+#include <seastar/core/thread.hh>
 #include <functional>
+
+class column_family;
 
 namespace sstables {
 
