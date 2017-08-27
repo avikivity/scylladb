@@ -23,6 +23,7 @@
 #pragma once
 
 #include "version.hh"
+#include "shared_sstable.hh"
 #include "core/file.hh"
 #include "core/fstream.hh"
 #include "core/future.hh"
@@ -158,10 +159,10 @@ static constexpr inline size_t default_sstable_buffer_size() {
     return 128 * 1024;
 }
 
-lw_shared_ptr<sstable> make_sstable(schema_ptr schema, sstring dir, int64_t generation, sstable_version_types v, sstable_format_types f, gc_clock::time_point now = gc_clock::now(),
+shared_sstable make_sstable(schema_ptr schema, sstring dir, int64_t generation, sstable_version_types v, sstable_format_types f, gc_clock::time_point now = gc_clock::now(),
             io_error_handler_gen error_handler_gen = default_io_error_handler_gen(), size_t buffer_size = default_sstable_buffer_size());
 
-class sstable : public enable_lw_shared_from_this<sstable> {
+class sstable : private sstable_reference_count {
 public:
     enum class component_type {
         Index,
@@ -199,6 +200,11 @@ public:
     sstable(sstable&&) = default;
 
     ~sstable();
+
+    shared_sstable shared_from_this() {
+        ++_count;
+        return shared_sstable(this);
+    }
 
     // Read one or few rows at the given byte range from the data file,
     // feeding them into the consumer. This function reads the entire given
@@ -737,14 +743,12 @@ public:
     // will then re-export as public every method it needs.
     friend class test;
 
+    friend class shared_sstable;
     friend class components_writer;
     friend class sstable_writer;
     friend class index_reader;
     friend class mutation_reader::impl;
 };
-
-using shared_sstable = lw_shared_ptr<sstable>;
-using sstable_list = std::unordered_set<shared_sstable>;
 
 struct entry_descriptor {
     sstring ks;
@@ -891,5 +895,11 @@ struct sstable_open_info {
 };
 
 future<> init_metrics();
+
+inline
+sstable*
+shared_sstable::get() const {
+    return static_cast<sstable*>(_sst);
+}
 
 }
