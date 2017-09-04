@@ -1280,7 +1280,7 @@ SEASTAR_TEST_CASE(test_skipping_in_compressed_stream) {
         strcpy(buf2.get_write(), "buf2");
 
         size_t uncompressed_size = 0;
-        auto out = make_compressed_file_output_stream(f, file_output_stream_options(), &c);
+        auto out = make_compressed_file_output_stream(f, file_output_stream_options(), &c, scheduling_group());
         out.write(buf1.get(), buf1.size()).get();
         uncompressed_size += buf1.size();
         out.write(buf2.get(), buf2.size()).get();
@@ -1292,7 +1292,7 @@ SEASTAR_TEST_CASE(test_skipping_in_compressed_stream) {
 
         auto make_is = [&] {
             f = open_file_dma(file_path, open_flags::ro).get0();
-            return make_compressed_file_input_stream(f, &c, 0, uncompressed_size, opts);
+            return make_compressed_file_input_stream(f, &c, 0, uncompressed_size, opts, scheduling_group());
         };
 
         auto expect = [] (input_stream<char>& in, const temporary_buffer<char>& buf) {

@@ -456,10 +456,13 @@ class compressed_file_data_source_impl : public data_source_impl {
     uint64_t _pos;
     uint64_t _beg_pos;
     uint64_t _end_pos;
+    scheduling_group _sg;
 public:
     compressed_file_data_source_impl(file f, sstables::compression* cm,
-                uint64_t pos, size_t len, file_input_stream_options options)
+                uint64_t pos, size_t len, file_input_stream_options options,
+                scheduling_group sg)
             : _compression_metadata(cm)
+            , _sg(sg)
     {
         _beg_pos = pos;
         if (pos > _compression_metadata->uncompressed_file_length()) {
@@ -498,7 +501,7 @@ public:
             throw std::runtime_error("compressed reader out of sync");
         }
         return _input_stream->read_exactly(addr.chunk_len).
-            then([this, addr](temporary_buffer<char> buf) {
+            then(_sg, [this, addr](temporary_buffer<char> buf) {
                 // The last 4 bytes of the chunk are the adler32 checksum
                 // of the rest of the (compressed) chunk.
                 auto compressed_len = addr.chunk_len - 4;
@@ -522,7 +525,7 @@ public:
                 out.trim_front(addr.offset);
                 _pos += out.size();
                 _underlying_pos += addr.chunk_len;
-                return out;
+                return make_ready_future<temporary_buffer<char>>(std::move(out));
         });
     }
 
@@ -552,16 +555,16 @@ public:
 class compressed_file_data_source : public data_source {
 public:
     compressed_file_data_source(file f, sstables::compression* cm,
-            uint64_t offset, size_t len, file_input_stream_options options)
+            uint64_t offset, size_t len, file_input_stream_options options, scheduling_group sg)
         : data_source(std::make_unique<compressed_file_data_source_impl>(
-                std::move(f), cm, offset, len, std::move(options)))
+                std::move(f), cm, offset, len, std::move(options), sg))
         {}
 };
 
 input_stream<char> make_compressed_file_input_stream(
         file f, sstables::compression* cm, uint64_t offset, size_t len,
-        file_input_stream_options options)
+        file_input_stream_options options, scheduling_group sg)
 {
     return input_stream<char>(compressed_file_data_source(
-            std::move(f), cm, offset, len, std::move(options)));
+            std::move(f), cm, offset, len, std::move(options), sg));
 }

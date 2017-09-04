@@ -2170,7 +2170,7 @@ void sstable_writer::prepare_file_writer()
         _writer = std::make_unique<checksummed_file_writer>(std::move(_sst._data_file), std::move(options), true);
     } else {
         prepare_compression(_sst._components->compression, _schema);
-        _writer = std::make_unique<file_writer>(make_compressed_file_output_stream(std::move(_sst._data_file), std::move(options), &_sst._components->compression));
+        _writer = std::make_unique<file_writer>(make_compressed_file_output_stream(std::move(_sst._data_file), std::move(options), &_sst._components->compression, scheduling_group()));
     }
 }
 
@@ -2514,7 +2514,7 @@ input_stream<char> sstable::data_stream(uint64_t pos, size_t len, const io_prior
     options.dynamic_adjustments = std::move(history);
     if (_components->compression) {
         return make_compressed_file_input_stream(_data_file, &_components->compression,
-                pos, len, std::move(options));
+                pos, len, std::move(options), scheduling_group());
     } else {
         return make_file_input_stream(_data_file, pos, len, std::move(options));
     }
