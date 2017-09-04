@@ -87,12 +87,12 @@ class partition_checksum {
 private:
     std::array<uint8_t, 32> _digest; // 256 bits
 private:
-    static future<partition_checksum> compute_legacy(streamed_mutation m);
-    static future<partition_checksum> compute_streamed(streamed_mutation m);
+    static future<partition_checksum> compute_legacy(streamed_mutation m, seastar::scheduling_group sg);
+    static future<partition_checksum> compute_streamed(streamed_mutation m, seastar::scheduling_group sg);
 public:
     constexpr partition_checksum() : _digest{} { }
     explicit partition_checksum(std::array<uint8_t, 32> digest) : _digest(std::move(digest)) { }
-    static future<partition_checksum> compute(streamed_mutation m, repair_checksum rt);
+    static future<partition_checksum> compute(streamed_mutation m, repair_checksum rt, seastar::scheduling_group sg);
     void add(const partition_checksum& other);
     bool operator==(const partition_checksum& other) const;
     bool operator!=(const partition_checksum& other) const { return !operator==(other); }

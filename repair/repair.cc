@@ -39,6 +39,7 @@
 #include <cryptopp/sha.h>
 #include <seastar/core/gate.hh>
 #include <seastar/util/defer.hh>
+#include <seastar/core/scheduling.hh>
 
 static logging::logger rlogger("repair");
 
@@ -388,9 +389,9 @@ public:
     }
 };
 
-future<partition_checksum> partition_checksum::compute_legacy(streamed_mutation m)
+future<partition_checksum> partition_checksum::compute_legacy(streamed_mutation m, seastar::scheduling_group sg)
 {
-    return mutation_from_streamed_mutation(std::move(m)).then([] (auto mopt) {
+    return mutation_from_streamed_mutation(std::move(m), sg).then(sg, [] (auto&& mopt) mutable {
         assert(mopt);
         std::array<uint8_t, 32> digest;
         sha256_hasher h;
@@ -400,26 +401,27 @@ future<partition_checksum> partition_checksum::compute_legacy(streamed_mutation 
     });
 }
 
-future<partition_checksum> partition_checksum::compute_streamed(streamed_mutation m)
-{
+future<partition_checksum> partition_checksum::compute_streamed(streamed_mutation m, seastar::scheduling_group sg) {
     auto& s = *m.schema();
     auto h = make_lw_shared<sha256_hasher>();
     m.key().feed_hash(*h, s);
-    return do_with(std::move(m), [&s, h] (auto& sm) mutable {
+    return do_with(std::move(m), [&s, h, sg] (auto& sm) mutable {
+      return run_with_scheduling_group(sg, [&s, h = std::move(h), &sm, sg] () mutable {
         mutation_hasher<sha256_hasher> mh(s, *h);
-        return consume(sm, std::move(mh)).then([ h ] {
+        return consume(sm, std::move(mh), sg).then([ h ] {
             std::array<uint8_t, 32> digest;
             h->finalize(digest);
             return partition_checksum(digest);
         });
+      });
     });
 }
 
-future<partition_checksum> partition_checksum::compute(streamed_mutation m, repair_checksum hash_version)
+future<partition_checksum> partition_checksum::compute(streamed_mutation m, repair_checksum hash_version, seastar::scheduling_group sg)
 {
     switch (hash_version) {
-    case repair_checksum::legacy: return compute_legacy(std::move(m));
-    case repair_checksum::streamed: return compute_streamed(std::move(m));
+    case repair_checksum::legacy: return compute_legacy(std::move(m), sg);
+    case repair_checksum::streamed: return compute_streamed(std::move(m), sg);
     default: throw std::runtime_error(sprint("Unknown hash version: %d", static_cast<int>(hash_version)));
     }
 }
@@ -473,15 +475,16 @@ std::ostream& operator<<(std::ostream& out, const partition_checksum& c) {
 // vary the collection of sstables used throught a long repair.
 static future<partition_checksum> checksum_range_shard(database &db,
         const sstring& keyspace_name, const sstring& cf_name,
-        const dht::partition_range_vector& prs, repair_checksum hash_version) {
+        const dht::partition_range_vector& prs, repair_checksum hash_version,
+        seastar::scheduling_group sg) {
     auto& cf = db.find_column_family(keyspace_name, cf_name);
-    auto reader = cf.make_streaming_reader(cf.schema(), prs, scheduling_group());
+    auto reader = cf.make_streaming_reader(cf.schema(), prs, sg);
     return do_with(std::move(reader), partition_checksum(),
-        [hash_version] (auto& reader, auto& checksum) {
-        return repeat([&reader, &checksum, hash_version] () {
-            return reader().then([&checksum, hash_version] (auto mopt) {
+        [hash_version, sg] (auto& reader, auto& checksum) {
+        return repeat([&reader, &checksum, hash_version, sg] () {
+            return reader().then([&checksum, hash_version, sg] (auto mopt) {
                 if (mopt) {
-                    return partition_checksum::compute(std::move(*mopt), hash_version).then([&checksum] (auto pc) {
+                    return partition_checksum::compute(std::move(*mopt), hash_version, sg).then([&checksum] (auto pc) {
                         checksum.add(pc);
                         return stop_iteration::no;
                     });
@@ -531,7 +534,7 @@ future<partition_checksum> checksum_range(seastar::sharded<database> &db,
             return db.invoke_on(shard, [keyspace, cf, prs = std::move(prs), hash_version] (database& db) mutable {
                 return do_with(std::move(keyspace), std::move(cf), std::move(prs), [&db, hash_version] (auto& keyspace, auto& cf, auto& prs) {
                     return seastar::with_semaphore(checksum_parallelism_semaphore, 1, [&db, hash_version, &keyspace, &cf, &prs] {
-                        return checksum_range_shard(db, keyspace, cf, prs, hash_version);
+                        return checksum_range_shard(db, keyspace, cf, prs, hash_version, db.get_streaming_scheduling_group());
                     });
                 });
             }).then([&result] (partition_checksum sum) {
