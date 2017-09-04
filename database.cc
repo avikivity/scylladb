@@ -820,7 +820,7 @@ column_family::update_cache(memtable& m, lw_shared_ptr<sstables::sstable_set> ol
        return _cache.update(m, make_partition_presence_checker(std::move(old_sstables)), sg);
 
     } else {
-       return m.clear_gently();
+       return m.clear_gently(_config.memtable_scheduling_group);
     }
 }
 
@@ -896,7 +896,7 @@ column_family::seal_active_streaming_memtable_immediate(flush_permit&& permit) {
                     if (_config.enable_cache) {
                         return _cache.update_invalidating(*old, _config.streaming_scheduling_group);
                     } else {
-                        return old->clear_gently();
+                        return old->clear_gently(_config.streaming_scheduling_group);
                     }
                 });
             }).handle_exception([old, permit = std::move(permit)] (auto ep) {
