@@ -140,7 +140,7 @@ public:
     ~memtable();
     // Clears this memtable gradually without consuming the whole CPU.
     // Never resolves with a failed future.
-    future<> clear_gently() noexcept;
+    future<> clear_gently(seastar::scheduling_group sg = {}) noexcept;
     schema_ptr schema() const { return _schema; }
     void set_schema(schema_ptr) noexcept;
     future<> apply(memtable&);
