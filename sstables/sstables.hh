@@ -57,10 +57,6 @@
 #include "sstables/progress_monitor.hh"
 #include "db/commitlog/replay_position.hh"
 
-namespace seastar {
-class thread_scheduling_group;
-}
-
 namespace sstables {
 
 extern logging::logger sstlog;
@@ -140,7 +136,6 @@ struct sstable_writer_config {
     bool backup = false;
     bool leave_unsealed = false;
     stdx::optional<db::replay_position> replay_position;
-    seastar::thread_scheduling_group* thread_scheduling_group = nullptr;
     seastar::shared_ptr<write_monitor> monitor = default_write_monitor();
 };
 

@@ -22,6 +22,7 @@
 #pragma once
 #include <seastar/core/thread.hh>
 #include <seastar/core/timer.hh>
+#include <seastar/core/scheduling.hh>
 #include <chrono>
 
 // Simple proportional controller to adjust shares of memtable/streaming flushes.
@@ -56,9 +57,9 @@
 // qmax can easily become parameters if we find another user.
 class flush_cpu_controller {
     static constexpr float hard_dirty_limit = 0.50;
-    static constexpr float q1 = 0.01;
-    static constexpr float q2 = 0.2;
-    static constexpr float qmax = 1;
+    static constexpr float q1 = 10;
+    static constexpr float q2 = 200;
+    static constexpr float qmax = 1000;
 
     float _current_quota = 0.0f;
     float _goal;
@@ -66,12 +67,12 @@ class flush_cpu_controller {
     std::chrono::milliseconds _interval;
     timer<> _update_timer;
 
-    seastar::thread_scheduling_group _scheduling_group;
-    seastar::thread_scheduling_group *_current_scheduling_group = nullptr;
+    seastar::scheduling_group _scheduling_group;
+    seastar::scheduling_group _current_scheduling_group = {};
 
     void adjust();
 public:
-    seastar::thread_scheduling_group* scheduling_group() {
+    seastar::scheduling_group scheduling_group() {
         return _current_scheduling_group;
     }
     float current_quota() const {
@@ -79,10 +80,10 @@ public:
     }
 
     struct disabled {
-        seastar::thread_scheduling_group *backup;
+        seastar::scheduling_group backup;
     };
-    flush_cpu_controller(disabled d) : _scheduling_group(std::chrono::nanoseconds(0), 0), _current_scheduling_group(d.backup) {}
-    flush_cpu_controller(std::chrono::milliseconds interval, float soft_limit, std::function<float()> current_dirty);
+    flush_cpu_controller(disabled d) :  _scheduling_group(d.backup), _current_scheduling_group(d.backup) {}
+    flush_cpu_controller(std::chrono::milliseconds interval, seastar::scheduling_group sg, float soft_limit, std::function<float()> current_dirty);
     flush_cpu_controller(flush_cpu_controller&&) = default;
 };
 
