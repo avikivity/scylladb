@@ -196,7 +196,7 @@ public:
     // The function returns a future which completes after all the data has
     // been fed into the consumer. The caller needs to ensure the "consumer"
     // object lives until then (e.g., using the do_with() idiom).
-    future<> data_consume_rows_at_once(row_consumer& consumer, uint64_t pos, uint64_t end);
+    future<> data_consume_rows_at_once(row_consumer& consumer, uint64_t pos, uint64_t end, seastar::scheduling_group sg);
 
     // disk_read_range describes a byte ranges covering part of an sstable
     // row that we need to read from disk. Usually this is the whole byte
@@ -247,12 +247,12 @@ public:
     // read beyond end in anticipation of a small skip via fast_foward_to.
     // The amount of this excessive read is controlled by read ahead
     // hueristics which learn from the usefulness of previous read aheads.
-    data_consume_context data_consume_rows(row_consumer& consumer, disk_read_range toread, uint64_t last_end);
+    data_consume_context data_consume_rows(row_consumer& consumer, disk_read_range toread, uint64_t last_end, scheduling_group sg);
 
-    data_consume_context data_consume_single_partition(row_consumer& consumer, disk_read_range toread);
+    data_consume_context data_consume_single_partition(row_consumer& consumer, disk_read_range toread, seastar::scheduling_group sg);
 
     // Like data_consume_rows() with bounds, but iterates over whole range
-    data_consume_context data_consume_rows(row_consumer& consumer);
+    data_consume_context data_consume_rows(row_consumer& consumer, seastar::scheduling_group sg);
 
     static component_type component_from_sstring(sstring& s);
     static version_types version_from_sstring(sstring& s);
@@ -291,6 +291,7 @@ public:
         dht::ring_position_view key,
         const query::partition_slice& slice = query::full_slice,
         const io_priority_class& pc = default_priority_class(),
+        scheduling_group sg = {},
         streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
 
     future<streamed_mutation_opt> read_row(
@@ -298,6 +299,7 @@ public:
         const sstables::key& key,
         const query::partition_slice& slice = query::full_slice,
         const io_priority_class& pc = default_priority_class(),
+        scheduling_group sg = {},
         streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
 
     // Returns a mutation_reader for given range of partitions
@@ -306,6 +308,7 @@ public:
         const dht::partition_range& range,
         const query::partition_slice& slice = query::full_slice,
         const io_priority_class& pc = default_priority_class(),
+        scheduling_group sg = {},
         streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
         ::mutation_reader::forwarding fwd_mr = ::mutation_reader::forwarding::yes);
 
@@ -322,6 +325,7 @@ public:
     // progress (i.e., returned a future which hasn't completed yet).
     mutation_reader read_rows(schema_ptr schema,
         const io_priority_class& pc = default_priority_class(),
+        scheduling_group sg = {},
         streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
 
     // Returns mutation_source containing all writes contained in this sstable.
@@ -332,12 +336,14 @@ public:
             uint64_t estimated_partitions,
             schema_ptr schema,
             const sstable_writer_config&,
-            const io_priority_class& pc = default_priority_class());
+            const io_priority_class& pc = default_priority_class(),
+            scheduling_group sg = {});
 
     sstable_writer get_writer(const schema& s,
         uint64_t estimated_partitions,
         const sstable_writer_config&,
         const io_priority_class& pc = default_priority_class(),
+        scheduling_group sg = {},
         shard_id shard = engine().cpu_id());
 
     future<> seal_sstable(bool backup);
@@ -592,7 +598,7 @@ private:
     // of bytes to be read using this stream, we can make better choices
     // about the buffer size to read, and where exactly to stop reading
     // (even when a large buffer size is used).
-    input_stream<char> data_stream(uint64_t pos, size_t len, const io_priority_class& pc,
+    input_stream<char> data_stream(uint64_t pos, size_t len, const io_priority_class& pc, scheduling_group sg,
                                    lw_shared_ptr<file_input_stream_history> history);
 
     // Read exactly the specific byte range from the data file (after
@@ -601,7 +607,7 @@ private:
     // determined using the index file).
     // This function is intended (and optimized for) random access, not
     // for iteration through all the rows.
-    future<temporary_buffer<char>> data_read(uint64_t pos, size_t len, const io_priority_class& pc);
+    future<temporary_buffer<char>> data_read(uint64_t pos, size_t len, const io_priority_class& pc, scheduling_group sg);
 
     future<summary_entry&> read_summary_entry(size_t i);
 
@@ -800,14 +806,14 @@ class components_writer {
 private:
     void maybe_add_summary_entry(const dht::token& token, bytes_view key);
     uint64_t get_offset() const;
-    file_writer index_file_writer(sstable& sst, const io_priority_class& pc);
+    file_writer index_file_writer(sstable& sst, const io_priority_class& pc, scheduling_group sg);
     void ensure_tombstone_is_written() {
         if (!_tombstone_written) {
             consume(tombstone());
         }
     }
 public:
-    components_writer(sstable& sst, const schema& s, file_writer& out, uint64_t estimated_partitions, const sstable_writer_config&, const io_priority_class& pc);
+    components_writer(sstable& sst, const schema& s, file_writer& out, uint64_t estimated_partitions, const sstable_writer_config&, const io_priority_class& pc, scheduling_group sg);
     ~components_writer();
     components_writer(components_writer&& o) : _sst(o._sst), _schema(o._schema), _out(o._out), _index(std::move(o._index)),
             _index_needs_close(o._index_needs_close), _max_sstable_size(o._max_sstable_size), _tombstone_written(o._tombstone_written),
@@ -833,6 +839,7 @@ class sstable_writer {
     sstable& _sst;
     const schema& _schema;
     const io_priority_class& _pc;
+    seastar::scheduling_group _sg;
     bool _backup;
     bool _leave_unsealed;
     bool _compression_enabled;
@@ -845,7 +852,7 @@ private:
     void finish_file_writer();
 public:
     sstable_writer(sstable& sst, const schema& s, uint64_t estimated_partitions,
-            const sstable_writer_config&, const io_priority_class& pc, shard_id shard = engine().cpu_id());
+            const sstable_writer_config&, const io_priority_class& pc, scheduling_group sg, shard_id shard = engine().cpu_id());
     ~sstable_writer();
     sstable_writer(sstable_writer&& o) : _sst(o._sst), _schema(o._schema), _pc(o._pc), _backup(o._backup),
             _leave_unsealed(o._leave_unsealed), _compression_enabled(o._compression_enabled), _writer(std::move(o._writer)),

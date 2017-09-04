@@ -396,10 +396,12 @@ class data_consume_context::impl {
 private:
     shared_sstable _sst;
     std::unique_ptr<data_consume_rows_context> _ctx;
+    scheduling_group _sg;
 public:
-    impl(shared_sstable sst, row_consumer& consumer, input_stream<char>&& input, uint64_t start, uint64_t maxlen)
+    impl(shared_sstable sst, row_consumer& consumer, input_stream<char>&& input, uint64_t start, uint64_t maxlen, scheduling_group sg)
         : _sst(std::move(sst))
         , _ctx(new data_consume_rows_context(consumer, std::move(input), start, maxlen))
+        , _sg(sg)
     { }
     ~impl() {
         if (_ctx) {
@@ -408,7 +410,9 @@ public:
         }
     }
     future<> read() {
-        return _ctx->consume_input(*_ctx);
+        return _ctx->consume_input([this] (temporary_buffer<char> b) {
+            return run_with_scheduling_group(_sg, std::ref(*_ctx), std::move(b));
+        });
     }
     future<> fast_forward_to(uint64_t begin, uint64_t end) {
         _ctx->reset(indexable_element::partition);
@@ -450,7 +454,7 @@ bool data_consume_context::eof() const {
 }
 
 data_consume_context sstable::data_consume_rows(
-        row_consumer& consumer, sstable::disk_read_range toread, uint64_t last_end) {
+        row_consumer& consumer, sstable::disk_read_range toread, uint64_t last_end, scheduling_group sg) {
     // Although we were only asked to read until toread.end, we'll not limit
     // the underlying file input stream to this end, but rather to last_end.
     // This potentially enables read-ahead beyond end, until last_end, which
@@ -458,24 +462,25 @@ data_consume_context sstable::data_consume_rows(
     // returned context, and may make small skips.
     return std::make_unique<data_consume_context::impl>(shared_from_this(),
             consumer, data_stream(toread.start, last_end - toread.start,
-                consumer.io_priority(), _partition_range_history), toread.start, toread.end - toread.start);
+                consumer.io_priority(), sg, _partition_range_history), toread.start, toread.end - toread.start, sg);
 }
 
 data_consume_context sstable::data_consume_single_partition(
-        row_consumer& consumer, sstable::disk_read_range toread) {
+        row_consumer& consumer, sstable::disk_read_range toread, seastar::scheduling_group sg) {
     return std::make_unique<data_consume_context::impl>(shared_from_this(),
             consumer, data_stream(toread.start, toread.end - toread.start,
-                 consumer.io_priority(), _single_partition_history), toread.start, toread.end - toread.start);
+                 consumer.io_priority(), sg, _single_partition_history), toread.start, toread.end - toread.start, sg);
 }
 
 
-data_consume_context sstable::data_consume_rows(row_consumer& consumer) {
-    return data_consume_rows(consumer, {0, data_size()}, data_size());
+data_consume_context sstable::data_consume_rows(row_consumer& consumer, scheduling_group sg) {
+    return data_consume_rows(consumer, {0, data_size()}, data_size(), sg);
 }
 
 future<> sstable::data_consume_rows_at_once(row_consumer& consumer,
-        uint64_t start, uint64_t end) {
-    return data_read(start, end - start, consumer.io_priority()).then([&consumer]
+        uint64_t start, uint64_t end, seastar::scheduling_group sg) {
+    // FIXME: handle sg
+    return data_read(start, end - start, consumer.io_priority(), sg).then([&consumer]
                                                (temporary_buffer<char> buf) {
         data_consume_rows_context ctx(consumer, input_stream<char>(), 0, -1);
         ctx.process(buf);

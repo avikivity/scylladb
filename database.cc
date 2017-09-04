@@ -510,7 +510,7 @@ public:
         return parallel_for_each(std::move(candidates),
             [this](const lw_shared_ptr<sstables::sstable>& sstable) {
                 tracing::trace(_trace_state, "Reading key {} from sstable {}", _pr, seastar::value_of([&sstable] { return sstable->get_filename(); }));
-                return sstable->read_row(_schema, _pr.start()->value(), _slice, _pc, _fwd).then([this](auto smo) {
+                return sstable->read_row(_schema, _pr.start()->value(), _slice, _pc, _sg, _fwd).then([this](auto smo) {
                     if (smo) {
                         _mutations.emplace_back(std::move(*smo));
                     }
@@ -4211,7 +4211,7 @@ write_memtable_to_sstable(memtable& mt, sstables::shared_sstable sst, sstable_wr
     cfg.leave_unsealed = leave_unsealed;
     cfg.scheduling_group = sg;
     cfg.monitor = seastar::make_shared<permit_monitor>(std::move(permit));
-    return sst->write_components(mt.make_flush_reader(mt.schema(), pc, sg), mt.partition_count(), mt.schema(), cfg, pc);
+    return sst->write_components(mt.make_flush_reader(mt.schema(), pc, sg), mt.partition_count(), mt.schema(), cfg, pc, sg);
 }
 
 future<>

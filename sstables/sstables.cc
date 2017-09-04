@@ -1944,7 +1944,7 @@ uint64_t components_writer::get_offset() const {
     }
 }
 
-file_writer components_writer::index_file_writer(sstable& sst, const io_priority_class& pc) {
+file_writer components_writer::index_file_writer(sstable& sst, const io_priority_class& pc, seastar::scheduling_group sg) {
     file_output_stream_options options;
     options.buffer_size = sst.sstable_buffer_size;
     options.io_priority_class = pc;
@@ -1974,11 +1974,12 @@ static size_t summary_byte_cost() {
 components_writer::components_writer(sstable& sst, const schema& s, file_writer& out,
                                      uint64_t estimated_partitions,
                                      const sstable_writer_config& cfg,
-                                     const io_priority_class& pc)
+                                     const io_priority_class& pc,
+                                     scheduling_group sg)
     : _sst(sst)
     , _schema(s)
     , _out(out)
-    , _index(index_file_writer(sst, pc))
+    , _index(index_file_writer(sst, pc, sg))
     , _index_needs_close(true)
     , _max_sstable_size(cfg.max_sstable_size)
     , _tombstone_written(false)
@@ -2167,10 +2168,10 @@ void sstable_writer::prepare_file_writer()
     options.write_behind = 10;
 
     if (!_compression_enabled) {
-        _writer = std::make_unique<checksummed_file_writer>(std::move(_sst._data_file), std::move(options), true);
+        _writer = std::make_unique<checksummed_file_writer>(std::move(_sst._data_file), std::move(options), true, _sg);
     } else {
         prepare_compression(_sst._components->compression, _schema);
-        _writer = std::make_unique<file_writer>(make_compressed_file_output_stream(std::move(_sst._data_file), std::move(options), &_sst._components->compression, scheduling_group()));
+        _writer = std::make_unique<file_writer>(make_compressed_file_output_stream(std::move(_sst._data_file), std::move(options), &_sst._components->compression, _sg));
     }
 }
 
@@ -2199,10 +2200,11 @@ sstable_writer::~sstable_writer() {
 }
 
 sstable_writer::sstable_writer(sstable& sst, const schema& s, uint64_t estimated_partitions,
-                               const sstable_writer_config& cfg, const io_priority_class& pc, shard_id shard)
+                               const sstable_writer_config& cfg, const io_priority_class& pc, scheduling_group sg, shard_id shard)
     : _sst(sst)
     , _schema(s)
     , _pc(pc)
+    , _sg(sg)
     , _backup(cfg.backup)
     , _leave_unsealed(cfg.leave_unsealed)
     , _shard(shard)
@@ -2213,7 +2215,7 @@ sstable_writer::sstable_writer(sstable& sst, const schema& s, uint64_t estimated
     _sst.create_data().get();
     _compression_enabled = !_sst.has_component(sstable::component_type::CRC);
     prepare_file_writer();
-    _components_writer.emplace(_sst, _schema, *_writer, estimated_partitions, cfg, _pc);
+    _components_writer.emplace(_sst, _schema, *_writer, estimated_partitions, cfg, _pc, _sg);
 }
 
 void sstable_writer::consume_end_of_stream()
@@ -2249,9 +2251,9 @@ future<> sstable::seal_sstable(bool backup)
     });
 }
 
-sstable_writer sstable::get_writer(const schema& s, uint64_t estimated_partitions, const sstable_writer_config& cfg, const io_priority_class& pc, shard_id shard)
+sstable_writer sstable::get_writer(const schema& s, uint64_t estimated_partitions, const sstable_writer_config& cfg, const io_priority_class& pc, scheduling_group sg, shard_id shard)
 {
-    return sstable_writer(*this, s, estimated_partitions, cfg, pc, shard);
+    return sstable_writer(*this, s, estimated_partitions, cfg, pc, sg, shard);
 }
 
 future<> sstable::write_components(
@@ -2259,12 +2261,13 @@ future<> sstable::write_components(
         uint64_t estimated_partitions,
         schema_ptr schema,
         const sstable_writer_config& cfg,
-        const io_priority_class& pc) {
+        const io_priority_class& pc,
+        scheduling_group sg) {
     if (cfg.replay_position) {
         _collector.set_replay_position(cfg.replay_position.value());
     }
     seastar::thread_attributes attr;
-    attr.sched_group = cfg.scheduling_group;
+    attr.sched_group = sg;
     return seastar::async(std::move(attr), [this, mr = std::move(mr), estimated_partitions, schema = std::move(schema), cfg, &pc] () mutable {
         auto wr = get_writer(*schema, estimated_partitions, cfg, pc);
         consume_flattened_in_thread(mr, wr);
@@ -2506,7 +2509,7 @@ sstable::component_type sstable::component_from_sstring(sstring &s) {
     }
 }
 
-input_stream<char> sstable::data_stream(uint64_t pos, size_t len, const io_priority_class& pc, lw_shared_ptr<file_input_stream_history> history) {
+input_stream<char> sstable::data_stream(uint64_t pos, size_t len, const io_priority_class& pc, scheduling_group sg, lw_shared_ptr<file_input_stream_history> history) {
     file_input_stream_options options;
     options.buffer_size = sstable_buffer_size;
     options.io_priority_class = pc;
@@ -2514,14 +2517,14 @@ input_stream<char> sstable::data_stream(uint64_t pos, size_t len, const io_prior
     options.dynamic_adjustments = std::move(history);
     if (_components->compression) {
         return make_compressed_file_input_stream(_data_file, &_components->compression,
-                pos, len, std::move(options), scheduling_group());
+                pos, len, std::move(options), sg);
     } else {
         return make_file_input_stream(_data_file, pos, len, std::move(options));
     }
 }
 
-future<temporary_buffer<char>> sstable::data_read(uint64_t pos, size_t len, const io_priority_class& pc) {
-    return do_with(data_stream(pos, len, pc, { }), [len] (auto& stream) {
+future<temporary_buffer<char>> sstable::data_read(uint64_t pos, size_t len, const io_priority_class& pc, scheduling_group sg) {
+    return do_with(data_stream(pos, len, pc, sg, { }), [len] (auto& stream) {
         return stream.read_exactly(len).finally([&stream] {
             return stream.close();
         });
@@ -2980,18 +2983,19 @@ struct single_partition_reader_adaptor final : public ::mutation_reader::impl {
     dht::ring_position_view _key;
     const query::partition_slice& _slice;
     const io_priority_class& _pc;
+    scheduling_group _sg;
     streamed_mutation::forwarding _fwd;
 public:
     single_partition_reader_adaptor(sstables::shared_sstable sst, schema_ptr s, dht::ring_position_view key,
-        const query::partition_slice& slice, const io_priority_class& pc, streamed_mutation::forwarding fwd)
-        : _sst(sst), _s(s), _key(key), _slice(slice), _pc(pc), _fwd(fwd)
+        const query::partition_slice& slice, const io_priority_class& pc, scheduling_group sg, streamed_mutation::forwarding fwd)
+        : _sst(sst), _s(s), _key(key), _slice(slice), _pc(pc), _sg(sg), _fwd(fwd)
     { }
     virtual future<streamed_mutation_opt> operator()() override {
         if (!_sst) {
             return make_ready_future<streamed_mutation_opt>(stdx::nullopt);
         }
         auto sst = std::move(_sst);
-        return sst->read_row(_s, _key, _slice, _pc, _fwd);
+        return sst->read_row(_s, _key, _slice, _pc, _sg, _fwd);
     }
     virtual future<> fast_forward_to(const dht::partition_range& pr) override {
         throw std::bad_function_call();
@@ -3013,9 +3017,9 @@ mutation_source sstable::as_mutation_source() {
         // regardless of what the fwd_mr parameter says.
         if (range.is_singular() && range.start()->value().has_key()) {
             const dht::ring_position& pos = range.start()->value();
-            return make_mutation_reader<single_partition_reader_adaptor>(sst, s, pos, slice, pc, fwd);
+            return make_mutation_reader<single_partition_reader_adaptor>(sst, s, pos, slice, pc, sg, fwd);
         } else {
-            return make_mutation_reader<range_reader_adaptor>(sst, sst->read_range_rows(s, range, slice, pc, fwd, fwd_mr));
+            return make_mutation_reader<range_reader_adaptor>(sst, sst->read_range_rows(s, range, slice, pc, sg, fwd, fwd_mr));
         }
     });
 }

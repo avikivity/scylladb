@@ -38,7 +38,7 @@ public:
             streamed_mutation::forwarding fwd,
             mutation_reader::forwarding fwd_mr)
         : _sst(sst)
-        , _smr(sst->read_range_rows(std::move(s), pr, slice, pc, fwd, fwd_mr)) {
+        , _smr(sst->read_range_rows(std::move(s), pr, slice, pc, sg, fwd, fwd_mr)) {
     }
     virtual future<streamed_mutation_opt> operator()() override {
         return _smr.read();

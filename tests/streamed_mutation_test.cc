@@ -340,7 +340,7 @@ SEASTAR_TEST_CASE(test_mutation_hash) {
                 m.key().feed_hash(h, *m.schema());
 
                 mutation_hasher<md5_hasher> mh(*m.schema(), h);
-                consume(m, std::move(mh)).get0();
+                consume(m, std::move(mh), seastar::scheduling_group()).get0();
                 return h.finalize();
             };
             auto h1 = get_hash(streamed_mutation_from_mutation(mutation(m1)));

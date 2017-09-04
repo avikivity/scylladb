@@ -222,8 +222,8 @@ public:
             : _input(std::move(input)), _stream_position(start), _remain(maxlen) {}
 
     template<typename Consumer>
-    future<> consume_input(Consumer& c) {
-        return _input.consume(c);
+    future<> consume_input(Consumer&& c) {
+        return _input.consume(std::forward<Consumer>(c));
     }
 
     // some states do not consume input (its only exists to perform some
