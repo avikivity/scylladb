@@ -250,17 +250,17 @@ public:
     }
 };
 
-future<mutation_opt> mutation_from_streamed_mutation(streamed_mutation_opt sm) {
+future<mutation_opt> mutation_from_streamed_mutation(streamed_mutation_opt sm, scheduling_group sg) {
     if (!sm) {
         return make_ready_future<mutation_opt>();
     }
-    return do_with(std::move(*sm), [] (auto& sm) {
-        return consume(sm, mutation_rebuilder(sm));
+    return do_with(std::move(*sm), [sg] (auto& sm) {
+        return consume(sm, mutation_rebuilder(sm), sg);
     });
 }
 
-future<mutation> mutation_from_streamed_mutation(streamed_mutation& sm) {
-    return consume(sm, mutation_rebuilder(sm)).then([] (mutation_opt&& mo) {
+future<mutation> mutation_from_streamed_mutation(streamed_mutation& sm, scheduling_group sg) {
+    return consume(sm, mutation_rebuilder(sm), sg).then(sg, [] (mutation_opt&& mo) {
         return std::move(*mo);
     });
 }
