@@ -158,6 +158,7 @@ SEASTAR_TEST_CASE(combined_mutation_reader_test) {
                     query::full_partition_range,
                     query::full_slice,
                     seastar::default_priority_class(),
+                    scheduling_group(),
                     streamed_mutation::forwarding::no,
                     ::mutation_reader::forwarding::yes));
         }
@@ -170,6 +171,7 @@ SEASTAR_TEST_CASE(combined_mutation_reader_test) {
                 query::full_partition_range,
                 query::full_slice,
                 seastar::default_priority_class(),
+                scheduling_group(),
                 nullptr,
                 streamed_mutation::forwarding::no,
                 ::mutation_reader::forwarding::yes);

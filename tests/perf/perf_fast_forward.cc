@@ -186,6 +186,7 @@ static test_result scan_rows_with_stride(column_family& cf, int n_rows, int n_re
         query::full_partition_range,
         query::full_slice,
         default_priority_class(),
+        scheduling_group(),
         nullptr,
         n_skip ? streamed_mutation::forwarding::yes : streamed_mutation::forwarding::no);
 
@@ -259,6 +260,7 @@ static test_result slice_rows(column_family& cf, int offset = 0, int n_read = 1)
         query::full_partition_range,
         query::full_slice,
         default_priority_class(),
+        scheduling_group(),
         nullptr,
         streamed_mutation::forwarding::yes);
 
@@ -308,7 +310,7 @@ static test_result test_slicing_using_restrictions(column_family& cf, int_range 
 
 static test_result slice_rows_single_key(column_family& cf, int offset = 0, int n_read = 1) {
     auto pr = dht::partition_range::make_singular(make_pkey(*cf.schema(), 0));
-    auto rd = cf.make_reader(cf.schema(), pr, query::full_slice, default_priority_class(), nullptr, streamed_mutation::forwarding::yes);
+    auto rd = cf.make_reader(cf.schema(), pr, query::full_slice, default_priority_class(), scheduling_group(), nullptr, streamed_mutation::forwarding::yes);
 
     metrics_snapshot before;
     streamed_mutation_opt smo = rd().get0();
@@ -368,6 +370,7 @@ static test_result test_forwarding_with_restriction(column_family& cf, table_con
         pr,
         slice,
         default_priority_class(),
+        scheduling_group(),
         nullptr,
         streamed_mutation::forwarding::yes);
 

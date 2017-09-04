@@ -495,6 +495,7 @@ private:
                                         const dht::partition_range& range,
                                         const query::partition_slice& slice,
                                         const io_priority_class& pc,
+                                        scheduling_group sg,
                                         tracing::trace_state_ptr trace_state,
                                         streamed_mutation::forwarding fwd,
                                         mutation_reader::forwarding fwd_mr) const;
@@ -557,6 +558,7 @@ public:
             const dht::partition_range& range = query::full_partition_range,
             const query::partition_slice& slice = query::full_slice,
             const io_priority_class& pc = default_priority_class(),
+            seastar::scheduling_group sg = {},
             tracing::trace_state_ptr trace_state = nullptr,
             streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
             mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes) const;
@@ -566,11 +568,11 @@ public:
     //    reader and a _bounded_ amount of writes which arrive later.
     //  - Does not populate the cache
     mutation_reader make_streaming_reader(schema_ptr schema,
-            const dht::partition_range& range = query::full_partition_range) const;
+            const dht::partition_range& range = query::full_partition_range, seastar::scheduling_group sg = {}) const;
 
     // Requires ranges to be sorted and disjoint.
     mutation_reader make_streaming_reader(schema_ptr schema,
-            const dht::partition_range_vector& ranges) const;
+            const dht::partition_range_vector& ranges, seastar::scheduling_group sg) const;
 
     mutation_source as_mutation_source() const;
 
@@ -842,6 +844,7 @@ mutation_reader make_range_sstable_reader(schema_ptr s,
         const dht::partition_range& pr,
         const query::partition_slice& slice,
         const io_priority_class& pc,
+        scheduling_group sg,
         tracing::trace_state_ptr trace_state,
         streamed_mutation::forwarding fwd,
         mutation_reader::forwarding fwd_mr);

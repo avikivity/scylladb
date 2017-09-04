@@ -1922,6 +1922,7 @@ future<> data_query(
         uint32_t partition_limit,
         gc_clock::time_point query_time,
         query::result::builder& builder,
+        scheduling_group sg,
         tracing::trace_state_ptr trace_ptr)
 {
     if (row_limit == 0 || slice.partition_row_limit() == 0 || partition_limit == 0) {
@@ -1934,7 +1935,7 @@ future<> data_query(
     auto cfq = make_stable_flattened_mutations_consumer<compact_for_query<emit_only_live_rows::yes, query_result_builder>>(
             *s, query_time, slice, row_limit, partition_limit, std::move(qrb));
 
-    auto reader = source(s, range, slice, service::get_local_sstable_query_read_priority(), std::move(trace_ptr));
+    auto reader = source(s, range, slice, service::get_local_sstable_query_read_priority(), sg, std::move(trace_ptr));
     return consume_flattened(std::move(reader), std::move(cfq), is_reversed);
 }
 
@@ -2028,6 +2029,7 @@ static do_mutation_query(schema_ptr s,
                query::result_memory_accounter&& accounter,
                tracing::trace_state_ptr trace_ptr)
 {
+    auto sg = scheduling_group(); // FIXME: execution_stage blocks us from passing sg
     if (row_limit == 0 || slice.partition_row_limit() == 0 || partition_limit == 0) {
         return make_ready_future<reconcilable_result>(reconcilable_result());
     }
@@ -2038,7 +2040,7 @@ static do_mutation_query(schema_ptr s,
     auto cfq = make_stable_flattened_mutations_consumer<compact_for_query<emit_only_live_rows::no, reconcilable_result_builder>>(
             *s, query_time, slice, row_limit, partition_limit, std::move(rrb));
 
-    auto reader = source(s, range, slice, service::get_local_sstable_query_read_priority(), std::move(trace_ptr));
+    auto reader = source(s, range, slice, service::get_local_sstable_query_read_priority(), sg, std::move(trace_ptr));
     return consume_flattened(std::move(reader), std::move(cfq), is_reversed);
 }
 
@@ -2053,8 +2055,10 @@ mutation_query(schema_ptr s,
                uint32_t partition_limit,
                gc_clock::time_point query_time,
                query::result_memory_accounter&& accounter,
+               scheduling_group sg,
                tracing::trace_state_ptr trace_ptr)
 {
+    // FIXME: sg ignored because execution stage initialization doesn't know about scheduling yet
     return mutation_query_stage(std::move(s), std::move(source), seastar::cref(range), seastar::cref(slice),
                                 row_limit, partition_limit, query_time, std::move(accounter), std::move(trace_ptr));
 }
@@ -2131,6 +2135,7 @@ void mutation_partition::make_fully_continuous() {
 future<mutation_opt> counter_write_query(schema_ptr s, const mutation_source& source,
                                          const dht::decorated_key& dk,
                                          const query::partition_slice& slice,
+                                         scheduling_group sg,
                                          tracing::trace_state_ptr trace_ptr)
 {
     return do_with(dht::partition_range::make_singular(dk), [&] (auto& prange) {
@@ -2138,7 +2143,7 @@ future<mutation_opt> counter_write_query(schema_ptr s, const mutation_source& so
         auto cfq = make_stable_flattened_mutations_consumer<compact_for_query<emit_only_live_rows::yes, counter_write_query_result_builder>>(
                 *s, gc_clock::now(), slice, query::max_rows, query::max_rows, std::move(cwqrb));
         auto reader = source(s, prange, slice,
-                             service::get_local_sstable_query_read_priority(), std::move(trace_ptr));
+                             service::get_local_sstable_query_read_priority(), sg, std::move(trace_ptr));
         return consume_flattened(std::move(reader), std::move(cfq), false);
     });
 }

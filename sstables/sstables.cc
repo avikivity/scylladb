@@ -3003,6 +3003,7 @@ mutation_source sstable::as_mutation_source() {
             const dht::partition_range& range,
             const query::partition_slice& slice,
             const io_priority_class& pc,
+            scheduling_group sg,
             tracing::trace_state_ptr trace_ptr,
             streamed_mutation::forwarding fwd,
             ::mutation_reader::forwarding fwd_mr) mutable {

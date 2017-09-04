@@ -35,6 +35,7 @@ class memtable_snapshot_source {
     circular_buffer<lw_shared_ptr<memtable>> _memtables;
     utils::phased_barrier _apply;
     bool _closed = false;
+    scheduling_group _sg;
     seastar::condition_variable _should_compact;
     future<> _compactor;
 private:
@@ -69,6 +70,7 @@ private:
                  query::full_partition_range,
                  query::full_slice,
                  default_priority_class(),
+                 scheduling_group(),
                  nullptr,
                  streamed_mutation::forwarding::no,
                  mutation_reader::forwarding::yes));
@@ -82,8 +84,9 @@ private:
         _memtables.push_back(new_mt);
     }
 public:
-    memtable_snapshot_source(schema_ptr s)
+    memtable_snapshot_source(schema_ptr s, scheduling_group sg = {})
         : _s(s)
+        , _sg(sg)
         , _compactor(seastar::async([this] {
             while (!_closed) {
                 _should_compact.wait().get();

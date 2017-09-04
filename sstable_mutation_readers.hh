@@ -34,6 +34,7 @@ public:
             const dht::partition_range& pr,
             const query::partition_slice& slice,
             const io_priority_class& pc,
+            scheduling_group sg,
             streamed_mutation::forwarding fwd,
             mutation_reader::forwarding fwd_mr)
         : _sst(sst)

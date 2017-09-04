@@ -126,7 +126,7 @@ future<streamed_mutation_opt> combined_mutation_reader::next() {
     return make_ready_future<streamed_mutation_opt>(merge_mutations(std::exchange(_current, {})));
 }
 
-combined_mutation_reader::combined_mutation_reader(std::unique_ptr<reader_selector> selector, mutation_reader::forwarding fwd_mr)
+combined_mutation_reader::combined_mutation_reader(std::unique_ptr<reader_selector> selector, mutation_reader::forwarding fwd_mr, scheduling_group sg)
     : _selector(std::move(selector))
     , _fwd_mr(fwd_mr)
 {
@@ -149,8 +149,8 @@ future<streamed_mutation_opt> combined_mutation_reader::operator()() {
 }
 
 mutation_reader
-make_combined_reader(std::vector<mutation_reader> readers, mutation_reader::forwarding fwd_mr) {
-    return make_mutation_reader<combined_mutation_reader>(std::make_unique<list_reader_selector>(std::move(readers)), fwd_mr);
+make_combined_reader(std::vector<mutation_reader> readers, mutation_reader::forwarding fwd_mr, scheduling_group sg) {
+    return make_mutation_reader<combined_mutation_reader>(std::make_unique<list_reader_selector>(std::move(readers)), fwd_mr, sg);
 }
 
 mutation_reader
@@ -305,12 +305,12 @@ private:
     mutation_reader _reader;
 public:
     multi_range_mutation_reader(schema_ptr s, mutation_source source, const ranges_vector& ranges,
-                                const query::partition_slice& slice, const io_priority_class& pc,
+                                const query::partition_slice& slice, const io_priority_class& pc, scheduling_group sg,
                                 tracing::trace_state_ptr trace_state, streamed_mutation::forwarding fwd,
                                 mutation_reader::forwarding fwd_mr)
         : _ranges(ranges)
         , _current_range(_ranges.begin())
-        , _reader(source(s, *_current_range, slice, pc, trace_state, fwd,
+        , _reader(source(s, *_current_range, slice, pc, sg, trace_state, fwd,
             _ranges.size() > 1 ? mutation_reader::forwarding::yes : fwd_mr))
     {
     }
@@ -342,12 +342,12 @@ public:
 
 mutation_reader
 make_multi_range_reader(schema_ptr s, mutation_source source, const dht::partition_range_vector& ranges,
-                        const query::partition_slice& slice, const io_priority_class& pc,
+                        const query::partition_slice& slice, const io_priority_class& pc, scheduling_group sg,
                         tracing::trace_state_ptr trace_state, streamed_mutation::forwarding fwd,
                         mutation_reader::forwarding fwd_mr)
 {
     return make_mutation_reader<multi_range_mutation_reader>(std::move(s), std::move(source), ranges,
-                                                             slice, pc, std::move(trace_state), fwd, fwd_mr);
+                                                             slice, pc, sg, std::move(trace_state), fwd, fwd_mr);
 }
 
 snapshot_source make_empty_snapshot_source() {
@@ -361,6 +361,7 @@ mutation_source make_empty_mutation_source() {
             const dht::partition_range& pr,
             const query::partition_slice& slice,
             const io_priority_class& pc,
+            scheduling_group sg,
             tracing::trace_state_ptr tr,
             streamed_mutation::forwarding fwd) {
         return make_empty_reader();
@@ -372,13 +373,14 @@ mutation_source make_combined_mutation_source(std::vector<mutation_source> adden
             const dht::partition_range& pr,
             const query::partition_slice& slice,
             const io_priority_class& pc,
+            scheduling_group sg,
             tracing::trace_state_ptr tr,
             streamed_mutation::forwarding fwd) {
         std::vector<mutation_reader> rd;
         rd.reserve(addends.size());
         for (auto&& ms : addends) {
-            rd.emplace_back(ms(s, pr, slice, pc, tr, fwd));
+            rd.emplace_back(ms(s, pr, slice, pc, sg, tr, fwd));
         }
-        return make_combined_reader(std::move(rd), mutation_reader::forwarding::yes);
+        return make_combined_reader(std::move(rd), mutation_reader::forwarding::yes, sg);
     });
 }

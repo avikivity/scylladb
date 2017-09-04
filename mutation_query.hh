@@ -127,6 +127,7 @@ future<reconcilable_result> mutation_query(
     uint32_t partition_limit,
     gc_clock::time_point query_time,
     query::result_memory_accounter&& accounter = { },
+    scheduling_group sg = {},
     tracing::trace_state_ptr trace_ptr = nullptr);
 
 future<> data_query(
@@ -138,11 +139,13 @@ future<> data_query(
     uint32_t partition_limit,
     gc_clock::time_point query_time,
     query::result::builder& builder,
+    scheduling_group sg = {},
     tracing::trace_state_ptr trace_ptr = nullptr);
 
 // Performs a query for counter updates.
 future<mutation_opt> counter_write_query(schema_ptr, const mutation_source&,
                                          const dht::decorated_key& dk,
                                          const query::partition_slice& slice,
+                                         scheduling_group sg,
                                          tracing::trace_state_ptr trace_ptr);
 

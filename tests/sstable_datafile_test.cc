@@ -3662,6 +3662,7 @@ SEASTAR_TEST_CASE(test_skipping_using_index) {
             query::full_partition_range,
             query::full_slice,
             default_priority_class(),
+            scheduling_group(),
             nullptr,
             streamed_mutation::forwarding::yes,
             ::mutation_reader::forwarding::yes);

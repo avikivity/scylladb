@@ -419,6 +419,7 @@ public:
                                 const dht::partition_range& = query::full_partition_range,
                                 const query::partition_slice& slice = query::full_slice,
                                 const io_priority_class& = default_priority_class(),
+                                scheduling_group sg = {},
                                 tracing::trace_state_ptr trace_state = nullptr,
                                 streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
                                 mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::no);

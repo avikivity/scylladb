@@ -247,9 +247,10 @@ protected:
     mutation_reader delegate_reader(const dht::partition_range& delegate,
                                     const query::partition_slice& slice,
                                     const io_priority_class& pc,
+                                    scheduling_group sg,
                                     streamed_mutation::forwarding fwd,
                                     mutation_reader::forwarding fwd_mr) {
-        auto ret = (*_memtable->_underlying)(_schema, delegate, slice, pc, nullptr, fwd, fwd_mr);
+        auto ret = (*_memtable->_underlying)(_schema, delegate, slice, pc, sg, nullptr, fwd, fwd_mr);
         _memtable = {};
         _last = {};
         return ret;
@@ -266,6 +267,7 @@ class scanning_reader final: public iterator_reader {
     stdx::optional<dht::partition_range> _delegate_range;
     mutation_reader _delegate;
     const io_priority_class& _pc;
+    seastar::scheduling_group _sg;
     const query::partition_slice& _slice;
     streamed_mutation::forwarding _fwd;
     mutation_reader::forwarding _fwd_mr;
@@ -275,10 +277,12 @@ public:
                      const dht::partition_range& range,
                      const query::partition_slice& slice,
                      const io_priority_class& pc,
+                     scheduling_group sg,
                      streamed_mutation::forwarding fwd,
                      mutation_reader::forwarding fwd_mr)
          : iterator_reader(std::move(s), std::move(m), range)
          , _pc(pc)
+         , _sg(sg)
          , _slice(slice)
          , _fwd(fwd)
          , _fwd_mr(fwd_mr)
@@ -292,7 +296,7 @@ public:
         // FIXME: Use cache. See column_family::make_reader().
         _delegate_range = get_delegate_range();
         if (_delegate_range) {
-            _delegate = delegate_reader(*_delegate_range, _slice, _pc, _fwd, _fwd_mr);
+            _delegate = delegate_reader(*_delegate_range, _slice, _pc, _sg, _fwd, _fwd_mr);
             return _delegate();
         }
 
@@ -385,10 +389,12 @@ public:
 
 class flush_reader final : public iterator_reader {
     flush_memory_accounter _flushed_memory;
+    seastar::scheduling_group _sg;
 public:
-    flush_reader(schema_ptr s, lw_shared_ptr<memtable> m)
+    flush_reader(schema_ptr s, lw_shared_ptr<memtable> m, seastar::scheduling_group sg)
         : iterator_reader(std::move(s), m, query::full_partition_range)
         , _flushed_memory(*m)
+        , _sg(sg)
     {}
     flush_reader(const flush_reader&) = delete;
     flush_reader(flush_reader&&) = delete;
@@ -422,6 +428,7 @@ memtable::make_reader(schema_ptr s,
                       const dht::partition_range& range,
                       const query::partition_slice& slice,
                       const io_priority_class& pc,
+                      scheduling_group sg,
                       tracing::trace_state_ptr trace_state_ptr,
                       streamed_mutation::forwarding fwd,
                       mutation_reader::forwarding fwd_mr) {
@@ -438,17 +445,17 @@ memtable::make_reader(schema_ptr s,
         }
         });
     } else {
-        return make_mutation_reader<scanning_reader>(std::move(s), shared_from_this(), range, slice, pc, fwd, fwd_mr);
+        return make_mutation_reader<scanning_reader>(std::move(s), shared_from_this(), range, slice, pc, sg, fwd, fwd_mr);
     }
 }
 
 mutation_reader
-memtable::make_flush_reader(schema_ptr s, const io_priority_class& pc) {
+memtable::make_flush_reader(schema_ptr s, const io_priority_class& pc, seastar::scheduling_group sg) {
     if (group()) {
-        return make_mutation_reader<flush_reader>(std::move(s), shared_from_this());
+        return make_mutation_reader<flush_reader>(std::move(s), shared_from_this(), sg);
     } else {
         return make_mutation_reader<scanning_reader>(std::move(s), shared_from_this(),
-            query::full_partition_range, query::full_slice, pc, streamed_mutation::forwarding::no, mutation_reader::forwarding::no);
+            query::full_partition_range, query::full_slice, pc, sg, streamed_mutation::forwarding::no, mutation_reader::forwarding::no);
     }
 }
 
@@ -506,10 +513,11 @@ mutation_source memtable::as_data_source() {
             const dht::partition_range& range,
             const query::partition_slice& slice,
             const io_priority_class& pc,
+            scheduling_group sg,
             tracing::trace_state_ptr trace_state,
             streamed_mutation::forwarding fwd,
             mutation_reader::forwarding fwd_mr) {
-        return mt->make_reader(std::move(s), range, slice, pc, std::move(trace_state), fwd, fwd_mr);
+        return mt->make_reader(std::move(s), range, slice, pc, sg, std::move(trace_state), fwd, fwd_mr);
     });
 }
 

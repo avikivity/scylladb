@@ -124,6 +124,7 @@ public:
 class combined_mutation_reader : public mutation_reader::impl {
     std::unique_ptr<reader_selector> _selector;
     std::list<mutation_reader> _all_readers;
+    seastar::scheduling_group _sg;
 
     struct mutation_and_reader {
         streamed_mutation m;
@@ -164,7 +165,7 @@ private:
     future<streamed_mutation_opt> next();
 public:
     // The specified mutation_reader::forwarding tag must be the same for all included readers.
-    combined_mutation_reader(std::unique_ptr<reader_selector> selector, mutation_reader::forwarding fwd_mr);
+    combined_mutation_reader(std::unique_ptr<reader_selector> selector, mutation_reader::forwarding fwd_mr, scheduling_group sg);
     virtual future<streamed_mutation_opt> operator()() override;
     virtual future<> fast_forward_to(const dht::partition_range& pr) override;
 };
@@ -172,7 +173,7 @@ public:
 // Creates a mutation reader which combines data return by supplied readers.
 // Returns mutation of the same schema only when all readers return mutations
 // of the same schema.
-mutation_reader make_combined_reader(std::vector<mutation_reader>, mutation_reader::forwarding);
+mutation_reader make_combined_reader(std::vector<mutation_reader>, mutation_reader::forwarding, seastar::scheduling_group sg = {});
 mutation_reader make_combined_reader(mutation_reader&& a, mutation_reader&& b, mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes);
 // reads from the input readers, in order
 mutation_reader make_reader_returning(mutation, streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
@@ -288,6 +289,7 @@ class mutation_source {
         partition_range,
         const query::partition_slice&,
         io_priority,
+        scheduling_group,
         tracing::trace_state_ptr,
         streamed_mutation::forwarding,
         mutation_reader::forwarding
@@ -303,22 +305,22 @@ private:
 public:
     mutation_source(func_type fn) : _fn(make_lw_shared<func_type>(std::move(fn))) {}
     // For sources which don't care about the mutation_reader::forwarding flag (always fast forwardable)
-    mutation_source(std::function<mutation_reader(schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority pc, tracing::trace_state_ptr, streamed_mutation::forwarding)> fn)
-        : _fn(make_lw_shared<func_type>([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority pc, tracing::trace_state_ptr tr, streamed_mutation::forwarding fwd, mutation_reader::forwarding) {
-            return fn(s, range, slice, pc, std::move(tr), fwd);
+    mutation_source(std::function<mutation_reader(schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority pc, scheduling_group sg, tracing::trace_state_ptr, streamed_mutation::forwarding)> fn)
+        : _fn(make_lw_shared<func_type>([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority pc, scheduling_group sg, tracing::trace_state_ptr tr, streamed_mutation::forwarding fwd, mutation_reader::forwarding) {
+            return fn(s, range, slice, pc, sg, std::move(tr), fwd);
         })) {}
-    mutation_source(std::function<mutation_reader(schema_ptr, partition_range, const query::partition_slice&, io_priority)> fn)
-        : _fn(make_lw_shared<func_type>([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority pc, tracing::trace_state_ptr, streamed_mutation::forwarding fwd, mutation_reader::forwarding) {
+    mutation_source(std::function<mutation_reader(schema_ptr, partition_range, const query::partition_slice&, io_priority, scheduling_group sg)> fn)
+        : _fn(make_lw_shared<func_type>([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority pc, scheduling_group sg, tracing::trace_state_ptr, streamed_mutation::forwarding fwd, mutation_reader::forwarding) {
             assert(!fwd);
-            return fn(s, range, slice, pc);
+            return fn(s, range, slice, pc, sg);
         })) {}
     mutation_source(std::function<mutation_reader(schema_ptr, partition_range, const query::partition_slice&)> fn)
-        : _fn(make_lw_shared<func_type>([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority, tracing::trace_state_ptr, streamed_mutation::forwarding fwd, mutation_reader::forwarding) {
+        : _fn(make_lw_shared<func_type>([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice& slice, io_priority, scheduling_group, tracing::trace_state_ptr, streamed_mutation::forwarding fwd, mutation_reader::forwarding) {
             assert(!fwd);
             return fn(s, range, slice);
         })) {}
     mutation_source(std::function<mutation_reader(schema_ptr, partition_range range)> fn)
-        : _fn(make_lw_shared<func_type>([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice&, io_priority, tracing::trace_state_ptr, streamed_mutation::forwarding fwd, mutation_reader::forwarding) {
+        : _fn(make_lw_shared<func_type>([fn = std::move(fn)] (schema_ptr s, partition_range range, const query::partition_slice&, io_priority, scheduling_group, tracing::trace_state_ptr, streamed_mutation::forwarding fwd, mutation_reader::forwarding) {
             assert(!fwd);
             return fn(s, range);
         })) {}
@@ -336,11 +338,12 @@ public:
         partition_range range = query::full_partition_range,
         const query::partition_slice& slice = query::full_slice,
         io_priority pc = default_priority_class(),
+        scheduling_group sg = {},
         tracing::trace_state_ptr trace_state = nullptr,
         streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
         mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes) const
     {
-        return (*_fn)(std::move(s), range, slice, pc, std::move(trace_state), fwd, fwd_mr);
+        return (*_fn)(std::move(s), range, slice, pc, sg, std::move(trace_state), fwd, fwd_mr);
     }
 };
 
@@ -522,6 +525,6 @@ stable_flattened_mutations_consumer<FlattenedConsumer> make_stable_flattened_mut
 // Requires ranges to be sorted and disjoint.
 mutation_reader
 make_multi_range_reader(schema_ptr s, mutation_source source, const dht::partition_range_vector& ranges,
-                        const query::partition_slice& slice, const io_priority_class& pc = default_priority_class(),
+                        const query::partition_slice& slice, const io_priority_class& pc = default_priority_class(), scheduling_group sg = {},
                         tracing::trace_state_ptr trace_state = nullptr, streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
                         mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes);

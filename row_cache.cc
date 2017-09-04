@@ -47,7 +47,7 @@ thread_local seastar::thread_scheduling_group row_cache::_update_thread_scheduli
 mutation_reader
 row_cache::create_underlying_reader(read_context& ctx, mutation_source& src, const dht::partition_range& pr) {
     ctx.on_underlying_created();
-    return src(_schema, pr, ctx.slice(), ctx.pc(), ctx.trace_state(), streamed_mutation::forwarding::yes);
+    return src(_schema, pr, ctx.slice(), ctx.pc(), ctx.sched_group(), ctx.trace_state(), streamed_mutation::forwarding::yes);
 }
 
 cache_tracker& global_cache_tracker() {
@@ -595,11 +595,12 @@ row_cache::make_reader(schema_ptr s,
                        const dht::partition_range& range,
                        const query::partition_slice& slice,
                        const io_priority_class& pc,
+                       scheduling_group sg,
                        tracing::trace_state_ptr trace_state,
                        streamed_mutation::forwarding fwd,
                        mutation_reader::forwarding fwd_mr)
 {
-    auto ctx = make_lw_shared<read_context>(*this, std::move(s), range, slice, pc, trace_state, fwd, fwd_mr);
+    auto ctx = make_lw_shared<read_context>(*this, std::move(s), range, slice, pc, sg, trace_state, fwd, fwd_mr);
 
     if (!ctx->is_range_query()) {
         return _read_section(_tracker.region(), [&] {

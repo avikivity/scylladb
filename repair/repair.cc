@@ -475,7 +475,7 @@ static future<partition_checksum> checksum_range_shard(database &db,
         const sstring& keyspace_name, const sstring& cf_name,
         const dht::partition_range_vector& prs, repair_checksum hash_version) {
     auto& cf = db.find_column_family(keyspace_name, cf_name);
-    auto reader = cf.make_streaming_reader(cf.schema(), prs);
+    auto reader = cf.make_streaming_reader(cf.schema(), prs, scheduling_group());
     return do_with(std::move(reader), partition_checksum(),
         [hash_version] (auto& reader, auto& checksum) {
         return repeat([&reader, &checksum, hash_version] () {

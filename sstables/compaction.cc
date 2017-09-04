@@ -258,6 +258,7 @@ private:
                 query::full_partition_range,
                 query::full_slice,
                 service::get_local_compaction_priority(),
+                _sg,
                 nullptr,
                 ::streamed_mutation::forwarding::no,
                 ::mutation_reader::forwarding::no);
