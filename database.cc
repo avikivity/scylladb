@@ -997,6 +997,7 @@ column_family::seal_active_memtable(flush_permit&& permit) {
 
 future<stop_iteration>
 column_family::try_flush_memtable_to_sstable(lw_shared_ptr<memtable> old, sstable_write_permit&& permit) {
+  return run_with_scheduling_group(_config.memtable_scheduling_group, [this, old = std::move(old), permit = std::move(permit)] () mutable {
     auto gen = calculate_generation_for_new_table();
 
     auto newtab = sstables::make_sstable(_schema,
@@ -1035,6 +1036,7 @@ column_family::try_flush_memtable_to_sstable(lw_shared_ptr<memtable> old, sstabl
         old->revert_flushed_memory();
         return stop_iteration::no;
     });
+  });
 }
 
 void

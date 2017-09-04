@@ -42,8 +42,6 @@ using namespace cache;
 
 static logging::logger clogger("cache");
 
-thread_local seastar::thread_scheduling_group row_cache::_update_thread_scheduling_group(1ms, 0.2);
-
 mutation_reader
 row_cache::create_underlying_reader(read_context& ctx, mutation_source& src, const dht::partition_range& pr) {
     ctx.on_underlying_created();
@@ -764,9 +762,7 @@ future<> row_cache::do_update(external_updater eu, memtable& m, Updater updater)
         invalidate_sync(m);
         STAP_PROBE(scylla, row_cache_update_end);
     });
-    auto attr = seastar::thread_attributes();
-    attr.scheduling_group = &_update_thread_scheduling_group;
-    auto t = seastar::thread(attr, [this, &m, updater = std::move(updater)] () mutable {
+    auto t = seastar::thread([this, &m, updater = std::move(updater)] () mutable {
         // In case updater fails, we must bring the cache to consistency without deferring.
         auto cleanup = defer([&m, this] {
             invalidate_sync(m);
