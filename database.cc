@@ -829,7 +829,7 @@ column_family::update_cache(lw_shared_ptr<memtable> m, sstables::shared_sstable 
         return _cache.update(adder, *m);
     } else {
         adder();
-        return m->clear_gently();
+        return m->clear_gently(_config.memtable_scheduling_group);
     }
 }
 
@@ -907,7 +907,7 @@ column_family::seal_active_streaming_memtable_immediate(flush_permit&& permit) {
                     return _cache.update_invalidating(adder, *old);
                 } else {
                     adder();
-                    return old->clear_gently();
+                    return old->clear_gently(_config.streaming_scheduling_group);
                 }
             }).handle_exception([old, permit = std::move(permit)] (auto ep) {
                 dblog.error("failed to write streamed sstable: {}", ep);
