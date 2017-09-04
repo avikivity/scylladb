@@ -74,9 +74,9 @@ class sstable_reader final : public ::mutation_reader::impl {
     shared_sstable _sst;
     mutation_reader _reader;
 public:
-    sstable_reader(shared_sstable sst, schema_ptr schema)
+    sstable_reader(shared_sstable sst, schema_ptr schema, seastar::scheduling_group sg = {})
             : _sst(std::move(sst))
-            , _reader(_sst->read_rows(schema, service::get_local_compaction_priority()))
+            , _reader(_sst->read_rows(schema, service::get_local_compaction_priority(), sg))
             {}
     virtual future<streamed_mutation_opt> operator()() override {
         return _reader.read().handle_exception([sst = _sst] (auto ep) {
@@ -489,7 +489,8 @@ public:
             sstable_writer_config cfg;
             cfg.max_sstable_size = _max_sstable_size;
             auto&& priority = service::get_local_compaction_priority();
-            writer.emplace(sst->get_writer(*_cf.schema(), partitions_per_sstable(), cfg, priority, scheduling_group(), _shard));
+            auto sg = cfg.sched_group;
+            writer.emplace(sst->get_writer(*_cf.schema(), partitions_per_sstable(), cfg, priority, sg, _shard));
         }
         return &*writer;
     }
