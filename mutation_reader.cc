@@ -83,7 +83,7 @@ future<> combined_mutation_reader::prepare_next() {
     maybe_add_readers(current_position());
 
     return parallel_for_each(_next, [this] (mutation_reader* mr) {
-        return (*mr)().then([this, mr] (streamed_mutation_opt next) {
+        return (*mr)().then(_sg, [this, mr] (streamed_mutation_opt next) {
             if (next) {
                 _ptables.emplace_back(mutation_and_reader { std::move(*next), mr });
                 boost::range::push_heap(_ptables, &heap_compare);
@@ -91,12 +91,13 @@ future<> combined_mutation_reader::prepare_next() {
                 _all_readers.remove_if([mr] (auto& r) { return &r == mr; });
             }
         });
-    }).then([this] {
+    }).then(_sg, [this] {
         _next.clear();
     });
 }
 
 future<streamed_mutation_opt> combined_mutation_reader::next() {
+  return run_with_scheduling_group(_sg, [this] {
     if ((_current.empty() && !_next.empty()) || _selector->has_new_readers(current_position())) {
         return prepare_next().then([this] { return next(); });
     }
@@ -124,10 +125,12 @@ future<streamed_mutation_opt> combined_mutation_reader::next() {
         return make_ready_future<streamed_mutation_opt>(std::move(m));
     }
     return make_ready_future<streamed_mutation_opt>(merge_mutations(std::exchange(_current, {})));
+  });
 }
 
 combined_mutation_reader::combined_mutation_reader(std::unique_ptr<reader_selector> selector, mutation_reader::forwarding fwd_mr, scheduling_group sg)
     : _selector(std::move(selector))
+    , _sg(sg)
     , _fwd_mr(fwd_mr)
 {
 }
