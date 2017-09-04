@@ -259,15 +259,15 @@ mutation_reader make_filtering_reader(mutation_reader rd, MutationFilter&& filte
 // The returned future<> resolves when consumption ends.
 template <typename Consumer>
 inline
-future<> consume(mutation_reader& reader, Consumer consumer) {
+future<> consume(mutation_reader& reader, Consumer consumer, scheduling_group sg = {}) {
     static_assert(std::is_same<future<stop_iteration>, futurize_t<std::result_of_t<Consumer(mutation&&)>>>::value, "bad Consumer signature");
     using futurator = futurize<std::result_of_t<Consumer(mutation&&)>>;
 
-    return do_with(std::move(consumer), [&reader] (Consumer& c) -> future<> {
-        return repeat([&reader, &c] () {
-            return reader().then([] (auto sm) {
-                return mutation_from_streamed_mutation(std::move(sm));
-            }).then([&c] (mutation_opt&& mo) -> future<stop_iteration> {
+    return do_with(std::move(consumer), [&reader, sg] (Consumer& c) -> future<> {
+        return repeat(sg, [&reader, &c, sg] () {
+            return reader().then(sg, [sg] (auto sm) {
+                return mutation_from_streamed_mutation(std::move(sm), sg);
+            }).then(sg, [&c] (mutation_opt&& mo) -> future<stop_iteration> {
                 if (!mo) {
                     return make_ready_future<stop_iteration>(stop_iteration::yes);
                 }
