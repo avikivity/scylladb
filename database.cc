@@ -1983,19 +1983,19 @@ future<> distributed_loader::populate_column_family(distributed<database>& db, s
 
 inline
 flush_cpu_controller
-make_flush_cpu_controller(db::config& cfg, seastar::thread_scheduling_group* backup, std::function<double()> fn) {
+make_flush_cpu_controller(db::config& cfg, seastar::scheduling_group sg, seastar::scheduling_group backup, std::function<double()> fn) {
     if (cfg.auto_adjust_flush_quota()) {
-        return flush_cpu_controller(250ms, cfg.virtual_dirty_soft_limit(), std::move(fn));
+        return flush_cpu_controller(250ms, sg, cfg.virtual_dirty_soft_limit(), std::move(fn));
     }
     return flush_cpu_controller(flush_cpu_controller::disabled{backup});
 }
 
 utils::UUID database::empty_version = utils::UUID_gen::get_name_UUID(bytes{});
 
-database::database() : database(db::config())
+database::database() : database(db::config(), database_config())
 {}
 
-database::database(const db::config& cfg)
+database::database(const db::config& cfg, database_config dbcfg)
     : _stats(make_lw_shared<db_stats>())
     , _cl_stats(std::make_unique<cell_locker_stats>())
     , _cfg(std::make_unique<db::config>(cfg))
@@ -2003,10 +2003,11 @@ database::database(const db::config& cfg)
     , _system_dirty_memory_manager(*this, 10 << 20, cfg.virtual_dirty_soft_limit())
     , _dirty_memory_manager(*this, memory::stats().total_memory() * 0.45, cfg.virtual_dirty_soft_limit())
     , _streaming_dirty_memory_manager(*this, memory::stats().total_memory() * 0.10, cfg.virtual_dirty_soft_limit())
-    , _background_writer_scheduling_group(1ms, _cfg->background_writer_scheduling_quota())
-    , _memtable_cpu_controller(make_flush_cpu_controller(*_cfg, &_background_writer_scheduling_group, [this, limit = 2.0f * _dirty_memory_manager.throttle_threshold()] {
+    , _background_writer_scheduling_group(dbcfg.background_writer_scheduling_group)
+    , _memtable_cpu_controller(make_flush_cpu_controller(*_cfg, dbcfg.memtable_scheduling_group, _background_writer_scheduling_group, [this, limit = 2.0f * _dirty_memory_manager.throttle_threshold()] {
         return (_dirty_memory_manager.virtual_dirty_memory()) / limit;
     }))
+    , _dbcfg(dbcfg)
     , _version(empty_version)
     , _enable_incremental_backups(cfg.incremental_backups())
 {
@@ -2029,16 +2030,16 @@ void flush_cpu_controller::adjust() {
     }
 
     dblog.trace("dirty {}, goal {}, mid {} quota {}", dirty, _goal, mid, _current_quota);
-    _scheduling_group.update_usage(_current_quota);
+    _scheduling_group.set_shares(_current_quota);
 }
 
-flush_cpu_controller::flush_cpu_controller(std::chrono::milliseconds interval, float soft_limit, std::function<float()> current_dirty)
+flush_cpu_controller::flush_cpu_controller(std::chrono::milliseconds interval, seastar::scheduling_group sg, float soft_limit, std::function<float()> current_dirty)
     : _goal(soft_limit / 2)
     , _current_dirty(std::move(current_dirty))
     , _interval(interval)
     , _update_timer([this] { adjust(); })
-    , _scheduling_group(1ms, 0.0f)
-    , _current_scheduling_group(&_scheduling_group)
+    , _scheduling_group(sg)
+    , _current_scheduling_group(_scheduling_group)
 {
     _update_timer.arm_periodic(_interval);
 }
@@ -3370,7 +3371,7 @@ database::make_keyspace_config(const keyspace_metadata& ksm) {
     cfg.enable_incremental_backups = _enable_incremental_backups;
 
     if (_cfg->background_writer_scheduling_quota() < 1.0f) {
-        cfg.background_writer_scheduling_group = &_background_writer_scheduling_group;
+        cfg.background_writer_scheduling_group = _background_writer_scheduling_group;
         cfg.memtable_scheduling_group = _memtable_cpu_controller.scheduling_group();
     }
     cfg.enable_metrics_reporting = _cfg->enable_keyspace_column_family_metrics();
@@ -4161,11 +4162,12 @@ mutation_reader make_range_sstable_reader(schema_ptr s,
                 pc,
                 std::move(trace_state),
                 fwd,
-                fwd_mr), fwd_mr);
+                fwd_mr),
+            fwd_mr);
 }
 
 future<>
-write_memtable_to_sstable(memtable& mt, sstables::shared_sstable sst, sstable_write_permit&& permit, bool backup, const io_priority_class& pc, bool leave_unsealed, seastar::thread_scheduling_group *tsg) {
+write_memtable_to_sstable(memtable& mt, sstables::shared_sstable sst, sstable_write_permit&& permit, bool backup, const io_priority_class& pc, bool leave_unsealed, scheduling_group sg) {
     class permit_monitor final : public sstables::write_monitor {
         sstable_write_permit _permit;
     public:
@@ -4185,7 +4187,7 @@ write_memtable_to_sstable(memtable& mt, sstables::shared_sstable sst, sstable_wr
     cfg.replay_position = mt.replay_position();
     cfg.backup = backup;
     cfg.leave_unsealed = leave_unsealed;
-    cfg.thread_scheduling_group = tsg;
+    cfg.scheduling_group = sg;
     cfg.monitor = seastar::make_shared<permit_monitor>(std::move(permit));
     return sst->write_components(mt.make_flush_reader(mt.schema(), pc), mt.partition_count(), mt.schema(), cfg, pc);
 }

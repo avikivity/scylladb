@@ -293,8 +293,8 @@ public:
         restricted_mutation_reader_config read_concurrency_config;
         restricted_mutation_reader_config streaming_read_concurrency_config;
         ::cf_stats* cf_stats = nullptr;
-        seastar::thread_scheduling_group* background_writer_scheduling_group = nullptr;
-        seastar::thread_scheduling_group* memtable_scheduling_group = nullptr;
+        seastar::scheduling_group background_writer_scheduling_group = {};
+        seastar::scheduling_group memtable_scheduling_group = {};
         bool enable_metrics_reporting = false;
     };
     struct no_commitlog {};
@@ -738,7 +738,7 @@ public:
         return _config.cf_stats;
     }
 
-    seastar::thread_scheduling_group* background_writer_scheduling_group() {
+    seastar::scheduling_group background_writer_scheduling_group() {
         return _config.background_writer_scheduling_group;
     }
 
@@ -939,8 +939,8 @@ public:
         restricted_mutation_reader_config read_concurrency_config;
         restricted_mutation_reader_config streaming_read_concurrency_config;
         ::cf_stats* cf_stats = nullptr;
-        seastar::thread_scheduling_group* background_writer_scheduling_group = nullptr;
-        seastar::thread_scheduling_group* memtable_scheduling_group = nullptr;
+        seastar::scheduling_group background_writer_scheduling_group = {};
+        seastar::scheduling_group memtable_scheduling_group = {};
         bool enable_metrics_reporting = false;
     };
 private:
@@ -1013,6 +1013,12 @@ public:
     no_such_column_family(const sstring& ks_name, const sstring& cf_name);
 };
 
+
+struct database_config {
+    seastar::scheduling_group background_writer_scheduling_group;
+    seastar::scheduling_group memtable_scheduling_group;
+};
+
 // Policy for distributed<database>:
 //   broadcast metadata writes
 //   local metadata reads
@@ -1048,7 +1054,7 @@ private:
     dirty_memory_manager _dirty_memory_manager;
     dirty_memory_manager _streaming_dirty_memory_manager;
 
-    seastar::thread_scheduling_group _background_writer_scheduling_group;
+    seastar::scheduling_group _background_writer_scheduling_group;
     flush_cpu_controller _memtable_cpu_controller;
 
     semaphore _read_concurrency_sem{max_concurrent_reads()};
@@ -1058,6 +1064,8 @@ private:
     restricted_mutation_reader_config _system_read_concurrency_config;
 
     semaphore _sstable_load_concurrency_sem{max_concurrent_sstable_loads()};
+
+    database_config _dbcfg;
 
     std::unordered_map<sstring, keyspace> _keyspaces;
     std::unordered_map<utils::UUID, lw_shared_ptr<column_family>> _column_families;
@@ -1103,7 +1111,7 @@ public:
 
     future<> parse_system_tables(distributed<service::storage_proxy>&);
     database();
-    database(const db::config&);
+    database(const db::config&, database_config dbcfg);
     database(database&&) = delete;
     ~database();
 
