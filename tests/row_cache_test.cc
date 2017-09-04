@@ -625,7 +625,7 @@ SEASTAR_TEST_CASE(test_reading_from_random_partial_partition) {
         auto mt = make_lw_shared<memtable>(gen.schema());
         mt->apply(m2);
         underlying.apply(m2);
-        cache.update(*mt, make_default_partition_presence_checker()).get();
+        cache.update(*mt, make_default_partition_presence_checker(), scheduling_group()).get();
 
         auto rd2 = cache.make_reader(gen.schema());
         auto sm2 = rd2().get0();
@@ -784,7 +784,7 @@ SEASTAR_TEST_CASE(test_single_partition_update) {
         }
         cache.update(*mt, [] (auto&& key) {
             return partition_presence_checker_result::maybe_exists;
-        }).get();
+        }, scheduling_group()).get();
 
         {
             auto reader = cache.make_reader(s, range);
@@ -825,7 +825,7 @@ SEASTAR_TEST_CASE(test_update) {
 
         cache.update(*mt, [] (auto&& key) {
             return partition_presence_checker_result::definitely_doesnt_exist;
-        }).get();
+        }, scheduling_group()).get();
 
         for (auto&& key : keys_not_in_cache) {
             verify_has(cache, key);
@@ -1142,7 +1142,7 @@ SEASTAR_TEST_CASE(test_cache_population_and_update_race) {
         memtables.apply(*mt2);
 
         // This update should miss on all partitions
-        auto update_future = cache.update(*mt2, make_default_partition_presence_checker());
+        auto update_future = cache.update(*mt2, make_default_partition_presence_checker(), scheduling_group());
 
         auto rd3 = cache.make_reader(s);
 
@@ -1584,7 +1584,7 @@ SEASTAR_TEST_CASE(test_update_invalidating) {
         mt->apply(m5);
 
         underlying.apply(*mt);
-        cache.update_invalidating(*mt).get();
+        cache.update_invalidating(*mt, scheduling_group()).get();
 
         assert_that(cache.make_reader(s.schema()))
             .produces(m5)

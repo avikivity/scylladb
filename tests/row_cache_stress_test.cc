@@ -99,7 +99,7 @@ struct table {
         test_log.trace("updating cache");
         cache.update(*prev_mt, [] (const dht::decorated_key& dk) {
             return partition_presence_checker_result::maybe_exists;
-        }).get();
+        }, scheduling_group()).get();
         test_log.trace("flush done");
         prev_mt = {};
     }

@@ -813,11 +813,11 @@ void column_family::add_sstable(lw_shared_ptr<sstables::sstable> sstable, std::v
 }
 
 future<>
-column_family::update_cache(memtable& m, lw_shared_ptr<sstables::sstable_set> old_sstables) {
+column_family::update_cache(memtable& m, lw_shared_ptr<sstables::sstable_set> old_sstables, seastar::scheduling_group sg) {
     if (_config.enable_cache) {
        // be careful to use the old sstable list, since the new one will hit every
        // mutation in m.
-       return _cache.update(m, make_partition_presence_checker(std::move(old_sstables)));
+       return _cache.update(m, make_partition_presence_checker(std::move(old_sstables)), sg);
 
     } else {
        return m.clear_gently();
@@ -893,7 +893,7 @@ column_family::seal_active_streaming_memtable_immediate(flush_permit&& permit) {
                     trigger_compaction();
                     // Cache synchronization must be started atomically with add_sstable()
                     if (_config.enable_cache) {
-                        return _cache.update_invalidating(*old);
+                        return _cache.update_invalidating(*old, scheduling_group());
                     } else {
                         return old->clear_gently();
                     }
@@ -1020,9 +1020,10 @@ column_family::try_flush_memtable_to_sstable(lw_shared_ptr<memtable> old, sstabl
     // The code as is guarantees that we'll never partially backup a
     // single sstable, so that is enough of a guarantee.
     auto&& priority = service::get_local_memtable_flush_priority();
-    return write_memtable_to_sstable(*old, newtab, std::move(permit), incremental_backups_enabled(), priority, false, _config.memtable_scheduling_group).then([this, newtab, old] {
+    auto&& sg = _config.memtable_scheduling_group;
+    return write_memtable_to_sstable(*old, newtab, std::move(permit), incremental_backups_enabled(), priority, false, sg).then([this, newtab, old] {
         return newtab->open_data();
-    }).then_wrapped([this, old, newtab] (future<> ret) {
+    }).then_wrapped([this, old, newtab, sg] (future<> ret) {
         dblog.debug("Flushing to {} done", newtab->get_filename());
         try {
             ret.get();
@@ -1031,7 +1032,7 @@ column_family::try_flush_memtable_to_sstable(lw_shared_ptr<memtable> old, sstabl
             // is using data source snapshot created before the update starts, so that
             // we can use incremental_selector. If updates were done concurrently we
             // could mispopulate due to stale presence information.
-            return with_semaphore(_cache_update_sem, 1, [this, old, newtab] {
+            return with_semaphore(_cache_update_sem, 1, [this, old, newtab, sg] {
                 // We must add sstable before we call update_cache(), because
                 // memtable's data after moving to cache can be evicted at any time.
                 auto old_sstables = _sstables;
@@ -1039,7 +1040,7 @@ column_family::try_flush_memtable_to_sstable(lw_shared_ptr<memtable> old, sstabl
                 old->mark_flushed(newtab->as_mutation_source());
 
                 trigger_compaction();
-                return update_cache(*old, std::move(old_sstables));
+                return update_cache(*old, std::move(old_sstables), sg);
             }).then_wrapped([this, newtab, old] (future<> f) {
                 try {
                     f.get();

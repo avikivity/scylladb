@@ -185,7 +185,7 @@ int main(int argc, char** argv) {
 
             fragment_free_space();
 
-            cache.update(*mt, checker).get();
+            cache.update(*mt, checker, scheduling_group()).get();
 
             stuffing.clear();
             cache_stuffing.clear();

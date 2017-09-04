@@ -100,7 +100,7 @@ int main(int argc, char** argv) {
                 };
 
                 if (update_cache) {
-                    cache.update(*mt, checker).get();
+                    cache.update(*mt, checker, scheduling_group()).get();
                 }
             }, 5, 1);
         });
