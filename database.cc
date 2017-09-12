@@ -504,10 +504,14 @@ public:
         return parallel_for_each(std::move(candidates),
             [this](const sstables::shared_sstable& sstable) {
                 tracing::trace(_trace_state, "Reading key {} from sstable {}", _pr, seastar::value_of([&sstable] { return sstable->get_filename(); }));
-                return sstable->read_row(_schema, _pr.start()->value(), _slice, _pc, _fwd).then([this](auto smo) {
-                    if (smo) {
-                        _mutations.emplace_back(std::move(*smo));
-                    }
+                auto& ms = sstable->as_mutation_source();
+                auto reader = ms(_schema, _pr, _slice, _pc, _trace_state, _fwd, mutation_reader::forwarding::no);
+                return do_with(std::move(reader), [this] (mutation_reader& mr) {
+                    return mr().then([this](auto smo) {
+                        if (smo) {
+                            _mutations.emplace_back(std::move(*smo));
+                        }
+                    });
                 });
         }).then([this] () -> streamed_mutation_opt {
             _done = true;
