@@ -152,12 +152,13 @@ SEASTAR_TEST_CASE(combined_mutation_reader_test) {
         for (auto table : tables) {
             sstables->insert(table);
 
-            sstable_mutation_readers.emplace_back(make_mutation_reader<sstable_range_wrapping_reader>(
-                    table,
+            auto&& ms = table->as_mutation_source();
+            sstable_mutation_readers.emplace_back(ms(
                     s.schema(),
                     query::full_partition_range,
                     query::full_slice,
                     seastar::default_priority_class(),
+                    nullptr,
                     streamed_mutation::forwarding::no,
                     ::mutation_reader::forwarding::yes));
         }
