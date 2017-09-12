@@ -30,7 +30,6 @@
 #include "schema_builder.hh"
 #include "partition_slice_builder.hh"
 #include "tmpdir.hh"
-#include "sstable_mutation_readers.hh"
 #include "cell_locking.hh"
 
 #include "tests/test-utils.hh"
