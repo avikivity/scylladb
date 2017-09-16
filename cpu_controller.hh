@@ -68,13 +68,9 @@ class flush_cpu_controller {
     timer<> _update_timer;
 
     seastar::scheduling_group _scheduling_group;
-    seastar::scheduling_group _current_scheduling_group = {};
 
     void adjust();
 public:
-    seastar::scheduling_group scheduling_group() {
-        return _current_scheduling_group;
-    }
     float current_quota() const {
         return _current_quota;
     }
@@ -82,7 +78,7 @@ public:
     struct disabled {
         seastar::scheduling_group backup;
     };
-    flush_cpu_controller(disabled d) :  _scheduling_group(d.backup), _current_scheduling_group(d.backup) {}
+    flush_cpu_controller(disabled d) :  _scheduling_group(d.backup) {}
     flush_cpu_controller(std::chrono::milliseconds interval, seastar::scheduling_group sg, float soft_limit, std::function<float()> current_dirty);
     flush_cpu_controller(flush_cpu_controller&&) = default;
 };

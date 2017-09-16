@@ -442,9 +442,11 @@ int main(int ac, char** av) {
                     return seastar::scheduling_group();
                 }
             };
-            if (cfg->background_writer_scheduling_quota() < 1.0) {
-                dbcfg.background_writer_scheduling_group = make_sched_group("background_writer", 1000 * cfg->background_writer_scheduling_quota());
-            }
+            dbcfg.compaction_scheduling_group = make_sched_group("compaction", 100);
+            dbcfg.streaming_scheduling_group = make_sched_group("streaming", 20);
+            dbcfg.query_scheduling_group = make_sched_group("query", 100);
+            dbcfg.memtable_scheduling_group = make_sched_group("memtable", 100);
+            dbcfg.commitlog_scheduling_group = make_sched_group("commitlog", 100);
             db.start(std::ref(*cfg), dbcfg).get();
             engine().at_exit([&db, &return_value] {
                 // A shared sstable must be compacted by all shards before it can be deleted.

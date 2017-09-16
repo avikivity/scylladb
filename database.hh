@@ -299,8 +299,11 @@ public:
         restricted_mutation_reader_config read_concurrency_config;
         restricted_mutation_reader_config streaming_read_concurrency_config;
         ::cf_stats* cf_stats = nullptr;
-        seastar::scheduling_group background_writer_scheduling_group = {};
-        seastar::scheduling_group memtable_scheduling_group = {};
+        seastar::scheduling_group memtable_scheduling_group;
+        seastar::scheduling_group compaction_scheduling_group;
+        seastar::scheduling_group commitlog_scheduling_group;
+        seastar::scheduling_group query_scheduling_group;
+        seastar::scheduling_group streaming_scheduling_group;
         bool enable_metrics_reporting = false;
     };
     struct no_commitlog {};
@@ -749,10 +752,6 @@ public:
         return _config.cf_stats;
     }
 
-    seastar::scheduling_group background_writer_scheduling_group() {
-        return _config.background_writer_scheduling_group;
-    }
-
     compaction_manager& get_compaction_manager() const {
         return _compaction_manager;
     }
@@ -947,8 +946,11 @@ public:
         restricted_mutation_reader_config read_concurrency_config;
         restricted_mutation_reader_config streaming_read_concurrency_config;
         ::cf_stats* cf_stats = nullptr;
-        seastar::scheduling_group background_writer_scheduling_group = {};
-        seastar::scheduling_group memtable_scheduling_group = {};
+        seastar::scheduling_group memtable_scheduling_group;
+        seastar::scheduling_group compaction_scheduling_group;
+        seastar::scheduling_group commitlog_scheduling_group;
+        seastar::scheduling_group query_scheduling_group;
+        seastar::scheduling_group streaming_scheduling_group;
         bool enable_metrics_reporting = false;
     };
 private:
@@ -1023,8 +1025,11 @@ public:
 
 
 struct database_config {
-    seastar::scheduling_group background_writer_scheduling_group;
     seastar::scheduling_group memtable_scheduling_group;
+    seastar::scheduling_group compaction_scheduling_group;
+    seastar::scheduling_group commitlog_scheduling_group;
+    seastar::scheduling_group query_scheduling_group;
+    seastar::scheduling_group streaming_scheduling_group;
 };
 
 // Policy for distributed<database>:
@@ -1066,7 +1071,6 @@ private:
     dirty_memory_manager _dirty_memory_manager;
     dirty_memory_manager _streaming_dirty_memory_manager;
 
-    seastar::scheduling_group _background_writer_scheduling_group;
     flush_cpu_controller _memtable_cpu_controller;
 
     semaphore _read_concurrency_sem{max_memory_concurrent_reads()};
@@ -1134,6 +1138,8 @@ public:
     db::commitlog* commitlog() const {
         return _commitlog.get();
     }
+
+    seastar::scheduling_group get_streaming_scheduling_group() const { return _dbcfg.streaming_scheduling_group; }
 
     compaction_manager& get_compaction_manager() {
         return *_compaction_manager;
