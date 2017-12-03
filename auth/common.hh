@@ -79,8 +79,8 @@ future<> do_execute_task(noncopyable_function<future<> ()> t, exponential_backof
 }
 
 // Task must support being invoked more than once.
-template <class Clock>
-void delay_until_system_ready(delayed_tasks<Clock>& ts, noncopyable_function<future<> ()> t) {
+inline
+void delay_until_system_ready(delayed_tasks& ts, noncopyable_function<future<> ()> t) {
     ts.schedule_after(10s, [t = std::move(t)] () mutable {
         return do_execute_task(std::move(t), exponential_backoff_retry(1s, 1min));
     });

@@ -37,8 +37,10 @@
 //
 // Delay asynchronous tasks.
 //
-template <class Clock = std::chrono::steady_clock>
 class delayed_tasks final {
+public:
+    using clock = std::chrono::steady_clock;
+private:
     static logging::logger _logger;
 
     // A waiter is destroyed before the timer has elapsed.
@@ -47,12 +49,12 @@ class delayed_tasks final {
     };
 
     class waiter final {
-        timer<Clock> _timer;
+        timer<clock> _timer;
 
         promise<> _done{};
 
     public:
-        explicit waiter(typename Clock::duration d) : _timer([this] { _done.set_value(); }) {
+        explicit waiter(clock::duration d) : _timer([this] { _done.set_value(); }) {
             _timer.arm(d);
         }
 
@@ -76,8 +78,7 @@ public:
     // Schedule the task `f` after d` has elapsed. If the instance goes out of scope before
     // the duration has elapsed, then the task is cancelled.
     //
-    template <class Rep, class Period>
-    void schedule_after(std::chrono::duration<Rep, Period> d, noncopyable_function<future<> ()> f) {
+    void schedule_after(clock::duration d, noncopyable_function<future<> ()> f) {
         _logger.trace("Adding scheduled task.");
 
         auto iter = _waiters.insert(_waiters.end(), std::make_unique<waiter>(d));
@@ -90,7 +91,7 @@ public:
              // We'll only get here if the instance is still alive, since otherwise the future will be resolved to
              // `cancelled`.
             _waiters.erase(iter);
-        }).template handle_exception_type([](const cancelled&) {
+        }).handle_exception_type([](const cancelled&) {
             // Nothing.
             return make_ready_future<>();
         });
@@ -104,5 +105,3 @@ public:
     }
 };
 
-template <class Clock>
-logging::logger delayed_tasks<Clock>::_logger("delayed_tasks");

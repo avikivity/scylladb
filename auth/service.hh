@@ -76,7 +76,7 @@ class service final {
     // Only one of these should be registered, so we end up with some unused instances. Not the end of the world.
     std::unique_ptr<::service::migration_listener> _migration_listener;
 
-    delayed_tasks<> _delayed{};
+    delayed_tasks _delayed{};
 
 public:
     service(

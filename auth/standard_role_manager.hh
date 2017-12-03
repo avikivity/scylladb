@@ -50,7 +50,7 @@ class standard_role_manager final : public role_manager {
 
     ::service::migration_manager& _migration_manager;
 
-    delayed_tasks<> _delayed{};
+    delayed_tasks _delayed{};
 
 public:
     standard_role_manager(cql3::query_processor& qp, ::service::migration_manager& mm)

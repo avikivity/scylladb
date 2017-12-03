@@ -58,7 +58,7 @@ class password_authenticator : public authenticator {
 
     ::service::migration_manager& _migration_manager;
 
-    delayed_tasks<> _delayed{};
+    delayed_tasks _delayed{};
 
 public:
     password_authenticator(cql3::query_processor&, ::service::migration_manager&);
