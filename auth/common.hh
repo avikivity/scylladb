@@ -66,25 +66,7 @@ future<> once_among_shards(Task&& f) {
     return make_ready_future<>();
 }
 
-inline
-future<> do_execute_task(noncopyable_function<future<> ()> t, exponential_backoff_retry r) {
-    auto f = t();
-    return f.handle_exception([t = std::move(t), r = std::move(r)] (auto ep) mutable {
-        auth_log.warn("Task failed with error, rescheduling: {}", ep);
-        auto delay = r.retry();
-        return delay.then([t = std::move(t), r = std::move(r)] () mutable {
-            return do_execute_task(std::move(t), std::move(r));
-        });
-    });
-}
-
-// Task must support being invoked more than once.
-inline
-void delay_until_system_ready(delayed_tasks& ts, noncopyable_function<future<> ()> t) {
-    ts.schedule_after(10s, [t = std::move(t)] () mutable {
-        return do_execute_task(std::move(t), exponential_backoff_retry(1s, 1min));
-    });
-}
+void delay_until_system_ready(delayed_tasks& ts, noncopyable_function<future<> ()> t);
 
 future<> create_metadata_table_if_missing(
         const sstring& table_name,
