@@ -27,6 +27,7 @@
 #include <seastar/core/reactor.hh>
 #include <seastar/core/resource.hh>
 #include <seastar/core/sstring.hh>
+#include <seastar/util/noncopyable_function.hh>
 
 #include "delayed_tasks.hh"
 #include "log.hh"
@@ -65,8 +66,8 @@ future<> once_among_shards(Task&& f) {
     return make_ready_future<>();
 }
 
-template <class Task>
-static future<> do_execute_task(Task&& t, exponential_backoff_retry r) {
+inline
+future<> do_execute_task(noncopyable_function<future<> ()> t, exponential_backoff_retry r) {
     auto f = t();
     return f.handle_exception([t = std::move(t), r = std::move(r)] (auto ep) mutable {
         auth_log.warn("Task failed with error, rescheduling: {}", ep);
@@ -78,8 +79,8 @@ static future<> do_execute_task(Task&& t, exponential_backoff_retry r) {
 }
 
 // Task must support being invoked more than once.
-template <class Task, class Clock>
-void delay_until_system_ready(delayed_tasks<Clock>& ts, Task t) {
+template <class Clock>
+void delay_until_system_ready(delayed_tasks<Clock>& ts, noncopyable_function<future<> ()> t) {
     ts.schedule_after(10s, [t = std::move(t)] () mutable {
         return do_execute_task(std::move(t), exponential_backoff_retry(1s, 1min));
     });
