@@ -29,6 +29,7 @@
 
 #include <seastar/core/future.hh>
 #include <seastar/core/timer.hh>
+#include <seastar/util/noncopyable_function.hh>
 
 #include "log.hh"
 #include "seastarx.hh"
@@ -75,8 +76,8 @@ public:
     // Schedule the task `f` after d` has elapsed. If the instance goes out of scope before
     // the duration has elapsed, then the task is cancelled.
     //
-    template <class Rep, class Period, class Task>
-    void schedule_after(std::chrono::duration<Rep, Period> d, Task f) {
+    template <class Rep, class Period>
+    void schedule_after(std::chrono::duration<Rep, Period> d, noncopyable_function<future<> ()> f) {
         _logger.trace("Adding scheduled task.");
 
         auto iter = _waiters.insert(_waiters.end(), std::make_unique<waiter>(d));
