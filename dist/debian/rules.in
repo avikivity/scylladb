@@ -2,8 +2,22 @@
 
 export PYBUILD_DISABLE=1
 
+# We want a package compiled with old kernel headers to
+# support nowait aio if the user upgrades their kernel
+aio_defines=$(shell \
+  defines="";
+  if ! grep -qwr RWF_NOWAIT /usr/include/linux; then \
+    defines="$defines -DRWF_NOWAIT=8"; \
+  fi; \
+  if ! grep -qwr aio_rw_flags /usr/include/linux; then \
+    defines="#defines -Daio_rw_flags=aio_reserved1"; \
+  fi; \
+  \
+  echo "$defines" \
+)
+
 override_dh_auto_configure:
-	./configure.py --enable-dpdk --mode=release --static-thrift --static-boost --compiler=@@COMPILER@@ --cflags="-I/opt/scylladb/include -L/opt/scylladb/lib/x86-linux-gnu/" --ldflags="-Wl,-rpath=/opt/scylladb/lib"
+	./configure.py --enable-dpdk --mode=release --static-thrift --static-boost --compiler=@@COMPILER@@ --cflags="$(aio_defines) -I/opt/scylladb/include -L/opt/scylladb/lib/x86-linux-gnu/" --ldflags="-Wl,-rpath=/opt/scylladb/lib"
 
 override_dh_auto_build:
 	PATH="/opt/scylladb/bin:$$PATH" ninja
