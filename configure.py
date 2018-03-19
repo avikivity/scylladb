@@ -316,7 +316,7 @@ arg_parser = argparse.ArgumentParser('Configure scylla')
 arg_parser.add_argument('--static', dest = 'static', action = 'store_const', default = '',
                         const = '-static',
                         help = 'Static link (useful for running on hosts outside the build environment')
-arg_parser.add_argument('--pie', dest = 'pie', action = 'store_true',
+arg_parser.add_argument('--pie', dest = 'pie', action = 'store_false',
                         help = 'Build position-independent executable (PIE)')
 arg_parser.add_argument('--so', dest = 'so', action = 'store_true',
                         help = 'Build shared object (SO) instead of executable')
@@ -803,7 +803,7 @@ elif args.pie:
     args.pie = '-pie'
     args.fpie = '-fpie'
 else:
-    args.pie = ''
+    args.pie = '-no-pie'
     args.fpie = ''
 
 # a list element means a list of alternative packages to consider
