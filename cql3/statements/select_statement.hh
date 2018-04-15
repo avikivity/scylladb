@@ -122,7 +122,7 @@ public:
 
     future<::shared_ptr<cql_transport::messages::result_message>> execute(service::storage_proxy& proxy,
         lw_shared_ptr<query::read_command> cmd, dht::partition_range_vector&& partition_ranges, service::query_state& state,
-         const query_options& options, gc_clock::time_point now);
+         const query_options& options, gc_clock::time_point now, db::timeout_clock::time_point timeout);
 
     shared_ptr<cql_transport::messages::result_message> process_results(foreign_ptr<lw_shared_ptr<query::result>> results,
         lw_shared_ptr<query::read_command> cmd, const query_options& options, gc_clock::time_point now);
@@ -188,7 +188,8 @@ private:
 
     future<dht::partition_range_vector> find_index_partition_ranges(service::storage_proxy& proxy,
                                                                     service::query_state& state,
-                                                                    const query_options& options);
+                                                                    const query_options& options,
+                                                                    db::timeout_clock::time_point timeout);
 };
 
 }
