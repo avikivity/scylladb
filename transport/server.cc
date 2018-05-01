@@ -259,7 +259,7 @@ private:
     }
 };
 
-cql_server::cql_server(distributed<cql3::query_processor>& qp, cql_load_balance lb, auth::service& auth_service,
+cql_server::cql_server(cql3::query_processor& qp, cql_load_balance lb, auth::service& auth_service,
         cql_server_config config)
     : _query_processor(qp)
     , _config(config)
@@ -858,7 +858,7 @@ future<response_type> cql_server::connection::process_query(uint16_t stream, byt
 
     tracing::begin(query_state.get_trace_state(), "Execute CQL3 query", query_state.get_client_state().get_client_address());
 
-    return _server._query_processor.local().process(query, query_state, options).then([this, stream, buf = std::move(buf), &query_state, skip_metadata] (auto msg) {
+    return _server._query_processor.process(query, query_state, options).then([this, stream, buf = std::move(buf), &query_state, skip_metadata] (auto msg) {
          tracing::trace(query_state.get_trace_state(), "Done processing - preparing a result");
          return this->make_result(stream, msg, query_state.get_trace_state(), skip_metadata);
     }).then([&query_state, q_state = std::move(q_state), this] (auto&& response) {
@@ -881,14 +881,14 @@ future<response_type> cql_server::connection::process_prepare(uint16_t stream, b
     return parallel_for_each(cpus.begin(), cpus.end(), [this, query, cpu_id, &cs] (unsigned int c) mutable {
         if (c != cpu_id) {
             return smp::submit_to(c, [this, query, &cs] () mutable {
-                return _server._query_processor.local().prepare(std::move(query), cs, false).discard_result();
+                return _server._query_processor.prepare(std::move(query), cs, false).discard_result();
             });
         } else {
             return make_ready_future<>();
         }
     }).then([this, query, stream, &cs] () mutable {
         tracing::trace(cs.get_trace_state(), "Done preparing on remote shards");
-        return _server._query_processor.local().prepare(std::move(query), cs, false).then([this, stream, &cs] (auto msg) {
+        return _server._query_processor.prepare(std::move(query), cs, false).then([this, stream, &cs] (auto msg) {
             tracing::trace(cs.get_trace_state(), "Done preparing on a local shard - preparing a result. ID is [{}]", seastar::value_of([&msg] {
                 return messages::result_message::prepared::cql::get_id(msg);
             }));
@@ -904,7 +904,7 @@ future<response_type> cql_server::connection::process_execute(uint16_t stream, b
 {
     cql3::prepared_cache_key_type cache_key(read_short_bytes(buf));
     auto& id = cql3::prepared_cache_key_type::cql_id(cache_key);
-    auto prepared = _server._query_processor.local().get_prepared(cache_key);
+    auto prepared = _server._query_processor.get_prepared(cache_key);
     if (!prepared) {
         throw exceptions::prepared_query_not_found_exception(id);
     }
@@ -939,7 +939,7 @@ future<response_type> cql_server::connection::process_execute(uint16_t stream, b
         throw exceptions::invalid_request_exception("Invalid amount of bind variables");
     }
     tracing::trace(query_state.get_trace_state(), "Processing a statement");
-    return _server._query_processor.local().process_statement(stmt, query_state, options).then([this, stream, buf = std::move(buf), &query_state, skip_metadata] (auto msg) {
+    return _server._query_processor.process_statement(stmt, query_state, options).then([this, stream, buf = std::move(buf), &query_state, skip_metadata] (auto msg) {
         tracing::trace(query_state.get_trace_state(), "Done processing - preparing a result");
         return this->make_result(stream, msg, query_state.get_trace_state(), skip_metadata);
     }).then([&query_state, q_state = std::move(q_state), this] (auto&& response) {
@@ -975,14 +975,14 @@ cql_server::connection::process_batch(uint16_t stream, bytes_view buf, service::
         switch (kind) {
         case 0: {
             auto query = read_long_string_view(buf).to_string();
-            stmt_ptr = _server._query_processor.local().get_statement(query, client_state);
+            stmt_ptr = _server._query_processor.get_statement(query, client_state);
             ps = stmt_ptr->checked_weak_from_this();
             break;
         }
         case 1: {
             cql3::prepared_cache_key_type cache_key(read_short_bytes(buf));
             auto& id = cql3::prepared_cache_key_type::cql_id(cache_key);
-            ps = _server._query_processor.local().get_prepared(cache_key);
+            ps = _server._query_processor.get_prepared(cache_key);
             if (!ps) {
                 throw exceptions::prepared_query_not_found_exception(id);
             }
@@ -1024,8 +1024,8 @@ cql_server::connection::process_batch(uint16_t stream, bytes_view buf, service::
     tracing::set_optional_serial_consistency_level(client_state.get_trace_state(), options.get_serial_consistency());
     tracing::trace(client_state.get_trace_state(), "Creating a batch statement");
 
-    auto batch = ::make_shared<cql3::statements::batch_statement>(cql3::statements::batch_statement::type(type), std::move(modifications), cql3::attributes::none(), _server._query_processor.local().get_cql_stats());
-    return _server._query_processor.local().process_batch(batch, query_state, options).then([this, stream, batch, &query_state] (auto msg) {
+    auto batch = ::make_shared<cql3::statements::batch_statement>(cql3::statements::batch_statement::type(type), std::move(modifications), cql3::attributes::none(), _server._query_processor.get_cql_stats());
+    return _server._query_processor.process_batch(batch, query_state, options).then([this, stream, batch, &query_state] (auto msg) {
         return this->make_result(stream, msg, query_state.get_trace_state());
     }).then([&query_state, q_state = std::move(q_state), this] (auto&& response) {
         /* Keep q_state alive. */

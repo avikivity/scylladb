@@ -29,7 +29,6 @@
 #include "cql3/query_processor.hh"
 #include "cql3/values.hh"
 #include "auth/authenticator.hh"
-#include "core/distributed.hh"
 #include "timeout_config.hh"
 #include <seastar/core/semaphore.hh>
 #include <memory>
@@ -111,7 +110,7 @@ private:
     static constexpr cql_protocol_version_type current_version = cql_serialization_format::latest_version;
 
     std::vector<server_socket> _listeners;
-    distributed<cql3::query_processor>& _query_processor;
+    cql3::query_processor& _query_processor;
     cql_server_config _config;
     size_t _max_request_size;
     semaphore _memory_available;
@@ -127,7 +126,7 @@ private:
     cql_load_balance _lb;
     auth::service& _auth_service;
 public:
-    cql_server(distributed<cql3::query_processor>& qp, cql_load_balance lb, auth::service&,
+    cql_server(cql3::query_processor& qp, cql_load_balance lb, auth::service&,
             cql_server_config config);
     future<> listen(ipv4_addr addr, std::shared_ptr<seastar::tls::credentials_builder> = {}, bool keepalive = false);
     future<> do_accepts(int which, bool keepalive, ipv4_addr server_addr);
