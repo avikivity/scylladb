@@ -1312,6 +1312,17 @@ bytes_opt cql_server::connection::read_bytes(bytes_view& buf) {
     return {std::move(b)};
 }
 
+bytes_view cql_server::connection::read_bytes_view(bytes_view& buf) {
+    auto len = read_int(buf);
+    if (len < 0) {
+        return {};
+    }
+    check_room(buf, len);
+    bytes_view b(reinterpret_cast<const int8_t*>(buf.begin()), len);
+    buf.remove_prefix(len);
+    return b;
+}
+
 bytes cql_server::connection::read_short_bytes(bytes_view& buf)
 {
     auto n = read_short(buf);

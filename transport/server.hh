@@ -234,6 +234,7 @@ private:
         sstring_view read_string_view(bytes_view& buf);
         sstring_view read_long_string_view(bytes_view& buf);
         bytes_opt read_bytes(bytes_view& buf);
+        bytes_view read_bytes_view(bytes_view& buf);
         bytes read_short_bytes(bytes_view& buf);
         cql3::raw_value read_value(bytes_view& buf);
         cql3::raw_value_view read_value_view(bytes_view& buf);
