@@ -1680,7 +1680,7 @@ T cast_if_fits(size_t v) {
     return static_cast<T>(v);
 }
 
-void cql_server::response::write_string(const sstring& s)
+void cql_server::response::write_string(stdx::string_view s)
 {
     write_short(cast_if_fits<uint16_t>(s.size()));
     _body.write(bytes_view(reinterpret_cast<const int8_t*>(s.data()), s.size()));
@@ -1706,7 +1706,7 @@ void cql_server::response::write_string_list(std::vector<sstring> string_list)
     }
 }
 
-void cql_server::response::write_bytes(bytes b)
+void cql_server::response::write_bytes(bytes_view b)
 {
     write_int(cast_if_fits<int32_t>(b.size()));
     _body.write(b);

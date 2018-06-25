@@ -76,11 +76,11 @@ public:
     placeholder<int32_t> write_int_placeholder();
     void write_long(int64_t n);
     void write_short(uint16_t n);
-    void write_string(const sstring& s);
+    void write_string(stdx::string_view s);
     void write_bytes_as_string(bytes_view s);
     void write_long_string(const sstring& s);
     void write_string_list(std::vector<sstring> string_list);
-    void write_bytes(bytes b);
+    void write_bytes(bytes_view b);
     void write_short_bytes(bytes b);
     void write_inet(ipv4_addr inet);
     void write_consistency(db::consistency_level c);
