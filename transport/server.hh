@@ -56,6 +56,8 @@ enum class cql_compression {
 enum cql_frame_flags {
     compression = 0x01,
     tracing     = 0x02,
+    custom_payload = 0x04,
+    warning     = 0x08,
 };
 
 struct [[gnu::packed]] cql_binary_frame_v1 {
