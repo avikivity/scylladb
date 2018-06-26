@@ -24,6 +24,7 @@
 #include "server.hh"
 #include "utils/reusable_buffer.hh"
 #include <unordered_map>
+#include <optional>
 
 namespace cql_transport {
 
@@ -52,6 +53,8 @@ class cql_server::response {
     cql_binary_opcode _opcode;
     uint8_t           _flags = 0; // a bitwise OR mask of zero or more cql_frame_flags values
     bytes_ostream _body;
+    // Use optional<> to avoid allocation in unordered_map default constructor
+    std::optional<std::unordered_map<sstring, bytes>> _custom_payload;
 public:
     template<typename T>
     class placeholder;
@@ -71,7 +74,14 @@ public:
         _flags |= flag;
     }
 
+    bool has_custom_payload() const {
+        return bool(_custom_payload);
+    }
+
+    void set_custom_payload(sstring key, bytes value);
+
     void serialize(const event::schema_change& event, uint8_t version);
+    void serialize_custom_payload();
     void write_byte(uint8_t b);
     void write_int(int32_t n);
     placeholder<int32_t> write_int_placeholder();

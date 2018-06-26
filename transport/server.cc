@@ -1202,6 +1202,7 @@ std::unique_ptr<cql_server::response>
 cql_server::connection::make_result(int16_t stream, shared_ptr<messages::result_message> msg, const tracing::trace_state_ptr& tr_state, bool skip_metadata)
 {
     auto response = std::make_unique<cql_server::response>(stream, cql_binary_opcode::RESULT, tr_state);
+    response->serialize_custom_payload();
     fmt_visitor fmt{_version, *response, skip_metadata};
     msg->accept(fmt);
     return response;
@@ -1211,6 +1212,7 @@ std::unique_ptr<cql_server::response>
 cql_server::connection::make_topology_change_event(const event::topology_change& event)
 {
     auto response = std::make_unique<cql_server::response>(-1, cql_binary_opcode::EVENT, tracing::trace_state_ptr());
+    response->serialize_custom_payload();
     response->write_string("TOPOLOGY_CHANGE");
     response->write_string(to_string(event.change));
     response->write_inet(event.node);
@@ -1221,6 +1223,7 @@ std::unique_ptr<cql_server::response>
 cql_server::connection::make_status_change_event(const event::status_change& event)
 {
     auto response = std::make_unique<cql_server::response>(-1, cql_binary_opcode::EVENT, tracing::trace_state_ptr());
+    response->serialize_custom_payload();
     response->write_string("STATUS_CHANGE");
     response->write_string(to_string(event.status));
     response->write_inet(event.node);
@@ -1231,6 +1234,7 @@ std::unique_ptr<cql_server::response>
 cql_server::connection::make_schema_change_event(const event::schema_change& event)
 {
     auto response = std::make_unique<cql_server::response>(-1, cql_binary_opcode::EVENT, tracing::trace_state_ptr());
+    response->serialize_custom_payload();
     response->write_string("SCHEMA_CHANGE");
     response->serialize(event, _version);
     return response;
@@ -1240,6 +1244,9 @@ void cql_server::connection::write_response(foreign_ptr<std::unique_ptr<cql_serv
 {
     _ready_to_respond = _ready_to_respond.then([this, compression, response = std::move(response)] () mutable {
         auto message = response->make_message(_version, compression);
+        if (response->has_custom_payload()) {
+            response->set_frame_flag(cql_frame_flags::custom_payload);
+        }
         message.on_delete([response = std::move(response)] { });
         return _write_buf.write(std::move(message)).then([this] {
             return _write_buf.flush();
@@ -1555,6 +1562,19 @@ cql3::raw_value_view cql_server::connection::read_value_view(bytes_view& buf) {
     bytes_view bv(reinterpret_cast<const int8_t*>(buf.begin()), len);
     buf.remove_prefix(len);
     return cql3::raw_value_view::make_value(std::move(bv));
+}
+
+void cql_server::response::set_custom_payload(sstring key, bytes value) {
+    if (!_custom_payload) {
+        _custom_payload.emplace();
+    }
+    _custom_payload->emplace(std::move(key), std::move(value));
+}
+
+void cql_server::response::serialize_custom_payload() {
+    if (!_custom_payload) {
+        return;
+    }
 }
 
 scattered_message<char> cql_server::response::make_message(uint8_t version, cql_compression compression) {
