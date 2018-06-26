@@ -243,6 +243,7 @@ private:
         void read_value_view_list(bytes_view& buf, std::vector<cql3::raw_value_view>& values);
         db::consistency_level read_consistency(bytes_view& buf);
         std::unordered_map<sstring, sstring> read_string_map(bytes_view& buf);
+        std::unordered_map<stdx::string_view, bytes_view> read_bytes_map(bytes_view& buf);
         std::unique_ptr<cql3::query_options> read_options(bytes_view& buf);
         std::unique_ptr<cql3::query_options> read_options(bytes_view& buf, uint8_t);
 

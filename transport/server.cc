@@ -1384,6 +1384,17 @@ std::unordered_map<sstring, sstring> cql_server::connection::read_string_map(byt
     return string_map;
 }
 
+std::unordered_map<stdx::string_view, bytes_view> cql_server::connection::read_bytes_map(bytes_view& buf) {
+    std::unordered_map<stdx::string_view, bytes_view> map;
+    auto n = read_short(buf);
+    for (auto i = 0; i < n; i++) {
+        auto key = read_string_view(buf);
+        auto val = read_bytes_view(buf);
+        map.emplace(key, val);
+    }
+    return map;
+}
+
 enum class options_flag {
     VALUES,
     SKIP_METADATA,
@@ -1768,6 +1779,14 @@ void cql_server::response::write_string_multimap(std::multimap<sstring, sstring>
         }
         write_string(key);
         write_string_list(values);
+    }
+}
+
+void cql_server::response::write_bytes_map(const std::unordered_map<sstring, bytes>& map) {
+    write_short(cast_if_fits<uint16_t>(map.size()));
+    for (auto&& [k, v] : map) {
+        write_string(k);
+        write_bytes(v);
     }
 }
 
