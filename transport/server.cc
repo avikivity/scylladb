@@ -752,7 +752,7 @@ future<response_type> cql_server::connection::process_auth_response(uint16_t str
 
 future<response_type> cql_server::connection::process_options(uint16_t stream, bytes_view buf, std::unique_ptr<custom_payload_request_type> custom, service::client_state client_state)
 {
-    return make_ready_future<response_type>(std::make_pair(make_supported(stream, client_state.get_trace_state()), client_state));
+    return make_ready_future<response_type>(std::make_pair(make_supported(stream, client_state.get_trace_state(), std::move(custom)), client_state));
 }
 
 void
@@ -1113,7 +1113,8 @@ std::unique_ptr<cql_server::response> cql_server::connection::make_auth_challeng
     return response;
 }
 
-std::unique_ptr<cql_server::response> cql_server::connection::make_supported(int16_t stream, const tracing::trace_state_ptr& tr_state)
+std::unique_ptr<cql_server::response> cql_server::connection::make_supported(int16_t stream, const tracing::trace_state_ptr& tr_state,
+        std::unique_ptr<custom_payload_request_type> custom_payload)
 {
     std::multimap<sstring, sstring> opts;
     opts.insert({"CQL_VERSION", cql3::query_processor::CQL_VERSION});
@@ -1121,6 +1122,17 @@ std::unique_ptr<cql_server::response> cql_server::connection::make_supported(int
     opts.insert({"COMPRESSION", "snappy"});
     opts.insert({"SCYLLA_SHARD", sprint("%d", engine().cpu_id())});
     auto response = std::make_unique<cql_server::response>(stream, cql_binary_opcode::SUPPORTED, tr_state);
+    if (custom_payload && custom_payload->count("com.scylladb.ShardInfoRequest")) {
+        auto& part = dht::global_partitioner();
+        encoded shard_info, params;
+        shard_info.write_int(engine().cpu_id());
+        shard_info.write_string(part.name());
+        shard_info.write_int(smp::count);
+        shard_info.write_string(part.cpu_sharding_algorithm_name());
+        params.write_int(part.sharding_ignore_msb());
+        shard_info.write_bytes(params.data().linearize());
+        response->set_custom_payload("com.scylladb.ShardInfoResponse", bytes(shard_info.data().linearize()));
+    }
     response->write_string_multimap(opts);
     return response;
 }
