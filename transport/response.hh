@@ -48,16 +48,67 @@ enum class cql_binary_opcode : uint8_t {
     AUTH_SUCCESS   = 16,
 };
 
+// Thin wrapper around bytes_ostream adding transport layer encoding
+class cql_server::encoded {
+    bytes_ostream _body;
+public:
+    encoded() = default;
+    // not explicit, since this is a thin wrapper
+    encoded(bytes_ostream&& body) : _body(std::move(body)) {}
+
+    bytes_ostream& data() { return _body; }
+    const bytes_ostream& data() const { return _body; }
+
+    template<typename T>
+    class placeholder;
+
+    bytes_ostream::value_type* write_place_holder(size_t size) {
+        return _body.write_place_holder(size);
+    }
+    void write_byte(uint8_t b);
+    void write_int(int32_t n);
+    placeholder<int32_t> write_int_placeholder();
+    void write_long(int64_t n);
+    void write_short(uint16_t n);
+    void write_string(stdx::string_view s);
+    void write_bytes_as_string(bytes_view s);
+    void write_long_string(const sstring& s);
+    void write_string_list(std::vector<sstring> string_list);
+    void write_bytes(bytes_view b);
+    void write_short_bytes(bytes b);
+    void write_inet(ipv4_addr inet);
+    void write_consistency(db::consistency_level c);
+    void write_string_map(std::map<sstring, sstring> string_map);
+    void write_string_multimap(std::multimap<sstring, sstring> string_map);
+    void write_bytes_map(const std::unordered_map<sstring, bytes>& map);
+    void write_value(bytes_opt value);
+    void write_value(std::optional<query::result_bytes_view> value);
+    void write(const cql3::metadata& m, bool skip = false);
+    void write(const cql3::prepared_metadata& m, uint8_t version);
+};
+
+template<>
+class cql_server::encoded::placeholder<int32_t> {
+    int8_t* _pointer;
+public:
+    explicit placeholder(int8_t* ptr) : _pointer(ptr) { }
+    void write(int32_t n) {
+        auto u = htonl(n);
+        auto* s = reinterpret_cast<const int8_t*>(&u);
+        std::copy_n(s, sizeof(u), _pointer);
+    }
+};
+
 class cql_server::response {
     int16_t           _stream;
     cql_binary_opcode _opcode;
     uint8_t           _flags = 0; // a bitwise OR mask of zero or more cql_frame_flags values
-    bytes_ostream _body;
+    encoded _body;
     // Use optional<> to avoid allocation in unordered_map default constructor
     std::optional<std::unordered_map<sstring, bytes>> _custom_payload;
 public:
     template<typename T>
-    class placeholder;
+    using placeholder = encoded::placeholder<T>;
 
     response(int16_t stream, cql_binary_opcode opcode, const tracing::trace_state_ptr& tr_state_ptr)
         : _stream{stream}
@@ -82,26 +133,26 @@ public:
 
     void serialize(const event::schema_change& event, uint8_t version);
     void serialize_custom_payload();
-    void write_byte(uint8_t b);
-    void write_int(int32_t n);
-    placeholder<int32_t> write_int_placeholder();
-    void write_long(int64_t n);
-    void write_short(uint16_t n);
-    void write_string(stdx::string_view s);
-    void write_bytes_as_string(bytes_view s);
-    void write_long_string(const sstring& s);
-    void write_string_list(std::vector<sstring> string_list);
-    void write_bytes(bytes_view b);
-    void write_short_bytes(bytes b);
-    void write_inet(ipv4_addr inet);
-    void write_consistency(db::consistency_level c);
-    void write_string_map(std::map<sstring, sstring> string_map);
-    void write_string_multimap(std::multimap<sstring, sstring> string_map);
-    void write_bytes_map(const std::unordered_map<sstring, bytes>& map);
-    void write_value(bytes_opt value);
-    void write_value(std::optional<query::result_bytes_view> value);
-    void write(const cql3::metadata& m, bool skip = false);
-    void write(const cql3::prepared_metadata& m, uint8_t version);
+    void write_byte(uint8_t b) { _body.write_byte(b); }
+    void write_int(int32_t n) { _body.write_int(n); }
+    placeholder<int32_t> write_int_placeholder() { return _body.write_int_placeholder(); }
+    void write_long(int64_t n) { _body.write_long(n); }
+    void write_short(uint16_t n) { _body.write_short(n); }
+    void write_string(stdx::string_view s) { _body.write_string(s); }
+    void write_bytes_as_string(bytes_view s) { _body.write_bytes_as_string(s); }
+    void write_long_string(const sstring& s) { _body.write_long_string(s); }
+    void write_string_list(std::vector<sstring> string_list) { _body.write_string_list(std::move(string_list)); }
+    void write_bytes(bytes_view b) { _body.write_bytes(b); }
+    void write_short_bytes(bytes b) { _body.write_short_bytes(std::move(b)); }
+    void write_inet(ipv4_addr inet) { _body.write_inet(inet); }
+    void write_consistency(db::consistency_level c) { _body.write_consistency(c); }
+    void write_string_map(std::map<sstring, sstring> string_map) { _body.write_string_map(std::move(string_map)); }
+    void write_string_multimap(std::multimap<sstring, sstring> string_map) { _body.write_string_multimap(std::move(string_map)); }
+    void write_bytes_map(const std::unordered_map<sstring, bytes>& map) { _body.write_bytes_map(map); }
+    void write_value(bytes_opt value) { _body.write_value(std::move(value)); }
+    void write_value(std::optional<query::result_bytes_view> value) { _body.write_value(std::move(value)); }
+    void write(const cql3::metadata& m, bool skip = false) { _body.write(m, skip); }
+    void write(const cql3::prepared_metadata& m, uint8_t version) { _body.write(m, version); }
 
     // Make a non-owning scattered_message of the response. Remains valid as long
     // as the response object is alive.
@@ -146,18 +197,6 @@ private:
         } else {
             return make_frame_one<cql_binary_frame_v1>(version, length);
         }
-    }
-};
-
-template<>
-class cql_server::response::placeholder<int32_t> {
-    int8_t* _pointer;
-public:
-    explicit placeholder(int8_t* ptr) : _pointer(ptr) { }
-    void write(int32_t n) {
-        auto u = htonl(n);
-        auto* s = reinterpret_cast<const int8_t*>(&u);
-        std::copy_n(s, sizeof(u), _pointer);
     }
 };
 

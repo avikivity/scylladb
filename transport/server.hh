@@ -140,6 +140,7 @@ public:
     future<> do_accepts(int which, bool keepalive, ipv4_addr server_addr);
     future<> stop();
 public:
+    class encoded;
     class response;
     using response_type = std::pair<std::unique_ptr<cql_server::response>, service::client_state>;
 private:

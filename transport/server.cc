@@ -1582,9 +1582,9 @@ scattered_message<char> cql_server::response::make_message(uint8_t version, cql_
         compress(compression);
     }
     scattered_message<char> msg;
-    auto frame = make_frame(version, _body.size());
+    auto frame = make_frame(version, _body.data().size());
     msg.append(std::move(frame));
-    for (auto&& fragment : _body.fragments()) {
+    for (auto&& fragment : _body.data().fragments()) {
         msg.append_static(reinterpret_cast<const char*>(fragment.data()), fragment.size());
     }
     return msg;
@@ -1611,7 +1611,7 @@ void cql_server::response::compress(cql_compression compression)
 
 void cql_server::response::compress_lz4()
 {
-    auto view = _input_buffer.get_linearized_view(_body);
+    auto view = _input_buffer.get_linearized_view(_body.data());
     const char* input = reinterpret_cast<const char*>(view.data());
     size_t input_len = view.size();
 
@@ -1637,7 +1637,7 @@ void cql_server::response::compress_lz4()
 
 void cql_server::response::compress_snappy()
 {
-    auto view = _input_buffer.get_linearized_view(_body);
+    auto view = _input_buffer.get_linearized_view(_body.data());
     const char* input = reinterpret_cast<const char*>(view.data());
     size_t input_len = view.size();
 
@@ -1689,31 +1689,31 @@ void cql_server::response::serialize(const event::schema_change& event, uint8_t 
     }
 }
 
-void cql_server::response::write_byte(uint8_t b)
+void cql_server::encoded::write_byte(uint8_t b)
 {
     auto s = reinterpret_cast<const int8_t*>(&b);
     _body.write(bytes_view(s, sizeof(b)));
 }
 
-void cql_server::response::write_int(int32_t n)
+void cql_server::encoded::write_int(int32_t n)
 {
     auto u = htonl(n);
     auto *s = reinterpret_cast<const int8_t*>(&u);
     _body.write(bytes_view(s, sizeof(u)));
 }
 
-cql_server::response::placeholder<int32_t> cql_server::response::write_int_placeholder() {
+cql_server::response::placeholder<int32_t> cql_server::encoded::write_int_placeholder() {
     return placeholder<int32_t>(_body.write_place_holder(sizeof(int32_t)));
 }
 
-void cql_server::response::write_long(int64_t n)
+void cql_server::encoded::write_long(int64_t n)
 {
     auto u = htonq(n);
     auto *s = reinterpret_cast<const int8_t*>(&u);
     _body.write(bytes_view(s, sizeof(u)));
 }
 
-void cql_server::response::write_short(uint16_t n)
+void cql_server::encoded::write_short(uint16_t n)
 {
     auto u = htons(n);
     auto *s = reinterpret_cast<const int8_t*>(&u);
@@ -1730,25 +1730,25 @@ T cast_if_fits(size_t v) {
     return static_cast<T>(v);
 }
 
-void cql_server::response::write_string(stdx::string_view s)
+void cql_server::encoded::write_string(stdx::string_view s)
 {
     write_short(cast_if_fits<uint16_t>(s.size()));
     _body.write(bytes_view(reinterpret_cast<const int8_t*>(s.data()), s.size()));
 }
 
-void cql_server::response::write_bytes_as_string(bytes_view s)
+void cql_server::encoded::write_bytes_as_string(bytes_view s)
 {
     write_short(cast_if_fits<uint16_t>(s.size()));
     _body.write(s);
 }
 
-void cql_server::response::write_long_string(const sstring& s)
+void cql_server::encoded::write_long_string(const sstring& s)
 {
     write_int(cast_if_fits<int32_t>(s.size()));
     _body.write(bytes_view(reinterpret_cast<const int8_t*>(s.data()), s.size()));
 }
 
-void cql_server::response::write_string_list(std::vector<sstring> string_list)
+void cql_server::encoded::write_string_list(std::vector<sstring> string_list)
 {
     write_short(cast_if_fits<uint16_t>(string_list.size()));
     for (auto&& s : string_list) {
@@ -1756,19 +1756,19 @@ void cql_server::response::write_string_list(std::vector<sstring> string_list)
     }
 }
 
-void cql_server::response::write_bytes(bytes_view b)
+void cql_server::encoded::write_bytes(bytes_view b)
 {
     write_int(cast_if_fits<int32_t>(b.size()));
     _body.write(b);
 }
 
-void cql_server::response::write_short_bytes(bytes b)
+void cql_server::encoded::write_short_bytes(bytes b)
 {
     write_short(cast_if_fits<uint16_t>(b.size()));
     _body.write(b);
 }
 
-void cql_server::response::write_inet(ipv4_addr inet)
+void cql_server::encoded::write_inet(ipv4_addr inet)
 {
     write_byte(4);
     write_byte(((inet.ip & 0xff000000) >> 24));
@@ -1778,12 +1778,12 @@ void cql_server::response::write_inet(ipv4_addr inet)
     write_int(inet.port);
 }
 
-void cql_server::response::write_consistency(db::consistency_level c)
+void cql_server::encoded::write_consistency(db::consistency_level c)
 {
     write_short(consistency_to_wire(c));
 }
 
-void cql_server::response::write_string_map(std::map<sstring, sstring> string_map)
+void cql_server::encoded::write_string_map(std::map<sstring, sstring> string_map)
 {
     write_short(cast_if_fits<uint16_t>(string_map.size()));
     for (auto&& s : string_map) {
@@ -1792,7 +1792,7 @@ void cql_server::response::write_string_map(std::map<sstring, sstring> string_ma
     }
 }
 
-void cql_server::response::write_string_multimap(std::multimap<sstring, sstring> string_map)
+void cql_server::encoded::write_string_multimap(std::multimap<sstring, sstring> string_map)
 {
     std::vector<sstring> keys;
     for (auto it = string_map.begin(), end = string_map.end(); it != end; it = string_map.upper_bound(it->first)) {
@@ -1810,7 +1810,7 @@ void cql_server::response::write_string_multimap(std::multimap<sstring, sstring>
     }
 }
 
-void cql_server::response::write_bytes_map(const std::unordered_map<sstring, bytes>& map) {
+void cql_server::encoded::write_bytes_map(const std::unordered_map<sstring, bytes>& map) {
     write_short(cast_if_fits<uint16_t>(map.size()));
     for (auto&& [k, v] : map) {
         write_string(k);
@@ -1818,7 +1818,7 @@ void cql_server::response::write_bytes_map(const std::unordered_map<sstring, byt
     }
 }
 
-void cql_server::response::write_value(bytes_opt value)
+void cql_server::encoded::write_value(bytes_opt value)
 {
     if (!value) {
         write_int(-1);
@@ -1829,7 +1829,7 @@ void cql_server::response::write_value(bytes_opt value)
     _body.write(*value);
 }
 
-void cql_server::response::write_value(std::optional<query::result_bytes_view> value)
+void cql_server::encoded::write_value(std::optional<query::result_bytes_view> value)
 {
     if (!value) {
         write_int(-1);
@@ -1880,7 +1880,7 @@ private:
 
     static thread_local const type_id_to_type_type type_id_to_type;
 public:
-    static void encode(cql_server::response& r, data_type type) {
+    static void encode(cql_server::encoded& r, data_type type) {
         type = type->underlying_type();
 
         // For compatibility sake, we still return DateType as the timestamp type in resultSet metadata (#5723)
@@ -1964,7 +1964,7 @@ thread_local const type_codec::type_id_to_type_type type_codec::type_id_to_type 
     (type_id::TIME      , time_type)
     (type_id::INET      , inet_addr_type);
 
-void cql_server::response::write(const cql3::metadata& m, bool no_metadata) {
+void cql_server::encoded::write(const cql3::metadata& m, bool no_metadata) {
     auto flags = m.flags();
     bool global_tables_spec = m.flags().contains<cql3::metadata::flag::GLOBAL_TABLES_SPEC>();
     bool has_more_pages = m.flags().contains<cql3::metadata::flag::HAS_MORE_PAGES>();
@@ -2003,7 +2003,7 @@ void cql_server::response::write(const cql3::metadata& m, bool no_metadata) {
     };
 }
 
-void cql_server::response::write(const cql3::prepared_metadata& m, uint8_t version)
+void cql_server::encoded::write(const cql3::prepared_metadata& m, uint8_t version)
 {
     bool global_tables_spec = m.flags().contains<cql3::prepared_metadata::flag::GLOBAL_TABLES_SPEC>();
 
