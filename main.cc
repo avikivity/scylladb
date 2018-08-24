@@ -60,6 +60,7 @@
 #include <seastar/core/memory.hh>
 #include <seastar/util/log-cli.hh>
 #include "service/cache_hitrate_calculator.hh"
+#include "service/priority_manager.hh"
 #include "sstables/compaction_manager.hh"
 #include "sstables/sstables.hh"
 
@@ -503,6 +504,10 @@ int main(int ac, char** av) {
             supervisor::notify("initializing storage service");
             multitenancy_config mtcfg;
             mtcfg.default_tenant.sched_group = make_sched_group("statement", 1000);
+            mtcfg.tenants["analytics"] = tenant_config{make_sched_group("statement:analytics", 200)}; // demo
+            smp::invoke_on_all([&] {
+                service::get_local_priority_manager().add_tenant("analytics", 200); // demo
+            }).get();
             init_storage_service(db, auth_service, sys_dist_ks, mtcfg);
             supervisor::notify("starting per-shard database core");
 
