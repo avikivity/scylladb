@@ -33,11 +33,13 @@ namespace db {
 class extensions;
 }
 
+struct multitenancy_config;
+
 extern logging::logger startlog;
 
 class bad_configuration_error : public std::exception {};
 
-void init_storage_service(distributed<database>& db, sharded<auth::service>&, sharded<db::system_distributed_keyspace>&);
+void init_storage_service(distributed<database>& db, sharded<auth::service>&, sharded<db::system_distributed_keyspace>&, multitenancy_config mtcfg);
 
 struct init_scheduling_config {
     scheduling_group streaming;

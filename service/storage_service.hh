@@ -60,6 +60,7 @@
 #include <seastar/core/distributed.hh>
 #include "disk-error-handler.hh"
 #include "gms/feature.hh"
+#include "multitenant.hh"
 #include <seastar/core/metrics_registration.hh>
 
 namespace cql_transport {
@@ -139,7 +140,7 @@ private:
     bool _stream_manager_stopped = false;
     seastar::metrics::metric_groups _metrics;
 public:
-    storage_service(distributed<database>& db, sharded<auth::service>&, sharded<db::system_distributed_keyspace>&);
+    storage_service(distributed<database>& db, sharded<auth::service>&, sharded<db::system_distributed_keyspace>&, multitenancy_config mtcfg);
     void isolate_on_error();
     void isolate_on_commit_error();
 
@@ -744,6 +745,7 @@ private:
     serialized_action _replicate_action;
     serialized_action _update_pending_ranges_action;
     sharded<db::system_distributed_keyspace>& _sys_dist_ks;
+    multitenancy_config _multitenancy_config;
 private:
     /**
      * Replicates token_metadata contents on shard0 instance to other shards.
@@ -2295,8 +2297,8 @@ public:
     }
 };
 
-inline future<> init_storage_service(distributed<database>& db, sharded<auth::service>& auth_service, sharded<db::system_distributed_keyspace>& sys_dist_ks) {
-    return service::get_storage_service().start(std::ref(db), std::ref(auth_service), std::ref(sys_dist_ks));
+inline future<> init_storage_service(distributed<database>& db, sharded<auth::service>& auth_service, sharded<db::system_distributed_keyspace>& sys_dist_ks, multitenancy_config mtcfg) {
+    return service::get_storage_service().start(std::ref(db), std::ref(auth_service), std::ref(sys_dist_ks), mtcfg);
 }
 
 inline future<> deinit_storage_service() {

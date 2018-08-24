@@ -124,12 +124,14 @@ int get_generation_number() {
     return generation_number;
 }
 
-storage_service::storage_service(distributed<database>& db, sharded<auth::service>& auth_service, sharded<db::system_distributed_keyspace>& sys_dist_ks)
+storage_service::storage_service(distributed<database>& db, sharded<auth::service>& auth_service, sharded<db::system_distributed_keyspace>& sys_dist_ks,
+        multitenancy_config mtcfg)
         : _db(db)
         , _auth_service(auth_service)
         , _replicate_action([this] { return do_replicate_to_all_cores(); })
         , _update_pending_ranges_action([this] { return do_update_pending_ranges(); })
-        , _sys_dist_ks(sys_dist_ks) {
+        , _sys_dist_ks(sys_dist_ks)
+        , _multitenancy_config(std::move(mtcfg)) {
     register_metrics();
     sstable_read_error.connect([this] { isolate_on_error(); });
     sstable_write_error.connect([this] { isolate_on_error(); });
@@ -2101,6 +2103,7 @@ future<> storage_service::start_native_transport() {
         cql_transport::cql_server_config cql_server_config;
         cql_server_config.timeout_config = make_timeout_config(cfg);
         cql_server_config.max_request_size = ss._db.local().get_available_memory() / 10;
+        cql_server_config.multitenancy_config = ss._multitenancy_config;
         cql_transport::cql_load_balance lb = cql_transport::parse_load_balance(cfg.load_balance());
         return seastar::net::dns::resolve_name(addr).then([&ss, cserver, addr, &cfg, lb, keepalive, ceo = std::move(ceo), cql_server_config] (seastar::net::inet_address ip) {
                 return cserver->start(std::ref(service::get_storage_proxy()), std::ref(cql3::get_query_processor()), lb, std::ref(ss._auth_service), cql_server_config).then([cserver, &cfg, addr, ip, ceo, keepalive]() {
