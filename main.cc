@@ -503,6 +503,7 @@ int main(int ac, char** av) {
             supervisor::notify("initializing storage service");
             multitenancy_config mtcfg;
             mtcfg.default_tenant.sched_group = make_sched_group("statement", 1000);
+            mtcfg.tenants["doctor"] = tenant_config{make_sched_group("doctor", 200)}; // demo
             init_storage_service(db, auth_service, sys_dist_ks, mtcfg);
             supervisor::notify("starting per-shard database core");
 
