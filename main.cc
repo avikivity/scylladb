@@ -509,7 +509,7 @@ int main(int ac, char** av) {
             dbcfg.compaction_scheduling_group = make_sched_group("compaction", 1000);
             dbcfg.memory_compaction_scheduling_group = make_sched_group("mem_compaction", 1000);
             dbcfg.streaming_scheduling_group = maintenance_scheduling_group;
-            dbcfg.statement_scheduling_group = make_sched_group("statement", 1000);
+            dbcfg.statement_scheduling_groups.default_tenant.sched_group = make_sched_group("statement", 1000);
             dbcfg.memtable_scheduling_group = make_sched_group("memtable", 1000);
             dbcfg.memtable_to_cache_scheduling_group = make_sched_group("memtable_to_cache", 200);
             dbcfg.available_memory = memory::stats().total_memory();
@@ -594,7 +594,7 @@ int main(int ac, char** av) {
                 startlog.warn("Using default cluster name is not recommended. Using a unique cluster name will reduce the chance of adding nodes to the wrong cluster by mistake");
             }
             init_scheduling_config scfg;
-            scfg.statement = dbcfg.statement_scheduling_group;
+            scfg.statement = dbcfg.statement_scheduling_groups.default_tenant.sched_group;
             scfg.streaming = dbcfg.streaming_scheduling_group;
             scfg.gossip = scheduling_group();
             init_ms_fd_gossiper(listen_address
@@ -763,11 +763,11 @@ int main(int ac, char** av) {
             }
 
             supervisor::notify("starting native transport");
-            with_scheduling_group(dbcfg.statement_scheduling_group, [] {
+            with_scheduling_group(dbcfg.statement_scheduling_groups.default_tenant.sched_group, [] {
                 return service::get_local_storage_service().start_native_transport();
             }).get();
             if (start_thrift) {
-                with_scheduling_group(dbcfg.statement_scheduling_group, [] {
+                with_scheduling_group(dbcfg.statement_scheduling_groups.default_tenant.sched_group, [] {
                     return service::get_local_storage_service().start_rpc_server();
                 }).get();
             }

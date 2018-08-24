@@ -87,6 +87,7 @@
 #include "querier.hh"
 #include "mutation_query.hh"
 #include "db/large_partition_handler.hh"
+#include "multitenant.hh"
 #include <unordered_set>
 
 class cell_locker;
@@ -318,7 +319,7 @@ public:
         seastar::scheduling_group memtable_to_cache_scheduling_group;
         seastar::scheduling_group compaction_scheduling_group;
         seastar::scheduling_group memory_compaction_scheduling_group;
-        seastar::scheduling_group statement_scheduling_group;
+        multitenancy_config statement_scheduling_groups;
         seastar::scheduling_group streaming_scheduling_group;
         bool enable_metrics_reporting = false;
         db::large_partition_handler* large_partition_handler;
@@ -1055,7 +1056,7 @@ public:
         seastar::scheduling_group memtable_to_cache_scheduling_group;
         seastar::scheduling_group compaction_scheduling_group;
         seastar::scheduling_group memory_compaction_scheduling_group;
-        seastar::scheduling_group statement_scheduling_group;
+        multitenancy_config statement_scheduling_groups;
         seastar::scheduling_group streaming_scheduling_group;
         bool enable_metrics_reporting = false;
         db::timeout_semaphore* view_update_concurrency_semaphore = nullptr;
@@ -1137,7 +1138,7 @@ struct database_config {
     seastar::scheduling_group memtable_to_cache_scheduling_group; // FIXME: merge with memtable_scheduling_group
     seastar::scheduling_group compaction_scheduling_group;
     seastar::scheduling_group memory_compaction_scheduling_group;
-    seastar::scheduling_group statement_scheduling_group;
+    multitenancy_config statement_scheduling_groups;
     seastar::scheduling_group streaming_scheduling_group;
     size_t available_memory;
 };
