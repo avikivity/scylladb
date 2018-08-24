@@ -168,6 +168,7 @@ private:
         service::client_state _client_state;
         std::unordered_map<uint16_t, cql_query_state> _query_states;
         unsigned _request_cpu = 0;
+        bool _tenant_switch = false;
 
         enum class tracing_request_type : uint8_t {
             not_requested,
@@ -196,6 +197,7 @@ private:
         future<processing_result> process_request_one(fragmented_temporary_buffer::istream buf, uint8_t op, uint16_t stream, service::client_state client_state, tracing_request_type tracing_request);
         unsigned frame_size() const;
         unsigned pick_request_cpu();
+        scheduling_group get_scheduling_group();
         void update_client_state(processing_result& r);
         cql_binary_frame_v3 parse_frame(temporary_buffer<char> buf);
         future<fragmented_temporary_buffer> read_and_decompress_frame(size_t length, uint8_t flags);
@@ -208,6 +210,7 @@ private:
         future<response_type> process_execute(uint16_t stream, request_reader in, service::client_state client_state);
         future<response_type> process_batch(uint16_t stream, request_reader in, service::client_state client_state);
         future<response_type> process_register(uint16_t stream, request_reader in, service::client_state client_state);
+        future<> process_until_tenant_switch();
 
         std::unique_ptr<cql_server::response> make_unavailable_error(int16_t stream, exceptions::exception_code err, sstring msg, db::consistency_level cl, int32_t required, int32_t alive, const tracing::trace_state_ptr& tr_state);
         std::unique_ptr<cql_server::response> make_read_timeout_error(int16_t stream, exceptions::exception_code err, sstring msg, db::consistency_level cl, int32_t received, int32_t blockfor, bool data_present, const tracing::trace_state_ptr& tr_state);
