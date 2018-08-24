@@ -2136,7 +2136,7 @@ database::database(const db::config& cfg, database_config dbcfg)
     , _cfg(std::make_unique<db::config>(cfg))
     // Allow system tables a pool of 10 MB memory to write, but never block on other regions.
     , _system_dirty_memory_manager(*this, 10 << 20, cfg.virtual_dirty_soft_limit(), default_scheduling_group())
-    , _dirty_memory_manager(*this, dbcfg.available_memory * 0.45, cfg.virtual_dirty_soft_limit(), dbcfg.statement_scheduling_group)
+    , _dirty_memory_manager(*this, dbcfg.available_memory * 0.45, cfg.virtual_dirty_soft_limit(), dbcfg.statement_scheduling_groups.default_tenant.sched_group)
     , _streaming_dirty_memory_manager(*this, dbcfg.available_memory * 0.10, cfg.virtual_dirty_soft_limit(), dbcfg.streaming_scheduling_group)
     , _dbcfg(dbcfg)
     , _memtable_controller(make_flush_controller(*_cfg, dbcfg.memtable_scheduling_group, service::get_local_memtable_flush_priority(), [this, limit = float(_dirty_memory_manager.throttle_threshold())] {
@@ -2893,7 +2893,7 @@ keyspace::make_column_family_config(const schema& s, const db::config& db_config
     cfg.memtable_scheduling_group = _config.memtable_scheduling_group;
     cfg.memtable_to_cache_scheduling_group = _config.memtable_to_cache_scheduling_group;
     cfg.streaming_scheduling_group = _config.streaming_scheduling_group;
-    cfg.statement_scheduling_group = _config.statement_scheduling_group;
+    cfg.statement_scheduling_groups = _config.statement_scheduling_groups;
     cfg.enable_metrics_reporting = db_config.enable_keyspace_column_family_metrics();
     cfg.large_partition_handler = lp_handler;
     cfg.view_update_concurrency_semaphore = _config.view_update_concurrency_semaphore;
@@ -3686,7 +3686,7 @@ database::make_keyspace_config(const keyspace_metadata& ksm) {
     cfg.memtable_scheduling_group = _dbcfg.memtable_scheduling_group;
     cfg.memtable_to_cache_scheduling_group = _dbcfg.memtable_to_cache_scheduling_group;
     cfg.streaming_scheduling_group = _dbcfg.streaming_scheduling_group;
-    cfg.statement_scheduling_group = _dbcfg.statement_scheduling_group;
+    cfg.statement_scheduling_groups = _dbcfg.statement_scheduling_groups;
     cfg.enable_metrics_reporting = _cfg->enable_keyspace_column_family_metrics();
 
     cfg.view_update_concurrency_semaphore = &_view_update_concurrency_sem;
