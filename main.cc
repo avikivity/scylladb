@@ -501,7 +501,9 @@ int main(int ac, char** av) {
             static sharded<auth::service> auth_service;
             static sharded<db::system_distributed_keyspace> sys_dist_ks;
             supervisor::notify("initializing storage service");
-            init_storage_service(db, auth_service, sys_dist_ks);
+            multitenancy_config mtcfg;
+            mtcfg.default_tenant.sched_group = make_sched_group("statement", 1000);
+            init_storage_service(db, auth_service, sys_dist_ks, mtcfg);
             supervisor::notify("starting per-shard database core");
 
             // Note: changed from using a move here, because we want the config object intact.
@@ -509,7 +511,7 @@ int main(int ac, char** av) {
             dbcfg.compaction_scheduling_group = make_sched_group("compaction", 1000);
             dbcfg.memory_compaction_scheduling_group = make_sched_group("mem_compaction", 1000);
             dbcfg.streaming_scheduling_group = maintenance_scheduling_group;
-            dbcfg.statement_scheduling_groups.default_tenant.sched_group = make_sched_group("statement", 1000);
+            dbcfg.statement_scheduling_groups = mtcfg;
             dbcfg.memtable_scheduling_group = make_sched_group("memtable", 1000);
             dbcfg.memtable_to_cache_scheduling_group = make_sched_group("memtable_to_cache", 200);
             dbcfg.available_memory = memory::stats().total_memory();

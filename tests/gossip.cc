@@ -71,7 +71,7 @@ int main(int ac, char ** av) {
         auto vv = std::make_shared<gms::versioned_value::factory>();
         locator::i_endpoint_snitch::create_snitch("SimpleSnitch").then([&auth_service, &db] {
             sharded<db::system_distributed_keyspace> sys_dist_ks;
-            return service::init_storage_service(db, auth_service, sys_dist_ks);
+            return service::init_storage_service(db, auth_service, sys_dist_ks, multitenancy_config{});
         }).then([vv, listen, config] {
             return netw::get_messaging_service().start(listen);
         }).then([config] {

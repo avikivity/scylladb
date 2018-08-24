@@ -332,7 +332,7 @@ public:
             auto stop_sys_dist_ks = defer([&sys_dist_ks] { sys_dist_ks.stop().get(); });
 
             auto& ss = service::get_storage_service();
-            ss.start(std::ref(*db), std::ref(*auth_service), std::ref(sys_dist_ks)).get();
+            ss.start(std::ref(*db), std::ref(*auth_service), std::ref(sys_dist_ks), multitenancy_config{}).get();
             auto stop_storage_service = defer([&ss] { ss.stop().get(); });
 
             database_config dbcfg;
@@ -463,7 +463,7 @@ public:
         auto thread = seastar::thread_impl::get();
         assert(thread);
         netw::get_messaging_service().start(gms::inet_address("127.0.0.1"), 7000, false).get();
-        service::get_storage_service().start(std::ref(_db), std::ref(_auth_service), std::ref(_sys_dist_ks)).get();
+        service::get_storage_service().start(std::ref(_db), std::ref(_auth_service), std::ref(_sys_dist_ks), multitenancy_config{}).get();
         service::get_storage_service().invoke_on_all([] (auto& ss) {
             ss.enable_all_features();
         }).get();
