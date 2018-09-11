@@ -24,4 +24,10 @@ priority_manager& get_local_priority_manager() {
     static thread_local priority_manager pm = priority_manager();
     return pm;
 }
+
+void
+priority_manager::add_tenant(sstring name, unsigned shares) {
+    _sstable_query_read_for_tenant.emplace(std::pair("statement:" + name, engine().register_one_priority_class("query:" + name, shares)));
+}
+
 }

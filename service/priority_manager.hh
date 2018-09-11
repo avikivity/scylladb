@@ -23,6 +23,9 @@
 #include <seastar/core/future.hh>
 #include <seastar/core/distributed.hh>
 #include <seastar/core/reactor.hh>
+#include <seastar/core/scheduling.hh>
+
+#include <unordered_map>
 
 #include "seastarx.hh"
 
@@ -33,6 +36,7 @@ class priority_manager {
     ::io_priority_class _stream_read_priority;
     ::io_priority_class _stream_write_priority;
     ::io_priority_class _sstable_query_read;
+    std::unordered_map<sstring, io_priority_class> _sstable_query_read_for_tenant;
     ::io_priority_class _compaction_priority;
 
 public:
@@ -58,8 +62,14 @@ public:
 
     const ::io_priority_class&
     sstable_query_read_priority() {
+        auto& name = current_scheduling_group().name();
+        if (auto it = _sstable_query_read_for_tenant.find(name); it != _sstable_query_read_for_tenant.end()) {
+            return it->second;
+        }
         return _sstable_query_read;
     }
+
+    void add_tenant(sstring name, unsigned shares);
 
     const ::io_priority_class&
     compaction_priority() {
