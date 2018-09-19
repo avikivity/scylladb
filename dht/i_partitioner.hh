@@ -87,6 +87,24 @@ enum class token_kind {
 };
 
 
+// Underlying data in a token; could be std::array<int8_t, 8>,
+// but we want a distinct type to preserve on-the-wire compatibility
+// with managed_bytes.
+struct token_data {
+    int8_t d[8] = {};
+
+    int8_t* begin() { return d; }
+    int8_t* end() { return d + 8; }
+    const int8_t* begin() const { return d; }
+    const int8_t* end() const { return d + 8; }
+    int8_t* data() { return d; }
+    const int8_t* data() const { return d; }
+    size_t size() const { return 8; }
+    int8_t& operator[](size_t i) { return d[i]; }
+    int8_t operator[](size_t i) const { return d[i]; }
+    operator bytes_view() const { return { begin(), size() }; }
+};
+
 class token_view {
 public:
     token_kind _kind;
@@ -117,12 +135,18 @@ public:
     //     [0x80] == 0.5
     //     [0x00, 0x80] == 1/512
     //     [0xff, 0x80] == 1 - 1/512
-    managed_bytes _data;
+    token_data _data;
 
     token() : _kind(kind::before_all_keys) {
     }
 
-    token(kind k, managed_bytes d) : _kind(std::move(k)), _data(std::move(d)) {
+    token(kind k, token_data d) : _kind(std::move(k)), _data(std::move(d)) {
+    }
+    token(kind k, bytes_view d) : _kind(k) {
+        if (d.size() != _data.size()) {
+            throw std::runtime_error("bad token size");
+        }
+        std::copy(d.begin(), d.end(), _data.begin());
     }
 
     bool is_minimum() const {
@@ -134,21 +158,23 @@ public:
     }
 
     size_t external_memory_usage() const {
-        return _data.external_memory_usage();
+        return 0;
     }
 
     size_t memory_usage() const {
-        return sizeof(token) + external_memory_usage();
+        return sizeof(token);
     }
 
-    explicit token(token_view v) : _kind(v._kind), _data(v._data) {}
+    explicit token(token_view v) : _kind(v._kind) {
+        std::copy_n(v._data.data(), _data.size(), _data.data());
+    }
 
     operator token_view() const {
         return token_view(*this);
     }
 };
 
-inline token_view::token_view(const token& token) : _kind(token._kind), _data(bytes_view(token._data)) {}
+inline token_view::token_view(const token& token) : _kind(token._kind), _data(token._data.data(), token._data.size()) {}
 
 token midpoint_unsigned(const token& t1, const token& t2);
 const token& minimum_token();
@@ -818,7 +844,7 @@ struct hash<dht::token> {
         return ret;
     }
 private:
-    size_t hash_large_token(const managed_bytes& b) const;
+    size_t hash_large_token(const dht::token_data& b) const;
 };
 
 template <>
@@ -831,5 +857,4 @@ struct hash<dht::decorated_key> {
 
 
 }
-
 

@@ -84,6 +84,7 @@
 #include "frozen_mutation.hh"
 #include "flat_mutation_reader.hh"
 #include "streaming/stream_manager.hh"
+#include "dht/token_serializer.hh"
 
 namespace netw {
 

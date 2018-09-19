@@ -82,7 +82,7 @@ murmur3_partitioner::get_token(uint64_t value) const {
     // indicator.
     // FIXME: will this require a repair when importing a database?
     auto t = net::hton(normalize(value));
-    bytes b(bytes::initialized_later(), 8);
+    token_data b;
     std::copy_n(reinterpret_cast<int8_t*>(&t), 8, b.begin());
     return token{token::kind::key, std::move(b)};
 }
@@ -153,7 +153,9 @@ dht::token murmur3_partitioner::from_bytes(bytes_view bytes) const {
     if (tok == std::numeric_limits<int64_t>::min()) {
         return minimum_token();
     } else {
-        return dht::token(dht::token::kind::key, bytes);
+        token_data d;
+        std::copy(bytes.begin(), bytes.end(), d.data());
+        return dht::token(dht::token::kind::key, d);
     }
 }
 

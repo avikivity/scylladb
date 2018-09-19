@@ -55,6 +55,7 @@
 #include "idl/token.dist.impl.hh"
 #include "idl/range.dist.impl.hh"
 #include "message/messaging_service.hh"
+#include "dht/token_serializer.hh"
 
 service::pager::paging_state::paging_state(partition_key pk,
         std::experimental::optional<clustering_key> ck,

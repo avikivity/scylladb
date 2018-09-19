@@ -34,8 +34,8 @@
 
 namespace dht {
 
-static const token min_token{ token::kind::before_all_keys, {} };
-static const token max_token{ token::kind::after_all_keys, {} };
+static const token min_token{ token::kind::before_all_keys, token_data{} };
+static const token max_token{ token::kind::after_all_keys, token_data{} };
 
 const token&
 minimum_token() {
@@ -48,11 +48,11 @@ maximum_token() {
 }
 
 // result + overflow bit
-std::pair<bytes, bool>
-add_bytes(bytes_view b1, bytes_view b2, bool carry = false) {
+std::pair<token_data, bool>
+add_bytes(token_data b1, token_data b2, bool carry = false) {
     auto sz = std::max(b1.size(), b2.size());
-    auto expand = [sz] (bytes_view b) {
-        bytes ret(bytes::initialized_later(), sz);
+    auto expand = [sz] (token_data b) {
+        token_data ret;
         auto bsz = b.size();
         auto p = std::copy(b.begin(), b.end(), ret.begin());
         std::fill_n(p, sz - bsz, 0);
@@ -72,8 +72,8 @@ add_bytes(bytes_view b1, bytes_view b2, bool carry = false) {
     return { std::move(eb1), bool(tmp) };
 }
 
-bytes
-shift_right(bool carry, bytes b) {
+token_data
+shift_right(bool carry, token_data b) {
     unsigned tmp = carry;
     auto sz = b.size();
     auto p = b.begin();
@@ -576,7 +576,7 @@ split_ranges_to_shards(const dht::token_range_vector& ranges, const schema& s) {
 namespace std {
 
 size_t
-hash<dht::token>::hash_large_token(const managed_bytes& b) const {
+hash<dht::token>::hash_large_token(const dht::token_data& b) const {
     auto read_bytes = boost::irange<size_t>(0, b.size())
             | boost::adaptors::transformed([&b] (size_t idx) { return b[idx]; });
     std::array<uint64_t, 2> result;

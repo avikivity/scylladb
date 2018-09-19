@@ -6,6 +6,6 @@ class token {
         after_all_keys,
     };
     dht::token::kind _kind;
-    bytes _data;
+    dht::token_data _data;
 };
 }
