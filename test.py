@@ -125,6 +125,20 @@ other_tests = [
 ]
 
 
+slow_tests_in_debug_mode = set([
+    'row_cache_test',
+    'mutation_reader_test',
+    'cql_query_test',
+    'sstable_mutation_test',
+    'view_schema_test',
+    'view_build_test',
+    'view_complex_test',
+    'secondary_index_test',
+    'sstable_test',
+    'sstable_3_x_test',
+    'flat_mutation_reader_test',
+])
+
 def print_progress_succint(test_path, test_args, success, cookie):
     if type(cookie) is int:
         cookie = (0, 1, cookie)
@@ -210,7 +224,27 @@ if __name__ == "__main__":
         for test in other_tests:
             test_to_run.append((os.path.join(prefix, test), 'other', custom_seastar_args.get(test, seastar_args) + standard_args))
         for test in boost_tests:
-            test_to_run.append((os.path.join(prefix, test), 'boost', custom_seastar_args.get(test, seastar_args) + standard_args))
+            test_path = os.path.join(prefix, test)
+            def append_test(boost_args=[]):
+                test_to_run.append((test_path, 'boost', custom_seastar_args.get(test, seastar_args) + standard_args, boost_args))
+            case_list = None
+            if mode == 'debug' and test in slow_tests_in_debug_mode:
+                # debug tests are slow, so run each case separately, to
+                # combat Amdahl
+                case_list_str = subprocess.run([test_path, '--list_content'],
+                                               stdout=subprocess.PIPE,
+                                               stderr=subprocess.PIPE,
+                                               check=True,
+                                               universal_newlines=True).stderr
+                # Default test cases have an asterisk appended, so filter
+                # for that, and remove the asterisk
+                case_list = [case[:-1]
+                             for case in case_list_str.splitlines()
+                             if case.endswith('*')]
+                for case in case_list:
+                    append_test(['-t', case])
+            else:
+                append_test()
 
     if 'release' in modes_to_run:
         test_to_run.append(('build/release/tests/lsa_async_eviction_test', 'other',
@@ -236,8 +270,7 @@ if __name__ == "__main__":
     env['ASAN_OPTIONS'] = 'alloc_dealloc_mismatch=0'
     env['UBSAN_OPTIONS'] = 'print_stacktrace=1'
     env['BOOST_TEST_CATCH_SYSTEM_ERRORS'] = 'no'
-    def run_test(path, type, exec_args):
-        boost_args = []
+    def run_test(path, type, exec_args, boost_args):
         # avoid modifying in-place, it will change test_to_run
         exec_args = exec_args + '--collectd 0'.split()
         file = io.StringIO()
@@ -283,7 +316,8 @@ if __name__ == "__main__":
         path = test[0]
         test_type = test[1]
         exec_args = test[2] if len(test) >= 3 else []
-        futures.append(executor.submit(run_test, path, test_type, exec_args))
+        boost_args = test[3] if len(test) >= 4 else []
+        futures.append(executor.submit(run_test, path, test_type, exec_args, boost_args))
 
     cookie = n_total
     for future in concurrent.futures.as_completed(futures):
