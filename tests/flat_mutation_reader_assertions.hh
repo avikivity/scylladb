@@ -31,6 +31,7 @@
 class flat_reader_assertions {
     flat_mutation_reader _reader;
     dht::partition_range _pr;
+    bool _engaged = false;
 private:
     mutation_fragment_opt read_next() {
         return _reader(db::no_timeout).get0();
@@ -38,7 +39,35 @@ private:
 public:
     flat_reader_assertions(flat_mutation_reader reader)
         : _reader(std::move(reader))
+        , _engaged(true)
     { }
+    flat_reader_assertions(flat_reader_assertions&& x) noexcept
+            : _reader(std::move(x._reader))
+            , _pr(std::move(x._pr))
+            , _engaged(std::exchange(x._engaged, false)) {
+    }
+    flat_reader_assertions& operator=(flat_reader_assertions&& x) noexcept {
+        if (this != &x) {
+            _reader = std::move(x._reader);
+            _pr = std::move(x._pr);
+            _engaged = std::exchange(x._engaged, false);
+        }
+        return *this;
+    }
+    ~flat_reader_assertions() {
+        if (!_engaged) {
+            return;
+        }
+        // consume tail of reader to ensure resources are reclaimed before the test
+        // terminates, so we don't report memory leaks
+        try {
+            while (_reader(db::no_timeout).get0()) {
+                // ignore mutation fragment
+            }
+        } catch (...) {
+            // Too late to do anything here
+        }
+    }
 
     flat_reader_assertions& produces_partition_start(const dht::decorated_key& dk,
                                                      stdx::optional<tombstone> tomb = stdx::nullopt) {
