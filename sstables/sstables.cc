@@ -3965,13 +3965,13 @@ delete_sstables(std::vector<sstring> tocs);
 
 sstable::~sstable() {
     if (_index_file) {
-        _index_file.close().handle_exception([save = _index_file, op = background_jobs().start()] (auto ep) {
+        _index_file.close().handle_exception([save = _index_file, op = std::move(_close_index_completed)] (auto ep) {
             sstlog.warn("sstable close index_file failed: {}", ep);
             general_disk_error();
         });
     }
     if (_data_file) {
-        _data_file.close().handle_exception([save = _data_file, op = background_jobs().start()] (auto ep) {
+        _data_file.close().handle_exception([save = _data_file, op = std::move(_close_data_completed)] (auto ep) {
             sstlog.warn("sstable close data_file failed: {}", ep);
             general_disk_error();
         });
@@ -3986,7 +3986,7 @@ sstable::~sstable() {
         // generation number anyway.
         try {
             delete_sstables({filename(component_type::TOC)}).handle_exception(
-                        [op = background_jobs().start()] (std::exception_ptr eptr) {
+                        [op = std::move(_delete_completed)] (std::exception_ptr eptr) {
                             try {
                                 std::rethrow_exception(eptr);
                             } catch (...) {
@@ -4282,6 +4282,12 @@ mutation_source sstable::as_mutation_source() {
         }
     });
 }
+
+utils::phased_barrier::operation
+sstable::new_background_job() {
+    return background_jobs().start();
+}
+
 
 bool supports_correct_non_compound_range_tombstones() {
     return service::get_local_storage_service().cluster_supports_reading_correctly_serialized_range_tombstones();

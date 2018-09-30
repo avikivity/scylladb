@@ -131,6 +131,9 @@ public:
     sstable(schema_ptr schema, sstring dir, int64_t generation, version_types v, format_types f, gc_clock::time_point now = gc_clock::now(),
             io_error_handler_gen error_handler_gen = default_io_error_handler_gen(), size_t buffer_size = default_buffer_size)
         : sstable_buffer_size(buffer_size)
+        , _close_index_completed(new_background_job())
+        , _close_data_completed(new_background_job())
+        , _delete_completed(new_background_job())
         , _schema(std::move(schema))
         , _dir(std::move(dir))
         , _generation(generation)
@@ -401,6 +404,12 @@ public:
 private:
     size_t sstable_buffer_size = default_buffer_size;
 
+    // These tell background_jobs() that there's a pending
+    // operation in progress.
+    utils::phased_barrier::operation _close_index_completed;
+    utils::phased_barrier::operation _close_data_completed;
+    utils::phased_barrier::operation _delete_completed;
+
     static std::unordered_map<version_types, sstring, enum_hash<version_types>> _version_string;
     static std::unordered_map<format_types, sstring, enum_hash<format_types>> _format_string;
 
@@ -592,6 +601,7 @@ private:
         serialization_header& s = *static_cast<serialization_header *>(p.get());
         return s;
     }
+    static utils::phased_barrier::operation new_background_job();
 public:
     future<> read_toc();
 

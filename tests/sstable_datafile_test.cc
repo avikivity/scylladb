@@ -87,6 +87,7 @@ atomic_cell make_atomic_cell(data_type dt, bytes_view value, uint32_t ttl = 0, u
 }
 
 SEASTAR_TEST_CASE(datafile_generation_01) {
+  return with_background_jobs([] {
     // Data file with clustering key
     //
     // Respective CQL table and CQL insert:
@@ -153,8 +154,10 @@ SEASTAR_TEST_CASE(datafile_generation_01) {
             });
         });
     });
+  });
 }
 SEASTAR_TEST_CASE(datafile_generation_02) {
+  return with_background_jobs([] {
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         // Data file with compound partition key and clustering key
         //
@@ -223,9 +226,11 @@ SEASTAR_TEST_CASE(datafile_generation_02) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_03) {
+  return with_background_jobs([] {
     // Data file with compound clustering key
     //
     // Respective CQL table and CQL insert:
@@ -293,9 +298,11 @@ SEASTAR_TEST_CASE(datafile_generation_03) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_04) {
+  return with_background_jobs([] {
     // Data file with clustering key and static row
     //
     // Respective CQL table and CQL insert:
@@ -369,9 +376,11 @@ SEASTAR_TEST_CASE(datafile_generation_04) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_05) {
+  return with_background_jobs([] {
     // Data file with clustering key and expiring cells.
     //
     // Respective CQL table and CQL insert:
@@ -438,6 +447,7 @@ SEASTAR_TEST_CASE(datafile_generation_05) {
             });
         });
     });
+  });
 }
 
 atomic_cell make_dead_atomic_cell(uint32_t deletion_time) {
@@ -445,6 +455,7 @@ atomic_cell make_dead_atomic_cell(uint32_t deletion_time) {
 }
 
 SEASTAR_TEST_CASE(datafile_generation_06) {
+  return with_background_jobs([] {
     // Data file with clustering key and tombstone cells.
     //
     // Respective CQL table and CQL insert:
@@ -513,9 +524,11 @@ SEASTAR_TEST_CASE(datafile_generation_06) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_07) {
+  return with_background_jobs([] {
     // Data file with clustering key and two sstable rows.
     // Only index file is validated in this test case.
     //
@@ -575,9 +588,11 @@ SEASTAR_TEST_CASE(datafile_generation_07) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_08) {
+  return with_background_jobs([] {
     // Data file with multiple rows.
     // Only summary file is validated in this test case.
     //
@@ -646,9 +661,11 @@ SEASTAR_TEST_CASE(datafile_generation_08) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_09) {
+  return with_background_jobs([] {
     // Test that generated sstable components can be successfully loaded.
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
@@ -689,6 +706,7 @@ SEASTAR_TEST_CASE(datafile_generation_09) {
             });
         });
     });
+  });
 }
 
 template <typename ChecksumType>
@@ -772,12 +790,15 @@ static future<> test_digest_and_checksum(sstable_version_types version) {
 }
 
 SEASTAR_TEST_CASE(datafile_generation_10) {
+  return with_background_jobs([] {
     return test_digest_and_checksum<adler32_utils>(sstable_version_types::la).then([]{
         return test_digest_and_checksum<crc32_utils>(sstable_version_types::mc);
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_11) {
+  return with_background_jobs([] {
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         auto s = complex_schema();
 
@@ -873,9 +894,11 @@ SEASTAR_TEST_CASE(datafile_generation_11) {
             });
         }).then([sst, mt] {});
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_12) {
+  return with_background_jobs([] {
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         auto s = complex_schema();
 
@@ -906,6 +929,7 @@ SEASTAR_TEST_CASE(datafile_generation_12) {
             });
         }).then([sst, mt] {});
     });
+  });
 }
 
 static future<> sstable_compression_test(compressor_ptr c, unsigned generation) {
@@ -945,18 +969,25 @@ static future<> sstable_compression_test(compressor_ptr c, unsigned generation) 
 }
 
 SEASTAR_TEST_CASE(datafile_generation_13) {
+  return with_background_jobs([] {
     return sstable_compression_test(compressor::lz4, 13);
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_14) {
+  return with_background_jobs([] {
     return sstable_compression_test(compressor::snappy, 14);
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_15) {
+  return with_background_jobs([] {
     return sstable_compression_test(compressor::deflate, 15);
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_16) {
+  return with_background_jobs([] {
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         auto s = uncompressed_schema();
 
@@ -980,6 +1011,7 @@ SEASTAR_TEST_CASE(datafile_generation_16) {
             });
         }).then([sst, mtp] {});
     });
+  });
 }
 
 ////////////////////////////////  Test basic compaction support
@@ -1040,6 +1072,7 @@ static flat_mutation_reader make_normalizing_sstable_reader(shared_sstable sst, 
 }
 
 SEASTAR_TEST_CASE(compaction_manager_test) {
+  return with_background_jobs([] {
   return seastar::async([] {
     storage_service_for_tests ssft;
     BOOST_REQUIRE(smp::count == 1);
@@ -1120,9 +1153,11 @@ SEASTAR_TEST_CASE(compaction_manager_test) {
         return cm->stop().then([cm] {});
     }).get();
   });
+  });
 }
 
 SEASTAR_TEST_CASE(compact) {
+  return with_background_jobs([] {
     BOOST_REQUIRE(smp::count == 1);
     constexpr int generation = 17;
     // The "compaction" sstable was created with the following schema:
@@ -1219,6 +1254,7 @@ SEASTAR_TEST_CASE(compact) {
     }).finally([cl_stats, tracker] { });
 
     // verify that the compacted sstable look like
+  });
 }
 
 static std::vector<sstables::shared_sstable> get_candidates_for_leveled_strategy(column_family& cf) {
@@ -1408,6 +1444,7 @@ static future<> check_compacted_sstables(sstring tmpdir_path, unsigned long gene
 }
 
 SEASTAR_TEST_CASE(compact_02) {
+  return with_background_jobs([] {
     // NOTE: generations 18 to 38 are used here.
 
     // This tests size-tiered compaction strategy by creating 4 sstables of
@@ -1445,9 +1482,11 @@ SEASTAR_TEST_CASE(compact_02) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_37) {
+  return with_background_jobs([] {
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         auto s = compact_simple_dense_schema();
 
@@ -1480,9 +1519,11 @@ SEASTAR_TEST_CASE(datafile_generation_37) {
             });
         }).then([sst, mtp, s] {});
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_38) {
+  return with_background_jobs([] {
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         auto s = compact_dense_schema();
 
@@ -1514,9 +1555,11 @@ SEASTAR_TEST_CASE(datafile_generation_38) {
             });
         }).then([sst, mtp, s] {});
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_39) {
+  return with_background_jobs([] {
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         auto s = compact_sparse_schema();
 
@@ -1549,9 +1592,11 @@ SEASTAR_TEST_CASE(datafile_generation_39) {
             });
         }).then([sst, mtp, s] {});
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_40) {
+  return with_background_jobs([] {
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         // Data file with clustering key sorted in descending order
         //
@@ -1612,9 +1657,11 @@ SEASTAR_TEST_CASE(datafile_generation_40) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_41) {
+  return with_background_jobs([] {
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
             {{"p1", utf8_type}}, {{"c1", utf8_type}}, {{"r1", int32_type}, {"r2", int32_type}}, {}, utf8_type));
@@ -1644,9 +1691,11 @@ SEASTAR_TEST_CASE(datafile_generation_41) {
             });
         }).then([sst, mt] {});
     });
+  });
 }
 
 SEASTAR_TEST_CASE(check_compaction_ancestor_metadata) {
+  return with_background_jobs([] {
     // NOTE: generations 42 to 46 are used here.
 
     // check that ancestors list of compacted sstable is correct.
@@ -1670,9 +1719,11 @@ SEASTAR_TEST_CASE(check_compaction_ancestor_metadata) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(datafile_generation_47) {
+  return with_background_jobs([] {
     // Tests the problem in which the sstable row parser would hang.
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
@@ -1703,9 +1754,11 @@ SEASTAR_TEST_CASE(datafile_generation_47) {
             });
         }).then([sst, mt] {});
     });
+  });
 }
 
 SEASTAR_TEST_CASE(test_counter_write) {
+  return with_background_jobs([] {
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         return seastar::async([tmpdir_path] {
             auto s = schema_builder(some_keyspace, some_column_family)
@@ -1754,6 +1807,7 @@ SEASTAR_TEST_CASE(test_counter_write) {
                 .produces_end_of_stream();
         });
     });
+  });
 }
 
 // Leveled compaction strategy tests
@@ -1857,6 +1911,7 @@ static bool sstable_overlaps(const lw_shared_ptr<column_family>& cf, int64_t gen
 }
 
 SEASTAR_TEST_CASE(leveled_01) {
+  return with_background_jobs([] {
     column_family_for_tests cf;
 
     auto key_and_token_pair = token_generation_for_current_shard(50);
@@ -1895,9 +1950,11 @@ SEASTAR_TEST_CASE(leveled_01) {
     BOOST_REQUIRE(gens.empty());
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(leveled_02) {
+  return with_background_jobs([] {
     column_family_for_tests cf;
 
     auto key_and_token_pair = token_generation_for_current_shard(50);
@@ -1946,9 +2003,11 @@ SEASTAR_TEST_CASE(leveled_02) {
     BOOST_REQUIRE(gens.empty());
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(leveled_03) {
+  return with_background_jobs([] {
     column_family_for_tests cf;
 
     auto key_and_token_pair = token_generation_for_current_shard(50);
@@ -2000,9 +2059,11 @@ SEASTAR_TEST_CASE(leveled_03) {
     BOOST_REQUIRE(gen_and_level.empty());
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(leveled_04) {
+  return with_background_jobs([] {
     column_family_for_tests cf;
 
     auto key_and_token_pair = token_generation_for_current_shard(50);
@@ -2063,9 +2124,11 @@ SEASTAR_TEST_CASE(leveled_04) {
     BOOST_REQUIRE(levels.empty());
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(leveled_05) {
+  return with_background_jobs([] {
     // NOTE: Generations from 48 to 51 are used here.
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
 
@@ -2083,9 +2146,11 @@ SEASTAR_TEST_CASE(leveled_05) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(leveled_06) {
+  return with_background_jobs([] {
     // Test that we can compact a single L1 compaction into an empty L2.
 
     column_family_for_tests cf;
@@ -2115,9 +2180,11 @@ SEASTAR_TEST_CASE(leveled_06) {
     BOOST_REQUIRE(sst->generation() == 1);
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(leveled_07) {
+  return with_background_jobs([] {
     column_family_for_tests cf;
 
     for (auto i = 0; i < leveled_manifest::MAX_COMPACTING_L0*2; i++) {
@@ -2137,9 +2204,11 @@ SEASTAR_TEST_CASE(leveled_07) {
     }
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(leveled_invariant_fix) {
+  return with_background_jobs([] {
     column_family_for_tests cf;
 
     auto sstables_no = cf.schema()->max_compaction_threshold();
@@ -2171,9 +2240,11 @@ SEASTAR_TEST_CASE(leveled_invariant_fix) {
     }));
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(leveled_stcs_on_L0) {
+  return with_background_jobs([] {
     schema_builder builder(make_lw_shared(schema({}, some_keyspace, some_column_family,
         {{"p1", utf8_type}}, {}, {}, {}, utf8_type)));
     builder.set_min_compaction_threshold(4);
@@ -2218,9 +2289,11 @@ SEASTAR_TEST_CASE(leveled_stcs_on_L0) {
     }
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(overlapping_starved_sstables_test) {
+  return with_background_jobs([] {
     column_family_for_tests cf;
 
     auto key_and_token_pair = token_generation_for_current_shard(5);
@@ -2249,9 +2322,11 @@ SEASTAR_TEST_CASE(overlapping_starved_sstables_test) {
     BOOST_REQUIRE(candidate.sstables.size() == 3);
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(check_overlapping) {
+  return with_background_jobs([] {
     column_family_for_tests cf;
 
     auto key_and_token_pair = token_generation_for_current_shard(4);
@@ -2272,9 +2347,11 @@ SEASTAR_TEST_CASE(check_overlapping) {
     BOOST_REQUIRE(overlapping_sstables.front()->generation() == 4);
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(check_read_indexes) {
+  return with_background_jobs([] {
   return for_each_sstable_version([] (const sstables::sstable::version_types version) {
     auto builder = schema_builder("test", "summary_test")
         .with_column("a", int32_type, column_kind::partition_key);
@@ -2291,9 +2368,11 @@ SEASTAR_TEST_CASE(check_read_indexes) {
         });
     });
   });
+  });
 }
 
 SEASTAR_TEST_CASE(tombstone_purge_test) {
+  return with_background_jobs([] {
     BOOST_REQUIRE(smp::count == 1);
     return seastar::async([] {
         storage_service_for_tests ssft;
@@ -2490,9 +2569,11 @@ SEASTAR_TEST_CASE(tombstone_purge_test) {
                     .produces_end_of_stream();
         }
     });
+  });
 }
 
 SEASTAR_TEST_CASE(check_multi_schema) {
+  return with_background_jobs([] {
     // Schema used to write sstable:
     // CREATE TABLE multi_schema_test (
     //        a int PRIMARY KEY,
@@ -2544,9 +2625,11 @@ SEASTAR_TEST_CASE(check_multi_schema) {
         }
         return make_ready_future<>();
     });
+  });
 }
 
 SEASTAR_TEST_CASE(sstable_rewrite) {
+  return with_background_jobs([] {
     BOOST_REQUIRE(smp::count == 1);
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
@@ -2599,6 +2682,7 @@ SEASTAR_TEST_CASE(sstable_rewrite) {
             }).then([cf] {});
         }).then([sst, mt, s] {});
     });
+  });
 }
 
 void test_sliced_read_row_presence(shared_sstable sst, schema_ptr s, const query::partition_slice& ps,
@@ -2644,6 +2728,7 @@ void test_sliced_read_row_presence(shared_sstable sst, schema_ptr s, const query
 }
 
 SEASTAR_TEST_CASE(test_sliced_mutation_reads) {
+  return with_background_jobs([] {
     // CREATE TABLE sliced_mutation_reads_test (
     //        pk int,
     //        ck int,
@@ -2725,9 +2810,11 @@ SEASTAR_TEST_CASE(test_sliced_mutation_reads) {
         }
       }
     });
+  });
 }
 
 SEASTAR_TEST_CASE(test_wrong_range_tombstone_order) {
+  return with_background_jobs([] {
     // create table wrong_range_tombstone_order (
     //        p int,
     //        a int,
@@ -2794,9 +2881,11 @@ SEASTAR_TEST_CASE(test_wrong_range_tombstone_order) {
             .produces_end_of_stream();
       }
     });
+  });
 }
 
 SEASTAR_TEST_CASE(test_counter_read) {
+  return with_background_jobs([] {
         // create table counter_test (
         //      pk int,
         //      ck int,
@@ -2891,9 +2980,11 @@ SEASTAR_TEST_CASE(test_counter_read) {
             BOOST_REQUIRE(!mfopt);
           }
         });
+  });
 }
 
 SEASTAR_TEST_CASE(test_sstable_max_local_deletion_time) {
+  return with_background_jobs([] {
     return test_setup::do_with_tmp_directory([] (sstring tmpdir_path) {
         auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
             {{"p1", utf8_type}}, {{"c1", utf8_type}}, {{"r1", utf8_type}}, {}, utf8_type));
@@ -2915,9 +3006,11 @@ SEASTAR_TEST_CASE(test_sstable_max_local_deletion_time) {
             BOOST_REQUIRE(last_expiry == sstp->get_stats_metadata().max_local_deletion_time);
         }).then([sst, mt, s] {});
     });
+  });
 }
 
 SEASTAR_TEST_CASE(test_sstable_max_local_deletion_time_2) {
+  return with_background_jobs([] {
     // Create sstable A with 5x column with TTL 100 and 1x column with TTL 1000
     // Create sstable B with tombstone for column in sstable A with TTL 1000.
     // Compact them and expect that maximum deletion time is that of column with TTL 100.
@@ -2964,6 +3057,7 @@ SEASTAR_TEST_CASE(test_sstable_max_local_deletion_time_2) {
             BOOST_REQUIRE(((now + gc_clock::duration(100)).time_since_epoch().count()) == info.new_sstables.front()->get_stats_metadata().max_local_deletion_time);
         });
     });
+  });
 }
 
 static stats_metadata build_stats(int64_t min_timestamp, int64_t max_timestamp, int32_t max_local_deletion_time) {
@@ -2975,6 +3069,7 @@ static stats_metadata build_stats(int64_t min_timestamp, int64_t max_timestamp, 
 }
 
 SEASTAR_TEST_CASE(get_fully_expired_sstables_test) {
+  return with_background_jobs([] {
     auto key_and_token_pair = token_generation_for_current_shard(4);
     auto min_key = key_and_token_pair[0].first;
     auto max_key = key_and_token_pair[key_and_token_pair.size()-1].first;
@@ -3009,9 +3104,11 @@ SEASTAR_TEST_CASE(get_fully_expired_sstables_test) {
     }
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(compaction_with_fully_expired_table) {
+  return with_background_jobs([] {
     return seastar::async([] {
         storage_service_for_tests ssft;
         auto builder = schema_builder("la", "cf")
@@ -3057,9 +3154,11 @@ SEASTAR_TEST_CASE(compaction_with_fully_expired_table) {
         BOOST_REQUIRE(ret.total_keys_written == 0);
         BOOST_REQUIRE(ret.new_sstables.empty());
     });
+  });
 }
 
 SEASTAR_TEST_CASE(basic_date_tiered_strategy_test) {
+  return with_background_jobs([] {
     schema_builder builder(make_lw_shared(schema({}, some_keyspace, some_column_family,
         {{"p1", utf8_type}}, {}, {}, {}, utf8_type)));
     builder.set_min_compaction_threshold(4);
@@ -3094,9 +3193,11 @@ SEASTAR_TEST_CASE(basic_date_tiered_strategy_test) {
     }
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(date_tiered_strategy_test_2) {
+  return with_background_jobs([] {
     schema_builder builder(make_lw_shared(schema({}, some_keyspace, some_column_family,
         {{"p1", utf8_type}}, {}, {}, {}, utf8_type)));
     builder.set_min_compaction_threshold(4);
@@ -3147,9 +3248,11 @@ SEASTAR_TEST_CASE(date_tiered_strategy_test_2) {
     BOOST_REQUIRE(!gens.count(min_threshold + 2));
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(time_window_strategy_time_window_tests) {
+  return with_background_jobs([] {
     using namespace std::chrono;
 
     api::timestamp_type tstamp1 = duration_cast<microseconds>(milliseconds(1451001601000L)).count(); // 2015-12-25 @ 00:00:01, in milliseconds
@@ -3170,9 +3273,11 @@ SEASTAR_TEST_CASE(time_window_strategy_time_window_tests) {
     BOOST_REQUIRE(time_window_compaction_strategy::get_window_lower_bound(duration_cast<seconds>(hours(24*2)), tstamp2) == low_hour);
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(time_window_strategy_ts_resolution_check) {
+  return with_background_jobs([] {
     auto ts = 1451001601000L; // 2015-12-25 @ 00:00:01, in milliseconds
     auto ts_in_ms = std::chrono::milliseconds(ts);
     auto ts_in_us = std::chrono::duration_cast<std::chrono::microseconds>(ts_in_ms);
@@ -3207,9 +3312,11 @@ SEASTAR_TEST_CASE(time_window_strategy_ts_resolution_check) {
         BOOST_REQUIRE(ret.second == expected);
     }
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(time_window_strategy_correctness_test) {
+  return with_background_jobs([] {
     using namespace std::chrono;
 
     return seastar::async([] {
@@ -3303,9 +3410,11 @@ SEASTAR_TEST_CASE(time_window_strategy_correctness_test) {
         // new bucket should be trimmed to max threshold of 32
         BOOST_REQUIRE(new_bucket.size() == size_t(32));
     });
+  });
 }
 
 SEASTAR_TEST_CASE(test_promoted_index_read) {
+  return with_background_jobs([] {
     // create table promoted_index_read (
     //        pk int,
     //        ck1 int,
@@ -3362,6 +3471,7 @@ SEASTAR_TEST_CASE(test_promoted_index_read) {
                 .produces_end_of_stream();
       }
     });
+  });
 }
 
 static void check_min_max_column_names(const sstable_ptr& sst, std::vector<bytes> min_components, std::vector<bytes> max_components) {
@@ -3416,6 +3526,7 @@ static void test_min_max_clustering_key(schema_ptr s, std::vector<bytes> explode
 }
 
 SEASTAR_TEST_CASE(min_max_clustering_key_test) {
+  return with_background_jobs([] {
     return seastar::async([] {
         storage_service_for_tests ssft;
         {
@@ -3461,9 +3572,11 @@ SEASTAR_TEST_CASE(min_max_clustering_key_test) {
             test_min_max_clustering_key(s, { "key1" }, {}, {}, {});
         }
     });
+  });
 }
 
 SEASTAR_TEST_CASE(min_max_clustering_key_test_2) {
+  return with_background_jobs([] {
     return seastar::async([] {
         storage_service_for_tests ssft;
         auto s = schema_builder("ks", "cf")
@@ -3508,9 +3621,11 @@ SEASTAR_TEST_CASE(min_max_clustering_key_test_2) {
         BOOST_REQUIRE(info.new_sstables.size() == 1);
         check_min_max_column_names(info.new_sstables.front(), { "0ck100" }, { "9ck298" });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(sstable_tombstone_metadata_check) {
+  return with_background_jobs([] {
     return seastar::async([] {
         storage_service_for_tests ssft;
         auto s = schema_builder("ks", "cf")
@@ -3601,9 +3716,11 @@ SEASTAR_TEST_CASE(sstable_tombstone_metadata_check) {
             BOOST_REQUIRE(sst->get_stats_metadata().estimated_tombstone_drop_time.bin.size());
         }
     });
+  });
 }
 
 SEASTAR_TEST_CASE(test_partition_skipping) {
+  return with_background_jobs([] {
     return seastar::async([] {
       for (const auto version : all_sstable_versions) {
         auto s = schema_builder("ks", "test_skipping_partitions")
@@ -3664,6 +3781,7 @@ SEASTAR_TEST_CASE(test_partition_skipping) {
             .produces_end_of_stream();
       }
     });
+  });
 }
 
 // Must be run in a seastar thread
@@ -3677,6 +3795,7 @@ shared_sstable make_sstable_easy(sstring path, flat_mutation_reader rd, sstable_
 }
 
 SEASTAR_TEST_CASE(test_repeated_tombstone_skipping) {
+  return with_background_jobs([] {
     return seastar::async([] {
       for (const auto version : all_sstable_versions) {
         storage_service_for_tests ssft;
@@ -3734,9 +3853,11 @@ SEASTAR_TEST_CASE(test_repeated_tombstone_skipping) {
         }
       }
     });
+  });
 }
 
 SEASTAR_TEST_CASE(test_skipping_using_index) {
+  return with_background_jobs([] {
     return seastar::async([] {
       for (const auto version : all_sstable_versions) {
         storage_service_for_tests ssft;
@@ -3852,6 +3973,7 @@ SEASTAR_TEST_CASE(test_skipping_using_index) {
         }
       }
     });
+  });
 }
 
 static void copy_directory(boost::filesystem::path src_dir, boost::filesystem::path dst_dir) {
@@ -3872,6 +3994,7 @@ static void copy_directory(boost::filesystem::path src_dir, boost::filesystem::p
 }
 
 SEASTAR_TEST_CASE(test_unknown_component) {
+  return with_background_jobs([] {
     return seastar::async([] {
         auto tmp = make_lw_shared<tmpdir>();
         copy_directory("tests/sstables/unknown_component", std::string(tmp->path) + "/unknown_component");
@@ -3889,9 +4012,11 @@ SEASTAR_TEST_CASE(test_unknown_component) {
         // assure unknown component is deleted
         BOOST_REQUIRE(!file_exists(tmp->path + "/la-2-big-UNKNOWN.txt").get0());
     });
+  });
 }
 
 SEASTAR_TEST_CASE(size_tiered_beyond_max_threshold_test) {
+  return with_background_jobs([] {
     column_family_for_tests cf;
     auto cs = sstables::make_compaction_strategy(sstables::compaction_strategy_type::size_tiered, cf.schema()->compaction_strategy_options());
 
@@ -3906,9 +4031,11 @@ SEASTAR_TEST_CASE(size_tiered_beyond_max_threshold_test) {
     auto desc = cs.get_sstables_for_compaction(*cf, std::move(candidates));
     BOOST_REQUIRE(desc.sstables.size() == size_t(max_threshold));
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(sstable_set_incremental_selector) {
+  return with_background_jobs([] {
     auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
         {{"p1", utf8_type}}, {}, {}, {}, utf8_type));
     auto cs = sstables::make_compaction_strategy(sstables::compaction_strategy_type::leveled, s->compaction_strategy_options());
@@ -3968,9 +4095,11 @@ SEASTAR_TEST_CASE(sstable_set_incremental_selector) {
     }
 
     return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(sstable_resharding_strategy_tests) {
+  return with_background_jobs([] {
     // TODO: move it to sstable_resharding_test.cc. Unable to do so now because of linking issues
     // when using sstables::stats_metadata at sstable_resharding_test.cc.
 
@@ -4008,9 +4137,11 @@ SEASTAR_TEST_CASE(sstable_resharding_strategy_tests) {
   }
 
   return make_ready_future<>();
+  });
 }
 
 SEASTAR_TEST_CASE(sstable_tombstone_histogram_test) {
+  return with_background_jobs([] {
     return seastar::async([] {
         storage_service_for_tests ssft;
         auto builder = schema_builder("tests", "tombstone_histogram_test")
@@ -4051,9 +4182,11 @@ SEASTAR_TEST_CASE(sstable_tombstone_histogram_test) {
         // check that load procedure will properly load histogram from statistics component
         BOOST_REQUIRE(histogram.bin == histogram2.bin);
     });
+  });
 }
 
 SEASTAR_TEST_CASE(sstable_bad_tombstone_histogram_test) {
+  return with_background_jobs([] {
     return seastar::async([] {
         auto builder = schema_builder("tests", "tombstone_histogram_test")
                 .with_column("id", utf8_type, column_kind::partition_key)
@@ -4065,9 +4198,11 @@ SEASTAR_TEST_CASE(sstable_bad_tombstone_histogram_test) {
         // check that bad histogram was discarded
         BOOST_REQUIRE(histogram.bin.empty());
     });
+  });
 }
 
 SEASTAR_TEST_CASE(sstable_expired_data_ratio) {
+  return with_background_jobs([] {
     return seastar::async([] {
         storage_service_for_tests ssft;
         auto tmp = make_lw_shared<tmpdir>();
@@ -4167,9 +4302,11 @@ SEASTAR_TEST_CASE(sstable_expired_data_ratio) {
             BOOST_REQUIRE(descriptor.sstables.size() == 0);
         }
     });
+  });
 }
 
 SEASTAR_TEST_CASE(sstable_owner_shards) {
+  return with_background_jobs([] {
     return seastar::async([] {
         storage_service_for_tests ssft;
         cell_locker_stats cl_stats;
@@ -4239,9 +4376,11 @@ SEASTAR_TEST_CASE(sstable_owner_shards) {
         assert_sstable_owners({ 0, 10, 15, 20, 30, 40, 50 }, 0, 63);
         assert_sstable_owners({ 0, 10, 15, 20, 30, 40, 50 }, 12, 63);
     });
+  });
 }
 
 SEASTAR_TEST_CASE(test_summary_entry_spanning_more_keys_than_min_interval) {
+  return with_background_jobs([] {
     return seastar::async([] {
         storage_service_for_tests ssft;
         auto s = make_lw_shared(schema({}, some_keyspace, some_column_family,
@@ -4285,9 +4424,11 @@ SEASTAR_TEST_CASE(test_summary_entry_spanning_more_keys_than_min_interval) {
             .produces(slice(mutations, r))
             .produces_end_of_stream();
     });
+  });
 }
 
 SEASTAR_TEST_CASE(test_wrong_counter_shard_order) {
+  return with_background_jobs([] {
         // CREATE TABLE IF NOT EXISTS scylla_bench.test_counters (
         //     pk bigint,
         //     ck bigint,
@@ -4366,9 +4507,11 @@ SEASTAR_TEST_CASE(test_wrong_counter_shard_order) {
             BOOST_REQUIRE(!reader(db::no_timeout).get0());
         }
       });
+  });
 }
 
 SEASTAR_TEST_CASE(compaction_correctness_with_partitioned_sstable_set) {
+  return with_background_jobs([] {
     return seastar::async([] {
         storage_service_for_tests ssft;
         cell_locker_stats cl_stats;
@@ -4480,6 +4623,7 @@ SEASTAR_TEST_CASE(compaction_correctness_with_partitioned_sstable_set) {
                     .produces_end_of_stream();
         }
     });
+  });
 }
 
 static std::unique_ptr<index_reader> get_index_reader(shared_sstable sst) {
@@ -4487,6 +4631,7 @@ static std::unique_ptr<index_reader> get_index_reader(shared_sstable sst) {
 }
 
 SEASTAR_TEST_CASE(test_broken_promoted_index_is_skipped) {
+  return with_background_jobs([] {
     // create table ks.test (pk int, ck int, v int, primary key(pk, ck)) with compact storage;
     //
     // Populated with:
@@ -4511,9 +4656,11 @@ SEASTAR_TEST_CASE(test_broken_promoted_index_is_skipped) {
         }
       }
     });
+  });
 }
 
 SEASTAR_TEST_CASE(test_old_format_non_compound_range_tombstone_is_read) {
+  return with_background_jobs([] {
     // create table ks.test (pk int, ck int, v int, primary key(pk, ck)) with compact storage;
     //
     // Populated with:
@@ -4550,9 +4697,11 @@ SEASTAR_TEST_CASE(test_old_format_non_compound_range_tombstone_is_read) {
             }
         }
     });
+  });
 }
 
 SEASTAR_TEST_CASE(summary_rebuild_sanity) {
+  return with_background_jobs([] {
     return seastar::async([] {
         storage_service_for_tests ssft;
         auto builder = schema_builder("tests", "test")
@@ -4592,9 +4741,11 @@ SEASTAR_TEST_CASE(summary_rebuild_sanity) {
         BOOST_REQUIRE(s1.first_key.value == s2.first_key.value);
         BOOST_REQUIRE(s1.last_key.value == s2.last_key.value);
     });
+  });
 }
 
 SEASTAR_TEST_CASE(sstable_partition_estimation_sanity_test) {
+  return with_background_jobs([] {
     return seastar::async([] {
         storage_service_for_tests ssft;
         auto builder = schema_builder("tests", "test")
@@ -4649,9 +4800,11 @@ SEASTAR_TEST_CASE(sstable_partition_estimation_sanity_test) {
             BOOST_REQUIRE(std::abs(int64_t(total_partitions) - int64_t(sst->get_estimated_key_count())) <= s->min_index_interval());
         }
     });
+  });
 }
 
 SEASTAR_TEST_CASE(sstable_timestamp_metadata_correcness_with_negative) {
+  return with_background_jobs([] {
     BOOST_REQUIRE(smp::count == 1);
     return seastar::async([] {
         storage_service_for_tests ssft;
@@ -4683,4 +4836,5 @@ SEASTAR_TEST_CASE(sstable_timestamp_metadata_correcness_with_negative) {
         BOOST_REQUIRE(sst->get_stats_metadata().min_timestamp == -50);
         BOOST_REQUIRE(sst->get_stats_metadata().max_timestamp == 5);
     });
+  });
 }

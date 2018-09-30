@@ -70,40 +70,58 @@ static future<> broken_sst(sstring dir, unsigned long generation) {
 }
 
 SEASTAR_TEST_CASE(empty_toc) {
+  return with_background_jobs([] {
     return broken_sst("tests/sstables/badtoc", 1);
+  });
 }
 
 SEASTAR_TEST_CASE(alien_toc) {
+  return with_background_jobs([] {
     return broken_sst("tests/sstables/badtoc", 2);
+  });
 }
 
 SEASTAR_TEST_CASE(truncated_toc) {
+  return with_background_jobs([] {
     return broken_sst("tests/sstables/badtoc", 3);
+  });
 }
 
 SEASTAR_TEST_CASE(wrong_format_toc) {
+  return with_background_jobs([] {
     return broken_sst("tests/sstables/badtoc", 4);
+  });
 }
 
 SEASTAR_TEST_CASE(compression_truncated) {
+  return with_background_jobs([] {
     return broken_sst("tests/sstables/badcompression", 1);
+  });
 }
 
 SEASTAR_TEST_CASE(compression_bytes_flipped) {
+  return with_background_jobs([] {
     return broken_sst("tests/sstables/badcompression", 2);
+  });
 }
 
 SEASTAR_TEST_CASE(uncompressed_data) {
+  return with_background_jobs([] {
     return working_sst(uncompressed_schema(), uncompressed_dir(), 1);
+  });
 }
 
 SEASTAR_TEST_CASE(compressed_data) {
+  return with_background_jobs([] {
     auto s = make_lw_shared(schema({}, "ks", "cf", {}, {}, {}, {}, utf8_type));
     return working_sst(std::move(s), "tests/sstables/compressed", 1);
+  });
 }
 
 SEASTAR_TEST_CASE(composite_index) {
+  return with_background_jobs([] {
     return working_sst(composite_schema(), "tests/sstables/composite", 1);
+  });
 }
 
 future<index_list> index_read(schema_ptr schema, sstring path) {
@@ -113,15 +131,19 @@ future<index_list> index_read(schema_ptr schema, sstring path) {
 }
 
 SEASTAR_TEST_CASE(simple_index_read) {
+  return with_background_jobs([] {
     return index_read(uncompressed_schema(), uncompressed_dir()).then([] (auto vec) {
         BOOST_REQUIRE(vec.size() == 4);
     });
+  });
 }
 
 SEASTAR_TEST_CASE(composite_index_read) {
+  return with_background_jobs([] {
     return index_read(composite_schema(), "tests/sstables/composite").then([] (auto vec) {
         BOOST_REQUIRE(vec.size() == 20);
     });
+  });
 }
 
 template<uint64_t Position, uint64_t EntryPosition, uint64_t EntryKeySize>
@@ -148,49 +170,68 @@ future<> summary_query_fail(schema_ptr schema, sstring path, int generation) {
 }
 
 SEASTAR_TEST_CASE(small_summary_query_ok) {
+  return with_background_jobs([] {
     return summary_query<0, 0, 5>(uncompressed_schema(), uncompressed_dir(), 1);
+  });
 }
 
 SEASTAR_TEST_CASE(small_summary_query_fail) {
+  return with_background_jobs([] {
     return summary_query_fail<2, 0, 5>(uncompressed_schema(), uncompressed_dir(), 1);
+  });
 }
 
 SEASTAR_TEST_CASE(small_summary_query_negative_fail) {
+  return with_background_jobs([] {
     return summary_query_fail<-uint64_t(2), 0, 5>(uncompressed_schema(), uncompressed_dir(), 1);
+  });
 }
 
 SEASTAR_TEST_CASE(big_summary_query_0) {
+  return with_background_jobs([] {
     return summary_query<0, 0, 182>(uncompressed_schema(), "tests/sstables/bigsummary", 76);
+  });
 }
 
 SEASTAR_TEST_CASE(big_summary_query_32) {
+  return with_background_jobs([] {
     return summary_query<32, 0xc4000, 182>(uncompressed_schema(), "tests/sstables/bigsummary", 76);
+  });
 }
 
 // The following two files are just a copy of uncompressed's 1. But the Summary
 // is removed (and removed from the TOC as well). We should reconstruct it
 // in this case, so the queries should still go through
 SEASTAR_TEST_CASE(missing_summary_query_ok) {
+  return with_background_jobs([] {
     return summary_query<0, 0, 5>(uncompressed_schema(), uncompressed_dir(), 2);
+  });
 }
 
 SEASTAR_TEST_CASE(missing_summary_query_fail) {
+  return with_background_jobs([] {
     return summary_query_fail<2, 0, 5>(uncompressed_schema(), uncompressed_dir(), 2);
+  });
 }
 
 SEASTAR_TEST_CASE(missing_summary_query_negative_fail) {
+  return with_background_jobs([] {
     return summary_query_fail<-uint64_t(2), 0, 5>(uncompressed_schema(), uncompressed_dir(), 2);
+  });
 }
 
 // TODO: only one interval is generated with size-based sampling. Test it with a sstable that will actually result
 // in two intervals.
 #if 0
 SEASTAR_TEST_CASE(missing_summary_interval_1_query_ok) {
+  return with_background_jobs([] {
     return summary_query<1, 19, 6>(uncompressed_schema(1), uncompressed_dir(), 2);
+  });
 }
 #endif
 
 SEASTAR_TEST_CASE(missing_summary_first_last_sane) {
+  return with_background_jobs([] {
     return reusable_sst(uncompressed_schema(), uncompressed_dir(), 2).then([] (sstable_ptr ptr) {
         auto& summary = sstables::test(ptr).get_summary();
         BOOST_REQUIRE(summary.header.size == 1);
@@ -200,6 +241,7 @@ SEASTAR_TEST_CASE(missing_summary_first_last_sane) {
         BOOST_REQUIRE(bytes_view(summary.last_key) == as_bytes("finna"));
         return make_ready_future<>();
     });
+  });
 }
 
 static future<sstable_ptr> do_write_sst(schema_ptr schema, sstring load_dir, sstring write_dir, unsigned long generation) {
@@ -267,10 +309,13 @@ static future<> check_component_integrity(component_type component) {
 }
 
 SEASTAR_TEST_CASE(check_compressed_info_func) {
+  return with_background_jobs([] {
     return check_component_integrity(component_type::CompressionInfo);
+  });
 }
 
 SEASTAR_TEST_CASE(check_summary_func) {
+  return with_background_jobs([] {
     auto tmp = make_lw_shared<tmpdir>();
     auto s = make_lw_shared(schema({}, "ks", "cf", {}, {}, {}, {}, utf8_type));
     return do_write_sst(s, "tests/sstables/compressed", tmp->path, 1).then([tmp, s] (auto sst1) {
@@ -286,13 +331,17 @@ SEASTAR_TEST_CASE(check_summary_func) {
             BOOST_REQUIRE(sst1_s.last_key.value == sst2_s.last_key.value);
         });
     }).then([tmp] {});
+  });
 }
 
 SEASTAR_TEST_CASE(check_filter_func) {
+  return with_background_jobs([] {
     return check_component_integrity(component_type::Filter);
+  });
 }
 
 SEASTAR_TEST_CASE(check_statistics_func) {
+  return with_background_jobs([] {
     auto tmp = make_lw_shared<tmpdir>();
     auto s = make_lw_shared(schema({}, "ks", "cf", {}, {}, {}, {}, utf8_type));
     return do_write_sst(s, "tests/sstables/compressed", tmp->path, 1).then([tmp, s] (auto sst1) {
@@ -312,9 +361,11 @@ SEASTAR_TEST_CASE(check_statistics_func) {
             // TODO: compare the field contents from both sstables.
         });
     }).then([tmp] {});
+  });
 }
 
 SEASTAR_TEST_CASE(check_toc_func) {
+  return with_background_jobs([] {
     auto tmp = make_lw_shared<tmpdir>();
     auto s = make_lw_shared(schema({}, "ks", "cf", {}, {}, {}, {}, utf8_type));
     return do_write_sst(s, "tests/sstables/compressed", tmp->path, 1).then([tmp, s] (auto sst1) {
@@ -326,9 +377,11 @@ SEASTAR_TEST_CASE(check_toc_func) {
             BOOST_REQUIRE(sst1_c == sst2_c);
         });
     }).then([tmp] {});
+  });
 }
 
 SEASTAR_TEST_CASE(uncompressed_random_access_read) {
+  return with_background_jobs([] {
     return reusable_sst(uncompressed_schema(), uncompressed_dir(), 1).then([] (auto sstp) {
         // note: it's important to pass on a shared copy of sstp to prevent its
         // destruction until the continuation finishes reading!
@@ -337,9 +390,11 @@ SEASTAR_TEST_CASE(uncompressed_random_access_read) {
             return make_ready_future<>();
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(compressed_random_access_read) {
+  return with_background_jobs([] {
     auto s = make_lw_shared(schema({}, "ks", "cf", {}, {}, {}, {}, utf8_type));
     return reusable_sst(std::move(s), "tests/sstables/compressed", 1).then([] (auto sstp) {
         return sstables::test(sstp).data_read(97, 6).then([sstp] (temporary_buffer<char> buf) {
@@ -347,6 +402,7 @@ SEASTAR_TEST_CASE(compressed_random_access_read) {
             return make_ready_future<>();
         });
     });
+  });
 }
 
 class test_row_consumer : public row_consumer {
@@ -435,6 +491,7 @@ public:
 };
 
 SEASTAR_TEST_CASE(uncompressed_row_read_at_once) {
+  return with_background_jobs([] {
     return reusable_sst(uncompressed_schema(), uncompressed_dir(), 1).then([] (auto sstp) {
         return do_with(test_row_consumer(1418656871665302), [sstp] (auto& c) {
             return sstp->data_consume_rows_at_once(*uncompressed_schema(), c, 0, 95).then([sstp, &c] {
@@ -447,9 +504,11 @@ SEASTAR_TEST_CASE(uncompressed_row_read_at_once) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(compressed_row_read_at_once) {
+  return with_background_jobs([] {
     auto s = make_lw_shared(schema({}, "ks", "cf", {}, {}, {}, {}, utf8_type));
     return reusable_sst(std::move(s), "tests/sstables/compressed", 1).then([] (auto sstp) {
         return do_with(test_row_consumer(1418654707438005), [sstp] (auto& c) {
@@ -463,9 +522,11 @@ SEASTAR_TEST_CASE(compressed_row_read_at_once) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(uncompressed_rows_read_one) {
+  return with_background_jobs([] {
     return reusable_sst(uncompressed_schema(), uncompressed_dir(), 1).then([] (auto sstp) {
         return do_with(test_row_consumer(1418656871665302), [sstp] (auto& c) {
             auto context = data_consume_rows<data_consume_rows_context>(*uncompressed_schema(), sstp, c, {0, 95}, 95);
@@ -480,9 +541,11 @@ SEASTAR_TEST_CASE(uncompressed_rows_read_one) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(compressed_rows_read_one) {
+  return with_background_jobs([] {
     auto s = make_lw_shared(schema({}, "ks", "cf", {}, {}, {}, {}, utf8_type));
     return reusable_sst(std::move(s), "tests/sstables/compressed", 1).then([] (auto sstp) {
         return do_with(test_row_consumer(1418654707438005), [sstp] (auto& c) {
@@ -498,6 +561,7 @@ SEASTAR_TEST_CASE(compressed_rows_read_one) {
             });
         });
     });
+  });
 }
 
 // Tests for iterating over all rows.
@@ -550,6 +614,7 @@ public:
 
 
 SEASTAR_TEST_CASE(uncompressed_rows_read_all) {
+  return with_background_jobs([] {
     return reusable_sst(uncompressed_schema(), uncompressed_dir(), 1).then([] (auto sstp) {
         return do_with(count_row_consumer(), [sstp] (auto& c) {
             auto context = data_consume_rows<data_consume_rows_context>(*uncompressed_schema(), sstp, c);
@@ -564,9 +629,11 @@ SEASTAR_TEST_CASE(uncompressed_rows_read_all) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(compressed_rows_read_all) {
+  return with_background_jobs([] {
     auto s = make_lw_shared(schema({}, "ks", "cf", {}, {}, {}, {}, utf8_type));
     return reusable_sst(std::move(s), "tests/sstables/compressed", 1).then([] (auto sstp) {
         return do_with(count_row_consumer(), [sstp] (auto& c) {
@@ -582,6 +649,7 @@ SEASTAR_TEST_CASE(compressed_rows_read_all) {
             });
         });
     });
+  });
 }
 
 // test reading all the rows one by one, using the feature of the
@@ -595,6 +663,7 @@ public:
 };
 
 SEASTAR_TEST_CASE(pausable_uncompressed_rows_read_all) {
+  return with_background_jobs([] {
     return reusable_sst(uncompressed_schema(), uncompressed_dir(), 1).then([] (auto sstp) {
         return do_with(pausable_count_row_consumer(), [sstp] (auto& c) {
             auto context = data_consume_rows<data_consume_rows_context>(*uncompressed_schema(), sstp, c);
@@ -620,6 +689,7 @@ SEASTAR_TEST_CASE(pausable_uncompressed_rows_read_all) {
             });
         });
     });
+  });
 }
 
 
@@ -642,6 +712,7 @@ public:
 };
 
 SEASTAR_TEST_CASE(read_set) {
+  return with_background_jobs([] {
     return reusable_sst(set_schema(), "tests/sstables/set", 1).then([] (auto sstp) {
         return do_with(set_consumer(), [sstp] (auto& c) {
             auto context = data_consume_rows<data_consume_rows_context>(*uncompressed_schema(), sstp, c);
@@ -656,6 +727,7 @@ SEASTAR_TEST_CASE(read_set) {
             });
         });
     });
+  });
 }
 
 class ttl_row_consumer : public count_row_consumer {
@@ -699,6 +771,7 @@ public:
 };
 
 SEASTAR_TEST_CASE(ttl_read) {
+  return with_background_jobs([] {
     return reusable_sst(uncompressed_schema(), "tests/sstables/ttl", 1).then([] (auto sstp) {
         return do_with(ttl_row_consumer(1430151018675502), [sstp] (auto& c) {
             auto context = data_consume_rows<data_consume_rows_context>(*uncompressed_schema(), sstp, c);
@@ -713,6 +786,7 @@ SEASTAR_TEST_CASE(ttl_read) {
             });
         });
     });
+  });
 }
 
 class deleted_cell_row_consumer : public count_row_consumer {
@@ -738,6 +812,7 @@ public:
 };
 
 SEASTAR_TEST_CASE(deleted_cell_read) {
+  return with_background_jobs([] {
     return reusable_sst(uncompressed_schema(), "tests/sstables/deleted_cell", 2).then([] (auto sstp) {
         return do_with(deleted_cell_row_consumer(), [sstp] (auto& c) {
             auto context = data_consume_rows<data_consume_rows_context>(*uncompressed_schema(), sstp, c);
@@ -752,10 +827,12 @@ SEASTAR_TEST_CASE(deleted_cell_read) {
             });
         });
     });
+  });
 }
 
 
 SEASTAR_TEST_CASE(find_key_map) {
+  return with_background_jobs([] {
     return reusable_sst(map_schema(), "tests/sstables/map_pk", 1).then([] (auto sstp) {
         schema_ptr s = map_schema();
         auto& summary = sstables::test(sstp)._summary();
@@ -774,9 +851,11 @@ SEASTAR_TEST_CASE(find_key_map) {
         auto key = sstables::key::from_deeply_exploded(*s, kk);
         BOOST_REQUIRE(sstables::test(sstp).binary_search(summary.entries, key) == 0);
     });
+  });
 }
 
 SEASTAR_TEST_CASE(find_key_set) {
+  return with_background_jobs([] {
     return reusable_sst(set_schema(), "tests/sstables/set_pk", 1).then([] (auto sstp) {
         schema_ptr s = set_schema();
         auto& summary = sstables::test(sstp)._summary();
@@ -795,9 +874,11 @@ SEASTAR_TEST_CASE(find_key_set) {
         auto key = sstables::key::from_deeply_exploded(*s, kk);
         BOOST_REQUIRE(sstables::test(sstp).binary_search(summary.entries, key) == 0);
     });
+  });
 }
 
 SEASTAR_TEST_CASE(find_key_list) {
+  return with_background_jobs([] {
     return reusable_sst(list_schema(), "tests/sstables/list_pk", 1).then([] (auto sstp) {
         schema_ptr s = set_schema();
         auto& summary = sstables::test(sstp)._summary();
@@ -816,10 +897,12 @@ SEASTAR_TEST_CASE(find_key_list) {
         auto key = sstables::key::from_deeply_exploded(*s, kk);
         BOOST_REQUIRE(sstables::test(sstp).binary_search(summary.entries, key) == 0);
     });
+  });
 }
 
 
 SEASTAR_TEST_CASE(find_key_composite) {
+  return with_background_jobs([] {
     return reusable_sst(composite_schema(), "tests/sstables/composite", 1).then([] (auto sstp) {
         schema_ptr s = composite_schema();
         auto& summary = sstables::test(sstp)._summary();
@@ -834,9 +917,11 @@ SEASTAR_TEST_CASE(find_key_composite) {
         auto key = sstables::key::from_deeply_exploded(*s, kk);
         BOOST_REQUIRE(sstables::test(sstp).binary_search(summary.entries, key) == 0);
     });
+  });
 }
 
 SEASTAR_TEST_CASE(all_in_place) {
+  return with_background_jobs([] {
     return reusable_sst(uncompressed_schema(), "tests/sstables/bigsummary", 76).then([] (auto sstp) {
         auto& summary = sstables::test(sstp)._summary();
 
@@ -846,9 +931,11 @@ SEASTAR_TEST_CASE(all_in_place) {
             BOOST_REQUIRE(sstables::test(sstp).binary_search(summary.entries, key) == idx++);
         }
     });
+  });
 }
 
 SEASTAR_TEST_CASE(full_index_search) {
+  return with_background_jobs([] {
     return reusable_sst(uncompressed_schema(), uncompressed_dir(), 1).then([] (auto sstp) {
         return sstables::test(sstp).read_indexes().then([sstp] (auto index_list) {
             int idx = 0;
@@ -858,9 +945,11 @@ SEASTAR_TEST_CASE(full_index_search) {
             }
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(not_find_key_composite_bucket0) {
+  return with_background_jobs([] {
     return reusable_sst(composite_schema(), "tests/sstables/composite", 1).then([] (auto sstp) {
         schema_ptr s = composite_schema();
         auto& summary = sstables::test(sstp)._summary();
@@ -876,10 +965,12 @@ SEASTAR_TEST_CASE(not_find_key_composite_bucket0) {
         // (result + 1) * -1 -1 = 0
         BOOST_REQUIRE(sstables::test(sstp).binary_search(summary.entries, key) == -2);
     });
+  });
 }
 
 // See CASSANDRA-7593. This sstable writes 0 in the range_start. We need to handle that case as well
 SEASTAR_TEST_CASE(wrong_range) {
+  return with_background_jobs([] {
     return reusable_sst(uncompressed_schema(), "tests/sstables/wrongrange", 114).then([] (auto sstp) {
         return do_with(make_dkey(uncompressed_schema(), "todata"), [sstp] (auto& key) {
             auto s = columns_schema();
@@ -889,6 +980,7 @@ SEASTAR_TEST_CASE(wrong_range) {
             });
         });
     });
+  });
 }
 
 static future<>
@@ -908,6 +1000,7 @@ test_sstable_exists(sstring dir, unsigned long generation, bool exists) {
 // We will therefore run it in an empty directory, and first link a known SSTable from another
 // directory to it.
 SEASTAR_TEST_CASE(set_generation) {
+  return with_background_jobs([] {
     return test_setup::do_with_cloned_tmp_directory(uncompressed_dir(), [] (sstring uncompressed_dir, sstring generation_dir) {
         return reusable_sst(uncompressed_schema(), uncompressed_dir, 1).then([generation_dir] (auto sstp) {
             return sstp->create_links(generation_dir).then([sstp] {});
@@ -923,9 +1016,11 @@ SEASTAR_TEST_CASE(set_generation) {
                                  component_type::Data);
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(reshuffle) {
+  return with_background_jobs([] {
     return test_setup::do_with_cloned_tmp_directory(uncompressed_dir(), [] (sstring uncompressed_dir, sstring generation_dir) {
         return reusable_sst(uncompressed_schema(), uncompressed_dir, 1).then([generation_dir] (auto sstp) {
             return sstp->create_links(generation_dir, 1).then([sstp, generation_dir] {
@@ -967,9 +1062,11 @@ SEASTAR_TEST_CASE(reshuffle) {
             });
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(statistics_rewrite) {
+  return with_background_jobs([] {
     return test_setup::do_with_cloned_tmp_directory(uncompressed_dir(), [] (sstring uncompressed_dir, sstring generation_dir) {
         return reusable_sst(uncompressed_schema(), uncompressed_dir, 1).then([generation_dir] (auto sstp) {
             return sstp->create_links(generation_dir).then([sstp] {});
@@ -986,6 +1083,7 @@ SEASTAR_TEST_CASE(statistics_rewrite) {
             });
         });
     });
+  });
 }
 
 // Tests for reading a large partition for which the index contains a
@@ -1031,6 +1129,7 @@ static future<shared_sstable> load_large_partition_sst(const sstables::sstable::
 // is read from disk, as an unparsed array, and doesn't actually use it to
 // search for anything.
 SEASTAR_TEST_CASE(promoted_index_read) {
+  return with_background_jobs([] {
   return for_each_sstable_version([] (const sstables::sstable::version_types version) {
     return load_large_partition_sst(version).then([] (auto sstp) {
         schema_ptr s = large_partition_schema();
@@ -1039,6 +1138,7 @@ SEASTAR_TEST_CASE(promoted_index_read) {
             BOOST_REQUIRE(vec.front().get_promoted_index_size() > 0);
         });
     });
+  });
   });
 }
 
@@ -1137,6 +1237,7 @@ static future<int> count_rows(sstable_ptr sstp, schema_ptr s, sstring ck1, sstri
 // To verify that the promoted index was actually used to reduce the size
 // of read from disk, add printouts to the row reading code.
 SEASTAR_TEST_CASE(sub_partition_read) {
+  return with_background_jobs([] {
   schema_ptr s = large_partition_schema();
   return for_each_sstable_version([s] (const sstables::sstable::version_types version) {
     return load_large_partition_sst(version).then([s] (auto sstp) {
@@ -1198,12 +1299,14 @@ SEASTAR_TEST_CASE(sub_partition_read) {
         });
     });
   });
+  });
 }
 
 // Same as previous test, just using read_range_rows instead of read_row
 // to read parts of potentially more than one partition (in this particular
 // sstable, there is actually just one partition).
 SEASTAR_TEST_CASE(sub_partitions_read) {
+  return with_background_jobs([] {
   schema_ptr s = large_partition_schema();
   return for_each_sstable_version([s] (const sstables::sstable::version_types version) {
     return load_large_partition_sst(version).then([s] (auto sstp) {
@@ -1211,6 +1314,7 @@ SEASTAR_TEST_CASE(sub_partitions_read) {
             BOOST_REQUIRE(nrows == 5);
         });
     });
+  });
   });
 }
 
@@ -1235,6 +1339,7 @@ static future<> compare_files(sstring file1, sstring file2) {
 // we have a problem in our promoted index writing code (or in the data
 // writing code, because the promoted index points to offsets in the data).
 SEASTAR_TEST_CASE(promoted_index_write) {
+  return with_background_jobs([] {
     auto s = large_partition_schema();
     return test_setup::do_with_tmp_directory([s] (auto dirname) {
         auto mtp = make_lw_shared<memtable>(s);
@@ -1263,9 +1368,11 @@ SEASTAR_TEST_CASE(promoted_index_write) {
             return compare_files(large_partition_file, dirname + "/la-100-big-Index.db");
         }).then([sst, mtp] {});
     });
+  });
 }
 
 SEASTAR_TEST_CASE(test_skipping_in_compressed_stream) {
+  return with_background_jobs([] {
     return seastar::async([] {
         tmpdir tmp;
         auto file_path = tmp.path + "/test";
@@ -1345,4 +1452,5 @@ SEASTAR_TEST_CASE(test_skipping_in_compressed_stream) {
         in.skip(opts.buffer_size).get();
         expect_eof(in);
     });
+  });
 }
