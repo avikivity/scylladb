@@ -352,6 +352,9 @@ messaging_service::messaging_service(gms::inet_address ip
     , _scheduling_config(scfg)
     , _scheduling_info_for_connection_index(initial_scheduling_info())
 {
+    for (auto&& e : _scheduling_config.statement.tenants) {
+        add_tenant_scheduling_info(e.second.sched_group, e.first);
+    }
     _rpc->set_logger([] (const sstring& log) {
             rpc_logger.info("{}", log);
     });
@@ -467,19 +470,43 @@ static constexpr std::array<uint8_t, static_cast<size_t>(messaging_verb::LAST)> 
 
 static std::array<uint8_t, static_cast<size_t>(messaging_verb::LAST)> s_rpc_client_idx_table = make_rpc_client_idx_table();
 
-static unsigned get_rpc_client_idx(messaging_verb verb) {
-    return s_rpc_client_idx_table[static_cast<size_t>(verb)];
+unsigned
+messaging_service::get_rpc_client_idx(messaging_verb verb) const {
+    auto idx = s_rpc_client_idx_table[static_cast<size_t>(verb)];
+    if ((idx == 0 || idx == 3) && current_scheduling_group() != _scheduling_config.statement.default_tenant.sched_group) {
+        // A statement or statement-ack verb, and non-default tenant
+        if (auto it = _connection_index_for_tenant.find(current_scheduling_group()); it != _connection_index_for_tenant.end()) {
+            idx = it->second + unsigned(idx != 0);
+        }
+    }
+    return idx;
 }
 
 std::vector<messaging_service::scheduling_info_for_connection_index>
 messaging_service::initial_scheduling_info() const {
+    auto stmt = _scheduling_config.statement.default_tenant.sched_group;
     return std::vector<scheduling_info_for_connection_index>({
-        { _scheduling_config.statement, "statement" },
+        { stmt, "statement" },
         { _scheduling_config.gossip, "gossip" },
         { _scheduling_config.streaming, "streaming", },
-        { _scheduling_config.statement, "statement-ack" },
+        { stmt, "statement-ack" },
     });
 };
+
+void
+messaging_service::add_tenant_scheduling_info(scheduling_group sched_group, sstring name) {
+    auto idx = _scheduling_info_for_connection_index.size();
+    auto undo = defer([&] {
+        _scheduling_info_for_connection_index.resize(idx);
+        _clients.resize(idx);
+    });
+    _scheduling_info_for_connection_index.emplace_back(scheduling_info_for_connection_index{sched_group, "statement:" + name});
+    _clients.emplace_back();
+    _scheduling_info_for_connection_index.emplace_back(scheduling_info_for_connection_index{sched_group, "statement-ack:" + name});
+    _clients.emplace_back();
+    _connection_index_for_tenant.emplace(sched_group, idx);
+    undo.cancel();
+}
 
 scheduling_group
 messaging_service::scheduling_group_for_verb(messaging_verb verb) const {

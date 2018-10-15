@@ -36,6 +36,7 @@
 #include "tracing/tracing.hh"
 #include "digest_algorithm.hh"
 #include "streaming/stream_reason.hh"
+#include "multitenant.hh"
 
 #include <seastar/net/tls.hh>
 
@@ -187,7 +188,7 @@ public:
     };
 
     struct scheduling_config {
-        scheduling_group statement;
+        multitenancy_config statement;
         scheduling_group streaming;
         scheduling_group gossip;
     };
@@ -211,13 +212,14 @@ private:
     std::array<std::unique_ptr<rpc_protocol_server_wrapper>, 2> _server;
     ::shared_ptr<seastar::tls::server_credentials> _credentials;
     std::array<std::unique_ptr<rpc_protocol_server_wrapper>, 2> _server_tls;
-    std::array<clients_map, 4> _clients;
+    std::vector<clients_map> _clients{4};
     uint64_t _dropped_messages[static_cast<int32_t>(messaging_verb::LAST)] = {};
     bool _stopping = false;
     std::list<std::function<void(gms::inet_address ep)>> _connection_drop_notifiers;
     memory_config _mcfg;
     scheduling_config _scheduling_config;
     std::vector<scheduling_info_for_connection_index> _scheduling_info_for_connection_index;
+    std::unordered_map<scheduling_group, size_t> _connection_index_for_tenant;
 public:
     using clock_type = lowres_clock;
 public:
@@ -383,6 +385,8 @@ public:
     scheduling_group scheduling_group_for_verb(messaging_verb verb) const;
     scheduling_group scheduling_group_for_isolation_cookie(const sstring& isolation_cookie) const;
     std::vector<messaging_service::scheduling_info_for_connection_index> initial_scheduling_info() const;
+    unsigned get_rpc_client_idx(messaging_verb verb) const;
+    void add_tenant_scheduling_info(scheduling_group sched_group, sstring name);
 };
 
 extern distributed<messaging_service> _the_messaging_service;

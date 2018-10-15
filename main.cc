@@ -596,7 +596,7 @@ int main(int ac, char** av) {
                 startlog.warn("Using default cluster name is not recommended. Using a unique cluster name will reduce the chance of adding nodes to the wrong cluster by mistake");
             }
             init_scheduling_config scfg;
-            scfg.statement = dbcfg.statement_scheduling_groups.default_tenant.sched_group;
+            scfg.statement = dbcfg.statement_scheduling_groups;
             scfg.streaming = dbcfg.streaming_scheduling_group;
             scfg.gossip = scheduling_group();
             init_ms_fd_gossiper(listen_address

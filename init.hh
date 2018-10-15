@@ -43,7 +43,7 @@ void init_storage_service(distributed<database>& db, sharded<auth::service>&, sh
 
 struct init_scheduling_config {
     scheduling_group streaming;
-    scheduling_group statement;
+    multitenancy_config statement;
     scheduling_group gossip;
 };
 
