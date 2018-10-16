@@ -350,6 +350,7 @@ messaging_service::messaging_service(gms::inet_address ip
     , _credentials(credentials ? credentials->build_server_credentials() : nullptr)
     , _mcfg(mcfg)
     , _scheduling_config(scfg)
+    , _scheduling_info_for_connection_index(initial_scheduling_info())
 {
     _rpc->set_logger([] (const sstring& log) {
             rpc_logger.info("{}", log);
@@ -470,16 +471,19 @@ static unsigned get_rpc_client_idx(messaging_verb verb) {
     return s_rpc_client_idx_table[static_cast<size_t>(verb)];
 }
 
-const messaging_service::scheduling_info_for_connection_index messaging_service::_scheduling_info_for_connection_index[4] = {
-    { &scheduling_config::statement, "statement" },
-    { &scheduling_config::gossip, "gossip" },
-    { &scheduling_config::streaming, "streaming", },
-    { &scheduling_config::statement, "statement-ack" },
+std::vector<messaging_service::scheduling_info_for_connection_index>
+messaging_service::initial_scheduling_info() const {
+    return std::vector<scheduling_info_for_connection_index>({
+        { _scheduling_config.statement, "statement" },
+        { _scheduling_config.gossip, "gossip" },
+        { _scheduling_config.streaming, "streaming", },
+        { _scheduling_config.statement, "statement-ack" },
+    });
 };
 
 scheduling_group
 messaging_service::scheduling_group_for_verb(messaging_verb verb) const {
-    return _scheduling_config.*(_scheduling_info_for_connection_index[get_rpc_client_idx(verb)].sched_group_ptr);
+    return _scheduling_info_for_connection_index[get_rpc_client_idx(verb)].sched_group;
 }
 
 scheduling_group
@@ -487,7 +491,7 @@ messaging_service::scheduling_group_for_isolation_cookie(const sstring& isolatio
     // Once per connection, so a loop is fine.
     for (auto&& info : _scheduling_info_for_connection_index) {
         if (info.isolation_cookie == isolation_cookie) {
-            return _scheduling_config.*(info.sched_group_ptr);
+            return info.sched_group;
         }
     }
     // Client is using a new connection class that the server doesn't recognize yet.
