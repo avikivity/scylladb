@@ -82,11 +82,13 @@ select_statement::parameters::parameters(orderings_type orderings,
 select_statement::parameters::parameters(orderings_type orderings,
                                          bool is_distinct,
                                          bool allow_filtering,
-                                         bool is_json)
+                                         bool is_json,
+                                         bool bypass_cache)
     : _orderings{std::move(orderings)}
     , _is_distinct{is_distinct}
     , _allow_filtering{allow_filtering}
     , _is_json{is_json}
+    , _bypass_cache{bypass_cache}
 { }
 
 bool select_statement::parameters::is_distinct() const {
@@ -99,6 +101,10 @@ bool select_statement::parameters::is_json() const {
 
 bool select_statement::parameters::allow_filtering() const {
     return _allow_filtering;
+}
+
+bool select_statement::parameters::bypass_cache() const {
+    return _bypass_cache;
 }
 
 select_statement::parameters::orderings_type const& select_statement::parameters::orderings() const {
@@ -201,6 +207,10 @@ select_statement::make_partition_slice(const query_options& options)
         } else if (col->is_regular()) {
             regular_columns.push_back(col->id);
         }
+    }
+
+    if (_parameters->bypass_cache()) {
+        _opts.set(query::partition_slice::option::bypass_cache);
     }
 
     if (_parameters->is_distinct()) {
