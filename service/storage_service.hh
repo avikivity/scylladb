@@ -306,7 +306,7 @@ public:
         _roles_feature.enable();
         _la_sstable_feature.enable();
         _stream_with_rpc_stream_feature.enable();
-        _mc_sstable_feature.enable();
+        //_mc_sstable_feature.enable();
     }
 
     void finish_bootstrapping() {
