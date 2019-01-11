@@ -665,6 +665,7 @@ void table::add_sstable(sstables::shared_sstable sstable, const std::vector<unsi
     auto new_sstables = make_lw_shared(*_sstables);
     new_sstables->insert(sstable);
     _sstables = std::move(new_sstables);
+    _sstables_cond.broadcast();
     update_stats_for_new_sstable(sstable->bytes_on_disk(), shards_for_the_sstable);
     if (sstable->requires_view_building()) {
         _sstables_staging.emplace(sstable->generation(), sstable);
@@ -1150,6 +1151,7 @@ table::rebuild_sstable_list(const std::vector<sstables::shared_sstable>& new_sst
         }
     }
     _sstables = make_lw_shared(std::move(new_sstable_list));
+    _sstables_cond.broadcast();
 }
 
 void
@@ -1403,6 +1405,7 @@ void table::set_compaction_strategy(sstables::compaction_strategy_type strategy)
     // now exception safe:
     _compaction_strategy = std::move(new_cs);
     _sstables = std::move(new_sstables);
+    _sstables_cond.broadcast();
 }
 
 size_t table::sstables_count() const {
@@ -1812,8 +1815,40 @@ future<std::unordered_map<sstring, table::snapshot_details>> table::get_snapshot
     });
 }
 
+bool table::may_add_new_sstable() const {
+    // Too many sstables can cause reads to consume all memory and fail, so this
+    // checks if we're about to enter that condition and stop writes instead. Since
+    // we're stopping a memtable flush, this is a hard stop on writes to that table
+    // so this is a last resort. Compaction should kick in before the hard stop to
+    // reduce the sstable count.
+
+    // If compaction is disabled, then allow new sstables to be created. It's better
+    // to risk out-of-memory on the next read than deadlock the system because we'll
+    // never make room for another sstable.
+    if (_compaction_disabled || _compaction_manager.stopped()) {
+        return true;
+    }
+    // We assume that each sstable can materialize a row that is "a few megabytes" in size,
+    // worst case, so we should be able to handle 200.
+    return _compaction_strategy.current_estimated_sstables_per_read(*_sstables) < 200;
+}
+
+
 future<> table::flush() {
-    return _memtables->request_flush();
+    auto may_flush = make_ready_future();
+    if (!may_add_new_sstable()) {
+        tlogger.warn("table {}.{}: flushing delayed due to excessive sstable count",
+                _schema->ks_name(), _schema->cf_name());
+        may_flush = _sstables_cond.wait([this] { return may_add_new_sstable(); }).then([this] {
+            tlogger.warn("table {}.{}: resuming flushing", _schema->ks_name(), _schema->cf_name());
+        });
+        // Note: memtable::request_flush() will coalesce multiple flush requests, so even
+        // if many waiters are released at this point simultaneously we'll still only get one
+        // new sstable
+    }
+    return may_flush.then([this] {
+        return _memtables->request_flush();
+    });
 }
 
 // FIXME: We can do much better than this in terms of cache management. Right
@@ -1927,6 +1962,7 @@ future<db::replay_position> table::discard_sstables(db_clock::time_point truncat
                 }
 
                 cf._sstables = std::move(pruned);
+                cf._sstables_cond.broadcast();
             }
         };
         auto p = make_lw_shared<pruner>(*this);

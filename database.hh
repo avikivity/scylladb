@@ -415,6 +415,7 @@ private:
     sstables::compaction_strategy _compaction_strategy;
     // generation -> sstable. Ordered by key so we can easily get the most recent.
     lw_shared_ptr<sstables::sstable_set> _sstables;
+    condition_variable _sstables_cond; // signaled when _sstables is updated
     // sstables that have been compacted (so don't look up in query) but
     // have not been deleted yet, so must not GC any tombstones in other sstables
     // that may delete data in these sstables:
@@ -497,6 +498,9 @@ public:
         return it != _sstables_staging.end() ? it->second : nullptr;
     }
 private:
+    // Too many sstables can cause reads to OOM, so this is a last-ditch defense
+    // against too many of them. The system should strive to never reach this condition.
+    bool may_add_new_sstable() const;
     void update_stats_for_new_sstable(uint64_t disk_space_used_by_sstable, const std::vector<unsigned>& shards_for_the_sstable) noexcept;
     // Adds new sstable to the set of sstables
     // Doesn't update the cache. The cache must be synchronized in order for reads to see
