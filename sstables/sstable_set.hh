@@ -63,6 +63,7 @@ public:
     lw_shared_ptr<sstable_list> all() const { return _all; }
     void insert(shared_sstable sst);
     void erase(shared_sstable sst);
+    size_t estimate_size_for_select() const;
 
     // Used to incrementally select sstables from sstable set using ring-position.
     // sstable set must be alive during the lifetime of the selector.

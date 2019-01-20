@@ -92,6 +92,7 @@ public:
     virtual void insert(shared_sstable sst) = 0;
     virtual void erase(shared_sstable sst) = 0;
     virtual std::unique_ptr<incremental_selector_impl> make_incremental_selector() const = 0;
+    virtual size_t estimate_size_for_select() const = 0;
 };
 
 sstable_set::sstable_set(std::unique_ptr<sstable_set_impl> impl, schema_ptr s, lw_shared_ptr<sstable_list> all)
@@ -160,6 +161,11 @@ sstable_set::erase(shared_sstable sst) {
 
 sstable_set::~sstable_set() = default;
 
+size_t
+sstable_set::estimate_size_for_select() const {
+    return _impl->estimate_size_for_select();
+}
+
 sstable_set::incremental_selector::incremental_selector(std::unique_ptr<incremental_selector_impl> impl, const schema& s)
     : _impl(std::move(impl))
     , _cmp(s) {
@@ -200,6 +206,9 @@ public:
     virtual void erase(shared_sstable sst) override {
         _sstables.erase(boost::range::find(_sstables, sst));
     }
+    virtual size_t estimate_size_for_select() const override {
+        return _sstables.size();
+    }
     virtual std::unique_ptr<incremental_selector_impl> make_incremental_selector() const override;
     class incremental_selector;
 };
@@ -233,6 +242,7 @@ private:
     // Change counter on interval map for leveled sstables which is used by
     // incremental selector to determine whether or not to invalidate iterators.
     uint64_t _leveled_sstables_change_cnt = 0;
+    size_t _nr_leveled = 0;
 private:
     static interval_type make_interval(const schema& s, const dht::partition_range& range) {
         return interval_type::closed(
@@ -316,6 +326,7 @@ public:
         } else {
             _leveled_sstables_change_cnt++;
             _leveled_sstables.add({make_interval(*sst), value_set({sst})});
+            ++_nr_leveled;
         }
     }
     virtual void erase(shared_sstable sst) override {
@@ -324,7 +335,19 @@ public:
         } else {
             _leveled_sstables_change_cnt++;
             _leveled_sstables.subtract({make_interval(*sst), value_set({sst})});
+            --_nr_leveled;
         }
+    }
+    virtual size_t estimate_size_for_select() const override {
+        auto ret = _unleveled_sstables.size();
+        if (_nr_leveled) {
+            // This is not accurate since we don't know the real base of the levels,
+            // but it's off only by a small factor and we're only interested in an estimate.
+            // In any case the bulk of the sstables in a read are in _unleveled_sstables, if
+            // we have a backlog
+            ret += std::log(_nr_leveled);
+        }
+        return ret;
     }
     virtual std::unique_ptr<incremental_selector_impl> make_incremental_selector() const override;
     class incremental_selector;
