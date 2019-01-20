@@ -129,6 +129,8 @@ public:
     sstable_set make_sstable_set(schema_ptr schema) const;
 
     compaction_backlog_tracker& get_backlog_tracker();
+
+    size_t current_estimated_sstables_per_read(const sstables::sstable_set& set) const;
 };
 
 // Creates a compaction_strategy object from one of the strategies available.

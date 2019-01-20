@@ -771,6 +771,13 @@ compaction_backlog_tracker& compaction_strategy::get_backlog_tracker() {
     return _compaction_strategy_impl->get_backlog_tracker();
 }
 
+size_t
+compaction_strategy::current_estimated_sstables_per_read(const sstables::sstable_set& set) const {
+    return set.estimate_size_for_select();
+}
+
+
+
 compaction_strategy make_compaction_strategy(compaction_strategy_type strategy, const std::map<sstring, sstring>& options) {
     ::shared_ptr<compaction_strategy_impl> impl;
 
