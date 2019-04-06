@@ -78,7 +78,7 @@ namespace db {
 class config : public utils::config_file {
 public:
     config();
-    config(db::extensions*);
+    config(const db::extensions*);
     ~config();
 
     // Throws exception if experimental feature is disabled.
@@ -306,7 +306,7 @@ private:
     log_legacy_value<std::unordered_map<sstring, seastar::log_level>> logger_log_level;
     log_legacy_value<bool> log_to_stdout, log_to_syslog;
 
-    db::extensions* _extensions;
+    const db::extensions* _extensions;
 };
 
 }
