@@ -155,10 +155,12 @@ struct convert<db::config::seed_provider_type> {
 
 }
 
+static db::extensions default_extensions;
+
 #define str(x)  #x
 #define _mk_init(name, type, deflt, status, desc, ...)  , name(this, str(name), value_status::status, type(deflt), desc)
 
-db::config::config(std::shared_ptr<db::extensions> exts)
+db::config::config(db::extensions* exts)
     : utils::config_file()
 
     , background_writer_scheduling_quota(this, "background_writer_scheduling_quota", value_status::Unused, 1.0,
@@ -681,7 +683,7 @@ db::config::config(std::shared_ptr<db::extensions> exts)
 {}
 
 db::config::config()
-    : config(std::make_shared<db::extensions>())
+    : config(&default_extensions)
 {}
 
 db::config::~config()

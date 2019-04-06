@@ -337,7 +337,7 @@ int main(int ac, char** av) {
     app_template app(std::move(app_cfg));
 
     auto ext = std::make_shared<db::extensions>();
-    auto cfg = make_lw_shared<db::config>(ext);
+    auto cfg = make_lw_shared<db::config>(ext.get());
     auto init = app.get_options_description().add_options();
 
     // If --version is requested, print it out and exit immediately to avoid

@@ -59,7 +59,7 @@ SEASTAR_TEST_CASE(simple_schema_extension) {
      * Ensure we can create a table with the extension, and that it (and its data) is preserved
      * by the schema creation (which serializes and deserializes mutations)
      */
-    return do_with_cql_env([] (cql_test_env& e) {
+    return do_with_cql_env([ext] (cql_test_env& e) {
         return e.execute_cql("create table cf (id int primary key, value int) with los_lobos = { 'king of' : 'swing', 'ninja' : 'mission' };").discard_result().then([&e] {
             auto& db = e.local_db();
             auto& cf = db.find_column_family("ks", "cf");
@@ -69,7 +69,7 @@ SEASTAR_TEST_CASE(simple_schema_extension) {
             BOOST_REQUIRE(!ext->is_placeholder());
             BOOST_CHECK_EQUAL(ext->serialize(), dummy_ext(std::map<sstring, sstring>{{"king of", "swing"},{"ninja", "mission"}}).serialize());
         });
-    }, ::make_shared<db::config>(ext));
+    }, ::make_shared<db::config>(ext.get()));
 }
 
 using namespace sstables;
@@ -94,7 +94,7 @@ SEASTAR_TEST_CASE(simple_sstable_extension) {
     /**
      * Ensure the extension is invoked on read/write of sstables, esp. data.
      */
-    return do_with_cql_env([] (cql_test_env& e) {
+    return do_with_cql_env([ext] (cql_test_env& e) {
         return e.execute_cql("create table cf (id int primary key, value int);").discard_result().then([&e] {
             BOOST_REQUIRE(counter == 0);
             // minimal data
@@ -108,6 +108,6 @@ SEASTAR_TEST_CASE(simple_sstable_extension) {
                 });
             });
         });
-    }, ::make_shared<db::config>(ext));
+    }, ::make_shared<db::config>(ext.get()));
 }
 
