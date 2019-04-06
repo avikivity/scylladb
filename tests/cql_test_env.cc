@@ -334,17 +334,17 @@ public:
             tmpdir data_dir;
             auto data_dir_path = data_dir.path().string();
             if (!cfg->data_file_directories.is_set()) {
-                cfg->data_file_directories() = {data_dir_path};
+                cfg->data_file_directories.set({data_dir_path});
             } else {
                 data_dir_path = cfg->data_file_directories()[0];
             }
-            cfg->commitlog_directory() = data_dir_path + "/commitlog.dir";
-            cfg->hints_directory() = data_dir_path + "/hints.dir";
-            cfg->view_hints_directory() = data_dir_path + "/view_hints.dir";
-            cfg->num_tokens() = 256;
-            cfg->ring_delay_ms() = 500;
-            cfg->experimental() = true;
-            cfg->shutdown_announce_in_ms() = 0;
+            cfg->commitlog_directory.set(data_dir_path + "/commitlog.dir");
+            cfg->hints_directory.set(data_dir_path + "/hints.dir");
+            cfg->view_hints_directory.set(data_dir_path + "/view_hints.dir");
+            cfg->num_tokens.set(256);
+            cfg->ring_delay_ms.set(500);
+            cfg->experimental.set(true);
+            cfg->shutdown_announce_in_ms.set(0);
             create_directories((data_dir_path + "/system").c_str());
             create_directories(cfg->commitlog_directory().c_str());
             create_directories(cfg->hints_directory().c_str());
