@@ -200,3 +200,26 @@ const db::extensions& db::config::extensions() const {
 }
 
 template struct utils::config_file::named_value<seastar::log_level>;
+
+namespace utils {
+
+sstring
+config_value_as_json(const db::seed_provider_type& v) {
+    // We don't support converting this to json yet
+    return "seed_provider_type";
+}
+
+sstring
+config_value_as_json(const log_level& v) {
+    // We don't support converting this to json yet; and because the log_level config items
+    // aren't part of config_file::value(), it won't be converted to json in REST
+    throw std::runtime_error("config_value_as_json(log_level) is not implemented");
+}
+
+sstring config_value_as_json(const std::unordered_map<sstring, log_level>& v) {
+    // We don't support converting this to json yet; and because the log_level config items
+    // aren't part of config_file::value(), it won't be listed
+    throw std::runtime_error("config_value_as_json(const std::unordered_map<sstring, log_level>& v) is not implemented");
+}
+
+}

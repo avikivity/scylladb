@@ -30,6 +30,7 @@
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/util/program-options.hh>
 #include <seastar/util/log.hh>
+#include <seastar/json/json_elements.hh>
 
 #include "seastarx.hh"
 #include "utils/config_file.hh"
@@ -57,6 +58,20 @@ struct seed_provider_type {
     sstring class_name;
     std::unordered_map<sstring, sstring> parameters;
 };
+
+}
+
+namespace utils {
+
+sstring config_value_as_json(const db::seed_provider_type& v);
+
+sstring config_value_as_json(const log_level& v);
+
+sstring config_value_as_json(const std::unordered_map<sstring, log_level>& v);
+
+}
+
+namespace db {
 
 class config : public utils::config_file {
 public:

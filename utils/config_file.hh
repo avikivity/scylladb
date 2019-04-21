@@ -34,11 +34,21 @@
 #include "seastarx.hh"
 
 namespace seastar { class file; }
+namespace seastar::json { class json_return_type; }
 namespace YAML { class Node; }
 
 namespace utils {
 
 namespace bpo = boost::program_options;
+
+
+// This is an extension point to allow converting types that json::formatter::to_json
+// doesn't support.
+template <typename T>
+const T&
+config_value_as_json(const T& v) {
+    return v;
+}
 
 class config_file {
 public:
@@ -84,6 +94,7 @@ public:
         virtual void set_value(const YAML::Node&) = 0;
         virtual value_status status() const = 0;
         virtual config_source source() const = 0;
+        virtual json::json_return_type value_as_json() const = 0;
     };
 
     template<typename T>
@@ -133,6 +144,7 @@ public:
         void add_command_line_option(bpo::options_description_easy_init&,
                         const std::string_view&, const std::string_view&) override;
         void set_value(const YAML::Node&) override;
+        virtual json::json_return_type value_as_json() const override;
     };
 
     typedef std::reference_wrapper<config_src> cfg_ref;
