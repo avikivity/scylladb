@@ -82,16 +82,16 @@ struct convert<db::config::seed_provider_type> {
 
 #define _mk_name(name, ...) name,
 #define str(x)  #x
-#define _mk_init(name, type, deflt, status, desc, ...)  , name(str(name), type(deflt), desc)
+#define _mk_init(name, type, deflt, status, desc, ...)  , name(str(name), #type, type(deflt), desc)
 
 db::config::config(std::shared_ptr<db::extensions> exts)
     : utils::config_file({ _make_config_values(_mk_name)
         default_log_level, logger_log_level, log_to_stdout, log_to_syslog })
     _make_config_values(_mk_init)
-    , default_log_level("default_log_level")
-    , logger_log_level("logger_log_level")
-    , log_to_stdout("log_to_stdout")
-    , log_to_syslog("log_to_syslog")
+    , default_log_level("default_log_level", "log_level")
+    , logger_log_level("logger_log_level", "log_level_map")
+    , log_to_stdout("log_to_stdout", "bool")
+    , log_to_syslog("log_to_syslog", "bool")
     , _extensions(std::move(exts))
 {}
 

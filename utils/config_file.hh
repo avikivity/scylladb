@@ -59,10 +59,12 @@ public:
 
     struct config_src {
         std::string_view _name, _desc;
+        std::string_view _type_name;
     public:
-        config_src(std::string_view name, std::string_view desc)
+        config_src(std::string_view name, std::string_view type_name, std::string_view desc)
             : _name(name)
             , _desc(desc)
+            , _type_name(type_name)
         {}
         virtual ~config_src() {}
 
@@ -71,6 +73,9 @@ public:
         }
         const std::string_view & desc() const {
             return _desc;
+        }
+        const std::string_view& type_name() const {
+            return _type_name;
         }
 
         virtual void add_command_line_option(
@@ -92,8 +97,8 @@ public:
         typedef T type;
         typedef named_value<T, S> MyType;
 
-        named_value(std::string_view name, const T& t = T(), std::string_view desc = {})
-            : config_src(name, desc)
+        named_value(std::string_view name, std::string_view type_name, const T& t = T(), std::string_view desc = {})
+            : config_src(name, type_name, desc)
             , _value(t)
         {}
         value_status status() const override {
