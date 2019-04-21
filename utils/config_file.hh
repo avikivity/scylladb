@@ -109,7 +109,8 @@ public:
         typedef T type;
         typedef named_value<T> MyType;
 
-        named_value(config_file* file, std::string_view name, std::string_view type_name, value_status vs, const T& t = T(), std::string_view desc = {})
+        named_value(config_file* file, std::string_view name, std::string_view type_name, value_status vs, const T& t = T(), std::string_view desc = {},
+                std::initializer_list<T> allowed_values = {})
             : config_src(name, type_name, desc)
             , _value(t)
             , _value_status(vs)
