@@ -25,6 +25,7 @@
 #include <boost/range/algorithm.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
+#include <experimental/source_location>
 
 #include <seastar/net/inet_address.hh>
 
@@ -3576,4 +3577,53 @@ SEASTAR_TEST_CASE(test_describe_varchar) {
                     {ks, tbl, v, none, v, regular, pos_m1, text_t}
                 });
    });
+}
+
+namespace {
+
+// Can't name it `query` -- clashes with namespace query.
+shared_ptr<cql_transport::messages::result_message> equery(
+        cql_test_env& e, const char* qstr, const stdx::source_location& loc = stdx::source_location::current()) {
+    try {
+        return e.execute_cql(qstr).get0();
+    } catch (const std::exception& e) {
+        BOOST_FAIL(format("query '{}' failed: {}\n{}:{}: originally from here",
+                          qstr, e.what(), loc.file_name(), loc.line()));
+    }
+    return shared_ptr<cql_transport::messages::result_message>(nullptr);
+}
+
+} // anonymous namespace
+
+namespace {
+
+/// Asserts that equery(e, qstr) result contains expected rows, in any order.
+void require_rows(cql_test_env& e,
+                  const char* qstr,
+                  const std::vector<std::vector<bytes_opt>>& expected,
+                  const stdx::source_location& loc = stdx::source_location::current()) {
+    try {
+        assert_that(equery(e, qstr, loc)).is_rows().with_rows_ignore_order(expected);
+    }
+    catch (const std::exception& e) {
+        BOOST_FAIL(format("query '{}' failed: {}\n{}:{}: originally from here",
+                          qstr, e.what(), loc.file_name(), loc.line()));
+    }
+}
+
+auto I(int32_t x) { return int32_type->decompose(x); }
+
+} // anonymous namespace
+
+SEASTAR_TEST_CASE(test_aggregate_and_simple_selection_together) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        equery(e, "create table t (p int, c int, v int, primary key(p, c))");
+        equery(e, "insert into t (p, c, v) values (1, 1, 11)");
+        equery(e, "insert into t (p, c, v) values (1, 2, 12)");
+        equery(e, "insert into t (p, c, v) values (1, 3, 13)");
+        equery(e, "insert into t (p, c, v) values (2, 2, 22)");
+        require_rows(e, "select c, avg(c) from t", {{I(1), I(2)}});
+        require_rows(e, "select p, sum(v) from t", {{I(1), I(58)}});
+        return make_ready_future<>();
+    });
 }
