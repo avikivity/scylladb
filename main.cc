@@ -146,6 +146,62 @@ read_config(bpo::variables_map& opts, db::config& cfg) {
         return make_exception_future<>(ep);
     });
 }
+
+class sighup_handler {
+    bpo::variables_map& _opts;
+    db::config& _cfg;
+    condition_variable _cond;
+    bool _pending = false; // if asked to reread while already reading
+    bool _stopping = false;
+    bool _stopped = false;
+    future<> _done = do_work();
+public:
+    sighup_handler(bpo::variables_map& opts, db::config& cfg) : _opts(opts), _cfg(cfg) {
+        startlog.info("installing SIGHUP handler");
+        engine().handle_signal(SIGHUP, [this] { reread_config(); });
+    }
+private:
+    void reread_config() {
+        if (_stopping) {
+            return;
+        }
+        _pending = true;
+        _cond.broadcast();
+    }
+    future<> do_work() {
+        return repeat([this] {
+            return _cond.wait([this] { return _pending || _stopping; }).then([this] {
+                return async([this] {
+                    if (_stopping) {
+                        _stopped = true;
+                        return stop_iteration::yes;
+                    } else if (_pending) {
+                        _pending = false;
+                        try {
+                            startlog.info("re-reading configuration file");
+                            read_config(_opts, _cfg).get();
+                            _cfg.broadcast_to_all_shards().get();
+                            startlog.info("completed re-reading configuration file");
+                        } catch (...) {
+                            startlog.error("failed to re-read configuration file: {}", std::current_exception());
+                        }
+                    }
+                    return stop_iteration::no;
+                });
+            });
+        });
+    }
+public:
+    future<> stop() {
+        // No way to unregister yet
+        engine().handle_signal(SIGHUP, [] {});
+        _pending = false;
+        _stopping = true;
+        _cond.broadcast();
+        return std::move(_done);
+    }
+};
+
 static future<> disk_sanity(sstring path, bool developer_mode) {
     return check_direct_io_support(path).then([] {
         return make_ready_future<>();
@@ -407,6 +463,11 @@ int main(int ac, char** av) {
             read_config(opts, *cfg).get();
             configurable::init_all(opts, *cfg, *ext).get();
             cfg->broadcast_to_all_shards().get();
+
+            ::sighup_handler sigup_handler(opts, *cfg);
+            auto stop_sighup_handler = defer([&] {
+                sigup_handler.stop().get();
+            });
 
             logalloc::prime_segment_pool(memory::stats().total_memory(), memory::min_free_memory()).get();
             logging::apply_settings(cfg->logging_settings(opts));
