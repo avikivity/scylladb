@@ -49,15 +49,15 @@
 using namespace std::literals::chrono_literals;
 
 SEASTAR_TEST_CASE(test_large_partitions) {
-    db::config cfg{};
-    cfg.compaction_large_partition_warning_threshold_mb(0);
+    auto cfg = make_shared<db::config>();
+    cfg->compaction_large_partition_warning_threshold_mb(0);
     return do_with_cql_env([](cql_test_env& e) { return make_ready_future<>(); }, cfg);
 }
 
 SEASTAR_THREAD_TEST_CASE(test_large_data) {
-    db::config cfg{};
-    cfg.compaction_large_row_warning_threshold_mb(1);
-    cfg.compaction_large_cell_warning_threshold_mb(1);
+    auto cfg = make_shared<db::config>();
+    cfg->compaction_large_row_warning_threshold_mb(1);
+    cfg->compaction_large_cell_warning_threshold_mb(1);
     do_with_cql_env([](cql_test_env& e) {
         e.execute_cql("create table tbl (a int, b text, primary key (a))").get();
         sstring blob(1024*1024, 'x');
