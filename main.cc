@@ -171,7 +171,7 @@ private:
         _pending = true;
         _cond.broadcast();
     }
-    // Main work look. Waits for wither _stopping or _pending to be raised, and
+    // Main work loop. Waits for either _stopping or _pending to be raised, and
     // re-reads the configuration file if _pending. We use a repeat loop here to
     // avoid having multiple reads of the configuration file happening in parallel
     // (this can cause an older read to overwrite the results of a younger read).
