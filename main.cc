@@ -147,6 +147,8 @@ read_config(bpo::variables_map& opts, db::config& cfg) {
     });
 }
 
+// Handles SIGHUP, using it to trigger re-reading of the configuration file. Should
+// only be constructed on shard 0.
 class sighup_handler {
     bpo::variables_map& _opts;
     db::config& _cfg;
@@ -154,8 +156,9 @@ class sighup_handler {
     bool _pending = false; // if asked to reread while already reading
     bool _stopping = false;
     bool _stopped = false;
-    future<> _done = do_work();
+    future<> _done = do_work();  // Launch main work loop, capture completion future
 public:
+    // Installs the signal handler. Must call stop() (and wait for it) before destruction.
     sighup_handler(bpo::variables_map& opts, db::config& cfg) : _opts(opts), _cfg(cfg) {
         startlog.info("installing SIGHUP handler");
         engine().handle_signal(SIGHUP, [this] { reread_config(); });
@@ -168,6 +171,10 @@ private:
         _pending = true;
         _cond.broadcast();
     }
+    // Main work look. Waits for wither _stopping or _pending to be raised, and
+    // re-reads the configuration file if _pending. We use a repeat loop here to
+    // avoid having multiple reads of the configuration file happening in parallel
+    // (this can cause an older read to overwrite the results of a younger read).
     future<> do_work() {
         return repeat([this] {
             return _cond.wait([this] { return _pending || _stopping; }).then([this] {
@@ -192,6 +199,8 @@ private:
         });
     }
 public:
+    // Signals the main work loop to stop, and waits for it (and any in-progress work)
+    // to complete. After this is waited for, the object can be destroyed.
     future<> stop() {
         // No way to unregister yet
         engine().handle_signal(SIGHUP, [] {});
