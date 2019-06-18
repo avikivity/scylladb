@@ -155,7 +155,6 @@ class sighup_handler {
     condition_variable _cond;
     bool _pending = false; // if asked to reread while already reading
     bool _stopping = false;
-    bool _stopped = false;
     future<> _done = do_work();  // Launch main work loop, capture completion future
 public:
     // Installs the signal handler. Must call stop() (and wait for it) before destruction.
@@ -180,7 +179,6 @@ private:
             return _cond.wait([this] { return _pending || _stopping; }).then([this] {
                 return async([this] {
                     if (_stopping) {
-                        _stopped = true;
                         return stop_iteration::yes;
                     } else if (_pending) {
                         _pending = false;
