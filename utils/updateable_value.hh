@@ -42,16 +42,14 @@ namespace utils {
 //  - an observe() function is provided (to both) that can be used to attach a callback
 //    that is called whenever the value changes
 
-// There are also updateable_value_source_base and updateable_value_base classes which
-// are used to reduce template bloat and are not meant to be used directly.
-
 template <typename T>
 class updateable_value_source;
 
 class updateable_value_source_base;
 
 // Base class for updateable_value<T>, containing functionality for tracking
-// the update source.
+// the update source. Used to reduce template bloat and not meant to be used
+// directly.
 class updateable_value_base {
 protected:
     const updateable_value_source_base* _source = nullptr;
@@ -93,7 +91,8 @@ public:
     friend class updateable_value_source;
 };
 
-// Contains the mechanisms to track updateable_value_base
+// Contains the mechanisms to track updateable_value_base.  Used to reduce template
+// bloat and not meant to be used directly.
 class updateable_value_source_base {
 protected:
     // This class contains two different types of state: values and
