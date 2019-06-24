@@ -3577,3 +3577,38 @@ SEASTAR_TEST_CASE(test_describe_varchar) {
                 });
    });
 }
+
+namespace {
+
+/// Asserts that cquery_nofail(e, qstr) contains expected rows, in any order.
+void require_rows(cql_test_env& e,
+                  const char* qstr,
+                  const std::vector<std::vector<bytes_opt>>& expected) {
+    try {
+        assert_that(cquery_nofail(e, qstr, nullptr)).is_rows().with_rows_ignore_order(expected);
+    }
+    catch (const std::exception& e) {
+        BOOST_FAIL(format("query '{}' failed: {}",
+                          qstr, e.what()));
+    }
+}
+
+auto I(int32_t x) { return int32_type->decompose(x); }
+
+auto L(int64_t x) { return long_type->decompose(x); }
+
+} // anonymous namespace
+
+SEASTAR_TEST_CASE(test_aggregate_and_simple_selection_together) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        cquery_nofail(e, "create table t (p int, c int, v int, primary key(p, c))");
+        cquery_nofail(e, "insert into t (p, c, v) values (1, 1, 11)");
+        cquery_nofail(e, "insert into t (p, c, v) values (1, 2, 12)");
+        cquery_nofail(e, "insert into t (p, c, v) values (1, 3, 13)");
+        cquery_nofail(e, "insert into t (p, c, v) values (2, 2, 22)");
+        require_rows(e, "select c, avg(c) from t", {{I(1), I(2)}});
+        require_rows(e, "select p, sum(v) from t", {{I(1), I(58)}});
+        require_rows(e, "select p, count(c) from t group by p", {{I(1), L(3)}, {I(2), L(1)}});
+        return make_ready_future<>();
+    });
+}
