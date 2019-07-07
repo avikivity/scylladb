@@ -103,7 +103,7 @@ class toppartitions_data_listener : public data_listener {
     database& _db;
     sstring _ks;
     sstring _cf;
-
+    gate _gate;
 public:
     using top_k = utils::space_saving_top_k<toppartitions_item_key, toppartitions_item_key::hash, toppartitions_item_key::comp>;
 private:

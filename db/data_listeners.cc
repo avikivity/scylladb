@@ -75,7 +75,7 @@ toppartitions_data_listener::~toppartitions_data_listener() {
 
 future<> toppartitions_data_listener::stop() {
     dblog.debug("toppartitions_data_listener: stopping {}", this);
-    return make_ready_future<>();
+    return _gate.close();
 }
 
 flat_mutation_reader toppartitions_data_listener::on_read(const schema_ptr& s, const dht::partition_range& range,
@@ -84,7 +84,10 @@ flat_mutation_reader toppartitions_data_listener::on_read(const schema_ptr& s, c
         return std::move(rd);
     }
     dblog.trace("toppartitions_data_listener::on_read: {}.{}", s->ks_name(), s->cf_name());
-    return make_filtering_reader(std::move(rd), [this, &range, &slice, s = std::move(s)] (const dht::decorated_key& dk) {
+    // Cannot use with_gate() because it returns a future, and we need to return a value
+    _gate.enter();
+    auto leave = defer([this] { _gate.leave(); });
+    return make_filtering_reader(std::move(rd), [this, &range, &slice, s = std::move(s), leave = std::move(leave)] (const dht::decorated_key& dk) {
         _top_k_read.append(toppartitions_item_key{s, dk});
         return true;
     });
