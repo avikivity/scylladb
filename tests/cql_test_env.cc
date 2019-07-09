@@ -30,6 +30,7 @@
 #include "cql3/query_options.hh"
 #include "cql3/statements/batch_statement.hh"
 #include <seastar/core/distributed.hh>
+#include <seastar/core/abort_source.hh>
 #include <seastar/core/shared_ptr.hh>
 #include "utils/UUID_gen.hh"
 #include "service/migration_manager.hh"
@@ -334,6 +335,9 @@ public:
 
             auto wait_for_background_jobs = defer([] { sstables::await_background_jobs_on_all_shards().get(); });
 
+            sharded<abort_source, plain_sharded_traits<abort_source>> abort_sources;
+            abort_sources.start().get();
+            auto stop_abort_sources = defer([&] { abort_sources.stop().get(); });
             auto db = ::make_shared<distributed<database>>();
             auto cfg = cfg_in.db_config;
             tmpdir data_dir;
@@ -384,7 +388,7 @@ public:
             auto view_update_generator = ::make_shared<seastar::sharded<db::view::view_update_generator>>();
 
             auto& ss = service::get_storage_service();
-            ss.start(std::ref(*db), std::ref(gms::get_gossiper()), std::ref(*auth_service), std::ref(sys_dist_ks), std::ref(*view_update_generator), std::ref(*feature_service), true, cfg_in.disabled_features).get();
+            ss.start(std::ref(abort_sources), std::ref(*db), std::ref(gms::get_gossiper()), std::ref(*auth_service), std::ref(sys_dist_ks), std::ref(*view_update_generator), std::ref(*feature_service), true, cfg_in.disabled_features).get();
             auto stop_storage_service = defer([&ss] { ss.stop().get(); });
 
             database_config dbcfg;
@@ -536,6 +540,7 @@ future<> do_with_cql_env_thread(std::function<void(cql_test_env&)> func, cql_tes
 }
 
 class storage_service_for_tests::impl {
+    sharded<abort_source, plain_sharded_traits<abort_source>> _abort_source;
     sharded<gms::feature_service> _feature_service;
     sharded<gms::gossiper> _gossiper;
     distributed<database> _db;
@@ -549,10 +554,12 @@ public:
         assert(thread);
         utils::fb_utilities::set_broadcast_address(gms::inet_address("localhost"));
         utils::fb_utilities::set_broadcast_rpc_address(gms::inet_address("localhost"));
+        _abort_source.start().get();
         _feature_service.start().get();
         _gossiper.start(std::ref(_feature_service), std::ref(_cfg)).get();
         netw::get_messaging_service().start(gms::inet_address("127.0.0.1"), 7000, false).get();
-        service::get_storage_service().start(std::ref(_db), std::ref(_gossiper), std::ref(_auth_service), std::ref(_sys_dist_ks), std::ref(_view_update_generator), std::ref(_feature_service), true).get();
+        service::get_storage_service().start(std::ref(_abort_source), std::ref(_db), std::ref(_gossiper), std::ref(_auth_service),
+                std::ref(_sys_dist_ks), std::ref(_view_update_generator), std::ref(_feature_service), true).get();
         service::get_storage_service().invoke_on_all([] (auto& ss) {
             ss.enable_all_features();
         }).get();
@@ -563,6 +570,7 @@ public:
         _db.stop().get();
         _gossiper.stop().get();
         _feature_service.stop().get();
+        _abort_source.stop().get();
     }
 };
 
