@@ -643,7 +643,7 @@ int main(int ac, char** av) {
             // #293 - do not stop anything
             //engine().at_exit([]{ return gms::get_gossiper().stop(); });
             supervisor::notify("initializing storage service");
-            init_storage_service(db, gossiper, auth_service, sys_dist_ks, view_update_generator, feature_service);
+            init_storage_service(stop_signal.as_sharded_abort_source(), db, gossiper, auth_service, sys_dist_ks, view_update_generator, feature_service);
             supervisor::notify("starting per-shard database core");
 
             // Note: changed from using a move here, because we want the config object intact.
