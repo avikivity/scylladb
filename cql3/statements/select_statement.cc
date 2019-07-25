@@ -526,6 +526,7 @@ indexed_table_select_statement::do_execute_base_query(
     auto timeout = db::timeout_clock::now() + options.get_timeout_config().*get_timeout_config_selector();
 
     struct base_query_state {
+        semaphore concurrency_limiter{100};
         query::result_merger merger;
         std::vector<primary_key> primary_keys;
         std::vector<primary_key>::iterator current_primary_key;
@@ -543,14 +544,16 @@ indexed_table_select_statement::do_execute_base_query(
         auto &merger = query_state.merger;
         auto &keys = query_state.primary_keys;
         auto &key_it = query_state.current_primary_key;
-        return repeat([this, &keys, &key_it, &merger, &proxy, &state, &options, cmd, timeout]() {
+        return repeat([this, &keys, &key_it, &merger, &proxy, &state, &options, cmd, timeout, &query_state]() {
             // Starting with 1 key, we check if the result was a short read, and if not,
             // we continue exponentially, asking for 2x more key than before
             auto key_it_end = std::min(key_it + std::distance(keys.begin(), key_it) + 1, keys.end());
             auto command = ::make_lw_shared<query::read_command>(*cmd);
 
             query::result_merger oneshot_merger(cmd->row_limit, query::max_partitions);
-            return map_reduce(key_it, key_it_end, [this, &proxy, &state, &options, cmd, timeout] (auto& key) {
+            return map_reduce(key_it, key_it_end, [this, &proxy, &state, &options, cmd, timeout, &query_state] (auto& key) {
+              // Limit concurrency here to avoid flooding the reader_concurrency_semaphore (and in general generating huge loads). See #3807.
+              return with_semaphore(query_state.concurrency_limiter, 1, [this, &proxy, &state, &options, cmd, timeout, key] {
                 auto command = ::make_lw_shared<query::read_command>(*cmd);
                 // for each partition, read just one clustering row (TODO: can
                 // get all needed rows of one partition at once.)
@@ -562,6 +565,7 @@ indexed_table_select_statement::do_execute_base_query(
                 .then([] (service::storage_proxy::coordinator_query_result qr) {
                     return std::move(qr.query_result);
                 });
+              });
             }, std::move(oneshot_merger)).then([&key_it, key_it_end = std::move(key_it_end), &keys, &merger] (foreign_ptr<lw_shared_ptr<query::result>> result) {
                 bool is_short_read = result->is_short_read();
                 merger(std::move(result));
