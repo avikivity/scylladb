@@ -36,6 +36,7 @@
 #include "database.hh"
 #include "db/system_distributed_keyspace.hh"
 #include "db/config.hh"
+#include "cql3/cql_config.hh"
 
 namespace db::view {
 class view_update_generator;
@@ -63,7 +64,11 @@ SEASTAR_TEST_CASE(test_boot_shutdown){
         gms::get_gossiper().start(std::ref(feature_service), std::ref(cfg)).get();
         auto stop_gossiper = defer([&] { gms::get_gossiper().stop().get(); });
 
-        service::get_storage_service().start(std::ref(db), std::ref(gms::get_gossiper()), std::ref(auth_service), std::ref(sys_dist_ks), std::ref(view_update_generator), std::ref(feature_service), true).get();
+        sharded<cql3::cql_config> cql_config;
+        cql_config.start();
+        auto stop_cql_config = defer([&] { cql_config.stop().get(); });
+
+        service::get_storage_service().start(std::ref(db), std::ref(gms::get_gossiper()), std::ref(auth_service), std::ref(cql_config), std::ref(sys_dist_ks), std::ref(view_update_generator), std::ref(feature_service), true).get();
         auto stop_ss = defer([&] { service::get_storage_service().stop().get(); });
 
         db.start(std::ref(cfg), dbcfg).get();
