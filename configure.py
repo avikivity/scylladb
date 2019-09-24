@@ -1072,6 +1072,7 @@ modes['debug']['cxxflags'] += ' ' + dbgflag
 modes['release']['cxxflags'] += ' ' + dbgflag
 
 seastar_cflags = args.user_cflags
+seastar_cflags += ' -DSEASTAR_DEBUG_SHARED_PTR'
 seastar_cflags += ' -Wno-error'
 if args.target != '':
     seastar_cflags += ' -march=' + args.target
