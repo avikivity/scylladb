@@ -92,6 +92,9 @@ public:
         }
     }
     std::map<sstring, sstring> to_map() const {
+        if (!_enabled) {
+            return {};
+        }
         return {
             { "enabled", _enabled ? "true" : "false" },
             { "preimage", _preimage ? "true" : "false" },
