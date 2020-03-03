@@ -840,12 +840,12 @@ SEASTAR_THREAD_TEST_CASE(test_row_delete) {
         BOOST_REQUIRE_EQUAL(results.size(), 3);  // 2 rows for update + 1 for delete
 
         BOOST_REQUIRE_EQUAL(results[0].size(), 1);
-        BOOST_REQUIRE_EQUAL(*results[0].front(), data_value(cdc::operation::update).serialize_nonnull());
+        BOOST_REQUIRE_EQUAL(*results[0].front(), data_value(static_cast<int8_t>(cdc::operation::update)).serialize_nonnull());
 
         BOOST_REQUIRE_EQUAL(results[1].size(), 1);
-        BOOST_REQUIRE_EQUAL(*results[1].front(), data_value(cdc::operation::update).serialize_nonnull());
+        BOOST_REQUIRE_EQUAL(*results[1].front(), data_value(static_cast<int8_t>(cdc::operation::update)).serialize_nonnull());
 
         BOOST_REQUIRE_EQUAL(results[2].size(), 1);
-        BOOST_REQUIRE_EQUAL(*results[2].front(), data_value(cdc::operation::row_delete).serialize_nonnull());
+        BOOST_REQUIRE_EQUAL(*results[2].front(), data_value(static_cast<int8_t>(cdc::operation::row_delete)).serialize_nonnull());
     }, mk_cdc_test_config()).get();
 }
