@@ -61,7 +61,6 @@ fedora_packages=(
     ant
     ant-junit
     maven
-    pystache
     patchelf
     python3
     python3-PyYAML
@@ -74,7 +73,6 @@ fedora_packages=(
     python3-setuptools
     python3-magic
     python3-psutil
-    python3-cassandra-driver
     python3-colorama
     dnf-utils
     pigz

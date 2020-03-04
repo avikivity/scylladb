@@ -58,17 +58,7 @@ struct cell_hash {
 
     size_type hash = no_hash;
 
-    explicit operator bool() const noexcept {
-        return hash != no_hash;
-    }
-};
-
-template<>
-struct appending_hash<cell_hash> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const cell_hash& ch) const {
-        feed_hash(h, ch.hash);
-    }
+    explicit operator bool() const noexcept;
 };
 
 using cell_hash_opt = seastar::optimized_optional<cell_hash>;
@@ -1157,14 +1147,6 @@ public:
 };
 
 struct mutation_application_stats {
-    uint64_t row_hits = 0;
-    uint64_t row_writes = 0;
-
-    mutation_application_stats& operator+=(const mutation_application_stats& other) {
-        row_hits += other.row_hits;
-        row_writes += other.row_writes;
-        return *this;
-    }
 };
 
 // Represents a set of writes made to a single partition.
@@ -1209,41 +1191,15 @@ public:
     using rows_type = intrusive_set_external_comparator<rows_entry, &rows_entry::_link>;
     friend class rows_entry;
     friend class size_calculator;
-private:
-    tombstone _tombstone;
-    lazy_row _static_row;
-    bool _static_row_continuous = true;
-    rows_type _rows;
-    // Contains only strict prefixes so that we don't have to lookup full keys
-    // in both _row_tombstones and _rows.
-    range_tombstone_list _row_tombstones;
-#ifdef SEASTAR_DEBUG
-    table_schema_version _schema_version;
-#endif
-
     friend class converting_mutation_partition_applier;
 public:
     struct copy_comparators_only {};
     struct incomplete_tag {};
     // Constructs an empty instance which is fully discontinuous except for the partition tombstone.
     mutation_partition(incomplete_tag, const schema& s, tombstone);
-    static mutation_partition make_incomplete(const schema& s, tombstone t = {}) {
-        return mutation_partition(incomplete_tag(), s, t);
-    }
-    mutation_partition(schema_ptr s)
-        : _rows()
-        , _row_tombstones(*s)
-#ifdef SEASTAR_DEBUG
-        , _schema_version(s->version())
-#endif
-    { }
-    mutation_partition(mutation_partition& other, copy_comparators_only)
-        : _rows()
-        , _row_tombstones(other._row_tombstones, range_tombstone_list::copy_comparator_only())
-#ifdef SEASTAR_DEBUG
-        , _schema_version(other._schema_version)
-#endif
-    { }
+    static mutation_partition make_incomplete(const schema& s, tombstone t = {});
+    mutation_partition(schema_ptr s);
+    mutation_partition(mutation_partition& other, copy_comparators_only);
     mutation_partition(mutation_partition&&) = default;
     mutation_partition(const schema& s, const mutation_partition&);
     mutation_partition(const mutation_partition&, const schema&, query::clustering_key_filter_ranges);
@@ -1256,16 +1212,11 @@ public:
     bool equal_continuity(const schema&, const mutation_partition&) const;
     // Consistent with equal()
     template<typename Hasher>
-    void feed_hash(Hasher& h, const schema& s) const {
-        hashing_partition_visitor<Hasher> v(h, s);
-        accept(s, v);
-    }
+    void feed_hash(Hasher& h, const schema& s) const;
 
     class printer {
-        const schema& _schema;
-        const mutation_partition& _mutation_partition;
     public:
-        printer(const schema& s, const mutation_partition& mp) : _schema(s), _mutation_partition(mp) { }
+        printer(const schema& s, const mutation_partition& mp);
         printer(const printer&) = delete;
         printer(printer&&) = delete;
 
@@ -1276,8 +1227,8 @@ public:
     // Makes sure there is a dummy entry after all clustered rows. Doesn't affect continuity.
     // Doesn't invalidate iterators.
     void ensure_last_dummy(const schema&);
-    bool static_row_continuous() const { return _static_row_continuous; }
-    void set_static_row_continuous(bool value) { _static_row_continuous = value; }
+    bool static_row_continuous() const;
+    void set_static_row_continuous(bool value);
     bool is_fully_continuous() const;
     void make_fully_continuous();
     // Sets or clears continuity of clustering ranges between existing rows.
@@ -1297,7 +1248,7 @@ public:
     // Applies mutation_fragment.
     // The fragment must be goverened by the same schema as this object.
     void apply(const schema& s, const mutation_fragment&);
-    void apply(tombstone t) { _tombstone.apply(t); }
+    void apply(tombstone t);
     void apply_delete(const schema& schema, const clustering_key_prefix& prefix, tombstone t);
     void apply_delete(const schema& schema, range_tombstone rt);
     void apply_delete(const schema& schema, clustering_key_prefix&& prefix, tombstone t);
@@ -1427,14 +1378,14 @@ public:
     deletable_row& clustered_row(const schema& s, clustering_key_view key);
     deletable_row& clustered_row(const schema& s, position_in_partition_view pos, is_dummy, is_continuous);
 public:
-    tombstone partition_tombstone() const { return _tombstone; }
-    lazy_row& static_row() { return _static_row; }
-    const lazy_row& static_row() const { return _static_row; }
+    tombstone partition_tombstone() const;
+    lazy_row& static_row();
+    const lazy_row& static_row() const;
     // return a set of rows_entry where each entry represents a CQL row sharing the same clustering key.
-    const rows_type& clustered_rows() const { return _rows; }
-    const range_tombstone_list& row_tombstones() const { return _row_tombstones; }
-    rows_type& clustered_rows() { return _rows; }
-    range_tombstone_list& row_tombstones() { return _row_tombstones; }
+    const rows_type& clustered_rows() const;
+    const range_tombstone_list& row_tombstones() const;
+    rows_type& clustered_rows();
+    range_tombstone_list& row_tombstones();
     const row* find_row(const schema& s, const clustering_key& key) const;
     tombstone range_tombstone_for_row(const schema& schema, const clustering_key& key) const;
     row_tombstone tombstone_for_row(const schema& schema, const clustering_key& key) const;
@@ -1447,10 +1398,6 @@ public:
     rows_type::iterator upper_bound(const schema& schema, const query::clustering_range& r);
     boost::iterator_range<rows_type::iterator> range(const schema& schema, const query::clustering_range& r);
     // Returns an iterator range of rows_entry, with only non-dummy entries.
-    auto non_dummy_rows() const {
-        return boost::make_iterator_range(_rows.begin(), _rows.end())
-            | boost::adaptors::filtered([] (const rows_entry& e) { return bool(!e.dummy()); });
-    }
     // Writes this partition using supplied query result writer.
     // The partition should be first compacted with compact_for_query(), otherwise
     // results may include data which is deleted/expired.
@@ -1478,14 +1425,6 @@ private:
     void for_each_row(const schema& schema, const query::clustering_range& row_range, bool reversed, Func&& func) const;
     friend class counter_write_query_result_builder;
 
-    void check_schema(const schema& s) const {
-#ifdef SEASTAR_DEBUG
-        assert(s.version() == _schema_version);
-#endif
-    }
+    void check_schema(const schema& s) const;
 };
 
-inline
-mutation_partition& mutation_partition::container_of(rows_type& rows) {
-    return *boost::intrusive::get_parent_from_member(&rows, &mutation_partition::_rows);
-}

@@ -425,22 +425,19 @@ public:
         _data->_size_in_bytes = std::nullopt;
         return _data->_partition_start;
     }
-    partition_end& as_mutable_end_of_partition() {
-        _data->_size_in_bytes = std::nullopt;
-        return _data->_partition_end;
-    }
+    partition_end& as_mutable_end_of_partition();
 
-    static_row&& as_static_row() && { return std::move(_data->_static_row); }
-    clustering_row&& as_clustering_row() && { return std::move(_data->_clustering_row); }
-    range_tombstone&& as_range_tombstone() && { return std::move(_data->_range_tombstone); }
-    partition_start&& as_partition_start() && { return std::move(_data->_partition_start); }
-    partition_end&& as_end_of_partition() && { return std::move(_data->_partition_end); }
+    static_row&& as_static_row() &&;
+    clustering_row&& as_clustering_row() &&;
+    range_tombstone&& as_range_tombstone() &&;
+    partition_start&& as_partition_start() &&;
+    partition_end&& as_end_of_partition() &&;
 
-    const static_row& as_static_row() const & { return _data->_static_row; }
-    const clustering_row& as_clustering_row() const & { return _data->_clustering_row; }
-    const range_tombstone& as_range_tombstone() const & { return _data->_range_tombstone; }
-    const partition_start& as_partition_start() const & { return _data->_partition_start; }
-    const partition_end& as_end_of_partition() const & { return _data->_partition_end; }
+    const static_row& as_static_row() const &;
+    const clustering_row& as_clustering_row() const &;
+    const range_tombstone& as_range_tombstone() const &;
+    const partition_start& as_partition_start() const &;
+    const partition_end& as_end_of_partition() const &;
 
     // Requirements: mergeable_with(mf)
     void apply(const schema& s, mutation_fragment&& mf);
@@ -485,46 +482,22 @@ public:
         abort();
     }
 
-    size_t memory_usage(const schema& s) const {
-        if (!_data->_size_in_bytes) {
-            _data->_size_in_bytes = sizeof(data) + visit([&s] (auto& mf) -> size_t { return mf.external_memory_usage(s); });
-        }
-        return *_data->_size_in_bytes;
-    }
+    size_t memory_usage(const schema& s) const;
 
-    bool equal(const schema& s, const mutation_fragment& other) const {
-        if (other._kind != _kind) {
-            return false;
-        }
-        switch(_kind) {
-        case kind::static_row:
-            return as_static_row().equal(s, other.as_static_row());
-        case kind::clustering_row:
-            return as_clustering_row().equal(s, other.as_clustering_row());
-        case kind::range_tombstone:
-            return as_range_tombstone().equal(s, other.as_range_tombstone());
-        case kind::partition_start:
-            return as_partition_start().equal(s, other.as_partition_start());
-        case kind::partition_end:
-            return as_end_of_partition().equal(s, other.as_end_of_partition());
-        }
-        abort();
-    }
+    bool equal(const schema& s, const mutation_fragment& other) const;
 
     // Fragments which have the same position() and are mergeable can be
     // merged into one fragment with apply() which represents the sum of
     // writes represented by each of the fragments.
     // Fragments which have the same position() but are not mergeable
     // can be emitted one after the other in the stream.
-    bool mergeable_with(const mutation_fragment& mf) const {
-        return _kind == mf._kind && _kind != kind::range_tombstone;
-    }
+    bool mergeable_with(const mutation_fragment& mf) const;
 
     class printer {
         const schema& _schema;
         const mutation_fragment& _mutation_fragment;
     public:
-        printer(const schema& s, const mutation_fragment& mf) : _schema(s), _mutation_fragment(mf) { }
+        printer(const schema& s, const mutation_fragment& mf);
         printer(const printer&) = delete;
         printer(printer&&) = delete;
 
@@ -533,25 +506,6 @@ public:
     friend std::ostream& operator<<(std::ostream& os, const printer& p);
 };
 
-inline position_in_partition_view static_row::position() const
-{
-    return position_in_partition_view(position_in_partition_view::static_row_tag_t());
-}
-
-inline position_in_partition_view clustering_row::position() const
-{
-    return position_in_partition_view(position_in_partition_view::clustering_row_tag_t(), _ck);
-}
-
-inline position_in_partition_view partition_start::position() const
-{
-    return position_in_partition_view(position_in_partition_view::partition_start_tag_t{});
-}
-
-inline position_in_partition_view partition_end::position() const
-{
-    return position_in_partition_view(position_in_partition_view::end_of_partition_tag_t());
-}
 
 std::ostream& operator<<(std::ostream&, partition_region);
 std::ostream& operator<<(std::ostream&, mutation_fragment::kind);

@@ -22,7 +22,6 @@
 #pragma once
 
 #include "bytes.hh"
-#include "types.hh"
 #include "compound_compat.hh"
 #include "utils/managed_bytes.hh"
 #include "hashing.hh"
@@ -276,45 +275,25 @@ public:
     };
 
     struct hashing {
-        typename TopLevel::compound _t;
-        hashing(const schema& s) : _t(get_compound_type(s)) {}
-        size_t operator()(const TopLevel& o) const {
-            return _t->hash(o);
-        }
-        size_t operator()(const TopLevelView& o) const {
-            return _t->hash(o.representation());
-        }
+        hashing(const schema& s);
+        size_t operator()(const TopLevel& o) const;
+        size_t operator()(const TopLevelView& o) const;
     };
 
     struct equality {
-        typename TopLevel::compound _t;
-        equality(const schema& s) : _t(get_compound_type(s)) {}
-        bool operator()(const TopLevel& o1, const TopLevel& o2) const {
-            return _t->equal(o1.representation(), o2.representation());
-        }
-        bool operator()(const TopLevelView& o1, const TopLevel& o2) const {
-            return _t->equal(o1.representation(), o2.representation());
-        }
-        bool operator()(const TopLevel& o1, const TopLevelView& o2) const {
-            return _t->equal(o1.representation(), o2.representation());
-        }
+        equality(const schema& s);
+        bool operator()(const TopLevel& o1, const TopLevel& o2) const;
+        bool operator()(const TopLevelView& o1, const TopLevel& o2) const;
+        bool operator()(const TopLevel& o1, const TopLevelView& o2) const;
     };
 
-    bool equal(const schema& s, const TopLevel& other) const {
-        return get_compound_type(s)->equal(representation(), other.representation());
-    }
+    bool equal(const schema& s, const TopLevel& other) const ;
 
-    bool equal(const schema& s, const TopLevelView& other) const {
-        return get_compound_type(s)->equal(representation(), other.representation());
-    }
+    bool equal(const schema& s, const TopLevelView& other) const ;
 
-    operator bytes_view() const {
-        return _bytes;
-    }
+    operator bytes_view() const;
 
-    const managed_bytes& representation() const {
-        return _bytes;
-    }
+    const managed_bytes& representation() const;
 
     // begin() and end() return iterators over components of this compound. The iterator yields a bytes_view to the component.
     // The iterators satisfy InputIterator concept.
@@ -327,18 +306,12 @@ public:
         return get_compound_type(s)->end(_bytes);
     }
 
-    bool is_empty() const {
-        return _bytes.empty();
-    }
+    bool is_empty() const;
 
-    explicit operator bool() const {
-        return !is_empty();
-    }
+    explicit operator bool() const;
 
     // For backward compatibility with existing code.
-    bool is_empty(const schema& s) const {
-        return is_empty();
-    }
+    bool is_empty(const schema& s) const;
 
     // Returns a range of bytes_view
     auto components() const {
@@ -346,74 +319,34 @@ public:
     }
 
     // Returns a range of bytes_view
-    auto components(const schema& s) const {
-        return components();
-    }
+    auto components(const schema& s) const;
 
-    bytes_view get_component(const schema& s, size_t idx) const {
-        auto it = begin(s);
-        std::advance(it, idx);
-        return *it;
-    }
+    bytes_view get_component(const schema& s, size_t idx) const;
 
     // Returns the number of components of this compound.
-    size_t size(const schema& s) const {
-        return std::distance(begin(s), end(s));
-    }
+    size_t size(const schema& s) const;
 
-    size_t external_memory_usage() const {
-        return _bytes.external_memory_usage();
-    }
+    size_t external_memory_usage() const;
 
-    size_t memory_usage() const {
-        return sizeof(*this) + external_memory_usage();
-    }
+    size_t memory_usage() const;
 };
 
 template <typename TopLevel, typename PrefixTopLevel>
 class prefix_view_on_full_compound {
 public:
     using iterator = typename compound_type<allow_prefixes::no>::iterator;
-private:
-    bytes_view _b;
-    unsigned _prefix_len;
-    iterator _begin;
-    iterator _end;
-public:
-    prefix_view_on_full_compound(const schema& s, bytes_view b, unsigned prefix_len)
-        : _b(b)
-        , _prefix_len(prefix_len)
-        , _begin(TopLevel::get_compound_type(s)->begin(_b))
-        , _end(_begin)
-    {
-        std::advance(_end, prefix_len);
-    }
+    prefix_view_on_full_compound(const schema& s, bytes_view b, unsigned prefix_len);
 
-    iterator begin() const { return _begin; }
-    iterator end() const { return _end; }
+    iterator begin() const;
+    iterator end() const;
 
     struct less_compare_with_prefix {
-        typename PrefixTopLevel::compound prefix_type;
 
-        less_compare_with_prefix(const schema& s)
-            : prefix_type(PrefixTopLevel::get_compound_type(s))
-        { }
+        less_compare_with_prefix(const schema& s);
 
-        bool operator()(const prefix_view_on_full_compound& k1, const PrefixTopLevel& k2) const {
-            return lexicographical_tri_compare(
-                prefix_type->types().begin(), prefix_type->types().end(),
-                k1.begin(), k1.end(),
-                prefix_type->begin(k2), prefix_type->end(k2),
-                tri_compare) < 0;
-        }
+        bool operator()(const prefix_view_on_full_compound& k1, const PrefixTopLevel& k2) const;
 
-        bool operator()(const PrefixTopLevel& k1, const prefix_view_on_full_compound& k2) const {
-            return lexicographical_tri_compare(
-                prefix_type->types().begin(), prefix_type->types().end(),
-                prefix_type->begin(k1), prefix_type->end(k1),
-                k2.begin(), k2.end(),
-                tri_compare) < 0;
-        }
+        bool operator()(const PrefixTopLevel& k1, const prefix_view_on_full_compound& k2) const;
     };
 };
 
@@ -421,46 +354,17 @@ template <typename TopLevel>
 class prefix_view_on_prefix_compound {
 public:
     using iterator = typename compound_type<allow_prefixes::yes>::iterator;
-private:
-    bytes_view _b;
-    unsigned _prefix_len;
-    iterator _begin;
-    iterator _end;
-public:
-    prefix_view_on_prefix_compound(const schema& s, bytes_view b, unsigned prefix_len)
-        : _b(b)
-        , _prefix_len(prefix_len)
-        , _begin(TopLevel::get_compound_type(s)->begin(_b))
-        , _end(_begin)
-    {
-        std::advance(_end, prefix_len);
-    }
+    prefix_view_on_prefix_compound(const schema& s, bytes_view b, unsigned prefix_len);
 
-    iterator begin() const { return _begin; }
-    iterator end() const { return _end; }
+    iterator begin() const;
+    iterator end() const;
 
     struct less_compare_with_prefix {
-        typename TopLevel::compound prefix_type;
+        less_compare_with_prefix(const schema& s);
 
-        less_compare_with_prefix(const schema& s)
-            : prefix_type(TopLevel::get_compound_type(s))
-        { }
+        bool operator()(const prefix_view_on_prefix_compound& k1, const TopLevel& k2) const;
 
-        bool operator()(const prefix_view_on_prefix_compound& k1, const TopLevel& k2) const {
-            return lexicographical_tri_compare(
-                prefix_type->types().begin(), prefix_type->types().end(),
-                k1.begin(), k1.end(),
-                prefix_type->begin(k2), prefix_type->end(k2),
-                tri_compare) < 0;
-        }
-
-        bool operator()(const TopLevel& k1, const prefix_view_on_prefix_compound& k2) const {
-            return lexicographical_tri_compare(
-                prefix_type->types().begin(), prefix_type->types().end(),
-                prefix_type->begin(k1), prefix_type->end(k1),
-                k2.begin(), k2.end(),
-                tri_compare) < 0;
-        }
+        bool operator()(const TopLevel& k1, const prefix_view_on_prefix_compound& k2) const;
     };
 };
 
@@ -472,39 +376,15 @@ protected:
 public:
     using prefix_view_type = prefix_view_on_full_compound<TopLevel, PrefixTopLevel>;
 
-    bool is_prefixed_by(const schema& s, const PrefixTopLevel& prefix) const {
-        auto t = base::get_compound_type(s);
-        auto prefix_type = PrefixTopLevel::get_compound_type(s);
-        return ::is_prefixed_by(t->types().begin(),
-            t->begin(*this), t->end(*this),
-            prefix_type->begin(prefix), prefix_type->end(prefix),
-            ::equal);
-    }
+    bool is_prefixed_by(const schema& s, const PrefixTopLevel& prefix) const;
 
     struct less_compare_with_prefix {
-        typename PrefixTopLevel::compound prefix_type;
-        typename TopLevel::compound full_type;
 
-        less_compare_with_prefix(const schema& s)
-            : prefix_type(PrefixTopLevel::get_compound_type(s))
-            , full_type(TopLevel::get_compound_type(s))
-        { }
+        less_compare_with_prefix(const schema& s);
 
-        bool operator()(const TopLevel& k1, const PrefixTopLevel& k2) const {
-            return lexicographical_tri_compare(
-                prefix_type->types().begin(), prefix_type->types().end(),
-                full_type->begin(k1), full_type->end(k1),
-                prefix_type->begin(k2), prefix_type->end(k2),
-                tri_compare) < 0;
-        }
+        bool operator()(const TopLevel& k1, const PrefixTopLevel& k2) const;
 
-        bool operator()(const PrefixTopLevel& k1, const TopLevel& k2) const {
-            return lexicographical_tri_compare(
-                prefix_type->types().begin(), prefix_type->types().end(),
-                prefix_type->begin(k1), prefix_type->end(k1),
-                full_type->begin(k2), full_type->end(k2),
-                tri_compare) < 0;
-        }
+        bool operator()(const PrefixTopLevel& k1, const TopLevel& k2) const;
     };
 
     // In prefix equality two sequences are equal if any of them is a prefix
@@ -512,46 +392,24 @@ public:
     // Note: full compounds sorted according to lexicographical ordering are also
     // sorted according to prefix equality ordering.
     struct prefix_equality_less_compare {
-        typename PrefixTopLevel::compound prefix_type;
-        typename TopLevel::compound full_type;
+        prefix_equality_less_compare(const schema& s);
 
-        prefix_equality_less_compare(const schema& s)
-            : prefix_type(PrefixTopLevel::get_compound_type(s))
-            , full_type(TopLevel::get_compound_type(s))
-        { }
+        bool operator()(const TopLevel& k1, const PrefixTopLevel& k2) const;
 
-        bool operator()(const TopLevel& k1, const PrefixTopLevel& k2) const {
-            return prefix_equality_tri_compare(prefix_type->types().begin(),
-                full_type->begin(k1), full_type->end(k1),
-                prefix_type->begin(k2), prefix_type->end(k2),
-                tri_compare) < 0;
-        }
-
-        bool operator()(const PrefixTopLevel& k1, const TopLevel& k2) const {
-            return prefix_equality_tri_compare(prefix_type->types().begin(),
-                prefix_type->begin(k1), prefix_type->end(k1),
-                full_type->begin(k2), full_type->end(k2),
-                tri_compare) < 0;
-        }
+        bool operator()(const PrefixTopLevel& k1, const TopLevel& k2) const;
     };
 
-    prefix_view_type prefix_view(const schema& s, unsigned prefix_len) const {
-        return { s, this->representation(), prefix_len };
-    }
+    prefix_view_type prefix_view(const schema& s, unsigned prefix_len) const;
 };
 
 template <typename TopLevel, typename FullTopLevel>
 class prefix_compound_view_wrapper : public compound_view_wrapper<TopLevel> {
     using base = compound_view_wrapper<TopLevel>;
 protected:
-    prefix_compound_view_wrapper(bytes_view v)
-        : compound_view_wrapper<TopLevel>(v)
-    { }
+    prefix_compound_view_wrapper(bytes_view v);
 
 public:
-    bool is_full(const schema& s) const {
-        return TopLevel::get_compound_type(s)->is_full(base::_bytes);
-    }
+    bool is_full(const schema& s) const;
 };
 
 template <typename TopLevel, typename TopLevelView, typename FullTopLevel>
@@ -562,60 +420,30 @@ protected:
 public:
     using prefix_view_type = prefix_view_on_prefix_compound<TopLevel>;
 
-    prefix_view_type prefix_view(const schema& s, unsigned prefix_len) const {
-        return { s, this->representation(), prefix_len };
-    }
+    prefix_view_type prefix_view(const schema& s, unsigned prefix_len) const;
 
-    bool is_full(const schema& s) const {
-        return TopLevel::get_compound_type(s)->is_full(base::_bytes);
-    }
+    bool is_full(const schema& s) const;
 
     // Can be called only if is_full()
-    FullTopLevel to_full(const schema& s) const {
-        return FullTopLevel::from_exploded(s, base::explode(s));
-    }
+    FullTopLevel to_full(const schema& s) const;
 
-    bool is_prefixed_by(const schema& s, const TopLevel& prefix) const {
-        auto t = base::get_compound_type(s);
-        return ::is_prefixed_by(t->types().begin(),
-            t->begin(*this), t->end(*this),
-            t->begin(prefix), t->end(prefix),
-            equal);
-    }
+    bool is_prefixed_by(const schema& s, const TopLevel& prefix) const;
 
     // In prefix equality two sequences are equal if any of them is a prefix
     // of the other. Otherwise lexicographical ordering is applied.
     // Note: full compounds sorted according to lexicographical ordering are also
     // sorted according to prefix equality ordering.
     struct prefix_equality_less_compare {
-        typename TopLevel::compound prefix_type;
+        prefix_equality_less_compare(const schema& s);
 
-        prefix_equality_less_compare(const schema& s)
-            : prefix_type(TopLevel::get_compound_type(s))
-        { }
-
-        bool operator()(const TopLevel& k1, const TopLevel& k2) const {
-            return prefix_equality_tri_compare(prefix_type->types().begin(),
-                prefix_type->begin(k1), prefix_type->end(k1),
-                prefix_type->begin(k2), prefix_type->end(k2),
-                tri_compare) < 0;
-        }
+        bool operator()(const TopLevel& k1, const TopLevel& k2) const;
     };
 
     // See prefix_equality_less_compare.
     struct prefix_equal_tri_compare {
-        typename TopLevel::compound prefix_type;
+        prefix_equal_tri_compare(const schema& s);
 
-        prefix_equal_tri_compare(const schema& s)
-            : prefix_type(TopLevel::get_compound_type(s))
-        { }
-
-        int operator()(const TopLevel& k1, const TopLevel& k2) const {
-            return prefix_equality_tri_compare(prefix_type->types().begin(),
-                prefix_type->begin(k1), prefix_type->end(k1),
-                prefix_type->begin(k2), prefix_type->end(k2),
-                tri_compare);
-        }
+        int operator()(const TopLevel& k1, const TopLevel& k2) const;
     };
 };
 
@@ -623,20 +451,12 @@ class partition_key_view : public compound_view_wrapper<partition_key_view> {
 public:
     using c_type = compound_type<allow_prefixes::no>;
 private:
-    partition_key_view(bytes_view v)
-        : compound_view_wrapper<partition_key_view>(v)
-    { }
+    partition_key_view(bytes_view v);
 public:
     using compound = lw_shared_ptr<c_type>;
 
-    static partition_key_view from_bytes(bytes_view v) {
-        return { v };
-    }
-
-    static const compound& get_compound_type(const schema& s) {
-        return s.partition_key_type();
-    }
-
+    static partition_key_view from_bytes(bytes_view v);
+    static const compound& get_compound_type(const schema& s);
     // Returns key's representation which is compatible with Origin.
     // The result is valid as long as the schema is live.
     const legacy_compound_view<c_type> legacy_form(const schema& s) const;
@@ -645,10 +465,7 @@ public:
     int legacy_tri_compare(const schema& s, partition_key_view o) const;
 
     // Checks if keys are equal in a way which is compatible with Origin.
-    bool legacy_equal(const schema& s, partition_key_view o) const {
-        return legacy_tri_compare(s, o) == 0;
-    }
-
+    bool legacy_equal(const schema& s, partition_key_view o) const;
     // A trichotomic comparator which orders keys according to their ordering on the ring.
     int ring_order_tri_compare(const schema& s, partition_key_view o) const;
 
@@ -656,17 +473,11 @@ public:
 };
 
 class partition_key : public compound_wrapper<partition_key, partition_key_view> {
-    explicit partition_key(managed_bytes&& b)
-        : compound_wrapper<partition_key, partition_key_view>(std::move(b))
-    { }
 public:
     using c_type = compound_type<allow_prefixes::no>;
 
     template<typename RangeOfSerializedComponents>
-    static partition_key from_range(RangeOfSerializedComponents&& v) {
-        return partition_key(managed_bytes(c_type::serialize_value(std::forward<RangeOfSerializedComponents>(v))));
-    }
-
+    static partition_key from_range(RangeOfSerializedComponents&& v);
     /*!
      * \brief create a partition_key from a nodetool style string
      * takes a nodetool style string representation of a partition key and returns a partition_key.
@@ -676,10 +487,7 @@ public:
      */
     static partition_key from_nodetool_style_string(const schema_ptr s, const sstring& key);
 
-    partition_key(std::vector<bytes> v)
-        : compound_wrapper(managed_bytes(c_type::serialize_value(std::move(v))))
-    { }
-
+    partition_key(std::vector<bytes> v);
     partition_key(partition_key&& v) = default;
     partition_key(const partition_key& v) = default;
     partition_key(partition_key& v) = default;
@@ -687,98 +495,50 @@ public:
     partition_key& operator=(partition_key&) = default;
     partition_key& operator=(partition_key&&) = default;
 
-    partition_key(partition_key_view key)
-        : partition_key(managed_bytes(key.representation()))
-    { }
+    partition_key(partition_key_view key);
 
     using compound = lw_shared_ptr<c_type>;
 
-    static partition_key from_bytes(bytes_view b) {
-        return partition_key(managed_bytes(b));
-    }
-
-    static const compound& get_compound_type(const schema& s) {
-        return s.partition_key_type();
-    }
-
+    static partition_key from_bytes(bytes_view b);
+    static const compound& get_compound_type(const schema& s);
     // Returns key's representation which is compatible with Origin.
     // The result is valid as long as the schema is live.
-    const legacy_compound_view<c_type> legacy_form(const schema& s) const {
-        return view().legacy_form(s);
-    }
-
+    const legacy_compound_view<c_type> legacy_form(const schema& s) const;
     // A trichotomic comparator for ordering compatible with Origin.
-    int legacy_tri_compare(const schema& s, const partition_key& o) const {
-        return view().legacy_tri_compare(s, o);
-    }
-
+    int legacy_tri_compare(const schema& s, const partition_key& o) const;
     // Checks if keys are equal in a way which is compatible with Origin.
-    bool legacy_equal(const schema& s, const partition_key& o) const {
-        return view().legacy_equal(s, o);
-    }
-
-    void validate(const schema& s) const {
-        return s.partition_key_type()->validate(representation());
-    }
-
+    bool legacy_equal(const schema& s, const partition_key& o) const;
+    void validate(const schema& s) const;
     friend std::ostream& operator<<(std::ostream& out, const partition_key& pk);
 };
 
 std::ostream& operator<<(std::ostream& out, const partition_key::with_schema_wrapper& pk);
 
 class exploded_clustering_prefix {
-    std::vector<bytes> _v;
 public:
-    exploded_clustering_prefix(std::vector<bytes>&& v) : _v(std::move(v)) {}
-    exploded_clustering_prefix() {}
-    size_t size() const {
-        return _v.size();
-    }
-    auto const& components() const {
-        return _v;
-    }
-    explicit operator bool() const {
-        return !_v.empty();
-    }
-    bool is_full(const schema& s) const {
-        return _v.size() == s.clustering_key_size();
-    }
+    exploded_clustering_prefix(std::vector<bytes>&& v);
+    exploded_clustering_prefix();
+    size_t size() const;
+    auto const& components() const;
+    explicit operator bool() const;
+    bool is_full(const schema& s) const;
     friend std::ostream& operator<<(std::ostream& os, const exploded_clustering_prefix& ecp);
 };
 
 class clustering_key_prefix_view : public prefix_compound_view_wrapper<clustering_key_prefix_view, clustering_key> {
-    clustering_key_prefix_view(bytes_view v)
-        : prefix_compound_view_wrapper<clustering_key_prefix_view, clustering_key>(v)
-    { }
 public:
-    static clustering_key_prefix_view from_bytes(bytes_view v) {
-        return { v };
-    }
-
+    static clustering_key_prefix_view from_bytes(bytes_view v);
     using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
 
-    static const compound& get_compound_type(const schema& s) {
-        return s.clustering_key_prefix_type();
-    }
-
-    static clustering_key_prefix_view make_empty() {
-        return { bytes_view() };
-    }
-};
+    static const compound& get_compound_type(const schema& s);
+    static clustering_key_prefix_view make_empty();};
 
 class clustering_key_prefix : public prefix_compound_wrapper<clustering_key_prefix, clustering_key_prefix_view, clustering_key> {
-    explicit clustering_key_prefix(managed_bytes&& b)
-            : prefix_compound_wrapper<clustering_key_prefix, clustering_key_prefix_view, clustering_key>(std::move(b))
-    { }
 public:
     template<typename RangeOfSerializedComponents>
-    static clustering_key_prefix from_range(RangeOfSerializedComponents&& v) {
-        return clustering_key_prefix(compound::element_type::serialize_value(std::forward<RangeOfSerializedComponents>(v)));
-    }
+    static clustering_key_prefix from_range(RangeOfSerializedComponents&& v);
 
-    clustering_key_prefix(std::vector<bytes> v)
-        : prefix_compound_wrapper(compound::element_type::serialize_value(std::move(v)))
-    { }
+    clustering_key_prefix(std::vector<bytes> v);
 
     clustering_key_prefix(clustering_key_prefix&& v) = default;
     clustering_key_prefix(const clustering_key_prefix& v) = default;
@@ -787,78 +547,17 @@ public:
     clustering_key_prefix& operator=(clustering_key_prefix&) = default;
     clustering_key_prefix& operator=(clustering_key_prefix&&) = default;
 
-    clustering_key_prefix(clustering_key_prefix_view v)
-        : clustering_key_prefix(managed_bytes(v.representation()))
-    { }
-
+    clustering_key_prefix(clustering_key_prefix_view v);
     using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
 
-    static clustering_key_prefix from_bytes(bytes_view b) {
-        return clustering_key_prefix(managed_bytes(b));
-    }
-
-    static const compound& get_compound_type(const schema& s) {
-        return s.clustering_key_prefix_type();
-    }
-
-    static clustering_key_prefix from_clustering_prefix(const schema& s, const exploded_clustering_prefix& prefix) {
-        return from_exploded(s, prefix.components());
-    }
-
+    static clustering_key_prefix from_bytes(bytes_view b);
+    static const compound& get_compound_type(const schema& s);
+    static clustering_key_prefix from_clustering_prefix(const schema& s, const exploded_clustering_prefix& prefix);
     /* This function makes the passed clustering key full by filling its
      * missing trailing components with empty values.
      * This is used to represesent clustering keys of rows in compact tables that may be non-full.
      * Returns whether a key wasn't full before the call.
      */
-    static bool make_full(const schema& s, clustering_key_prefix& ck) {
-        if (!ck.is_full(s)) {
-            // TODO: avoid unnecessary copy here
-            auto full_ck_size = s.clustering_key_columns().size();
-            auto exploded = ck.explode(s);
-            exploded.resize(full_ck_size);
-            ck = clustering_key_prefix::from_exploded(std::move(exploded));
-            return true;
-        }
-        return false;
-    }
-
-    friend std::ostream& operator<<(std::ostream& out, const clustering_key_prefix& ckp);
+    static bool make_full(const schema& s, clustering_key_prefix& ck);    friend std::ostream& operator<<(std::ostream& out, const clustering_key_prefix& ckp);
 };
 
-std::ostream& operator<<(std::ostream& out, const clustering_key_prefix::with_schema_wrapper& pk);
-
-template<>
-struct appending_hash<partition_key_view> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const partition_key_view& pk, const schema& s) const {
-        for (bytes_view v : pk.components(s)) {
-            ::feed_hash(h, v);
-        }
-    }
-};
-
-template<>
-struct appending_hash<partition_key> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const partition_key& pk, const schema& s) const {
-        appending_hash<partition_key_view>()(h, pk.view(), s);
-    }
-};
-
-template<>
-struct appending_hash<clustering_key_prefix_view> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const clustering_key_prefix_view& ck, const schema& s) const {
-        for (bytes_view v : ck.components(s)) {
-            ::feed_hash(h, v);
-        }
-    }
-};
-
-template<>
-struct appending_hash<clustering_key_prefix> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const clustering_key_prefix& ck, const schema& s) const {
-        appending_hash<clustering_key_prefix_view>()(h, ck.view(), s);
-    }
-};
