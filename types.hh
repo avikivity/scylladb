@@ -89,92 +89,6 @@ enum class lexicographical_relation : int8_t {
     after_all_prefixed
 };
 
-// Like std::lexicographical_compare but injects values from shared sequence (types) to the comparator
-// Compare is an abstract_type-aware less comparator, which takes the type as first argument.
-template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Compare>
-bool lexicographical_compare(TypesIterator types, InputIt1 first1, InputIt1 last1,
-        InputIt2 first2, InputIt2 last2, Compare comp) {
-    while (first1 != last1 && first2 != last2) {
-        if (comp(*types, *first1, *first2)) {
-            return true;
-        }
-        if (comp(*types, *first2, *first1)) {
-            return false;
-        }
-        ++first1;
-        ++first2;
-        ++types;
-    }
-    return (first1 == last1) && (first2 != last2);
-}
-
-// Like std::lexicographical_compare but injects values from shared sequence
-// (types) to the comparator. Compare is an abstract_type-aware trichotomic
-// comparator, which takes the type as first argument.
-//
-// A trichotomic comparator returns an integer which is less, equal or greater
-// than zero when the first value is respectively smaller, equal or greater
-// than the second value.
-template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Compare>
-int lexicographical_tri_compare(TypesIterator types_first, TypesIterator types_last,
-        InputIt1 first1, InputIt1 last1,
-        InputIt2 first2, InputIt2 last2,
-        Compare comp,
-        lexicographical_relation relation1 = lexicographical_relation::before_all_strictly_prefixed,
-        lexicographical_relation relation2 = lexicographical_relation::before_all_strictly_prefixed) {
-    while (types_first != types_last && first1 != last1 && first2 != last2) {
-        auto c = comp(*types_first, *first1, *first2);
-        if (c) {
-            return c;
-        }
-        ++first1;
-        ++first2;
-        ++types_first;
-    }
-    bool e1 = first1 == last1;
-    bool e2 = first2 == last2;
-    if (e1 && e2) {
-        return static_cast<int>(relation1) - static_cast<int>(relation2);
-    }
-    if (e2) {
-        return relation2 == lexicographical_relation::after_all_prefixed ? -1 : 1;
-    } else if (e1) {
-        return relation1 == lexicographical_relation::after_all_prefixed ? 1 : -1;
-    } else {
-        return 0;
-    }
-}
-
-// Trichotomic version of std::lexicographical_compare()
-//
-// Returns an integer which is less, equal or greater than zero when the first value
-// is respectively smaller, equal or greater than the second value.
-template <typename InputIt1, typename InputIt2, typename Compare>
-int lexicographical_tri_compare(InputIt1 first1, InputIt1 last1,
-        InputIt2 first2, InputIt2 last2,
-        Compare comp,
-        lexicographical_relation relation1 = lexicographical_relation::before_all_strictly_prefixed,
-        lexicographical_relation relation2 = lexicographical_relation::before_all_strictly_prefixed) {
-    while (first1 != last1 && first2 != last2) {
-        auto c = comp(*first1, *first2);
-        if (c) {
-            return c;
-        }
-        ++first1;
-        ++first2;
-    }
-    bool e1 = first1 == last1;
-    bool e2 = first2 == last2;
-    if (e1 == e2) {
-        return static_cast<int>(relation1) - static_cast<int>(relation2);
-    }
-    if (e2) {
-        return relation2 == lexicographical_relation::after_all_prefixed ? -1 : 1;
-    } else {
-        return relation1 == lexicographical_relation::after_all_prefixed ? 1 : -1;
-    }
-}
-
 // A trichotomic comparator for prefix equality total ordering.
 // In this ordering, two sequences are equal iff any of them is a prefix
 // of the another. Otherwise, lexicographical ordering determines the order.
@@ -184,49 +98,25 @@ int lexicographical_tri_compare(InputIt1 first1, InputIt1 last1,
 //
 template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Compare>
 int prefix_equality_tri_compare(TypesIterator types, InputIt1 first1, InputIt1 last1,
-        InputIt2 first2, InputIt2 last2, Compare comp) {
-    while (first1 != last1 && first2 != last2) {
-        auto c = comp(*types, *first1, *first2);
-        if (c) {
-            return c;
-        }
-        ++first1;
-        ++first2;
-        ++types;
-    }
-    return 0;
-}
+        InputIt2 first2, InputIt2 last2, Compare comp);
 
 // Returns true iff the second sequence is a prefix of the first sequence
 // Equality is an abstract_type-aware equality checker which takes the type as first argument.
 template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Equality>
 bool is_prefixed_by(TypesIterator types, InputIt1 first1, InputIt1 last1,
-        InputIt2 first2, InputIt2 last2, Equality equality) {
-    while (first1 != last1 && first2 != last2) {
-        if (!equality(*types, *first1, *first2)) {
-            return false;
-        }
-        ++first1;
-        ++first2;
-        ++types;
-    }
-    return first2 == last2;
-}
+        InputIt2 first2, InputIt2 last2, Equality equality);
 
 struct runtime_exception : public std::exception {
-    sstring _why;
 public:
-    runtime_exception(sstring why) : _why(sstring("runtime error: ") + why) {}
-    virtual const char* what() const noexcept override { return _why.c_str(); }
+    runtime_exception(sstring why);
+    virtual const char* what() const noexcept override;
 };
 
 struct empty_t {};
 
 class empty_value_exception : public std::exception {
 public:
-    virtual const char* what() const noexcept override {
-        return "Unexpected empty value";
-    }
+    virtual const char* what() const noexcept override;
 };
 
 [[noreturn]] void on_types_internal_error(const sstring& reason);
@@ -239,60 +129,31 @@ template <typename T>
 class emptyable {
     // We don't use optional<>, to avoid lots of ifs during the copy and move constructors
     static_assert(std::is_default_constructible<T>::value, "must be default constructible");
-    bool _is_empty = false;
-    T _value;
 public:
     // default-constructor defaults to a non-empty value, since empty is the
     // exception rather than the rule
-    emptyable() : _value{} {}
-    emptyable(const T& x) : _value(x) {}
-    emptyable(T&& x) : _value(std::move(x)) {}
-    emptyable(empty_t) : _is_empty(true) {}
+    emptyable();
+    emptyable(const T& x);
+    emptyable(T&& x);
+    emptyable(empty_t);
     template <typename... U>
-    emptyable(U&&... args) : _value(std::forward<U>(args)...) {}
-    bool empty() const { return _is_empty; }
-    operator const T& () const { verify(); return _value; }
-    operator T&& () && { verify(); return std::move(_value); }
-    const T& get() const & { verify(); return _value; }
-    T&& get() && { verify(); return std::move(_value); }
-private:
-    void verify() const {
-        if (_is_empty) {
-            throw empty_value_exception();
-        }
-    }
+    emptyable(U&&... args);
+    bool empty() const;
+    operator const T& () const;
+    operator T&& () &&;
+    const T& get() const &;
+    T&& get() &&;
 };
 
 template <typename T>
 inline
 bool
-operator==(const emptyable<T>& me1, const emptyable<T>& me2) {
-    if (me1.empty() && me2.empty()) {
-        return true;
-    }
-    if (me1.empty() != me2.empty()) {
-        return false;
-    }
-    return me1.get() == me2.get();
-}
+operator==(const emptyable<T>& me1, const emptyable<T>& me2);
 
 template <typename T>
 inline
 bool
-operator<(const emptyable<T>& me1, const emptyable<T>& me2) {
-    if (me1.empty()) {
-        if (me2.empty()) {
-            return false;
-        } else {
-            return true;
-        }
-    }
-    if (me2.empty()) {
-        return false;
-    } else {
-        return me1.get() < me2.get();
-    }
-}
+operator<(const emptyable<T>& me1, const emptyable<T>& me2);
 
 // Checks whether T::empty() const exists and returns bool
 template <typename T>

@@ -48,23 +48,17 @@ class clustering_row {
     row_marker _marker;
     row _cells;
 public:
-    explicit clustering_row(clustering_key_prefix ck) : _ck(std::move(ck)) { }
-    clustering_row(clustering_key_prefix ck, row_tombstone t, row_marker marker, row cells)
-            : _ck(std::move(ck)), _t(t), _marker(std::move(marker)), _cells(std::move(cells)) {
-        _t.maybe_shadow(marker);
-    }
-    clustering_row(const schema& s, const clustering_row& other)
-        : clustering_row(other._ck, other._t, other._marker, row(s, column_kind::regular_column, other._cells)) { }
-    clustering_row(const schema& s, const rows_entry& re)
-            : clustering_row(re.key(), re.row().deleted_at(), re.row().marker(), row(s, column_kind::regular_column, re.row().cells())) { }
-    clustering_row(rows_entry&& re)
-            : clustering_row(std::move(re.key()), re.row().deleted_at(), re.row().marker(), std::move(re.row().cells())) { }
+    explicit clustering_row(clustering_key_prefix ck);
+    clustering_row(clustering_key_prefix ck, row_tombstone t, row_marker marker, row cells);
+    clustering_row(const schema& s, const clustering_row& other);
+    clustering_row(const schema& s, const rows_entry& re);
+    clustering_row(rows_entry&& re);
 
-    clustering_key_prefix& key() { return _ck; }
-    const clustering_key_prefix& key() const { return _ck; }
+    clustering_key_prefix& key();
+    const clustering_key_prefix& key() const;
 
-    void remove_tombstone() { _t = {}; }
-    row_tombstone tomb() const { return _t; }
+    void remove_tombstone();
+    row_tombstone tomb() const;
 
     const row_marker& marker() const { return _marker; }
     row_marker& marker() { return _marker; }

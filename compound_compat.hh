@@ -137,20 +137,7 @@ public:
         { }
 
         // @k1 and @k2 must be serialized using @type, which was passed to the constructor.
-        int operator()(bytes_view k1, bytes_view k2) const {
-            if (_type.is_singular()) {
-                return compare_unsigned(*_type.begin(k1), *_type.begin(k2));
-            }
-            return lexicographical_tri_compare(
-                _type.begin(k1), _type.end(k1),
-                _type.begin(k2), _type.end(k2),
-                [] (const bytes_view& c1, const bytes_view& c2) -> int {
-                    if (c1.size() != c2.size()) {
-                        return c1.size() < c2.size() ? -1 : 1;
-                    }
-                    return memcmp(c1.begin(), c2.begin(), c1.size());
-                });
-        }
+        int operator()(bytes_view k1, bytes_view k2) const;
     };
 
     // Equivalent to std::distance(begin(), end()), but computes faster
@@ -577,30 +564,3 @@ int composite::tri_compare::operator()(const composite& v1, const composite& v2)
     return (*this)(composite_view(v1), composite_view(v2));
 }
 
-inline
-int composite::tri_compare::operator()(composite_view v1, composite_view v2) const {
-    // See org.apache.cassandra.db.composites.AbstractCType#compare
-    if (v1.empty()) {
-        return v2.empty() ? 0 : -1;
-    }
-    if (v2.empty()) {
-        return 1;
-    }
-    if (v1.is_static() != v2.is_static()) {
-        return v1.is_static() ? -1 : 1;
-    }
-    auto a_values = v1.components();
-    auto b_values = v2.components();
-    auto cmp = [&](const data_type& t, component_view c1, component_view c2) {
-        // First by value, then by EOC
-        auto r = t->compare(c1.first, c2.first);
-        if (r) {
-            return r;
-        }
-        return static_cast<int>(c1.second) - static_cast<int>(c2.second);
-    };
-    return lexicographical_tri_compare(_types.begin(), _types.end(),
-        a_values.begin(), a_values.end(),
-        b_values.begin(), b_values.end(),
-        cmp);
-}

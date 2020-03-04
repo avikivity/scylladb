@@ -28,30 +28,8 @@
 
 #include <optional>
 
-inline
-lexicographical_relation relation_for_lower_bound(composite_view v) {
-    switch (v.last_eoc()) {
-        case composite::eoc::start:
-        case composite::eoc::none:
-            return lexicographical_relation::before_all_prefixed;
-        case composite::eoc::end:
-            return lexicographical_relation::after_all_prefixed;
-    }
-    abort();
-}
-
-inline
-lexicographical_relation relation_for_upper_bound(composite_view v) {
-    switch (v.last_eoc()) {
-        case composite::eoc::start:
-            return lexicographical_relation::before_all_prefixed;
-        case composite::eoc::none:
-            return lexicographical_relation::before_all_strictly_prefixed;
-        case composite::eoc::end:
-            return lexicographical_relation::after_all_prefixed;
-    }
-    abort();
-}
+lexicographical_relation relation_for_lower_bound(composite_view v);
+lexicographical_relation relation_for_upper_bound(composite_view v);
 
 enum class bound_weight : int8_t {
     before_all_prefixed = -1,
@@ -59,18 +37,7 @@ enum class bound_weight : int8_t {
     after_all_prefixed = 1,
 };
 
-inline
-bound_weight position_weight(bound_kind k) {
-    switch(k) {
-    case bound_kind::excl_end:
-    case bound_kind::incl_start:
-        return bound_weight::before_all_prefixed;
-    case bound_kind::incl_end:
-    case bound_kind::excl_start:
-        return bound_weight::after_all_prefixed;
-    }
-    abort();
-}
+bound_weight position_weight(bound_kind k);
 
 enum class partition_region : uint8_t {
     partition_start,
@@ -367,60 +334,10 @@ public:
 
         composite_tri_compare(const schema& s) : _s(s) {}
 
-        int operator()(position_in_partition_view a, position_in_partition_view b) const {
-            if (a._type != b._type) {
-                return rank(a._type) - rank(b._type);
-            }
-            if (!a._ck) {
-                return 0;
-            }
-            auto&& types = _s.clustering_key_type()->types();
-            auto cmp = [&] (const data_type& t, bytes_view c1, bytes_view c2) { return t->compare(c1, c2); };
-            return lexicographical_tri_compare(types.begin(), types.end(),
-                a._ck->begin(_s), a._ck->end(_s),
-                b._ck->begin(_s), b._ck->end(_s),
-                cmp, a.relation(), b.relation());
-        }
+        int operator()(position_in_partition_view a, position_in_partition_view b) const;
 
-        int operator()(position_in_partition_view a, composite_view b) const {
-            if (b.empty()) {
-                return 1; // a cannot be empty.
-            }
-            partition_region b_type = b.is_static() ? partition_region::static_row : partition_region::clustered;
-            if (a._type != b_type) {
-                return rank(a._type) - rank(b_type);
-            }
-            if (!a._ck) {
-                return 0;
-            }
-            auto&& types = _s.clustering_key_type()->types();
-            auto b_values = b.values();
-            auto cmp = [&] (const data_type& t, bytes_view c1, bytes_view c2) { return t->compare(c1, c2); };
-            return lexicographical_tri_compare(types.begin(), types.end(),
-                a._ck->begin(_s), a._ck->end(_s),
-                b_values.begin(), b_values.end(),
-                cmp, a.relation(), relation_for_lower_bound(b));
-        }
-
-        int operator()(composite_view a, position_in_partition_view b) const {
-            return -(*this)(b, a);
-        }
-
-        int operator()(composite_view a, composite_view b) const {
-            if (a.is_static() != b.is_static()) {
-                return a.is_static() ? -1 : 1;
-            }
-            auto&& types = _s.clustering_key_type()->types();
-            auto a_values = a.values();
-            auto b_values = b.values();
-            auto cmp = [&] (const data_type& t, bytes_view c1, bytes_view c2) { return t->compare(c1, c2); };
-            return lexicographical_tri_compare(types.begin(), types.end(),
-                a_values.begin(), a_values.end(),
-                b_values.begin(), b_values.end(),
-                cmp,
-                relation_for_lower_bound(a),
-                relation_for_lower_bound(b));
-        }
+        int operator()(position_in_partition_view a, composite_view b) const;
+        int operator()(composite_view a, position_in_partition_view b) const;
     };
 
     // Less comparator giving the same order as composite_tri_compare.
