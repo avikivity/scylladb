@@ -5554,89 +5554,26 @@ class result_memory_accounter {
     stop_iteration _stop_on_global_limit;
 private:
     struct mutation_query_tag { };
-    explicit result_memory_accounter(mutation_query_tag, result_memory_limiter& limiter, size_t max_size) noexcept
-        : _limiter(&limiter)
-        , _blocked_bytes(result_memory_limiter::minimum_result_size)
-        , _maximum_result_size(max_size)
-        , _stop_on_global_limit(true)
-    { }
+    
     struct data_query_tag { };
-    explicit result_memory_accounter(data_query_tag, result_memory_limiter& limiter, size_t max_size) noexcept
-        : _limiter(&limiter)
-        , _blocked_bytes(result_memory_limiter::minimum_result_size)
-        , _maximum_result_size(max_size)
-    { }
+    
     struct digest_query_tag { };
-    explicit result_memory_accounter(digest_query_tag, result_memory_limiter&, size_t max_size) noexcept
-        : _blocked_bytes(0)
-        , _maximum_result_size(max_size)
-    { }
+    
     friend class result_memory_limiter;
 public:
-    result_memory_accounter() = default;
-    result_memory_accounter(result_memory_accounter&& other) noexcept
-        : _limiter(std::exchange(other._limiter, nullptr))
-        , _blocked_bytes(other._blocked_bytes)
-        , _used_memory(other._used_memory)
-        , _total_used_memory(other._total_used_memory)
-        , _maximum_result_size(other._maximum_result_size)
-        , _stop_on_global_limit(other._stop_on_global_limit)
-    { }
-    result_memory_accounter& operator=(result_memory_accounter&& other) noexcept {
-        if (this != &other) {
-            this->~result_memory_accounter();
-            new (this) result_memory_accounter(std::move(other));
-        }
-        return *this;
-    }
-    ~result_memory_accounter() {
-        if (_limiter) {
-            _limiter->release(_blocked_bytes);
-        }
-    }
-    size_t used_memory() const { return _used_memory; }
-    stop_iteration update_and_check(size_t n) {
-        _used_memory += n;
-        _total_used_memory += n;
-        auto stop = stop_iteration(_total_used_memory > _maximum_result_size);
-        if (_limiter && _used_memory > _blocked_bytes) {
-            auto to_block = std::min(_used_memory - _blocked_bytes, n);
-            _blocked_bytes += to_block;
-            stop = (_limiter->update_and_check(to_block) && _stop_on_global_limit) || stop;
-        }
-        return stop;
-    }
-    stop_iteration check() const {
-        stop_iteration stop { _total_used_memory > result_memory_limiter::maximum_result_size };
-        if (!stop && _used_memory >= _blocked_bytes && _limiter) {
-            return _limiter->check() && _stop_on_global_limit;
-        }
-        return stop;
-    }
-    void update(size_t n) {
-        update_and_check(n);
-    }
-    result_memory_tracker done() && {
-        if (!_limiter) {
-            return { };
-        }
-        auto& sem = std::exchange(_limiter, nullptr)->sem();
-        return result_memory_tracker(sem, _blocked_bytes, _used_memory);
-    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
 };
-inline future<result_memory_accounter> result_memory_limiter::new_mutation_read(size_t max_size) {
-    return _memory_limiter.wait(minimum_result_size).then([this, max_size] {
-        return result_memory_accounter(result_memory_accounter::mutation_query_tag(), *this, max_size);
-    });
-}
-inline future<result_memory_accounter> result_memory_limiter::new_data_read(size_t max_size) {
-    return _memory_limiter.wait(minimum_result_size).then([this, max_size] {
-        return result_memory_accounter(result_memory_accounter::data_query_tag(), *this, max_size);
-    });
-}
-inline future<result_memory_accounter> result_memory_limiter::new_digest_read(size_t max_size) {
-    return make_ready_future<result_memory_accounter>(result_memory_accounter(result_memory_accounter::digest_query_tag(), *this, max_size));
-}
+
+
+
 enum class result_request {
     only_result,
     only_digest,
@@ -5645,12 +5582,8 @@ enum class result_request {
 struct result_options {
     result_request request = result_request::only_result;
     digest_algorithm digest_algo = query::digest_algorithm::none;
-    static result_options only_result() {
-        return result_options{};
-    }
-    static result_options only_digest(digest_algorithm da) {
-        return {result_request::only_digest, da};
-    }
+    
+    
 };
 class result_digest {
 public:
@@ -5658,15 +5591,11 @@ public:
 private:
     type _digest;
 public:
-    result_digest() = default;
-    result_digest(type&& digest) : _digest(std::move(digest)) {}
-    const type& get() const { return _digest; }
-    bool operator==(const result_digest& rh) const {
-        return _digest == rh._digest;
-    }
-    bool operator!=(const result_digest& rh) const {
-        return _digest != rh._digest;
-    }
+    
+    
+    
+    
+    
 };
 struct short_read_tag { };
 using short_read = bool_class<short_read_tag>;
@@ -5682,52 +5611,20 @@ public:
     class builder;
     class partition_writer;
     friend class result_merger;
-    result();
-    result(bytes_ostream&& w, short_read sr, std::optional<uint32_t> c, std::optional<uint32_t> pc,
-           result_memory_tracker memory_tracker = { })
-        : _w(std::move(w))
-        , _row_count(c)
-        , _short_read(sr)
-        , _memory_tracker(std::move(memory_tracker))
-        , _partition_count(pc)
-    {
-        w.reduce_chunk_count();
-    }
-    result(bytes_ostream&& w, std::optional<result_digest> d, api::timestamp_type last_modified,
-           short_read sr, std::optional<uint32_t> c, std::optional<uint32_t> pc, result_memory_tracker memory_tracker = { })
-        : _w(std::move(w))
-        , _digest(d)
-        , _row_count(c)
-        , _last_modified(last_modified)
-        , _short_read(sr)
-        , _memory_tracker(std::move(memory_tracker))
-        , _partition_count(pc)
-    {
-        w.reduce_chunk_count();
-    }
-    result(result&&) = default;
-    result(const result&) = default;
-    result& operator=(result&&) = default;
-    result& operator=(const result&) = default;
-    const bytes_ostream& buf() const {
-        return _w;
-    }
-    const std::optional<result_digest>& digest() const {
-        return _digest;
-    }
-    const std::optional<uint32_t>& row_count() const {
-        return _row_count;
-    }
-    const api::timestamp_type last_modified() const {
-        return _last_modified;
-    }
-    short_read is_short_read() const {
-        return _short_read;
-    }
-    const std::optional<uint32_t>& partition_count() const {
-        return _partition_count;
-    }
-    void ensure_counts();
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     struct printer {
         schema_ptr s;
         const query::partition_slice& slice;
