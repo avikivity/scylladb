@@ -1606,7 +1606,696 @@ public:
 #include <set>
 #include <optional>
 
-#include "utils/chunked_vector.hh"
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <new>
+#include <utility>
+#include <algorithm>
+#include <initializer_list>
+#include <memory>
+#include <stdexcept>
+
+namespace utils {
+
+/// A vector with small buffer optimisation
+///
+/// small_vector is a variation of std::vector<> that reserves a configurable
+/// amount of storage internally, without the need for memory allocation.
+/// This can bring measurable gains if the expected number of elements is
+/// small. The drawback is that moving such small_vector is more expensive
+/// and invalidates iterators as well as references which disqualifies it in
+/// some cases.
+///
+/// All member functions of small_vector provide strong exception guarantees.
+///
+/// It is unspecified when small_vector is going to use internal storage, except
+/// for the obvious case when size() > N. In other situations user must not
+/// attempt to guess if data is stored internally or externally. The same applies
+/// to capacity(). Apart from the obvious fact that capacity() >= size() the user
+/// must not assume anything else. In particular it may not always hold that
+/// capacity() >= N.
+///
+/// Unless otherwise specified (e.g. move ctor and assignment) small_vector
+/// provides guarantees at least as strong as those of std::vector<>.
+template<typename T, size_t N>
+class small_vector {
+    static_assert(N > 0);
+    static_assert(std::is_nothrow_move_constructible_v<T>);
+    static_assert(std::is_nothrow_move_assignable_v<T>);
+    static_assert(std::is_nothrow_destructible_v<T>);
+
+private:
+    T* _begin;
+    T* _end;
+    T* _capacity_end;
+
+    // Use union instead of std::aligned_storage so that debuggers can see
+    // the contained objects without needing any pretty printers.
+    union internal {
+        internal() { }
+        ~internal() { }
+        T storage[N];
+    };
+    internal _internal;
+
+private:
+    bool uses_internal_storage() const noexcept {
+        return _begin == _internal.storage;
+    }
+
+    [[gnu::cold]] [[gnu::noinline]]
+    void expand(size_t new_capacity) {
+        auto ptr = static_cast<T*>(::aligned_alloc(alignof(T), new_capacity * sizeof(T)));
+        if (!ptr) {
+            throw std::bad_alloc();
+        }
+        auto n_end = std::uninitialized_move(begin(), end(), ptr);
+        std::destroy(begin(), end());
+        if (!uses_internal_storage()) {
+            std::free(_begin);
+        }
+        _begin = ptr;
+        _end = n_end;
+        _capacity_end = ptr + new_capacity;
+    }
+
+    [[gnu::cold]] [[gnu::noinline]]
+    void slow_copy_assignment(const small_vector& other) {
+        auto ptr = static_cast<T*>(::aligned_alloc(alignof(T), other.size() * sizeof(T)));
+        if (!ptr) {
+            throw std::bad_alloc();
+        }
+        auto n_end = ptr;
+        try {
+            n_end = std::uninitialized_copy(other.begin(), other.end(), n_end);
+        } catch (...) {
+            std::free(ptr);
+            throw;
+        }
+        std::destroy(begin(), end());
+        if (!uses_internal_storage()) {
+            std::free(_begin);
+        }
+        _begin = ptr;
+        _end = n_end;
+        _capacity_end = n_end;
+    }
+
+    void reserve_at_least(size_t n) {
+        if (__builtin_expect(_begin + n > _capacity_end, false)) {
+            expand(std::max(n, capacity() * 2));
+        }
+    }
+
+    [[noreturn]] [[gnu::cold]] [[gnu::noinline]]
+    void throw_out_of_range() {
+        throw std::out_of_range("out of range small vector access");
+    }
+
+public:
+    using value_type = T;
+    using pointer = T*;
+    using const_pointer = const T*;
+    using reference = T&;
+    using const_reference = const T&;
+
+    using iterator = T*;
+    using const_iterator = const T*;
+
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+
+    small_vector() noexcept
+        : _begin(_internal.storage)
+        , _end(_begin)
+        , _capacity_end(_begin + N)
+    { }
+
+    template<typename InputIterator>
+    small_vector(InputIterator first, InputIterator last) : small_vector() {
+        if constexpr (std::is_base_of_v<std::forward_iterator_tag, typename std::iterator_traits<InputIterator>::iterator_category>) {
+            reserve(std::distance(first, last));
+            _end = std::uninitialized_copy(first, last, _end);
+        } else {
+            std::copy(first, last, std::back_inserter(*this));
+        }
+    }
+
+    small_vector(std::initializer_list<T> list) : small_vector(list.begin(), list.end()) { }
+
+    // May invalidate iterators and references.
+    small_vector(small_vector&& other) noexcept {
+        if (other.uses_internal_storage()) {
+            _begin = _internal.storage;
+            _capacity_end = _begin + N;
+            if constexpr (std::is_trivially_copyable_v<T>) {
+                // Compilers really like loops with the number of iterations known at
+                // the compile time, the usually emit less code which can be more aggressively
+                // optimised. Since we can assume that N is small it is most likely better
+                // to just copy everything, regardless of how many elements are actually in
+                // the vector.
+                std::memcpy(_internal.storage, other._internal.storage, N * sizeof(T));
+                _end = _begin + other.size();
+            } else {
+                _end = _begin;
+
+                // What we would really like here is std::uninintialized_move_and_destroy.
+                // It is beneficial to do move and destruction in a single pass since the compiler
+                // may be able to merge those operations (e.g. the destruction of a move-from
+                // std::unique_ptr is a no-op).
+                for (auto& e : other) {
+                    new (_end++) T(std::move(e));
+                    e.~T();
+                }
+            }
+            other._end = other._internal.storage;
+        } else {
+            _begin = std::exchange(other._begin, other._internal.storage);
+            _end = std::exchange(other._end, other._internal.storage);
+            _capacity_end = std::exchange(other._capacity_end, other._internal.storage + N);
+        }
+    }
+
+    small_vector(const small_vector& other) noexcept : small_vector() {
+        reserve(other.size());
+        _end = std::uninitialized_copy(other.begin(), other.end(), _end);
+    }
+
+    // May invalidate iterators and references.
+    small_vector& operator=(small_vector&& other) noexcept {
+        clear();
+        if (other.uses_internal_storage()) {
+            if (__builtin_expect(!uses_internal_storage(), false)) {
+                std::free(_begin);
+                _begin = _internal.storage;
+            }
+            _capacity_end = _begin + N;
+            if constexpr (std::is_trivially_copyable_v<T>) {
+                std::memcpy(_internal.storage, other._internal.storage, N * sizeof(T));
+                _end = _begin + other.size();
+            } else {
+                _end = _begin;
+
+                // Better to use single pass than std::uninitialize_move + std::destroy.
+                // See comment in move ctor for details.
+                for (auto& e : other) {
+                    new (_end++) T(std::move(e));
+                    e.~T();
+                }
+            }
+            other._end = other._internal.storage;
+        } else {
+            if (__builtin_expect(!uses_internal_storage(), false)) {
+                std::free(_begin);
+            }
+            _begin = std::exchange(other._begin, other._internal.storage);
+            _end = std::exchange(other._end, other._internal.storage);
+            _capacity_end = std::exchange(other._capacity_end, other._internal.storage + N);
+        }
+        return *this;
+    }
+
+    small_vector& operator=(const small_vector& other) {
+        if constexpr (std::is_nothrow_copy_constructible_v<T>) {
+            if (capacity() >= other.size()) {
+                clear();
+                _end = std::uninitialized_copy(other.begin(), other.end(), _end);
+                return *this;
+            }
+        }
+        slow_copy_assignment(other);
+        return *this;
+    }
+
+    ~small_vector() {
+        clear();
+        if (__builtin_expect(!uses_internal_storage(), false)) {
+            std::free(_begin);
+        }
+    }
+
+    void reserve(size_t n) {
+        if (__builtin_expect(_begin + n > _capacity_end, false)) {
+            expand(n);
+        }
+    }
+
+    void clear() noexcept {
+        std::destroy(_begin, _end);
+        _end = _begin;
+    }
+
+    iterator begin() noexcept { return _begin; }
+    const_iterator begin() const noexcept { return _begin; }
+    const_iterator cbegin() const noexcept { return _begin; }
+
+    iterator end() noexcept { return _end; }
+    const_iterator end() const noexcept { return _end; }
+    const_iterator cend() const noexcept { return _end; }
+
+    reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
+    const_reverse_iterator rbegin() const noexcept { return const_reverse_iterator(end()); }
+    const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(end()); }
+
+    reverse_iterator rend() noexcept { return reverse_iterator(begin()); }
+    const_reverse_iterator rend() const noexcept { return const_reverse_iterator(begin()); }
+    const_reverse_iterator crend() const noexcept { return const_reverse_iterator(begin()); }
+
+    T* data() noexcept { return _begin; }
+    const T* data() const noexcept { return _begin; }
+
+    T& front() noexcept { return *begin(); }
+    const T& front() const noexcept { return *begin(); }
+
+    T& back() noexcept { return end()[-1]; }
+    const T& back() const noexcept { return end()[-1]; }
+
+    T& operator[](size_t idx) noexcept { return data()[idx]; }
+    const T& operator[](size_t idx) const noexcept { return data()[idx]; }
+
+    T& at(size_t idx) {
+        if (__builtin_expect(idx >= size(), false)) {
+            throw_out_of_range();
+        }
+        return operator[](idx);
+    }
+    const T& at(size_t idx) const {
+        if (__builtin_expect(idx >= size(), false)) {
+            throw_out_of_range();
+        }
+        return operator[](idx);
+    }
+
+    bool empty() const noexcept { return _begin == _end; }
+    size_t size() const noexcept { return _end - _begin; }
+    size_t capacity() const noexcept { return _capacity_end - _begin; }
+
+    template<typename... Args>
+    T& emplace_back(Args&&... args) {
+        if (__builtin_expect(_end == _capacity_end, false)) {
+            expand(std::max<size_t>(capacity() * 2, 1));
+        }
+        auto& ref = *new (_end) T(std::forward<Args>(args)...);
+        ++_end;
+        return ref;
+    }
+
+    T& push_back(const T& value) {
+        return emplace_back(value);
+    }
+
+    T& push_back(T&& value) {
+        return emplace_back(std::move(value));
+    }
+
+    template<typename InputIterator>
+    iterator insert(const_iterator cpos, InputIterator first, InputIterator last) {
+        if constexpr (std::is_base_of_v<std::forward_iterator_tag, typename std::iterator_traits<InputIterator>::iterator_category>) {
+            if (first == last) {
+                return const_cast<iterator>(cpos);
+            }
+            auto idx = cpos - _begin;
+            auto new_count = std::distance(first, last);
+            reserve_at_least(size() + new_count);
+            auto pos = _begin + idx;
+            auto after = std::distance(pos, end());
+            if (__builtin_expect(pos == end(), true)) {
+                _end = std::uninitialized_copy(first, last, end());
+                return pos;
+            } else if (after > new_count) {
+                std::uninitialized_move(end() - new_count, end(), end());
+                std::move_backward(pos, end() - new_count, end());
+                try {
+                    std::copy(first, last, pos);
+                } catch (...) {
+                    std::move(pos + new_count, end() + new_count, pos);
+                    std::destroy(end(), end() + new_count);
+                    throw;
+                }
+            } else {
+                std::uninitialized_move(pos, end(), pos + new_count);
+                auto mid = std::next(first, after);
+                try {
+                    std::uninitialized_copy(mid, last, end());
+                    try {
+                        std::copy(first, mid, pos);
+                    } catch (...) {
+                        std::destroy(end(), pos + new_count);
+                        throw;
+                    }
+                } catch (...) {
+                    std::move(pos + new_count, end() + new_count, pos);
+                    std::destroy(pos + new_count, end() + new_count);
+                    throw;
+                }
+
+            }
+            _end += new_count;
+            return pos;
+        } else {
+            auto start = cpos - _begin;
+            auto idx = start;
+            while (first != last) {
+                try {
+                    insert(begin() + idx, *first);
+                    ++first;
+                    ++idx;
+                } catch (...) {
+                    erase(begin() + start, begin() + idx);
+                    throw;
+                }
+            }
+            return begin() + idx;
+        }
+    }
+
+    template<typename... Args>
+    iterator emplace(const_iterator cpos, Args&&... args) {
+        auto idx = cpos - _begin;
+        reserve_at_least(size() + 1);
+        auto pos = _begin + idx;
+        if (pos != _end) {
+            new (_end) T(std::move(_end[-1]));
+            std::move_backward(pos, _end - 1, _end);
+            pos->~T();
+        }
+        try {
+            new (pos) T(std::forward<Args>(args)...);
+        } catch (...) {
+            if (pos != _end) {
+                new (pos) T(std::move(pos[1]));
+                std::move(pos + 2, _end + 1, pos + 1);
+                _end->~T();
+            }
+            throw;
+        }
+        _end++;
+        return pos;
+    }
+
+    iterator insert(const_iterator cpos, const T& obj) {
+        return emplace(cpos, obj);
+    }
+
+    iterator insert(const_iterator cpos, T&& obj) {
+        return emplace(cpos, std::move(obj));
+    }
+
+    void resize(size_t n) {
+        if (n < size()) {
+            erase(end() - (size() - n), end());
+        } else if (n > size()) {
+            reserve_at_least(n);
+            _end = std::uninitialized_value_construct_n(_end, n - size());
+        }
+    }
+
+    void resize(size_t n, const T& value) {
+        if (n < size()) {
+            erase(end() - (size() - n), end());
+        } else if (n > size()) {
+            reserve_at_least(n);
+            auto nend = _begin + n;
+            std::uninitialized_fill(_end, nend, value);
+            _end = nend;
+        }
+    }
+
+    void pop_back() noexcept {
+        (--_end)->~T();
+    }
+
+    iterator erase(const_iterator cit) noexcept {
+        return erase(cit, cit + 1);
+    }
+
+    iterator erase(const_iterator cfirst, const_iterator clast) noexcept {
+        auto first = const_cast<iterator>(cfirst);
+        auto last = const_cast<iterator>(clast);
+        std::move(last, end(), first);
+        auto nend = _end - (clast - cfirst);
+        std::destroy(nend, _end);
+        _end = nend;
+        return first;
+    }
+
+    void swap(small_vector& other) noexcept {
+        std::swap(*this, other);
+    }
+
+    bool operator==(const small_vector& other) const noexcept {
+        return size() == other.size() && std::equal(_begin, _end, other.begin());
+    }
+
+    bool operator!=(const small_vector& other) const noexcept {
+        return !(*this == other);
+    }
+};
+
+}
+
+#include <boost/range/algorithm/equal.hpp>
+#include <boost/algorithm/clamp.hpp>
+#include <boost/version.hpp>
+#include <memory>
+#include <type_traits>
+#include <iterator>
+#include <utility>
+#include <algorithm>
+#include <stdexcept>
+
+namespace utils {
+
+struct chunked_vector_free_deleter {
+    void operator()(void* x) const { ::free(x); }
+};
+
+template <typename T, size_t max_contiguous_allocation = 128*1024>
+class chunked_vector {
+    static_assert(std::is_nothrow_move_constructible<T>::value, "T must be nothrow move constructible");
+    using chunk_ptr = std::unique_ptr<T[], chunked_vector_free_deleter>;
+    // Each chunk holds max_chunk_capacity() items, except possibly the last
+    utils::small_vector<chunk_ptr, 1> _chunks;
+    size_t _size = 0;
+    size_t _capacity = 0;
+private:
+    static size_t max_chunk_capacity() {
+        return std::max(max_contiguous_allocation / sizeof(T), size_t(1));
+    }
+    void reserve_for_push_back() {
+        if (_size == _capacity) {
+            do_reserve_for_push_back();
+        }
+    }
+    void do_reserve_for_push_back();
+    void make_room(size_t n);
+    chunk_ptr new_chunk(size_t n);
+    T* addr(size_t i) const {
+        return &_chunks[i / max_chunk_capacity()][i % max_chunk_capacity()];
+    }
+    void check_bounds(size_t i) const {
+        if (i >= _size) {
+            throw std::out_of_range("chunked_vector out of range access");
+        }
+    }
+    static void migrate(T* begin, T* end, T* result);
+public:
+    using value_type = T;
+    using size_type = size_t;
+    using difference_type = ssize_t;
+    using reference = T&;
+    using const_reference = const T&;
+    using pointer = T*;
+    using const_pointer = const T*;
+public:
+    chunked_vector() = default;
+    chunked_vector(const chunked_vector& x);
+    chunked_vector(chunked_vector&& x) noexcept;
+    template <typename Iterator>
+    chunked_vector(Iterator begin, Iterator end);
+    explicit chunked_vector(size_t n, const T& value = T());
+    ~chunked_vector();
+    chunked_vector& operator=(const chunked_vector& x);
+    chunked_vector& operator=(chunked_vector&& x) noexcept;
+
+    bool empty() const {
+        return !_size;
+    }
+    size_t size() const {
+        return _size;
+    }
+    T& operator[](size_t i) {
+        return *addr(i);
+    }
+    const T& operator[](size_t i) const {
+        return *addr(i);
+    }
+    T& at(size_t i) {
+        check_bounds(i);
+        return *addr(i);
+    }
+    const T& at(size_t i) const {
+        check_bounds(i);
+        return *addr(i);
+    }
+
+    void push_back(const T& x) {
+        reserve_for_push_back();
+        new (addr(_size)) T(x);
+        ++_size;
+    }
+    void push_back(T&& x) {
+        reserve_for_push_back();
+        new (addr(_size)) T(std::move(x));
+        ++_size;
+    }
+    template <typename... Args>
+    T& emplace_back(Args&&... args) {
+        reserve_for_push_back();
+        auto& ret = *new (addr(_size)) T(std::forward<Args>(args)...);
+        ++_size;
+        return ret;
+    }
+    void pop_back() {
+        --_size;
+        addr(_size)->~T();
+    }
+    const T& back() const {
+        return *addr(_size - 1);
+    }
+    T& back() {
+        return *addr(_size - 1);
+    }
+
+    void clear();
+    void shrink_to_fit();
+    void resize(size_t n);
+    void reserve(size_t n) {
+        if (n > _capacity) {
+            make_room(n);
+        }
+    }
+
+    size_t memory_size() const {
+        return _capacity * sizeof(T);
+    }
+public:
+    template <class ValueType>
+    class iterator_type {
+        const chunk_ptr* _chunks;
+        size_t _i;
+    public:
+        using iterator_category = std::random_access_iterator_tag;
+        using value_type = ValueType;
+        using difference_type = ssize_t;
+        using pointer = ValueType*;
+        using reference = ValueType&;
+    private:
+        pointer addr() const {
+            return &_chunks[_i / max_chunk_capacity()][_i % max_chunk_capacity()];
+        }
+        iterator_type(const chunk_ptr* chunks, size_t i) : _chunks(chunks), _i(i) {}
+    public:
+        iterator_type() = default;
+        iterator_type(const iterator_type<std::remove_const_t<ValueType>>& x) : _chunks(x._chunks), _i(x._i) {} // needed for iterator->const_iterator conversion
+        reference operator*() const {
+            return *addr();
+        }
+        pointer operator->() const {
+            return addr();
+        }
+        reference operator[](ssize_t n) const {
+            return *(*this + n);
+        }
+        iterator_type& operator++() {
+            ++_i;
+            return *this;
+        }
+        iterator_type operator++(int) {
+            auto x = *this;
+            ++_i;
+            return x;
+        }
+        iterator_type& operator--() {
+            --_i;
+            return *this;
+        }
+        iterator_type operator--(int) {
+            auto x = *this;
+            --_i;
+            return x;
+        }
+        iterator_type& operator+=(ssize_t n) {
+            _i += n;
+            return *this;
+        }
+        iterator_type& operator-=(ssize_t n) {
+            _i -= n;
+            return *this;
+        }
+        iterator_type operator+(ssize_t n) const {
+            auto x = *this;
+            return x += n;
+        }
+        iterator_type operator-(ssize_t n) const {
+            auto x = *this;
+            return x -= n;
+        }
+        friend iterator_type operator+(ssize_t n, iterator_type a) {
+            return a + n;
+        }
+        friend ssize_t operator-(iterator_type a, iterator_type b) {
+            return a._i - b._i;
+        }
+        bool operator==(iterator_type x) const {
+            return _i == x._i;
+        }
+        bool operator!=(iterator_type x) const {
+            return _i != x._i;
+        }
+        bool operator<(iterator_type x) const {
+            return _i < x._i;
+        }
+        bool operator<=(iterator_type x) const {
+            return _i <= x._i;
+        }
+        bool operator>(iterator_type x) const {
+            return _i > x._i;
+        }
+        bool operator>=(iterator_type x) const {
+            return _i >= x._i;
+        }
+        friend class chunked_vector;
+    };
+    using iterator = iterator_type<T>;
+    using const_iterator = iterator_type<const T>;
+public:
+    const T& front() const { return *cbegin(); }
+    T& front() { return *begin(); }
+    iterator begin() { return iterator(_chunks.data(), 0); }
+    iterator end() { return iterator(_chunks.data(), _size); }
+    const_iterator begin() const { return const_iterator(_chunks.data(), 0); }
+    const_iterator end() const { return const_iterator(_chunks.data(), _size); }
+    const_iterator cbegin() const { return const_iterator(_chunks.data(), 0); }
+    const_iterator cend() const { return const_iterator(_chunks.data(), _size); }
+    std::reverse_iterator<iterator> rbegin() { return std::reverse_iterator(end()); }
+    std::reverse_iterator<iterator> rend() { return std::reverse_iterator(begin()); }
+    std::reverse_iterator<const_iterator> rbegin() const { return std::reverse_iterator(end()); }
+    std::reverse_iterator<const_iterator> rend() const { return std::reverse_iterator(begin()); }
+    std::reverse_iterator<const_iterator> crbegin() const { return std::reverse_iterator(cend()); }
+    std::reverse_iterator<const_iterator> crend() const { return std::reverse_iterator(cbegin()); }
+public:
+    bool operator==(const chunked_vector& x) const {
+        return boost::equal(*this, x);
+    }
+    bool operator!=(const chunked_vector& x) const {
+        return !operator==(x);
+    }
+};
+
+
+}
 
 template<typename Iterator>
 static inline
@@ -3027,7 +3716,6 @@ using compound_prefix = compound_type<allow_prefixes::yes>;
 
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/util/backtrace.hh>
-#include "json.hh"
 
 namespace dht {
 
@@ -5670,8 +6358,1632 @@ public:
     static bool make_full(const schema& s, clustering_key_prefix& ck);    friend std::ostream& operator<<(std::ostream& out, const clustering_key_prefix& ckp);
 };
 
-#include "clustering_bounds_comparator.hh"
-#include "query-request.hh"
+#include <functional>
+#include <list>
+#include <vector>
+#include <optional>
+#include <iosfwd>
+#include <boost/range/algorithm/copy.hpp>
+#include <boost/range/adaptor/sliced.hpp>
+#include <boost/range/adaptor/transformed.hpp>
+#include <seastar/util/gcc6-concepts.hh>
+
+template<typename T>
+class range_bound {
+    T _value;
+    bool _inclusive;
+public:
+    range_bound(T value, bool inclusive = true)
+              : _value(std::move(value))
+              , _inclusive(inclusive)
+    { }
+    const T& value() const & { return _value; }
+    T&& value() && { return std::move(_value); }
+    bool is_inclusive() const { return _inclusive; }
+    bool operator==(const range_bound& other) const {
+        return (_value == other._value) && (_inclusive == other._inclusive);
+    }
+    template<typename Comparator>
+    bool equal(const range_bound& other, Comparator&& cmp) const {
+        return _inclusive == other._inclusive && cmp(_value, other._value) == 0;
+    }
+};
+
+template<typename T>
+class nonwrapping_range;
+
+// A range which can have inclusive, exclusive or open-ended bounds on each end.
+// The end bound can be smaller than the start bound.
+template<typename T>
+class wrapping_range {
+    template <typename U>
+    using optional = std::optional<U>;
+public:
+    using bound = range_bound<T>;
+
+    template <typename Transformer>
+    using transformed_type = typename std::remove_cv_t<std::remove_reference_t<std::result_of_t<Transformer(T)>>>;
+private:
+    optional<bound> _start;
+    optional<bound> _end;
+    bool _singular;
+public:
+    wrapping_range(optional<bound> start, optional<bound> end, bool singular = false)
+        : _start(std::move(start))
+        , _singular(singular) {
+        if (!_singular) {
+            _end = std::move(end);
+        }
+    }
+    wrapping_range(T value)
+        : _start(bound(std::move(value), true))
+        , _end()
+        , _singular(true)
+    { }
+    wrapping_range() : wrapping_range({}, {}) { }
+private:
+    // Bound wrappers for compile-time dispatch and safety.
+    struct start_bound_ref { const optional<bound>& b; };
+    struct end_bound_ref { const optional<bound>& b; };
+
+    start_bound_ref start_bound() const { return { start() }; }
+    end_bound_ref end_bound() const { return { end() }; }
+
+    template<typename Comparator>
+    static bool greater_than_or_equal(end_bound_ref end, start_bound_ref start, Comparator&& cmp) {
+        return !end.b || !start.b || cmp(end.b->value(), start.b->value())
+                                     >= (!end.b->is_inclusive() || !start.b->is_inclusive());
+    }
+
+    template<typename Comparator>
+    static bool less_than(end_bound_ref end, start_bound_ref start, Comparator&& cmp) {
+        return !greater_than_or_equal(end, start, cmp);
+    }
+
+    template<typename Comparator>
+    static bool less_than_or_equal(start_bound_ref first, start_bound_ref second, Comparator&& cmp) {
+        return !first.b || (second.b && cmp(first.b->value(), second.b->value())
+                                        <= -(!first.b->is_inclusive() && second.b->is_inclusive()));
+    }
+
+    template<typename Comparator>
+    static bool less_than(start_bound_ref first, start_bound_ref second, Comparator&& cmp) {
+        return second.b && (!first.b || cmp(first.b->value(), second.b->value())
+                                        < (first.b->is_inclusive() && !second.b->is_inclusive()));
+    }
+
+    template<typename Comparator>
+    static bool greater_than_or_equal(end_bound_ref first, end_bound_ref second, Comparator&& cmp) {
+        return !first.b || (second.b && cmp(first.b->value(), second.b->value())
+                                        >= (!first.b->is_inclusive() && second.b->is_inclusive()));
+    }
+public:
+    // the point is before the range (works only for non wrapped ranges)
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    bool before(const T& point, Comparator&& cmp) const {
+        assert(!is_wrap_around(cmp));
+        if (!start()) {
+            return false; //open start, no points before
+        }
+        auto r = cmp(point, start()->value());
+        if (r < 0) {
+            return true;
+        }
+        if (!start()->is_inclusive() && r == 0) {
+            return true;
+        }
+        return false;
+    }
+    // the point is after the range (works only for non wrapped ranges)
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    bool after(const T& point, Comparator&& cmp) const {
+        assert(!is_wrap_around(cmp));
+        if (!end()) {
+            return false; //open end, no points after
+        }
+        auto r = cmp(end()->value(), point);
+        if (r < 0) {
+            return true;
+        }
+        if (!end()->is_inclusive() && r == 0) {
+            return true;
+        }
+        return false;
+    }
+    // check if two ranges overlap.
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    bool overlaps(const wrapping_range& other, Comparator&& cmp) const {
+        bool this_wraps = is_wrap_around(cmp);
+        bool other_wraps = other.is_wrap_around(cmp);
+
+        if (this_wraps && other_wraps) {
+            return true;
+        } else if (this_wraps) {
+            auto unwrapped = unwrap();
+            return other.overlaps(unwrapped.first, cmp) || other.overlaps(unwrapped.second, cmp);
+        } else if (other_wraps) {
+            auto unwrapped = other.unwrap();
+            return overlaps(unwrapped.first, cmp) || overlaps(unwrapped.second, cmp);
+        }
+
+        // No range should reach this point as wrap around.
+        assert(!this_wraps);
+        assert(!other_wraps);
+
+        // if both this and other have an open start, the two ranges will overlap.
+        if (!start() && !other.start()) {
+            return true;
+        }
+
+        return greater_than_or_equal(end_bound(), other.start_bound(), cmp)
+            && greater_than_or_equal(other.end_bound(), start_bound(), cmp);
+    }
+    static wrapping_range make(bound start, bound end) {
+        return wrapping_range({std::move(start)}, {std::move(end)});
+    }
+    static wrapping_range make_open_ended_both_sides() {
+        return {{}, {}};
+    }
+    static wrapping_range make_singular(T value) {
+        return {std::move(value)};
+    }
+    static wrapping_range make_starting_with(bound b) {
+        return {{std::move(b)}, {}};
+    }
+    static wrapping_range make_ending_with(bound b) {
+        return {{}, {std::move(b)}};
+    }
+    bool is_singular() const {
+        return _singular;
+    }
+    bool is_full() const {
+        return !_start && !_end;
+    }
+    void reverse() {
+        if (!_singular) {
+            std::swap(_start, _end);
+        }
+    }
+    const optional<bound>& start() const {
+        return _start;
+    }
+    const optional<bound>& end() const {
+        return _singular ? _start : _end;
+    }
+    // Range is a wrap around if end value is smaller than the start value
+    // or they're equal and at least one bound is not inclusive.
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    bool is_wrap_around(Comparator&& cmp) const {
+        if (_end && _start) {
+            auto r = cmp(end()->value(), start()->value());
+            return r < 0
+                   || (r == 0 && (!start()->is_inclusive() || !end()->is_inclusive()));
+        } else {
+            return false; // open ended range or singular range don't wrap around
+        }
+    }
+    // Converts a wrap-around range to two non-wrap-around ranges.
+    // The returned ranges are not overlapping and ordered.
+    // Call only when is_wrap_around().
+    std::pair<wrapping_range, wrapping_range> unwrap() const {
+        return {
+            { {}, end() },
+            { start(), {} }
+        };
+    }
+    // the point is inside the range
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    bool contains(const T& point, Comparator&& cmp) const {
+        if (is_wrap_around(cmp)) {
+            auto unwrapped = unwrap();
+            return unwrapped.first.contains(point, cmp)
+                   || unwrapped.second.contains(point, cmp);
+        } else {
+            return !before(point, cmp) && !after(point, cmp);
+        }
+    }
+    // Returns true iff all values contained by other are also contained by this.
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    bool contains(const wrapping_range& other, Comparator&& cmp) const {
+        bool this_wraps = is_wrap_around(cmp);
+        bool other_wraps = other.is_wrap_around(cmp);
+
+        if (this_wraps && other_wraps) {
+            return cmp(start()->value(), other.start()->value())
+                   <= -(!start()->is_inclusive() && other.start()->is_inclusive())
+                && cmp(end()->value(), other.end()->value())
+                   >= (!end()->is_inclusive() && other.end()->is_inclusive());
+        }
+
+        if (!this_wraps && !other_wraps) {
+            return less_than_or_equal(start_bound(), other.start_bound(), cmp)
+                    && greater_than_or_equal(end_bound(), other.end_bound(), cmp);
+        }
+
+        if (other_wraps) { // && !this_wraps
+            return !start() && !end();
+        }
+
+        // !other_wraps && this_wraps
+        return (other.start() && cmp(start()->value(), other.start()->value())
+                                 <= -(!start()->is_inclusive() && other.start()->is_inclusive()))
+                || (other.end() && cmp(end()->value(), other.end()->value())
+                                   >= (!end()->is_inclusive() && other.end()->is_inclusive()));
+    }
+    // Returns ranges which cover all values covered by this range but not covered by the other range.
+    // Ranges are not overlapping and ordered.
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    std::vector<wrapping_range> subtract(const wrapping_range& other, Comparator&& cmp) const {
+        std::vector<wrapping_range> result;
+        std::list<wrapping_range> left;
+        std::list<wrapping_range> right;
+
+        if (is_wrap_around(cmp)) {
+            auto u = unwrap();
+            left.emplace_back(std::move(u.first));
+            left.emplace_back(std::move(u.second));
+        } else {
+            left.push_back(*this);
+        }
+
+        if (other.is_wrap_around(cmp)) {
+            auto u = other.unwrap();
+            right.emplace_back(std::move(u.first));
+            right.emplace_back(std::move(u.second));
+        } else {
+            right.push_back(other);
+        }
+
+        // left and right contain now non-overlapping, ordered ranges
+
+        while (!left.empty() && !right.empty()) {
+            auto& r1 = left.front();
+            auto& r2 = right.front();
+            if (less_than(r2.end_bound(), r1.start_bound(), cmp)) {
+                right.pop_front();
+            } else if (less_than(r1.end_bound(), r2.start_bound(), cmp)) {
+                result.emplace_back(std::move(r1));
+                left.pop_front();
+            } else { // Overlap
+                auto tmp = std::move(r1);
+                left.pop_front();
+                if (!greater_than_or_equal(r2.end_bound(), tmp.end_bound(), cmp)) {
+                    left.push_front({bound(r2.end()->value(), !r2.end()->is_inclusive()), tmp.end()});
+                }
+                if (!less_than_or_equal(r2.start_bound(), tmp.start_bound(), cmp)) {
+                    left.push_front({tmp.start(), bound(r2.start()->value(), !r2.start()->is_inclusive())});
+                }
+            }
+        }
+
+        boost::copy(left, std::back_inserter(result));
+
+        // TODO: Merge adjacent ranges (optimization)
+        return result;
+    }
+    // split range in two around a split_point. split_point has to be inside the range
+    // split_point will belong to first range
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    std::pair<wrapping_range<T>, wrapping_range<T>> split(const T& split_point, Comparator&& cmp) const {
+        assert(contains(split_point, std::forward<Comparator>(cmp)));
+        wrapping_range left(start(), bound(split_point));
+        wrapping_range right(bound(split_point, false), end());
+        return std::make_pair(std::move(left), std::move(right));
+    }
+    // Create a sub-range including values greater than the split_point. Returns std::nullopt if
+    // split_point is after the end (but not included in the range, in case of wraparound ranges)
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    std::optional<wrapping_range<T>> split_after(const T& split_point, Comparator&& cmp) const {
+        if (contains(split_point, std::forward<Comparator>(cmp))
+                && (!end() || cmp(split_point, end()->value()) != 0)) {
+            return wrapping_range(bound(split_point, false), end());
+        } else if (end() && cmp(split_point, end()->value()) >= 0) {
+            // whether to return std::nullopt or the full range is not
+            // well-defined for wraparound ranges; we return nullopt
+            // if split_point is after the end.
+            return std::nullopt;
+        } else {
+            return *this;
+        }
+    }
+    template<typename Bound, typename Transformer, typename U = transformed_type<Transformer>>
+    static std::optional<typename wrapping_range<U>::bound> transform_bound(Bound&& b, Transformer&& transformer) {
+        if (b) {
+            return { { transformer(std::forward<Bound>(b).value().value()), b->is_inclusive() } };
+        };
+        return {};
+    }
+    // Transforms this range into a new range of a different value type
+    // Supplied transformer should transform value of type T (the old type) into value of type U (the new type).
+    template<typename Transformer, typename U = transformed_type<Transformer>>
+    wrapping_range<U> transform(Transformer&& transformer) && {
+        return wrapping_range<U>(transform_bound(std::move(_start), transformer), transform_bound(std::move(_end), transformer), _singular);
+    }
+    template<typename Transformer, typename U = transformed_type<Transformer>>
+    wrapping_range<U> transform(Transformer&& transformer) const & {
+        return wrapping_range<U>(transform_bound(_start, transformer), transform_bound(_end, transformer), _singular);
+    }
+    template<typename Comparator>
+    bool equal(const wrapping_range& other, Comparator&& cmp) const {
+        return bool(_start) == bool(other._start)
+               && bool(_end) == bool(other._end)
+               && (!_start || _start->equal(*other._start, cmp))
+               && (!_end || _end->equal(*other._end, cmp))
+               && _singular == other._singular;
+    }
+    bool operator==(const wrapping_range& other) const {
+        return (_start == other._start) && (_end == other._end) && (_singular == other._singular);
+    }
+
+    template<typename U>
+    friend std::ostream& operator<<(std::ostream& out, const wrapping_range<U>& r);
+private:
+    friend class nonwrapping_range<T>;
+};
+
+template<typename U>
+std::ostream& operator<<(std::ostream& out, const wrapping_range<U>& r) {
+    if (r.is_singular()) {
+        return out << "{" << r.start()->value() << "}";
+    }
+
+    if (!r.start()) {
+        out << "(-inf, ";
+    } else {
+        if (r.start()->is_inclusive()) {
+            out << "[";
+        } else {
+            out << "(";
+        }
+        out << r.start()->value() << ", ";
+    }
+
+    if (!r.end()) {
+        out << "+inf)";
+    } else {
+        out << r.end()->value();
+        if (r.end()->is_inclusive()) {
+            out << "]";
+        } else {
+            out << ")";
+        }
+    }
+
+    return out;
+}
+
+// A range which can have inclusive, exclusive or open-ended bounds on each end.
+// The end bound can never be smaller than the start bound.
+template<typename T>
+class nonwrapping_range {
+    template <typename U>
+    using optional = std::optional<U>;
+public:
+    using bound = range_bound<T>;
+
+    template <typename Transformer>
+    using transformed_type = typename wrapping_range<T>::template transformed_type<Transformer>;
+private:
+    wrapping_range<T> _range;
+public:
+    nonwrapping_range(T value)
+        : _range(std::move(value))
+    { }
+    nonwrapping_range() : nonwrapping_range({}, {}) { }
+    // Can only be called if start <= end. IDL ctor.
+    nonwrapping_range(optional<bound> start, optional<bound> end, bool singular = false)
+        : _range(std::move(start), std::move(end), singular)
+    { }
+    // Can only be called if !r.is_wrap_around().
+    explicit nonwrapping_range(wrapping_range<T>&& r)
+        : _range(std::move(r))
+    { }
+    // Can only be called if !r.is_wrap_around().
+    explicit nonwrapping_range(const wrapping_range<T>& r)
+        : _range(r)
+    { }
+    operator wrapping_range<T>() const & {
+        return _range;
+    }
+    operator wrapping_range<T>() && {
+        return std::move(_range);
+    }
+
+    // the point is before the range.
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    bool before(const T& point, Comparator&& cmp) const {
+        return _range.before(point, std::forward<Comparator>(cmp));
+    }
+    // the point is after the range.
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    bool after(const T& point, Comparator&& cmp) const {
+        return _range.after(point, std::forward<Comparator>(cmp));
+    }
+    // check if two ranges overlap.
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    bool overlaps(const nonwrapping_range& other, Comparator&& cmp) const {
+        // if both this and other have an open start, the two ranges will overlap.
+        if (!start() && !other.start()) {
+            return true;
+        }
+
+        return wrapping_range<T>::greater_than_or_equal(_range.end_bound(), other._range.start_bound(), cmp)
+            && wrapping_range<T>::greater_than_or_equal(other._range.end_bound(), _range.start_bound(), cmp);
+    }
+    static nonwrapping_range make(bound start, bound end) {
+        return nonwrapping_range({std::move(start)}, {std::move(end)});
+    }
+    static nonwrapping_range make_open_ended_both_sides() {
+        return {{}, {}};
+    }
+    static nonwrapping_range make_singular(T value) {
+        return {std::move(value)};
+    }
+    static nonwrapping_range make_starting_with(bound b) {
+        return {{std::move(b)}, {}};
+    }
+    static nonwrapping_range make_ending_with(bound b) {
+        return {{}, {std::move(b)}};
+    }
+    bool is_singular() const {
+        return _range.is_singular();
+    }
+    bool is_full() const {
+        return _range.is_full();
+    }
+    const optional<bound>& start() const {
+        return _range.start();
+    }
+    const optional<bound>& end() const {
+        return _range.end();
+    }
+    // the point is inside the range
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    bool contains(const T& point, Comparator&& cmp) const {
+        return !before(point, cmp) && !after(point, cmp);
+    }
+    // Returns true iff all values contained by other are also contained by this.
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    bool contains(const nonwrapping_range& other, Comparator&& cmp) const {
+        return wrapping_range<T>::less_than_or_equal(_range.start_bound(), other._range.start_bound(), cmp)
+                && wrapping_range<T>::greater_than_or_equal(_range.end_bound(), other._range.end_bound(), cmp);
+    }
+    // Returns ranges which cover all values covered by this range but not covered by the other range.
+    // Ranges are not overlapping and ordered.
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    std::vector<nonwrapping_range> subtract(const nonwrapping_range& other, Comparator&& cmp) const {
+        auto subtracted = _range.subtract(other._range, std::forward<Comparator>(cmp));
+        return boost::copy_range<std::vector<nonwrapping_range>>(subtracted | boost::adaptors::transformed([](auto&& r) {
+            return nonwrapping_range(std::move(r));
+        }));
+    }
+    // split range in two around a split_point. split_point has to be inside the range
+    // split_point will belong to first range
+    // Comparator must define a total ordering on T.
+    template<typename Comparator>
+    std::pair<nonwrapping_range<T>, nonwrapping_range<T>> split(const T& split_point, Comparator&& cmp) const {
+        assert(contains(split_point, std::forward<Comparator>(cmp)));
+        nonwrapping_range left(start(), bound(split_point));
+        nonwrapping_range right(bound(split_point, false), end());
+        return std::make_pair(std::move(left), std::move(right));
+    }
+    // Create a sub-range including values greater than the split_point. If split_point is after
+    // the end, returns std::nullopt.
+    template<typename Comparator>
+    std::optional<nonwrapping_range> split_after(const T& split_point, Comparator&& cmp) const {
+        if (end() && cmp(split_point, end()->value()) >= 0) {
+            return std::nullopt;
+        } else if (start() && cmp(split_point, start()->value()) < 0) {
+            return *this;
+        } else {
+            return nonwrapping_range(range_bound<T>(split_point, false), end());
+        }
+    }
+    // Creates a new sub-range which is the intersection of this range and a range starting with "start".
+    // If there is no overlap, returns std::nullopt.
+    template<typename Comparator>
+    std::optional<nonwrapping_range> trim_front(std::optional<bound>&& start, Comparator&& cmp) const {
+        return intersection(nonwrapping_range(std::move(start), {}), cmp);
+    }
+    // Transforms this range into a new range of a different value type
+    // Supplied transformer should transform value of type T (the old type) into value of type U (the new type).
+    template<typename Transformer, typename U = transformed_type<Transformer>>
+    nonwrapping_range<U> transform(Transformer&& transformer) && {
+        return nonwrapping_range<U>(std::move(_range).transform(std::forward<Transformer>(transformer)));
+    }
+    template<typename Transformer, typename U = transformed_type<Transformer>>
+    nonwrapping_range<U> transform(Transformer&& transformer) const & {
+        return nonwrapping_range<U>(_range.transform(std::forward<Transformer>(transformer)));
+    }
+    template<typename Comparator>
+    bool equal(const nonwrapping_range& other, Comparator&& cmp) const {
+        return _range.equal(other._range, std::forward<Comparator>(cmp));
+    }
+    bool operator==(const nonwrapping_range& other) const {
+        return _range == other._range;
+    }
+    // Takes a vector of possibly overlapping ranges and returns a vector containing
+    // a set of non-overlapping ranges covering the same values.
+    template<typename Comparator>
+    static std::vector<nonwrapping_range> deoverlap(std::vector<nonwrapping_range> ranges, Comparator&& cmp) {
+        auto size = ranges.size();
+        if (size <= 1) {
+            return ranges;
+        }
+
+        std::sort(ranges.begin(), ranges.end(), [&](auto&& r1, auto&& r2) {
+            return wrapping_range<T>::less_than(r1._range.start_bound(), r2._range.start_bound(), cmp);
+        });
+
+        std::vector<nonwrapping_range> deoverlapped_ranges;
+        deoverlapped_ranges.reserve(size);
+
+        auto&& current = ranges[0];
+        for (auto&& r : ranges | boost::adaptors::sliced(1, ranges.size())) {
+            bool includes_end = wrapping_range<T>::greater_than_or_equal(r._range.end_bound(), current._range.start_bound(), cmp)
+                                && wrapping_range<T>::greater_than_or_equal(current._range.end_bound(), r._range.end_bound(), cmp);
+            if (includes_end) {
+                continue; // last.start <= r.start <= r.end <= last.end
+            }
+            bool includes_start = wrapping_range<T>::greater_than_or_equal(current._range.end_bound(), r._range.start_bound(), cmp);
+            if (includes_start) {
+                current = nonwrapping_range(std::move(current.start()), std::move(r.end()));
+            } else {
+                deoverlapped_ranges.emplace_back(std::move(current));
+                current = std::move(r);
+            }
+        }
+
+        deoverlapped_ranges.emplace_back(std::move(current));
+        return deoverlapped_ranges;
+    }
+
+private:
+    // These private functions optimize the case where a sequence supports the
+    // lower and upper bound operations more efficiently, as is the case with
+    // some boost containers.
+    struct std_ {};
+    struct built_in_ : std_ {};
+
+    template<typename Range, typename LessComparator,
+             typename = decltype(std::declval<Range>().lower_bound(std::declval<T>(), std::declval<LessComparator>()))>
+    typename std::remove_reference<Range>::type::const_iterator do_lower_bound(const T& value, Range&& r, LessComparator&& cmp, built_in_) const {
+        return r.lower_bound(value, std::forward<LessComparator>(cmp));
+    }
+
+    template<typename Range, typename LessComparator,
+             typename = decltype(std::declval<Range>().upper_bound(std::declval<T>(), std::declval<LessComparator>()))>
+    typename std::remove_reference<Range>::type::const_iterator do_upper_bound(const T& value, Range&& r, LessComparator&& cmp, built_in_) const {
+        return r.upper_bound(value, std::forward<LessComparator>(cmp));
+    }
+
+    template<typename Range, typename LessComparator>
+    typename std::remove_reference<Range>::type::const_iterator do_lower_bound(const T& value, Range&& r, LessComparator&& cmp, std_) const {
+        return std::lower_bound(r.begin(), r.end(), value, std::forward<LessComparator>(cmp));
+    }
+
+    template<typename Range, typename LessComparator>
+    typename std::remove_reference<Range>::type::const_iterator do_upper_bound(const T& value, Range&& r, LessComparator&& cmp, std_) const {
+        return std::upper_bound(r.begin(), r.end(), value, std::forward<LessComparator>(cmp));
+    }
+public:
+    // Return the lower bound of the specified sequence according to these bounds.
+    template<typename Range, typename LessComparator>
+    typename std::remove_reference<Range>::type::const_iterator lower_bound(Range&& r, LessComparator&& cmp) const {
+        return start()
+            ? (start()->is_inclusive()
+                ? do_lower_bound(start()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_())
+                : do_upper_bound(start()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_()))
+            : std::cbegin(r);
+    }
+    // Return the upper bound of the specified sequence according to these bounds.
+    template<typename Range, typename LessComparator>
+    typename std::remove_reference<Range>::type::const_iterator upper_bound(Range&& r, LessComparator&& cmp) const {
+        return end()
+             ? (end()->is_inclusive()
+                ? do_upper_bound(end()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_())
+                : do_lower_bound(end()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_()))
+             : (is_singular()
+                ? do_upper_bound(start()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_())
+                : std::cend(r));
+    }
+    // Returns a subset of the range that is within these bounds.
+    template<typename Range, typename LessComparator>
+    boost::iterator_range<typename std::remove_reference<Range>::type::const_iterator>
+    slice(Range&& range, LessComparator&& cmp) const {
+        return boost::make_iterator_range(lower_bound(range, cmp), upper_bound(range, cmp));
+    }
+
+    // Returns the intersection between this range and other.
+    template<typename Comparator>
+    std::optional<nonwrapping_range> intersection(const nonwrapping_range& other, Comparator&& cmp) const {
+        auto p = std::minmax(_range, other._range, [&cmp] (auto&& a, auto&& b) {
+            return wrapping_range<T>::less_than(a.start_bound(), b.start_bound(), cmp);
+        });
+        if (wrapping_range<T>::greater_than_or_equal(p.first.end_bound(), p.second.start_bound(), cmp)) {
+            auto end = std::min(p.first.end_bound(), p.second.end_bound(), [&cmp] (auto&& a, auto&& b) {
+                return !wrapping_range<T>::greater_than_or_equal(a, b, cmp);
+            });
+            return nonwrapping_range(p.second.start(), end.b);
+        }
+        return {};
+    }
+
+    template<typename U>
+    friend std::ostream& operator<<(std::ostream& out, const nonwrapping_range<U>& r);
+};
+
+template<typename U>
+std::ostream& operator<<(std::ostream& out, const nonwrapping_range<U>& r) {
+    return out << r._range;
+}
+
+template<typename T>
+using range = wrapping_range<T>;
+
+GCC6_CONCEPT(
+template<template<typename> typename T, typename U>
+concept bool Range = std::is_same<T<U>, wrapping_range<U>>::value || std::is_same<T<U>, nonwrapping_range<U>>::value;
+)
+
+// Allow using range<T> in a hash table. The hash function 31 * left +
+// right is the same one used by Cassandra's AbstractBounds.hashCode().
+namespace std {
+
+template<typename T>
+struct hash<wrapping_range<T>> {
+    using argument_type = wrapping_range<T>;
+    using result_type = decltype(std::hash<T>()(std::declval<T>()));
+    result_type operator()(argument_type const& s) const {
+        auto hash = std::hash<T>();
+        auto left = s.start() ? hash(s.start()->value()) : 0;
+        auto right = s.end() ? hash(s.end()->value()) : 0;
+        return 31 * left + right;
+    }
+};
+
+template<typename T>
+struct hash<nonwrapping_range<T>> {
+    using argument_type = nonwrapping_range<T>;
+    using result_type = decltype(std::hash<T>()(std::declval<T>()));
+    result_type operator()(argument_type const& s) const {
+        return hash<wrapping_range<T>>()(s);
+    }
+};
+
+}
+
+/**
+ * Represents the kind of bound in a range tombstone.
+ */
+enum class bound_kind : uint8_t {
+    excl_end = 0,
+    incl_start = 1,
+    // values 2 to 5 are reserved for forward Origin compatibility
+    incl_end = 6,
+    excl_start = 7,
+};
+
+std::ostream& operator<<(std::ostream& out, const bound_kind k);
+
+bound_kind invert_kind(bound_kind k);
+int32_t weight(bound_kind k);
+
+class bound_view {
+    const static thread_local clustering_key _empty_prefix;
+    std::reference_wrapper<const clustering_key_prefix> _prefix;
+    bound_kind _kind;
+public:
+    bound_view(const clustering_key_prefix& prefix, bound_kind kind)
+        : _prefix(prefix)
+        , _kind(kind)
+    { }
+    bound_view(const bound_view& other) noexcept = default;
+    bound_view& operator=(const bound_view& other) noexcept = default;
+
+    bound_kind kind() const { return _kind; }
+    const clustering_key_prefix& prefix() const { return _prefix; }
+
+    struct tri_compare {
+        // To make it assignable and to avoid taking a schema_ptr, we
+        // wrap the schema reference.
+        std::reference_wrapper<const schema> _s;
+        tri_compare(const schema& s) : _s(s)
+        { }
+        int operator()(const clustering_key_prefix& p1, int32_t w1, const clustering_key_prefix& p2, int32_t w2) const {
+            auto type = _s.get().clustering_key_prefix_type();
+            auto res = prefix_equality_tri_compare(type->types().begin(),
+                type->begin(p1), type->end(p1),
+                type->begin(p2), type->end(p2),
+                ::tri_compare);
+            if (res) {
+                return res;
+            }
+            auto d1 = p1.size(_s);
+            auto d2 = p2.size(_s);
+            if (d1 == d2) {
+                return w1 - w2;
+            }
+            return d1 < d2 ? w1 - (w1 <= 0) : -(w2 - (w2 <= 0));
+        }
+        int operator()(const bound_view b, const clustering_key_prefix& p) const {
+            return operator()(b._prefix, weight(b._kind), p, 0);
+        }
+        int operator()(const clustering_key_prefix& p, const bound_view b) const {
+            return operator()(p, 0, b._prefix, weight(b._kind));
+        }
+        int operator()(const bound_view b1, const bound_view b2) const {
+            return operator()(b1._prefix, weight(b1._kind), b2._prefix, weight(b2._kind));
+        }
+    };
+    struct compare {
+        // To make it assignable and to avoid taking a schema_ptr, we
+        // wrap the schema reference.
+        tri_compare _cmp;
+        compare(const schema& s) : _cmp(s)
+        { }
+        bool operator()(const clustering_key_prefix& p1, int32_t w1, const clustering_key_prefix& p2, int32_t w2) const {
+            return _cmp(p1, w1, p2, w2) < 0;
+        }
+        bool operator()(const bound_view b, const clustering_key_prefix& p) const {
+            return operator()(b._prefix, weight(b._kind), p, 0);
+        }
+        bool operator()(const clustering_key_prefix& p, const bound_view b) const {
+            return operator()(p, 0, b._prefix, weight(b._kind));
+        }
+        bool operator()(const bound_view b1, const bound_view b2) const {
+            return operator()(b1._prefix, weight(b1._kind), b2._prefix, weight(b2._kind));
+        }
+    };
+    bool equal(const schema& s, const bound_view other) const {
+        return _kind == other._kind && _prefix.get().equal(s, other._prefix.get());
+    }
+    bool adjacent(const schema& s, const bound_view other) const {
+        return invert_kind(other._kind) == _kind && _prefix.get().equal(s, other._prefix.get());
+    }
+    static bound_view bottom() {
+        return {_empty_prefix, bound_kind::incl_start};
+    }
+    static bound_view top() {
+        return {_empty_prefix, bound_kind::incl_end};
+    }
+    template<template<typename> typename R>
+    GCC6_CONCEPT( requires Range<R, clustering_key_prefix_view> )
+    static bound_view from_range_start(const R<clustering_key_prefix>& range) {
+        return range.start()
+               ? bound_view(range.start()->value(), range.start()->is_inclusive() ? bound_kind::incl_start : bound_kind::excl_start)
+               : bottom();
+    }
+    template<template<typename> typename R>
+    GCC6_CONCEPT( requires Range<R, clustering_key_prefix> )
+    static bound_view from_range_end(const R<clustering_key_prefix>& range) {
+        return range.end()
+               ? bound_view(range.end()->value(), range.end()->is_inclusive() ? bound_kind::incl_end : bound_kind::excl_end)
+               : top();
+    }
+    template<template<typename> typename R>
+    GCC6_CONCEPT( requires Range<R, clustering_key_prefix> )
+    static std::pair<bound_view, bound_view> from_range(const R<clustering_key_prefix>& range) {
+        return {from_range_start(range), from_range_end(range)};
+    }
+    template<template<typename> typename R>
+    GCC6_CONCEPT( requires Range<R, clustering_key_prefix_view> )
+    static std::optional<typename R<clustering_key_prefix_view>::bound> to_range_bound(const bound_view& bv) {
+        if (&bv._prefix.get() == &_empty_prefix) {
+            return {};
+        }
+        bool inclusive = bv._kind != bound_kind::excl_end && bv._kind != bound_kind::excl_start;
+        return {typename R<clustering_key_prefix_view>::bound(bv._prefix.get().view(), inclusive)};
+    }
+    friend std::ostream& operator<<(std::ostream& out, const bound_view& b) {
+        return out << "{bound: prefix=" << b._prefix.get() << ", kind=" << b._kind << "}";
+    }
+};
+#include <optional>
+
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/sstring.hh>
+#include <memory>
+#include <random>
+#include <utility>
+#include <vector>
+#include "range.hh"
+#include <byteswap.h>
+#include "dht/token.hh"
+
+namespace sstables {
+
+class key_view;
+class decorated_key_view;
+
+}
+
+namespace dht {
+
+//
+// Origin uses a complex class hierarchy where Token is an abstract class,
+// and various subclasses use different implementations (LongToken vs.
+// BigIntegerToken vs. StringToken), plus other variants to to signify the
+// the beginning of the token space etc.
+//
+// We'll fold all of that into the token class and push all of the variations
+// into its users.
+
+class decorated_key;
+class ring_position;
+
+using partition_range = nonwrapping_range<ring_position>;
+using token_range = nonwrapping_range<token>;
+
+using partition_range_vector = std::vector<partition_range>;
+using token_range_vector = std::vector<token_range>;
+
+template <typename T>
+inline auto get_random_number() {
+    static thread_local std::default_random_engine re{std::random_device{}()};
+    static thread_local std::uniform_int_distribution<T> dist{};
+    return dist(re);
+}
+
+// Wraps partition_key with its corresponding token.
+//
+// Total ordering defined by comparators is compatible with Origin's ordering.
+class decorated_key {
+public:
+    dht::token _token;
+    partition_key _key;
+
+    decorated_key(dht::token t, partition_key k)
+        : _token(std::move(t))
+        , _key(std::move(k)) {
+    }
+
+    struct less_comparator {
+        schema_ptr s;
+        less_comparator(schema_ptr s);
+        bool operator()(const decorated_key& k1, const decorated_key& k2) const;
+        bool operator()(const decorated_key& k1, const ring_position& k2) const;
+        bool operator()(const ring_position& k1, const decorated_key& k2) const;
+    };
+
+    bool equal(const schema& s, const decorated_key& other) const;
+
+    bool less_compare(const schema& s, const decorated_key& other) const;
+    bool less_compare(const schema& s, const ring_position& other) const;
+
+    // Trichotomic comparators defining total ordering on the union of
+    // decorated_key and ring_position objects.
+    int tri_compare(const schema& s, const decorated_key& other) const;
+    int tri_compare(const schema& s, const ring_position& other) const;
+
+    const dht::token& token() const {
+        return _token;
+    }
+
+    const partition_key& key() const {
+        return _key;
+    }
+
+    size_t external_memory_usage() const {
+        return _key.external_memory_usage() + _token.external_memory_usage();
+    }
+
+    size_t memory_usage() const {
+        return sizeof(decorated_key) + external_memory_usage();
+    }
+};
+
+
+class decorated_key_equals_comparator {
+    const schema& _schema;
+public:
+    explicit decorated_key_equals_comparator(const schema& schema) : _schema(schema) {}
+    bool operator()(const dht::decorated_key& k1, const dht::decorated_key& k2) const {
+        return k1.equal(_schema, k2);
+    }
+};
+
+using decorated_key_opt = std::optional<decorated_key>;
+
+class i_partitioner {
+protected:
+    unsigned _shard_count;
+    unsigned _sharding_ignore_msb_bits;
+    std::vector<uint64_t> _shard_start;
+public:
+    i_partitioner(unsigned shard_count = smp::count, unsigned sharding_ignore_msb_bits = 0);
+    virtual ~i_partitioner() {}
+
+    /**
+     * Transform key to object representation of the on-disk format.
+     *
+     * @param key the raw, client-facing key
+     * @return decorated version of key
+     */
+    decorated_key decorate_key(const schema& s, const partition_key& key) {
+        return { get_token(s, key), key };
+    }
+
+    /**
+     * Transform key to object representation of the on-disk format.
+     *
+     * @param key the raw, client-facing key
+     * @return decorated version of key
+     */
+    decorated_key decorate_key(const schema& s, partition_key&& key) {
+        auto token = get_token(s, key);
+        return { std::move(token), std::move(key) };
+    }
+
+    /**
+     * @return a token that can be used to route a given key
+     * (This is NOT a method to create a token from its string representation;
+     * for that, use tokenFactory.fromString.)
+     */
+    virtual token get_token(const schema& s, partition_key_view key) const = 0;
+    virtual token get_token(const sstables::key_view& key) const = 0;
+
+    // FIXME: token.tokenFactory
+    //virtual token.tokenFactory gettokenFactory() = 0;
+
+    /**
+     * @return True if the implementing class preserves key order in the tokens
+     * it generates.
+     */
+    virtual bool preserves_order() = 0;
+
+    /**
+     * @return name of partitioner.
+     */
+    virtual const sstring name() const = 0;
+
+    /**
+     * Calculates the shard that handles a particular token.
+     */
+    virtual unsigned shard_of(const token& t) const;
+
+    /**
+     * Gets the first token greater than `t` that is in shard `shard`, and is a shard boundary (its first token).
+     *
+     * If the `spans` parameter is greater than zero, the result is the same as if the function
+     * is called `spans` times, each time applied to its return value, but efficiently. This allows
+     * selecting ranges that include multiple round trips around the 0..smp::count-1 shard span:
+     *
+     *     token_for_next_shard(t, shard, spans) == token_for_next_shard(token_for_shard(t, shard, 1), spans - 1)
+     *
+     * On overflow, maximum_token() is returned.
+     */
+    virtual token token_for_next_shard(const token& t, shard_id shard, unsigned spans = 1) const;
+
+    /**
+     * @return number of shards configured for this partitioner
+     */
+    unsigned shard_count() const {
+        return _shard_count;
+    }
+
+    unsigned sharding_ignore_msb() const {
+        return _sharding_ignore_msb_bits;
+    }
+    bool operator==(const i_partitioner& o) const {
+        return name() == o.name()
+                && sharding_ignore_msb() == o.sharding_ignore_msb();
+    }
+    bool operator!=(const i_partitioner& o) const {
+        return !(*this == o);
+    }
+};
+
+//
+// Represents position in the ring of partitions, where partitions are ordered
+// according to decorated_key ordering (first by token, then by key value).
+// Intended to be used for defining partition ranges.
+//
+// The 'key' part is optional. When it's absent, this object represents a position
+// which is either before or after all keys sharing given token. That's determined
+// by relation_to_keys().
+//
+// For example for the following data:
+//
+//   tokens: |    t1   | t2 |
+//           +----+----+----+
+//   keys:   | k1 | k2 | k3 |
+//
+// The ordering is:
+//
+//   ring_position(t1, token_bound::start) < ring_position(k1)
+//   ring_position(k1)                     < ring_position(k2)
+//   ring_position(k1)                     == decorated_key(k1)
+//   ring_position(k2)                     == decorated_key(k2)
+//   ring_position(k2)                     < ring_position(t1, token_bound::end)
+//   ring_position(k2)                     < ring_position(k3)
+//   ring_position(t1, token_bound::end)   < ring_position(t2, token_bound::start)
+//
+// Maps to org.apache.cassandra.db.RowPosition and its derivatives in Origin.
+//
+class ring_position {
+public:
+    enum class token_bound : int8_t { start = -1, end = 1 };
+private:
+    friend class ring_position_comparator;
+    friend class ring_position_ext;
+    dht::token _token;
+    token_bound _token_bound{}; // valid when !_key
+    std::optional<partition_key> _key;
+public:
+    static ring_position min() {
+        return { minimum_token(), token_bound::start };
+    }
+
+    static ring_position max() {
+        return { maximum_token(), token_bound::end };
+    }
+
+    bool is_min() const {
+        return _token.is_minimum();
+    }
+
+    bool is_max() const {
+        return _token.is_maximum();
+    }
+
+    static ring_position starting_at(dht::token token) {
+        return { std::move(token), token_bound::start };
+    }
+
+    static ring_position ending_at(dht::token token) {
+        return { std::move(token), token_bound::end };
+    }
+
+    ring_position(dht::token token, token_bound bound)
+        : _token(std::move(token))
+        , _token_bound(bound)
+    { }
+
+    ring_position(dht::token token, partition_key key)
+        : _token(std::move(token))
+        , _key(std::make_optional(std::move(key)))
+    { }
+
+    ring_position(dht::token token, token_bound bound, std::optional<partition_key> key)
+        : _token(std::move(token))
+        , _token_bound(bound)
+        , _key(std::move(key))
+    { }
+
+    ring_position(const dht::decorated_key& dk)
+        : _token(dk._token)
+        , _key(std::make_optional(dk._key))
+    { }
+
+    ring_position(dht::decorated_key&& dk)
+        : _token(std::move(dk._token))
+        , _key(std::make_optional(std::move(dk._key)))
+    { }
+
+    const dht::token& token() const {
+        return _token;
+    }
+
+    // Valid when !has_key()
+    token_bound bound() const {
+        return _token_bound;
+    }
+
+    // Returns -1 if smaller than keys with the same token, +1 if greater.
+    int relation_to_keys() const {
+        return _key ? 0 : static_cast<int>(_token_bound);
+    }
+
+    const std::optional<partition_key>& key() const {
+        return _key;
+    }
+
+    bool has_key() const {
+        return bool(_key);
+    }
+
+    // Call only when has_key()
+    dht::decorated_key as_decorated_key() const {
+        return { _token, *_key };
+    }
+
+    bool equal(const schema&, const ring_position&) const;
+
+    // Trichotomic comparator defining a total ordering on ring_position objects
+    int tri_compare(const schema&, const ring_position&) const;
+
+    // "less" comparator corresponding to tri_compare()
+    bool less_compare(const schema&, const ring_position&) const;
+
+    friend std::ostream& operator<<(std::ostream&, const ring_position&);
+};
+
+// Non-owning version of ring_position and ring_position_ext.
+//
+// Unlike ring_position, it can express positions which are right after and right before the keys.
+// ring_position still can not because it is sent between nodes and such a position
+// would not be (yet) properly interpreted by old nodes. That's why any ring_position
+// can be converted to ring_position_view, but not the other way.
+//
+// It is possible to express a partition_range using a pair of two ring_position_views v1 and v2,
+// where v1 = ring_position_view::for_range_start(r) and v2 = ring_position_view::for_range_end(r).
+// Such range includes all keys k such that v1 <= k < v2, with order defined by ring_position_comparator.
+//
+class ring_position_view {
+    friend int ring_position_tri_compare(const schema& s, ring_position_view lh, ring_position_view rh);
+    friend class ring_position_comparator;
+    friend class ring_position_ext;
+
+    // Order is lexicographical on (_token, _key) tuples, where _key part may be missing, and
+    // _weight affecting order between tuples if one is a prefix of the other (including being equal).
+    // A positive weight puts the position after all strictly prefixed by it, while a non-positive
+    // weight puts it before them. If tuples are equal, the order is further determined by _weight.
+    //
+    // For example {_token=t1, _key=nullptr, _weight=1} is ordered after {_token=t1, _key=k1, _weight=0},
+    // but {_token=t1, _key=nullptr, _weight=-1} is ordered before it.
+    //
+    const dht::token* _token; // always not nullptr
+    const partition_key* _key; // Can be nullptr
+    int8_t _weight;
+public:
+    using token_bound = ring_position::token_bound;
+    struct after_key_tag {};
+    using after_key = bool_class<after_key_tag>;
+
+    static ring_position_view min() {
+        return { minimum_token(), nullptr, -1 };
+    }
+
+    static ring_position_view max() {
+        return { maximum_token(), nullptr, 1 };
+    }
+
+    bool is_min() const {
+        return _token->is_minimum();
+    }
+
+    bool is_max() const {
+        return _token->is_maximum();
+    }
+
+    static ring_position_view for_range_start(const partition_range& r) {
+        return r.start() ? ring_position_view(r.start()->value(), after_key(!r.start()->is_inclusive())) : min();
+    }
+
+    static ring_position_view for_range_end(const partition_range& r) {
+        return r.end() ? ring_position_view(r.end()->value(), after_key(r.end()->is_inclusive())) : max();
+    }
+
+    static ring_position_view for_after_key(const dht::decorated_key& dk) {
+        return ring_position_view(dk, after_key::yes);
+    }
+
+    static ring_position_view for_after_key(dht::ring_position_view view) {
+        return ring_position_view(after_key_tag(), view);
+    }
+
+    static ring_position_view starting_at(const dht::token& t) {
+        return ring_position_view(t, token_bound::start);
+    }
+
+    static ring_position_view ending_at(const dht::token& t) {
+        return ring_position_view(t, token_bound::end);
+    }
+
+    ring_position_view(const dht::ring_position& pos, after_key after = after_key::no)
+        : _token(&pos.token())
+        , _key(pos.has_key() ? &*pos.key() : nullptr)
+        , _weight(pos.has_key() ? bool(after) : pos.relation_to_keys())
+    { }
+
+    ring_position_view(const ring_position_view& pos) = default;
+    ring_position_view& operator=(const ring_position_view& other) = default;
+
+    ring_position_view(after_key_tag, const ring_position_view& v)
+        : _token(v._token)
+        , _key(v._key)
+        , _weight(v._key ? 1 : v._weight)
+    { }
+
+    ring_position_view(const dht::decorated_key& key, after_key after_key = after_key::no)
+        : _token(&key.token())
+        , _key(&key.key())
+        , _weight(bool(after_key))
+    { }
+
+    ring_position_view(const dht::token& token, const partition_key* key, int8_t weight)
+        : _token(&token)
+        , _key(key)
+        , _weight(weight)
+    { }
+
+    explicit ring_position_view(const dht::token& token, token_bound bound = token_bound::start)
+        : _token(&token)
+        , _key(nullptr)
+        , _weight(static_cast<std::underlying_type_t<token_bound>>(bound))
+    { }
+
+    const dht::token& token() const { return *_token; }
+    const partition_key* key() const { return _key; }
+
+    // Only when key() == nullptr
+    token_bound get_token_bound() const { return token_bound(_weight); }
+    // Only when key() != nullptr
+    after_key is_after_key() const { return after_key(_weight == 1); }
+
+    friend std::ostream& operator<<(std::ostream&, ring_position_view);
+};
+
+using ring_position_ext_view = ring_position_view;
+
+//
+// Represents position in the ring of partitions, where partitions are ordered
+// according to decorated_key ordering (first by token, then by key value).
+// Intended to be used for defining partition ranges.
+//
+// Unlike ring_position, it can express positions which are right after and right before the keys.
+// ring_position still can not because it is sent between nodes and such a position
+// would not be (yet) properly interpreted by old nodes. That's why any ring_position
+// can be converted to ring_position_ext, but not the other way.
+//
+// It is possible to express a partition_range using a pair of two ring_position_exts v1 and v2,
+// where v1 = ring_position_ext::for_range_start(r) and v2 = ring_position_ext::for_range_end(r).
+// Such range includes all keys k such that v1 <= k < v2, with order defined by ring_position_comparator.
+//
+class ring_position_ext {
+    // Order is lexicographical on (_token, _key) tuples, where _key part may be missing, and
+    // _weight affecting order between tuples if one is a prefix of the other (including being equal).
+    // A positive weight puts the position after all strictly prefixed by it, while a non-positive
+    // weight puts it before them. If tuples are equal, the order is further determined by _weight.
+    //
+    // For example {_token=t1, _key=nullptr, _weight=1} is ordered after {_token=t1, _key=k1, _weight=0},
+    // but {_token=t1, _key=nullptr, _weight=-1} is ordered before it.
+    //
+    dht::token _token;
+    std::optional<partition_key> _key;
+    int8_t _weight;
+public:
+    using token_bound = ring_position::token_bound;
+    struct after_key_tag {};
+    using after_key = bool_class<after_key_tag>;
+
+    static ring_position_ext min() {
+        return { minimum_token(), std::nullopt, -1 };
+    }
+
+    static ring_position_ext max() {
+        return { maximum_token(), std::nullopt, 1 };
+    }
+
+    bool is_min() const {
+        return _token.is_minimum();
+    }
+
+    bool is_max() const {
+        return _token.is_maximum();
+    }
+
+    static ring_position_ext for_range_start(const partition_range& r) {
+        return r.start() ? ring_position_ext(r.start()->value(), after_key(!r.start()->is_inclusive())) : min();
+    }
+
+    static ring_position_ext for_range_end(const partition_range& r) {
+        return r.end() ? ring_position_ext(r.end()->value(), after_key(r.end()->is_inclusive())) : max();
+    }
+
+    static ring_position_ext for_after_key(const dht::decorated_key& dk) {
+        return ring_position_ext(dk, after_key::yes);
+    }
+
+    static ring_position_ext for_after_key(dht::ring_position_ext view) {
+        return ring_position_ext(after_key_tag(), view);
+    }
+
+    static ring_position_ext starting_at(const dht::token& t) {
+        return ring_position_ext(t, token_bound::start);
+    }
+
+    static ring_position_ext ending_at(const dht::token& t) {
+        return ring_position_ext(t, token_bound::end);
+    }
+
+    ring_position_ext(const dht::ring_position& pos, after_key after = after_key::no)
+        : _token(pos.token())
+        , _key(pos.key())
+        , _weight(pos.has_key() ? bool(after) : pos.relation_to_keys())
+    { }
+
+    ring_position_ext(const ring_position_ext& pos) = default;
+    ring_position_ext& operator=(const ring_position_ext& other) = default;
+
+    ring_position_ext(ring_position_view v)
+        : _token(*v._token)
+        , _key(v._key ? std::make_optional(*v._key) : std::nullopt)
+        , _weight(v._weight)
+    { }
+
+    ring_position_ext(after_key_tag, const ring_position_ext& v)
+        : _token(v._token)
+        , _key(v._key)
+        , _weight(v._key ? 1 : v._weight)
+    { }
+
+    ring_position_ext(const dht::decorated_key& key, after_key after_key = after_key::no)
+        : _token(key.token())
+        , _key(key.key())
+        , _weight(bool(after_key))
+    { }
+
+    ring_position_ext(dht::token token, std::optional<partition_key> key, int8_t weight) noexcept
+        : _token(std::move(token))
+        , _key(std::move(key))
+        , _weight(weight)
+    { }
+
+    ring_position_ext(ring_position&& pos) noexcept
+        : _token(std::move(pos._token))
+        , _key(std::move(pos._key))
+        , _weight(pos.relation_to_keys())
+    { }
+
+    explicit ring_position_ext(const dht::token& token, token_bound bound = token_bound::start)
+        : _token(token)
+        , _key(std::nullopt)
+        , _weight(static_cast<std::underlying_type_t<token_bound>>(bound))
+    { }
+
+    const dht::token& token() const { return _token; }
+    const std::optional<partition_key>& key() const { return _key; }
+
+    // Only when key() == std::nullopt
+    token_bound get_token_bound() const { return token_bound(_weight); }
+
+    // Only when key() != std::nullopt
+    after_key is_after_key() const { return after_key(_weight == 1); }
+
+    operator ring_position_view() const { return { _token, _key ? &*_key : nullptr, _weight }; }
+
+    friend std::ostream& operator<<(std::ostream&, const ring_position_ext&);
+};
+
+int ring_position_tri_compare(const schema& s, ring_position_view lh, ring_position_view rh);
+
+// Trichotomic comparator for ring order
+struct ring_position_comparator {
+    const schema& s;
+    ring_position_comparator(const schema& s_) : s(s_) {}
+    int operator()(ring_position_view, ring_position_view) const;
+    int operator()(ring_position_view, sstables::decorated_key_view) const;
+    int operator()(sstables::decorated_key_view, ring_position_view) const;
+};
+
+// "less" comparator giving the same order as ring_position_comparator
+struct ring_position_less_comparator {
+    ring_position_comparator tri;
+
+    ring_position_less_comparator(const schema& s) : tri(s) {}
+
+    template<typename T, typename U>
+    bool operator()(const T& lh, const U& rh) const {
+        return tri(lh, rh) < 0;
+    }
+};
+
+struct token_comparator {
+    // Return values are those of a trichotomic comparison.
+    int operator()(const token& t1, const token& t2) const;
+};
+
+std::ostream& operator<<(std::ostream& out, const token& t);
+
+std::ostream& operator<<(std::ostream& out, const decorated_key& t);
+
+std::ostream& operator<<(std::ostream& out, const i_partitioner& p);
+
+class partition_ranges_view {
+    const dht::partition_range* _data = nullptr;
+    size_t _size = 0;
+
+public:
+    partition_ranges_view() = default;
+    partition_ranges_view(const dht::partition_range& range) : _data(&range), _size(1) {}
+    partition_ranges_view(const dht::partition_range_vector& ranges) : _data(ranges.data()), _size(ranges.size()) {}
+    bool empty() const { return _size == 0; }
+    size_t size() const { return _size; }
+    const dht::partition_range& front() const { return *_data; }
+    const dht::partition_range& back() const { return *(_data + _size - 1); }
+    const dht::partition_range* begin() const { return _data; }
+    const dht::partition_range* end() const { return _data + _size; }
+};
+std::ostream& operator<<(std::ostream& out, partition_ranges_view v);
+
+void set_global_partitioner(const sstring& class_name, unsigned ignore_msb = 0);
+i_partitioner& global_partitioner();
+
+unsigned shard_of(const schema&, const token&);
+inline decorated_key decorate_key(const schema& s, const partition_key& key) {
+    return s.get_partitioner().decorate_key(s, key);
+}
+inline decorated_key decorate_key(const schema& s, partition_key&& key) {
+    return s.get_partitioner().decorate_key(s, std::move(key));
+}
+
+inline token get_token(const schema& s, partition_key_view key) {
+    return s.get_partitioner().get_token(s, key);
+}
+
+dht::partition_range to_partition_range(dht::token_range);
+dht::partition_range_vector to_partition_ranges(const dht::token_range_vector& ranges);
+
+// Each shard gets a sorted, disjoint vector of ranges
+std::map<unsigned, dht::partition_range_vector>
+split_range_to_shards(dht::partition_range pr, const schema& s);
+
+// If input ranges are sorted and disjoint then the ranges for each shard
+// are also sorted and disjoint.
+std::map<unsigned, dht::partition_range_vector>
+split_ranges_to_shards(const dht::token_range_vector& ranges, const schema& s);
+
+// Intersect a partition_range with a shard and return the the resulting sub-ranges, in sorted order
+future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const schema& s, const dht::partition_range& pr, shard_id shard);
+future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const i_partitioner& partitioner, const schema& s, const dht::partition_range& pr, shard_id shard);
+
+std::unique_ptr<dht::i_partitioner> make_partitioner(sstring name, unsigned shard_count, unsigned sharding_ignore_msb_bits);
+
+extern std::unique_ptr<i_partitioner> default_partitioner;
+
+} // dht
+
+namespace std {
+template<>
+struct hash<dht::token> {
+    size_t operator()(const dht::token& t) const {
+        // We have to reverse the bytes here to keep compatibility with
+        // the behaviour that was here when tokens were represented as
+        // sequence of bytes.
+        return bswap_64(t._data);
+    }
+};
+
+template <>
+struct hash<dht::decorated_key> {
+    size_t operator()(const dht::decorated_key& k) const {
+        auto h_token = hash<dht::token>();
+        return h_token(k.token());
+    }
+};
+
+
+}
+#include "enum_set.hh"
+#include "range.hh"
+#include "tracing/tracing.hh"
+
+class position_in_partition_view;
+
+namespace query {
+
+using column_id_vector = utils::small_vector<column_id, 8>;
+
+template <typename T>
+using range = wrapping_range<T>;
+
+using ring_position = dht::ring_position;
+using clustering_range = nonwrapping_range<clustering_key_prefix>;
+
+extern const dht::partition_range full_partition_range;
+extern const clustering_range full_clustering_range;
+
+
+typedef std::vector<clustering_range> clustering_row_ranges;
+
+/// Trim the clustering ranges.
+///
+/// Equivalent of intersecting each clustering range with [pos, +inf) position
+/// in partition range, or (-inf, pos] position in partition range if
+/// reversed == true. Ranges that do not intersect are dropped. Ranges that
+/// partially overlap are trimmed.
+/// Result: each range will overlap fully with [pos, +inf), or (-int, pos] if
+/// reversed is true.
+void trim_clustering_row_ranges_to(const schema& s, clustering_row_ranges& ranges, position_in_partition_view pos, bool reversed = false);
+
+/// Trim the clustering ranges.
+///
+/// Equivalent of intersecting each clustering range with (key, +inf) clustering
+/// range, or (-inf, key) clustering range if reversed == true. Ranges that do
+/// not intersect are dropped. Ranges that partially overlap are trimmed.
+/// Result: each range will overlap fully with (key, +inf), or (-int, key) if
+/// reversed is true.
+void trim_clustering_row_ranges_to(const schema& s, clustering_row_ranges& ranges, const clustering_key& key, bool reversed = false);
+
+class specific_ranges {
+};
+
+constexpr auto max_rows = std::numeric_limits<uint32_t>::max();
+
+// Specifies subset of rows, columns and cell attributes to be returned in a query.
+// Can be accessed across cores.
+// Schema-dependent.
+class partition_slice {
+public:
+    enum class option {
+        send_clustering_key,
+        send_partition_key,
+        send_timestamp,
+        send_expiry,
+        reversed,
+        distinct,
+        collections_as_maps,
+        send_ttl,
+        allow_short_read,
+        with_digest,
+        bypass_cache,
+        // Normally, we don't return static row if the request has clustering
+        // key restrictions and the partition doesn't have any rows matching
+        // the restrictions, see #589. This flag overrides this behavior.
+        always_return_static_content,
+    };
+    using option_set = enum_set<super_enum<option,
+        option::send_clustering_key,
+        option::send_partition_key,
+        option::send_timestamp,
+        option::send_expiry,
+        option::reversed,
+        option::distinct,
+        option::collections_as_maps,
+        option::send_ttl,
+        option::allow_short_read,
+        option::with_digest,
+        option::bypass_cache,
+        option::always_return_static_content>>;
+public:
+    partition_slice(clustering_row_ranges row_ranges, column_id_vector static_columns,
+        column_id_vector regular_columns, option_set options,
+        std::unique_ptr<specific_ranges> specific_ranges = nullptr,
+        cql_serialization_format = cql_serialization_format::internal(),
+        uint32_t partition_row_limit = max_rows);
+    partition_slice(clustering_row_ranges ranges, const schema& schema, const column_set& mask, option_set options);
+    partition_slice(const partition_slice&);
+    partition_slice(partition_slice&&);
+
+    partition_slice& operator=(partition_slice&& other) noexcept;
+
+    const clustering_row_ranges& row_ranges(const schema&, const partition_key&) const;
+    void set_range(const schema&, const partition_key&, clustering_row_ranges);
+    void clear_range(const schema&, const partition_key&);
+    void clear_ranges();    // FIXME: possibly make this function return a const ref instead.
+    clustering_row_ranges get_all_ranges() const;
+
+    const clustering_row_ranges& default_row_ranges() const;
+    const std::unique_ptr<specific_ranges>& get_specific_ranges() const;
+    const cql_serialization_format& cql_format() const;
+    const uint32_t partition_row_limit() const;
+    void set_partition_row_limit(uint32_t limit);
+
+    friend std::ostream& operator<<(std::ostream& out, const partition_slice& ps);
+    friend std::ostream& operator<<(std::ostream& out, const specific_ranges& ps);
+};
+
+constexpr auto max_partitions = std::numeric_limits<uint32_t>::max();
+
+
+}
 
 #include <optional>
 
