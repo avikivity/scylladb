@@ -11845,16 +11845,24 @@ private:
 };
 
 
-#include "mutation_partition.hh"
-#include "position_in_partition.hh"
 
 #include <optional>
 #include <seastar/util/gcc6-concepts.hh>
 #include <seastar/util/optimized_optional.hh>
 
-#include "seastar/core/future-util.hh"
+#include <seastar/core/future-util.hh>
 
-#include "db/timeout_clock.hh"
+
+#include <seastar/core/lowres_clock.hh>
+#include <seastar/core/semaphore.hh>
+#include <chrono>
+
+namespace db {
+using timeout_clock = seastar::lowres_clock;
+using timeout_semaphore = seastar::basic_semaphore<seastar::default_timeout_exception_factory, timeout_clock>;
+using timeout_semaphore_units = seastar::semaphore_units<seastar::default_timeout_exception_factory, timeout_clock>;
+static constexpr timeout_clock::time_point no_timeout = timeout_clock::time_point::max();
+}
 
 // mutation_fragments are the objects that streamed_mutation are going to
 // stream. They can represent:
@@ -12615,9 +12623,599 @@ public:
 
 
 #include <seastar/core/future-util.hh>
-#include "frozen_mutation.hh"
+#include <seastar/util/bool_class.hh>
+#include <seastar/core/future.hh>
+
+
+namespace cql3{
+class query_options;
+struct raw_value_view;
+
+namespace statements {
+class prepared_statement;
+}
+}
+
+namespace tracing {
+
+
+class trace_state_ptr final {
+public:
+    trace_state_ptr();
+    trace_state_ptr(nullptr_t);
+};
+
+}
+
+#include <seastar/util/gcc6-concepts.hh>
+#include <seastar/core/thread.hh>
+
+using seastar::future;
+
+class mutation_source;
+
+GCC6_CONCEPT(
+    template<typename Consumer>
+    concept bool FlatMutationReaderConsumer() {
+        return requires(Consumer c, mutation_fragment mf) {
+            { c(std::move(mf)) } -> stop_iteration;
+        };
+    }
+)
+
+GCC6_CONCEPT(
+    template<typename T>
+    concept bool FlattenedConsumer() {
+        return StreamedMutationConsumer<T>() && requires(T obj, const dht::decorated_key& dk) {
+            obj.consume_new_partition(dk);
+            obj.consume_end_of_partition();
+        };
+    }
+
+    template<typename T>
+    concept bool FlattenedConsumerFilter = requires(T filter, const dht::decorated_key& dk, const mutation_fragment& mf) {
+        { filter(dk) } -> bool;
+        { filter(mf) } -> bool;
+        { filter.on_end_of_stream() } -> void;
+    };
+)
+
+/*
+ * Allows iteration on mutations using mutation_fragments.
+ * It iterates over mutations one by one and for each mutation
+ * it returns:
+ *      1. partition_start mutation_fragment
+ *      2. static_row mutation_fragment if one exists
+ *      3. mutation_fragments for all clustering rows and range tombstones
+ *         in clustering key order
+ *      4. partition_end mutation_fragment
+ * The best way to consume those mutation_fragments is to call
+ * flat_mutation_reader::consume with a consumer that receives the fragments.
+ */
+class flat_mutation_reader final {
+public:
+    class impl {
+    };
+private:
+    std::unique_ptr<impl> _impl;
+
+    flat_mutation_reader() = default;
+    explicit operator bool() const noexcept;
+    friend class optimized_optional<flat_mutation_reader>;
+    void do_upgrade_schema(const schema_ptr&);
+public:
+    // Documented in mutation_reader::forwarding in mutation_reader.hh.
+    class partition_range_forwarding_tag;
+    using partition_range_forwarding = bool_class<partition_range_forwarding_tag>;
+
+    flat_mutation_reader(std::unique_ptr<impl> impl) noexcept;
+
+    future<mutation_fragment_opt> operator()(db::timeout_clock::time_point timeout);
+
+
+
+    // Skips to the next partition.
+    //
+    // Skips over the remaining fragments of the current partitions. If the
+    // reader is currently positioned at a partition boundary (partition
+    // start) nothing is done.
+    // Only skips within the current partition range, i.e. if the current
+    // partition is the last in the range the reader will be at EOS.
+    //
+    // Can be used to skip over entire partitions if interleaved with
+    // `operator()()` calls.
+    void next_partition();
+
+    future<> fill_buffer(db::timeout_clock::time_point timeout);
+
+    // Changes the range of partitions to pr. The range can only be moved
+    // forwards. pr.begin() needs to be larger than pr.end() of the previousl
+    // used range (i.e. either the initial one passed to the constructor or a
+    // previous fast forward target).
+    // pr needs to be valid until the reader is destroyed or fast_forward_to()
+    // is called again.
+    future<> fast_forward_to(const dht::partition_range& pr, db::timeout_clock::time_point timeout);
+    // Skips to a later range of rows.
+    // The new range must not overlap with the current range.
+    //
+    // In forwarding mode the stream does not return all fragments right away,
+    // but only those belonging to the current clustering range. Initially
+    // current range only covers the static row. The stream can be forwarded
+    // (even before end-of- stream) to a later range with fast_forward_to().
+    // Forwarding doesn't change initial restrictions of the stream, it can
+    // only be used to skip over data.
+    //
+    // Monotonicity of positions is preserved by forwarding. That is fragments
+    // emitted after forwarding will have greater positions than any fragments
+    // emitted before forwarding.
+    //
+    // For any range, all range tombstones relevant for that range which are
+    // present in the original stream will be emitted. Range tombstones
+    // emitted before forwarding which overlap with the new range are not
+    // necessarily re-emitted.
+    //
+    // When forwarding mode is not enabled, fast_forward_to()
+    // cannot be used.
+    future<> fast_forward_to(position_range cr, db::timeout_clock::time_point timeout);
+    bool is_end_of_stream() const;
+    bool is_buffer_empty() const;
+    bool is_buffer_full() const;
+    mutation_fragment pop_mutation_fragment();
+    void unpop_mutation_fragment(mutation_fragment mf);
+    const schema_ptr& schema() const;
+    void set_max_buffer_size(size_t size);
+    // Resolves with a pointer to the next fragment in the stream without consuming it from the stream,
+    // or nullptr if there are no more fragments.
+    // The returned pointer is invalidated by any other non-const call to this object.
+    future<mutation_fragment*> peek(db::timeout_clock::time_point timeout);
+    // A peek at the next fragment in the buffer.
+    // Cannot be called if is_buffer_empty() returns true.
+    const mutation_fragment& peek_buffer() const;
+    // The actual buffer size of the reader.
+    // Altough we consistently refer to this as buffer size throught the code
+    // we really use "buffer size" as the size of the collective memory
+    // used by all the mutation fragments stored in the buffer of the reader.
+    size_t buffer_size() const;
+    // Detach the internal buffer of the reader.
+    // Roughly equivalent to depleting it by calling pop_mutation_fragment()
+    // until is_buffer_empty() returns true.
+    // The reader will need to allocate a new buffer on the next fill_buffer()
+    // call.
+    circular_buffer<mutation_fragment> detach_buffer();
+    // Moves the buffer content to `other`.
+    //
+    // If the buffer of `other` is empty this is very efficient as the buffers
+    // are simply swapped. Otherwise the content of the buffer is moved
+    // fragmuent-by-fragment.
+    // Allows efficient implementation of wrapping readers that do no
+    // transformation to the fragment stream.
+    void move_buffer_content_to(impl& other);
+
+    // Causes this reader to conform to s.
+    // Multiple calls of upgrade_schema() compose, effects of prior calls on the stream are preserved.
+    void upgrade_schema(const schema_ptr& s);
+};
+
+using flat_mutation_reader_opt = optimized_optional<flat_mutation_reader>;
+
+template<typename Impl, typename... Args>
+flat_mutation_reader make_flat_mutation_reader(Args &&... args) {
+    return flat_mutation_reader(std::make_unique<Impl>(std::forward<Args>(args)...));
+}
+
+
+// Creates a stream which is like r but with transformation applied to the elements.
+template<typename T>
+GCC6_CONCEPT(
+    requires StreamedMutationTranformer<T>()
+)
+flat_mutation_reader transform(flat_mutation_reader r, T t);
+inline flat_mutation_reader& to_reference(flat_mutation_reader& r) { return r; }
+inline const flat_mutation_reader& to_reference(const flat_mutation_reader& r) { return r; }
+
+flat_mutation_reader make_delegating_reader(flat_mutation_reader&);
+
+flat_mutation_reader make_forwardable(flat_mutation_reader m);
+
+flat_mutation_reader make_nonforwardable(flat_mutation_reader, bool);
+
+flat_mutation_reader make_empty_flat_reader(schema_ptr s);
+
+flat_mutation_reader flat_mutation_reader_from_mutations(std::vector<mutation>, const dht::partition_range& pr = query::full_partition_range, streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
+inline flat_mutation_reader flat_mutation_reader_from_mutations(std::vector<mutation> ms, streamed_mutation::forwarding fwd) {
+    return flat_mutation_reader_from_mutations(std::move(ms), query::full_partition_range, fwd);
+}
+flat_mutation_reader
+flat_mutation_reader_from_mutations(std::vector<mutation> ms,
+                                    const query::partition_slice& slice,
+                                    streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
+flat_mutation_reader
+flat_mutation_reader_from_mutations(std::vector<mutation> ms,
+                                    const dht::partition_range& pr,
+                                    const query::partition_slice& slice,
+                                    streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
+
+/// Make a reader that enables the wrapped reader to work with multiple ranges.
+///
+/// \param ranges An range vector that has to contain strictly monotonic
+///     partition ranges, such that successively calling
+///     `flat_mutation_reader::fast_forward_to()` with each one is valid.
+///     An range vector range with 0 or 1 elements is also valid.
+/// \param fwd_mr It is only respected when `ranges` contains 0 or 1 partition
+///     ranges. Otherwise the reader is created with
+///     mutation_reader::forwarding::yes.
+flat_mutation_reader
+make_flat_multi_range_reader(schema_ptr s, mutation_source source, const dht::partition_range_vector& ranges,
+                             const query::partition_slice& slice, const io_priority_class& pc = default_priority_class(),
+                             tracing::trace_state_ptr trace_state = nullptr,
+                             flat_mutation_reader::partition_range_forwarding fwd_mr = flat_mutation_reader::partition_range_forwarding::yes);
+
+/// Make a reader that enables the wrapped reader to work with multiple ranges.
+///
+/// Generator overload. The ranges returned by the generator have to satisfy the
+/// same requirements as the `ranges` param of the vector overload.
+flat_mutation_reader
+make_flat_multi_range_reader(
+        schema_ptr s,
+        mutation_source source,
+        std::function<std::optional<dht::partition_range>()> generator,
+        const query::partition_slice& slice,
+        const io_priority_class& pc = default_priority_class(),
+        tracing::trace_state_ptr trace_state = nullptr,
+        flat_mutation_reader::partition_range_forwarding fwd_mr = flat_mutation_reader::partition_range_forwarding::yes);
+
+flat_mutation_reader
+make_flat_mutation_reader_from_fragments(schema_ptr, std::deque<mutation_fragment>);
+
+flat_mutation_reader
+make_flat_mutation_reader_from_fragments(schema_ptr, std::deque<mutation_fragment>, const dht::partition_range& pr);
+
+flat_mutation_reader
+make_flat_mutation_reader_from_fragments(schema_ptr, std::deque<mutation_fragment>, const dht::partition_range& pr, const query::partition_slice& slice);
+
+// Calls the consumer for each element of the reader's stream until end of stream
+// is reached or the consumer requests iteration to stop by returning stop_iteration::yes.
+// The consumer should accept mutation as the argument and return stop_iteration.
+// The returned future<> resolves when consumption ends.
+template <typename Consumer>
+inline
+future<> consume_partitions(flat_mutation_reader& reader, Consumer consumer, db::timeout_clock::time_point timeout) {
+    static_assert(std::is_same<future<stop_iteration>, futurize_t<std::result_of_t<Consumer(mutation&&)>>>::value, "bad Consumer signature");
+    using futurator = futurize<std::result_of_t<Consumer(mutation&&)>>;
+
+    return do_with(std::move(consumer), [&reader, timeout] (Consumer& c) -> future<> {
+        return repeat([&reader, &c, timeout] () {
+            return read_mutation_from_flat_mutation_reader(reader, timeout).then([&c] (mutation_opt&& mo) -> future<stop_iteration> {
+                if (!mo) {
+                    return make_ready_future<stop_iteration>(stop_iteration::yes);
+                }
+                return futurator::apply(c, std::move(*mo));
+            });
+        });
+    });
+}
+
+flat_mutation_reader
+make_generating_reader(schema_ptr s, std::function<future<mutation_fragment_opt> ()> get_next_fragment);
+
+/// A reader that emits partitions in reverse.
+///
+/// 1. Static row is still emitted first.
+/// 2. Range tombstones are ordered by their end position.
+/// 3. Clustered rows and range tombstones are emitted in descending order.
+/// Because of 2 and 3 the guarantee that a range tombstone is emitted before
+/// any mutation fragment affected by it still holds.
+/// Ordering of partitions themselves remains unchanged.
+///
+/// \param original the reader to be reversed, has to be kept alive while the
+///     reversing reader is in use.
+/// \param max_memory_consumption the maximum amount of memory the reader is
+///     allowed to use for reversing. The reverse reader reads entire partitions
+///     into memory, before reversing them. Since partitions can be larger than
+///     the available memory, we need to enforce a limit on memory consumption.
+///     If the read uses more memory then this limit, the read is aborted.
+///
+/// FIXME: reversing should be done in the sstable layer, see #1413.
+flat_mutation_reader
+make_reversing_reader(flat_mutation_reader& original, size_t max_memory_consumption);
+
+class mutation;
+
+namespace ser {
+class mutation_view;
+}
+
+// Immutable, compact form of mutation.
+//
+// This form is primarily destined to be sent over the network channel.
+// Regular mutation can't be deserialized because its complex data structures
+// need schema reference at the time object is constructed. We can't lookup
+// schema before we deserialize column family ID. Another problem is that even
+// if we had the ID somehow, low level RPC layer doesn't know how to lookup
+// the schema. Data can be wrapped in frozen_mutation without schema
+// information, the schema is only needed to access some of the fields.
+//
+class frozen_mutation final {
+private:
+    partition_key deserialize_key() const;
+    ser::mutation_view mutation_view() const;
+public:
+    frozen_mutation(const mutation& m);
+    explicit frozen_mutation(bytes_ostream&& b);
+    frozen_mutation(bytes_ostream&& b, partition_key key);
+    frozen_mutation(frozen_mutation&& m) = default;
+    frozen_mutation(const frozen_mutation& m) = default;
+    frozen_mutation& operator=(frozen_mutation&&) = default;
+    frozen_mutation& operator=(const frozen_mutation&) = default;
+    const bytes_ostream& representation() const;
+    utils::UUID column_family_id() const;
+    utils::UUID schema_version() const; // FIXME: Should replace column_family_id()
+    partition_key_view key(const schema& s) const;
+    dht::decorated_key decorated_key(const schema& s) const;
+    mutation_partition_view partition() const;
+    // The supplied schema must be of the same version as the schema of
+    // the mutation which was used to create this instance.
+    // throws schema_mismatch_error otherwise.
+    mutation unfreeze(schema_ptr s) const;
+
+    struct printer;
+
+    // Same requirements about the schema as unfreeze().
+    printer pretty_printer(schema_ptr) const;
+};
+
+frozen_mutation freeze(const mutation& m);
+
+struct frozen_mutation_and_schema {
+    frozen_mutation fm;
+    schema_ptr s;
+};
+
+// Can receive streamed_mutation in reversed order.
+class streamed_mutation_freezer;
+
+static constexpr size_t default_frozen_fragment_size = 128 * 1024;
+
+using frozen_mutation_consumer_fn = std::function<future<stop_iteration>(frozen_mutation, bool)>;
+future<> fragment_and_freeze(flat_mutation_reader mr, frozen_mutation_consumer_fn c,
+                             size_t fragment_size = default_frozen_fragment_size);
+
+class frozen_mutation_fragment {
+};
+
+frozen_mutation_fragment freeze(const schema& s, const mutation_fragment& mf);
+
 #include <seastar/core/do_with.hh>
-#include "mutation_query.hh"
+
+#include <seastar/core/future.hh>
+#include <seastar/core/future-util.hh>
+#include <seastar/core/do_with.hh>
+
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/file.hh>
+
+struct reader_resources {
+    int count = 0;
+    ssize_t memory = 0;
+
+    reader_resources() = default;
+
+    reader_resources(int count, ssize_t memory)
+        : count(count)
+        , memory(memory) {
+    }
+
+    bool operator>=(const reader_resources& other) const {
+        return count >= other.count && memory >= other.memory;
+    }
+
+    reader_resources& operator-=(const reader_resources& other) {
+        count -= other.count;
+        memory -= other.memory;
+        return *this;
+    }
+
+    reader_resources& operator+=(const reader_resources& other) {
+        count += other.count;
+        memory += other.memory;
+        return *this;
+    }
+
+    explicit operator bool() const {
+        return count >= 0 && memory >= 0;
+    }
+};
+
+class reader_concurrency_semaphore;
+
+class reader_permit {
+    struct impl {
+        reader_concurrency_semaphore& semaphore;
+        reader_resources base_cost;
+
+        impl(reader_concurrency_semaphore& semaphore, reader_resources base_cost);
+        ~impl();
+    };
+
+    friend reader_permit no_reader_permit();
+
+public:
+    class memory_units {
+        reader_concurrency_semaphore* _semaphore = nullptr;
+        size_t _memory = 0;
+
+        friend class reader_permit;
+    private:
+        memory_units(reader_concurrency_semaphore* semaphore, ssize_t memory) noexcept;
+    public:
+        memory_units(const memory_units&) = delete;
+        memory_units(memory_units&&) noexcept;
+        ~memory_units();
+        memory_units& operator=(const memory_units&) = delete;
+        memory_units& operator=(memory_units&&) noexcept;
+        void reset(size_t memory = 0);
+        operator size_t() const {
+            return _memory;
+        }
+    };
+
+private:
+    lw_shared_ptr<impl> _impl;
+
+private:
+    reader_permit() = default;
+
+public:
+    reader_permit(reader_concurrency_semaphore& semaphore, reader_resources base_cost);
+
+    bool operator==(const reader_permit& o) const {
+        return _impl == o._impl;
+    }
+    operator bool() const {
+        return bool(_impl);
+    }
+
+    memory_units get_memory_units(size_t memory = 0);
+    void release();
+};
+
+reader_permit no_reader_permit();
+
+template <typename Char>
+temporary_buffer<Char> make_tracked_temporary_buffer(temporary_buffer<Char> buf, reader_permit& permit) {
+    return temporary_buffer<Char>(buf.get_write(), buf.size(),
+            make_deleter(buf.release(), [units = permit.get_memory_units(buf.size())] () mutable { units.reset(); }));
+}
+
+file make_tracked_file(file f, reader_permit p);
+
+using namespace seastar;
+
+/// Specific semaphore for controlling reader concurrency
+///
+/// Before creating a reader one should obtain a permit by calling
+/// `wait_admission()`. This permit can then be used for tracking the
+/// reader's memory consumption.
+/// The permit should be held onto for the lifetime of the reader
+/// and/or any buffer its tracking.
+/// Reader concurrency is dual limited by count and memory.
+/// The semaphore can be configured with the desired limits on
+/// construction. New readers will only be admitted when there is both
+/// enough count and memory units available. Readers are admitted in
+/// FIFO order.
+/// Semaphore's `name` must be provided in ctor and its only purpose is
+/// to increase readability of exceptions: both timeout exceptions and
+/// queue overflow exceptions (read below) include this `name` in messages.
+/// It's also possible to specify the maximum allowed number of waiting
+/// readers by the `max_queue_length` constructor parameter. When the
+/// number of waiting readers becomes equal or greater than
+/// `max_queue_length` (upon calling `wait_admission()`) an exception of
+/// type `std::runtime_error` is thrown. Optionally, some additional
+/// code can be executed just before throwing (`prethrow_action`
+/// constructor parameter).
+class reader_concurrency_semaphore {
+};
+
+namespace mutation_reader {
+    // mutation_reader::forwarding determines whether fast_forward_to() may
+    // be used on the mutation reader to change the partition range being
+    // read. Enabling forwarding also changes read policy: forwarding::no
+    // means we will stop reading from disk at the end of the given range,
+    // but with forwarding::yes we may read ahead, anticipating the user to
+    // make a small skip with fast_forward_to() and continuing to read.
+    //
+    // Note that mutation_reader::forwarding is similarly name but different
+    // from streamed_mutation::forwarding - the former is about skipping to
+    // a different partition range, while the latter is about skipping
+    // inside a large partition.
+    using forwarding = flat_mutation_reader::partition_range_forwarding;
+}
+
+/// A partition_presence_checker quickly returns whether a key is known not to exist
+/// in a data source (it may return false positives, but not false negatives).
+enum class partition_presence_checker_result {
+    definitely_doesnt_exist,
+    maybe_exists
+};
+using partition_presence_checker = std::function<partition_presence_checker_result (const dht::decorated_key& key)>;
+
+partition_presence_checker make_default_partition_presence_checker();
+
+// mutation_source represents source of data in mutation form. The data source
+// can be queried multiple times and in parallel. For each query it returns
+// independent mutation_reader.
+// The reader returns mutations having all the same schema, the one passed
+// when invoking the source.
+class mutation_source {
+    using partition_range = const dht::partition_range&;
+    using io_priority = const io_priority_class&;
+    using flat_reader_factory_type = std::function<flat_mutation_reader(schema_ptr,
+                                                                        reader_permit,
+                                                                        partition_range,
+                                                                        const query::partition_slice&,
+                                                                        io_priority,
+                                                                        tracing::trace_state_ptr,
+                                                                        streamed_mutation::forwarding,
+                                                                        mutation_reader::forwarding)>;
+public:
+    mutation_source() = default;
+    explicit operator bool() const;
+    friend class optimized_optional<mutation_source>;
+public:
+    mutation_source(flat_reader_factory_type fn, std::function<partition_presence_checker()> pcf = [] { return make_default_partition_presence_checker(); });
+
+    // For sources which don't care about the mutation_reader::forwarding flag (always fast forwardable)
+    mutation_source(std::function<flat_mutation_reader(schema_ptr, reader_permit, partition_range, const query::partition_slice&, io_priority,
+                tracing::trace_state_ptr, streamed_mutation::forwarding)> fn);
+    mutation_source(std::function<flat_mutation_reader(schema_ptr, reader_permit, partition_range, const query::partition_slice&, io_priority)> fn);
+    mutation_source(std::function<flat_mutation_reader(schema_ptr, reader_permit, partition_range, const query::partition_slice&)> fn);
+    mutation_source(std::function<flat_mutation_reader(schema_ptr, reader_permit, partition_range range)> fn);
+    mutation_source(const mutation_source& other) = default;
+    mutation_source& operator=(const mutation_source& other) = default;
+    mutation_source(mutation_source&&) = default;
+    mutation_source& operator=(mutation_source&&) = default;
+
+    // Creates a new reader.
+    //
+    // All parameters captured by reference must remain live as long as returned
+    // mutation_reader or streamed_mutation obtained through it are alive.
+    flat_mutation_reader
+    make_reader(
+        schema_ptr s,
+        reader_permit permit,
+        partition_range range,
+        const query::partition_slice& slice,
+        io_priority pc = default_priority_class(),
+        tracing::trace_state_ptr trace_state = nullptr,
+        streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
+        mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes) const;
+
+    flat_mutation_reader
+    make_reader(
+        schema_ptr s,
+        reader_permit permit = no_reader_permit(),
+        partition_range range = query::full_partition_range) const;
+    partition_presence_checker make_partition_presence_checker();
+};
+
+
+using mutation_source_opt = optimized_optional<mutation_source>;
+
+class reconcilable_result;
+class frozen_reconcilable_result;
+
+// Can be read by other cores after publishing.
+struct partition {
+};
+
+
+
+// Performs a query for counter updates.
+future<mutation_opt> counter_write_query(schema_ptr, const mutation_source&,
+                                         const dht::decorated_key& dk,
+                                         const query::partition_slice& slice,
+                                         tracing::trace_state_ptr trace_ptr);
+
 
 using namespace std::chrono_literals;
 using namespace db;

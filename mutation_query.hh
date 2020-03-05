@@ -20,22 +20,3 @@
  */
 
 #pragma once
-
-#include "mutation_reader.hh"
-#include "frozen_mutation.hh"
-
-class reconcilable_result;
-class frozen_reconcilable_result;
-
-// Can be read by other cores after publishing.
-struct partition {
-};
-
-
-
-// Performs a query for counter updates.
-future<mutation_opt> counter_write_query(schema_ptr, const mutation_source&,
-                                         const dht::decorated_key& dk,
-                                         const query::partition_slice& slice,
-                                         tracing::trace_state_ptr trace_ptr);
-

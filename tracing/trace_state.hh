@@ -40,23 +40,3 @@
  */
 #pragma once
 
-
-namespace cql3{
-class query_options;
-struct raw_value_view;
-
-namespace statements {
-class prepared_statement;
-}
-}
-
-namespace tracing {
-
-
-class trace_state_ptr final {
-public:
-    trace_state_ptr();
-    trace_state_ptr(nullptr_t);
-};
-
-}

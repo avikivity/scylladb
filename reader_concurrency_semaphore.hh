@@ -20,32 +20,3 @@
  */
 
 #pragma once
-
-#include "reader_permit.hh"
-
-using namespace seastar;
-
-/// Specific semaphore for controlling reader concurrency
-///
-/// Before creating a reader one should obtain a permit by calling
-/// `wait_admission()`. This permit can then be used for tracking the
-/// reader's memory consumption.
-/// The permit should be held onto for the lifetime of the reader
-/// and/or any buffer its tracking.
-/// Reader concurrency is dual limited by count and memory.
-/// The semaphore can be configured with the desired limits on
-/// construction. New readers will only be admitted when there is both
-/// enough count and memory units available. Readers are admitted in
-/// FIFO order.
-/// Semaphore's `name` must be provided in ctor and its only purpose is
-/// to increase readability of exceptions: both timeout exceptions and
-/// queue overflow exceptions (read below) include this `name` in messages.
-/// It's also possible to specify the maximum allowed number of waiting
-/// readers by the `max_queue_length` constructor parameter. When the
-/// number of waiting readers becomes equal or greater than
-/// `max_queue_length` (upon calling `wait_admission()`) an exception of
-/// type `std::runtime_error` is thrown. Optionally, some additional
-/// code can be executed just before throwing (`prethrow_action` 
-/// constructor parameter).
-class reader_concurrency_semaphore {
-};
