@@ -581,27 +581,12 @@ public:
         fragment_iterator(chunk* current) : _current(current) {}
         fragment_iterator(const fragment_iterator&) = default;
         fragment_iterator& operator=(const fragment_iterator&) = default;
-        bytes_view operator*() const {
-            return { _current->data, _current->offset };
-        }
-        bytes_view operator->() const {
-            return *(*this);
-        }
-        fragment_iterator& operator++() {
-            _current = _current->next.get();
-            return *this;
-        }
-        fragment_iterator operator++(int) {
-            fragment_iterator tmp(*this);
-            ++(*this);
-            return tmp;
-        }
-        bool operator==(const fragment_iterator& other) const {
-            return _current == other._current;
-        }
-        bool operator!=(const fragment_iterator& other) const {
-            return _current != other._current;
-        }
+        bytes_view operator*() const ;
+        bytes_view operator->() const ;
+        fragment_iterator& operator++() ;
+        fragment_iterator operator++(int) ;
+        bool operator==(const fragment_iterator& other) const ;
+        bool operator!=(const fragment_iterator& other) const ;
     };
     using const_iterator = fragment_iterator;
     class output_iterator {
@@ -615,26 +600,15 @@ public:
     private:
         bytes_ostream* _ostream = nullptr;
     private:
-        explicit output_iterator(bytes_ostream& os) : _ostream(&os) { }
+        explicit output_iterator(bytes_ostream& os)  ;
     public:
-        reference operator*() const { return *_ostream->write_place_holder(1); }
-        output_iterator& operator++() { return *this; }
-        output_iterator operator++(int) { return *this; }
+        reference operator*() const ;
+        output_iterator& operator++() ;
+        output_iterator operator++(int) ;
     };
 private:
-    inline size_type current_space_left() const {
-        if (!_current) {
-            return 0;
-        }
-        return _current->size - _current->offset;
-    }
-    size_type next_alloc_size(size_t data_size) const {
-        auto next_size = _current
-                ? _current->size * 2
-                : _initial_chunk_size;
-        next_size = std::min(next_size, max_chunk_size());
-        return std::max<size_type>(next_size, data_size + sizeof(chunk));
-    }
+     size_type current_space_left() const ;
+    size_type next_alloc_size(size_t data_size) const ;
     [[gnu::always_inline]]
     value_type* alloc(size_type size) {
         if (__builtin_expect(size <= current_space_left(), true)) {
@@ -817,60 +791,11 @@ public:
         chunk* _chunk;
         size_type _offset;
     };
-    position pos() const {
-        return { _current, _current ? _current->offset : 0 };
-    }
-    size_type written_since(position pos) {
-        chunk* c = pos._chunk;
-        if (!c) {
-            return _size;
-        }
-        size_type total = c->offset - pos._offset;
-        c = c->next.get();
-        while (c) {
-            total += c->offset;
-            c = c->next.get();
-        }
-        return total;
-    }
-    void retract(position pos) {
-        if (!pos._chunk) {
-            *this = {};
-            return;
-        }
-        _size -= written_since(pos);
-        _current = pos._chunk;
-        _current->next = nullptr;
-        _current->offset = pos._offset;
-    }
-    void reduce_chunk_count() {
-        if (size() < max_chunk_size()) {
-            linearize();
-        }
-    }
-    bool operator==(const bytes_ostream& other) const {
-        auto as = fragments().begin();
-        auto as_end = fragments().end();
-        auto bs = other.fragments().begin();
-        auto bs_end = other.fragments().end();
-        auto a = *as++;
-        auto b = *bs++;
-        while (!a.empty() || !b.empty()) {
-            auto now = std::min(a.size(), b.size());
-            if (!std::equal(a.begin(), a.begin() + now, b.begin(), b.begin() + now)) {
-                return false;
-            }
-            a.remove_prefix(now);
-            if (a.empty() && as != as_end) {
-                a = *as++;
-            }
-            b.remove_prefix(now);
-            if (b.empty() && bs != bs_end) {
-                b = *bs++;
-            }
-        }
-        return true;
-    }
+    position pos() const ;
+    size_type written_since(position pos) ;
+    void retract(position pos) ;
+    void reduce_chunk_count() ;
+    bool operator==(const bytes_ostream& other) const ;
     bool operator!=(const bytes_ostream& other) const {
         return !(*this == other);
     }
@@ -3059,9 +2984,7 @@ private:
     mutable schema_registry_entry* _registry_entry = nullptr;
     std::unique_ptr<::view_info> _view_info;
     const std::array<column_count_type, 3> _offsets;
-    inline column_count_type column_offset(column_kind k) const {
-        return k == column_kind::partition_key ? 0 : _offsets[column_count_type(k) - 1];
-    }
+     column_count_type column_offset(column_kind k) const ;
     std::unordered_map<bytes, const column_definition*> _columns_by_name;
     lw_shared_ptr<compound_type<allow_prefixes::no>> _partition_key_type;
     lw_shared_ptr<compound_type<allow_prefixes::yes>> _clustering_key_type;
@@ -3070,9 +2993,7 @@ private:
     column_count_type _clustering_key_size;
     column_count_type _regular_column_count;
     column_count_type _static_column_count;
-    extensions_map& extensions() {
-        return _raw._extensions;
-    }
+    extensions_map& extensions() ;
     friend class db::extensions;
     friend class schema_builder;
 public:
@@ -3103,86 +3024,33 @@ public:
         std::string_view comment = {});
     schema(const schema&);
     ~schema();
-    table_schema_version version() const {
-        return _raw._version;
-    }
-    double bloom_filter_fp_chance() const {
-        return _raw._bloom_filter_fp_chance;
-    }
+    table_schema_version version() const ;
+    double bloom_filter_fp_chance() const ;
     sstring thrift_key_validator() const;
-    const extensions_map& extensions() const {
-        return _raw._extensions;
-    }
-    bool is_dense() const {
-        return _raw._is_dense;
-    }
-    bool is_compound() const {
-        return _raw._is_compound;
-    }
-    bool is_cql3_table() const {
-        return !is_super() && !is_dense() && is_compound();
-    }
-    bool is_compact_table() const {
-        return !is_cql3_table();
-    }
-    bool is_static_compact_table() const {
-        return !is_super() && !is_dense() && !is_compound();
-    }
-    thrift_schema& thrift() {
-        return _thrift;
-    }
-    const thrift_schema& thrift() const {
-        return _thrift;
-    }
-    const utils::UUID& id() const {
-        return _raw._id;
-    }
-    const sstring& comment() const {
-        return _raw._comment;
-    }
-    bool is_counter() const {
-        return _raw._is_counter;
-    }
-    const cf_type type() const {
-        return _raw._type;
-    }
-    bool is_super() const {
-        return _raw._type == cf_type::super;
-    }
-    gc_clock::duration gc_grace_seconds() const {
-        auto seconds = std::chrono::seconds(_raw._gc_grace_seconds);
-        return std::chrono::duration_cast<gc_clock::duration>(seconds);
-    }
-    double dc_local_read_repair_chance() const {
-        return _raw._dc_local_read_repair_chance;
-    }
-    double read_repair_chance() const {
-        return _raw._read_repair_chance;
-    }
-    double crc_check_chance() const {
-        return _raw._crc_check_chance;
-    }
-    int32_t min_compaction_threshold() const {
-        return _raw._min_compaction_threshold;
-    }
-    int32_t max_compaction_threshold() const {
-        return _raw._max_compaction_threshold;
-    }
-    int32_t min_index_interval() const {
-        return _raw._min_index_interval;
-    }
-    int32_t max_index_interval() const {
-        return _raw._max_index_interval;
-    }
-    int32_t memtable_flush_period() const {
-        return _raw._memtable_flush_period;
-    }
-    bool compaction_enabled() const {
-        return _raw._compaction_enabled;
-    }
-    const ::speculative_retry& speculative_retry() const {
-        return _raw._speculative_retry;
-    }
+    const extensions_map& extensions() const ;
+    bool is_dense() const ;
+    bool is_compound() const ;
+    bool is_cql3_table() const ;
+    bool is_compact_table() const ;
+    bool is_static_compact_table() const ;
+    thrift_schema& thrift() ;
+    const thrift_schema& thrift() const ;
+    const utils::UUID& id() const ;
+    const sstring& comment() const ;
+    bool is_counter() const ;
+    const cf_type type() const ;
+    bool is_super() const ;
+    gc_clock::duration gc_grace_seconds() const ;
+    double dc_local_read_repair_chance() const ;
+    double read_repair_chance() const ;
+    double crc_check_chance() const ;
+    int32_t min_compaction_threshold() const ;
+    int32_t max_compaction_threshold() const ;
+    int32_t min_index_interval() const ;
+    int32_t max_index_interval() const ;
+    int32_t memtable_flush_period() const ;
+    bool compaction_enabled() const ;
+    const ::speculative_retry& speculative_retry() const ;
     dht::i_partitioner& get_partitioner() const;
     const column_definition* get_column_definition(const bytes& name) const;
     const column_definition& column_at(column_kind, column_id) const;
@@ -3216,21 +3084,11 @@ public:
         select_order_range;
     select_order_range all_columns_in_select_order() const;
     uint32_t position(const column_definition& column) const;
-    const columns_type& all_columns() const {
-        return _raw._columns;
-    }
-    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const {
-        return _columns_by_name;
-    }
-    const auto& dropped_columns() const {
-        return _raw._dropped_columns;
-    }
-    const auto& collections() const {
-        return _raw._collections;
-    }
-    gc_clock::duration default_time_to_live() const {
-        return _raw._default_time_to_live;
-    }
+    const columns_type& all_columns() const ;
+    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const ;
+    const auto& dropped_columns() const ;
+    const auto& collections() const ;
+    gc_clock::duration default_time_to_live() const ;
     data_type make_legacy_default_validator() const;
     const sstring& ks_name() const {
         return _raw._ks_name;
@@ -4665,13 +4523,9 @@ public:
     const T& value() const & { return _value; }
     T&& value() && { return std::move(_value); }
     bool is_inclusive() const { return _inclusive; }
-    bool operator==(const range_bound& other) const {
-        return (_value == other._value) && (_inclusive == other._inclusive);
-    }
+    bool operator==(const range_bound& other) const ;
     template<typename Comparator>
-    bool equal(const range_bound& other, Comparator&& cmp) const {
-        return _inclusive == other._inclusive && cmp(_value, other._value) == 0;
-    }
+    bool equal(const range_bound& other, Comparator&& cmp) const ;
 };
 template<typename T>
 class nonwrapping_range;
@@ -4688,246 +4542,57 @@ private:
     optional<bound> _end;
     bool _singular;
 public:
-    wrapping_range(optional<bound> start, optional<bound> end, bool singular = false)
-        : _start(std::move(start))
-        , _singular(singular) {
-        if (!_singular) {
-            _end = std::move(end);
-        }
-    }
-    wrapping_range(T value)
-        : _start(bound(std::move(value), true))
-        , _end()
-        , _singular(true)
-    { }
-    wrapping_range() : wrapping_range({}, {}) { }
+    wrapping_range(optional<bound> start, optional<bound> end, bool singular = false)  ;
+    wrapping_range(T value) 
+    ;
+    wrapping_range()  ;
 private:
     struct start_bound_ref { const optional<bound>& b; };
     struct end_bound_ref { const optional<bound>& b; };
-    start_bound_ref start_bound() const { return { start() }; }
-    end_bound_ref end_bound() const { return { end() }; }
+    start_bound_ref start_bound() const ;
+    end_bound_ref end_bound() const ;
     template<typename Comparator>
-    static bool greater_than_or_equal(end_bound_ref end, start_bound_ref start, Comparator&& cmp) {
-        return !end.b || !start.b || cmp(end.b->value(), start.b->value())
-                                     >= (!end.b->is_inclusive() || !start.b->is_inclusive());
-    }
+    static bool greater_than_or_equal(end_bound_ref end, start_bound_ref start, Comparator&& cmp) ;
     template<typename Comparator>
-    static bool less_than(end_bound_ref end, start_bound_ref start, Comparator&& cmp) {
-        return !greater_than_or_equal(end, start, cmp);
-    }
+    static bool less_than(end_bound_ref end, start_bound_ref start, Comparator&& cmp) ;
     template<typename Comparator>
-    static bool less_than_or_equal(start_bound_ref first, start_bound_ref second, Comparator&& cmp) {
-        return !first.b || (second.b && cmp(first.b->value(), second.b->value())
-                                        <= -(!first.b->is_inclusive() && second.b->is_inclusive()));
-    }
+    static bool less_than_or_equal(start_bound_ref first, start_bound_ref second, Comparator&& cmp) ;
     template<typename Comparator>
-    static bool less_than(start_bound_ref first, start_bound_ref second, Comparator&& cmp) {
-        return second.b && (!first.b || cmp(first.b->value(), second.b->value())
-                                        < (first.b->is_inclusive() && !second.b->is_inclusive()));
-    }
+    static bool less_than(start_bound_ref first, start_bound_ref second, Comparator&& cmp) ;
     template<typename Comparator>
-    static bool greater_than_or_equal(end_bound_ref first, end_bound_ref second, Comparator&& cmp) {
-        return !first.b || (second.b && cmp(first.b->value(), second.b->value())
-                                        >= (!first.b->is_inclusive() && second.b->is_inclusive()));
-    }
+    static bool greater_than_or_equal(end_bound_ref first, end_bound_ref second, Comparator&& cmp) ;
 public:
     template<typename Comparator>
-    bool before(const T& point, Comparator&& cmp) const {
-        assert(!is_wrap_around(cmp));
-        if (!start()) {
-            return false; 
-        }
-        auto r = cmp(point, start()->value());
-        if (r < 0) {
-            return true;
-        }
-        if (!start()->is_inclusive() && r == 0) {
-            return true;
-        }
-        return false;
-    }
+    bool before(const T& point, Comparator&& cmp) const ;
     template<typename Comparator>
-    bool after(const T& point, Comparator&& cmp) const {
-        assert(!is_wrap_around(cmp));
-        if (!end()) {
-            return false; 
-        }
-        auto r = cmp(end()->value(), point);
-        if (r < 0) {
-            return true;
-        }
-        if (!end()->is_inclusive() && r == 0) {
-            return true;
-        }
-        return false;
-    }
+    bool after(const T& point, Comparator&& cmp) const ;
     template<typename Comparator>
-    bool overlaps(const wrapping_range& other, Comparator&& cmp) const {
-        bool this_wraps = is_wrap_around(cmp);
-        bool other_wraps = other.is_wrap_around(cmp);
-        if (this_wraps && other_wraps) {
-            return true;
-        } else if (this_wraps) {
-            auto unwrapped = unwrap();
-            return other.overlaps(unwrapped.first, cmp) || other.overlaps(unwrapped.second, cmp);
-        } else if (other_wraps) {
-            auto unwrapped = other.unwrap();
-            return overlaps(unwrapped.first, cmp) || overlaps(unwrapped.second, cmp);
-        }
-        assert(!this_wraps);
-        assert(!other_wraps);
-        if (!start() && !other.start()) {
-            return true;
-        }
-        return greater_than_or_equal(end_bound(), other.start_bound(), cmp)
-            && greater_than_or_equal(other.end_bound(), start_bound(), cmp);
-    }
-    static wrapping_range make(bound start, bound end) {
-        return wrapping_range({std::move(start)}, {std::move(end)});
-    }
-    static wrapping_range make_open_ended_both_sides() {
-        return {{}, {}};
-    }
-    static wrapping_range make_singular(T value) {
-        return {std::move(value)};
-    }
-    static wrapping_range make_starting_with(bound b) {
-        return {{std::move(b)}, {}};
-    }
-    static wrapping_range make_ending_with(bound b) {
-        return {{}, {std::move(b)}};
-    }
-    bool is_singular() const {
-        return _singular;
-    }
-    bool is_full() const {
-        return !_start && !_end;
-    }
-    void reverse() {
-        if (!_singular) {
-            std::swap(_start, _end);
-        }
-    }
-    const optional<bound>& start() const {
-        return _start;
-    }
-    const optional<bound>& end() const {
-        return _singular ? _start : _end;
-    }
+    bool overlaps(const wrapping_range& other, Comparator&& cmp) const ;
+    static wrapping_range make(bound start, bound end) ;
+    static wrapping_range make_open_ended_both_sides() ;
+    static wrapping_range make_singular(T value) ;
+    static wrapping_range make_starting_with(bound b) ;
+    static wrapping_range make_ending_with(bound b) ;
+    bool is_singular() const ;
+    bool is_full() const ;
+    void reverse() ;
+    const optional<bound>& start() const ;
+    const optional<bound>& end() const ;
     template<typename Comparator>
-    bool is_wrap_around(Comparator&& cmp) const {
-        if (_end && _start) {
-            auto r = cmp(end()->value(), start()->value());
-            return r < 0
-                   || (r == 0 && (!start()->is_inclusive() || !end()->is_inclusive()));
-        } else {
-            return false; 
-        }
-    }
-    std::pair<wrapping_range, wrapping_range> unwrap() const {
-        return {
-            { {}, end() },
-            { start(), {} }
-        };
-    }
+    bool is_wrap_around(Comparator&& cmp) const ;
+    std::pair<wrapping_range, wrapping_range> unwrap() const ;
     template<typename Comparator>
-    bool contains(const T& point, Comparator&& cmp) const {
-        if (is_wrap_around(cmp)) {
-            auto unwrapped = unwrap();
-            return unwrapped.first.contains(point, cmp)
-                   || unwrapped.second.contains(point, cmp);
-        } else {
-            return !before(point, cmp) && !after(point, cmp);
-        }
-    }
+    bool contains(const T& point, Comparator&& cmp) const ;
     template<typename Comparator>
-    bool contains(const wrapping_range& other, Comparator&& cmp) const {
-        bool this_wraps = is_wrap_around(cmp);
-        bool other_wraps = other.is_wrap_around(cmp);
-        if (this_wraps && other_wraps) {
-            return cmp(start()->value(), other.start()->value())
-                   <= -(!start()->is_inclusive() && other.start()->is_inclusive())
-                && cmp(end()->value(), other.end()->value())
-                   >= (!end()->is_inclusive() && other.end()->is_inclusive());
-        }
-        if (!this_wraps && !other_wraps) {
-            return less_than_or_equal(start_bound(), other.start_bound(), cmp)
-                    && greater_than_or_equal(end_bound(), other.end_bound(), cmp);
-        }
-        if (other_wraps) { 
-            return !start() && !end();
-        }
-        return (other.start() && cmp(start()->value(), other.start()->value())
-                                 <= -(!start()->is_inclusive() && other.start()->is_inclusive()))
-                || (other.end() && cmp(end()->value(), other.end()->value())
-                                   >= (!end()->is_inclusive() && other.end()->is_inclusive()));
-    }
+    bool contains(const wrapping_range& other, Comparator&& cmp) const ;
     template<typename Comparator>
-    std::vector<wrapping_range> subtract(const wrapping_range& other, Comparator&& cmp) const {
-        std::vector<wrapping_range> result;
-        std::list<wrapping_range> left;
-        std::list<wrapping_range> right;
-        if (is_wrap_around(cmp)) {
-            auto u = unwrap();
-            left.emplace_back(std::move(u.first));
-            left.emplace_back(std::move(u.second));
-        } else {
-            left.push_back(*this);
-        }
-        if (other.is_wrap_around(cmp)) {
-            auto u = other.unwrap();
-            right.emplace_back(std::move(u.first));
-            right.emplace_back(std::move(u.second));
-        } else {
-            right.push_back(other);
-        }
-        while (!left.empty() && !right.empty()) {
-            auto& r1 = left.front();
-            auto& r2 = right.front();
-            if (less_than(r2.end_bound(), r1.start_bound(), cmp)) {
-                right.pop_front();
-            } else if (less_than(r1.end_bound(), r2.start_bound(), cmp)) {
-                result.emplace_back(std::move(r1));
-                left.pop_front();
-            } else { 
-                auto tmp = std::move(r1);
-                left.pop_front();
-                if (!greater_than_or_equal(r2.end_bound(), tmp.end_bound(), cmp)) {
-                    left.push_front({bound(r2.end()->value(), !r2.end()->is_inclusive()), tmp.end()});
-                }
-                if (!less_than_or_equal(r2.start_bound(), tmp.start_bound(), cmp)) {
-                    left.push_front({tmp.start(), bound(r2.start()->value(), !r2.start()->is_inclusive())});
-                }
-            }
-        }
-        boost::copy(left, std::back_inserter(result));
-        return result;
-    }
+    std::vector<wrapping_range> subtract(const wrapping_range& other, Comparator&& cmp) const ;
     template<typename Comparator>
-    std::pair<wrapping_range<T>, wrapping_range<T>> split(const T& split_point, Comparator&& cmp) const {
-        assert(contains(split_point, std::forward<Comparator>(cmp)));
-        wrapping_range left(start(), bound(split_point));
-        wrapping_range right(bound(split_point, false), end());
-        return std::make_pair(std::move(left), std::move(right));
-    }
+    std::pair<wrapping_range<T>, wrapping_range<T>> split(const T& split_point, Comparator&& cmp) const ;
     template<typename Comparator>
-    std::optional<wrapping_range<T>> split_after(const T& split_point, Comparator&& cmp) const {
-        if (contains(split_point, std::forward<Comparator>(cmp))
-                && (!end() || cmp(split_point, end()->value()) != 0)) {
-            return wrapping_range(bound(split_point, false), end());
-        } else if (end() && cmp(split_point, end()->value()) >= 0) {
-            return std::nullopt;
-        } else {
-            return *this;
-        }
-    }
+    std::optional<wrapping_range<T>> split_after(const T& split_point, Comparator&& cmp) const ;
     template<typename Bound, typename Transformer, typename U = transformed_type<Transformer>>
-    static std::optional<typename wrapping_range<U>::bound> transform_bound(Bound&& b, Transformer&& transformer) {
-        if (b) {
-            return { { transformer(std::forward<Bound>(b).value().value()), b->is_inclusive() } };
-        };
-        return {};
-    }
+    static std::optional<typename wrapping_range<U>::bound> transform_bound(Bound&& b, Transformer&& transformer) ;
     template<typename Transformer, typename U = transformed_type<Transformer>>
     wrapping_range<U> transform(Transformer&& transformer) && {
         return wrapping_range<U>(transform_bound(std::move(_start), transformer), transform_bound(std::move(_end), transformer), _singular);
