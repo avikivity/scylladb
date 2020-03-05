@@ -4570,9 +4570,7 @@ class decorated_key_equals_comparator {
     const schema& _schema;
 public:
     explicit decorated_key_equals_comparator(const schema& schema) : _schema(schema) {}
-    bool operator()(const dht::decorated_key& k1, const dht::decorated_key& k2) const {
-        return k1.equal(_schema, k2);
-    }
+    bool operator()(const dht::decorated_key& k1, const dht::decorated_key& k2) const ;
 };
 using decorated_key_opt = std::optional<decorated_key>;
 class i_partitioner {
@@ -4582,26 +4580,21 @@ protected:
     std::vector<uint64_t> _shard_start;
 public:
     i_partitioner(unsigned shard_count = smp::count, unsigned sharding_ignore_msb_bits = 0);
-    virtual ~i_partitioner() {}
+    virtual ~i_partitioner() ;
     /**
      * Transform key to object representation of the on-disk format.
      *
      * @param key the raw, client-facing key
      * @return decorated version of key
      */
-    decorated_key decorate_key(const schema& s, const partition_key& key) {
-        return { get_token(s, key), key };
-    }
+    decorated_key decorate_key(const schema& s, const partition_key& key) ;
     /**
      * Transform key to object representation of the on-disk format.
      *
      * @param key the raw, client-facing key
      * @return decorated version of key
      */
-    decorated_key decorate_key(const schema& s, partition_key&& key) {
-        auto token = get_token(s, key);
-        return { std::move(token), std::move(key) };
-    }
+    decorated_key decorate_key(const schema& s, partition_key&& key) ;
     /**
      * @return a token that can be used to route a given key
      * (This is NOT a method to create a token from its string representation;
@@ -4637,19 +4630,10 @@ public:
     /**
      * @return number of shards configured for this partitioner
      */
-    unsigned shard_count() const {
-        return _shard_count;
-    }
-    unsigned sharding_ignore_msb() const {
-        return _sharding_ignore_msb_bits;
-    }
-    bool operator==(const i_partitioner& o) const {
-        return name() == o.name()
-                && sharding_ignore_msb() == o.sharding_ignore_msb();
-    }
-    bool operator!=(const i_partitioner& o) const {
-        return !(*this == o);
-    }
+    unsigned shard_count() const ;
+    unsigned sharding_ignore_msb() const ;
+    bool operator==(const i_partitioner& o) const ;
+    bool operator!=(const i_partitioner& o) const ;
 };
 class ring_position {
 public:
@@ -4661,9 +4645,7 @@ private:
     token_bound _token_bound{}; 
     std::optional<partition_key> _key;
 public:
-    static ring_position min() {
-        return { minimum_token(), token_bound::start };
-    }
+    static ring_position min() ;
     static ring_position max() {
         return { maximum_token(), token_bound::end };
     }
@@ -4734,33 +4716,15 @@ public:
     using token_bound = ring_position::token_bound;
     struct after_key_tag {};
     using after_key = bool_class<after_key_tag>;
-    static ring_position_view min() {
-        return { minimum_token(), nullptr, -1 };
-    }
-    static ring_position_view max() {
-        return { maximum_token(), nullptr, 1 };
-    }
-    bool is_min() const {
-        return _token->is_minimum();
-    }
-    bool is_max() const {
-        return _token->is_maximum();
-    }
-    static ring_position_view for_range_start(const partition_range& r) {
-        return r.start() ? ring_position_view(r.start()->value(), after_key(!r.start()->is_inclusive())) : min();
-    }
-    static ring_position_view for_range_end(const partition_range& r) {
-        return r.end() ? ring_position_view(r.end()->value(), after_key(r.end()->is_inclusive())) : max();
-    }
-    static ring_position_view for_after_key(const dht::decorated_key& dk) {
-        return ring_position_view(dk, after_key::yes);
-    }
-    static ring_position_view for_after_key(dht::ring_position_view view) {
-        return ring_position_view(after_key_tag(), view);
-    }
-    static ring_position_view starting_at(const dht::token& t) {
-        return ring_position_view(t, token_bound::start);
-    }
+    static ring_position_view min() ;
+    static ring_position_view max() ;
+    bool is_min() const ;
+    bool is_max() const ;
+    static ring_position_view for_range_start(const partition_range& r) ;
+    static ring_position_view for_range_end(const partition_range& r) ;
+    static ring_position_view for_after_key(const dht::decorated_key& dk) ;
+    static ring_position_view for_after_key(dht::ring_position_view view) ;
+    static ring_position_view starting_at(const dht::token& t) ;
     static ring_position_view ending_at(const dht::token& t) {
         return ring_position_view(t, token_bound::end);
     }
@@ -4793,8 +4757,8 @@ public:
     { }
     const dht::token& token() const { return *_token; }
     const partition_key* key() const { return _key; }
-    token_bound get_token_bound() const { return token_bound(_weight); }
-    after_key is_after_key() const { return after_key(_weight == 1); }
+    token_bound get_token_bound() const ;
+    after_key is_after_key() const ;
     friend std::ostream& operator<<(std::ostream&, ring_position_view);
 };
 using ring_position_ext_view = ring_position_view;
@@ -4806,27 +4770,13 @@ public:
     using token_bound = ring_position::token_bound;
     struct after_key_tag {};
     using after_key = bool_class<after_key_tag>;
-    static ring_position_ext min() {
-        return { minimum_token(), std::nullopt, -1 };
-    }
-    static ring_position_ext max() {
-        return { maximum_token(), std::nullopt, 1 };
-    }
-    bool is_min() const {
-        return _token.is_minimum();
-    }
-    bool is_max() const {
-        return _token.is_maximum();
-    }
-    static ring_position_ext for_range_start(const partition_range& r) {
-        return r.start() ? ring_position_ext(r.start()->value(), after_key(!r.start()->is_inclusive())) : min();
-    }
-    static ring_position_ext for_range_end(const partition_range& r) {
-        return r.end() ? ring_position_ext(r.end()->value(), after_key(r.end()->is_inclusive())) : max();
-    }
-    static ring_position_ext for_after_key(const dht::decorated_key& dk) {
-        return ring_position_ext(dk, after_key::yes);
-    }
+    static ring_position_ext min() ;
+    static ring_position_ext max() ;
+    bool is_min() const ;
+    bool is_max() const ;
+    static ring_position_ext for_range_start(const partition_range& r) ;
+    static ring_position_ext for_range_end(const partition_range& r) ;
+    static ring_position_ext for_after_key(const dht::decorated_key& dk) ;
     static ring_position_ext for_after_key(dht::ring_position_ext view) {
         return ring_position_ext(after_key_tag(), view);
     }
