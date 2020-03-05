@@ -7052,15 +7052,8 @@ public:
 };
 
 #include <random>
-#include <utility>
-#include <vector>
 #include <byteswap.h>
 
-#include <seastar/net/byteorder.hh>
-#include <fmt/format.h>
-#include <array>
-#include <functional>
-#include <utility>
 
 namespace dht {
 
@@ -7854,15 +7847,7 @@ struct hash<dht::decorated_key> {
 
 
 }
-#include <boost/iterator/transform_iterator.hpp>
-#include <seastar/core/bitset-iter.hh>
 
-#include <algorithm>
-#include <cstddef>
-#include <optional>
-#include <stdexcept>
-#include <type_traits>
-#include <limits>
 
 /**
  *
@@ -8133,8 +8118,6 @@ public:
         return frozen<items...>::unfreeze();
     }
 };
-#include <vector>
-#include <atomic>
 #include <random>
 #include <seastar/core/sharded.hh>
 #include <seastar/core/sstring.hh>
