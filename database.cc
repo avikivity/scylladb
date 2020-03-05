@@ -1,23 +1,6 @@
-/*
- * Copyright (C) 2014 ScyllaDB
- */
 
-/*
- * This file is part of Scylla.
- *
- * Scylla is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Scylla is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Scylla.  If not, see <http://www.gnu.org/licenses/>.
- */
+
+
 
 
 #include <atomic>
@@ -47,18 +30,18 @@ using seastar::make_shared;
 #include <seastar/util/gcc6-concepts.hh>
 
 
-//
-// This hashing differs from std::hash<> in that it decouples knowledge about
-// type structure from the way the hash value is calculated:
-//  * appending_hash<T> instantiation knows about what data should be included in the hash for type T.
-//  * Hasher object knows how to combine the data into the final hash.
-//
-// The appending_hash<T> should always feed some data into the hasher, regardless of the state the object is in,
-// in order for the hash to be highly sensitive for value changes. For example, vector<optional<T>> should
-// ideally feed different values for empty vector and a vector with a single empty optional.
-//
-// appending_hash<T> is machine-independent.
-//
+
+
+
+
+
+
+
+
+
+
+
+
 
 GCC6_CONCEPT(
     template<typename H>
@@ -91,7 +74,7 @@ class gc_clock final {
 public:
     using base = seastar::lowres_system_clock;
     using rep = int64_t;
-    using period = std::ratio<1, 1>; // seconds
+    using period = std::ratio<1, 1>; 
     using duration = std::chrono::duration<rep, period>;
     using time_point = std::chrono::time_point<gc_clock, duration>;
 
@@ -106,7 +89,7 @@ public:
 using expiry_opt = std::optional<gc_clock::time_point>;
 using ttl_opt = std::optional<gc_clock::duration>;
 
-// 20 years in seconds
+
 static constexpr gc_clock::duration max_ttl = gc_clock::duration{20 * 365 * 24 * 60 * 60};
 
 std::ostream& operator<<(std::ostream& os, gc_clock::time_point tp);
@@ -115,13 +98,13 @@ std::ostream& operator<<(std::ostream& os, gc_clock::time_point tp);
 
 
 
-// the database clock follows Java - 1ms granularity, 64-bit counter, 1970 epoch
+
 
 class db_clock final {
 public:
     using base = std::chrono::system_clock;
     using rep = int64_t;
-    using period = std::ratio<1, 1000>; // milliseconds
+    using period = std::ratio<1, 1000>; 
     using duration = std::chrono::duration<rep, period>;
     using time_point = std::chrono::time_point<db_clock, duration>;
 
@@ -132,7 +115,7 @@ public:
 };
 
 gc_clock::time_point to_gc_clock(db_clock::time_point tp);
-/* For debugging and log messages. */
+
 std::ostream& operator<<(std::ostream&, db_clock::time_point);
 
 
@@ -141,7 +124,7 @@ std::ostream& operator<<(std::ostream&, db_clock::time_point);
 
 using column_count_type = uint32_t;
 
-// Column ID, unique within column_kind
+
 using column_id = column_count_type;
 
 class schema;
@@ -158,9 +141,9 @@ timestamp_type constexpr missing_timestamp = std::numeric_limits<timestamp_type>
 timestamp_type constexpr min_timestamp = std::numeric_limits<timestamp_type>::min() + 1;
 timestamp_type constexpr max_timestamp = std::numeric_limits<timestamp_type>::max();
 
-// Used for generating server-side mutation timestamps.
-// Same epoch as Java's System.currentTimeMillis() for compatibility.
-// Satisfies requirements of Clock.
+
+
+
 class timestamp_clock final {
     using base = std::chrono::system_clock;
 public:
@@ -189,7 +172,7 @@ template<typename T>
 concept bool HasTriCompare =
     requires(const T& t) {
         { t.compare(t) } -> int;
-    } && std::is_same<std::result_of_t<decltype(&T::compare)(T, T)>, int>::value; //FIXME: #1449
+    } && std::is_same<std::result_of_t<decltype(&T::compare)(T, T)>, int>::value; 
 )
 
 template<typename T>
@@ -227,10 +210,10 @@ struct tombstone final : public with_relational_operators<tombstone> {
     explicit operator bool() const;
     void apply(const tombstone& t) noexcept;
 
-    // See reversibly_mergeable.hh
+    
     void apply_reversibly(tombstone& t) noexcept;
 
-    // See reversibly_mergeable.hh
+    
     void revert(tombstone& t) noexcept;
     tombstone operator+(const tombstone& t);
 
@@ -243,7 +226,7 @@ struct appending_hash<tombstone> {
     void operator()(Hasher& h, const tombstone& t) const;
 };
 
-// Determines whether tombstone may be GC-ed.
+
 using can_gc_fn = std::function<bool(tombstone)>;
 
 static can_gc_fn always_gc = [] (tombstone) { return true; };
@@ -328,7 +311,7 @@ std::ostream& operator<<(std::ostream& os, const bytes_opt& b);
 
 namespace std {
 
-// Must be in std:: namespace, or ADL fails
+
 std::ostream& operator<<(std::ostream& os, const bytes_view& b);
 
 }
@@ -408,30 +391,30 @@ void serialize_bool(CharOutputIterator& out, bool val) {
     serialize_int8(out, val ? 1 : 0);
 }
 
-// The following serializer is compatible with Java's writeUTF().
-// In our C++ implementation, we assume the string is already UTF-8
-// encoded. Unfortunately, Java's implementation is a bit different from
-// UTF-8 for encoding characters above 16 bits in unicode (see
-// http://docs.oracle.com/javase/7/docs/api/java/io/DataInput.html#modified-utf-8)
-// For now we'll just assume those aren't in the string...
-// TODO: fix the compatibility with Java even in this case.
+
+
+
+
+
+
+
 template <typename CharOutputIterator>
 GCC6_CONCEPT(requires requires (CharOutputIterator it) {
     *it++ = 'a';
 })
 inline
 void serialize_string(CharOutputIterator& out, const sstring& s) {
-    // Java specifies that nulls in the string need to be replaced by the
-    // two bytes 0xC0, 0x80. Let's not bother with such transformation
-    // now, but just verify wasn't needed.
+    
+    
+    
     for (char c : s) {
         if (c == '\0') {
             throw UTFDataFormatException();
         }
     }
     if (s.size() > std::numeric_limits<uint16_t>::max()) {
-        // Java specifies the string length is written as uint16_t, so we
-        // can't serialize longer strings.
+        
+        
         throw UTFDataFormatException();
     }
     serialize_int16(out, s.size());
@@ -444,11 +427,11 @@ GCC6_CONCEPT(requires requires (CharOutputIterator it) {
 })
 inline
 void serialize_string(CharOutputIterator& out, const char* s) {
-    // TODO: like above, need to change UTF-8 when above 16-bit.
+    
     auto len = strlen(s);
     if (len > std::numeric_limits<uint16_t>::max()) {
-        // Java specifies the string length is written as uint16_t, so we
-        // can't serialize longer strings.
+        
+        
         throw UTFDataFormatException();
     }
     serialize_int16(out, len);
@@ -457,7 +440,7 @@ void serialize_string(CharOutputIterator& out, const char* s) {
 
 inline
 size_t serialize_string_size(const sstring& s) {;
-    // As above, this code is missing the case of modified utf-8
+    
     return serialize_int16_size + s.size();
 }
 
@@ -497,9 +480,9 @@ public:
     }
 
     int64_t timestamp() const {
-        //if (version() != 1) {
-        //     throw new UnsupportedOperationException("Not a time-based UUID");
-        //}
+        
+        
+        
         assert(is_timestamp());
 
         return ((most_sig_bits & 0xFFF) << 48) |
@@ -508,8 +491,8 @@ public:
 
     }
 
-    // This matches Java's UUID.toString() actual implementation. Note that
-    // that method's documentation suggest something completely different!
+    
+    
     sstring to_sstring() const {
         return format("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
                 ((uint64_t)most_sig_bits >> 32),
@@ -596,9 +579,9 @@ struct hash<utils::UUID> {
 
 namespace logging {
 
-//
-// Seastar changed the names of some of these types. Maintain the old names here to avoid too much churn.
-//
+
+
+
 
 using log_level = seastar::log_level;
 using logger = seastar::logger;
@@ -624,8 +607,8 @@ using seastar::level_name;
 
 namespace meta {
 
-// Wrappers that allows returning a list of types. All helpers defined in this
-// file accept both unpacked and packed lists of types.
+
+
 template<typename... Ts>
 struct list { };
 
@@ -659,12 +642,12 @@ struct do_find_if<Predicate, meta::list<Ts...>> : internal::negative_to_empty<in
 
 }
 
-// Returns the index of the first type in the list of types list of types Ts for
-// which Predicate<T::value is true.
+
+
 template<template<class> typename Predicate, typename... Ts>
 constexpr size_t find_if = internal::do_find_if<Predicate, Ts...>::value;
 
-// Returns the index of the first occurrence of type T in the list of types Ts.
+
 template<typename T, typename... Ts>
 constexpr size_t find = find_if<internal::is_same_as<T>::template type, Ts...>;
 
@@ -689,7 +672,7 @@ struct do_get<N, meta::list<Ts...>> : do_get_unpacked<N, Ts...> { };
 
 }
 
-// Returns the Nth type in the provided list of types.
+
 template<size_t N, typename... Ts>
 using get = typename internal::do_get<N, Ts...>::type;
 
@@ -722,7 +705,7 @@ struct do_take<N, Result, meta::list<Ts...>> : do_take_unpacked<N, Result, Ts...
 
 }
 
-// Returns a list containing N first elements of the provided list of types.
+
 template<size_t N, typename... Ts>
 using take = typename internal::do_take<N, list<>, Ts...>::type;
 
@@ -744,8 +727,8 @@ struct do_for_each<meta::list<Ts...>> : do_for_each_unpacked<Ts...> { };
 
 }
 
-// Executes the provided function for each element in the provided list of
-// types. For each type T the Function is called with an argument of type T*.
+
+
 template<typename... Ts, typename Function>
 constexpr void for_each(Function&& fn) {
     internal::do_for_each<Ts...>::run(std::forward<Function>(fn));
@@ -761,7 +744,7 @@ struct get_size<meta::list<Ts...>> : std::integral_constant<size_t, sizeof...(Ts
 
 }
 
-// Returns the size of a list of types.
+
 template<typename... Ts>
 constexpr size_t size = internal::get_size<Ts...>::value;
 
@@ -777,12 +760,12 @@ enum class mutable_view { no, yes, };
 
 GCC6_CONCEPT(
 
-/// Fragmented buffer
-///
-/// Concept `FragmentedBuffer` is satisfied by any class that is a range of
-/// fragments and provides a method `size_bytes()` which returns the total
-/// size of the buffer. The interfaces accepting `FragmentedBuffer` will attempt
-/// to avoid unnecessary linearisation.
+
+
+
+
+
+
 template<typename T>
 concept bool FragmentRange = requires (T range) {
     typename T::fragment_type;
@@ -791,7 +774,7 @@ concept bool FragmentRange = requires (T range) {
     { *range.begin() } -> typename T::fragment_type;
     { *range.end() } -> typename T::fragment_type;
     { range.size_bytes() } -> size_t;
-    { range.empty() } -> bool; // returns true iff size_bytes() == 0.
+    { range.empty() } -> bool; 
 };
 
 )
@@ -805,13 +788,13 @@ struct is_fragment_range<T, std::void_t<typename T::fragment_type>> : std::true_
 template<typename T>
 static constexpr bool is_fragment_range_v = is_fragment_range<T>::value;
 
-/// A non-mutable view of a FragmentRange
-///
-/// Provide a trivially copyable and movable, non-mutable view on a
-/// fragment range. This allows uniform ownership semantics across
-/// multi-fragment ranges and the single fragment and empty fragment
-/// adaptors below, i.e. it allows treating all fragment ranges
-/// uniformly as views.
+
+
+
+
+
+
+
 template <typename T>
 GCC6_CONCEPT(
     requires FragmentRange<T>
@@ -862,17 +845,17 @@ public:
 private:
     static_assert(sizeof(value_type) == 1, "value_type is assumed to be one byte long");
     struct chunk {
-        // FIXME: group fragment pointers to reduce pointer chasing when packetizing
+        
         std::unique_ptr<chunk> next;
         ~chunk() {
             auto p = std::move(next);
             while (p) {
-                // Avoid recursion when freeing chunks
+                
                 auto p_next = std::move(p->next);
                 p = std::move(p_next);
             }
         }
-        size_type offset; // Also means "size" after chunk is closed
+        size_type offset; 
         size_type size;
         value_type data[0];
         void operator delete(void* ptr) { free(ptr); }
@@ -943,22 +926,22 @@ private:
         }
         return _current->size - _current->offset;
     }
-    // Figure out next chunk size.
-    //   - must be enough for data_size
-    //   - must be at least _initial_chunk_size
-    //   - try to double each time to prevent too many allocations
-    //   - do not exceed max_chunk_size
+    
+    
+    
+    
+    
     size_type next_alloc_size(size_t data_size) const {
         auto next_size = _current
                 ? _current->size * 2
                 : _initial_chunk_size;
         next_size = std::min(next_size, max_chunk_size());
-        // FIXME: check for overflow?
+        
         return std::max<size_type>(next_size, data_size + sizeof(chunk));
     }
-    // Makes room for a contiguous region of given size.
-    // The region is accounted for as already written.
-    // size must not be zero.
+    
+    
+    
     [[gnu::always_inline]]
     value_type* alloc(size_type size) {
         if (__builtin_expect(size <= current_space_left(), true)) {
@@ -1038,13 +1021,13 @@ public:
     template <typename T>
     struct place_holder {
         value_type* ptr;
-        // makes the place_holder looks like a stream
+        
         seastar::simple_output_stream get_stream() {
             return seastar::simple_output_stream(reinterpret_cast<char*>(ptr), sizeof(T));
         }
     };
 
-    // Returns a place holder for a value to be written later.
+    
     template <typename T>
     inline
     std::enable_if_t<std::is_fundamental<T>::value, place_holder<T>>
@@ -1057,7 +1040,7 @@ public:
         return alloc(size);
     }
 
-    // Writes given sequence of bytes
+    
     [[gnu::always_inline]]
     inline void write(bytes_view v) {
         if (v.empty()) {
@@ -1088,7 +1071,7 @@ public:
         return !_begin || !_begin->next;
     }
 
-    // Call only when is_linearized()
+    
     bytes_view view() const {
         assert(is_linearized());
         if (!_current) {
@@ -1098,8 +1081,8 @@ public:
         return bytes_view(_current->data, _size);
     }
 
-    // Makes the underlying storage contiguous and returns a view to it.
-    // Invalidates all previously created placeholders.
+    
+    
     bytes_view linearize() {
         if (is_linearized()) {
             return view();
@@ -1127,12 +1110,12 @@ public:
         return bytes_view(_current->data, _size);
     }
 
-    // Returns the amount of bytes written so far
+    
     size_type size() const {
         return _size;
     }
 
-    // For the FragmentRange concept
+    
     size_type size_bytes() const {
         return _size;
     }
@@ -1142,7 +1125,7 @@ public:
     }
 
     void reserve(size_t size) {
-        // FIXME: implement
+        
     }
 
     void append(const bytes_ostream& o) {
@@ -1151,8 +1134,8 @@ public:
         }
     }
 
-    // Removes n bytes from the end of the bytes_ostream.
-    // Beware of O(n) algorithm.
+    
+    
     void remove_suffix(size_t n) {
         _size -= n;
         auto left = _size;
@@ -1169,8 +1152,8 @@ public:
         }
     }
 
-    // begin() and end() form an input range to bytes_view representing fragments.
-    // Any modification of this instance invalidates iterators.
+    
+    
     fragment_iterator begin() const { return { _begin.get() }; }
     fragment_iterator end() const { return { nullptr }; }
 
@@ -1189,8 +1172,8 @@ public:
         return { _current, _current ? _current->offset : 0 };
     }
 
-    // Returns the amount of bytes written since given position.
-    // "pos" must be valid.
+    
+    
     size_type written_since(position pos) {
         chunk* c = pos._chunk;
         if (!c) {
@@ -1205,8 +1188,8 @@ public:
         return total;
     }
 
-    // Rollbacks all data written after "pos".
-    // Invalidates all placeholders and positions created after "pos".
+    
+    
     void retract(position pos) {
         if (!pos._chunk) {
             *this = {};
@@ -1219,10 +1202,10 @@ public:
     }
 
     void reduce_chunk_count() {
-        // FIXME: This is a simplified version. It linearizes the whole buffer
-        // if its size is below max_chunk_size. We probably could also gain
-        // some read performance by doing "real" reduction, i.e. merging
-        // all chunks until all but the last one is max_chunk_size.
+        
+        
+        
+        
         if (size() < max_chunk_size()) {
             linearize();
         }
@@ -1257,12 +1240,12 @@ public:
         return !(*this == other);
     }
 
-    // Makes this instance empty.
-    //
-    // The first buffer is not deallocated, so callers may rely on the
-    // fact that if they write less than the initial chunk size between
-    // the clear() calls then writes will not involve any memory allocations,
-    // except for the first write made on this instance.
+    
+    
+    
+    
+    
+    
     void clear() {
         if (_begin) {
             _begin->offset = 0;
@@ -1274,7 +1257,7 @@ public:
 };
 
 
-/// Fragmented buffer consisting of multiple temporary_buffer<char>
+
 class fragmented_temporary_buffer {
     using vector_type = std::vector<seastar::temporary_buffer<char>>;
 public:
@@ -1297,10 +1280,10 @@ public:
     size_t size_bytes() const;
     bool empty() const;
 
-    // Linear complexity, invalidates views and istreams
+    
     void remove_prefix(size_t n) noexcept;
 
-    // Linear complexity, invalidates views and istreams
+    
     void remove_suffix(size_t n) noexcept;
 };
 
@@ -1329,13 +1312,13 @@ public:
 
 namespace ser {
 
-/// A fragmented view of an opaque buffer in a stream of serialised data
-///
-/// This class allows reading large, fragmented blobs serialised by the IDL
-/// infrastructure without linearising or copying them. The view remains valid
-/// as long as the underlying IDL-serialised buffer is alive.
-///
-/// Satisfies FragmentRange concept.
+
+
+
+
+
+
+
 template<typename FragmentIterator>
 class buffer_view {
 public:
@@ -1385,7 +1368,7 @@ public:
 class abstract_type;
 class collection_type_impl;
 
-/// View of an atomic cell
+
 template<mutable_view is_mutable>
 class basic_atomic_cell_view {
 protected:
@@ -1406,21 +1389,21 @@ public:
     bool is_live_and_has_ttl() const;
     bool is_dead(gc_clock::time_point now) const;
     bool is_covered_by(tombstone t, bool is_counter) const;
-    // Can be called on live and dead cells
+    
     api::timestamp_type timestamp() const;
     void set_timestamp(api::timestamp_type ts);
-    // Can be called on live cells only
+    
     size_t value_size() const;
     bool is_value_fragmented() const;
-    // Can be called on live counter update cells only
+    
     int64_t counter_update_value() const;
-    // Can be called only when is_dead(gc_clock::time_point)
+    
     gc_clock::time_point deletion_time() const;
-    // Can be called only when is_live_and_has_ttl()
+    
     gc_clock::time_point expiry() const;
-    // Can be called only when is_live_and_has_ttl()
+    
     gc_clock::duration ttl() const;
-    // Can be called on live and dead cells
+    
     bool has_expired(gc_clock::time_point now) const;
 
     bytes_view serialize() const;
@@ -1499,12 +1482,12 @@ void merge_column(const abstract_type& def,
 
 using cql_protocol_version_type = uint8_t;
 
-// Abstraction of transport protocol-dependent serialization format
-// Protocols v1, v2 used 16 bits for collection sizes, while v3 and
-// above use 32 bits.  But letting every bit of the code know what
-// transport protocol we're using (and in some cases, we aren't using
-// any transport -- it's for internal storage) is bad, so abstract it
-// away here.
+
+
+
+
+
+
 
 class cql_serialization_format {
     cql_protocol_version_type _version;
@@ -1531,26 +1514,26 @@ public:
 
 namespace utils {
 
-/// A vector with small buffer optimisation
-///
-/// small_vector is a variation of std::vector<> that reserves a configurable
-/// amount of storage internally, without the need for memory allocation.
-/// This can bring measurable gains if the expected number of elements is
-/// small. The drawback is that moving such small_vector is more expensive
-/// and invalidates iterators as well as references which disqualifies it in
-/// some cases.
-///
-/// All member functions of small_vector provide strong exception guarantees.
-///
-/// It is unspecified when small_vector is going to use internal storage, except
-/// for the obvious case when size() > N. In other situations user must not
-/// attempt to guess if data is stored internally or externally. The same applies
-/// to capacity(). Apart from the obvious fact that capacity() >= size() the user
-/// must not assume anything else. In particular it may not always hold that
-/// capacity() >= N.
-///
-/// Unless otherwise specified (e.g. move ctor and assignment) small_vector
-/// provides guarantees at least as strong as those of std::vector<>.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 template<typename T, size_t N>
 class small_vector {
     static_assert(N > 0);
@@ -1563,8 +1546,8 @@ private:
     T* _end;
     T* _capacity_end;
 
-    // Use union instead of std::aligned_storage so that debuggers can see
-    // the contained objects without needing any pretty printers.
+    
+    
     union internal {
         internal() { }
         ~internal() { }
@@ -1657,26 +1640,26 @@ public:
 
     small_vector(std::initializer_list<T> list) : small_vector(list.begin(), list.end()) { }
 
-    // May invalidate iterators and references.
+    
     small_vector(small_vector&& other) noexcept {
         if (other.uses_internal_storage()) {
             _begin = _internal.storage;
             _capacity_end = _begin + N;
             if constexpr (std::is_trivially_copyable_v<T>) {
-                // Compilers really like loops with the number of iterations known at
-                // the compile time, the usually emit less code which can be more aggressively
-                // optimised. Since we can assume that N is small it is most likely better
-                // to just copy everything, regardless of how many elements are actually in
-                // the vector.
+                
+                
+                
+                
+                
                 std::memcpy(_internal.storage, other._internal.storage, N * sizeof(T));
                 _end = _begin + other.size();
             } else {
                 _end = _begin;
 
-                // What we would really like here is std::uninintialized_move_and_destroy.
-                // It is beneficial to do move and destruction in a single pass since the compiler
-                // may be able to merge those operations (e.g. the destruction of a move-from
-                // std::unique_ptr is a no-op).
+                
+                
+                
+                
                 for (auto& e : other) {
                     new (_end++) T(std::move(e));
                     e.~T();
@@ -1695,7 +1678,7 @@ public:
         _end = std::uninitialized_copy(other.begin(), other.end(), _end);
     }
 
-    // May invalidate iterators and references.
+    
     small_vector& operator=(small_vector&& other) noexcept {
         clear();
         if (other.uses_internal_storage()) {
@@ -1710,8 +1693,8 @@ public:
             } else {
                 _end = _begin;
 
-                // Better to use single pass than std::uninitialize_move + std::destroy.
-                // See comment in move ctor for details.
+                
+                
                 for (auto& e : other) {
                     new (_end++) T(std::move(e));
                     e.~T();
@@ -1979,7 +1962,7 @@ template <typename T, size_t max_contiguous_allocation = 128*1024>
 class chunked_vector {
     static_assert(std::is_nothrow_move_constructible<T>::value, "T must be nothrow move constructible");
     using chunk_ptr = std::unique_ptr<T[], chunked_vector_free_deleter>;
-    // Each chunk holds max_chunk_capacity() items, except possibly the last
+    
     utils::small_vector<chunk_ptr, 1> _chunks;
     size_t _size = 0;
     size_t _capacity = 0;
@@ -2102,7 +2085,7 @@ public:
         iterator_type(const chunk_ptr* chunks, size_t i) : _chunks(chunks), _i(i) {}
     public:
         iterator_type() = default;
-        iterator_type(const iterator_type<std::remove_const_t<ValueType>>& x) : _chunks(x._chunks), _i(x._i) {} // needed for iterator->const_iterator conversion
+        iterator_type(const iterator_type<std::remove_const_t<ValueType>>& x) : _chunks(x._chunks), _i(x._i) {} 
         reference operator*() const {
             return *addr();
         }
@@ -2337,7 +2320,7 @@ std::ostream& operator<<(std::ostream& os, const std::optional<T>& opt) {
 
 
 
-// Wrapper for a value with a type-tag for differentiating instances.
+
 template <class Value, class Tag>
 class cql_duration_counter final {
 public:
@@ -2361,19 +2344,19 @@ public:
     virtual ~cql_duration_error() = default;
 };
 
-//
-// A duration of time.
-//
-// Three counters represent the time: the number of months, of days, and of nanoseconds. This is necessary because
-// the number hours in a day can vary during daylight savings and because the number of days in a month vary.
-//
-// As a consequence of this representation, there can exist no total ordering relation on durations. To see why,
-// consider a duration `1mo5s` (1 month and 5 seconds). In a month with 30 days, this represents a smaller duration of
-// time than in a month with 31 days.
-//
-// The primary use of this type is to manipulate absolute time-stamps with relative offsets. For example,
-// `"Jan. 31 2005 at 23:15" + 3mo5d`.
-//
+
+
+
+
+
+
+
+
+
+
+
+
+
 class cql_duration final {
 public:
     using common_counter_type = int64_t;
@@ -2384,49 +2367,49 @@ public:
             (sizeof(common_counter_type) >= sizeof(nanoseconds_counter::value_type)),
             "The common counter type is smaller than one of the component counter types.");
 
-    // A zero-valued duration.
+    
     constexpr cql_duration() noexcept = default;
 
-    // Construct a duration with explicit values for its three counters.
+    
     constexpr cql_duration(months_counter m, days_counter d, nanoseconds_counter n) noexcept :
             months(m),
             days(d),
             nanoseconds(n) {}
 
-    //
-    // Parse a duration string.
-    //
-    // Three formats for durations are supported:
-    //
-    // 1. "Standard" format. This consists of one or more pairs of a count and a unit specifier. Examples are "23d1mo"
-    //    and "5h23m10s". Components of the total duration must be written in decreasing order. That is, "5h2y" is
-    //    an invalid duration string.
-    //
-    //    The allowed units are:
-    //      - "y": years
-    //      - "mo": months
-    //      - "w": weeks
-    //      - "d": days
-    //      - "h": hours
-    //      - "m": minutes
-    //      - "s": seconds
-    //      - "ms": milliseconds
-    //      - "us" or "µs": microseconds
-    //      - "ns": nanoseconds
-    //
-    //    Units are case-insensitive.
-    //
-    // 2. ISO-8601 format. "P[n]Y[n]M[n]DT[n]H[n]M[n]S" or "P[n]W". All specifiers are optional. Examples are
-    //    "P23Y1M" or "P10W".
-    //
-    // 3. ISO-8601 alternate format. "P[YYYY]-[MM]-[DD]T[hh]:[mm]:[ss]". All specifiers are mandatory. An example is
-    //    "P2000-10-14T07:22:30".
-    //
-    // For all formats, a negative duration is indicated by beginning the string with the '-' symbol. For example,
-    // "-2y10ns".
-    //
-    // Throws `cql_duration_error` in the event of a parsing error.
-    //
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     explicit cql_duration(std::string_view s);
 
     months_counter::value_type months{0};
@@ -2434,20 +2417,20 @@ public:
     nanoseconds_counter::value_type nanoseconds{0};
 };
 
-//
-// Pretty-print a duration using the standard format.
-//
-// Durations are simplified during printing so that `duration(24, 0, 0)` is printed as "2y".
-//
+
+
+
+
+
 std::ostream& operator<<(std::ostream& os, const cql_duration& d);
 
-// See above.
+
 seastar::sstring to_string(const cql_duration&);
 
-//
-// Note that equality comparison is based on exact counter matches. It is not valid to expect equivalency across
-// counters like months and days. See the documentation for `duration` for more.
-//
+
+
+
+
 
 bool operator==(const cql_duration&, const cql_duration&) noexcept;
 bool operator!=(const cql_duration&, const cql_duration&) noexcept;
@@ -2501,46 +2484,46 @@ class column_specification;
 
 }
 
-// Specifies position in a lexicographically ordered sequence
-// relative to some value.
-//
-// For example, if used with a value "bc" with lexicographical ordering on strings,
-// each enum value represents the following positions in an example sequence:
-//
-//   aa
-//   aaa
-//   b
-//   ba
-// --> before_all_prefixed
-//   bc
-// --> before_all_strictly_prefixed
-//   bca
-//   bcd
-// --> after_all_prefixed
-//   bd
-//   bda
-//   c
-//   ca
-//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 enum class lexicographical_relation : int8_t {
     before_all_prefixed,
     before_all_strictly_prefixed,
     after_all_prefixed
 };
 
-// A trichotomic comparator for prefix equality total ordering.
-// In this ordering, two sequences are equal iff any of them is a prefix
-// of the another. Otherwise, lexicographical ordering determines the order.
-//
-// 'comp' is an abstract_type-aware trichotomic comparator, which takes the
-// type as first argument.
-//
+
+
+
+
+
+
+
 template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Compare>
 int prefix_equality_tri_compare(TypesIterator types, InputIt1 first1, InputIt1 last1,
         InputIt2 first2, InputIt2 last2, Compare comp);
 
-// Returns true iff the second sequence is a prefix of the first sequence
-// Equality is an abstract_type-aware equality checker which takes the type as first argument.
+
+
 template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Equality>
 bool is_prefixed_by(TypesIterator types, InputIt1 first1, InputIt1 last1,
         InputIt2 first2, InputIt2 last2, Equality equality);
@@ -2560,17 +2543,17 @@ public:
 
 [[noreturn]] void on_types_internal_error(const sstring& reason);
 
-// Cassandra has a notion of empty values even for scalars (i.e. int).  This is
-// distinct from NULL which means deleted or never set.  It is serialized
-// as a zero-length byte array (whereas NULL is serialized as a negative-length
-// byte array).
+
+
+
+
 template <typename T>
 class emptyable {
-    // We don't use optional<>, to avoid lots of ifs during the copy and move constructors
+    
     static_assert(std::is_default_constructible<T>::value, "must be default constructible");
 public:
-    // default-constructor defaults to a non-empty value, since empty is the
-    // exception rather than the rule
+    
+    
     emptyable();
     emptyable(const T& x);
     emptyable(T&& x);
@@ -2594,7 +2577,7 @@ inline
 bool
 operator<(const emptyable<T>& me1, const emptyable<T>& me2);
 
-// Checks whether T::empty() const exists and returns bool
+
 template <typename T>
 class has_empty {
     template <typename X>
@@ -2650,7 +2633,7 @@ template <typename T>
 T&& value_cast(data_value&& value);
 
 class data_value {
-    void* _value;  // FIXME: use "small value optimization" for small types
+    void* _value;  
     data_type _type;
 private:
     data_value(void* value, data_type type) : _value(value), _type(std::move(type)) {}
@@ -2662,15 +2645,15 @@ public:
     data_value(data_value&& x) noexcept : _value(x._value), _type(std::move(x._type)) {
         x._value = nullptr;
     }
-    // common conversions from C++ types to database types
-    // note: somewhat dangerous, consider a factory function instead
+    
+    
     explicit data_value(bytes);
 
     data_value(sstring&&);
     data_value(std::string_view);
-    // We need the following overloads just to avoid ambiguity because
-    // seastar::net::inet_address is implicitly constructible from a
-    // const sstring&.
+    
+    
+    
     data_value(const char*);
     data_value(const std::string&);
     data_value(const sstring&);
@@ -2705,7 +2688,7 @@ public:
     const data_type& type() const {
         return _type;
     }
-    bool is_null() const {   // may return false negatives for strings etc.
+    bool is_null() const {   
         return !_value;
     }
     size_t serialized_size() const;
@@ -2744,7 +2727,7 @@ class serialized_compare;
 class serialized_tri_compare;
 class user_type_impl;
 
-// Unsafe to access across shards unless otherwise noted.
+
 class abstract_type : public enable_shared_from_this<abstract_type> {
     sstring _name;
     std::optional<uint32_t> _value_length_if_fixed;
@@ -2786,7 +2769,7 @@ public:
 
     virtual ~abstract_type();
     bool less(bytes_view v1, bytes_view v2) const;
-    // returns a callable that can be called with two byte_views, and calls this->less() on them.
+    
     serialized_compare as_less_comparator() const ;
     serialized_tri_compare as_tri_comparator() const ;
     static data_type parse_type(const sstring& name);
@@ -2818,23 +2801,18 @@ public:
     bool is_value_compatible_with(const abstract_type& other) const;
     bool references_user_type(const sstring& keyspace, const bytes& name) const;
 
-    // For types that contain (or are equal to) the given user type (e.g., a set of elements of this type),
-    // updates them with the new version of the type ('updated'). For other types does nothing.
+    
+    
     std::optional<data_type> update_user_type(const shared_ptr<const user_type_impl> updated) const;
 
     bool references_duration() const;
     std::optional<uint32_t> value_length_if_fixed() const;
 public:
     bytes decompose(const data_value& value) const;
-    // Safe to call across shards
+    
     const sstring& name() const;
 
-    /**
-     * When returns true then equal values have the same byte representation and if byte
-     * representation is different, the values are not equal.
-     *
-     * When returns false, nothing can be inferred.
-     */
+    
     bool is_byte_order_equal() const;
     sstring get_string(const bytes& b) const;
     sstring to_string(bytes_view bv) const;
@@ -2847,8 +2825,8 @@ public:
     bool is_map() const;
     bool is_set() const;
     bool is_list() const;
-    // Lists and sets are similar: they are both represented as std::vector<data_value>
-    // @sa listlike_collection_type_impl
+    
+    
     bool is_listlike() const;
     bool is_multi_cell() const;
     bool is_atomic() const;
@@ -2863,11 +2841,11 @@ public:
 private:
     mutable sstring _cql3_type_name;
 protected:
-    // native_value_* methods are virualized versions of native_type's
-    // sizeof/alignof/copy-ctor/move-ctor etc.
+    
+    
     void* native_value_clone(const void* from) const;
     const std::type_info& native_typeid() const;
-    // abstract_type is a friend of data_value, but derived classes are not.
+    
     static const void* get_value_ptr(const data_value& v) {
         return v._value;
     }
@@ -2888,10 +2866,10 @@ const T& value_cast(const data_value& value);
 template <typename T>
 T&& value_cast(data_value&& value);
 
-// CRTP: implements translation between a native_type (C++ type) to abstract_type
-// AbstractType is parametrized because we want a
-//    abstract_type -> collection_type_impl -> map_type
-// type hierarchy, and native_type is only known at the last step.
+
+
+
+
 template <typename NativeType, typename AbstractType = abstract_type>
 class concrete_type : public AbstractType {
 public:
@@ -3109,7 +3087,7 @@ abstract_type::as_tri_comparator() const {
 
 using key_compare = serialized_compare;
 
-// Remember to update type_codec in transport/server.cc and cql3/cql3_type.cc
+
 extern thread_local const shared_ptr<const abstract_type> byte_type;
 extern thread_local const shared_ptr<const abstract_type> short_type;
 extern thread_local const shared_ptr<const abstract_type> int32_type;
@@ -3246,11 +3224,11 @@ namespace std {
 
 }
 
-// FIXME: make more explicit
+
 bytes
 to_bytes(const char* x);
 
-// FIXME: make more explicit
+
 bytes
 to_bytes(const std::string& x);
 
@@ -3268,7 +3246,7 @@ std::vector<bytes_opt> to_bytes_opt_vec(const std::vector<bytes_view_opt>&);
 bytes_view_opt
 as_bytes_view_opt(const bytes_opt& bv);
 
-// FIXME: make more explicit
+
 bytes
 to_bytes(const sstring& x);
 
@@ -3285,7 +3263,7 @@ to_bytes(const utils::UUID& uuid) {
     return bytes(reinterpret_cast<int8_t*>(&tmp), 16);
 }
 
-// This follows java.util.Comparator
+
 template <typename T>
 struct comparator {
     comparator() = default;
@@ -3393,7 +3371,7 @@ enum class cause {
     CONSISTENCY,
     HINT,
     SUPER,
-    WRAP_AROUND, // Support for handling wrap around ranges in queries on database level and below
+    WRAP_AROUND, 
     STORAGE_SERVICE,
     SCHEMA_CHANGE,
     MIXED_CF,
@@ -3567,7 +3545,7 @@ public:
                 return type->compare(v1, v2);
             });
     }
-    // Retruns true iff given prefix has no missing components
+    
     bool is_full(bytes_view v) const {
         assert(AllowPrefixes == allow_prefixes::yes);
         return std::distance(begin(v), end(v)) == (ssize_t)_types.size();
@@ -3576,14 +3554,14 @@ public:
         return begin(v) == end(v);
     }
     void validate(bytes_view v) {
-        // FIXME: implement
+        
         warn(unimplemented::cause::VALIDATION);
     }
     bool equal(bytes_view v1, bytes_view v2) {
         if (_byte_order_equal) {
             return compare_unsigned(v1, v2) == 0;
         }
-        // FIXME: call equal() on each component
+        
         return compare(v1, v2) == 0;
     }
 };
@@ -3602,27 +3580,27 @@ class i_partitioner;
 
 using column_count_type = uint32_t;
 
-// Column ID, unique within column_kind
+
 using column_id = column_count_type;
 
-// Column ID unique within a schema. Enum class to avoid
-// mixing wtih column id.
+
+
 enum class ordinal_column_id: column_count_type {};
 
 std::ostream& operator<<(std::ostream& os, ordinal_column_id id);
 
-// Maintains a set of columns used in a query. The columns are
-// identified by ordinal_id.
-//
-// @sa column_definition::ordinal_id.
+
+
+
+
 class column_set {
 public:
     using bitset = boost::dynamic_bitset<uint64_t>;
     using size_type = bitset::size_type;
 
-    // column_count_type is more narrow than size_type, but truncating a size_type max value does
-    // give column_count_type max value. This is used to avoid extra branching in
-    // find_first()/find_next().
+    
+    
+    
     static_assert(static_cast<column_count_type>(boost::dynamic_bitset<uint64_t>::npos) == ~static_cast<column_count_type>(0));
     static constexpr ordinal_column_id npos = static_cast<ordinal_column_id>(bitset::npos);
 
@@ -3635,17 +3613,17 @@ public:
         _mask.resize(num_bits);
     }
 
-    // Set the appropriate bit for column id.
+    
     void set(ordinal_column_id id) {
         column_count_type bit = static_cast<column_count_type>(id);
         _mask.set(bit);
     }
-    // Test the mask for use of a given column id.
+    
     bool test(ordinal_column_id id) const {
         column_count_type bit = static_cast<column_count_type>(id);
         return _mask.test(bit);
     }
-    // @sa boost::dynamic_bistet docs
+    
     size_type count() const { return _mask.count(); }
     ordinal_column_id find_first() const {
         return static_cast<ordinal_column_id>(_mask.find_first());
@@ -3653,7 +3631,7 @@ public:
     ordinal_column_id find_next(ordinal_column_id pos) const {
         return static_cast<ordinal_column_id>(_mask.find_next(static_cast<column_count_type>(pos)));
     }
-    // Logical or
+    
     void union_with(const column_set& with) {
         _mask |= with._mask;
     }
@@ -3662,25 +3640,25 @@ private:
     bitset _mask;
 };
 
-// Cluster-wide identifier of schema version of particular table.
-//
-// The version changes the value not only on structural changes but also
-// temporal. For example, schemas with the same set of columns but created at
-// different times should have different versions. This allows nodes to detect
-// if the version they see was already synchronized with or not even if it has
-// the same structure as the past versions.
-//
-// Schema changes merged in any order should result in the same final version.
-//
-// When table_schema_version changes, schema_tables::calculate_schema_digest() should
-// also change when schema mutations are applied.
+
+
+
+
+
+
+
+
+
+
+
+
 using table_schema_version = utils::UUID;
 
 class schema;
 class schema_registry_entry;
 class schema_builder;
 
-// Useful functions to manipulate the schema's comparator field
+
 namespace cell_comparator {
 sstring to_sstring(const schema& s);
 bool check_compound(sstring comparator);
@@ -3690,7 +3668,7 @@ void read_collections(schema_builder& builder, sstring comparator);
 namespace db {
 class extensions;
 }
-// make sure these match the order we like columns back from schema
+
 enum class column_kind { partition_key, clustering_key, static_column, regular_column };
 
 enum class column_view_virtual { no, yes };
@@ -3802,9 +3780,7 @@ class index_metadata final {
 
 class schema_builder;
 
-/*
- * Sub-schema for thrift aspects. Should be kept isolated (and starved)
- */
+
 class thrift_schema {
     bool _compound = true;
     bool _is_dynamic = false;
@@ -3822,8 +3798,8 @@ static constexpr int DEFAULT_MAX_COMPACTION_THRESHOLD = 32;
 static constexpr int DEFAULT_MIN_INDEX_INTERVAL = 128;
 static constexpr int DEFAULT_GC_GRACE_SECONDS = 864000;
 
-// Unsafe to access across shards.
-// Safe to copy across shards.
+
+
 class column_mapping_entry {
     bytes _name;
     data_type _type;
@@ -3842,15 +3818,15 @@ public:
     bool is_atomic() const { return _is_atomic; }
 };
 
-// Encapsulates information needed for converting mutations between different schema versions.
-//
-// Unsafe to access across shards.
-// Safe to copy across shards.
+
+
+
+
 class column_mapping {
 private:
-    // Contains _n_static definitions for static columns followed by definitions for regular columns,
-    // both ordered by consecutive column_ids.
-    // Primary key column sets are not mutable so we don't need to map them.
+    
+    
+    
     std::vector<column_mapping_entry> _columns;
     column_count_type _n_static = 0;
 public:
@@ -3918,13 +3894,13 @@ std::ostream& operator<<(std::ostream& os, const raw_view_info& view);
 
 class view_info;
 
-// Represents a column set which is compactible with Cassandra 3.x.
-//
-// This layout differs from the layout Scylla uses in schema/schema_builder for static compact tables.
-// For such tables, Scylla expects all columns to be of regular type and no clustering columns,
-// whereas in v3 those columns are static and there is a clustering column with type matching the
-// cell name comparator and a regular column with type matching the default validator.
-// See issues #2555 and #1474.
+
+
+
+
+
+
+
 class v3_columns {
     bool _is_dense = false;
     bool _is_compound = false;
@@ -3992,15 +3968,15 @@ public:
     };
     using extensions_map = std::map<sstring, ::shared_ptr<schema_extension>>;
 private:
-    // More complex fields are derived from these inside rebuild().
-    // Contains only fields which can be safely default-copied.
+    
+    
     struct raw_schema {
         raw_schema(utils::UUID id);
         utils::UUID _id;
         sstring _ks_name;
         sstring _cf_name;
-        // regular columns are sorted by name
-        // static columns are sorted by name, but present only when there's any clustering column
+        
+        
         std::vector<column_definition> _columns;
         sstring _comment;
         gc_clock::duration _default_time_to_live = gc_clock::duration::zero();
@@ -4022,16 +3998,16 @@ private:
         int32_t _max_index_interval = 2048;
         int32_t _memtable_flush_period = 0;
         speculative_retry _speculative_retry = ::speculative_retry(speculative_retry::type::PERCENTILE, 0.99);
-        // FIXME: SizeTiered doesn't really work yet. Being it marked here only means that this is the strategy
-        // we will use by default - when we have the choice.
+        
+        
         bool _compaction_enabled = true;
         table_schema_version _version;
         std::unordered_map<sstring, dropped_column> _dropped_columns;
         std::map<bytes, data_type> _collections;
         std::unordered_map<sstring, index_metadata> _indices_by_name;
-        // The flag is not stored in the schema mutation and does not affects schema digest.
-        // It is set locally on a system tables that should be extra durable
-        bool _wait_for_sync = false; // true if all writes using this schema have to be synced immediately by commitlog
+        
+        
+        bool _wait_for_sync = false; 
     };
     raw_schema _raw;
     thrift_schema _thrift;
@@ -4081,7 +4057,7 @@ private:
     void rebuild();
     schema(const raw_schema&, std::optional<raw_view_info>);
 public:
-    // deprecated, use schema_builder.
+    
     schema(std::optional<utils::UUID> id,
         std::string_view ks_name,
         std::string_view cf_name,
@@ -4193,7 +4169,7 @@ public:
 
     const column_definition* get_column_definition(const bytes& name) const;
     const column_definition& column_at(column_kind, column_id) const;
-    // Find a column definition given column ordinal id in the schema
+    
     const column_definition& column_at(ordinal_column_id ordinal_id) const;
     const_iterator regular_begin() const;
     const_iterator regular_end() const;
@@ -4216,15 +4192,15 @@ public:
     column_count_type static_columns_count() const;
     column_count_type regular_columns_count() const;
     column_count_type all_columns_count() const;
-    // Returns a range of column definitions
+    
     const_iterator_range_type partition_key_columns() const;
-    // Returns a range of column definitions
+    
     const_iterator_range_type clustering_key_columns() const;
-    // Returns a range of column definitions
+    
     const_iterator_range_type static_columns() const;
-    // Returns a range of column definitions
+    
     const_iterator_range_type regular_columns() const;
-    // Returns a range of column definitions
+    
 
     typedef boost::range::joined_range<const_iterator_range_type, const_iterator_range_type>
         select_order_range;
@@ -4284,43 +4260,27 @@ public:
     const query::partition_slice& full_slice() const {
         return *_full_slice;
     }
-    // Returns all index names of this schema.
+    
     std::vector<sstring> index_names() const;
-    // Returns all indices of this schema.
+    
     std::vector<index_metadata> indices() const;
     const std::unordered_map<sstring, index_metadata>& all_indices() const;
-    // Search for an index with a given name.
+    
     bool has_index(const sstring& index_name) const;
-    // Search for an existing index with same kind and options.
+    
     std::optional<index_metadata> find_index_noname(const index_metadata& target) const;
     friend std::ostream& operator<<(std::ostream& os, const schema& s);
-    /*!
-     * \brief stream the CQL DESCRIBE output.
-     *
-     * CQL DESCRIBE is implemented at the driver level. This method mimic that functionality
-     * inside Scylla.
-     *
-     * The output of DESCRIBE is the CQL command to create the described table with its indexes and views.
-     *
-     * For tables with Indexes or Materialized Views, the CQL DESCRIBE is split between the base and view tables.
-     * Calling the describe method on the base table schema would result with the CQL "CREATE TABLE"
-     * command for creating that table only.
-     *
-     * Calling the describe method on a view schema would result with the appropriate "CREATE MATERIALIZED VIEW"
-     * or "CREATE INDEX" depends on the type of index that schema describes (ie. Materialized View, Global
-     * Index or Local Index).
-     *
-     */
+    
     std::ostream& describe(std::ostream& os) const;
     friend bool operator==(const schema&, const schema&);
     const column_mapping& get_column_mapping() const;
     friend class schema_registry_entry;
-    // May be called from different shard
+    
     schema_registry_entry* registry_entry() const noexcept;
-    // Returns true iff this schema version was synced with on current node.
-    // Schema version is said to be synced with when its mutations were merged
-    // into current node's schema, so that current node's schema is at least as
-    // recent as this version.
+    
+    
+    
+    
     bool is_synced() const;
     bool equal_columns(const schema&) const;
     bool wait_for_sync_to_commitlog() const {
@@ -4336,9 +4296,7 @@ bool operator==(const schema&, const schema&);
 
 using schema_ptr = lw_shared_ptr<const schema>;
 
-/**
- * Wrapper for schema_ptr used by functions that expect an engaged view_info field.
- */
+
 class view_ptr final {
     schema_ptr _schema;
 public:
@@ -4368,15 +4326,15 @@ std::ostream& operator<<(std::ostream& os, const view_ptr& view);
 utils::UUID generate_legacy_id(const sstring& ks_name, const sstring& cf_name);
 
 
-// Thrown when attempted to access a schema-dependent object using
-// an incompatible version of the schema object.
+
+
 class schema_mismatch_error : public std::runtime_error {
 public:
     schema_mismatch_error(table_schema_version expected, const schema& access);
 };
 
-// Throws schema_mismatch_error when a schema-dependent object of "expected" version
-// cannot be accessed using "access" schema.
+
+
 inline void check_schema_version(table_schema_version expected, const schema& access) {
     if (expected != access.version()) {
         throw_with_backtrace<schema_mismatch_error>(expected, access);
@@ -4424,26 +4382,26 @@ inline bool is_later(sstable_version_types a, sstable_version_types b) {
 
 }
 
-//
-// This header provides adaptors between the representation used by our compound_type<>
-// and representation used by Origin.
-//
-// For single-component keys the legacy representation is equivalent
-// to the only component's serialized form. For composite keys it the following
-// (See org.apache.cassandra.db.marshal.CompositeType):
-//
-//   <representation> ::= ( <component> )+
-//   <component>      ::= <length> <value> <EOC>
-//   <length>         ::= <uint16_t>
-//   <EOC>            ::= <uint8_t>
-//
-//  <value> is component's value in serialized form. <EOC> is always 0 for partition key.
-//
 
-// Given a representation serialized using @CompoundType, provides a view on the
-// representation of the same components as they would be serialized by Origin.
-//
-// The view is exposed in a form of a byte range. For example of use see to_legacy() function.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 template <typename CompoundType>
 class legacy_compound_view {
     static_assert(!CompoundType::is_prefixable, "Legacy view not defined for prefixes");
@@ -4457,11 +4415,11 @@ public:
 
     class iterator : public std::iterator<std::input_iterator_tag, bytes::value_type> {
         bool _singular;
-        // Offset within virtual output space of a component.
-        //
-        // Offset: -2             -1             0  ...  LEN-1 LEN
-        // Field:  [ length MSB ] [ length LSB ] [   VALUE   ] [ EOC ]
-        //
+        
+        
+        
+        
+        
         int32_t _offset;
         typename CompoundType::iterator _i;
     public:
@@ -4486,15 +4444,15 @@ public:
                 return component_size & 0xff;
             } else if (_offset < component_size) {
                 return (*_i)[_offset];
-            } else { // _offset == component_size
-                return 0; // EOC field
+            } else { 
+                return 0; 
             }
         }
 
         iterator& operator++() {
             auto component_size = (int32_t) _i->size();
             if (_offset < component_size
-                // When _singular, we skip the EOC byte.
+                
                 && (!_singular || _offset != (component_size - 1)))
             {
                 ++_offset;
@@ -4514,18 +4472,18 @@ public:
         }
     };
 
-    // A trichotomic comparator defined on @CompoundType representations which
-    // orders them according to lexicographical ordering of their corresponding
-    // legacy representations.
-    //
-    //   tri_comparator(t)(k1, k2)
-    //
-    // ...is equivalent to:
-    //
-    //   compare_unsigned(to_legacy(t, k1), to_legacy(t, k2))
-    //
-    // ...but more efficient.
-    //
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     struct tri_comparator {
         const CompoundType& _type;
 
@@ -4533,18 +4491,18 @@ public:
             : _type(type)
         { }
 
-        // @k1 and @k2 must be serialized using @type, which was passed to the constructor.
+        
         int operator()(bytes_view k1, bytes_view k2) const;
     };
 
-    // Equivalent to std::distance(begin(), end()), but computes faster
+    
     size_t size() const {
         if (_type.is_singular()) {
             return _type.begin(_packed)->size();
         }
         size_t s = 0;
         for (auto&& component : _type.components(_packed)) {
-            s += 2 /* length field */ + component.size() + 1 /* EOC */;
+            s += 2  + component.size() + 1 ;
         }
         return s;
     }
@@ -4558,8 +4516,8 @@ public:
     }
 };
 
-// Converts compound_type<> representation to legacy representation
-// @packed is assumed to be serialized using supplied @type.
+
+
 template <typename CompoundType>
 static inline
 bytes to_legacy(CompoundType& type, bytes_view packed) {
@@ -4571,15 +4529,15 @@ bytes to_legacy(CompoundType& type, bytes_view packed) {
 
 class composite_view;
 
-// Represents a value serialized according to Origin's CompositeType.
-// If is_compound is true, then the value is one or more components encoded as:
-//
-//   <representation> ::= ( <component> )+
-//   <component>      ::= <length> <value> <EOC>
-//   <length>         ::= <uint16_t>
-//   <EOC>            ::= <uint8_t>
-//
-// If false, then it encodes a single value, without a prefix length or a suffix EOC.
+
+
+
+
+
+
+
+
+
 class composite final {
     bytes _bytes;
     bool _is_compound;
@@ -4651,10 +4609,10 @@ private:
         for (auto&& val : values) {
             write<size_type>(out, static_cast<size_type>(size(val)));
             write_value(std::forward<decltype(val)>(val), out);
-            // Range tombstones are not keys. For collections, only frozen
-            // values can be keys. Therefore, for as long as it is safe to
-            // assume that this code will be used to create keys, it is safe
-            // to assume the trailing byte is always zero.
+            
+            
+            
+            
             write<eoc_type>(out, eoc_type(eoc::none));
         }
     }
@@ -4663,10 +4621,10 @@ private:
         size_t len = 0;
         auto it = values.begin();
         if (it != values.end()) {
-            // CQL3 uses a specific prefix (0xFFFF) to encode "static columns"
-            // (CASSANDRA-6561). This does mean the maximum size of the first component of a
-            // composite is 65534, not 65535 (or we wouldn't be able to detect if the first 2
-            // bytes is the static prefix or not).
+            
+            
+            
+            
             auto value_size = size(*it);
             if (value_size > static_cast<size_type>(std::numeric_limits<size_type>::max() - uint8_t(is_compound))) {
                 throw std::runtime_error(format("First component size too large: {:d} > {:d}", value_size, std::numeric_limits<size_type>::max() - is_compound));
@@ -4692,7 +4650,7 @@ public:
         return f(const_cast<bytes&>(_bytes));
     }
 
-    // marker is ignored if !is_compound
+    
     template<typename RangeOfSerializedComponents>
     static composite serialize_value(RangeOfSerializedComponents&& values, bool is_compound = true, eoc marker = eoc::none) {
         auto size = serialized_size(values, is_compound);
@@ -4707,7 +4665,7 @@ public:
 
     template<typename RangeOfSerializedComponents>
     static composite serialize_static(const schema& s, RangeOfSerializedComponents&& values) {
-        // FIXME: Optimize
+        
         auto b = bytes(size_t(2), bytes::value_type(0xff));
         std::vector<bytes_view> sv(s.clustering_key_size());
         b += composite::serialize_value(boost::range::join(sv, std::forward<RangeOfSerializedComponents>(values)), true).release_bytes();
@@ -4963,18 +4921,18 @@ int composite::tri_compare::operator()(const composite& v1, const composite& v2)
 
 #include <any>
 
-// A function used by compacting collectors to migrate objects during
-// compaction. The function should reconstruct the object located at src
-// in the location pointed by dst. The object at old location should be
-// destroyed. See standard_migrator() above for example. Both src and dst
-// are aligned as requested during alloc()/construct().
+
+
+
+
+
 class migrate_fn_type {
-    // Migrators may be registered by thread-local objects. The table of all
-    // registered migrators is also thread-local which may cause problems with
-    // the order of object destruction and lead to use-after-free.
-    // This can be worked around by making migrators keep a shared pointer
-    // to the table of migrators. std::any is used so that its type doesn't
-    // have to be made public.
+    
+    
+    
+    
+    
+    
     std::any _migrators;
     uint32_t _align = 0;
     uint32_t _index;
@@ -4990,8 +4948,8 @@ public:
     uint32_t index() const { return _index; }
 };
 
-// Non-constant-size classes (ending with `char data[0]`) must override this
-// to tell the allocator about the real size of the object
+
+
 template <typename T>
 inline
 size_t
@@ -5023,28 +4981,28 @@ standard_migrator<T>& get_standard_migrator()
     return instance;
 }
 
-//
-// Abstracts allocation strategy for managed objects.
-//
-// Managed objects may be moved by the allocator during compaction, which
-// invalidates any references to those objects. Compaction may be started
-// synchronously with allocations. To ensure that references remain valid, use
-// logalloc::compaction_lock.
-//
-// Because references may get invalidated, managing allocators can't be used
-// with standard containers, because they assume the reference is valid until freed.
-//
-// For example containers compatible with compacting allocators see:
-//   - managed_ref - managed version of std::unique_ptr<>
-//   - managed_bytes - managed version of "bytes"
-//
-// Note: When object is used as an element inside intrusive containers,
-// typically no extra measures need to be taken for reference tracking, if the
-// link member is movable. When object is moved, the member hook will be moved
-// too and it should take care of updating any back-references. The user must
-// be aware though that any iterators into such container may be invalidated
-// across deferring points.
-//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class allocation_strategy {
 protected:
     size_t _preferred_max_contiguous_allocation = std::numeric_limits<size_t>::max();
@@ -5054,33 +5012,33 @@ public:
 
     virtual ~allocation_strategy() {}
 
-    //
-    // Allocates space for a new ManagedObject. The caller must construct the
-    // object before compaction runs. "size" is the amount of space to reserve
-    // in bytes. It can be larger than MangedObjects's size.
-    //
-    // Throws std::bad_alloc on allocation failure.
-    //
-    // Doesn't invalidate references to objects allocated with this strategy.
-    //
+    
+    
+    
+    
+    
+    
+    
+    
+    
     virtual void* alloc(migrate_fn, size_t size, size_t alignment) = 0;
 
-    // Releases storage for the object. Doesn't invoke object's destructor.
-    // Doesn't invalidate references to objects allocated with this strategy.
+    
+    
     virtual void free(void* object, size_t size) = 0;
     virtual void free(void* object) = 0;
 
-    // Returns the total immutable memory size used by the allocator to host
-    // this object.  This will be at least the size of the object itself, plus
-    // any immutable overhead needed to represent the object (if any).
-    //
-    // The immutable overhead is the overhead that cannot change over the
-    // lifetime of the object (such as padding, etc).
+    
+    
+    
+    
+    
+    
     virtual size_t object_memory_size_in_allocator(const void* obj) const noexcept = 0;
 
-    // Like alloc() but also constructs the object with a migrator using
-    // standard move semantics. Allocates respecting object's alignment
-    // requirement.
+    
+    
+    
     template<typename T, typename... Args>
     T* construct(Args&&... args) {
         void* storage = alloc(&get_standard_migrator<T>(), sizeof(T), alignof(T));
@@ -5092,8 +5050,8 @@ public:
         }
     }
 
-    // Destroys T and releases its storage.
-    // Doesn't invalidate references to allocated objects.
+    
+    
     template<typename T>
     void destroy(T* obj) {
         size_t size = size_for_allocation_strategy(*obj);
@@ -5105,10 +5063,10 @@ public:
         return _preferred_max_contiguous_allocation;
     }
 
-    // Returns a number which is increased when references to objects managed by this allocator
-    // are invalidated, e.g. due to internal events like compaction or eviction.
-    // When the value returned by this method doesn't change, references obtained
-    // between invocations remain valid.
+    
+    
+    
+    
     uint64_t invalidate_counter() const {
         return _invalidate_counter;
     }
@@ -5122,10 +5080,10 @@ class standard_allocation_strategy : public allocation_strategy {
 public:
     virtual void* alloc(migrate_fn, size_t size, size_t alignment) override {
         seastar::memory::on_alloc_point();
-        // ASAN doesn't intercept aligned_alloc() and complains on free().
+        
         void* ret;
-        // The system posix_memalign will return EINVAL if alignment is not
-        // a multiple of pointer size.
+        
+        
         if (alignment < sizeof(void*)) {
             alignment = sizeof(void*);
         }
@@ -5182,46 +5140,46 @@ struct alloc_strategy_deleter {
     }
 };
 
-// std::unique_ptr which can be used for owning an object allocated using allocation_strategy.
-// Must be destroyed before the pointer is invalidated. For compacting allocators, that
-// means it must not escape outside allocating_section or reclaim lock.
-// Must be destroyed in the same allocating context in which T was allocated.
+
+
+
+
 template<typename T>
 using alloc_strategy_unique_ptr = std::unique_ptr<T, alloc_strategy_deleter<T>>;
 
-//
-// Passing allocators to objects.
-//
-// The same object type can be allocated using different allocators, for
-// example standard allocator (for temporary data), or log-structured
-// allocator for long-lived data. In case of LSA, objects may be allocated
-// inside different LSA regions. Objects should be freed only from the region
-// which owns it.
-//
-// There's a problem of how to ensure correct usage of allocators. Storing the
-// reference to the allocator used for construction of some object inside that
-// object is a possible solution. This has a disadvantage of extra space
-// overhead per-object though. We could avoid that if the code which decides
-// about which allocator to use is also the code which controls object's life
-// time. That seems to be the case in current uses, so a simplified scheme of
-// passing allocators will do. Allocation strategy is set in a thread-local
-// context, as shown below. From there, aware objects pick up the allocation
-// strategy. The code controling the objects must ensure that object allocated
-// in one regime is also freed in the same regime.
-//
-// with_allocator() provides a way to set the current allocation strategy used
-// within given block of code. with_allocator() can be nested, which will
-// temporarily shadow enclosing strategy. Use current_allocator() to obtain
-// currently active allocation strategy. Use current_deleter() to obtain a
-// Deleter object using current allocation strategy to destroy objects.
-//
-// Example:
-//
-//   logalloc::region r;
-//   with_allocator(r.allocator(), [] {
-//       auto obj = make_managed<int>();
-//   });
-//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 class allocator_lock {
     allocation_strategy* _prev;
@@ -5286,16 +5244,16 @@ struct blob_storage {
     }
 } __attribute__((packed));
 
-// A managed version of "bytes" (can be used with LSA).
+
 class managed_bytes {
     static thread_local std::unordered_map<const blob_storage*, std::unique_ptr<bytes_view::value_type[]>> _lc_state;
     struct linearization_context {
         unsigned _nesting = 0;
-        // Map from first blob_storage address to linearized version
-        // We use the blob_storage address to be insentive to moving
-        // a managed_bytes object.
-        // linearization_context is entered often in the fast path, but it is
-        // actually used only in rare (slow) cases.
+        
+        
+        
+        
+        
         std::unordered_map<const blob_storage*, std::unique_ptr<bytes_view::value_type[]>>* _state_ptr = nullptr;
         void enter() {
             ++_nesting;
@@ -5322,7 +5280,7 @@ private:
     static constexpr size_t max_inline_size = 15;
     struct small_blob {
         bytes_view::value_type data[max_inline_size];
-        int8_t size; // -1 -> use blob_storage
+        int8_t size; 
     };
     union u {
         u() {}
@@ -5415,7 +5373,7 @@ public:
 
     managed_bytes(bytes_view v) : managed_bytes(initialized_later(), v.size()) {
         if (!external()) {
-            // Workaround for https://github.com/scylladb/scylla/issues/4086
+            
             #pragma GCC diagnostic push
             #pragma GCC diagnostic ignored "-Warray-bounds"
             std::copy(v.begin(), v.end(), _u.small.data);
@@ -5601,7 +5559,7 @@ public:
 
     blob_storage::char_type* data() {
         if (external()) {
-            assert(!_u.ptr->next);  // must be linearized
+            assert(!_u.ptr->next);  
             return _u.ptr->data;
         } else {
             return _u.small.data;
@@ -5612,7 +5570,7 @@ public:
         return read_linearize();
     }
 
-    // Returns the amount of external memory used.
+    
     size_t external_memory_usage() const {
         if (external()) {
             size_t mem = 0;
@@ -5630,8 +5588,8 @@ public:
     friend std::result_of_t<Func()> with_linearized_managed_bytes(Func&& func);
 };
 
-// Run func() while ensuring that reads of managed_bytes objects are
-// temporarlily linearized
+
+
 template <typename Func>
 inline
 std::result_of_t<Func()>
@@ -5651,33 +5609,33 @@ struct hash<managed_bytes> {
 
 }
 
-// blob_storage is a variable-size type
+
 inline
 size_t
 size_for_allocation_strategy(const blob_storage& bs) {
     return sizeof(bs) + bs.frag_size;
 }
 
-// database.hh
+
 class database;
 class keyspace;
 class table;
 using column_family = table;
 class memtable_list;
 
-// mutation.hh
+
 class mutation;
 class mutation_partition;
 
-// schema.hh
+
 class schema;
 class column_definition;
 class column_mapping;
 
-// schema_mutations.hh
+
 class schema_mutations;
 
-// keys.hh
+
 class exploded_clustering_prefix;
 class partition_key;
 class partition_key_view;
@@ -5686,32 +5644,32 @@ class clustering_key_prefix_view;
 using clustering_key = clustering_key_prefix;
 using clustering_key_view = clustering_key_prefix_view;
 
-// memtable.hh
+
 class memtable;
 
-//
-// This header defines type system for primary key holders.
-//
-// We distinguish partition keys and clustering keys. API-wise they are almost
-// the same, but they're separate type hierarchies.
-//
-// Clustering keys are further divided into prefixed and non-prefixed (full).
-// Non-prefixed keys always have full component set, as defined by schema.
-// Prefixed ones can have any number of trailing components missing. They may
-// differ in underlying representation.
-//
-// The main classes are:
-//
-//   partition_key           - full partition key
-//   clustering_key          - full clustering key
-//   clustering_key_prefix   - clustering key prefix
-//
-// These classes wrap only the minimum information required to store the key
-// (the key value itself). Any information which can be inferred from schema
-// is not stored. Therefore accessors need to be provided with a pointer to
-// schema, from which information about structure is extracted.
 
-// Abstracts a view to serialized compound.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 template <typename TopLevelView>
 class compound_view_wrapper {
 protected:
@@ -5769,24 +5727,24 @@ public:
         return get_compound_type(s)->equal(representation(), other.representation());
     }
 
-    // begin() and end() return iterators over components of this compound. The iterator yields a bytes_view to the component.
-    // The iterators satisfy InputIterator concept.
+    
+    
     auto begin() const {
         return TopLevelView::compound::element_type::begin(representation());
     }
 
-    // See begin()
+    
     auto end() const {
         return TopLevelView::compound::element_type::end(representation());
     }
 
-    // begin() and end() return iterators over components of this compound. The iterator yields a bytes_view to the component.
-    // The iterators satisfy InputIterator concept.
+    
+    
     auto begin(const schema& s) const {
         return begin();
     }
 
-    // See begin()
+    
     auto end(const schema& s) const {
         return end();
     }
@@ -5797,12 +5755,12 @@ public:
         return *it;
     }
 
-    // Returns a range of bytes_view
+    
     auto components() const {
         return TopLevelView::compound::element_type::components(representation());
     }
 
-    // Returns a range of bytes_view
+    
     auto components(const schema& s) const {
         return components();
     }
@@ -5815,7 +5773,7 @@ public:
         return !is_empty();
     }
 
-    // For backward compatibility with existing code.
+    
     bool is_empty(const schema& s) const {
         return is_empty();
     }
@@ -5862,7 +5820,7 @@ public:
         return from_exploded(v);
     }
 
-    // We don't allow optional values, but provide this method as an efficient adaptor
+    
     static TopLevel from_optional_exploded(const schema& s, const std::vector<bytes_opt>& v) {
         return TopLevel::from_bytes(get_compound_type(s)->serialize_optionals(v));
     }
@@ -5894,7 +5852,7 @@ public:
         return view();
     }
 
-    // FIXME: return views
+    
     std::vector<bytes> explode(const schema& s) const {
         return get_compound_type(s)->deserialize_value(_bytes);
     }
@@ -5956,13 +5914,13 @@ public:
 
     const managed_bytes& representation() const;
 
-    // begin() and end() return iterators over components of this compound. The iterator yields a bytes_view to the component.
-    // The iterators satisfy InputIterator concept.
+    
+    
     auto begin(const schema& s) const {
         return get_compound_type(s)->begin(_bytes);
     }
 
-    // See begin()
+    
     auto end(const schema& s) const {
         return get_compound_type(s)->end(_bytes);
     }
@@ -5971,20 +5929,20 @@ public:
 
     explicit operator bool() const;
 
-    // For backward compatibility with existing code.
+    
     bool is_empty(const schema& s) const;
 
-    // Returns a range of bytes_view
+    
     auto components() const {
         return TopLevelView::compound::element_type::components(representation());
     }
 
-    // Returns a range of bytes_view
+    
     auto components(const schema& s) const;
 
     bytes_view get_component(const schema& s, size_t idx) const;
 
-    // Returns the number of components of this compound.
+    
     size_t size(const schema& s) const;
 
     size_t external_memory_usage() const;
@@ -6048,10 +6006,10 @@ public:
         bool operator()(const PrefixTopLevel& k1, const TopLevel& k2) const;
     };
 
-    // In prefix equality two sequences are equal if any of them is a prefix
-    // of the other. Otherwise lexicographical ordering is applied.
-    // Note: full compounds sorted according to lexicographical ordering are also
-    // sorted according to prefix equality ordering.
+    
+    
+    
+    
     struct prefix_equality_less_compare {
         prefix_equality_less_compare(const schema& s);
 
@@ -6085,22 +6043,22 @@ public:
 
     bool is_full(const schema& s) const;
 
-    // Can be called only if is_full()
+    
     FullTopLevel to_full(const schema& s) const;
 
     bool is_prefixed_by(const schema& s, const TopLevel& prefix) const;
 
-    // In prefix equality two sequences are equal if any of them is a prefix
-    // of the other. Otherwise lexicographical ordering is applied.
-    // Note: full compounds sorted according to lexicographical ordering are also
-    // sorted according to prefix equality ordering.
+    
+    
+    
+    
     struct prefix_equality_less_compare {
         prefix_equality_less_compare(const schema& s);
 
         bool operator()(const TopLevel& k1, const TopLevel& k2) const;
     };
 
-    // See prefix_equality_less_compare.
+    
     struct prefix_equal_tri_compare {
         prefix_equal_tri_compare(const schema& s);
 
@@ -6118,16 +6076,16 @@ public:
 
     static partition_key_view from_bytes(bytes_view v);
     static const compound& get_compound_type(const schema& s);
-    // Returns key's representation which is compatible with Origin.
-    // The result is valid as long as the schema is live.
+    
+    
     const legacy_compound_view<c_type> legacy_form(const schema& s) const;
 
-    // A trichotomic comparator for ordering compatible with Origin.
+    
     int legacy_tri_compare(const schema& s, partition_key_view o) const;
 
-    // Checks if keys are equal in a way which is compatible with Origin.
+    
     bool legacy_equal(const schema& s, partition_key_view o) const;
-    // A trichotomic comparator which orders keys according to their ordering on the ring.
+    
     int ring_order_tri_compare(const schema& s, partition_key_view o) const;
 
     friend std::ostream& operator<<(std::ostream& out, const partition_key_view& pk);
@@ -6162,12 +6120,12 @@ public:
 
     static partition_key from_bytes(bytes_view b);
     static const compound& get_compound_type(const schema& s);
-    // Returns key's representation which is compatible with Origin.
-    // The result is valid as long as the schema is live.
+    
+    
     const legacy_compound_view<c_type> legacy_form(const schema& s) const;
-    // A trichotomic comparator for ordering compatible with Origin.
+    
     int legacy_tri_compare(const schema& s, const partition_key& o) const;
-    // Checks if keys are equal in a way which is compatible with Origin.
+    
     bool legacy_equal(const schema& s, const partition_key& o) const;
     void validate(const schema& s) const;
     friend std::ostream& operator<<(std::ostream& out, const partition_key& pk);
@@ -6214,11 +6172,7 @@ public:
     static clustering_key_prefix from_bytes(bytes_view b);
     static const compound& get_compound_type(const schema& s);
     static clustering_key_prefix from_clustering_prefix(const schema& s, const exploded_clustering_prefix& prefix);
-    /* This function makes the passed clustering key full by filling its
-     * missing trailing components with empty values.
-     * This is used to represesent clustering keys of rows in compact tables that may be non-full.
-     * Returns whether a key wasn't full before the call.
-     */
+    
     static bool make_full(const schema& s, clustering_key_prefix& ck);    friend std::ostream& operator<<(std::ostream& out, const clustering_key_prefix& ckp);
 };
 
@@ -6248,8 +6202,8 @@ public:
 template<typename T>
 class nonwrapping_range;
 
-// A range which can have inclusive, exclusive or open-ended bounds on each end.
-// The end bound can be smaller than the start bound.
+
+
 template<typename T>
 class wrapping_range {
     template <typename U>
@@ -6278,7 +6232,7 @@ public:
     { }
     wrapping_range() : wrapping_range({}, {}) { }
 private:
-    // Bound wrappers for compile-time dispatch and safety.
+    
     struct start_bound_ref { const optional<bound>& b; };
     struct end_bound_ref { const optional<bound>& b; };
 
@@ -6314,13 +6268,13 @@ private:
                                         >= (!first.b->is_inclusive() && second.b->is_inclusive()));
     }
 public:
-    // the point is before the range (works only for non wrapped ranges)
-    // Comparator must define a total ordering on T.
+    
+    
     template<typename Comparator>
     bool before(const T& point, Comparator&& cmp) const {
         assert(!is_wrap_around(cmp));
         if (!start()) {
-            return false; //open start, no points before
+            return false; 
         }
         auto r = cmp(point, start()->value());
         if (r < 0) {
@@ -6331,13 +6285,13 @@ public:
         }
         return false;
     }
-    // the point is after the range (works only for non wrapped ranges)
-    // Comparator must define a total ordering on T.
+    
+    
     template<typename Comparator>
     bool after(const T& point, Comparator&& cmp) const {
         assert(!is_wrap_around(cmp));
         if (!end()) {
-            return false; //open end, no points after
+            return false; 
         }
         auto r = cmp(end()->value(), point);
         if (r < 0) {
@@ -6348,8 +6302,8 @@ public:
         }
         return false;
     }
-    // check if two ranges overlap.
-    // Comparator must define a total ordering on T.
+    
+    
     template<typename Comparator>
     bool overlaps(const wrapping_range& other, Comparator&& cmp) const {
         bool this_wraps = is_wrap_around(cmp);
@@ -6365,11 +6319,11 @@ public:
             return overlaps(unwrapped.first, cmp) || overlaps(unwrapped.second, cmp);
         }
 
-        // No range should reach this point as wrap around.
+        
         assert(!this_wraps);
         assert(!other_wraps);
 
-        // if both this and other have an open start, the two ranges will overlap.
+        
         if (!start() && !other.start()) {
             return true;
         }
@@ -6409,9 +6363,9 @@ public:
     const optional<bound>& end() const {
         return _singular ? _start : _end;
     }
-    // Range is a wrap around if end value is smaller than the start value
-    // or they're equal and at least one bound is not inclusive.
-    // Comparator must define a total ordering on T.
+    
+    
+    
     template<typename Comparator>
     bool is_wrap_around(Comparator&& cmp) const {
         if (_end && _start) {
@@ -6419,20 +6373,20 @@ public:
             return r < 0
                    || (r == 0 && (!start()->is_inclusive() || !end()->is_inclusive()));
         } else {
-            return false; // open ended range or singular range don't wrap around
+            return false; 
         }
     }
-    // Converts a wrap-around range to two non-wrap-around ranges.
-    // The returned ranges are not overlapping and ordered.
-    // Call only when is_wrap_around().
+    
+    
+    
     std::pair<wrapping_range, wrapping_range> unwrap() const {
         return {
             { {}, end() },
             { start(), {} }
         };
     }
-    // the point is inside the range
-    // Comparator must define a total ordering on T.
+    
+    
     template<typename Comparator>
     bool contains(const T& point, Comparator&& cmp) const {
         if (is_wrap_around(cmp)) {
@@ -6443,8 +6397,8 @@ public:
             return !before(point, cmp) && !after(point, cmp);
         }
     }
-    // Returns true iff all values contained by other are also contained by this.
-    // Comparator must define a total ordering on T.
+    
+    
     template<typename Comparator>
     bool contains(const wrapping_range& other, Comparator&& cmp) const {
         bool this_wraps = is_wrap_around(cmp);
@@ -6462,19 +6416,19 @@ public:
                     && greater_than_or_equal(end_bound(), other.end_bound(), cmp);
         }
 
-        if (other_wraps) { // && !this_wraps
+        if (other_wraps) { 
             return !start() && !end();
         }
 
-        // !other_wraps && this_wraps
+        
         return (other.start() && cmp(start()->value(), other.start()->value())
                                  <= -(!start()->is_inclusive() && other.start()->is_inclusive()))
                 || (other.end() && cmp(end()->value(), other.end()->value())
                                    >= (!end()->is_inclusive() && other.end()->is_inclusive()));
     }
-    // Returns ranges which cover all values covered by this range but not covered by the other range.
-    // Ranges are not overlapping and ordered.
-    // Comparator must define a total ordering on T.
+    
+    
+    
     template<typename Comparator>
     std::vector<wrapping_range> subtract(const wrapping_range& other, Comparator&& cmp) const {
         std::vector<wrapping_range> result;
@@ -6497,7 +6451,7 @@ public:
             right.push_back(other);
         }
 
-        // left and right contain now non-overlapping, ordered ranges
+        
 
         while (!left.empty() && !right.empty()) {
             auto& r1 = left.front();
@@ -6507,7 +6461,7 @@ public:
             } else if (less_than(r1.end_bound(), r2.start_bound(), cmp)) {
                 result.emplace_back(std::move(r1));
                 left.pop_front();
-            } else { // Overlap
+            } else { 
                 auto tmp = std::move(r1);
                 left.pop_front();
                 if (!greater_than_or_equal(r2.end_bound(), tmp.end_bound(), cmp)) {
@@ -6521,12 +6475,12 @@ public:
 
         boost::copy(left, std::back_inserter(result));
 
-        // TODO: Merge adjacent ranges (optimization)
+        
         return result;
     }
-    // split range in two around a split_point. split_point has to be inside the range
-    // split_point will belong to first range
-    // Comparator must define a total ordering on T.
+    
+    
+    
     template<typename Comparator>
     std::pair<wrapping_range<T>, wrapping_range<T>> split(const T& split_point, Comparator&& cmp) const {
         assert(contains(split_point, std::forward<Comparator>(cmp)));
@@ -6534,18 +6488,18 @@ public:
         wrapping_range right(bound(split_point, false), end());
         return std::make_pair(std::move(left), std::move(right));
     }
-    // Create a sub-range including values greater than the split_point. Returns std::nullopt if
-    // split_point is after the end (but not included in the range, in case of wraparound ranges)
-    // Comparator must define a total ordering on T.
+    
+    
+    
     template<typename Comparator>
     std::optional<wrapping_range<T>> split_after(const T& split_point, Comparator&& cmp) const {
         if (contains(split_point, std::forward<Comparator>(cmp))
                 && (!end() || cmp(split_point, end()->value()) != 0)) {
             return wrapping_range(bound(split_point, false), end());
         } else if (end() && cmp(split_point, end()->value()) >= 0) {
-            // whether to return std::nullopt or the full range is not
-            // well-defined for wraparound ranges; we return nullopt
-            // if split_point is after the end.
+            
+            
+            
             return std::nullopt;
         } else {
             return *this;
@@ -6558,8 +6512,8 @@ public:
         };
         return {};
     }
-    // Transforms this range into a new range of a different value type
-    // Supplied transformer should transform value of type T (the old type) into value of type U (the new type).
+    
+    
     template<typename Transformer, typename U = transformed_type<Transformer>>
     wrapping_range<U> transform(Transformer&& transformer) && {
         return wrapping_range<U>(transform_bound(std::move(_start), transformer), transform_bound(std::move(_end), transformer), _singular);
@@ -6617,8 +6571,8 @@ std::ostream& operator<<(std::ostream& out, const wrapping_range<U>& r) {
     return out;
 }
 
-// A range which can have inclusive, exclusive or open-ended bounds on each end.
-// The end bound can never be smaller than the start bound.
+
+
 template<typename T>
 class nonwrapping_range {
     template <typename U>
@@ -6635,15 +6589,15 @@ public:
         : _range(std::move(value))
     { }
     nonwrapping_range() : nonwrapping_range({}, {}) { }
-    // Can only be called if start <= end. IDL ctor.
+    
     nonwrapping_range(optional<bound> start, optional<bound> end, bool singular = false)
         : _range(std::move(start), std::move(end), singular)
     { }
-    // Can only be called if !r.is_wrap_around().
+    
     explicit nonwrapping_range(wrapping_range<T>&& r)
         : _range(std::move(r))
     { }
-    // Can only be called if !r.is_wrap_around().
+    
     explicit nonwrapping_range(const wrapping_range<T>& r)
         : _range(r)
     { }
@@ -6654,23 +6608,23 @@ public:
         return std::move(_range);
     }
 
-    // the point is before the range.
-    // Comparator must define a total ordering on T.
+    
+    
     template<typename Comparator>
     bool before(const T& point, Comparator&& cmp) const {
         return _range.before(point, std::forward<Comparator>(cmp));
     }
-    // the point is after the range.
-    // Comparator must define a total ordering on T.
+    
+    
     template<typename Comparator>
     bool after(const T& point, Comparator&& cmp) const {
         return _range.after(point, std::forward<Comparator>(cmp));
     }
-    // check if two ranges overlap.
-    // Comparator must define a total ordering on T.
+    
+    
     template<typename Comparator>
     bool overlaps(const nonwrapping_range& other, Comparator&& cmp) const {
-        // if both this and other have an open start, the two ranges will overlap.
+        
         if (!start() && !other.start()) {
             return true;
         }
@@ -6705,22 +6659,22 @@ public:
     const optional<bound>& end() const {
         return _range.end();
     }
-    // the point is inside the range
-    // Comparator must define a total ordering on T.
+    
+    
     template<typename Comparator>
     bool contains(const T& point, Comparator&& cmp) const {
         return !before(point, cmp) && !after(point, cmp);
     }
-    // Returns true iff all values contained by other are also contained by this.
-    // Comparator must define a total ordering on T.
+    
+    
     template<typename Comparator>
     bool contains(const nonwrapping_range& other, Comparator&& cmp) const {
         return wrapping_range<T>::less_than_or_equal(_range.start_bound(), other._range.start_bound(), cmp)
                 && wrapping_range<T>::greater_than_or_equal(_range.end_bound(), other._range.end_bound(), cmp);
     }
-    // Returns ranges which cover all values covered by this range but not covered by the other range.
-    // Ranges are not overlapping and ordered.
-    // Comparator must define a total ordering on T.
+    
+    
+    
     template<typename Comparator>
     std::vector<nonwrapping_range> subtract(const nonwrapping_range& other, Comparator&& cmp) const {
         auto subtracted = _range.subtract(other._range, std::forward<Comparator>(cmp));
@@ -6728,9 +6682,9 @@ public:
             return nonwrapping_range(std::move(r));
         }));
     }
-    // split range in two around a split_point. split_point has to be inside the range
-    // split_point will belong to first range
-    // Comparator must define a total ordering on T.
+    
+    
+    
     template<typename Comparator>
     std::pair<nonwrapping_range<T>, nonwrapping_range<T>> split(const T& split_point, Comparator&& cmp) const {
         assert(contains(split_point, std::forward<Comparator>(cmp)));
@@ -6738,8 +6692,8 @@ public:
         nonwrapping_range right(bound(split_point, false), end());
         return std::make_pair(std::move(left), std::move(right));
     }
-    // Create a sub-range including values greater than the split_point. If split_point is after
-    // the end, returns std::nullopt.
+    
+    
     template<typename Comparator>
     std::optional<nonwrapping_range> split_after(const T& split_point, Comparator&& cmp) const {
         if (end() && cmp(split_point, end()->value()) >= 0) {
@@ -6750,14 +6704,14 @@ public:
             return nonwrapping_range(range_bound<T>(split_point, false), end());
         }
     }
-    // Creates a new sub-range which is the intersection of this range and a range starting with "start".
-    // If there is no overlap, returns std::nullopt.
+    
+    
     template<typename Comparator>
     std::optional<nonwrapping_range> trim_front(std::optional<bound>&& start, Comparator&& cmp) const {
         return intersection(nonwrapping_range(std::move(start), {}), cmp);
     }
-    // Transforms this range into a new range of a different value type
-    // Supplied transformer should transform value of type T (the old type) into value of type U (the new type).
+    
+    
     template<typename Transformer, typename U = transformed_type<Transformer>>
     nonwrapping_range<U> transform(Transformer&& transformer) && {
         return nonwrapping_range<U>(std::move(_range).transform(std::forward<Transformer>(transformer)));
@@ -6773,8 +6727,8 @@ public:
     bool operator==(const nonwrapping_range& other) const {
         return _range == other._range;
     }
-    // Takes a vector of possibly overlapping ranges and returns a vector containing
-    // a set of non-overlapping ranges covering the same values.
+    
+    
     template<typename Comparator>
     static std::vector<nonwrapping_range> deoverlap(std::vector<nonwrapping_range> ranges, Comparator&& cmp) {
         auto size = ranges.size();
@@ -6794,7 +6748,7 @@ public:
             bool includes_end = wrapping_range<T>::greater_than_or_equal(r._range.end_bound(), current._range.start_bound(), cmp)
                                 && wrapping_range<T>::greater_than_or_equal(current._range.end_bound(), r._range.end_bound(), cmp);
             if (includes_end) {
-                continue; // last.start <= r.start <= r.end <= last.end
+                continue; 
             }
             bool includes_start = wrapping_range<T>::greater_than_or_equal(current._range.end_bound(), r._range.start_bound(), cmp);
             if (includes_start) {
@@ -6810,9 +6764,9 @@ public:
     }
 
 private:
-    // These private functions optimize the case where a sequence supports the
-    // lower and upper bound operations more efficiently, as is the case with
-    // some boost containers.
+    
+    
+    
     struct std_ {};
     struct built_in_ : std_ {};
 
@@ -6838,7 +6792,7 @@ private:
         return std::upper_bound(r.begin(), r.end(), value, std::forward<LessComparator>(cmp));
     }
 public:
-    // Return the lower bound of the specified sequence according to these bounds.
+    
     template<typename Range, typename LessComparator>
     typename std::remove_reference<Range>::type::const_iterator lower_bound(Range&& r, LessComparator&& cmp) const {
         return start()
@@ -6847,7 +6801,7 @@ public:
                 : do_upper_bound(start()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_()))
             : std::cbegin(r);
     }
-    // Return the upper bound of the specified sequence according to these bounds.
+    
     template<typename Range, typename LessComparator>
     typename std::remove_reference<Range>::type::const_iterator upper_bound(Range&& r, LessComparator&& cmp) const {
         return end()
@@ -6858,14 +6812,14 @@ public:
                 ? do_upper_bound(start()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_())
                 : std::cend(r));
     }
-    // Returns a subset of the range that is within these bounds.
+    
     template<typename Range, typename LessComparator>
     boost::iterator_range<typename std::remove_reference<Range>::type::const_iterator>
     slice(Range&& range, LessComparator&& cmp) const {
         return boost::make_iterator_range(lower_bound(range, cmp), upper_bound(range, cmp));
     }
 
-    // Returns the intersection between this range and other.
+    
     template<typename Comparator>
     std::optional<nonwrapping_range> intersection(const nonwrapping_range& other, Comparator&& cmp) const {
         auto p = std::minmax(_range, other._range, [&cmp] (auto&& a, auto&& b) {
@@ -6897,8 +6851,8 @@ template<template<typename> typename T, typename U>
 concept bool Range = std::is_same<T<U>, wrapping_range<U>>::value || std::is_same<T<U>, nonwrapping_range<U>>::value;
 )
 
-// Allow using range<T> in a hash table. The hash function 31 * left +
-// right is the same one used by Cassandra's AbstractBounds.hashCode().
+
+
 namespace std {
 
 template<typename T>
@@ -6930,7 +6884,7 @@ struct hash<nonwrapping_range<T>> {
 enum class bound_kind : uint8_t {
     excl_end = 0,
     incl_start = 1,
-    // values 2 to 5 are reserved for forward Origin compatibility
+    
     incl_end = 6,
     excl_start = 7,
 };
@@ -6956,8 +6910,8 @@ public:
     const clustering_key_prefix& prefix() const { return _prefix; }
 
     struct tri_compare {
-        // To make it assignable and to avoid taking a schema_ptr, we
-        // wrap the schema reference.
+        
+        
         std::reference_wrapper<const schema> _s;
         tri_compare(const schema& s) : _s(s)
         { }
@@ -6988,8 +6942,8 @@ public:
         }
     };
     struct compare {
-        // To make it assignable and to avoid taking a schema_ptr, we
-        // wrap the schema reference.
+        
+        
         tri_compare _cmp;
         compare(const schema& s) : _cmp(s)
         { }
@@ -7163,7 +7117,7 @@ public:
      * Gets the first shard of the minimum token.
      */
     static unsigned shard_of_minimum_token() {
-        return 0;  // hardcoded for now; unlikely to change
+        return 0;  
     }
 
 };
@@ -7180,7 +7134,7 @@ inline bool operator<=(const token& t1, const token& t2) { return std::rel_ops::
 inline bool operator>=(const token& t1, const token& t2) { return std::rel_ops::operator>=(t1, t2); }
 std::ostream& operator<<(std::ostream& out, const token& t);
 
-} // namespace dht
+} 
 
 namespace sstables {
 
@@ -7191,14 +7145,14 @@ class decorated_key_view;
 
 namespace dht {
 
-//
-// Origin uses a complex class hierarchy where Token is an abstract class,
-// and various subclasses use different implementations (LongToken vs.
-// BigIntegerToken vs. StringToken), plus other variants to to signify the
-// the beginning of the token space etc.
-//
-// We'll fold all of that into the token class and push all of the variations
-// into its users.
+
+
+
+
+
+
+
+
 
 class decorated_key;
 class ring_position;
@@ -7216,9 +7170,9 @@ inline auto get_random_number() {
     return dist(re);
 }
 
-// Wraps partition_key with its corresponding token.
-//
-// Total ordering defined by comparators is compatible with Origin's ordering.
+
+
+
 class decorated_key {
 public:
     dht::token _token;
@@ -7242,8 +7196,8 @@ public:
     bool less_compare(const schema& s, const decorated_key& other) const;
     bool less_compare(const schema& s, const ring_position& other) const;
 
-    // Trichotomic comparators defining total ordering on the union of
-    // decorated_key and ring_position objects.
+    
+    
     int tri_compare(const schema& s, const decorated_key& other) const;
     int tri_compare(const schema& s, const ring_position& other) const;
 
@@ -7314,8 +7268,8 @@ public:
     virtual token get_token(const schema& s, partition_key_view key) const = 0;
     virtual token get_token(const sstables::key_view& key) const = 0;
 
-    // FIXME: token.tokenFactory
-    //virtual token.tokenFactory gettokenFactory() = 0;
+    
+    
 
     /**
      * @return True if the implementing class preserves key order in the tokens
@@ -7365,33 +7319,33 @@ public:
     }
 };
 
-//
-// Represents position in the ring of partitions, where partitions are ordered
-// according to decorated_key ordering (first by token, then by key value).
-// Intended to be used for defining partition ranges.
-//
-// The 'key' part is optional. When it's absent, this object represents a position
-// which is either before or after all keys sharing given token. That's determined
-// by relation_to_keys().
-//
-// For example for the following data:
-//
-//   tokens: |    t1   | t2 |
-//           +----+----+----+
-//   keys:   | k1 | k2 | k3 |
-//
-// The ordering is:
-//
-//   ring_position(t1, token_bound::start) < ring_position(k1)
-//   ring_position(k1)                     < ring_position(k2)
-//   ring_position(k1)                     == decorated_key(k1)
-//   ring_position(k2)                     == decorated_key(k2)
-//   ring_position(k2)                     < ring_position(t1, token_bound::end)
-//   ring_position(k2)                     < ring_position(k3)
-//   ring_position(t1, token_bound::end)   < ring_position(t2, token_bound::start)
-//
-// Maps to org.apache.cassandra.db.RowPosition and its derivatives in Origin.
-//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class ring_position {
 public:
     enum class token_bound : int8_t { start = -1, end = 1 };
@@ -7399,7 +7353,7 @@ private:
     friend class ring_position_comparator;
     friend class ring_position_ext;
     dht::token _token;
-    token_bound _token_bound{}; // valid when !_key
+    token_bound _token_bound{}; 
     std::optional<partition_key> _key;
 public:
     static ring_position min() {
@@ -7456,12 +7410,12 @@ public:
         return _token;
     }
 
-    // Valid when !has_key()
+    
     token_bound bound() const {
         return _token_bound;
     }
 
-    // Returns -1 if smaller than keys with the same token, +1 if greater.
+    
     int relation_to_keys() const {
         return _key ? 0 : static_cast<int>(_token_bound);
     }
@@ -7474,48 +7428,48 @@ public:
         return bool(_key);
     }
 
-    // Call only when has_key()
+    
     dht::decorated_key as_decorated_key() const {
         return { _token, *_key };
     }
 
     bool equal(const schema&, const ring_position&) const;
 
-    // Trichotomic comparator defining a total ordering on ring_position objects
+    
     int tri_compare(const schema&, const ring_position&) const;
 
-    // "less" comparator corresponding to tri_compare()
+    
     bool less_compare(const schema&, const ring_position&) const;
 
     friend std::ostream& operator<<(std::ostream&, const ring_position&);
 };
 
-// Non-owning version of ring_position and ring_position_ext.
-//
-// Unlike ring_position, it can express positions which are right after and right before the keys.
-// ring_position still can not because it is sent between nodes and such a position
-// would not be (yet) properly interpreted by old nodes. That's why any ring_position
-// can be converted to ring_position_view, but not the other way.
-//
-// It is possible to express a partition_range using a pair of two ring_position_views v1 and v2,
-// where v1 = ring_position_view::for_range_start(r) and v2 = ring_position_view::for_range_end(r).
-// Such range includes all keys k such that v1 <= k < v2, with order defined by ring_position_comparator.
-//
+
+
+
+
+
+
+
+
+
+
+
 class ring_position_view {
     friend int ring_position_tri_compare(const schema& s, ring_position_view lh, ring_position_view rh);
     friend class ring_position_comparator;
     friend class ring_position_ext;
 
-    // Order is lexicographical on (_token, _key) tuples, where _key part may be missing, and
-    // _weight affecting order between tuples if one is a prefix of the other (including being equal).
-    // A positive weight puts the position after all strictly prefixed by it, while a non-positive
-    // weight puts it before them. If tuples are equal, the order is further determined by _weight.
-    //
-    // For example {_token=t1, _key=nullptr, _weight=1} is ordered after {_token=t1, _key=k1, _weight=0},
-    // but {_token=t1, _key=nullptr, _weight=-1} is ordered before it.
-    //
-    const dht::token* _token; // always not nullptr
-    const partition_key* _key; // Can be nullptr
+    
+    
+    
+    
+    
+    
+    
+    
+    const dht::token* _token; 
+    const partition_key* _key; 
     int8_t _weight;
 public:
     using token_bound = ring_position::token_bound;
@@ -7598,9 +7552,9 @@ public:
     const dht::token& token() const { return *_token; }
     const partition_key* key() const { return _key; }
 
-    // Only when key() == nullptr
+    
     token_bound get_token_bound() const { return token_bound(_weight); }
-    // Only when key() != nullptr
+    
     after_key is_after_key() const { return after_key(_weight == 1); }
 
     friend std::ostream& operator<<(std::ostream&, ring_position_view);
@@ -7608,29 +7562,29 @@ public:
 
 using ring_position_ext_view = ring_position_view;
 
-//
-// Represents position in the ring of partitions, where partitions are ordered
-// according to decorated_key ordering (first by token, then by key value).
-// Intended to be used for defining partition ranges.
-//
-// Unlike ring_position, it can express positions which are right after and right before the keys.
-// ring_position still can not because it is sent between nodes and such a position
-// would not be (yet) properly interpreted by old nodes. That's why any ring_position
-// can be converted to ring_position_ext, but not the other way.
-//
-// It is possible to express a partition_range using a pair of two ring_position_exts v1 and v2,
-// where v1 = ring_position_ext::for_range_start(r) and v2 = ring_position_ext::for_range_end(r).
-// Such range includes all keys k such that v1 <= k < v2, with order defined by ring_position_comparator.
-//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class ring_position_ext {
-    // Order is lexicographical on (_token, _key) tuples, where _key part may be missing, and
-    // _weight affecting order between tuples if one is a prefix of the other (including being equal).
-    // A positive weight puts the position after all strictly prefixed by it, while a non-positive
-    // weight puts it before them. If tuples are equal, the order is further determined by _weight.
-    //
-    // For example {_token=t1, _key=nullptr, _weight=1} is ordered after {_token=t1, _key=k1, _weight=0},
-    // but {_token=t1, _key=nullptr, _weight=-1} is ordered before it.
-    //
+    
+    
+    
+    
+    
+    
+    
+    
     dht::token _token;
     std::optional<partition_key> _key;
     int8_t _weight;
@@ -7727,10 +7681,10 @@ public:
     const dht::token& token() const { return _token; }
     const std::optional<partition_key>& key() const { return _key; }
 
-    // Only when key() == std::nullopt
+    
     token_bound get_token_bound() const { return token_bound(_weight); }
 
-    // Only when key() != std::nullopt
+    
     after_key is_after_key() const { return after_key(_weight == 1); }
 
     operator ring_position_view() const { return { _token, _key ? &*_key : nullptr, _weight }; }
@@ -7740,7 +7694,7 @@ public:
 
 int ring_position_tri_compare(const schema& s, ring_position_view lh, ring_position_view rh);
 
-// Trichotomic comparator for ring order
+
 struct ring_position_comparator {
     const schema& s;
     ring_position_comparator(const schema& s_) : s(s_) {}
@@ -7749,7 +7703,7 @@ struct ring_position_comparator {
     int operator()(sstables::decorated_key_view, ring_position_view) const;
 };
 
-// "less" comparator giving the same order as ring_position_comparator
+
 struct ring_position_less_comparator {
     ring_position_comparator tri;
 
@@ -7762,7 +7716,7 @@ struct ring_position_less_comparator {
 };
 
 struct token_comparator {
-    // Return values are those of a trichotomic comparison.
+    
     int operator()(const token& t1, const token& t2) const;
 };
 
@@ -7807,16 +7761,16 @@ inline token get_token(const schema& s, partition_key_view key) {
 dht::partition_range to_partition_range(dht::token_range);
 dht::partition_range_vector to_partition_ranges(const dht::token_range_vector& ranges);
 
-// Each shard gets a sorted, disjoint vector of ranges
+
 std::map<unsigned, dht::partition_range_vector>
 split_range_to_shards(dht::partition_range pr, const schema& s);
 
-// If input ranges are sorted and disjoint then the ranges for each shard
-// are also sorted and disjoint.
+
+
 std::map<unsigned, dht::partition_range_vector>
 split_ranges_to_shards(const dht::token_range_vector& ranges, const schema& s);
 
-// Intersect a partition_range with a shard and return the the resulting sub-ranges, in sorted order
+
 future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const schema& s, const dht::partition_range& pr, shard_id shard);
 future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const i_partitioner& partitioner, const schema& s, const dht::partition_range& pr, shard_id shard);
 
@@ -7824,15 +7778,15 @@ std::unique_ptr<dht::i_partitioner> make_partitioner(sstring name, unsigned shar
 
 extern std::unique_ptr<i_partitioner> default_partitioner;
 
-} // dht
+} 
 
 namespace std {
 template<>
 struct hash<dht::token> {
     size_t operator()(const dht::token& t) const {
-        // We have to reverse the bytes here to keep compatibility with
-        // the behaviour that was here when tokens were represented as
-        // sequence of bytes.
+        
+        
+        
         return bswap_64(t._data);
     }
 };
@@ -7951,7 +7905,7 @@ public:
 template<typename Enum>
 class enum_set {
 public:
-    using mask_type = size_t; // TODO: use the smallest sufficient type
+    using mask_type = size_t; 
     using enum_type = typename Enum::enum_type;
 
 private:
@@ -8151,7 +8105,7 @@ public:
     }
 
     inet_address(const sstring& addr) {
-        // FIXME: We need a real DNS resolver
+        
         if (addr == "localhost") {
             _addr = net::ipv4_address("127.0.0.1");
         } else {
@@ -8161,7 +8115,7 @@ public:
     bytes_view bytes() const {
         return bytes_view(reinterpret_cast<const int8_t*>(_addr.data()), _addr.size());
     }
-    // TODO remove
+    
     uint32_t raw_addr() const {
         return addr().as_ipv4_address().ip;
     }
@@ -8228,11 +8182,11 @@ inline std::chrono::seconds ttl_by_type(const trace_type t) {
     switch (t) {
     case trace_type::NONE:
     case trace_type::QUERY:
-        return std::chrono::seconds(86400);  // 1 day
+        return std::chrono::seconds(86400);  
     case trace_type::REPAIR:
-        return std::chrono::seconds(604800); // 7 days
+        return std::chrono::seconds(604800); 
     default:
-        // unknown type value - must be a SW bug
+        
         throw std::invalid_argument("unknown trace type: " + std::to_string(int(t)));
     }
 }
@@ -8262,13 +8216,13 @@ public:
 
 std::ostream& operator<<(std::ostream& os, const span_id& id);
 
-// !!!!IMPORTANT!!!!
-//
-// The enum_set based on this enum is serialized using IDL, therefore new items
-// should always be added to the end of this enum - never before the existing
-// ones.
-//
-// Otherwise this may break IDL's backward compatibility.
+
+
+
+
+
+
+
 enum class trace_state_props {
     write_on_close, primary, log_slow_query, full_tracing
 };
@@ -8285,8 +8239,8 @@ public:
     trace_type type;
     bool write_on_close;
     trace_state_props_set state_props;
-    uint32_t slow_query_threshold_us; // in microseconds
-    uint32_t slow_query_ttl_sec; // in seconds
+    uint32_t slow_query_threshold_us; 
+    uint32_t slow_query_ttl_sec; 
     span_id parent_id;
 
 public:
@@ -8322,14 +8276,7 @@ public:
     virtual future<> start() = 0;
     virtual future<> stop() = 0;
 
-    /**
-     * Write a bulk of tracing records.
-     *
-     * This function has to clear a scheduled state of each one_session_records object
-     * in the @param bulk after it has been actually passed to the backend for writing.
-     *
-     * @param bulk a bulk of records
-     */
+    
     virtual void write_records_bulk(records_bulk& bulk) = 0;
 
     virtual std::unique_ptr<backend_session_state_base> allocate_session_state() const = 0;
@@ -8351,9 +8298,9 @@ struct event_record {
 
 struct session_record {
     gms::inet_address client;
-    // Keep the containers below sorted since some backends require that and
-    // it's very cheap to always do that because the amount of elements in a
-    // container is very small.
+    
+    
+    
     std::map<sstring, sstring> parameters;
     std::set<sstring> tables;
     sstring username;
@@ -8393,15 +8340,15 @@ public:
     std::unique_ptr<backend_session_state_base> backend_state_ptr;
     bool do_log_slow_query = false;
 
-    // A pointer to the records counter of the corresponding state new records
-    // of this tracing session should consume from (e.g. "cached" or "pending
-    // for write").
+    
+    
+    
     uint64_t* budget_ptr;
 
-    // Each tracing session object represents a single tracing span.
-    //
-    // Each span has a span ID. In order to be able to build a full tree of all
-    // spans of the same query we need a parent span ID as well.
+    
+    
+    
+    
     span_id parent_id;
     span_id my_span_id;
 
@@ -8453,17 +8400,17 @@ private:
 class tracing : public seastar::async_sharded_service<tracing> {
 public:
     static const gc_clock::duration write_period;
-    // maximum number of sessions pending for write per shard
+    
     static constexpr int max_pending_sessions = 1000;
-    // expectation of an average number of trace records per session
+    
     static constexpr int exp_trace_events_per_session = 10;
-    // maximum allowed pending records per-shard
+    
     static constexpr int max_pending_trace_records = max_pending_sessions * exp_trace_events_per_session;
-    // number of pending sessions that would trigger a write event
+    
     static constexpr int write_event_sessions_threshold = 100;
-    // number of pending records that would trigger a write event
+    
     static constexpr int write_event_records_threshold = write_event_sessions_threshold * exp_trace_events_per_session;
-    // Number of events when an info message is printed
+    
     static constexpr int log_warning_period = 10000;
 
     static const std::chrono::microseconds default_slow_query_duraion_threshold;
@@ -8477,61 +8424,61 @@ public:
     } stats;
 
 private:
-    // A number of currently active tracing sessions
+    
     uint64_t _active_sessions = 0;
 
-    // Below are 3 counters that describe the total amount of tracing records on
-    // this shard. Each counter describes a state in which a record may be.
-    //
-    // Each record may only be in a specific state at every point of time and
-    // thereby it must be accounted only in one and only one of the three
-    // counters below at any given time.
-    //
-    // The sum of all three counters should not be greater than
-    // (max_pending_trace_records + write_event_records_threshold) at any time
-    // (actually it can get as high as a value above plus (max_pending_sessions)
-    // if all sessions are primary but we won't take this into an account for
-    // simplicity).
-    //
-    // The same is about the number of outstanding sessions: it may not be
-    // greater than (max_pending_sessions + write_event_sessions_threshold) at
-    // any time.
-    //
-    // If total number of tracing records is greater or equal to the limit
-    // above, the new trace point is going to be dropped.
-    //
-    // If current number or records plus the expected number of trace records
-    // per session (exp_trace_events_per_session) is greater than the limit
-    // above new sessions will be dropped. A new session will also be dropped if
-    // there are too many active sessions.
-    //
-    // When the record or a session is dropped the appropriate statistics
-    // counters are updated and there is a rate-limited warning message printed
-    // to the log.
-    //
-    // Every time a number of records pending for write is greater or equal to
-    // (write_event_records_threshold) or a number of sessions pending for
-    // write is greater or equal to (write_event_sessions_threshold) a write
-    // event is issued.
-    //
-    // Every 2 seconds a timer would write all pending for write records
-    // available so far.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
-    // Total number of records cached in the active sessions that are not going
-    // to be written in the next write event
+    
+    
     uint64_t _cached_records = 0;
-    // Total number of records that are currently being written to I/O
+    
     uint64_t _flushing_records = 0;
-    // Total number of records in the _pending_for_write_records_bulk. All of
-    // them are going to be written to the I/O during the next write event.
+    
+    
     uint64_t _pending_for_write_records_count = 0;
 
     records_bulk _pending_for_write_records_bulk;
     timer<lowres_clock> _write_timer;
-    // _down becomes FALSE after the local service is fully initialized and
-    // tracing records are allowed to be created and collected. It becomes TRUE
-    // after the shutdown() call and prevents further write attempts to I/O
-    // backend.
+    
+    
+    
+    
     bool _down = true;
     bool _slow_query_logging_enabled = false;
     std::unique_ptr<i_tracing_backend_helper> _tracing_backend_helper_ptr;
@@ -8539,7 +8486,7 @@ private:
     const backend_registry& _backend_registry;
     sstring _tracing_backend_helper_class_name;
     seastar::metrics::metric_groups _metrics;
-    double _trace_probability = 0.0; // keep this one for querying purposes
+    double _trace_probability = 0.0; 
     uint64_t _normalized_trace_probability = 0;
     std::ranlux48_base _gen;
     std::chrono::microseconds _slow_query_duration_threshold;
@@ -8559,7 +8506,7 @@ public:
     }
 
     static seastar::sharded<tracing>& tracing_instance() {
-        // FIXME: leaked intentionally to avoid shutdown problems, see #293
+        
         static seastar::sharded<tracing>* tracing_inst = new seastar::sharded<tracing>();
 
         return *tracing_inst;
@@ -8577,19 +8524,12 @@ public:
     static future<> start_tracing();
     tracing(const backend_registry& br, sstring tracing_backend_helper_class_name);
 
-    // Initialize a tracing backend (e.g. tracing_keyspace or logstash)
+    
     future<> start();
 
     future<> stop();
 
-    /**
-     * Waits until all pending tracing records are flushed to the backend an
-     * shuts down the backend. The following calls to
-     * write_session_record()/write_event_record() methods of a backend instance
-     * should be a NOOP.
-     *
-     * @return a ready future when the shutdown is complete
-     */
+    
     future<> shutdown();
 
     void write_pending_records() {
@@ -8609,23 +8549,10 @@ public:
         _flushing_records -= nr;
     }
 
-    /**
-     * Create a new primary tracing session.
-     *
-     * @param type a tracing session type
-     * @param props trace session properties set
-     *
-     * @return tracing state handle
-     */
+    
     trace_state_ptr create_session(trace_type type, trace_state_props_set props) noexcept;
 
-    /**
-     * Create a new secondary tracing session.
-     *
-     * @param secondary_session_info tracing session info
-     *
-     * @return tracing state handle
-     */
+    
     trace_state_ptr create_session(const trace_info& secondary_session_info) noexcept;
 
     void write_maybe() {
@@ -8639,7 +8566,7 @@ public:
     }
 
     void write_session_records(lw_shared_ptr<one_session_records> records, bool write_now) {
-        // if service is down - drop the records and return
+        
         if (_down) {
             return;
         }
@@ -8647,7 +8574,7 @@ public:
         try {
             schedule_for_write(std::move(records));
         } catch (...) {
-            // OOM: bump up the error counter and ignore
+            
             ++stats.trace_errors;
             return;
         }
@@ -8659,14 +8586,7 @@ public:
         }
     }
 
-    /**
-     * Sets a probability for tracing a CQL request.
-     *
-     * @param p a new tracing probability - a floating point value in a [0,1]
-     *          range. It would effectively define a portion of CQL requests
-     *          initiated on the current Node that will be traced.
-     * @throw std::invalid_argument if @ref p is out of range
-     */
+    
     void set_trace_probability(double p);
     double get_trace_probability() const {
         return _trace_probability;
@@ -8680,20 +8600,15 @@ public:
         return _tracing_backend_helper_ptr->allocate_session_state();
     }
 
-    /**
-     * Checks if there is enough budget for the @param nr new records
-     * @param nr number of new records
-     *
-     * @return TRUE if there is enough budget, FLASE otherwise
-     */
+    
     bool have_records_budget(uint64_t nr = 1) {
-        // We don't want the total amount of pending, active and flushing records to
-        // bypass the maximum number of pending records plus the number of
-        // records that are possibly being written write now.
-        //
-        // If either records are being created too fast or a backend doesn't
-        // keep up we want to start dropping records.
-        // In any case, this should be rare.
+        
+        
+        
+        
+        
+        
+        
         if (_pending_for_write_records_count + _cached_records + _flushing_records + nr > max_pending_trace_records + write_event_records_threshold) {
             return false;
         }
@@ -8717,7 +8632,7 @@ public:
         _pending_for_write_records_bulk.emplace_back(records);
         records->set_pending_for_write();
 
-        // move the current records from a "cached" to "pending for write" state
+        
         auto current_records_num = records->size();
         _cached_records -= current_records_num;
         _pending_for_write_records_count += current_records_num;
@@ -8731,17 +8646,7 @@ public:
         return _slow_query_logging_enabled;
     }
 
-    /**
-     * Set the slow query threshold
-     *
-     * We limit the number of microseconds in the threshold by a maximal unsigned 32-bit
-     * integer.
-     *
-     * If a new threshold value exceeds the above limitation we will override it
-     * with the value based on a limit above.
-     *
-     * @param new_threshold new threshold value
-     */
+    
     void set_slow_query_threshold(std::chrono::microseconds new_threshold) {
         if (new_threshold.count() > std::numeric_limits<uint32_t>::max()) {
             _slow_query_duration_threshold = std::chrono::microseconds(std::numeric_limits<uint32_t>::max());
@@ -8755,17 +8660,7 @@ public:
         return _slow_query_duration_threshold;
     }
 
-    /**
-     * Set the slow query record TTL
-     *
-     * We limit the number of seconds in the TTL by a maximal signed 32-bit
-     * integer.
-     *
-     * If a new TTL value exceeds the above limitation we will override it
-     * with the value based on a limit above.
-     *
-     * @param new_ttl new TTL
-     */
+    
     void set_slow_query_record_ttl(std::chrono::seconds new_ttl) {
         if (new_ttl.count() > std::numeric_limits<int32_t>::max()) {
             _slow_query_record_ttl = std::chrono::seconds(std::numeric_limits<int32_t>::max());
@@ -8782,13 +8677,9 @@ public:
 private:
     void write_timer_callback();
 
-    /**
-     * Check if we may create a new tracing session.
-     *
-     * @return TRUE if conditions are allowing creating a new tracing session
-     */
+    
     bool may_create_new_session(const std::optional<utils::UUID>& session_id = std::nullopt) {
-        // Don't create a session if its records are likely to be dropped
+        
         if (!have_records_budget(exp_trace_events_per_session) || _active_sessions >= max_pending_sessions + write_event_sessions_threshold) {
             if (session_id) {
                 tracing_logger.trace("{}: Too many outstanding tracing records or sessions. Dropping a secondary session", *session_id);
@@ -8823,7 +8714,7 @@ void one_session_records::data_consumed() {
 }
 
 inline span_id span_id::make_span_id() {
-    // make sure the value is always greater than 0
+    
     return 1 + (tracing::get_local_tracing_instance().get_next_rand_uint64() << 1);
 }
 }
@@ -8846,23 +8737,23 @@ extern const clustering_range full_clustering_range;
 
 typedef std::vector<clustering_range> clustering_row_ranges;
 
-/// Trim the clustering ranges.
-///
-/// Equivalent of intersecting each clustering range with [pos, +inf) position
-/// in partition range, or (-inf, pos] position in partition range if
-/// reversed == true. Ranges that do not intersect are dropped. Ranges that
-/// partially overlap are trimmed.
-/// Result: each range will overlap fully with [pos, +inf), or (-int, pos] if
-/// reversed is true.
+
+
+
+
+
+
+
+
 void trim_clustering_row_ranges_to(const schema& s, clustering_row_ranges& ranges, position_in_partition_view pos, bool reversed = false);
 
-/// Trim the clustering ranges.
-///
-/// Equivalent of intersecting each clustering range with (key, +inf) clustering
-/// range, or (-inf, key) clustering range if reversed == true. Ranges that do
-/// not intersect are dropped. Ranges that partially overlap are trimmed.
-/// Result: each range will overlap fully with (key, +inf), or (-int, key) if
-/// reversed is true.
+
+
+
+
+
+
+
 void trim_clustering_row_ranges_to(const schema& s, clustering_row_ranges& ranges, const clustering_key& key, bool reversed = false);
 
 class specific_ranges {
@@ -8870,9 +8761,9 @@ class specific_ranges {
 
 constexpr auto max_rows = std::numeric_limits<uint32_t>::max();
 
-// Specifies subset of rows, columns and cell attributes to be returned in a query.
-// Can be accessed across cores.
-// Schema-dependent.
+
+
+
 class partition_slice {
 public:
     enum class option {
@@ -8887,9 +8778,9 @@ public:
         allow_short_read,
         with_digest,
         bypass_cache,
-        // Normally, we don't return static row if the request has clustering
-        // key restrictions and the partition doesn't have any rows matching
-        // the restrictions, see #589. This flag overrides this behavior.
+        
+        
+        
         always_return_static_content,
     };
     using option_set = enum_set<super_enum<option,
@@ -8920,7 +8811,7 @@ public:
     const clustering_row_ranges& row_ranges(const schema&, const partition_key&) const;
     void set_range(const schema&, const partition_key&, clustering_row_ranges);
     void clear_range(const schema&, const partition_key&);
-    void clear_ranges();    // FIXME: possibly make this function return a const ref instead.
+    void clear_ranges();    
     clustering_row_ranges get_all_ranges() const;
 
     const clustering_row_ranges& default_row_ranges() const;
@@ -8964,8 +8855,8 @@ public:
     bool is_before_key() const;
     bool is_after_key() const;
 private:
-    // Returns placement of this position_in_partition relative to *_ck,
-    // or lexicographical_relation::at_prefix if !_ck.
+    
+    
     lexicographical_relation relation() const;
 public:
     struct partition_start_tag_t { };
@@ -9007,16 +8898,16 @@ public:
     bool is_clustering_row() const;
     bool has_clustering_key() const;
 
-    // Returns true if all fragments that can be seen for given schema have
-    // positions >= than this. partition_start is ignored.
+    
+    
     bool is_before_all_fragments(const schema& s) const;
 
     bool is_after_all_clustered_rows(const schema& s) const;
 
-    // Valid when >= before_all_clustered_rows()
+    
     const clustering_key_prefix& key() const;
 
-    // Can be called only when !is_static_row && !is_clustering_row().
+    
     bound_view as_start_bound_view() const;
 
     bound_view as_end_bound_view() const;
@@ -9069,9 +8960,9 @@ public:
 
     static position_in_partition after_key(clustering_key ck);
 
-    // If given position is a clustering row position, returns a position
-    // right after it. Otherwise returns it unchanged.
-    // The position "pos" must be a clustering position.
+    
+    
+    
     static position_in_partition after_key(position_in_partition_view pos);
 
     static position_in_partition for_key(clustering_key ck);
@@ -9100,18 +8991,18 @@ public:
     const clustering_key_prefix& key() const;
     operator position_in_partition_view() const;
 
-    // Defines total order on the union of position_and_partition and composite objects.
-    //
-    // The ordering is compatible with position_range (r). The following is satisfied for
-    // all cells with name c included by the range:
-    //
-    //   r.start() <= c < r.end()
-    //
-    // The ordering on composites given by this is compatible with but weaker than the cell name order.
-    //
-    // The ordering on position_in_partition given by this is compatible but weaker than the ordering
-    // given by position_in_partition::tri_compare.
-    //
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     class composite_tri_compare {
     public:
         static int rank(partition_region t);
@@ -9124,7 +9015,7 @@ public:
         int operator()(composite_view a, position_in_partition_view b) const;
     };
 
-    // Less comparator giving the same order as composite_tri_compare.
+    
     class composite_less_compare {
     public:
         composite_less_compare(const schema& s);
@@ -9162,12 +9053,12 @@ public:
     friend std::ostream& operator<<(std::ostream&, const position_in_partition&);
 };
 
-// Returns true if and only if there can't be any clustering_row with position > a and < b.
-// It is assumed that a <= b.
+
+
 bool no_clustering_row_between(const schema& s, position_in_partition_view a, position_in_partition_view b);
 
-// Includes all position_in_partition objects "p" for which: start <= p < end
-// And only those.
+
+
 class position_range {
 public:
     static position_range from_range(const query::clustering_range&);
@@ -9183,8 +9074,8 @@ public:
     position_range(const position_range&) = default;
     position_range& operator=(const position_range&) = default;
 
-    // Constructs position_range which covers the same rows as given clustering_range.
-    // position_range includes a fragment if it includes position of that fragment.
+    
+    
     position_range(const query::clustering_range&);
     position_range(query::clustering_range&&);
 
@@ -9206,7 +9097,7 @@ class clustering_interval_set;
 
 namespace utils {
 
-// Facilitates transparently reading from a fragmented range.
+
 template<typename T, typename Exception = std::runtime_error>
 GCC6_CONCEPT(
     requires FragmentRange<T>
@@ -9220,8 +9111,8 @@ private:
     iterator _end;
     fragment_type _current;
     size_t _size;
-    // We need stable addresses for the `bytes`, which, due to the small
-    // value optimization, can invalidate any attached bytes_view on move.
+    
+    
     std::list<bytes> _linearized_values;
 
 private:
@@ -9270,7 +9161,7 @@ public:
         , _current(*_it)
         , _size(fr.size_bytes()) {
     }
-    // Not cheap to copy, would copy all linearized values.
+    
     linearizing_input_stream(const linearizing_input_stream&) = delete;
 
     size_t size() const {
@@ -9281,7 +9172,7 @@ public:
         return _size == 0;
     }
 
-    // The returned view is only valid as long as the stream is alive.
+    
     bytes_view read(size_t size) {
         return do_read(size).first;
     }
@@ -9307,7 +9198,7 @@ public:
     }
 };
 
-} // namespace utils
+} 
 
 class abstract_type;
 class bytes_ostream;
@@ -9316,59 +9207,59 @@ class row_tombstone;
 
 class collection_mutation;
 
-// An auxiliary struct used to (de)construct collection_mutations.
-// Unlike collection_mutation which is a serialized blob, this struct allows to inspect logical units of information
-// (tombstone and cells) inside the mutation easily.
+
+
+
 struct collection_mutation_description {
     tombstone tomb;
-    // FIXME: use iterators?
-    // we never iterate over `cells` more than once, so there is no need to store them in memory.
-    // In some cases instead of constructing the `cells` vector, it would be more efficient to provide
-    // a one-time-use forward iterator which returns the cells.
+    
+    
+    
+    
     utils::chunked_vector<std::pair<bytes, atomic_cell>> cells;
 
-    // Expires cells based on query_time. Expires tombstones based on max_purgeable and gc_before.
-    // Removes cells covered by tomb or this->tomb.
+    
+    
     bool compact_and_expire(column_id id, row_tombstone tomb, gc_clock::time_point query_time,
         can_gc_fn&, gc_clock::time_point gc_before, compaction_garbage_collector* collector = nullptr);
 
-    // Packs the data to a serialized blob.
+    
     collection_mutation serialize(const abstract_type&) const;
 };
 
-// Similar to collection_mutation_description, except that it doesn't store the cells' data, only observes it.
+
 struct collection_mutation_view_description {
     tombstone tomb;
-    // FIXME: use iterators? See the fixme in collection_mutation_description; the same considerations apply here.
+    
     utils::chunked_vector<std::pair<bytes_view, atomic_cell_view>> cells;
 
-    // Copies the observed data, storing it in a collection_mutation_description.
+    
     collection_mutation_description materialize(const abstract_type&) const;
 
-    // Packs the data to a serialized blob.
+    
     collection_mutation serialize(const abstract_type&) const;
 };
 
 using collection_mutation_input_stream = struct {};
 
-// Given a linearized collection_mutation_view, returns an auxiliary struct allowing the inspection of each cell.
-// The struct is an observer of the data given by the collection_mutation_view and is only valid while the
-// passed in `collection_mutation_input_stream` is alive.
-// The function needs to be given the type of stored data to reconstruct the structural information.
+
+
+
+
 collection_mutation_view_description deserialize_collection_mutation(const abstract_type&, collection_mutation_input_stream&);
 
 class collection_mutation_view {
 public:
 
-    // Is this a noop mutation?
+    
     bool is_empty() const;
 
-    // Is any of the stored cells live (not deleted nor expired) at the time point `tp`,
-    // given the later of the tombstones `t` and the one stored in the mutation (if any)?
-    // Requires a type to reconstruct the structural information.
+    
+    
+    
     bool is_any_live(const abstract_type&, tombstone t = tombstone(), gc_clock::time_point tp = gc_clock::time_point::min()) const;
 
-    // The maximum of timestamps of the mutation's cells and tombstone.
+    
     api::timestamp_type last_update(const abstract_type&) const;
 
 
@@ -9382,15 +9273,15 @@ public:
     };
 };
 
-// A serialized mutation of a collection of cells.
-// Used to represent mutations of collections (lists, maps, sets) or non-frozen user defined types.
-// It contains a sequence of cells, each representing a mutation of a single entry (element or field) of the collection.
-// Each cell has an associated 'key' (or 'path'). The meaning of each (key, cell) pair is:
-//  for sets: the key is the serialized set element, the cell contains no data (except liveness information),
-//  for maps: the key is the serialized map element's key, the cell contains the serialized map element's value,
-//  for lists: the key is a timeuuid identifying the list entry, the cell contains the serialized value,
-//  for user types: the key is an index identifying the field, the cell contains the value of the field.
-//  The mutation may also contain a collection-wide tombstone.
+
+
+
+
+
+
+
+
+
 class collection_mutation {
 public:
 
@@ -9404,18 +9295,18 @@ collection_mutation merge(const abstract_type&, collection_mutation_view, collec
 
 collection_mutation difference(const abstract_type&, collection_mutation_view, collection_mutation_view);
 
-// Serializes the given collection of cells to a sequence of bytes ready to be sent over the CQL protocol.
+
 bytes serialize_for_cql(const abstract_type&, collection_mutation_view, cql_serialization_format);
 
 
-// A variant type that can hold either an atomic_cell, or a serialized collection.
-// Which type is stored is determined by the schema.
+
+
 class atomic_cell_or_collection final {
-    // FIXME: This has made us lose small-buffer optimisation. Unfortunately,
-    // due to the changed cell format it would be less effective now, anyway.
-    // Measure the actual impact because any attempts to fix this will become
-    // irrelevant once rows are converted to the IMR as well, so maybe we can
-    // live with this like that.
+    
+    
+    
+    
+    
 public:
     atomic_cell_or_collection() = default;
     atomic_cell_or_collection(atomic_cell_or_collection&&) = default;
@@ -9458,27 +9349,27 @@ void swap(atomic_cell_or_collection& a, atomic_cell_or_collection& b) noexcept;
 namespace query {
 
 enum class digest_algorithm : uint8_t {
-    none = 0,  // digest not required
+    none = 0,  
     MD5 = 1,
-    xxHash = 2,// default algorithm
+    xxHash = 2,
 };
 
 }
 
 namespace query {
 
-// result_memory_limiter, result_memory_accounter and result_memory_tracker
-// form an infrastructure for limiting size of query results.
-//
-// result_memory_limiter is a shard-local object which ensures that all results
-// combined do not use more than 10% of the shard memory.
-//
-// result_memory_accounter is used by result producers, updates the shard-local
-// limits as well as keeps track of the individual maximum result size limit
-// which is 1 MB.
-//
-// result_memory_tracker is just an object that makes sure the
-// result_memory_limiter is notified when memory is released (but not sooner).
+
+
+
+
+
+
+
+
+
+
+
+
 
 class result_memory_accounter;
 
@@ -9501,30 +9392,30 @@ public:
         return _maximum_total_result_memory - _memory_limiter.available_units();
     }
 
-    // Reserves minimum_result_size and creates new memory accounter for
-    // mutation query. Uses the specified maximum result size and may be
-    // stopped before reaching it due to memory pressure on shard.
+    
+    
+    
     future<result_memory_accounter> new_mutation_read(size_t max_result_size);
 
-    // Reserves minimum_result_size and creates new memory accounter for
-    // data query. Uses the specified maximum result size, result will *not*
-    // be stopped due to on shard memory pressure in order to avoid digest
-    // mismatches.
+    
+    
+    
+    
     future<result_memory_accounter> new_data_read(size_t max_result_size);
 
-    // Creates a memory accounter for digest reads. Such accounter doesn't
-    // contribute to the shard memory usage, but still stops producing the
-    // result after individual limit has been reached.
+    
+    
+    
     future<result_memory_accounter> new_digest_read(size_t max_result_size);
 
-    // Checks whether the result can grow any more, takes into account only
-    // the per shard limit.
+    
+    
     stop_iteration check() const {
         return stop_iteration(_memory_limiter.current() <= 0);
     }
 
-    // Consumes n bytes from memory limiter and checks whether the result
-    // can grow any more (considering just the per-shard limit).
+    
+    
     stop_iteration update_and_check(size_t n) {
         _memory_limiter.consume(n);
         return check();
@@ -9558,8 +9449,8 @@ class result_memory_accounter {
     size_t _maximum_result_size = 0;
     stop_iteration _stop_on_global_limit;
 private:
-    // Mutation query accounter. Uses provided individual result size limit and
-    // will stop when shard memory pressure grows too high.
+    
+    
     struct mutation_query_tag { };
     explicit result_memory_accounter(mutation_query_tag, result_memory_limiter& limiter, size_t max_size) noexcept
         : _limiter(&limiter)
@@ -9568,8 +9459,8 @@ private:
         , _stop_on_global_limit(true)
     { }
 
-    // Data query accounter. Uses provided individual result size limit and
-    // will *not* stop even though shard memory pressure grows too high.
+    
+    
     struct data_query_tag { };
     explicit result_memory_accounter(data_query_tag, result_memory_limiter& limiter, size_t max_size) noexcept
         : _limiter(&limiter)
@@ -9577,9 +9468,9 @@ private:
         , _maximum_result_size(max_size)
     { }
 
-    // Digest query accounter. Uses provided individual result size limit and
-    // will *not* stop even though shard memory pressure grows too high. This
-    // accounter does not contribute to the shard memory limits.
+    
+    
+    
     struct digest_query_tag { };
     explicit result_memory_accounter(digest_query_tag, result_memory_limiter&, size_t max_size) noexcept
         : _blocked_bytes(0)
@@ -9615,9 +9506,9 @@ public:
 
     size_t used_memory() const { return _used_memory; }
 
-    // Consume n more bytes for the result. Returns stop_iteration::yes if
-    // the result cannot grow any more (taking into account both individual
-    // and per-shard limits).
+    
+    
+    
     stop_iteration update_and_check(size_t n) {
         _used_memory += n;
         _total_used_memory += n;
@@ -9630,7 +9521,7 @@ public:
         return stop;
     }
 
-    // Checks whether the result can grow any more.
+    
     stop_iteration check() const {
         stop_iteration stop { _total_used_memory > result_memory_limiter::maximum_result_size };
         if (!stop && _used_memory >= _blocked_bytes && _limiter) {
@@ -9639,7 +9530,7 @@ public:
         return stop;
     }
 
-    // Consume n more bytes for the result.
+    
     void update(size_t n) {
         update_and_check(n);
     }
@@ -9705,41 +9596,41 @@ public:
     }
 };
 
-//
-// The query results are stored in a serialized form. This is in order to
-// address the following problems, which a structured format has:
-//
-//   - high level of indirection (vector of vectors of vectors of blobs), which
-//     is not CPU cache friendly
-//
-//   - high allocation rate due to fine-grained object structure
-//
-// On replica side, the query results are probably going to be serialized in
-// the transport layer anyway, so serializing the results up-front doesn't add
-// net work. There is no processing of the query results on replica other than
-// concatenation in case of range queries and checksum calculation. If query
-// results are collected in serialized form from different cores, we can
-// concatenate them without copying by simply appending the fragments into the
-// packet.
-//
-// On coordinator side, the query results would have to be parsed from the
-// transport layer buffers anyway, so the fact that iterators parse it also
-// doesn't add net work, but again saves allocations and copying. The CQL
-// server doesn't need complex data structures to process the results, it just
-// goes over it linearly consuming it.
-//
-// The coordinator side could be optimized even further for CQL queries which
-// do not need processing (eg. select * from cf where ...). We could make the
-// replica send the query results in the format which is expected by the CQL
-// binary protocol client. So in the typical case the coordinator would just
-// pass the data using zero-copy to the client, prepending a header.
-//
-// Users which need more complex structure of query results can convert this
-// to query::result_set.
-//
-// Related headers:
-//  - query-result-reader.hh
-//  - query-result-writer.hh
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 struct short_read_tag { };
 using short_read = bool_class<short_read_tag>;
@@ -9850,14 +9741,14 @@ public:
             : range_tombstone(start.prefix(), start.kind(), end.prefix(), end.kind(), std::move(tomb))
     { }
 
-    // Can be called only when both start and end are !is_static_row && !is_clustering_row().
+    
     range_tombstone(position_in_partition_view start, position_in_partition_view end, tombstone tomb)
             : range_tombstone(start.as_start_bound_view(), end.as_end_bound_view(), tomb)
     {}
     range_tombstone(clustering_key_prefix&& start, clustering_key_prefix&& end, tombstone tomb)
             : range_tombstone(std::move(start), bound_kind::incl_start, std::move(end), bound_kind::incl_end, std::move(tomb))
     { }
-    // IDL constructor
+    
     range_tombstone(clustering_key_prefix&& start, tombstone tomb, bound_kind start_kind, clustering_key_prefix&& end, bound_kind end_kind)
             : range_tombstone(std::move(start), start_kind, std::move(end), end_kind, std::move(tomb))
     { }
@@ -9891,7 +9782,7 @@ public:
     const bound_view end_bound() const {
         return bound_view(end, end_kind);
     }
-    // Range tombstone covers all rows with positions p such that: position() <= p < end_position()
+    
     position_in_partition_view position() const;
     position_in_partition_view end_position() const;
     bool empty() const {
@@ -9928,22 +9819,22 @@ public:
             && end_kind == bound_kind::incl_end && start.equal(s, end);
     }
 
-    // Applies src to this. The tombstones may be overlapping.
-    // If the tombstone with larger timestamp has the smaller range the remainder
-    // is returned, it guaranteed not to overlap with this.
-    // The start bounds of this and src are required to be equal. The start bound
-    // of this is not changed. The start bound of the remainder (if there is any)
-    // is larger than the end bound of this.
+    
+    
+    
+    
+    
+    
     std::optional<range_tombstone> apply(const schema& s, range_tombstone&& src);
 
-    // Intersects the range of this tombstone with [pos, +inf) and replaces
-    // the range of the tombstone if there is an overlap.
-    // Returns true if there is an overlap. When returns false, the tombstone
-    // is not modified.
-    //
-    // pos must satisfy:
-    //   1) before_all_clustered_rows() <= pos
-    //   2) !pos.is_clustering_row() - because range_tombstone bounds can't represent such positions
+    
+    
+    
+    
+    
+    
+    
+    
     bool trim_front(const schema& s, position_in_partition_view pos) {
         position_in_partition::less_compare less(s);
         if (!less(pos, end_position())) {
@@ -9955,7 +9846,7 @@ public:
         return true;
     }
 
-    // Assumes !pos.is_clustering_row(), because range_tombstone bounds can't represent such positions
+    
     void set_start(const schema& s, position_in_partition_view pos) {
         bound_view new_start = pos.as_start_bound_view();
         start = new_start.prefix();
@@ -9979,7 +9870,7 @@ private:
     }
     void update_node(bi::set_member_hook<bi::link_mode<bi::auto_unlink>>& other_link) {
         if (other_link.is_linked()) {
-            // Move the link in case we're being relocated by LSA.
+            
             container_type::node_algorithms::replace_node(other_link.this_ptr(), _link.this_ptr());
             container_type::node_algorithms::init(other_link.this_ptr());
         }
@@ -9991,8 +9882,8 @@ struct appending_hash<range_tombstone>  {
     template<typename Hasher>
     void operator()(Hasher& h, const range_tombstone& value, const schema& s) const {
         feed_hash(h, value.start, s);
-        // For backward compatibility, don't consider new fields if
-        // this could be an old-style, overlapping, range tombstone.
+        
+        
         if (!value.start.equal(s, value.end) || value.start_kind != bound_kind::incl_start || value.end_kind != bound_kind::incl_end) {
             feed_hash(h, value.start_kind);
             feed_hash(h, value.end, s);
@@ -10002,28 +9893,28 @@ struct appending_hash<range_tombstone>  {
     }
 };
 
-// The accumulator expects the incoming range tombstones and clustered rows to
-// follow the ordering used by the mutation readers.
-//
-// Unless the accumulator is in the reverse mode, after apply(rt) or
-// tombstone_for_row(ck) are called there are followng restrictions for
-// subsequent calls:
-//  - apply(rt1) can be invoked only if rt.start_bound() < rt1.start_bound()
-//    and ck < rt1.start_bound()
-//  - tombstone_for_row(ck1) can be invoked only if rt.start_bound() < ck1
-//    and ck < ck1
-//
-// In other words position in partition of the mutation fragments passed to the
-// accumulator must be increasing.
-//
-// If the accumulator was created with the reversed flag set it expects the
-// stream of the range tombstone to come from a reverse partitions and follow
-// the ordering that they use. In particular, the restrictions from non-reversed
-// mode change to:
-//  - apply(rt1) can be invoked only if rt.end_bound() > rt1.end_bound() and
-//    ck > rt1.end_bound()
-//  - tombstone_for_row(ck1) can be invoked only if rt.end_bound() > ck1 and
-//    ck > ck1.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class range_tombstone_accumulator {
     bound_view::compare _cmp;
     tombstone _partition_tombstone;
@@ -10072,36 +9963,36 @@ public:
 class row_marker;
 class row_tombstone;
 
-// When used on an entry, marks the range between this entry and the previous
-// one as continuous or discontinuous, excluding the keys of both entries.
-// This information doesn't apply to continuity of the entries themselves,
-// that is specified by is_dummy flag.
-// See class doc of mutation_partition.
+
+
+
+
+
 using is_continuous = bool_class<class continuous_tag>;
 
-// Dummy entry is an entry which is incomplete.
-// Typically used for marking bounds of continuity range.
-// See class doc of mutation_partition.
+
+
+
 class dummy_tag {};
 using is_dummy = bool_class<dummy_tag>;
 
-// Guarantees:
-//
-// - any tombstones which affect cell's liveness are visited before that cell
-//
-// - rows are visited in ascending order with respect to their keys
-//
-// - row header (accept_row) is visited before that row's cells
-//
-// - row tombstones are visited in ascending order with respect to their key prefixes
-//
-// - cells in given row are visited in ascending order with respect to their column IDs
-//
-// - static row is visited before any clustered row
-//
-// - for each column in a row only one variant of accept_(static|row)_cell() is called, appropriate
-//   for column's kind (atomic or collection).
-//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class mutation_partition_visitor {
 public:
     virtual void accept_partition_tombstone(tombstone) = 0;
@@ -10163,7 +10054,7 @@ public:
     virtual void accept_row_cell(column_id, collection_mutation_view cmv) = 0;
 };
 
-// View on serialized mutation partition. See mutation_partition_serializer.
+
 class mutation_partition_view {
     utils::input_stream _in;
 private:
@@ -10403,8 +10294,8 @@ public:
         }
     }
 
-    // Returns the amount of external memory used to hold inserted items.
-    // Ignores reserved space.
+    
+    
     size_t used_space_external_memory_usage() const {
         if (is_external()) {
             return sizeof(external) + _size * sizeof(T);
@@ -10478,7 +10369,7 @@ class range_tombstone_list final {
 private:
     range_tombstones_type _tombstones;
 public:
-    // ForwardIterator<range_tombstone>
+    
     using iterator = range_tombstones_type::iterator;
     using const_iterator = range_tombstones_type::const_iterator;
 
@@ -10529,30 +10420,30 @@ public:
         nop_reverter rev(s, *this);
         apply_reversibly(s, std::move(start), start_kind, std::move(end), end_kind, std::move(tomb), rev);
     }
-    // Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
+    
     void apply_monotonically(const schema& s, const range_tombstone& rt);
-    // Merges another list with this object.
-    // Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
+    
+    
     void apply_monotonically(const schema& s, const range_tombstone_list& list);
-    /// Merges another list with this object.
-    /// The other list must be governed by the same allocator as this object.
-    ///
-    /// Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
-    /// The other list will be left in a state such that it would still commute with this object to the same state as it
-    /// would if the call didn't fail.
+    
+    
+    
+    
+    
+    
     stop_iteration apply_monotonically(const schema& s, range_tombstone_list&& list, is_preemptible = is_preemptible::no);
 public:
     tombstone search_tombstone_covering(const schema& s, const clustering_key_prefix& key) const;
-    // Returns range of tombstones which overlap with given range
+    
     boost::iterator_range<const_iterator> slice(const schema& s, const query::clustering_range&) const;
-    // Returns range tombstones which overlap with [start, end)
+    
     boost::iterator_range<const_iterator> slice(const schema& s, position_in_partition_view start, position_in_partition_view end) const;
     iterator erase(const_iterator, const_iterator);
-    // Ensures that every range tombstone is strictly contained within given clustering ranges.
-    // Preserves all information which may be relevant for rows from that ranges.
+    
+    
     void trim(const schema& s, const query::clustering_row_ranges&);
     range_tombstone_list difference(const schema& s, const range_tombstone_list& rt_list) const;
-    // Erases the range tombstones for which filter returns true.
+    
     template <typename Pred>
     void erase_where(Pred filter) {
         static_assert(std::is_same<bool, std::result_of_t<Pred(const range_tombstone&)>>::value,
@@ -10569,11 +10460,11 @@ public:
     void clear() {
         _tombstones.clear_and_dispose(current_deleter<range_tombstone>());
     }
-    // Removes elements of this list in batches.
-    // Returns stop_iteration::yes iff there is no more elements to remove.
+    
+    
     stop_iteration clear_gently() noexcept;
     void apply(const schema& s, const range_tombstone_list& rt_list);
-    // See reversibly_mergeable.hh
+    
     reverter apply_reversibly(const schema& s, range_tombstone_list& rt_list);
 
     friend std::ostream& operator<<(std::ostream& out, const range_tombstone_list&);
@@ -10610,19 +10501,19 @@ public:
 template<typename T>
 class managed;
 
-//
-// Similar to std::unique_ptr<>, but for LSA-allocated objects. Remains
-// valid across deferring points. See make_managed().
-//
-// std::unique_ptr<> can't be used with LSA-allocated objects because
-// it assumes that the object doesn't move after being allocated. This
-// is not true for LSA, which moves objects during compaction.
-//
-// Also works for objects allocated using standard allocators, though
-// there the extra space overhead of a pointer is not justified.
-// It still make sense to use it in places which are meant to work
-// with either kind of allocator.
-//
+
+
+
+
+
+
+
+
+
+
+
+
+
 template<typename T>
 struct managed_ref {
     managed<T>* _ptr;
@@ -10710,10 +10601,10 @@ public:
     }
 };
 
-//
-// Allocates T using given AllocationStrategy and returns a managed_ref owning the
-// allocated object.
-//
+
+
+
+
 template<typename T, typename... Args>
 managed_ref<T>
 make_managed(Args&&... args) {
@@ -10747,15 +10638,15 @@ struct cell_and_hash {
 
 class compaction_garbage_collector;
 
-//
-// Container for cells of a row. Cells are identified by column_id.
-//
-// All cells must belong to a single column_kind. The kind is not stored
-// for space-efficiency reasons. Whenever a method accepts a column_kind,
-// the caller must always supply the same column_kind.
-//
-// Can be used as a range of row::cell_entry.
-//
+
+
+
+
+
+
+
+
+
 class row {
 
     class cell_entry {
@@ -10804,9 +10695,9 @@ private:
     void consume_with(Func&&);
 
 public:
-    // Calls Func(column_id, cell_and_hash&) or Func(column_id, atomic_cell_and_collection&)
-    // for each cell in this row, depending on the concrete Func type.
-    // noexcept if Func doesn't throw.
+    
+    
+    
     template<typename Func>
     void for_each_cell(Func&& func);
 
@@ -10816,30 +10707,30 @@ public:
     template<typename Func>
     void for_each_cell_until(Func&& func) const;
 
-    // Merges cell's value into the row.
-    // Weak exception guarantees.
+    
+    
     void apply(const column_definition& column, const atomic_cell_or_collection& cell, cell_hash_opt hash = cell_hash_opt());
 
-    // Merges cell's value into the row.
-    // Weak exception guarantees.
+    
+    
     void apply(const column_definition& column, atomic_cell_or_collection&& cell, cell_hash_opt hash = cell_hash_opt());
 
-    // Monotonic exception guarantees. In case of exception the sum of cell and this remains the same as before the exception.
+    
     void apply_monotonically(const column_definition& column, atomic_cell_or_collection&& cell, cell_hash_opt hash = cell_hash_opt());
 
-    // Adds cell to the row. The column must not be already set.
+    
     void append_cell(column_id id, atomic_cell_or_collection cell);
 
-    // Weak exception guarantees
+    
     void apply(const schema&, column_kind, const row& src);
-    // Weak exception guarantees
+    
     void apply(const schema&, column_kind, row&& src);
-    // Monotonic exception guarantees
+    
     void apply_monotonically(const schema&, column_kind, row&& src);
 
-    // Expires cells based on query_time. Expires tombstones based on gc_before
-    // and max_purgeable. Removes cells covered by tomb.
-    // Returns true iff there are any live cells left.
+    
+    
+    
     bool compact_and_expire(
             const schema& s,
             column_kind kind,
@@ -10883,7 +10774,7 @@ public:
     friend std::ostream& operator<<(std::ostream& os, const printer& p);
 };
 
-// Like row, but optimized for the case where the row doesn't exist (e.g. static rows)
+
 class lazy_row {
 public:
     lazy_row() = default;
@@ -10904,15 +10795,15 @@ public:
 
     const atomic_cell_or_collection& cell_at(column_id id) const;
 
-    // Returns a pointer to cell's value or nullptr if column is not set.
+    
     const atomic_cell_or_collection* find_cell(column_id id) const;
 
-    // Returns a pointer to cell's value and hash or nullptr if column is not set.
+    
     const cell_and_hash* find_cell_and_hash(column_id id) const;
 
-    // Calls Func(column_id, cell_and_hash&) or Func(column_id, atomic_cell_and_collection&)
-    // for each cell in this row, depending on the concrete Func type.
-    // noexcept if Func doesn't throw.
+    
+    
+    
     template<typename Func>
     void for_each_cell(Func&& func);
 
@@ -10922,33 +10813,33 @@ public:
     template<typename Func>
     void for_each_cell_until(Func&& func) const;
 
-    // Merges cell's value into the row.
-    // Weak exception guarantees.
+    
+    
     void apply(const column_definition& column, const atomic_cell_or_collection& cell, cell_hash_opt hash = cell_hash_opt());
-    // Merges cell's value into the row.
-    // Weak exception guarantees.
+    
+    
     void apply(const column_definition& column, atomic_cell_or_collection&& cell, cell_hash_opt hash = cell_hash_opt());
 
-    // Monotonic exception guarantees. In case of exception the sum of cell and this remains the same as before the exception.
+    
     void apply_monotonically(const column_definition& column, atomic_cell_or_collection&& cell, cell_hash_opt hash = cell_hash_opt());
-    // Adds cell to the row. The column must not be already set.
+    
     void append_cell(column_id id, atomic_cell_or_collection cell);
 
-    // Weak exception guarantees
+    
     void apply(const schema& s, column_kind kind, const row& src);
-    // Weak exception guarantees
+    
     void apply(const schema& s, column_kind kind, const lazy_row& src);
 
-    // Weak exception guarantees
+    
     void apply(const schema& s, column_kind kind, row&& src);
 
-    // Monotonic exception guarantees
+    
     void apply_monotonically(const schema& s, column_kind kind, row&& src);
-    // Monotonic exception guarantees
+    
     void apply_monotonically(const schema& s, column_kind kind, lazy_row&& src);
-    // Expires cells based on query_time. Expires tombstones based on gc_before
-    // and max_purgeable. Removes cells covered by tomb.
-    // Returns true iff there are any live cells left.
+    
+    
+    
     bool compact_and_expire(
             const schema& s,
             column_kind kind,
@@ -11023,28 +10914,28 @@ public:
         }
         return _timestamp > t.timestamp;
     }
-    // Can be called only when !is_missing().
+    
     bool is_dead(gc_clock::time_point now) const {
         if (_ttl == dead) {
             return true;
         }
         return _ttl != no_ttl && _expiry <= now;
     }
-    // Can be called only when is_live().
+    
     bool is_expiring() const {
         return _ttl != no_ttl;
     }
-    // Can be called only when is_expiring().
+    
     gc_clock::duration ttl() const {
         return _ttl;
     }
-    // Can be called only when is_expiring().
+    
     gc_clock::time_point expiry() const {
         return _expiry;
     }
-    // Should be called when is_dead() or is_expiring().
-    // Safe to be called when is_missing().
-    // When is_expiring(), returns the the deletion time of the marker when it finally expires.
+    
+    
+    
     gc_clock::time_point deletion_time() const {
         return _ttl == dead ? _expiry : _expiry - _ttl;
     }
@@ -11056,12 +10947,12 @@ public:
             *this = rm;
         }
     }
-    // Expires cells and tombstones. Removes items covered by higher level
-    // tombstones.
-    // Returns true if row marker is live.
+    
+    
+    
     bool compact_and_expire(tombstone tomb, gc_clock::time_point now,
             can_gc_fn& can_gc, gc_clock::time_point gc_before, compaction_garbage_collector* collector = nullptr);
-    // Consistent with feed_hash()
+    
     bool operator==(const row_marker& other) const {
         if (_timestamp != other._timestamp) {
             return false;
@@ -11077,7 +10968,7 @@ public:
     bool operator!=(const row_marker& other) const {
         return !(*this == other);
     }
-    // Consistent with operator==()
+    
     template<typename Hasher>
     void feed_hash(Hasher& h) const {
         ::feed_hash(h, _timestamp);
@@ -11118,16 +11009,16 @@ public:
         return _tomb;
     }
 
-    // A shadowable row tombstone is valid only if the row has no live marker. In other words,
-    // the row tombstone is only valid as long as no newer insert is done (thus setting a
-    // live row marker; note that if the row timestamp set is lower than the tombstone's,
-    // then the tombstone remains in effect as usual). If a row has a shadowable tombstone
-    // with timestamp Ti and that row is updated with a timestamp Tj, such that Tj > Ti
-    // (and that update sets the row marker), then the shadowable tombstone is shadowed by
-    // that update. A concrete consequence is that if the update has cells with timestamp
-    // lower than Ti, then those cells are preserved (since the deletion is removed), and
-    // this is contrary to a regular, non-shadowable row tombstone where the tombstone is
-    // preserved and such cells are removed.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     bool is_shadowed_by(const row_marker& marker) const {
         return marker.is_live() && marker.timestamp() > _tomb.timestamp;
     }
@@ -11158,21 +11049,10 @@ public:
 };
 
 
-/*
-The rules for row_tombstones are as follows:
-  - The shadowable tombstone is always >= than the regular one;
-  - The regular tombstone works as expected;
-  - The shadowable tombstone doesn't erase or compact away the regular
-    row tombstone, nor dead cells;
-  - The shadowable tombstone can erase live cells, but only provided they
-    can be recovered (e.g., by including all cells in a MV update, both
-    updated cells and pre-existing ones);
-  - The shadowable tombstone can be erased or compacted away by a newer
-    row marker.
-*/
+
 class row_tombstone : public with_relational_operators<row_tombstone> {
     tombstone _regular;
-    shadowable_tombstone _shadowable; // _shadowable is always >= _regular
+    shadowable_tombstone _shadowable; 
 public:
     explicit row_tombstone(tombstone regular, shadowable_tombstone shadowable)
             : _regular(std::move(regular))
@@ -11281,8 +11161,8 @@ public:
         _deleted_at = {};
     }
 
-    // Weak exception guarantees. After exception, both src and this will commute to the same value as
-    // they would should the exception not happen.
+    
+    
     void apply(const schema& s, deletable_row&& src);
     void apply_monotonically(const schema& s, deletable_row&& src);
 public:
@@ -11328,9 +11208,9 @@ public:
     rows_entry(const schema& s, const clustering_key& key, row_tombstone tomb, const row_marker& marker, const row& row);
     rows_entry(rows_entry&& o) noexcept;
     rows_entry(const schema& s, const rows_entry& e);
-    // Valid only if !dummy()
+    
     clustering_key& key();
-    // Valid only if !dummy()
+    
     const clustering_key& key() const;
     deletable_row& row();
     const deletable_row& row() const;
@@ -11386,43 +11266,43 @@ public:
 struct mutation_application_stats {
 };
 
-// Represents a set of writes made to a single partition.
-//
-// The object is schema-dependent. Each instance is governed by some
-// specific schema version. Accessors require a reference to the schema object
-// of that version.
-//
-// There is an operation of addition defined on mutation_partition objects
-// (also called "apply"), which gives as a result an object representing the
-// sum of writes contained in the addends. For instances governed by the same
-// schema, addition is commutative and associative.
-//
-// In addition to representing writes, the object supports specifying a set of
-// partition elements called "continuity". This set can be used to represent
-// lack of information about certain parts of the partition. It can be
-// specified which ranges of clustering keys belong to that set. We say that a
-// key range is continuous if all keys in that range belong to the continuity
-// set, and discontinuous otherwise. By default everything is continuous.
-// The static row may be also continuous or not.
-// Partition tombstone is always continuous.
-//
-// Continuity is ignored by instance equality. It's also transient, not
-// preserved by serialization.
-//
-// Continuity is represented internally using flags on row entries. The key
-// range between two consecutive entries (both ends exclusive) is continuous
-// if and only if rows_entry::continuous() is true for the later entry. The
-// range starting after the last entry is assumed to be continuous. The range
-// corresponding to the key of the entry is continuous if and only if
-// rows_entry::dummy() is false.
-//
-// Adding two fully-continuous instances gives a fully-continuous instance.
-// Continuity doesn't affect how the write part is added.
-//
-// Addition of continuity is not commutative in general, but is associative.
-// The default continuity merging rules are those required by MVCC to
-// preserve its invariants. For details, refer to "Continuity merging rules" section
-// in the doc in partition_version.hh.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class mutation_partition final {
 public:
     friend class rows_entry;
@@ -11431,7 +11311,7 @@ public:
 public:
     struct copy_comparators_only {};
     struct incomplete_tag {};
-    // Constructs an empty instance which is fully discontinuous except for the partition tombstone.
+    
     mutation_partition(incomplete_tag, const schema& s, tombstone);
     static mutation_partition make_incomplete(const schema& s, tombstone t = {});
     mutation_partition(schema_ptr s);
@@ -11445,7 +11325,7 @@ public:
     bool equal(const schema&, const mutation_partition&) const;
     bool equal(const schema& this_schema, const mutation_partition& p, const schema& p_schema) const;
     bool equal_continuity(const schema&, const mutation_partition&) const;
-    // Consistent with equal()
+    
     template<typename Hasher>
     void feed_hash(Hasher& h, const schema& s) const;
 
@@ -11459,82 +11339,82 @@ public:
     };
     friend std::ostream& operator<<(std::ostream& os, const printer& p);
 public:
-    // Makes sure there is a dummy entry after all clustered rows. Doesn't affect continuity.
-    // Doesn't invalidate iterators.
+    
+    
     void ensure_last_dummy(const schema&);
     bool static_row_continuous() const;
     void set_static_row_continuous(bool value);
     bool is_fully_continuous() const;
     void make_fully_continuous();
-    // Sets or clears continuity of clustering ranges between existing rows.
+    
     void set_continuity(const schema&, const position_range& pr, is_continuous);
-    // Returns clustering row ranges which have continuity matching the is_continuous argument.
+    
     clustering_interval_set get_continuity(const schema&, is_continuous = is_continuous::yes) const;
-    // Returns true iff all keys from given range are marked as continuous, or range is empty.
+    
     bool fully_continuous(const schema&, const position_range&);
-    // Returns true iff all keys from given range are marked as not continuous and range is not empty.
+    
     bool fully_discontinuous(const schema&, const position_range&);
-    // Returns true iff all keys from given range have continuity membership as specified by is_continuous.
+    
     bool check_continuity(const schema&, const position_range&, is_continuous) const;
-    // Frees elements of the partition in batches.
-    // Returns stop_iteration::yes iff there are no more elements to free.
-    // Continuity is unspecified after this.
+    
+    
+    
     stop_iteration clear_gently(cache_tracker*) noexcept;
-    // Applies mutation_fragment.
-    // The fragment must be goverened by the same schema as this object.
+    
+    
     void apply(const schema& s, const mutation_fragment&);
     void apply(tombstone t);
     void apply_delete(const schema& schema, const clustering_key_prefix& prefix, tombstone t);
     void apply_delete(const schema& schema, range_tombstone rt);
     void apply_delete(const schema& schema, clustering_key_prefix&& prefix, tombstone t);
     void apply_delete(const schema& schema, clustering_key_prefix_view prefix, tombstone t);
-    // Equivalent to applying a mutation with an empty row, created with given timestamp
+    
     void apply_insert(const schema& s, clustering_key_view, api::timestamp_type created_at);
     void apply_insert(const schema& s, clustering_key_view, api::timestamp_type created_at,
                       gc_clock::duration ttl, gc_clock::time_point expiry);
-    // prefix must not be full
+    
     void apply_row_tombstone(const schema& schema, clustering_key_prefix prefix, tombstone t);
     void apply_row_tombstone(const schema& schema, range_tombstone rt);
-    //
-    // Applies p to current object.
-    //
-    // Commutative when this_schema == p_schema. If schemas differ, data in p which
-    // is not representable in this_schema is dropped, thus apply() loses commutativity.
-    //
-    // Weak exception guarantees.
+    
+    
+    
+    
+    
+    
+    
     void apply(const schema& this_schema, const mutation_partition& p, const schema& p_schema,
             mutation_application_stats& app_stats);
-    // Use in case this instance and p share the same schema.
-    // Same guarantees as apply(const schema&, mutation_partition&&, const schema&);
+    
+    
     void apply(const schema& s, mutation_partition&& p, mutation_application_stats& app_stats);
-    // Same guarantees and constraints as for apply(const schema&, const mutation_partition&, const schema&).
+    
     void apply(const schema& this_schema, mutation_partition_view p, const schema& p_schema,
             mutation_application_stats& app_stats);
 
-    // Applies p to this instance.
-    //
-    // Monotonic exception guarantees. In case of exception the sum of p and this remains the same as before the exception.
-    // This instance and p are governed by the same schema.
-    //
-    // Must be provided with a pointer to the cache_tracker, which owns both this and p.
-    //
-    // Returns stop_iteration::no if the operation was preempted before finished, and stop_iteration::yes otherwise.
-    // On preemption the sum of this and p stays the same (represents the same set of writes), and the state of this
-    // object contains at least all the writes it contained before the call (monotonicity). It may contain partial writes.
-    // Also, some progress is always guaranteed (liveness).
-    //
-    // The operation can be drien to completion like this:
-    //
-    //   while (apply_monotonically(..., is_preemtable::yes) == stop_iteration::no) { }
-    //
-    // If is_preemptible::no is passed as argument then stop_iteration::no is never returned.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     stop_iteration apply_monotonically(const schema& s, mutation_partition&& p, cache_tracker*,
             mutation_application_stats& app_stats, is_preemptible = is_preemptible::no);
     stop_iteration apply_monotonically(const schema& s, mutation_partition&& p, const schema& p_schema,
             mutation_application_stats& app_stats, is_preemptible = is_preemptible::no);
 
-    // Weak exception guarantees.
-    // Assumes this and p are not owned by a cache_tracker.
+    
+    
     void apply_weak(const schema& s, const mutation_partition& p, const schema& p_schema,
             mutation_application_stats& app_stats);
     void apply_weak(const schema& s, mutation_partition&&,
@@ -11542,10 +11422,10 @@ public:
     void apply_weak(const schema& s, mutation_partition_view p, const schema& p_schema,
             mutation_application_stats& app_stats);
 
-    // Converts partition to the new schema. When succeeds the partition should only be accessed
-    // using the new schema.
-    //
-    // Strong exception guarantees.
+    
+    
+    
+    
     void upgrade(const schema& old_schema, const schema& new_schema);
 private:
     void insert_row(const schema& s, const clustering_key& key, deletable_row&& row);
@@ -11559,53 +11439,53 @@ private:
         uint32_t row_limit,
         can_gc_fn&);
 
-    // Calls func for each row entry inside row_ranges until func returns stop_iteration::yes.
-    // Removes all entries for which func didn't return stop_iteration::no or wasn't called at all.
-    // Removes all entries that are empty, check rows_entry::empty().
-    // If reversed is true, func will be called on entries in reverse order. In that case row_ranges
-    // must be already in reverse order.
+    
+    
+    
+    
+    
     template<bool reversed, typename Func>
     void trim_rows(const schema& s,
         const std::vector<query::clustering_range>& row_ranges,
         Func&& func);
 public:
-    // Performs the following:
-    //   - throws out data which doesn't belong to row_ranges
-    //   - expires cells and tombstones based on query_time
-    //   - drops cells covered by higher-level tombstones (compaction)
-    //   - leaves at most row_limit live rows
-    //
-    // Note: a partition with a static row which has any cell live but no
-    // clustered rows still counts as one row, according to the CQL row
-    // counting rules.
-    //
-    // Returns the count of CQL rows which remained. If the returned number is
-    // smaller than the row_limit it means that there was no more data
-    // satisfying the query left.
-    //
-    // The row_limit parameter must be > 0.
-    //
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     uint32_t compact_for_query(const schema& s, gc_clock::time_point query_time,
         const std::vector<query::clustering_range>& row_ranges, bool always_return_static_content,
         bool reversed, uint32_t row_limit);
 
-    // Performs the following:
-    //   - expires cells based on compaction_time
-    //   - drops cells covered by higher-level tombstones
-    //   - drops expired tombstones which timestamp is before max_purgeable
+    
+    
+    
+    
     void compact_for_compaction(const schema& s, can_gc_fn&,
         gc_clock::time_point compaction_time);
 
-    // Returns the minimal mutation_partition that when applied to "other" will
-    // create a mutation_partition equal to the sum of other and this one.
-    // This and other must both be governed by the same schema s.
+    
+    
+    
     mutation_partition difference(schema_ptr s, const mutation_partition& other) const;
 
-    // Returns a subset of this mutation holding only information relevant for given clustering ranges.
-    // Range tombstones will be trimmed to the boundaries of the clustering ranges.
+    
+    
     mutation_partition sliced(const schema& s, const query::clustering_row_ranges&) const;
 
-    // Returns true if the mutation_partition represents no writes.
+    
     bool empty() const;
 public:
     deletable_row& clustered_row(const schema& s, const clustering_key& key);
@@ -11616,28 +11496,28 @@ public:
     tombstone partition_tombstone() const;
     lazy_row& static_row();
     const lazy_row& static_row() const;
-    // return a set of rows_entry where each entry represents a CQL row sharing the same clustering key.
+    
     const range_tombstone_list& row_tombstones() const;
     range_tombstone_list& row_tombstones();
     const row* find_row(const schema& s, const clustering_key& key) const;
     tombstone range_tombstone_for_row(const schema& schema, const clustering_key& key) const;
     row_tombstone tombstone_for_row(const schema& schema, const clustering_key& key) const;
-    // Can be called only for non-dummy entries
+    
     row_tombstone tombstone_for_row(const schema& schema, const rows_entry& e) const;
-    // Returns an iterator range of rows_entry, with only non-dummy entries.
-    // Writes this partition using supplied query result writer.
-    // The partition should be first compacted with compact_for_query(), otherwise
-    // results may include data which is deleted/expired.
-    // At most row_limit CQL rows will be written and digested.
+    
+    
+    
+    
+    
     void query_compacted(query::result::partition_writer& pw, const schema& s, uint32_t row_limit) const;
     void accept(const schema&, mutation_partition_visitor&) const;
 
-    // Returns the number of live CQL rows in this partition.
-    //
-    // Note: If no regular rows are live, but there's something live in the
-    // static row, the static row counts as one row. If there is at least one
-    // regular row live, static row doesn't count.
-    //
+    
+    
+    
+    
+    
+    
     size_t live_row_count(const schema&,
         gc_clock::time_point query_time = gc_clock::time_point::min()) const;
 
@@ -11668,15 +11548,15 @@ using timeout_semaphore_units = seastar::semaphore_units<seastar::default_timeou
 static constexpr timeout_clock::time_point no_timeout = timeout_clock::time_point::max();
 }
 
-// mutation_fragments are the objects that streamed_mutation are going to
-// stream. They can represent:
-//  - a static row
-//  - a clustering row
-//  - a range tombstone
-//
-// There exists an ordering (implemented in position_in_partition class) between
-// mutation_fragment objects. It reflects the order in which content of
-// partition appears in the sstables.
+
+
+
+
+
+
+
+
+
 
 class clustering_row {
 public:
@@ -11974,18 +11854,18 @@ public:
 
     position_in_partition_view position() const;
 
-    // Returns the range of positions for which this fragment holds relevant information.
+    
     position_range range() const;
 
-    // Checks if this fragment may be relevant for any range starting at given position.
+    
     bool relevant_for_range(const schema& s, position_in_partition_view pos) const;
 
-    // Like relevant_for_range() but makes use of assumption that pos is greater
-    // than the starting position of this fragment.
+    
+    
     bool relevant_for_range_assuming_after(const schema& s, position_in_partition_view pos) const;
 
     bool has_key() const { return is_clustering_row() || is_range_tombstone(); }
-    // Requirements: has_key() == true
+    
     const clustering_key_prefix& key() const;
 
     kind mutation_fragment_kind() const { return _kind; }
@@ -12026,7 +11906,7 @@ public:
     const partition_start& as_partition_start() const &;
     const partition_end& as_end_of_partition() const &;
 
-    // Requirements: mergeable_with(mf)
+    
     void apply(const schema& s, mutation_fragment&& mf);
 
     template<typename Consumer>
@@ -12073,11 +11953,11 @@ public:
 
     bool equal(const schema& s, const mutation_fragment& other) const;
 
-    // Fragments which have the same position() and are mergeable can be
-    // merged into one fragment with apply() which represents the sum of
-    // writes represented by each of the fragments.
-    // Fragments which have the same position() but are not mergeable
-    // can be emitted one after the other in the stream.
+    
+    
+    
+    
+    
     bool mergeable_with(const mutation_fragment& mf) const;
 
     class printer {
@@ -12100,46 +11980,46 @@ std::ostream& operator<<(std::ostream&, mutation_fragment::kind);
 using mutation_fragment_opt = optimized_optional<mutation_fragment>;
 
 namespace streamed_mutation {
-    // Determines whether streamed_mutation is in forwarding mode or not.
-    //
-    // In forwarding mode the stream does not return all fragments right away,
-    // but only those belonging to the current clustering range. Initially
-    // current range only covers the static row. The stream can be forwarded
-    // (even before end-of- stream) to a later range with fast_forward_to().
-    // Forwarding doesn't change initial restrictions of the stream, it can
-    // only be used to skip over data.
-    //
-    // Monotonicity of positions is preserved by forwarding. That is fragments
-    // emitted after forwarding will have greater positions than any fragments
-    // emitted before forwarding.
-    //
-    // For any range, all range tombstones relevant for that range which are
-    // present in the original stream will be emitted. Range tombstones
-    // emitted before forwarding which overlap with the new range are not
-    // necessarily re-emitted.
-    //
-    // When streamed_mutation is not in forwarding mode, fast_forward_to()
-    // cannot be used.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     class forwarding_tag;
     using forwarding = bool_class<forwarding_tag>;
 }
 
-// range_tombstone_stream is a helper object that simplifies producing a stream
-// of range tombstones and merging it with a stream of clustering rows.
-// Tombstones are added using apply() and retrieved using get_next().
-//
-// get_next(const rows_entry&) and get_next(const mutation_fragment&) allow
-// merging the stream of tombstones with a stream of clustering rows. If these
-// overloads return disengaged optional it means that there is no tombstone
-// in the stream that should be emitted before the object given as an argument.
-// (And, consequently, if the optional is engaged that tombstone should be
-// emitted first). After calling any of these overloads with a mutation_fragment
-// which is at some position in partition P no range tombstone can be added to
-// the stream which start bound is before that position.
-//
-// get_next() overload which doesn't take any arguments is used to return the
-// remaining tombstones. After it was called no new tombstones can be added
-// to the stream.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class range_tombstone_stream {
     const schema& _schema;
     position_in_partition::less_compare _cmp;
@@ -12150,10 +12030,10 @@ public:
     range_tombstone_stream(const schema& s) : _schema(s), _cmp(s), _list(s) { }
     mutation_fragment_opt get_next(const rows_entry&);
     mutation_fragment_opt get_next(const mutation_fragment&);
-    // Returns next fragment with position before upper_bound or disengaged optional if no such fragments are left.
+    
     mutation_fragment_opt get_next(position_in_partition_view upper_bound);
     mutation_fragment_opt get_next();
-    // Forgets all tombstones which are not relevant for any range starting at given position.
+    
     void forward_to(position_in_partition_view);
 
     void apply(range_tombstone&& rt) {
@@ -12162,9 +12042,9 @@ public:
     void apply(const range_tombstone_list& list) {
         _list.apply(_schema, list);
     }
-    // Apply those range tombstones from the list, that overlap with the
-    // range. If `trim_front` is set, range tombstones will be trimmed to the
-    // start of the clustering range.
+    
+    
+    
     void apply(const range_tombstone_list&, const query::clustering_range&, bool trim_front = false);
     void reset();
     bool empty() const;
@@ -12172,8 +12052,8 @@ public:
 };
 
 GCC6_CONCEPT(
-    // F gets a stream element as an argument and returns the new value which replaces that element
-    // in the transformed stream.
+    
+    
     template<typename F>
     concept bool StreamedMutationTranformer() {
         return requires(F f, mutation_fragment mf, schema_ptr s) {
@@ -12205,22 +12085,22 @@ public:
     void set_cell(const clustering_key_prefix& prefix, const bytes& name, const data_value& value, api::timestamp_type timestamp, ttl_opt ttl = {});
     void set_cell(const clustering_key_prefix& prefix, const column_definition& def, atomic_cell_or_collection&& value);
 
-    // Upgrades this mutation to a newer schema. The new schema must
-    // be obtained using only valid schema transformation:
-    //  * primary key column count must not change
-    //  * column types may only change to those with compatible representations
-    //
-    // After upgrade, mutation's partition should only be accessed using the new schema. User must
-    // ensure proper isolation of accesses.
-    //
-    // Strong exception guarantees.
-    //
-    // Note that the conversion may lose information, it's possible that m1 != m2 after:
-    //
-    //   auto m2 = m1;
-    //   m2.upgrade(s2);
-    //   m2.upgrade(m1.schema());
-    //
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     void upgrade(const schema_ptr&);
 
     const partition_key& key() const;
@@ -12231,30 +12111,30 @@ public:
     const mutation_partition& partition() const;
     mutation_partition& partition();
     const utils::UUID& column_family_id() const;
-    // Consistent with hash<canonical_mutation>
+    
     bool operator==(const mutation&) const;
     bool operator!=(const mutation&) const;
 public:
-    // The supplied partition_slice must be governed by this mutation's schema
+    
     query::result query(const query::partition_slice&,
         query::result_options opts = query::result_options::only_result(),
         gc_clock::time_point now = gc_clock::now(),
         uint32_t row_limit = query::max_rows) &&;
 
-    // The supplied partition_slice must be governed by this mutation's schema
-    // FIXME: Slower than the r-value version
+    
+    
     query::result query(const query::partition_slice&,
         query::result_options opts = query::result_options::only_result(),
         gc_clock::time_point now = gc_clock::now(),
         uint32_t row_limit = query::max_rows) const&;
 
-    // The supplied partition_slice must be governed by this mutation's schema
+    
     void query(query::result::builder& builder,
         const query::partition_slice& slice,
         gc_clock::time_point now = gc_clock::now(),
         uint32_t row_limit = query::max_rows) &&;
 
-    // See mutation_partition::live_row_count()
+    
     size_t live_row_count(gc_clock::time_point query_time = gc_clock::time_point::min()) const;
 
     void apply(mutation&&);
@@ -12265,8 +12145,8 @@ public:
     mutation& operator+=(const mutation& other);
     mutation& operator+=(mutation&& other);
 
-    // Returns a subset of this mutation holding only information relevant for given clustering ranges.
-    // Range tombstones will be trimmed to the boundaries of the clustering ranges.
+    
+    
     mutation sliced(const query::clustering_row_ranges&) const;
 private:
     friend std::ostream& operator<<(std::ostream& os, const mutation& m);
@@ -12286,9 +12166,9 @@ struct mutation_decorated_key_less_comparator {
 
 using mutation_opt = optimized_optional<mutation>;
 
-// Consistent with operator==()
-// Consistent across the cluster, so should not rely on particular
-// serialization format, only on actual data stored.
+
+
+
 template<>
 struct appending_hash<mutation> {
     template<typename Hasher>
@@ -12299,16 +12179,16 @@ void apply(mutation_opt& dst, mutation&& src);
 
 void apply(mutation_opt& dst, mutation_opt&& src);
 
-// Returns a range into partitions containing mutations covered by the range.
-// partitions must be sorted according to decorated key.
-// range must not wrap around.
+
+
+
 boost::iterator_range<std::vector<mutation>::const_iterator> slice(
     const std::vector<mutation>& partitions,
     const dht::partition_range&);
 
 class flat_mutation_reader;
 
-// Reads a single partition from a reader. Returns empty optional if there are no more partitions to be read.
+
 future<mutation_opt> read_mutation_from_flat_mutation_reader(flat_mutation_reader& reader, db::timeout_clock::time_point timeout);
 
 class cell_locker;
@@ -12364,24 +12244,24 @@ class mutation_reordered_with_truncate_exception : public std::exception {};
 using shared_memtable = lw_shared_ptr<memtable>;
 class memtable_list;
 
-// We could just add all memtables, regardless of types, to a single list, and
-// then filter them out when we read them. Here's why I have chosen not to do
-// it:
-//
-// First, some of the methods in which a memtable is involved (like seal) are
-// assume a commitlog, and go through great care of updating the replay
-// position, flushing the log, etc.  We want to bypass those, and that has to
-// be done either by sprikling the seal code with conditionals, or having a
-// separate method for each seal.
-//
-// Also, if we ever want to put some of the memtables in as separate allocator
-// region group to provide for extra QoS, having the classes properly wrapped
-// will make that trivial: just pass a version of new_memtable() that puts it
-// in a different region, while the list approach would require a lot of
-// conditionals as well.
-//
-// If we are going to have different methods, better have different instances
-// of a common class.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class memtable_list {
 };
 
@@ -12410,10 +12290,10 @@ public:
 };
 
 
-// Policy for distributed<database>:
-//   broadcast metadata writes
-//   local metadata reads
-//   use shard_of() for data
+
+
+
+
 
 class database {
 private:
@@ -12502,7 +12382,7 @@ private:
     friend class optimized_optional<flat_mutation_reader>;
     void do_upgrade_schema(const schema_ptr&);
 public:
-    // Documented in mutation_reader::forwarding in mutation_reader.hh.
+    
     class partition_range_forwarding_tag;
     using partition_range_forwarding = bool_class<partition_range_forwarding_tag>;
 
@@ -12512,48 +12392,48 @@ public:
 
 
 
-    // Skips to the next partition.
-    //
-    // Skips over the remaining fragments of the current partitions. If the
-    // reader is currently positioned at a partition boundary (partition
-    // start) nothing is done.
-    // Only skips within the current partition range, i.e. if the current
-    // partition is the last in the range the reader will be at EOS.
-    //
-    // Can be used to skip over entire partitions if interleaved with
-    // `operator()()` calls.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     void next_partition();
 
     future<> fill_buffer(db::timeout_clock::time_point timeout);
 
-    // Changes the range of partitions to pr. The range can only be moved
-    // forwards. pr.begin() needs to be larger than pr.end() of the previousl
-    // used range (i.e. either the initial one passed to the constructor or a
-    // previous fast forward target).
-    // pr needs to be valid until the reader is destroyed or fast_forward_to()
-    // is called again.
+    
+    
+    
+    
+    
+    
     future<> fast_forward_to(const dht::partition_range& pr, db::timeout_clock::time_point timeout);
-    // Skips to a later range of rows.
-    // The new range must not overlap with the current range.
-    //
-    // In forwarding mode the stream does not return all fragments right away,
-    // but only those belonging to the current clustering range. Initially
-    // current range only covers the static row. The stream can be forwarded
-    // (even before end-of- stream) to a later range with fast_forward_to().
-    // Forwarding doesn't change initial restrictions of the stream, it can
-    // only be used to skip over data.
-    //
-    // Monotonicity of positions is preserved by forwarding. That is fragments
-    // emitted after forwarding will have greater positions than any fragments
-    // emitted before forwarding.
-    //
-    // For any range, all range tombstones relevant for that range which are
-    // present in the original stream will be emitted. Range tombstones
-    // emitted before forwarding which overlap with the new range are not
-    // necessarily re-emitted.
-    //
-    // When forwarding mode is not enabled, fast_forward_to()
-    // cannot be used.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     future<> fast_forward_to(position_range cr, db::timeout_clock::time_point timeout);
     bool is_end_of_stream() const;
     bool is_buffer_empty() const;
@@ -12562,35 +12442,35 @@ public:
     void unpop_mutation_fragment(mutation_fragment mf);
     const schema_ptr& schema() const;
     void set_max_buffer_size(size_t size);
-    // Resolves with a pointer to the next fragment in the stream without consuming it from the stream,
-    // or nullptr if there are no more fragments.
-    // The returned pointer is invalidated by any other non-const call to this object.
+    
+    
+    
     future<mutation_fragment*> peek(db::timeout_clock::time_point timeout);
-    // A peek at the next fragment in the buffer.
-    // Cannot be called if is_buffer_empty() returns true.
+    
+    
     const mutation_fragment& peek_buffer() const;
-    // The actual buffer size of the reader.
-    // Altough we consistently refer to this as buffer size throught the code
-    // we really use "buffer size" as the size of the collective memory
-    // used by all the mutation fragments stored in the buffer of the reader.
+    
+    
+    
+    
     size_t buffer_size() const;
-    // Detach the internal buffer of the reader.
-    // Roughly equivalent to depleting it by calling pop_mutation_fragment()
-    // until is_buffer_empty() returns true.
-    // The reader will need to allocate a new buffer on the next fill_buffer()
-    // call.
+    
+    
+    
+    
+    
     circular_buffer<mutation_fragment> detach_buffer();
-    // Moves the buffer content to `other`.
-    //
-    // If the buffer of `other` is empty this is very efficient as the buffers
-    // are simply swapped. Otherwise the content of the buffer is moved
-    // fragmuent-by-fragment.
-    // Allows efficient implementation of wrapping readers that do no
-    // transformation to the fragment stream.
+    
+    
+    
+    
+    
+    
+    
     void move_buffer_content_to(impl& other);
 
-    // Causes this reader to conform to s.
-    // Multiple calls of upgrade_schema() compose, effects of prior calls on the stream are preserved.
+    
+    
     void upgrade_schema(const schema_ptr& s);
 };
 
@@ -12602,7 +12482,7 @@ flat_mutation_reader make_flat_mutation_reader(Args &&... args) {
 }
 
 
-// Creates a stream which is like r but with transformation applied to the elements.
+
 template<typename T>
 GCC6_CONCEPT(
     requires StreamedMutationTranformer<T>()
@@ -12633,25 +12513,25 @@ flat_mutation_reader_from_mutations(std::vector<mutation> ms,
                                     const query::partition_slice& slice,
                                     streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
 
-/// Make a reader that enables the wrapped reader to work with multiple ranges.
-///
-/// \param ranges An range vector that has to contain strictly monotonic
-///     partition ranges, such that successively calling
-///     `flat_mutation_reader::fast_forward_to()` with each one is valid.
-///     An range vector range with 0 or 1 elements is also valid.
-/// \param fwd_mr It is only respected when `ranges` contains 0 or 1 partition
-///     ranges. Otherwise the reader is created with
-///     mutation_reader::forwarding::yes.
+
+
+
+
+
+
+
+
+
 flat_mutation_reader
 make_flat_multi_range_reader(schema_ptr s, mutation_source source, const dht::partition_range_vector& ranges,
                              const query::partition_slice& slice, const io_priority_class& pc = default_priority_class(),
                              tracing::trace_state_ptr trace_state = nullptr,
                              flat_mutation_reader::partition_range_forwarding fwd_mr = flat_mutation_reader::partition_range_forwarding::yes);
 
-/// Make a reader that enables the wrapped reader to work with multiple ranges.
-///
-/// Generator overload. The ranges returned by the generator have to satisfy the
-/// same requirements as the `ranges` param of the vector overload.
+
+
+
+
 flat_mutation_reader
 make_flat_multi_range_reader(
         schema_ptr s,
@@ -12671,10 +12551,10 @@ make_flat_mutation_reader_from_fragments(schema_ptr, std::deque<mutation_fragmen
 flat_mutation_reader
 make_flat_mutation_reader_from_fragments(schema_ptr, std::deque<mutation_fragment>, const dht::partition_range& pr, const query::partition_slice& slice);
 
-// Calls the consumer for each element of the reader's stream until end of stream
-// is reached or the consumer requests iteration to stop by returning stop_iteration::yes.
-// The consumer should accept mutation as the argument and return stop_iteration.
-// The returned future<> resolves when consumption ends.
+
+
+
+
 template <typename Consumer>
 inline
 future<> consume_partitions(flat_mutation_reader& reader, Consumer consumer, db::timeout_clock::time_point timeout) {
@@ -12696,24 +12576,24 @@ future<> consume_partitions(flat_mutation_reader& reader, Consumer consumer, db:
 flat_mutation_reader
 make_generating_reader(schema_ptr s, std::function<future<mutation_fragment_opt> ()> get_next_fragment);
 
-/// A reader that emits partitions in reverse.
-///
-/// 1. Static row is still emitted first.
-/// 2. Range tombstones are ordered by their end position.
-/// 3. Clustered rows and range tombstones are emitted in descending order.
-/// Because of 2 and 3 the guarantee that a range tombstone is emitted before
-/// any mutation fragment affected by it still holds.
-/// Ordering of partitions themselves remains unchanged.
-///
-/// \param original the reader to be reversed, has to be kept alive while the
-///     reversing reader is in use.
-/// \param max_memory_consumption the maximum amount of memory the reader is
-///     allowed to use for reversing. The reverse reader reads entire partitions
-///     into memory, before reversing them. Since partitions can be larger than
-///     the available memory, we need to enforce a limit on memory consumption.
-///     If the read uses more memory then this limit, the read is aborted.
-///
-/// FIXME: reversing should be done in the sstable layer, see #1413.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 flat_mutation_reader
 make_reversing_reader(flat_mutation_reader& original, size_t max_memory_consumption);
 
@@ -12723,16 +12603,16 @@ namespace ser {
 class mutation_view;
 }
 
-// Immutable, compact form of mutation.
-//
-// This form is primarily destined to be sent over the network channel.
-// Regular mutation can't be deserialized because its complex data structures
-// need schema reference at the time object is constructed. We can't lookup
-// schema before we deserialize column family ID. Another problem is that even
-// if we had the ID somehow, low level RPC layer doesn't know how to lookup
-// the schema. Data can be wrapped in frozen_mutation without schema
-// information, the schema is only needed to access some of the fields.
-//
+
+
+
+
+
+
+
+
+
+
 class frozen_mutation final {
 private:
     partition_key deserialize_key() const;
@@ -12747,18 +12627,18 @@ public:
     frozen_mutation& operator=(const frozen_mutation&) = default;
     const bytes_ostream& representation() const;
     utils::UUID column_family_id() const;
-    utils::UUID schema_version() const; // FIXME: Should replace column_family_id()
+    utils::UUID schema_version() const; 
     partition_key_view key(const schema& s) const;
     dht::decorated_key decorated_key(const schema& s) const;
     mutation_partition_view partition() const;
-    // The supplied schema must be of the same version as the schema of
-    // the mutation which was used to create this instance.
-    // throws schema_mismatch_error otherwise.
+    
+    
+    
     mutation unfreeze(schema_ptr s) const;
 
     struct printer;
 
-    // Same requirements about the schema as unfreeze().
+    
     printer pretty_printer(schema_ptr) const;
 };
 
@@ -12769,7 +12649,7 @@ struct frozen_mutation_and_schema {
     schema_ptr s;
 };
 
-// Can receive streamed_mutation in reversed order.
+
 class streamed_mutation_freezer;
 
 static constexpr size_t default_frozen_fragment_size = 128 * 1024;
@@ -12883,48 +12763,48 @@ file make_tracked_file(file f, reader_permit p);
 
 using namespace seastar;
 
-/// Specific semaphore for controlling reader concurrency
-///
-/// Before creating a reader one should obtain a permit by calling
-/// `wait_admission()`. This permit can then be used for tracking the
-/// reader's memory consumption.
-/// The permit should be held onto for the lifetime of the reader
-/// and/or any buffer its tracking.
-/// Reader concurrency is dual limited by count and memory.
-/// The semaphore can be configured with the desired limits on
-/// construction. New readers will only be admitted when there is both
-/// enough count and memory units available. Readers are admitted in
-/// FIFO order.
-/// Semaphore's `name` must be provided in ctor and its only purpose is
-/// to increase readability of exceptions: both timeout exceptions and
-/// queue overflow exceptions (read below) include this `name` in messages.
-/// It's also possible to specify the maximum allowed number of waiting
-/// readers by the `max_queue_length` constructor parameter. When the
-/// number of waiting readers becomes equal or greater than
-/// `max_queue_length` (upon calling `wait_admission()`) an exception of
-/// type `std::runtime_error` is thrown. Optionally, some additional
-/// code can be executed just before throwing (`prethrow_action`
-/// constructor parameter).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class reader_concurrency_semaphore {
 };
 
 namespace mutation_reader {
-    // mutation_reader::forwarding determines whether fast_forward_to() may
-    // be used on the mutation reader to change the partition range being
-    // read. Enabling forwarding also changes read policy: forwarding::no
-    // means we will stop reading from disk at the end of the given range,
-    // but with forwarding::yes we may read ahead, anticipating the user to
-    // make a small skip with fast_forward_to() and continuing to read.
-    //
-    // Note that mutation_reader::forwarding is similarly name but different
-    // from streamed_mutation::forwarding - the former is about skipping to
-    // a different partition range, while the latter is about skipping
-    // inside a large partition.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     using forwarding = flat_mutation_reader::partition_range_forwarding;
 }
 
-/// A partition_presence_checker quickly returns whether a key is known not to exist
-/// in a data source (it may return false positives, but not false negatives).
+
+
 enum class partition_presence_checker_result {
     definitely_doesnt_exist,
     maybe_exists
@@ -12933,11 +12813,11 @@ using partition_presence_checker = std::function<partition_presence_checker_resu
 
 partition_presence_checker make_default_partition_presence_checker();
 
-// mutation_source represents source of data in mutation form. The data source
-// can be queried multiple times and in parallel. For each query it returns
-// independent mutation_reader.
-// The reader returns mutations having all the same schema, the one passed
-// when invoking the source.
+
+
+
+
+
 class mutation_source {
     using partition_range = const dht::partition_range&;
     using io_priority = const io_priority_class&;
@@ -12956,7 +12836,7 @@ public:
 public:
     mutation_source(flat_reader_factory_type fn, std::function<partition_presence_checker()> pcf = [] { return make_default_partition_presence_checker(); });
 
-    // For sources which don't care about the mutation_reader::forwarding flag (always fast forwardable)
+    
     mutation_source(std::function<flat_mutation_reader(schema_ptr, reader_permit, partition_range, const query::partition_slice&, io_priority,
                 tracing::trace_state_ptr, streamed_mutation::forwarding)> fn);
     mutation_source(std::function<flat_mutation_reader(schema_ptr, reader_permit, partition_range, const query::partition_slice&, io_priority)> fn);
@@ -12967,10 +12847,10 @@ public:
     mutation_source(mutation_source&&) = default;
     mutation_source& operator=(mutation_source&&) = default;
 
-    // Creates a new reader.
-    //
-    // All parameters captured by reference must remain live as long as returned
-    // mutation_reader or streamed_mutation obtained through it are alive.
+    
+    
+    
+    
     flat_mutation_reader
     make_reader(
         schema_ptr s,
@@ -12996,13 +12876,13 @@ using mutation_source_opt = optimized_optional<mutation_source>;
 class reconcilable_result;
 class frozen_reconcilable_result;
 
-// Can be read by other cores after publishing.
+
 struct partition {
 };
 
 
 
-// Performs a query for counter updates.
+
 future<mutation_opt> counter_write_query(schema_ptr, const mutation_source&,
                                          const dht::decorated_key& dk,
                                          const query::partition_slice& slice,
@@ -13034,15 +12914,15 @@ future<mutation> database::do_apply_counter_update(column_family& cf, const froz
         return cf.lock_counter_cells(m, timeout).then([&, timeout, this] (std::vector<locked_cell> lcs) mutable {
             locks = std::move(lcs);
 
-            // Before counter update is applied it needs to be transformed from
-            // deltas to counter shards. To do that, we need to read the current
-            // counter state for each modified cell...
+            
+            
+            
 
             return counter_write_query(schema_ptr(), mutation_source(), m.decorated_key(), slice, nullptr)
                     .then([this, &cf, &m, timeout] (auto mopt) {
-                // ...now, that we got existing state of all affected counter
-                // cells we can look for our shard in each of them, increment
-                // its clock and apply the delta.
+                
+                
+                
                 return std::move(m);
             });
         });
