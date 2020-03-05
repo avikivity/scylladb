@@ -136,12 +136,6 @@ gc_clock::time_point to_gc_clock(db_clock::time_point tp);
 std::ostream& operator<<(std::ostream&, db_clock::time_point);
 
 
-#include <iosfwd>
-#include <optional>
-#include <string.h>
-#include <seastar/core/future.hh>
-#include <limits>
-#include <cstddef>
 
 #include <seastar/core/shared_ptr.hh>
 
@@ -156,10 +150,6 @@ class schema_extension;
 using schema_ptr = seastar::lw_shared_ptr<const schema>;
 
 
-#include <cstdint>
-#include <limits>
-#include <chrono>
-#include <string>
 
 namespace api {
 
@@ -192,10 +182,7 @@ timestamp_type new_timestamp();
 std::string format_timestamp(api::timestamp_type);
 
 
-#include <functional>
 
-#include <seastar/util/gcc6-concepts.hh>
-#include <type_traits>
 
 GCC6_CONCEPT(
 template<typename T>
@@ -261,13 +248,9 @@ using can_gc_fn = std::function<bool(tombstone)>;
 
 static can_gc_fn always_gc = [] (tombstone) { return true; };
 
-#include <iosfwd>
 
-#include <seastar/core/bitset-iter.hh>
 #include <seastar/util/optimized_optional.hh>
 
-#include <seastar/core/sstring.hh>
-#include <optional>
 #include <iosfwd>
 #include <functional>
 
