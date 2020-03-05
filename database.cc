@@ -6563,8 +6563,8 @@ public:
     
     bool static_row_continuous() const;
     void set_static_row_continuous(bool value);
-    bool is_fully_continuous() const;
-    void make_fully_continuous();
+    
+    
     
     
     
@@ -6603,25 +6603,23 @@ public:
     
 public:
     
-    deletable_row& clustered_row(const schema& s, clustering_key&& key);
-    deletable_row& clustered_row(const schema& s, clustering_key_view key);
-    deletable_row& clustered_row(const schema& s, position_in_partition_view pos, is_dummy, is_continuous);
+    
+    
+    
 public:
-    tombstone partition_tombstone() const;
-    lazy_row& static_row();
-    const lazy_row& static_row() const;
-    const range_tombstone_list& row_tombstones() const;
-    range_tombstone_list& row_tombstones();
-    const row* find_row(const schema& s, const clustering_key& key) const;
-    tombstone range_tombstone_for_row(const schema& schema, const clustering_key& key) const;
-    row_tombstone tombstone_for_row(const schema& schema, const clustering_key& key) const;
-    row_tombstone tombstone_for_row(const schema& schema, const rows_entry& e) const;
-    void query_compacted(query::result::partition_writer& pw, const schema& s, uint32_t row_limit) const;
-    void accept(const schema&, mutation_partition_visitor&) const;
-    size_t live_row_count(const schema&,
-        gc_clock::time_point query_time = gc_clock::time_point::min()) const;
-    bool is_static_row_live(const schema&,
-        gc_clock::time_point query_time = gc_clock::time_point::min()) const;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     size_t row_count() const;
     size_t external_memory_usage(const schema&) const;
 private:
@@ -6651,27 +6649,27 @@ public:
     row_marker& marker();
     const row& cells() const;
     row& cells();
-    bool empty() const;
-    bool is_live(const schema& s, tombstone base_tombstone = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const;
-    void apply(const schema& s, clustering_row&& cr);
-    void apply(const schema& s, const clustering_row& cr);
-    void set_cell(const column_definition& def, atomic_cell_or_collection&& value);
-    void apply(row_marker rm);
-    void apply(tombstone t);
-    void apply(shadowable_tombstone t);
-    void apply(const schema& s, const rows_entry& r);
-    position_in_partition_view position() const;
-    size_t external_memory_usage(const schema& s) const;
-    size_t memory_usage(const schema& s) const;
-    bool equal(const schema& s, const clustering_row& other) const;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     class printer {
     public:
-        printer(const schema& s, const clustering_row& r);
-        printer(const printer&) = delete;
-        printer(printer&&) = delete;
-        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+        
+        
+        
+        
     };
-    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    
 };
 class static_row {
     row _cells;
@@ -6713,48 +6711,33 @@ public:
     public:
         printer(const schema& s, const static_row& r) : _schema(s), _static_row(r) { }
         printer(const printer&) = delete;
-        printer(printer&&) = delete;
-        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+        
+        
     };
-    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    
 };
 class partition_start final {
     dht::decorated_key _key;
     tombstone _partition_tombstone;
 public:
-    partition_start(dht::decorated_key pk, tombstone pt)
-        : _key(std::move(pk))
-        , _partition_tombstone(std::move(pt))
-    { }
-    dht::decorated_key& key() { return _key; }
-    const dht::decorated_key& key() const { return _key; }
-    const tombstone& partition_tombstone() const { return _partition_tombstone; }
-    tombstone& partition_tombstone() { return _partition_tombstone; }
-    position_in_partition_view position() const;
-    size_t external_memory_usage(const schema&) const {
-        return _key.external_memory_usage();
-    }
-    size_t memory_usage(const schema& s) const {
-        return sizeof(partition_start) + external_memory_usage(s);
-    }
-    bool equal(const schema& s, const partition_start& other) const {
-        return _key.equal(s, other._key) && _partition_tombstone == other._partition_tombstone;
-    }
-    friend std::ostream& operator<<(std::ostream& is, const partition_start& row);
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 };
 class partition_end final {
 public:
-    position_in_partition_view position() const;
-    size_t external_memory_usage(const schema&) const {
-        return 0;
-    }
-    size_t memory_usage(const schema& s) const {
-        return sizeof(partition_end) + external_memory_usage(s);
-    }
-    bool equal(const schema& s, const partition_end& other) const {
-        return true;
-    }
-    friend std::ostream& operator<<(std::ostream& is, const partition_end& row);
+    
+    
+    
+    
+    
 };
 GCC6_CONCEPT(
 template<typename T, typename ReturnType>
@@ -7312,19 +7295,19 @@ public:
     frozen_mutation(bytes_ostream&& b, partition_key key);
     frozen_mutation(frozen_mutation&& m) = default;
     frozen_mutation(const frozen_mutation& m) = default;
-    frozen_mutation& operator=(frozen_mutation&&) = default;
-    frozen_mutation& operator=(const frozen_mutation&) = default;
-    const bytes_ostream& representation() const;
-    utils::UUID column_family_id() const;
-    utils::UUID schema_version() const; 
-    partition_key_view key(const schema& s) const;
-    dht::decorated_key decorated_key(const schema& s) const;
-    mutation_partition_view partition() const;
+    
+    
+    
+    
+     
+    
+    
+    
     mutation unfreeze(schema_ptr s) const;
     struct printer;
-    printer pretty_printer(schema_ptr) const;
+    
 };
-frozen_mutation freeze(const mutation& m);
+
 struct frozen_mutation_and_schema {
     frozen_mutation fm;
     schema_ptr s;
@@ -7332,35 +7315,19 @@ struct frozen_mutation_and_schema {
 class streamed_mutation_freezer;
 static constexpr size_t default_frozen_fragment_size = 128 * 1024;
 using frozen_mutation_consumer_fn = std::function<future<stop_iteration>(frozen_mutation, bool)>;
-future<> fragment_and_freeze(flat_mutation_reader mr, frozen_mutation_consumer_fn c,
-                             size_t fragment_size = default_frozen_fragment_size);
+
 class frozen_mutation_fragment {
 };
-frozen_mutation_fragment freeze(const schema& s, const mutation_fragment& mf);
+
 struct reader_resources {
     int count = 0;
     ssize_t memory = 0;
-    reader_resources() = default;
-    reader_resources(int count, ssize_t memory)
-        : count(count)
-        , memory(memory) {
-    }
-    bool operator>=(const reader_resources& other) const {
-        return count >= other.count && memory >= other.memory;
-    }
-    reader_resources& operator-=(const reader_resources& other) {
-        count -= other.count;
-        memory -= other.memory;
-        return *this;
-    }
-    reader_resources& operator+=(const reader_resources& other) {
-        count += other.count;
-        memory += other.memory;
-        return *this;
-    }
-    explicit operator bool() const {
-        return count >= 0 && memory >= 0;
-    }
+    
+    
+    
+    
+    
+    
 };
 class reader_concurrency_semaphore;
 class reader_permit {
