@@ -10416,7 +10416,6 @@ public:
 class is_preemptible_tag;
 using is_preemptible = bool_class<is_preemptible_tag>;
 
-#include <variant>
 
 class range_tombstone_list final {
     using range_tombstones_type = range_tombstone::container_type;
@@ -11658,11 +11657,7 @@ private:
 
 
 
-#include <optional>
-#include <seastar/util/gcc6-concepts.hh>
-#include <seastar/util/optimized_optional.hh>
 
-#include <seastar/core/future-util.hh>
 
 
 #include <seastar/core/lowres_clock.hh>
