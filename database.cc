@@ -7202,9 +7202,140 @@ public:
 #include <random>
 #include <utility>
 #include <vector>
-#include "range.hh"
 #include <byteswap.h>
-#include "dht/token.hh"
+
+#include <seastar/net/byteorder.hh>
+#include <fmt/format.h>
+#include <array>
+#include <functional>
+#include <utility>
+
+namespace dht {
+
+class token;
+
+enum class token_kind {
+    before_all_keys,
+    key,
+    after_all_keys,
+};
+
+class token {
+    static inline int64_t normalize(int64_t t) {
+        return t == std::numeric_limits<int64_t>::min() ? std::numeric_limits<int64_t>::max() : t;
+    }
+public:
+    using kind = token_kind;
+    kind _kind;
+    int64_t _data;
+
+    token() : _kind(kind::before_all_keys) {
+    }
+
+    token(kind k, int64_t d)
+        : _kind(std::move(k))
+        , _data(normalize(d)) { }
+
+    token(kind k, const bytes& b) : _kind(std::move(k)) {
+        if (b.size() != sizeof(_data)) {
+            throw std::runtime_error(fmt::format("Wrong token bytes size: expected {} but got {}", sizeof(_data), b.size()));
+        }
+        std::copy_n(b.begin(), sizeof(_data), reinterpret_cast<int8_t *>(&_data));
+        _data = net::ntoh(_data);
+    }
+
+    token(kind k, bytes_view b) : _kind(std::move(k)) {
+        if (b.size() != sizeof(_data)) {
+            throw std::runtime_error(fmt::format("Wrong token bytes size: expected {} but got {}", sizeof(_data), b.size()));
+        }
+        std::copy_n(b.begin(), sizeof(_data), reinterpret_cast<int8_t *>(&_data));
+        _data = net::ntoh(_data);
+    }
+
+    bool is_minimum() const {
+        return _kind == kind::before_all_keys;
+    }
+
+    bool is_maximum() const {
+        return _kind == kind::after_all_keys;
+    }
+
+    size_t external_memory_usage() const {
+        return 0;
+    }
+
+    size_t memory_usage() const {
+        return sizeof(token);
+    }
+
+    bytes data() const {
+        auto t = net::hton(_data);
+        bytes b(bytes::initialized_later(), sizeof(_data));
+        std::copy_n(reinterpret_cast<int8_t*>(&t), sizeof(_data), b.begin());
+        return b;
+    }
+
+    /**
+     * @return a string representation of this token
+     */
+    sstring to_sstring() const;
+
+    /**
+     * Calculate a token representing the approximate "middle" of the given
+     * range.
+     *
+     * @return The approximate midpoint between left and right.
+     */
+    static token midpoint(const token& left, const token& right);
+
+    /**
+     * @return a randomly generated token
+     */
+    static token get_random_token();
+
+    /**
+     * @return a token from string representation
+     */
+    static dht::token from_sstring(const sstring& t);
+
+    /**
+     * @return a token from its byte representation
+     */
+    static dht::token from_bytes(bytes_view bytes);
+
+    /**
+     * Calculate the deltas between tokens in the ring in order to compare
+     *  relative sizes.
+     *
+     * @param sortedtokens a sorted List of tokens
+     * @return the mapping from 'token' to 'percentage of the ring owned by that token'.
+     */
+    static std::map<token, float> describe_ownership(const std::vector<token>& sorted_tokens);
+
+    static data_type get_token_validator();
+
+    /**
+     * Gets the first shard of the minimum token.
+     */
+    static unsigned shard_of_minimum_token() {
+        return 0;  // hardcoded for now; unlikely to change
+    }
+
+};
+
+const token& minimum_token();
+const token& maximum_token();
+int tri_compare(const token& t1, const token& t2);
+inline bool operator==(const token& t1, const token& t2) { return tri_compare(t1, t2) == 0; }
+inline bool operator<(const token& t1, const token& t2) { return tri_compare(t1, t2) < 0; }
+
+inline bool operator!=(const token& t1, const token& t2) { return std::rel_ops::operator!=(t1, t2); }
+inline bool operator>(const token& t1, const token& t2) { return std::rel_ops::operator>(t1, t2); }
+inline bool operator<=(const token& t1, const token& t2) { return std::rel_ops::operator<=(t1, t2); }
+inline bool operator>=(const token& t1, const token& t2) { return std::rel_ops::operator>=(t1, t2); }
+std::ostream& operator<<(std::ostream& out, const token& t);
+
+} // namespace dht
 
 namespace sstables {
 
@@ -7871,9 +8002,1004 @@ struct hash<dht::decorated_key> {
 
 
 }
-#include "enum_set.hh"
-#include "range.hh"
-#include "tracing/tracing.hh"
+#include <boost/iterator/transform_iterator.hpp>
+#include <seastar/core/bitset-iter.hh>
+
+#include <algorithm>
+#include <cstddef>
+#include <optional>
+#include <stdexcept>
+#include <type_traits>
+#include <limits>
+
+/**
+ *
+ * Allows to take full advantage of compile-time information when operating
+ * on a set of enum values.
+ *
+ * Examples:
+ *
+ *   enum class x { A, B, C };
+ *   using my_enum = super_enum<x, x::A, x::B, x::C>;
+ *   using my_enumset = enum_set<my_enum>;
+ *
+ *   static_assert(my_enumset::frozen<x::A, x::B>::contains<x::A>(), "it should...");
+ *
+ *   assert(my_enumset::frozen<x::A, x::B>::contains(my_enumset::prepare<x::A>()));
+ *
+ *   assert(my_enumset::frozen<x::A, x::B>::contains(x::A));
+ *
+ */
+
+
+template<typename EnumType, EnumType... Items>
+struct super_enum {
+    using enum_type = EnumType;
+
+    template<enum_type... values>
+    struct max {
+        static constexpr enum_type max_of(enum_type a, enum_type b) {
+            return a > b ? a : b;
+        }
+
+        template<enum_type first, enum_type second, enum_type... rest>
+        static constexpr enum_type get() {
+            return max_of(first, get<second, rest...>());
+        }
+
+        template<enum_type first>
+        static constexpr enum_type get() { return first; }
+
+        static constexpr enum_type value = get<values...>();
+    };
+
+    template<enum_type... values>
+    struct min {
+        static constexpr enum_type min_of(enum_type a, enum_type b) {
+            return a < b ? a : b;
+        }
+
+        template<enum_type first, enum_type second, enum_type... rest>
+        static constexpr enum_type get() {
+            return min_of(first, get<second, rest...>());
+        }
+
+        template<enum_type first>
+        static constexpr enum_type get() { return first; }
+
+        static constexpr enum_type value = get<values...>();
+    };
+
+    using sequence_type = typename std::underlying_type<enum_type>::type;
+
+    template <enum_type first, enum_type... rest>
+    struct valid_sequence {
+        static constexpr bool apply(sequence_type v) noexcept {
+            return (v == static_cast<sequence_type>(first)) || valid_sequence<rest...>::apply(v);
+        }
+    };
+
+    template <enum_type first>
+    struct valid_sequence<first> {
+        static constexpr bool apply(sequence_type v) noexcept {
+            return v == static_cast<sequence_type>(first);
+        }
+    };
+
+    static constexpr bool is_valid_sequence(sequence_type v) noexcept {
+        return valid_sequence<Items...>::apply(v);
+    }
+
+    template<enum_type Elem>
+    static constexpr sequence_type sequence_for() {
+        return static_cast<sequence_type>(Elem);
+    }
+
+    static sequence_type sequence_for(enum_type elem) {
+        return static_cast<sequence_type>(elem);
+    }
+
+    static constexpr sequence_type max_sequence = sequence_for<max<Items...>::value>();
+    static constexpr sequence_type min_sequence = sequence_for<min<Items...>::value>();
+
+    static_assert(min_sequence >= 0, "negative enum values unsupported");
+};
+
+class bad_enum_set_mask : public std::invalid_argument {
+public:
+    bad_enum_set_mask() : std::invalid_argument("Bit mask contains invalid enumeration indices.") {
+    }
+};
+
+template<typename Enum>
+class enum_set {
+public:
+    using mask_type = size_t; // TODO: use the smallest sufficient type
+    using enum_type = typename Enum::enum_type;
+
+private:
+    static constexpr int mask_digits = std::numeric_limits<mask_type>::digits;
+    using mask_iterator = seastar::bitsets::set_iterator<mask_digits>;
+
+    mask_type _mask;
+    constexpr enum_set(mask_type mask) : _mask(mask) {}
+
+    template<enum_type Elem>
+    static constexpr unsigned shift_for() {
+        return Enum::template sequence_for<Elem>();
+    }
+
+    static auto make_iterator(mask_iterator iter) {
+        return boost::make_transform_iterator(std::move(iter), [](typename Enum::sequence_type s) {
+            return enum_type(s);
+        });
+    }
+
+public:
+    using iterator = std::invoke_result_t<decltype(&enum_set::make_iterator), mask_iterator>;
+
+    constexpr enum_set() : _mask(0) {}
+
+    /**
+     * \throws \ref bad_enum_set_mask
+     */
+    static constexpr enum_set from_mask(mask_type mask) {
+        const auto bit_range = seastar::bitsets::for_each_set(std::bitset<mask_digits>(mask));
+
+        if (!std::all_of(bit_range.begin(), bit_range.end(), &Enum::is_valid_sequence)) {
+            throw bad_enum_set_mask();
+        }
+
+        return enum_set(mask);
+    }
+
+    static constexpr mask_type full_mask() {
+        return ~(std::numeric_limits<mask_type>::max() << (Enum::max_sequence + 1));
+    }
+
+    static constexpr enum_set full() {
+        return enum_set(full_mask());
+    }
+
+    static inline mask_type mask_for(enum_type e) {
+        return mask_type(1) << Enum::sequence_for(e);
+    }
+
+    template<enum_type Elem>
+    static constexpr mask_type mask_for() {
+        return mask_type(1) << shift_for<Elem>();
+    }
+
+    struct prepared {
+        mask_type mask;
+        bool operator==(const prepared& o) const {
+            return mask == o.mask;
+        }
+    };
+
+    static prepared prepare(enum_type e) {
+        return {mask_for(e)};
+    }
+
+    template<enum_type e>
+    static constexpr prepared prepare() {
+        return {mask_for<e>()};
+    }
+
+    static_assert(std::numeric_limits<mask_type>::max() >= ((size_t)1 << Enum::max_sequence), "mask type too small");
+
+    template<enum_type e>
+    bool contains() const {
+        return bool(_mask & mask_for<e>());
+    }
+
+    bool contains(enum_type e) const {
+        return bool(_mask & mask_for(e));
+    }
+
+    template<enum_type e>
+    void remove() {
+        _mask &= ~mask_for<e>();
+    }
+
+    void remove(enum_type e) {
+        _mask &= ~mask_for(e);
+    }
+
+    template<enum_type e>
+    void set() {
+        _mask |= mask_for<e>();
+    }
+
+    template<enum_type e>
+    void set_if(bool condition) {
+        _mask |= mask_type(condition) << shift_for<e>();
+    }
+
+    void set(enum_type e) {
+        _mask |= mask_for(e);
+    }
+
+    void add(const enum_set& other) {
+        _mask |= other._mask;
+    }
+
+    explicit operator bool() const {
+        return bool(_mask);
+    }
+
+    mask_type mask() const {
+        return _mask;
+    }
+
+    iterator begin() const {
+        return make_iterator(mask_iterator(_mask));
+    }
+
+    iterator end() const {
+        return make_iterator(mask_iterator(0));
+    }
+
+    template<enum_type... items>
+    struct frozen {
+        template<enum_type first>
+        static constexpr mask_type make_mask() {
+            return mask_for<first>();
+        }
+
+        static constexpr mask_type make_mask() {
+            return 0;
+        }
+
+        template<enum_type first, enum_type second, enum_type... rest>
+        static constexpr mask_type make_mask() {
+            return mask_for<first>() | make_mask<second, rest...>();
+        }
+
+        static constexpr mask_type mask = make_mask<items...>();
+
+        template<enum_type Elem>
+        static constexpr bool contains() {
+            return mask & mask_for<Elem>();
+        }
+
+        static bool contains(enum_type e) {
+            return mask & mask_for(e);
+        }
+
+        static bool contains(prepared e) {
+            return mask & e.mask;
+        }
+
+        static constexpr enum_set<Enum> unfreeze() {
+            return enum_set<Enum>(mask);
+        }
+    };
+
+    template<enum_type... items>
+    static constexpr enum_set<Enum> of() {
+        return frozen<items...>::unfreeze();
+    }
+};
+#include <vector>
+#include <atomic>
+#include <random>
+#include <seastar/core/sharded.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/metrics_registration.hh>
+#include <utility>
+
+#include <seastar/core/print.hh>
+#include <seastar/net/ip.hh>
+#include <seastar/net/inet_address.hh>
+#include <seastar/net/socket_defs.hh>
+#include <sstream>
+#include <optional>
+
+namespace gms {
+
+class inet_address {
+private:
+    net::inet_address _addr;
+public:
+    inet_address() = default;
+    inet_address(int32_t ip)
+        : inet_address(uint32_t(ip)) {
+    }
+    explicit inet_address(uint32_t ip)
+        : _addr(net::ipv4_address(ip)) {
+    }
+    inet_address(const net::inet_address& addr) : _addr(addr) {}
+    inet_address(const socket_address& sa)
+        : inet_address(sa.addr())
+    {}
+    const net::inet_address& addr() const {
+        return _addr;
+    }
+
+    inet_address(const inet_address&) = default;
+
+    operator const seastar::net::inet_address&() const {
+        return _addr;
+    }
+
+    inet_address(const sstring& addr) {
+        // FIXME: We need a real DNS resolver
+        if (addr == "localhost") {
+            _addr = net::ipv4_address("127.0.0.1");
+        } else {
+            _addr = net::inet_address(addr);
+        }
+    }
+    bytes_view bytes() const {
+        return bytes_view(reinterpret_cast<const int8_t*>(_addr.data()), _addr.size());
+    }
+    // TODO remove
+    uint32_t raw_addr() const {
+        return addr().as_ipv4_address().ip;
+    }
+    sstring to_sstring() const {
+        return format("{}", *this);
+    }
+    friend inline bool operator==(const inet_address& x, const inet_address& y) {
+        return x._addr == y._addr;
+    }
+    friend inline bool operator!=(const inet_address& x, const inet_address& y) {
+        using namespace std::rel_ops;
+        return x._addr != y._addr;
+    }
+    friend inline bool operator<(const inet_address& x, const inet_address& y) {
+        return x.bytes() < y.bytes();
+    }
+    friend struct std::hash<inet_address>;
+
+    using opt_family = std::optional<net::inet_address::family>;
+
+    static future<inet_address> lookup(sstring, opt_family family = {}, opt_family preferred = {});
+};
+
+std::ostream& operator<<(std::ostream& os, const inet_address& x);
+
+}
+
+namespace std {
+template<>
+struct hash<gms::inet_address> {
+    size_t operator()(gms::inet_address a) const { return std::hash<net::inet_address>()(a._addr); }
+};
+}
+
+namespace tracing {
+
+using elapsed_clock = std::chrono::steady_clock;
+
+extern logging::logger tracing_logger;
+
+class trace_state_ptr;
+class tracing;
+class backend_registry;
+
+enum class trace_type : uint8_t {
+    NONE,
+    QUERY,
+    REPAIR,
+};
+
+extern std::vector<sstring> trace_type_names;
+
+inline const sstring& type_to_string(trace_type t) {
+    return trace_type_names.at(static_cast<int>(t));
+}
+
+/**
+ * Returns a TTL for a given trace type
+ * @param t trace type
+ *
+ * @return TTL
+ */
+inline std::chrono::seconds ttl_by_type(const trace_type t) {
+    switch (t) {
+    case trace_type::NONE:
+    case trace_type::QUERY:
+        return std::chrono::seconds(86400);  // 1 day
+    case trace_type::REPAIR:
+        return std::chrono::seconds(604800); // 7 days
+    default:
+        // unknown type value - must be a SW bug
+        throw std::invalid_argument("unknown trace type: " + std::to_string(int(t)));
+    }
+}
+
+/**
+ * @brief represents an ID of a single tracing span.
+ *
+ * Currently span ID is a random 64-bit integer.
+ */
+class span_id {
+private:
+    uint64_t _id = illegal_id;
+
+public:
+    static constexpr uint64_t illegal_id = 0;
+
+public:
+    span_id() = default;
+    uint64_t get_id() const { return _id; }
+    span_id(uint64_t id) : _id(id) {}
+
+    /**
+     * @return New span_id with a random legal value
+     */
+    static span_id make_span_id();
+};
+
+std::ostream& operator<<(std::ostream& os, const span_id& id);
+
+// !!!!IMPORTANT!!!!
+//
+// The enum_set based on this enum is serialized using IDL, therefore new items
+// should always be added to the end of this enum - never before the existing
+// ones.
+//
+// Otherwise this may break IDL's backward compatibility.
+enum class trace_state_props {
+    write_on_close, primary, log_slow_query, full_tracing
+};
+
+using trace_state_props_set = enum_set<super_enum<trace_state_props,
+    trace_state_props::write_on_close,
+    trace_state_props::primary,
+    trace_state_props::log_slow_query,
+    trace_state_props::full_tracing>>;
+
+class trace_info {
+public:
+    utils::UUID session_id;
+    trace_type type;
+    bool write_on_close;
+    trace_state_props_set state_props;
+    uint32_t slow_query_threshold_us; // in microseconds
+    uint32_t slow_query_ttl_sec; // in seconds
+    span_id parent_id;
+
+public:
+    trace_info(utils::UUID sid, trace_type t, bool w_o_c, trace_state_props_set s_p, uint32_t slow_query_threshold, uint32_t slow_query_ttl, span_id p_id)
+        : session_id(std::move(sid))
+        , type(t)
+        , write_on_close(w_o_c)
+        , state_props(s_p)
+        , slow_query_threshold_us(slow_query_threshold)
+        , slow_query_ttl_sec(slow_query_ttl)
+        , parent_id(std::move(p_id))
+    {
+        state_props.set_if<trace_state_props::write_on_close>(write_on_close);
+    }
+};
+
+struct one_session_records;
+using records_bulk = std::deque<lw_shared_ptr<one_session_records>>;
+
+struct backend_session_state_base {
+    virtual ~backend_session_state_base() {};
+};
+
+struct i_tracing_backend_helper {
+    using wall_clock = std::chrono::system_clock;
+
+protected:
+    tracing& _local_tracing;
+
+public:
+    i_tracing_backend_helper(tracing& tr) : _local_tracing(tr) {}
+    virtual ~i_tracing_backend_helper() {}
+    virtual future<> start() = 0;
+    virtual future<> stop() = 0;
+
+    /**
+     * Write a bulk of tracing records.
+     *
+     * This function has to clear a scheduled state of each one_session_records object
+     * in the @param bulk after it has been actually passed to the backend for writing.
+     *
+     * @param bulk a bulk of records
+     */
+    virtual void write_records_bulk(records_bulk& bulk) = 0;
+
+    virtual std::unique_ptr<backend_session_state_base> allocate_session_state() const = 0;
+
+private:
+    friend class tracing;
+};
+
+struct event_record {
+    sstring message;
+    elapsed_clock::duration elapsed;
+    i_tracing_backend_helper::wall_clock::time_point event_time_point;
+
+    event_record(sstring message_, elapsed_clock::duration elapsed_, i_tracing_backend_helper::wall_clock::time_point event_time_point_)
+        : message(std::move(message_))
+        , elapsed(elapsed_)
+        , event_time_point(event_time_point_) {}
+};
+
+struct session_record {
+    gms::inet_address client;
+    // Keep the containers below sorted since some backends require that and
+    // it's very cheap to always do that because the amount of elements in a
+    // container is very small.
+    std::map<sstring, sstring> parameters;
+    std::set<sstring> tables;
+    sstring username;
+    sstring request;
+    size_t request_size = 0;
+    size_t response_size = 0;
+    std::chrono::system_clock::time_point started_at;
+    trace_type command = trace_type::NONE;
+    elapsed_clock::duration elapsed;
+    std::chrono::seconds slow_query_record_ttl;
+
+private:
+    bool _consumed = false;
+
+public:
+    session_record()
+        : username("<unauthenticated request>")
+        , elapsed(-1) {}
+
+    bool ready() const {
+        return elapsed.count() >= 0 && !_consumed;
+    }
+
+    void set_consumed() {
+        _consumed = true;
+    }
+};
+
+class one_session_records {
+private:
+    shared_ptr<tracing> _local_tracing_ptr;
+public:
+    utils::UUID session_id;
+    session_record session_rec;
+    std::chrono::seconds ttl;
+    std::deque<event_record> events_recs;
+    std::unique_ptr<backend_session_state_base> backend_state_ptr;
+    bool do_log_slow_query = false;
+
+    // A pointer to the records counter of the corresponding state new records
+    // of this tracing session should consume from (e.g. "cached" or "pending
+    // for write").
+    uint64_t* budget_ptr;
+
+    // Each tracing session object represents a single tracing span.
+    //
+    // Each span has a span ID. In order to be able to build a full tree of all
+    // spans of the same query we need a parent span ID as well.
+    span_id parent_id;
+    span_id my_span_id;
+
+    one_session_records();
+
+    /**
+     * Consume a single record from the per-shard budget.
+     */
+    void consume_from_budget() {
+        ++(*budget_ptr);
+    }
+
+    /**
+     * Drop all pending records and return the budget.
+     */
+    void drop_records() {
+        (*budget_ptr) -= size();
+        events_recs.clear();
+        session_rec.set_consumed();
+    }
+
+    /**
+     * Should be called when a record is scheduled for write.
+     * From that point till data_consumed() call all new records will be written
+     * in the next write event.
+     */
+    inline void set_pending_for_write();
+
+    /**
+     * Should be called after all data pending to be written in this record has
+     * been processed.
+     * From that point on new records are cached internally and have to be
+     * explicitly committed for write in order to be written during the write event.
+     */
+    inline void data_consumed();
+
+    bool is_pending_for_write() const {
+        return _is_pending_for_write;
+    }
+
+    uint64_t size() const {
+        return events_recs.size() + session_rec.ready();
+    }
+
+private:
+    bool _is_pending_for_write = false;
+};
+
+class tracing : public seastar::async_sharded_service<tracing> {
+public:
+    static const gc_clock::duration write_period;
+    // maximum number of sessions pending for write per shard
+    static constexpr int max_pending_sessions = 1000;
+    // expectation of an average number of trace records per session
+    static constexpr int exp_trace_events_per_session = 10;
+    // maximum allowed pending records per-shard
+    static constexpr int max_pending_trace_records = max_pending_sessions * exp_trace_events_per_session;
+    // number of pending sessions that would trigger a write event
+    static constexpr int write_event_sessions_threshold = 100;
+    // number of pending records that would trigger a write event
+    static constexpr int write_event_records_threshold = write_event_sessions_threshold * exp_trace_events_per_session;
+    // Number of events when an info message is printed
+    static constexpr int log_warning_period = 10000;
+
+    static const std::chrono::microseconds default_slow_query_duraion_threshold;
+    static const std::chrono::seconds default_slow_query_record_ttl;
+
+    struct stats {
+        uint64_t dropped_sessions = 0;
+        uint64_t dropped_records = 0;
+        uint64_t trace_records_count = 0;
+        uint64_t trace_errors = 0;
+    } stats;
+
+private:
+    // A number of currently active tracing sessions
+    uint64_t _active_sessions = 0;
+
+    // Below are 3 counters that describe the total amount of tracing records on
+    // this shard. Each counter describes a state in which a record may be.
+    //
+    // Each record may only be in a specific state at every point of time and
+    // thereby it must be accounted only in one and only one of the three
+    // counters below at any given time.
+    //
+    // The sum of all three counters should not be greater than
+    // (max_pending_trace_records + write_event_records_threshold) at any time
+    // (actually it can get as high as a value above plus (max_pending_sessions)
+    // if all sessions are primary but we won't take this into an account for
+    // simplicity).
+    //
+    // The same is about the number of outstanding sessions: it may not be
+    // greater than (max_pending_sessions + write_event_sessions_threshold) at
+    // any time.
+    //
+    // If total number of tracing records is greater or equal to the limit
+    // above, the new trace point is going to be dropped.
+    //
+    // If current number or records plus the expected number of trace records
+    // per session (exp_trace_events_per_session) is greater than the limit
+    // above new sessions will be dropped. A new session will also be dropped if
+    // there are too many active sessions.
+    //
+    // When the record or a session is dropped the appropriate statistics
+    // counters are updated and there is a rate-limited warning message printed
+    // to the log.
+    //
+    // Every time a number of records pending for write is greater or equal to
+    // (write_event_records_threshold) or a number of sessions pending for
+    // write is greater or equal to (write_event_sessions_threshold) a write
+    // event is issued.
+    //
+    // Every 2 seconds a timer would write all pending for write records
+    // available so far.
+
+    // Total number of records cached in the active sessions that are not going
+    // to be written in the next write event
+    uint64_t _cached_records = 0;
+    // Total number of records that are currently being written to I/O
+    uint64_t _flushing_records = 0;
+    // Total number of records in the _pending_for_write_records_bulk. All of
+    // them are going to be written to the I/O during the next write event.
+    uint64_t _pending_for_write_records_count = 0;
+
+    records_bulk _pending_for_write_records_bulk;
+    timer<lowres_clock> _write_timer;
+    // _down becomes FALSE after the local service is fully initialized and
+    // tracing records are allowed to be created and collected. It becomes TRUE
+    // after the shutdown() call and prevents further write attempts to I/O
+    // backend.
+    bool _down = true;
+    bool _slow_query_logging_enabled = false;
+    std::unique_ptr<i_tracing_backend_helper> _tracing_backend_helper_ptr;
+    sstring _thread_name;
+    const backend_registry& _backend_registry;
+    sstring _tracing_backend_helper_class_name;
+    seastar::metrics::metric_groups _metrics;
+    double _trace_probability = 0.0; // keep this one for querying purposes
+    uint64_t _normalized_trace_probability = 0;
+    std::ranlux48_base _gen;
+    std::chrono::microseconds _slow_query_duration_threshold;
+    std::chrono::seconds _slow_query_record_ttl;
+
+public:
+    uint64_t get_next_rand_uint64() {
+        return _gen();
+    }
+
+    i_tracing_backend_helper& backend_helper() {
+        return *_tracing_backend_helper_ptr;
+    }
+
+    const sstring& get_thread_name() const {
+        return _thread_name;
+    }
+
+    static seastar::sharded<tracing>& tracing_instance() {
+        // FIXME: leaked intentionally to avoid shutdown problems, see #293
+        static seastar::sharded<tracing>* tracing_inst = new seastar::sharded<tracing>();
+
+        return *tracing_inst;
+    }
+
+    static tracing& get_local_tracing_instance() {
+        return tracing_instance().local();
+    }
+
+    bool started() const {
+        return !_down;
+    }
+
+    static future<> create_tracing(const backend_registry& br, sstring tracing_backend_helper_class_name);
+    static future<> start_tracing();
+    tracing(const backend_registry& br, sstring tracing_backend_helper_class_name);
+
+    // Initialize a tracing backend (e.g. tracing_keyspace or logstash)
+    future<> start();
+
+    future<> stop();
+
+    /**
+     * Waits until all pending tracing records are flushed to the backend an
+     * shuts down the backend. The following calls to
+     * write_session_record()/write_event_record() methods of a backend instance
+     * should be a NOOP.
+     *
+     * @return a ready future when the shutdown is complete
+     */
+    future<> shutdown();
+
+    void write_pending_records() {
+        if (_pending_for_write_records_bulk.size()) {
+            _flushing_records += _pending_for_write_records_count;
+            stats.trace_records_count += _pending_for_write_records_count;
+            _pending_for_write_records_count = 0;
+            _tracing_backend_helper_ptr->write_records_bulk(_pending_for_write_records_bulk);
+            _pending_for_write_records_bulk.clear();
+        }
+    }
+
+    void write_complete(uint64_t nr = 1) {
+        if (nr > _flushing_records) {
+            throw std::logic_error(seastar::format("completing more records ({:d}) than there are pending ({:d})", nr, _flushing_records));
+        }
+        _flushing_records -= nr;
+    }
+
+    /**
+     * Create a new primary tracing session.
+     *
+     * @param type a tracing session type
+     * @param props trace session properties set
+     *
+     * @return tracing state handle
+     */
+    trace_state_ptr create_session(trace_type type, trace_state_props_set props) noexcept;
+
+    /**
+     * Create a new secondary tracing session.
+     *
+     * @param secondary_session_info tracing session info
+     *
+     * @return tracing state handle
+     */
+    trace_state_ptr create_session(const trace_info& secondary_session_info) noexcept;
+
+    void write_maybe() {
+        if (_pending_for_write_records_count >= write_event_records_threshold || _pending_for_write_records_bulk.size() >= write_event_sessions_threshold) {
+            write_pending_records();
+        }
+    }
+
+    void end_session() {
+        --_active_sessions;
+    }
+
+    void write_session_records(lw_shared_ptr<one_session_records> records, bool write_now) {
+        // if service is down - drop the records and return
+        if (_down) {
+            return;
+        }
+
+        try {
+            schedule_for_write(std::move(records));
+        } catch (...) {
+            // OOM: bump up the error counter and ignore
+            ++stats.trace_errors;
+            return;
+        }
+
+        if (write_now) {
+            write_pending_records();
+        } else {
+            write_maybe();
+        }
+    }
+
+    /**
+     * Sets a probability for tracing a CQL request.
+     *
+     * @param p a new tracing probability - a floating point value in a [0,1]
+     *          range. It would effectively define a portion of CQL requests
+     *          initiated on the current Node that will be traced.
+     * @throw std::invalid_argument if @ref p is out of range
+     */
+    void set_trace_probability(double p);
+    double get_trace_probability() const {
+        return _trace_probability;
+    }
+
+    bool trace_next_query() {
+        return _normalized_trace_probability != 0 && _gen() < _normalized_trace_probability;
+    }
+
+    std::unique_ptr<backend_session_state_base> allocate_backend_session_state() const {
+        return _tracing_backend_helper_ptr->allocate_session_state();
+    }
+
+    /**
+     * Checks if there is enough budget for the @param nr new records
+     * @param nr number of new records
+     *
+     * @return TRUE if there is enough budget, FLASE otherwise
+     */
+    bool have_records_budget(uint64_t nr = 1) {
+        // We don't want the total amount of pending, active and flushing records to
+        // bypass the maximum number of pending records plus the number of
+        // records that are possibly being written write now.
+        //
+        // If either records are being created too fast or a backend doesn't
+        // keep up we want to start dropping records.
+        // In any case, this should be rare.
+        if (_pending_for_write_records_count + _cached_records + _flushing_records + nr > max_pending_trace_records + write_event_records_threshold) {
+            return false;
+        }
+
+        return true;
+    }
+
+    uint64_t* get_pending_records_ptr() {
+        return &_pending_for_write_records_count;
+    }
+
+    uint64_t* get_cached_records_ptr() {
+        return &_cached_records;
+    }
+
+    void schedule_for_write(lw_shared_ptr<one_session_records> records) {
+        if (records->is_pending_for_write()) {
+            return;
+        }
+
+        _pending_for_write_records_bulk.emplace_back(records);
+        records->set_pending_for_write();
+
+        // move the current records from a "cached" to "pending for write" state
+        auto current_records_num = records->size();
+        _cached_records -= current_records_num;
+        _pending_for_write_records_count += current_records_num;
+    }
+
+    void set_slow_query_enabled(bool enable = true) {
+        _slow_query_logging_enabled = enable;
+    }
+
+    bool slow_query_tracing_enabled() const {
+        return _slow_query_logging_enabled;
+    }
+
+    /**
+     * Set the slow query threshold
+     *
+     * We limit the number of microseconds in the threshold by a maximal unsigned 32-bit
+     * integer.
+     *
+     * If a new threshold value exceeds the above limitation we will override it
+     * with the value based on a limit above.
+     *
+     * @param new_threshold new threshold value
+     */
+    void set_slow_query_threshold(std::chrono::microseconds new_threshold) {
+        if (new_threshold.count() > std::numeric_limits<uint32_t>::max()) {
+            _slow_query_duration_threshold = std::chrono::microseconds(std::numeric_limits<uint32_t>::max());
+            return;
+        }
+
+        _slow_query_duration_threshold = new_threshold;
+    }
+
+    std::chrono::microseconds slow_query_threshold() const {
+        return _slow_query_duration_threshold;
+    }
+
+    /**
+     * Set the slow query record TTL
+     *
+     * We limit the number of seconds in the TTL by a maximal signed 32-bit
+     * integer.
+     *
+     * If a new TTL value exceeds the above limitation we will override it
+     * with the value based on a limit above.
+     *
+     * @param new_ttl new TTL
+     */
+    void set_slow_query_record_ttl(std::chrono::seconds new_ttl) {
+        if (new_ttl.count() > std::numeric_limits<int32_t>::max()) {
+            _slow_query_record_ttl = std::chrono::seconds(std::numeric_limits<int32_t>::max());
+            return;
+        }
+
+        _slow_query_record_ttl = new_ttl;
+    }
+
+    std::chrono::seconds slow_query_record_ttl() const {
+        return _slow_query_record_ttl;
+    }
+
+private:
+    void write_timer_callback();
+
+    /**
+     * Check if we may create a new tracing session.
+     *
+     * @return TRUE if conditions are allowing creating a new tracing session
+     */
+    bool may_create_new_session(const std::optional<utils::UUID>& session_id = std::nullopt) {
+        // Don't create a session if its records are likely to be dropped
+        if (!have_records_budget(exp_trace_events_per_session) || _active_sessions >= max_pending_sessions + write_event_sessions_threshold) {
+            if (session_id) {
+                tracing_logger.trace("{}: Too many outstanding tracing records or sessions. Dropping a secondary session", *session_id);
+            } else {
+                tracing_logger.trace("Too many outstanding tracing records or sessions. Dropping a primary session");
+            }
+
+            if (++stats.dropped_sessions % tracing::log_warning_period == 1) {
+                tracing_logger.warn("Dropped {} sessions: open_sessions {}, cached_records {} pending_for_write_records {}, flushing_records {}",
+                            stats.dropped_sessions, _active_sessions, _cached_records, _pending_for_write_records_count, _flushing_records);
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+};
+
+void one_session_records::set_pending_for_write() {
+    _is_pending_for_write = true;
+    budget_ptr = _local_tracing_ptr->get_pending_records_ptr();
+}
+
+void one_session_records::data_consumed() {
+    if (session_rec.ready()) {
+        session_rec.set_consumed();
+    }
+
+    _is_pending_for_write = false;
+    budget_ptr = _local_tracing_ptr->get_cached_records_ptr();
+}
+
+inline span_id span_id::make_span_id() {
+    // make sure the value is always greater than 0
+    return 1 + (tracing::get_local_tracing_instance().get_next_rand_uint64() << 1);
+}
+}
 
 class position_in_partition_view;
 
@@ -8250,14 +9376,1540 @@ public:
 
 class clustering_interval_set;
 
-#include "atomic_cell_or_collection.hh"
-#include "query-result.hh"
-#include "mutation_partition_view.hh"
-#include "utils/managed_vector.hh"
-#include "range_tombstone_list.hh"
-#include "clustering_key_filter.hh"
-#include "utils/with_relational_operators.hh"
-#include "utils/managed_ref.hh"
+#include <list>
+#include <fmt/format.h>
+#include <seastar/net/byteorder.hh>
+#include <seastar/util/backtrace.hh>
+
+
+namespace utils {
+
+// Facilitates transparently reading from a fragmented range.
+template<typename T, typename Exception = std::runtime_error>
+GCC6_CONCEPT(
+    requires FragmentRange<T>
+)
+class linearizing_input_stream {
+    using iterator = typename T::iterator;
+    using fragment_type = typename T::fragment_type;
+
+private:
+    iterator _it;
+    iterator _end;
+    fragment_type _current;
+    size_t _size;
+    // We need stable addresses for the `bytes`, which, due to the small
+    // value optimization, can invalidate any attached bytes_view on move.
+    std::list<bytes> _linearized_values;
+
+private:
+    size_t remove_current_prefix(size_t size) {
+        if (size < _current.size()) {
+            _current.remove_prefix(size);
+            _size -= size;
+            return size;
+        }
+        const auto ret = _current.size();
+        _size -= ret;
+        ++_it;
+        _current = (_it == _end) ? fragment_type{} : *_it;
+        return ret;
+    }
+
+    void check_size(size_t size) const {
+        if (size > _size) {
+            seastar::throw_with_backtrace<Exception>(
+                    fmt::format("linearizing_input_stream::check_size() - not enough bytes (requested {:d}, got {:d})", size, _size));
+        }
+    }
+
+    std::pair<bytes_view, bool> do_read(size_t size) {
+        check_size(size);
+
+        if (size <= _current.size()) {
+            bytes_view ret(_current.begin(), size);
+            remove_current_prefix(size);
+            return {ret, false};
+        }
+
+        auto out = _linearized_values.emplace_back(bytes::initialized_later{}, size).begin();
+        while (size) {
+            out = std::copy_n(_current.begin(), std::min(size, _current.size()), out);
+            size -= remove_current_prefix(size);
+        }
+
+        return {_linearized_values.back(), true};
+    }
+
+public:
+    explicit linearizing_input_stream(const T& fr)
+        : _it(fr.begin())
+        , _end(fr.end())
+        , _current(*_it)
+        , _size(fr.size_bytes()) {
+    }
+    // Not cheap to copy, would copy all linearized values.
+    linearizing_input_stream(const linearizing_input_stream&) = delete;
+
+    size_t size() const {
+        return _size;
+    }
+
+    bool empty() const {
+        return _size == 0;
+    }
+
+    // The returned view is only valid as long as the stream is alive.
+    bytes_view read(size_t size) {
+        return do_read(size).first;
+    }
+
+    template <typename Type>
+    GCC6_CONCEPT(
+        requires std::is_trivial_v<Type>
+    )
+    Type read_trivial() {
+        auto [bv, linearized] = do_read(sizeof(Type));
+        auto ret = net::ntoh(*reinterpret_cast<const net::packed<Type>*>(bv.begin()));
+        if (linearized) {
+            _linearized_values.pop_back();
+        }
+        return ret;
+    }
+
+    void skip(size_t size) {
+        check_size(size);
+        while (size) {
+            size -= remove_current_prefix(size);
+        }
+    }
+};
+
+} // namespace utils
+#include <iosfwd>
+
+class abstract_type;
+class bytes_ostream;
+class compaction_garbage_collector;
+class row_tombstone;
+
+class collection_mutation;
+
+// An auxiliary struct used to (de)construct collection_mutations.
+// Unlike collection_mutation which is a serialized blob, this struct allows to inspect logical units of information
+// (tombstone and cells) inside the mutation easily.
+struct collection_mutation_description {
+    tombstone tomb;
+    // FIXME: use iterators?
+    // we never iterate over `cells` more than once, so there is no need to store them in memory.
+    // In some cases instead of constructing the `cells` vector, it would be more efficient to provide
+    // a one-time-use forward iterator which returns the cells.
+    utils::chunked_vector<std::pair<bytes, atomic_cell>> cells;
+
+    // Expires cells based on query_time. Expires tombstones based on max_purgeable and gc_before.
+    // Removes cells covered by tomb or this->tomb.
+    bool compact_and_expire(column_id id, row_tombstone tomb, gc_clock::time_point query_time,
+        can_gc_fn&, gc_clock::time_point gc_before, compaction_garbage_collector* collector = nullptr);
+
+    // Packs the data to a serialized blob.
+    collection_mutation serialize(const abstract_type&) const;
+};
+
+// Similar to collection_mutation_description, except that it doesn't store the cells' data, only observes it.
+struct collection_mutation_view_description {
+    tombstone tomb;
+    // FIXME: use iterators? See the fixme in collection_mutation_description; the same considerations apply here.
+    utils::chunked_vector<std::pair<bytes_view, atomic_cell_view>> cells;
+
+    // Copies the observed data, storing it in a collection_mutation_description.
+    collection_mutation_description materialize(const abstract_type&) const;
+
+    // Packs the data to a serialized blob.
+    collection_mutation serialize(const abstract_type&) const;
+};
+
+using collection_mutation_input_stream = struct {};
+
+// Given a linearized collection_mutation_view, returns an auxiliary struct allowing the inspection of each cell.
+// The struct is an observer of the data given by the collection_mutation_view and is only valid while the
+// passed in `collection_mutation_input_stream` is alive.
+// The function needs to be given the type of stored data to reconstruct the structural information.
+collection_mutation_view_description deserialize_collection_mutation(const abstract_type&, collection_mutation_input_stream&);
+
+class collection_mutation_view {
+public:
+
+    // Is this a noop mutation?
+    bool is_empty() const;
+
+    // Is any of the stored cells live (not deleted nor expired) at the time point `tp`,
+    // given the later of the tombstones `t` and the one stored in the mutation (if any)?
+    // Requires a type to reconstruct the structural information.
+    bool is_any_live(const abstract_type&, tombstone t = tombstone(), gc_clock::time_point tp = gc_clock::time_point::min()) const;
+
+    // The maximum of timestamps of the mutation's cells and tombstone.
+    api::timestamp_type last_update(const abstract_type&) const;
+
+
+    class printer {
+        const abstract_type& _type;
+        const collection_mutation_view& _cmv;
+    public:
+        printer(const abstract_type& type, const collection_mutation_view& cmv)
+                : _type(type), _cmv(cmv) {}
+        friend std::ostream& operator<<(std::ostream& os, const printer& cmvp);
+    };
+};
+
+// A serialized mutation of a collection of cells.
+// Used to represent mutations of collections (lists, maps, sets) or non-frozen user defined types.
+// It contains a sequence of cells, each representing a mutation of a single entry (element or field) of the collection.
+// Each cell has an associated 'key' (or 'path'). The meaning of each (key, cell) pair is:
+//  for sets: the key is the serialized set element, the cell contains no data (except liveness information),
+//  for maps: the key is the serialized map element's key, the cell contains the serialized map element's value,
+//  for lists: the key is a timeuuid identifying the list entry, the cell contains the serialized value,
+//  for user types: the key is an index identifying the field, the cell contains the value of the field.
+//  The mutation may also contain a collection-wide tombstone.
+class collection_mutation {
+public:
+
+    collection_mutation() {}
+    collection_mutation(const abstract_type&, collection_mutation_view);
+    collection_mutation(const abstract_type& type, const bytes_ostream& data);
+    operator collection_mutation_view() const;
+};
+
+collection_mutation merge(const abstract_type&, collection_mutation_view, collection_mutation_view);
+
+collection_mutation difference(const abstract_type&, collection_mutation_view, collection_mutation_view);
+
+// Serializes the given collection of cells to a sequence of bytes ready to be sent over the CQL protocol.
+bytes serialize_for_cql(const abstract_type&, collection_mutation_view, cql_serialization_format);
+
+
+// A variant type that can hold either an atomic_cell, or a serialized collection.
+// Which type is stored is determined by the schema.
+class atomic_cell_or_collection final {
+    // FIXME: This has made us lose small-buffer optimisation. Unfortunately,
+    // due to the changed cell format it would be less effective now, anyway.
+    // Measure the actual impact because any attempts to fix this will become
+    // irrelevant once rows are converted to the IMR as well, so maybe we can
+    // live with this like that.
+public:
+    atomic_cell_or_collection() = default;
+    atomic_cell_or_collection(atomic_cell_or_collection&&) = default;
+    atomic_cell_or_collection(const atomic_cell_or_collection&) = delete;
+    atomic_cell_or_collection& operator=(atomic_cell_or_collection&&) = default;
+    atomic_cell_or_collection& operator=(const atomic_cell_or_collection&) = delete;
+    atomic_cell_or_collection(atomic_cell ac);
+    atomic_cell_or_collection(const abstract_type& at, atomic_cell_view acv);
+    static atomic_cell_or_collection from_atomic_cell(atomic_cell data);
+    atomic_cell_view as_atomic_cell(const column_definition& cdef) const;
+    atomic_cell_ref as_atomic_cell_ref(const column_definition& cdef);
+    atomic_cell_mutable_view as_mutable_atomic_cell(const column_definition& cdef);
+    atomic_cell_or_collection(collection_mutation cm);
+    atomic_cell_or_collection copy(const abstract_type&) const;
+    explicit operator bool() const;
+    static constexpr bool can_use_mutable_view();
+    void swap(atomic_cell_or_collection& other) noexcept;
+    static atomic_cell_or_collection from_collection_mutation(collection_mutation data);
+    collection_mutation_view as_collection_mutation() const;
+    bytes_view serialize() const;
+    bool equals(const abstract_type& type, const atomic_cell_or_collection& other) const;
+    size_t external_memory_usage(const abstract_type&) const;
+
+    class printer {
+    public:
+        printer(const column_definition& cdef, const atomic_cell_or_collection& cell);
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream&, const printer&);
+    };
+    friend std::ostream& operator<<(std::ostream&, const printer&);
+};
+
+namespace std {
+
+void swap(atomic_cell_or_collection& a, atomic_cell_or_collection& b) noexcept;
+
+}
+namespace query {
+
+enum class digest_algorithm : uint8_t {
+    none = 0,  // digest not required
+    MD5 = 1,
+    xxHash = 2,// default algorithm
+};
+
+}
+#include <optional>
+#include <seastar/util/bool_class.hh>
+
+namespace query {
+
+// result_memory_limiter, result_memory_accounter and result_memory_tracker
+// form an infrastructure for limiting size of query results.
+//
+// result_memory_limiter is a shard-local object which ensures that all results
+// combined do not use more than 10% of the shard memory.
+//
+// result_memory_accounter is used by result producers, updates the shard-local
+// limits as well as keeps track of the individual maximum result size limit
+// which is 1 MB.
+//
+// result_memory_tracker is just an object that makes sure the
+// result_memory_limiter is notified when memory is released (but not sooner).
+
+class result_memory_accounter;
+
+class result_memory_limiter {
+    const size_t _maximum_total_result_memory;
+    semaphore _memory_limiter;
+public:
+    static constexpr size_t minimum_result_size = 4 * 1024;
+    static constexpr size_t maximum_result_size = 1 * 1024 * 1024;
+public:
+    explicit result_memory_limiter(size_t maximum_total_result_memory)
+        : _maximum_total_result_memory(maximum_total_result_memory)
+        , _memory_limiter(_maximum_total_result_memory)
+    { }
+
+    result_memory_limiter(const result_memory_limiter&) = delete;
+    result_memory_limiter(result_memory_limiter&&) = delete;
+
+    ssize_t total_used_memory() const {
+        return _maximum_total_result_memory - _memory_limiter.available_units();
+    }
+
+    // Reserves minimum_result_size and creates new memory accounter for
+    // mutation query. Uses the specified maximum result size and may be
+    // stopped before reaching it due to memory pressure on shard.
+    future<result_memory_accounter> new_mutation_read(size_t max_result_size);
+
+    // Reserves minimum_result_size and creates new memory accounter for
+    // data query. Uses the specified maximum result size, result will *not*
+    // be stopped due to on shard memory pressure in order to avoid digest
+    // mismatches.
+    future<result_memory_accounter> new_data_read(size_t max_result_size);
+
+    // Creates a memory accounter for digest reads. Such accounter doesn't
+    // contribute to the shard memory usage, but still stops producing the
+    // result after individual limit has been reached.
+    future<result_memory_accounter> new_digest_read(size_t max_result_size);
+
+    // Checks whether the result can grow any more, takes into account only
+    // the per shard limit.
+    stop_iteration check() const {
+        return stop_iteration(_memory_limiter.current() <= 0);
+    }
+
+    // Consumes n bytes from memory limiter and checks whether the result
+    // can grow any more (considering just the per-shard limit).
+    stop_iteration update_and_check(size_t n) {
+        _memory_limiter.consume(n);
+        return check();
+    }
+
+    void release(size_t n) noexcept {
+        _memory_limiter.signal(n);
+    }
+
+    semaphore& sem() noexcept { return _memory_limiter; }
+};
+
+
+class result_memory_tracker {
+    semaphore_units<> _units;
+    size_t _used_memory;
+private:
+    static thread_local semaphore _dummy;
+public:
+    result_memory_tracker() noexcept : _units(_dummy, 0), _used_memory(0) { }
+    result_memory_tracker(semaphore& sem, size_t blocked, size_t used) noexcept
+        : _units(sem, blocked), _used_memory(used) { }
+    size_t used_memory() const { return _used_memory; }
+};
+
+class result_memory_accounter {
+    result_memory_limiter* _limiter = nullptr;
+    size_t _blocked_bytes = 0;
+    size_t _used_memory = 0;
+    size_t _total_used_memory = 0;
+    size_t _maximum_result_size = 0;
+    stop_iteration _stop_on_global_limit;
+private:
+    // Mutation query accounter. Uses provided individual result size limit and
+    // will stop when shard memory pressure grows too high.
+    struct mutation_query_tag { };
+    explicit result_memory_accounter(mutation_query_tag, result_memory_limiter& limiter, size_t max_size) noexcept
+        : _limiter(&limiter)
+        , _blocked_bytes(result_memory_limiter::minimum_result_size)
+        , _maximum_result_size(max_size)
+        , _stop_on_global_limit(true)
+    { }
+
+    // Data query accounter. Uses provided individual result size limit and
+    // will *not* stop even though shard memory pressure grows too high.
+    struct data_query_tag { };
+    explicit result_memory_accounter(data_query_tag, result_memory_limiter& limiter, size_t max_size) noexcept
+        : _limiter(&limiter)
+        , _blocked_bytes(result_memory_limiter::minimum_result_size)
+        , _maximum_result_size(max_size)
+    { }
+
+    // Digest query accounter. Uses provided individual result size limit and
+    // will *not* stop even though shard memory pressure grows too high. This
+    // accounter does not contribute to the shard memory limits.
+    struct digest_query_tag { };
+    explicit result_memory_accounter(digest_query_tag, result_memory_limiter&, size_t max_size) noexcept
+        : _blocked_bytes(0)
+        , _maximum_result_size(max_size)
+    { }
+
+    friend class result_memory_limiter;
+public:
+    result_memory_accounter() = default;
+
+    result_memory_accounter(result_memory_accounter&& other) noexcept
+        : _limiter(std::exchange(other._limiter, nullptr))
+        , _blocked_bytes(other._blocked_bytes)
+        , _used_memory(other._used_memory)
+        , _total_used_memory(other._total_used_memory)
+        , _maximum_result_size(other._maximum_result_size)
+        , _stop_on_global_limit(other._stop_on_global_limit)
+    { }
+
+    result_memory_accounter& operator=(result_memory_accounter&& other) noexcept {
+        if (this != &other) {
+            this->~result_memory_accounter();
+            new (this) result_memory_accounter(std::move(other));
+        }
+        return *this;
+    }
+
+    ~result_memory_accounter() {
+        if (_limiter) {
+            _limiter->release(_blocked_bytes);
+        }
+    }
+
+    size_t used_memory() const { return _used_memory; }
+
+    // Consume n more bytes for the result. Returns stop_iteration::yes if
+    // the result cannot grow any more (taking into account both individual
+    // and per-shard limits).
+    stop_iteration update_and_check(size_t n) {
+        _used_memory += n;
+        _total_used_memory += n;
+        auto stop = stop_iteration(_total_used_memory > _maximum_result_size);
+        if (_limiter && _used_memory > _blocked_bytes) {
+            auto to_block = std::min(_used_memory - _blocked_bytes, n);
+            _blocked_bytes += to_block;
+            stop = (_limiter->update_and_check(to_block) && _stop_on_global_limit) || stop;
+        }
+        return stop;
+    }
+
+    // Checks whether the result can grow any more.
+    stop_iteration check() const {
+        stop_iteration stop { _total_used_memory > result_memory_limiter::maximum_result_size };
+        if (!stop && _used_memory >= _blocked_bytes && _limiter) {
+            return _limiter->check() && _stop_on_global_limit;
+        }
+        return stop;
+    }
+
+    // Consume n more bytes for the result.
+    void update(size_t n) {
+        update_and_check(n);
+    }
+
+    result_memory_tracker done() && {
+        if (!_limiter) {
+            return { };
+        }
+        auto& sem = std::exchange(_limiter, nullptr)->sem();
+        return result_memory_tracker(sem, _blocked_bytes, _used_memory);
+    }
+};
+
+inline future<result_memory_accounter> result_memory_limiter::new_mutation_read(size_t max_size) {
+    return _memory_limiter.wait(minimum_result_size).then([this, max_size] {
+        return result_memory_accounter(result_memory_accounter::mutation_query_tag(), *this, max_size);
+    });
+}
+
+inline future<result_memory_accounter> result_memory_limiter::new_data_read(size_t max_size) {
+    return _memory_limiter.wait(minimum_result_size).then([this, max_size] {
+        return result_memory_accounter(result_memory_accounter::data_query_tag(), *this, max_size);
+    });
+}
+
+inline future<result_memory_accounter> result_memory_limiter::new_digest_read(size_t max_size) {
+    return make_ready_future<result_memory_accounter>(result_memory_accounter(result_memory_accounter::digest_query_tag(), *this, max_size));
+}
+
+enum class result_request {
+    only_result,
+    only_digest,
+    result_and_digest,
+};
+
+struct result_options {
+    result_request request = result_request::only_result;
+    digest_algorithm digest_algo = query::digest_algorithm::none;
+
+    static result_options only_result() {
+        return result_options{};
+    }
+
+    static result_options only_digest(digest_algorithm da) {
+        return {result_request::only_digest, da};
+    }
+};
+
+class result_digest {
+public:
+    using type = std::array<uint8_t, 16>;
+private:
+    type _digest;
+public:
+    result_digest() = default;
+    result_digest(type&& digest) : _digest(std::move(digest)) {}
+    const type& get() const { return _digest; }
+    bool operator==(const result_digest& rh) const {
+        return _digest == rh._digest;
+    }
+    bool operator!=(const result_digest& rh) const {
+        return _digest != rh._digest;
+    }
+};
+
+//
+// The query results are stored in a serialized form. This is in order to
+// address the following problems, which a structured format has:
+//
+//   - high level of indirection (vector of vectors of vectors of blobs), which
+//     is not CPU cache friendly
+//
+//   - high allocation rate due to fine-grained object structure
+//
+// On replica side, the query results are probably going to be serialized in
+// the transport layer anyway, so serializing the results up-front doesn't add
+// net work. There is no processing of the query results on replica other than
+// concatenation in case of range queries and checksum calculation. If query
+// results are collected in serialized form from different cores, we can
+// concatenate them without copying by simply appending the fragments into the
+// packet.
+//
+// On coordinator side, the query results would have to be parsed from the
+// transport layer buffers anyway, so the fact that iterators parse it also
+// doesn't add net work, but again saves allocations and copying. The CQL
+// server doesn't need complex data structures to process the results, it just
+// goes over it linearly consuming it.
+//
+// The coordinator side could be optimized even further for CQL queries which
+// do not need processing (eg. select * from cf where ...). We could make the
+// replica send the query results in the format which is expected by the CQL
+// binary protocol client. So in the typical case the coordinator would just
+// pass the data using zero-copy to the client, prepending a header.
+//
+// Users which need more complex structure of query results can convert this
+// to query::result_set.
+//
+// Related headers:
+//  - query-result-reader.hh
+//  - query-result-writer.hh
+
+struct short_read_tag { };
+using short_read = bool_class<short_read_tag>;
+
+class result {
+    bytes_ostream _w;
+    std::optional<result_digest> _digest;
+    std::optional<uint32_t> _row_count;
+    api::timestamp_type _last_modified = api::missing_timestamp;
+    short_read _short_read;
+    query::result_memory_tracker _memory_tracker;
+    std::optional<uint32_t> _partition_count;
+public:
+    class builder;
+    class partition_writer;
+    friend class result_merger;
+
+    result();
+    result(bytes_ostream&& w, short_read sr, std::optional<uint32_t> c, std::optional<uint32_t> pc,
+           result_memory_tracker memory_tracker = { })
+        : _w(std::move(w))
+        , _row_count(c)
+        , _short_read(sr)
+        , _memory_tracker(std::move(memory_tracker))
+        , _partition_count(pc)
+    {
+        w.reduce_chunk_count();
+    }
+    result(bytes_ostream&& w, std::optional<result_digest> d, api::timestamp_type last_modified,
+           short_read sr, std::optional<uint32_t> c, std::optional<uint32_t> pc, result_memory_tracker memory_tracker = { })
+        : _w(std::move(w))
+        , _digest(d)
+        , _row_count(c)
+        , _last_modified(last_modified)
+        , _short_read(sr)
+        , _memory_tracker(std::move(memory_tracker))
+        , _partition_count(pc)
+    {
+        w.reduce_chunk_count();
+    }
+    result(result&&) = default;
+    result(const result&) = default;
+    result& operator=(result&&) = default;
+    result& operator=(const result&) = default;
+
+    const bytes_ostream& buf() const {
+        return _w;
+    }
+
+    const std::optional<result_digest>& digest() const {
+        return _digest;
+    }
+
+    const std::optional<uint32_t>& row_count() const {
+        return _row_count;
+    }
+
+    const api::timestamp_type last_modified() const {
+        return _last_modified;
+    }
+
+    short_read is_short_read() const {
+        return _short_read;
+    }
+
+    const std::optional<uint32_t>& partition_count() const {
+        return _partition_count;
+    }
+
+    void ensure_counts();
+
+    struct printer {
+        schema_ptr s;
+        const query::partition_slice& slice;
+        const query::result& res;
+    };
+
+    sstring pretty_print(schema_ptr, const query::partition_slice&) const;
+    printer pretty_printer(schema_ptr, const query::partition_slice&) const;
+};
+
+std::ostream& operator<<(std::ostream& os, const query::result::printer&);
+}
+
+#include <boost/intrusive/set.hpp>
+#include <boost/range/algorithm.hpp>
+#include <optional>
+
+namespace bi = boost::intrusive;
+
+/**
+ * Represents a ranged deletion operation. Can be empty.
+ */
+class range_tombstone final {
+    bi::set_member_hook<bi::link_mode<bi::auto_unlink>> _link;
+public:
+    clustering_key_prefix start;
+    bound_kind start_kind;
+    clustering_key_prefix end;
+    bound_kind end_kind;
+    tombstone tomb;
+    range_tombstone(clustering_key_prefix start, bound_kind start_kind, clustering_key_prefix end, bound_kind end_kind, tombstone tomb)
+            : start(std::move(start))
+            , start_kind(start_kind)
+            , end(std::move(end))
+            , end_kind(end_kind)
+            , tomb(std::move(tomb))
+    { }
+    range_tombstone(bound_view start, bound_view end, tombstone tomb)
+            : range_tombstone(start.prefix(), start.kind(), end.prefix(), end.kind(), std::move(tomb))
+    { }
+
+    // Can be called only when both start and end are !is_static_row && !is_clustering_row().
+    range_tombstone(position_in_partition_view start, position_in_partition_view end, tombstone tomb)
+            : range_tombstone(start.as_start_bound_view(), end.as_end_bound_view(), tomb)
+    {}
+    range_tombstone(clustering_key_prefix&& start, clustering_key_prefix&& end, tombstone tomb)
+            : range_tombstone(std::move(start), bound_kind::incl_start, std::move(end), bound_kind::incl_end, std::move(tomb))
+    { }
+    // IDL constructor
+    range_tombstone(clustering_key_prefix&& start, tombstone tomb, bound_kind start_kind, clustering_key_prefix&& end, bound_kind end_kind)
+            : range_tombstone(std::move(start), start_kind, std::move(end), end_kind, std::move(tomb))
+    { }
+    range_tombstone(range_tombstone&& rt) noexcept
+            : range_tombstone(std::move(rt.start), rt.start_kind, std::move(rt.end), rt.end_kind, std::move(rt.tomb)) {
+        update_node(rt._link);
+    }
+    struct without_link { };
+    range_tombstone(range_tombstone&& rt, without_link) noexcept
+            : range_tombstone(std::move(rt.start), rt.start_kind, std::move(rt.end), rt.end_kind, std::move(rt.tomb)) {
+    }
+    range_tombstone(const range_tombstone& rt)
+            : range_tombstone(rt.start, rt.start_kind, rt.end, rt.end_kind, rt.tomb)
+    { }
+    range_tombstone& operator=(range_tombstone&& rt) noexcept {
+        update_node(rt._link);
+        move_assign(std::move(rt));
+        return *this;
+    }
+    range_tombstone& operator=(const range_tombstone& rt) {
+        start = rt.start;
+        start_kind = rt.start_kind;
+        end = rt.end;
+        end_kind = rt.end_kind;
+        tomb = rt.tomb;
+        return *this;
+    }
+    const bound_view start_bound() const {
+        return bound_view(start, start_kind);
+    }
+    const bound_view end_bound() const {
+        return bound_view(end, end_kind);
+    }
+    // Range tombstone covers all rows with positions p such that: position() <= p < end_position()
+    position_in_partition_view position() const;
+    position_in_partition_view end_position() const;
+    bool empty() const {
+        return !bool(tomb);
+    }
+    explicit operator bool() const {
+        return bool(tomb);
+    }
+    bool equal(const schema& s, const range_tombstone& other) const {
+        return tomb == other.tomb && start_bound().equal(s, other.start_bound()) && end_bound().equal(s, other.end_bound());
+    }
+    struct compare {
+        bound_view::compare _c;
+        compare(const schema& s) : _c(s) {}
+        bool operator()(const range_tombstone& rt1, const range_tombstone& rt2) const {
+            return _c(rt1.start_bound(), rt2.start_bound());
+        }
+    };
+    friend void swap(range_tombstone& rt1, range_tombstone& rt2) {
+        range_tombstone tmp(std::move(rt2), without_link());
+        rt2.move_assign(std::move(rt1));
+        rt1.move_assign(std::move(tmp));
+    }
+    friend std::ostream& operator<<(std::ostream& out, const range_tombstone& rt);
+    using container_type = bi::set<range_tombstone,
+            bi::member_hook<range_tombstone, bi::set_member_hook<bi::link_mode<bi::auto_unlink>>, &range_tombstone::_link>,
+            bi::compare<range_tombstone::compare>,
+            bi::constant_time_size<false>>;
+
+    static bool is_single_clustering_row_tombstone(const schema& s, const clustering_key_prefix& start,
+        bound_kind start_kind, const clustering_key_prefix& end, bound_kind end_kind)
+    {
+        return start.is_full(s) && start_kind == bound_kind::incl_start
+            && end_kind == bound_kind::incl_end && start.equal(s, end);
+    }
+
+    // Applies src to this. The tombstones may be overlapping.
+    // If the tombstone with larger timestamp has the smaller range the remainder
+    // is returned, it guaranteed not to overlap with this.
+    // The start bounds of this and src are required to be equal. The start bound
+    // of this is not changed. The start bound of the remainder (if there is any)
+    // is larger than the end bound of this.
+    std::optional<range_tombstone> apply(const schema& s, range_tombstone&& src);
+
+    // Intersects the range of this tombstone with [pos, +inf) and replaces
+    // the range of the tombstone if there is an overlap.
+    // Returns true if there is an overlap. When returns false, the tombstone
+    // is not modified.
+    //
+    // pos must satisfy:
+    //   1) before_all_clustered_rows() <= pos
+    //   2) !pos.is_clustering_row() - because range_tombstone bounds can't represent such positions
+    bool trim_front(const schema& s, position_in_partition_view pos) {
+        position_in_partition::less_compare less(s);
+        if (!less(pos, end_position())) {
+            return false;
+        }
+        if (less(position(), pos)) {
+            set_start(s, pos);
+        }
+        return true;
+    }
+
+    // Assumes !pos.is_clustering_row(), because range_tombstone bounds can't represent such positions
+    void set_start(const schema& s, position_in_partition_view pos) {
+        bound_view new_start = pos.as_start_bound_view();
+        start = new_start.prefix();
+        start_kind = new_start.kind();
+    }
+
+    size_t external_memory_usage(const schema&) const {
+        return start.external_memory_usage() + end.external_memory_usage();
+    }
+
+    size_t memory_usage(const schema& s) const {
+        return sizeof(range_tombstone) + external_memory_usage(s);
+    }
+private:
+    void move_assign(range_tombstone&& rt) {
+        start = std::move(rt.start);
+        start_kind = rt.start_kind;
+        end = std::move(rt.end);
+        end_kind = rt.end_kind;
+        tomb = std::move(rt.tomb);
+    }
+    void update_node(bi::set_member_hook<bi::link_mode<bi::auto_unlink>>& other_link) {
+        if (other_link.is_linked()) {
+            // Move the link in case we're being relocated by LSA.
+            container_type::node_algorithms::replace_node(other_link.this_ptr(), _link.this_ptr());
+            container_type::node_algorithms::init(other_link.this_ptr());
+        }
+    }
+};
+
+template<>
+struct appending_hash<range_tombstone>  {
+    template<typename Hasher>
+    void operator()(Hasher& h, const range_tombstone& value, const schema& s) const {
+        feed_hash(h, value.start, s);
+        // For backward compatibility, don't consider new fields if
+        // this could be an old-style, overlapping, range tombstone.
+        if (!value.start.equal(s, value.end) || value.start_kind != bound_kind::incl_start || value.end_kind != bound_kind::incl_end) {
+            feed_hash(h, value.start_kind);
+            feed_hash(h, value.end, s);
+            feed_hash(h, value.end_kind);
+        }
+        feed_hash(h, value.tomb);
+    }
+};
+
+// The accumulator expects the incoming range tombstones and clustered rows to
+// follow the ordering used by the mutation readers.
+//
+// Unless the accumulator is in the reverse mode, after apply(rt) or
+// tombstone_for_row(ck) are called there are followng restrictions for
+// subsequent calls:
+//  - apply(rt1) can be invoked only if rt.start_bound() < rt1.start_bound()
+//    and ck < rt1.start_bound()
+//  - tombstone_for_row(ck1) can be invoked only if rt.start_bound() < ck1
+//    and ck < ck1
+//
+// In other words position in partition of the mutation fragments passed to the
+// accumulator must be increasing.
+//
+// If the accumulator was created with the reversed flag set it expects the
+// stream of the range tombstone to come from a reverse partitions and follow
+// the ordering that they use. In particular, the restrictions from non-reversed
+// mode change to:
+//  - apply(rt1) can be invoked only if rt.end_bound() > rt1.end_bound() and
+//    ck > rt1.end_bound()
+//  - tombstone_for_row(ck1) can be invoked only if rt.end_bound() > ck1 and
+//    ck > ck1.
+class range_tombstone_accumulator {
+    bound_view::compare _cmp;
+    tombstone _partition_tombstone;
+    std::deque<range_tombstone> _range_tombstones;
+    tombstone _current_tombstone;
+    bool _reversed;
+private:
+    void update_current_tombstone();
+    void drop_unneeded_tombstones(const clustering_key_prefix& ck, int w = 0);
+public:
+    range_tombstone_accumulator(const schema& s, bool reversed)
+        : _cmp(s), _reversed(reversed) { }
+
+    void set_partition_tombstone(tombstone t) {
+        _partition_tombstone = t;
+        update_current_tombstone();
+    }
+
+    tombstone get_partition_tombstone() const {
+        return _partition_tombstone;
+    }
+
+    tombstone current_tombstone() const {
+        return _current_tombstone;
+    }
+
+    tombstone tombstone_for_row(const clustering_key_prefix& ck) {
+        drop_unneeded_tombstones(ck);
+        return _current_tombstone;
+    }
+
+    const std::deque<range_tombstone>& range_tombstones_for_row(const clustering_key_prefix& ck) {
+        drop_unneeded_tombstones(ck);
+        return _range_tombstones;
+    }
+
+    std::deque<range_tombstone> range_tombstones() && {
+        return std::move(_range_tombstones);
+    }
+
+    void apply(range_tombstone rt);
+
+    void clear();
+};
+
+class row_marker;
+class row_tombstone;
+
+// When used on an entry, marks the range between this entry and the previous
+// one as continuous or discontinuous, excluding the keys of both entries.
+// This information doesn't apply to continuity of the entries themselves,
+// that is specified by is_dummy flag.
+// See class doc of mutation_partition.
+using is_continuous = bool_class<class continuous_tag>;
+
+// Dummy entry is an entry which is incomplete.
+// Typically used for marking bounds of continuity range.
+// See class doc of mutation_partition.
+class dummy_tag {};
+using is_dummy = bool_class<dummy_tag>;
+
+// Guarantees:
+//
+// - any tombstones which affect cell's liveness are visited before that cell
+//
+// - rows are visited in ascending order with respect to their keys
+//
+// - row header (accept_row) is visited before that row's cells
+//
+// - row tombstones are visited in ascending order with respect to their key prefixes
+//
+// - cells in given row are visited in ascending order with respect to their column IDs
+//
+// - static row is visited before any clustered row
+//
+// - for each column in a row only one variant of accept_(static|row)_cell() is called, appropriate
+//   for column's kind (atomic or collection).
+//
+class mutation_partition_visitor {
+public:
+    virtual void accept_partition_tombstone(tombstone) = 0;
+
+    virtual void accept_static_cell(column_id, atomic_cell_view) = 0;
+
+    virtual void accept_static_cell(column_id, collection_mutation_view) = 0;
+
+    virtual void accept_row_tombstone(const range_tombstone&) = 0;
+
+    virtual void accept_row(position_in_partition_view key, const row_tombstone& deleted_at, const row_marker& rm,
+        is_dummy = is_dummy::no, is_continuous = is_continuous::yes) = 0;
+
+    virtual void accept_row_cell(column_id id, atomic_cell_view) = 0;
+
+    virtual void accept_row_cell(column_id id, collection_mutation_view) = 0;
+};
+
+#include <seastar/core/simple-stream.hh>
+
+namespace utils {
+
+using input_stream = seastar::memory_input_stream<bytes_ostream::fragment_iterator>;
+
+}
+
+namespace ser {
+class mutation_partition_view;
+}
+
+class partition_builder;
+class converting_mutation_partition_applier;
+
+GCC6_CONCEPT(
+template<typename T>
+concept bool MutationViewVisitor = requires (T& visitor, tombstone t, atomic_cell ac,
+                                             collection_mutation_view cmv, range_tombstone rt,
+                                             position_in_partition_view pipv, row_tombstone row_tomb,
+                                             row_marker rm) {
+    visitor.accept_partition_tombstone(t);
+    visitor.accept_static_cell(column_id(), std::move(ac));
+    visitor.accept_static_cell(column_id(), cmv);
+    visitor.accept_row_tombstone(rt);
+    visitor.accept_row(pipv, row_tomb, rm,
+            is_dummy::no, is_continuous::yes);
+    visitor.accept_row_cell(column_id(), std::move(ac));
+    visitor.accept_row_cell(column_id(), cmv);
+};
+)
+
+class mutation_partition_view_virtual_visitor {
+public:
+    virtual ~mutation_partition_view_virtual_visitor();
+    virtual void accept_partition_tombstone(tombstone t) = 0;
+    virtual void accept_static_cell(column_id, atomic_cell ac) = 0;
+    virtual void accept_static_cell(column_id, collection_mutation_view cmv) = 0;
+    virtual void accept_row_tombstone(range_tombstone rt) = 0;
+    virtual void accept_row(position_in_partition_view pipv, row_tombstone rt, row_marker rm, is_dummy, is_continuous) = 0;
+    virtual void accept_row_cell(column_id, atomic_cell ac) = 0;
+    virtual void accept_row_cell(column_id, collection_mutation_view cmv) = 0;
+};
+
+// View on serialized mutation partition. See mutation_partition_serializer.
+class mutation_partition_view {
+    utils::input_stream _in;
+private:
+    mutation_partition_view(utils::input_stream v)
+        : _in(v)
+    { }
+
+    template<typename Visitor>
+    GCC6_CONCEPT(requires MutationViewVisitor<Visitor>)
+    void do_accept(const column_mapping&, Visitor& visitor) const;
+public:
+    static mutation_partition_view from_stream(utils::input_stream v) {
+        return { v };
+    }
+    static mutation_partition_view from_view(ser::mutation_partition_view v);
+    void accept(const schema& schema, partition_builder& visitor) const;
+    void accept(const column_mapping&, converting_mutation_partition_applier& visitor) const;
+    void accept(const column_mapping&, mutation_partition_view_virtual_visitor& mpvvv) const;
+
+    std::optional<clustering_key> first_row_key() const;
+    std::optional<clustering_key> last_row_key() const;
+};
+#include <array>
+#include <type_traits>
+
+
+template<typename T, unsigned InternalSize = 0, typename SizeType = size_t>
+class managed_vector {
+    static_assert(std::is_nothrow_move_constructible<T>::value,
+        "objects stored in managed_vector need to be nothrow move-constructible");
+public:
+    using value_type = T;
+    using size_type = SizeType;
+    using iterator = T*;
+    using const_iterator = const T*;
+private:
+    struct external {
+        managed_vector* _backref;
+        T _data[0];
+
+        external(external&& other) noexcept : _backref(other._backref) {
+            for (unsigned i = 0; i < _backref->size(); i++) {
+                new (_data + i) T(std::move(other._data[i]));
+                other._data[i].~T();
+            }
+            _backref->_data = _data;
+        }
+        size_t storage_size() const {
+            return sizeof(*this) + sizeof(T[_backref->_capacity]);
+        }
+        friend size_t size_for_allocation_strategy(const external& obj) {
+            return obj.storage_size();
+        }
+    };
+    union maybe_constructed {
+        maybe_constructed() { }
+        ~maybe_constructed() { }
+        T object;
+    };
+private:
+    std::array<maybe_constructed, InternalSize> _internal;
+    size_type _size = 0;
+    size_type _capacity = InternalSize;
+    T* _data = reinterpret_cast<T*>(_internal.data());
+    friend class external;
+private:
+    bool is_external() const {
+        return _data != reinterpret_cast<const T*>(_internal.data());
+    }
+    external* get_external() {
+        auto ptr = reinterpret_cast<char*>(_data) - offsetof(external, _data);
+        return reinterpret_cast<external*>(ptr);
+    }
+    void maybe_grow(size_type new_size) {
+        if (new_size <= _capacity) {
+            return;
+        }
+        auto new_capacity = std::max({ _capacity + std::min(_capacity, size_type(1024)), new_size, size_type(InternalSize + 8) });
+        reserve(new_capacity);
+    }
+    void clear_and_release() noexcept {
+        clear();
+        if (is_external()) {
+            current_allocator().free(get_external(), get_external()->storage_size());
+        }
+    }
+public:
+    managed_vector() = default;
+    managed_vector(const managed_vector& other) {
+        reserve(other._size);
+        try {
+            for (const auto& v : other) {
+                push_back(v);
+            }
+        } catch (...) {
+            clear_and_release();
+            throw;
+        }
+    }
+    managed_vector(managed_vector&& other) noexcept : _size(other._size), _capacity(other._capacity) {
+        if (other.is_external()) {
+            _data = other._data;
+            other._data = reinterpret_cast<T*>(other._internal.data());
+            get_external()->_backref = this;
+        } else {
+            for (unsigned i = 0; i < _size; i++) {
+                new (_data + i) T(std::move(other._data[i]));
+                other._data[i].~T();
+            }
+        }
+        other._size = 0;
+        other._capacity = InternalSize;
+    }
+
+    managed_vector& operator=(const managed_vector& other) {
+        if (this != &other) {
+            managed_vector tmp(other);
+            this->~managed_vector();
+            new (this) managed_vector(std::move(tmp));
+        }
+        return *this;
+    }
+    managed_vector& operator=(managed_vector&& other) noexcept {
+        if (this != &other) {
+            this->~managed_vector();
+            new (this) managed_vector(std::move(other));
+        }
+        return *this;
+    }
+
+    ~managed_vector() {
+        clear_and_release();
+    }
+
+    T& at(size_type pos) {
+        if (pos >= _size) {
+            throw std::out_of_range("out of range");
+        }
+        return operator[](pos);
+    }
+    const T& at(size_type pos) const {
+        if (pos >= _size) {
+            throw std::out_of_range("out of range");
+        }
+        return operator[](pos);
+    }
+    T& operator[](size_type pos) noexcept {
+        return _data[pos];
+    }
+    const T& operator[](size_type pos) const noexcept {
+        return _data[pos];
+    }
+
+    T& front() noexcept { return *_data; }
+    const T& front() const noexcept { return *_data;  }
+    T& back() noexcept { return _data[_size - 1]; }
+    const T& back() const noexcept { return _data[_size - 1]; }
+
+    T* data() noexcept { return _data; }
+    const T* data() const noexcept { return _data; }
+
+    iterator begin() noexcept { return _data; }
+    const_iterator begin() const noexcept { return _data; }
+    const_iterator cbegin() const noexcept { return _data; }
+    iterator end() noexcept { return _data + _size; }
+    const_iterator end() const noexcept { return _data + _size; }
+    const_iterator cend() const noexcept { return _data + _size; }
+
+    bool empty() const noexcept { return !_size; }
+    size_type size() const noexcept { return _size; }
+    size_type capacity() const noexcept { return _capacity; }
+
+    void clear() {
+        while (_size) {
+            pop_back();
+        }
+    }
+    void reserve(size_type new_capacity) {
+        if (new_capacity <= _capacity) {
+            return;
+        }
+        auto ptr = current_allocator().alloc(&get_standard_migrator<external>(),
+            sizeof(external) + sizeof(T) * new_capacity, alignof(external));
+        auto ext = static_cast<external*>(ptr);
+        ext->_backref = this;
+        T* data_ptr = ext->_data;
+        for (unsigned i = 0; i < _size; i++) {
+            new (data_ptr + i) T(std::move(_data[i]));
+            _data[i].~T();
+        }
+        if (is_external()) {
+            current_allocator().free(get_external(), get_external()->storage_size());
+        }
+        _data = data_ptr;
+        _capacity = new_capacity;
+    }
+
+    iterator erase(iterator it) {
+        std::move(it + 1, end(), it);
+        _data[_size - 1].~T();
+        _size--;
+        return it;
+    }
+
+    void push_back(const T& value) {
+        emplace_back(value);
+    }
+    void push_back(T&& value) {
+        emplace_back(std::move(value));
+    }
+    template<typename... Args>
+    T& emplace_back(Args&&... args) {
+        maybe_grow(_size + 1);
+        T* elem = new (_data + _size) T(std::forward<Args>(args)...);
+        _size++;
+        return *elem;
+    }
+    void pop_back() {
+        _data[_size - 1].~T();
+        _size--;
+    }
+
+    void resize(size_type new_size) {
+        maybe_grow(new_size);
+        while (_size > new_size) {
+            pop_back();
+        }
+        while (_size < new_size) {
+            emplace_back();
+        }
+    }
+    void resize(size_type new_size, const T& value) {
+        maybe_grow(new_size);
+        while (_size > new_size) {
+            pop_back();
+        }
+        while (_size < new_size) {
+            push_back(value);
+        }
+    }
+
+    // Returns the amount of external memory used to hold inserted items.
+    // Ignores reserved space.
+    size_t used_space_external_memory_usage() const {
+        if (is_external()) {
+            return sizeof(external) + _size * sizeof(T);
+        }
+        return 0;
+    }
+};
+#include <seastar/util/bool_class.hh>
+
+class is_preemptible_tag;
+using is_preemptible = bool_class<is_preemptible_tag>;
+
+#include <iosfwd>
+#include <variant>
+
+class range_tombstone_list final {
+    using range_tombstones_type = range_tombstone::container_type;
+    class insert_undo_op {
+        const range_tombstone& _new_rt;
+    public:
+        insert_undo_op(const range_tombstone& new_rt)
+                : _new_rt(new_rt) { }
+        void undo(const schema& s, range_tombstone_list& rt_list) noexcept;
+    };
+    class erase_undo_op {
+        alloc_strategy_unique_ptr<range_tombstone> _rt;
+    public:
+        erase_undo_op(range_tombstone& rt)
+                : _rt(&rt) { }
+        void undo(const schema& s, range_tombstone_list& rt_list) noexcept;
+    };
+    class update_undo_op {
+        range_tombstone _old_rt;
+        const range_tombstone& _new_rt;
+    public:
+        update_undo_op(range_tombstone&& old_rt, const range_tombstone& new_rt)
+                : _old_rt(std::move(old_rt)), _new_rt(new_rt) { }
+        void undo(const schema& s, range_tombstone_list& rt_list) noexcept;
+    };
+    class reverter {
+    private:
+        using op = std::variant<erase_undo_op, insert_undo_op, update_undo_op>;
+        std::vector<op> _ops;
+        const schema& _s;
+    protected:
+        range_tombstone_list& _dst;
+    public:
+        reverter(const schema& s, range_tombstone_list& dst)
+                : _s(s)
+                , _dst(dst) { }
+        virtual ~reverter() {
+            revert();
+        }
+        reverter(reverter&&) = default;
+        reverter& operator=(reverter&&) = default;
+        reverter(const reverter&) = delete;
+        reverter& operator=(reverter&) = delete;
+        virtual range_tombstones_type::iterator insert(range_tombstones_type::iterator it, range_tombstone& new_rt);
+        virtual range_tombstones_type::iterator erase(range_tombstones_type::iterator it);
+        virtual void update(range_tombstones_type::iterator it, range_tombstone&& new_rt);
+        void revert() noexcept;
+        void cancel() noexcept {
+            _ops.clear();
+        }
+    };
+    class nop_reverter : public reverter {
+    public:
+        nop_reverter(const schema& s, range_tombstone_list& rt_list)
+                : reverter(s, rt_list) { }
+        virtual range_tombstones_type::iterator insert(range_tombstones_type::iterator it, range_tombstone& new_rt) override;
+        virtual range_tombstones_type::iterator erase(range_tombstones_type::iterator it) override;
+        virtual void update(range_tombstones_type::iterator it, range_tombstone&& new_rt) override;
+    };
+private:
+    range_tombstones_type _tombstones;
+public:
+    // ForwardIterator<range_tombstone>
+    using iterator = range_tombstones_type::iterator;
+    using const_iterator = range_tombstones_type::const_iterator;
+
+    struct copy_comparator_only { };
+    range_tombstone_list(const schema& s)
+        : _tombstones(range_tombstone::compare(s))
+    { }
+    range_tombstone_list(const range_tombstone_list& x, copy_comparator_only)
+        : _tombstones(x._tombstones.key_comp())
+    { }
+    range_tombstone_list(const range_tombstone_list&);
+    range_tombstone_list& operator=(range_tombstone_list&) = delete;
+    range_tombstone_list(range_tombstone_list&&) = default;
+    range_tombstone_list& operator=(range_tombstone_list&&) = default;
+    ~range_tombstone_list();
+    size_t size() const {
+        return _tombstones.size();
+    }
+    bool empty() const {
+        return _tombstones.empty();
+    }
+    range_tombstones_type& tombstones() {
+        return _tombstones;
+    }
+    auto begin() {
+        return _tombstones.begin();
+    }
+    auto begin() const {
+        return _tombstones.begin();
+    }
+    auto end() {
+        return _tombstones.end();
+    }
+    auto end() const {
+        return _tombstones.end();
+    }
+    void apply(const schema& s, const bound_view& start_bound, const bound_view& end_bound, tombstone tomb) {
+        apply(s, start_bound.prefix(), start_bound.kind(), end_bound.prefix(), end_bound.kind(), std::move(tomb));
+    }
+    void apply(const schema& s, const range_tombstone& rt) {
+        apply(s, rt.start, rt.start_kind, rt.end, rt.end_kind, rt.tomb);
+    }
+    void apply(const schema& s, range_tombstone&& rt) {
+        apply(s, std::move(rt.start), rt.start_kind, std::move(rt.end), rt.end_kind, std::move(rt.tomb));
+    }
+    void apply(const schema& s, clustering_key_prefix start, bound_kind start_kind,
+               clustering_key_prefix end, bound_kind end_kind, tombstone tomb) {
+        nop_reverter rev(s, *this);
+        apply_reversibly(s, std::move(start), start_kind, std::move(end), end_kind, std::move(tomb), rev);
+    }
+    // Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
+    void apply_monotonically(const schema& s, const range_tombstone& rt);
+    // Merges another list with this object.
+    // Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
+    void apply_monotonically(const schema& s, const range_tombstone_list& list);
+    /// Merges another list with this object.
+    /// The other list must be governed by the same allocator as this object.
+    ///
+    /// Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
+    /// The other list will be left in a state such that it would still commute with this object to the same state as it
+    /// would if the call didn't fail.
+    stop_iteration apply_monotonically(const schema& s, range_tombstone_list&& list, is_preemptible = is_preemptible::no);
+public:
+    tombstone search_tombstone_covering(const schema& s, const clustering_key_prefix& key) const;
+    // Returns range of tombstones which overlap with given range
+    boost::iterator_range<const_iterator> slice(const schema& s, const query::clustering_range&) const;
+    // Returns range tombstones which overlap with [start, end)
+    boost::iterator_range<const_iterator> slice(const schema& s, position_in_partition_view start, position_in_partition_view end) const;
+    iterator erase(const_iterator, const_iterator);
+    // Ensures that every range tombstone is strictly contained within given clustering ranges.
+    // Preserves all information which may be relevant for rows from that ranges.
+    void trim(const schema& s, const query::clustering_row_ranges&);
+    range_tombstone_list difference(const schema& s, const range_tombstone_list& rt_list) const;
+    // Erases the range tombstones for which filter returns true.
+    template <typename Pred>
+    void erase_where(Pred filter) {
+        static_assert(std::is_same<bool, std::result_of_t<Pred(const range_tombstone&)>>::value,
+                      "bad Pred signature");
+        auto it = begin();
+        while (it != end()) {
+            if (filter(*it)) {
+                it = _tombstones.erase_and_dispose(it, current_deleter<range_tombstone>());
+            } else {
+                ++it;
+            }
+        }
+    }
+    void clear() {
+        _tombstones.clear_and_dispose(current_deleter<range_tombstone>());
+    }
+    // Removes elements of this list in batches.
+    // Returns stop_iteration::yes iff there is no more elements to remove.
+    stop_iteration clear_gently() noexcept;
+    void apply(const schema& s, const range_tombstone_list& rt_list);
+    // See reversibly_mergeable.hh
+    reverter apply_reversibly(const schema& s, range_tombstone_list& rt_list);
+
+    friend std::ostream& operator<<(std::ostream& out, const range_tombstone_list&);
+    bool equal(const schema&, const range_tombstone_list&) const;
+    size_t external_memory_usage(const schema& s) const {
+        size_t result = 0;
+        for (auto& rtb : _tombstones) {
+            result += rtb.memory_usage(s);
+        }
+        return result;
+    }
+private:
+    void apply_reversibly(const schema& s, clustering_key_prefix start, bound_kind start_kind,
+                          clustering_key_prefix end, bound_kind end_kind, tombstone tomb, reverter& rev);
+    void insert_from(const schema& s, range_tombstones_type::iterator it, clustering_key_prefix start,
+                     bound_kind start_kind, clustering_key_prefix end, bound_kind end_kind, tombstone tomb, reverter& rev);
+    range_tombstones_type::iterator find(const schema& s, const range_tombstone& rt);
+};
+
+namespace query {
+
+class clustering_key_filter_ranges {
+public:
+    clustering_key_filter_ranges(const clustering_row_ranges& ranges);
+    struct reversed { };
+    clustering_key_filter_ranges(reversed, const clustering_row_ranges& ranges);
+    clustering_key_filter_ranges(clustering_key_filter_ranges&& other) noexcept;
+    clustering_key_filter_ranges& operator=(clustering_key_filter_ranges&& other) noexcept;
+    static clustering_key_filter_ranges get_ranges(const schema& schema, const query::partition_slice& slice, const partition_key& key);
+};
+
+}
+
+template<typename T>
+class managed;
+
+//
+// Similar to std::unique_ptr<>, but for LSA-allocated objects. Remains
+// valid across deferring points. See make_managed().
+//
+// std::unique_ptr<> can't be used with LSA-allocated objects because
+// it assumes that the object doesn't move after being allocated. This
+// is not true for LSA, which moves objects during compaction.
+//
+// Also works for objects allocated using standard allocators, though
+// there the extra space overhead of a pointer is not justified.
+// It still make sense to use it in places which are meant to work
+// with either kind of allocator.
+//
+template<typename T>
+struct managed_ref {
+    managed<T>* _ptr;
+
+    managed_ref() : _ptr(nullptr) {}
+
+    managed_ref(const managed_ref&) = delete;
+
+    managed_ref(managed_ref&& other) noexcept
+        : _ptr(other._ptr)
+    {
+        other._ptr = nullptr;
+        if (_ptr) {
+            _ptr->_backref = &_ptr;
+        }
+    }
+
+    ~managed_ref() {
+        if (_ptr) {
+            current_allocator().destroy(_ptr);
+        }
+    }
+
+    managed_ref& operator=(managed_ref&& o) {
+        this->~managed_ref();
+        new (this) managed_ref(std::move(o));
+        return *this;
+    }
+
+    T* get() {
+        return _ptr ? &_ptr->_value : nullptr;
+    }
+
+    const T* get() const {
+        return _ptr ? &_ptr->_value : nullptr;
+    }
+
+    T& operator*() {
+        return _ptr->_value;
+    }
+
+    const T& operator*() const {
+        return _ptr->_value;
+    }
+
+    T* operator->() {
+        return &_ptr->_value;
+    }
+
+    const T* operator->() const {
+        return &_ptr->_value;
+    }
+
+    explicit operator bool() const {
+        return _ptr != nullptr;
+    }
+
+    size_t external_memory_usage() const {
+        return _ptr ? current_allocator().object_memory_size_in_allocator(_ptr) : 0;
+    }
+};
+
+template<typename T>
+class managed {
+    managed<T>** _backref;
+    T _value;
+
+    template<typename T_>
+    friend struct managed_ref;
+public:
+    static_assert(std::is_nothrow_move_constructible<T>::value, "Throwing move constructor not supported");
+
+    managed(managed<T>** backref, T&& v) noexcept
+        : _backref(backref)
+        , _value(std::move(v))
+    {
+        *_backref = this;
+    }
+
+    managed(managed&& other) noexcept
+        : _backref(other._backref)
+        , _value(std::move(other._value))
+    {
+        *_backref = this;
+    }
+};
+
+//
+// Allocates T using given AllocationStrategy and returns a managed_ref owning the
+// allocated object.
+//
+template<typename T, typename... Args>
+managed_ref<T>
+make_managed(Args&&... args) {
+    managed_ref<T> ref;
+    current_allocator().construct<managed<T>>(&ref._ptr, T(std::forward<Args>(args)...));
+    return ref;
+}
 
 class mutation_fragment;
 class clustering_row;
@@ -9193,9 +11845,531 @@ private:
 };
 
 
-#include "dht/i_partitioner.hh"
-#include "hashing.hh"
-#include "mutation_fragment.hh"
+#include "mutation_partition.hh"
+#include "position_in_partition.hh"
+
+#include <optional>
+#include <seastar/util/gcc6-concepts.hh>
+#include <seastar/util/optimized_optional.hh>
+
+#include "seastar/core/future-util.hh"
+
+#include "db/timeout_clock.hh"
+
+// mutation_fragments are the objects that streamed_mutation are going to
+// stream. They can represent:
+//  - a static row
+//  - a clustering row
+//  - a range tombstone
+//
+// There exists an ordering (implemented in position_in_partition class) between
+// mutation_fragment objects. It reflects the order in which content of
+// partition appears in the sstables.
+
+class clustering_row {
+public:
+    explicit clustering_row(clustering_key_prefix ck);
+    clustering_row(clustering_key_prefix ck, row_tombstone t, row_marker marker, row cells);
+    clustering_row(const schema& s, const clustering_row& other);
+    clustering_row(const schema& s, const rows_entry& re);
+    clustering_row(rows_entry&& re);
+
+    clustering_key_prefix& key();
+    const clustering_key_prefix& key() const;
+
+    void remove_tombstone();
+    row_tombstone tomb() const;
+
+    const row_marker& marker() const;
+    row_marker& marker();
+
+    const row& cells() const;
+    row& cells();
+
+    bool empty() const;
+
+    bool is_live(const schema& s, tombstone base_tombstone = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const;
+    void apply(const schema& s, clustering_row&& cr);
+    void apply(const schema& s, const clustering_row& cr);
+    void set_cell(const column_definition& def, atomic_cell_or_collection&& value);
+    void apply(row_marker rm);
+    void apply(tombstone t);
+    void apply(shadowable_tombstone t);
+    void apply(const schema& s, const rows_entry& r);
+    position_in_partition_view position() const;
+
+    size_t external_memory_usage(const schema& s) const;
+
+    size_t memory_usage(const schema& s) const;
+
+    bool equal(const schema& s, const clustering_row& other) const;
+
+    class printer {
+    public:
+        printer(const schema& s, const clustering_row& r);
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+};
+
+class static_row {
+    row _cells;
+public:
+    static_row() = default;
+    static_row(const schema& s, const static_row& other) : static_row(s, other._cells) { }
+    explicit static_row(const schema& s, const row& r) : _cells(s, column_kind::static_column, r) { }
+    explicit static_row(row&& r) : _cells(std::move(r)) { }
+
+    row& cells() { return _cells; }
+    const row& cells() const { return _cells; }
+
+    bool empty() const {
+        return _cells.empty();
+    }
+
+    bool is_live(const schema& s, gc_clock::time_point now = gc_clock::time_point::min()) const {
+        return _cells.is_live(s, column_kind::static_column, tombstone(), now);
+    }
+
+    void apply(const schema& s, const row& r) {
+        _cells.apply(s, column_kind::static_column, r);
+    }
+    void apply(const schema& s, static_row&& sr) {
+        _cells.apply(s, column_kind::static_column, std::move(sr._cells));
+    }
+    void set_cell(const column_definition& def, atomic_cell_or_collection&& value) {
+        _cells.apply(def, std::move(value));
+    }
+
+    position_in_partition_view position() const;
+
+    size_t external_memory_usage(const schema& s) const {
+        return _cells.external_memory_usage(s, column_kind::static_column);
+    }
+
+    size_t memory_usage(const schema& s) const {
+        return sizeof(static_row) + external_memory_usage(s);
+    }
+
+    bool equal(const schema& s, const static_row& other) const {
+        return _cells.equal(column_kind::static_column, s, other._cells, s);
+    }
+
+    class printer {
+        const schema& _schema;
+        const static_row& _static_row;
+    public:
+        printer(const schema& s, const static_row& r) : _schema(s), _static_row(r) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+};
+
+class partition_start final {
+    dht::decorated_key _key;
+    tombstone _partition_tombstone;
+public:
+    partition_start(dht::decorated_key pk, tombstone pt)
+        : _key(std::move(pk))
+        , _partition_tombstone(std::move(pt))
+    { }
+
+    dht::decorated_key& key() { return _key; }
+    const dht::decorated_key& key() const { return _key; }
+    const tombstone& partition_tombstone() const { return _partition_tombstone; }
+    tombstone& partition_tombstone() { return _partition_tombstone; }
+
+    position_in_partition_view position() const;
+
+    size_t external_memory_usage(const schema&) const {
+        return _key.external_memory_usage();
+    }
+
+    size_t memory_usage(const schema& s) const {
+        return sizeof(partition_start) + external_memory_usage(s);
+    }
+
+    bool equal(const schema& s, const partition_start& other) const {
+        return _key.equal(s, other._key) && _partition_tombstone == other._partition_tombstone;
+    }
+
+    friend std::ostream& operator<<(std::ostream& is, const partition_start& row);
+};
+
+class partition_end final {
+public:
+    position_in_partition_view position() const;
+
+    size_t external_memory_usage(const schema&) const {
+        return 0;
+    }
+
+    size_t memory_usage(const schema& s) const {
+        return sizeof(partition_end) + external_memory_usage(s);
+    }
+
+    bool equal(const schema& s, const partition_end& other) const {
+        return true;
+    }
+
+    friend std::ostream& operator<<(std::ostream& is, const partition_end& row);
+};
+
+GCC6_CONCEPT(
+template<typename T, typename ReturnType>
+concept bool MutationFragmentConsumer() {
+    return requires(T t, static_row sr, clustering_row cr, range_tombstone rt, partition_start ph, partition_end pe) {
+        { t.consume(std::move(sr)) } -> ReturnType;
+        { t.consume(std::move(cr)) } -> ReturnType;
+        { t.consume(std::move(rt)) } -> ReturnType;
+        { t.consume(std::move(ph)) } -> ReturnType;
+        { t.consume(std::move(pe)) } -> ReturnType;
+    };
+}
+)
+
+GCC6_CONCEPT(
+template<typename T, typename ReturnType>
+concept bool FragmentConsumerReturning() {
+    return requires(T t, static_row sr, clustering_row cr, range_tombstone rt, tombstone tomb) {
+        { t.consume(std::move(sr)) } -> ReturnType;
+        { t.consume(std::move(cr)) } -> ReturnType;
+        { t.consume(std::move(rt)) } -> ReturnType;
+    };
+}
+)
+
+GCC6_CONCEPT(
+template<typename T>
+concept bool FragmentConsumer() {
+    return FragmentConsumerReturning<T, stop_iteration >() || FragmentConsumerReturning<T, future<stop_iteration>>();
+}
+)
+
+GCC6_CONCEPT(
+template<typename T>
+concept bool StreamedMutationConsumer() {
+    return FragmentConsumer<T>() && requires(T t, static_row sr, clustering_row cr, range_tombstone rt, tombstone tomb) {
+        t.consume(tomb);
+        t.consume_end_of_stream();
+    };
+}
+)
+
+GCC6_CONCEPT(
+template<typename T, typename ReturnType>
+concept bool MutationFragmentVisitor() {
+    return requires(T t, const static_row& sr, const clustering_row& cr, const range_tombstone& rt, const partition_start& ph, const partition_end& eop) {
+        { t(sr) } -> ReturnType;
+        { t(cr) } -> ReturnType;
+        { t(rt) } -> ReturnType;
+        { t(ph) } -> ReturnType;
+        { t(eop) } -> ReturnType;
+    };
+}
+)
+
+class mutation_fragment {
+public:
+    enum class kind {
+        static_row,
+        clustering_row,
+        range_tombstone,
+        partition_start,
+        partition_end,
+    };
+private:
+    struct data {
+        data() { }
+        ~data() { }
+
+        std::optional<size_t> _size_in_bytes;
+        union {
+            static_row _static_row;
+            clustering_row _clustering_row;
+            range_tombstone _range_tombstone;
+            partition_start _partition_start;
+            partition_end _partition_end;
+        };
+    };
+private:
+    kind _kind;
+    std::unique_ptr<data> _data;
+
+    mutation_fragment() = default;
+    explicit operator bool() const noexcept { return bool(_data); }
+    void destroy_data() noexcept;
+    friend class optimized_optional<mutation_fragment>;
+
+    friend class position_in_partition;
+public:
+    struct clustering_row_tag_t { };
+
+    template<typename... Args>
+    mutation_fragment(clustering_row_tag_t, Args&&... args)
+        : _kind(kind::clustering_row)
+        , _data(std::make_unique<data>())
+    {
+        new (&_data->_clustering_row) clustering_row(std::forward<Args>(args)...);
+    }
+
+    mutation_fragment(static_row&& r);
+    mutation_fragment(clustering_row&& r);
+    mutation_fragment(range_tombstone&& r);
+    mutation_fragment(partition_start&& r);
+    mutation_fragment(partition_end&& r);
+
+    mutation_fragment(const schema& s, const mutation_fragment& o)
+        : _kind(o._kind), _data(std::make_unique<data>()) {
+        switch(_kind) {
+            case kind::static_row:
+                new (&_data->_static_row) static_row(s, o._data->_static_row);
+                break;
+            case kind::clustering_row:
+                new (&_data->_clustering_row) clustering_row(s, o._data->_clustering_row);
+                break;
+            case kind::range_tombstone:
+                new (&_data->_range_tombstone) range_tombstone(o._data->_range_tombstone);
+                break;
+            case kind::partition_start:
+                new (&_data->_partition_start) partition_start(o._data->_partition_start);
+                break;
+            case kind::partition_end:
+                new (&_data->_partition_end) partition_end(o._data->_partition_end);
+                break;
+        }
+    }
+    mutation_fragment(mutation_fragment&& other) = default;
+    mutation_fragment& operator=(mutation_fragment&& other) noexcept {
+        if (this != &other) {
+            this->~mutation_fragment();
+            new (this) mutation_fragment(std::move(other));
+        }
+        return *this;
+    }
+    [[gnu::always_inline]]
+    ~mutation_fragment() {
+        if (_data) {
+            destroy_data();
+        }
+    }
+
+    position_in_partition_view position() const;
+
+    // Returns the range of positions for which this fragment holds relevant information.
+    position_range range() const;
+
+    // Checks if this fragment may be relevant for any range starting at given position.
+    bool relevant_for_range(const schema& s, position_in_partition_view pos) const;
+
+    // Like relevant_for_range() but makes use of assumption that pos is greater
+    // than the starting position of this fragment.
+    bool relevant_for_range_assuming_after(const schema& s, position_in_partition_view pos) const;
+
+    bool has_key() const { return is_clustering_row() || is_range_tombstone(); }
+    // Requirements: has_key() == true
+    const clustering_key_prefix& key() const;
+
+    kind mutation_fragment_kind() const { return _kind; }
+
+    bool is_static_row() const { return _kind == kind::static_row; }
+    bool is_clustering_row() const { return _kind == kind::clustering_row; }
+    bool is_range_tombstone() const { return _kind == kind::range_tombstone; }
+    bool is_partition_start() const { return _kind == kind::partition_start; }
+    bool is_end_of_partition() const { return _kind == kind::partition_end; }
+
+    static_row& as_mutable_static_row() {
+        _data->_size_in_bytes = std::nullopt;
+        return _data->_static_row;
+    }
+    clustering_row& as_mutable_clustering_row() {
+        _data->_size_in_bytes = std::nullopt;
+        return _data->_clustering_row;
+    }
+    range_tombstone& as_mutable_range_tombstone() {
+        _data->_size_in_bytes = std::nullopt;
+        return _data->_range_tombstone;
+    }
+    partition_start& as_mutable_partition_start() {
+        _data->_size_in_bytes = std::nullopt;
+        return _data->_partition_start;
+    }
+    partition_end& as_mutable_end_of_partition();
+
+    static_row&& as_static_row() &&;
+    clustering_row&& as_clustering_row() &&;
+    range_tombstone&& as_range_tombstone() &&;
+    partition_start&& as_partition_start() &&;
+    partition_end&& as_end_of_partition() &&;
+
+    const static_row& as_static_row() const &;
+    const clustering_row& as_clustering_row() const &;
+    const range_tombstone& as_range_tombstone() const &;
+    const partition_start& as_partition_start() const &;
+    const partition_end& as_end_of_partition() const &;
+
+    // Requirements: mergeable_with(mf)
+    void apply(const schema& s, mutation_fragment&& mf);
+
+    template<typename Consumer>
+    GCC6_CONCEPT(
+        requires MutationFragmentConsumer<Consumer, decltype(std::declval<Consumer>().consume(std::declval<range_tombstone>()))>()
+    )
+    decltype(auto) consume(Consumer& consumer) && {
+        switch (_kind) {
+        case kind::static_row:
+            return consumer.consume(std::move(_data->_static_row));
+        case kind::clustering_row:
+            return consumer.consume(std::move(_data->_clustering_row));
+        case kind::range_tombstone:
+            return consumer.consume(std::move(_data->_range_tombstone));
+        case kind::partition_start:
+            return consumer.consume(std::move(_data->_partition_start));
+        case kind::partition_end:
+            return consumer.consume(std::move(_data->_partition_end));
+        }
+        abort();
+    }
+
+    template<typename Visitor>
+    GCC6_CONCEPT(
+        requires MutationFragmentVisitor<Visitor, decltype(std::declval<Visitor>()(std::declval<static_row&>()))>()
+    )
+    decltype(auto) visit(Visitor&& visitor) const {
+        switch (_kind) {
+        case kind::static_row:
+            return visitor(as_static_row());
+        case kind::clustering_row:
+            return visitor(as_clustering_row());
+        case kind::range_tombstone:
+            return visitor(as_range_tombstone());
+        case kind::partition_start:
+            return visitor(as_partition_start());
+        case kind::partition_end:
+            return visitor(as_end_of_partition());
+        }
+        abort();
+    }
+
+    size_t memory_usage(const schema& s) const;
+
+    bool equal(const schema& s, const mutation_fragment& other) const;
+
+    // Fragments which have the same position() and are mergeable can be
+    // merged into one fragment with apply() which represents the sum of
+    // writes represented by each of the fragments.
+    // Fragments which have the same position() but are not mergeable
+    // can be emitted one after the other in the stream.
+    bool mergeable_with(const mutation_fragment& mf) const;
+
+    class printer {
+        const schema& _schema;
+        const mutation_fragment& _mutation_fragment;
+    public:
+        printer(const schema& s, const mutation_fragment& mf);
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+};
+
+
+std::ostream& operator<<(std::ostream&, partition_region);
+std::ostream& operator<<(std::ostream&, mutation_fragment::kind);
+
+using mutation_fragment_opt = optimized_optional<mutation_fragment>;
+
+namespace streamed_mutation {
+    // Determines whether streamed_mutation is in forwarding mode or not.
+    //
+    // In forwarding mode the stream does not return all fragments right away,
+    // but only those belonging to the current clustering range. Initially
+    // current range only covers the static row. The stream can be forwarded
+    // (even before end-of- stream) to a later range with fast_forward_to().
+    // Forwarding doesn't change initial restrictions of the stream, it can
+    // only be used to skip over data.
+    //
+    // Monotonicity of positions is preserved by forwarding. That is fragments
+    // emitted after forwarding will have greater positions than any fragments
+    // emitted before forwarding.
+    //
+    // For any range, all range tombstones relevant for that range which are
+    // present in the original stream will be emitted. Range tombstones
+    // emitted before forwarding which overlap with the new range are not
+    // necessarily re-emitted.
+    //
+    // When streamed_mutation is not in forwarding mode, fast_forward_to()
+    // cannot be used.
+    class forwarding_tag;
+    using forwarding = bool_class<forwarding_tag>;
+}
+
+// range_tombstone_stream is a helper object that simplifies producing a stream
+// of range tombstones and merging it with a stream of clustering rows.
+// Tombstones are added using apply() and retrieved using get_next().
+//
+// get_next(const rows_entry&) and get_next(const mutation_fragment&) allow
+// merging the stream of tombstones with a stream of clustering rows. If these
+// overloads return disengaged optional it means that there is no tombstone
+// in the stream that should be emitted before the object given as an argument.
+// (And, consequently, if the optional is engaged that tombstone should be
+// emitted first). After calling any of these overloads with a mutation_fragment
+// which is at some position in partition P no range tombstone can be added to
+// the stream which start bound is before that position.
+//
+// get_next() overload which doesn't take any arguments is used to return the
+// remaining tombstones. After it was called no new tombstones can be added
+// to the stream.
+class range_tombstone_stream {
+    const schema& _schema;
+    position_in_partition::less_compare _cmp;
+    range_tombstone_list _list;
+private:
+    mutation_fragment_opt do_get_next();
+public:
+    range_tombstone_stream(const schema& s) : _schema(s), _cmp(s), _list(s) { }
+    mutation_fragment_opt get_next(const rows_entry&);
+    mutation_fragment_opt get_next(const mutation_fragment&);
+    // Returns next fragment with position before upper_bound or disengaged optional if no such fragments are left.
+    mutation_fragment_opt get_next(position_in_partition_view upper_bound);
+    mutation_fragment_opt get_next();
+    // Forgets all tombstones which are not relevant for any range starting at given position.
+    void forward_to(position_in_partition_view);
+
+    void apply(range_tombstone&& rt) {
+        _list.apply(_schema, std::move(rt));
+    }
+    void apply(const range_tombstone_list& list) {
+        _list.apply(_schema, list);
+    }
+    // Apply those range tombstones from the list, that overlap with the
+    // range. If `trim_front` is set, range tombstones will be trimmed to the
+    // start of the clustering range.
+    void apply(const range_tombstone_list&, const query::clustering_range&, bool trim_front = false);
+    void reset();
+    bool empty() const;
+    friend std::ostream& operator<<(std::ostream& out, const range_tombstone_stream&);
+};
+
+GCC6_CONCEPT(
+    // F gets a stream element as an argument and returns the new value which replaces that element
+    // in the transformed stream.
+    template<typename F>
+    concept bool StreamedMutationTranformer() {
+        return requires(F f, mutation_fragment mf, schema_ptr s) {
+            { f(std::move(mf)) } -> mutation_fragment;
+            { f(s) } -> schema_ptr;
+        };
+    }
+)
 
 #include <seastar/util/optimized_optional.hh>
 

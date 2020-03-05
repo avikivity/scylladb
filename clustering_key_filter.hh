@@ -23,19 +23,3 @@
 
 #pragma once
 
-#include "schema_fwd.hh"
-#include "query-request.hh"
-
-namespace query {
-
-class clustering_key_filter_ranges {
-public:
-    clustering_key_filter_ranges(const clustering_row_ranges& ranges);
-    struct reversed { };
-    clustering_key_filter_ranges(reversed, const clustering_row_ranges& ranges);
-    clustering_key_filter_ranges(clustering_key_filter_ranges&& other) noexcept;
-    clustering_key_filter_ranges& operator=(clustering_key_filter_ranges&& other) noexcept;
-    static clustering_key_filter_ranges get_ranges(const schema& schema, const query::partition_slice& slice, const partition_key& key);
-};
-
-}

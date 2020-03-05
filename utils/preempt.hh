@@ -21,7 +21,3 @@
 
 #pragma once
 
-#include <seastar/util/bool_class.hh>
-
-class is_preemptible_tag;
-using is_preemptible = bool_class<is_preemptible_tag>;
