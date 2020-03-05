@@ -2458,24 +2458,12 @@ public:
     static boost::iterator_range<iterator> components(const bytes_view& v) ;
     value_type deserialize_value(bytes_view v) ;
     bool less(bytes_view b1, bytes_view b2) ;
-    size_t hash(bytes_view v) ;
-    int compare(bytes_view b1, bytes_view b2) ;
-    bool is_full(bytes_view v) const {
-        assert(AllowPrefixes == allow_prefixes::yes);
-        return std::distance(begin(v), end(v)) == (ssize_t)_types.size();
-    }
-    bool is_empty(bytes_view v) const {
-        return begin(v) == end(v);
-    }
-    void validate(bytes_view v) {
-        warn(unimplemented::cause::VALIDATION);
-    }
-    bool equal(bytes_view v1, bytes_view v2) {
-        if (_byte_order_equal) {
-            return compare_unsigned(v1, v2) == 0;
-        }
-        return compare(v1, v2) == 0;
-    }
+    
+    
+    
+    
+    
+    
 };
 using compound_prefix = compound_type<allow_prefixes::yes>;
 #include <boost/range/join.hpp>
@@ -2486,32 +2474,21 @@ class i_partitioner;
 using column_count_type = uint32_t;
 using column_id = column_count_type;
 enum class ordinal_column_id: column_count_type {};
-std::ostream& operator<<(std::ostream& os, ordinal_column_id id);
+
 class column_set {
 public:
     using bitset = boost::dynamic_bitset<uint64_t>;
     using size_type = bitset::size_type;
     static_assert(static_cast<column_count_type>(boost::dynamic_bitset<uint64_t>::npos) == ~static_cast<column_count_type>(0));
     static constexpr ordinal_column_id npos = static_cast<ordinal_column_id>(bitset::npos);
-    explicit column_set(column_count_type num_bits = 0)
-        : _mask(num_bits)
-    {
-    }
-    void resize(column_count_type num_bits) {
-        _mask.resize(num_bits);
-    }
-    void set(ordinal_column_id id) {
-        column_count_type bit = static_cast<column_count_type>(id);
-        _mask.set(bit);
-    }
-    bool test(ordinal_column_id id) const {
-        column_count_type bit = static_cast<column_count_type>(id);
-        return _mask.test(bit);
-    }
-    size_type count() const ;
-    ordinal_column_id find_first() const ;
-    ordinal_column_id find_next(ordinal_column_id pos) const ;
-    void union_with(const column_set& with) ;
+    
+    
+    
+    
+    
+    
+    
+    
 private:
     bitset _mask;
 };
@@ -2520,23 +2497,23 @@ class schema;
 class schema_registry_entry;
 class schema_builder;
 namespace cell_comparator {
-sstring to_sstring(const schema& s);
-bool check_compound(sstring comparator);
-void read_collections(schema_builder& builder, sstring comparator);
+
+
+
 }
 namespace db {
 class extensions;
 }
 enum class column_kind { partition_key, clustering_key, static_column, regular_column };
 enum class column_view_virtual { no, yes };
-sstring to_sstring(column_kind k);
-bool is_compatible(column_kind k1, column_kind k2);
+
+
 enum class cf_type : uint8_t {
     standard,
     super,
 };
- sstring cf_type_to_sstring(cf_type t) ;
- cf_type sstring_to_cf_type(sstring name) ;
+ 
+ 
 struct speculative_retry {
     enum class type {
         NONE, CUSTOM, PERCENTILE, ALWAYS
@@ -2546,20 +2523,14 @@ private:
     double _v;
 public:
     speculative_retry(type t, double v)  ;
-    sstring to_sstring() const ;
-    static speculative_retry from_sstring(sstring str) ;
-    type get_type() const {
-        return _t;
-    }
-    double get_value() const {
-        return _v;
-    }
+    
+    
+    
+    
     bool operator==(const speculative_retry& other) const {
         return _t == other._t && _v == other._v;
     }
-    bool operator!=(const speculative_retry& other) const {
-        return !(*this == other);
-    }
+    
 };
 typedef std::unordered_map<sstring, sstring> index_options_map;
 enum class index_metadata_kind {
@@ -2574,12 +2545,12 @@ class thrift_schema {
     bool _compound = true;
     bool _is_dynamic = false;
 public:
-    bool has_compound_comparator() const;
-    bool is_dynamic() const;
+    
+    
     friend class schema;
 };
 bool operator==(const column_definition&, const column_definition&);
-inline bool operator!=(const column_definition& a, const column_definition& b) { return !(a == b); }
+
 static constexpr int DEFAULT_MIN_COMPACTION_THRESHOLD = 4;
 static constexpr int DEFAULT_MAX_COMPACTION_THRESHOLD = 32;
 static constexpr int DEFAULT_MIN_INDEX_INTERVAL = 128;
@@ -2589,42 +2560,30 @@ class column_mapping_entry {
     data_type _type;
     bool _is_atomic;
 public:
-    column_mapping_entry(bytes name, data_type type)
-        : _name(std::move(name)), _type(std::move(type)), _is_atomic(_type->is_atomic()) { }
-    column_mapping_entry(bytes name, sstring type_name);
-    column_mapping_entry(const column_mapping_entry&);
-    column_mapping_entry& operator=(const column_mapping_entry&);
-    column_mapping_entry(column_mapping_entry&&) = default;
-    column_mapping_entry& operator=(column_mapping_entry&&) = default;
-    const bytes& name() const { return _name; }
-    const data_type& type() const { return _type; }
-    const sstring& type_name() const { return _type->name(); }
-    bool is_atomic() const { return _is_atomic; }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 };
 class column_mapping {
 private:
     std::vector<column_mapping_entry> _columns;
     column_count_type _n_static = 0;
 public:
-    column_mapping() {}
-    column_mapping(std::vector<column_mapping_entry> columns, column_count_type n_static)
-            : _columns(std::move(columns))
-            , _n_static(n_static)
-    { }
-    const std::vector<column_mapping_entry>& columns() const { return _columns; }
-    column_count_type n_static() const { return _n_static; }
-    const column_mapping_entry& column_at(column_kind kind, column_id id) const {
-        assert(kind == column_kind::regular_column || kind == column_kind::static_column);
-        return kind == column_kind::regular_column ? regular_column_at(id) : static_column_at(id);
-    }
-    const column_mapping_entry& static_column_at(column_id id) const {
-        if (id >= _n_static) {
-            throw std::out_of_range(format("static column id {:d} >= {:d}", id, _n_static));
-        }
-        return _columns[id];
-    }
-    const column_mapping_entry& regular_column_at(column_id id) const ;
-    friend std::ostream& operator<<(std::ostream& out, const column_mapping& cm);
+    
+    
+    
+    
+    
+    
+    
+    
 };
 /**
  * Augments a schema with fields related to materialized views.
@@ -2636,16 +2595,16 @@ class raw_view_info final {
     bool _include_all_columns;
     sstring _where_clause;
 public:
-    raw_view_info(utils::UUID base_id, sstring base_name, bool include_all_columns, sstring where_clause);
-    const utils::UUID& base_id() const ;
-    const sstring& base_name() const ;
-    bool include_all_columns() const ;
-    const sstring& where_clause() const ;
-    friend bool operator==(const raw_view_info&, const raw_view_info&);
-    friend std::ostream& operator<<(std::ostream& os, const raw_view_info& view);
+    
+    
+    
+    
+    
+    
+    
 };
-bool operator==(const raw_view_info&, const raw_view_info&);
-std::ostream& operator<<(std::ostream& os, const raw_view_info& view);
+
+
 class view_info;
 class v3_columns {
     bool _is_dense = false;
@@ -2653,18 +2612,18 @@ class v3_columns {
     std::vector<column_definition> _columns;
     std::unordered_map<bytes, const column_definition*> _columns_by_name;
 public:
-    v3_columns(std::vector<column_definition> columns, bool is_dense, bool is_compound);
-    v3_columns() = default;
-    v3_columns(v3_columns&&) = default;
-    v3_columns& operator=(v3_columns&&) = default;
-    v3_columns(const v3_columns&) = delete;
-    static v3_columns from_v2_schema(const schema&);
+    
+    
+    
+    
+    
+    
 public:
-    const std::vector<column_definition>& all_columns() const;
-    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const;
-    bool is_static_compact() const;
-    bool is_compact() const;
-    void apply_to(schema_builder&) const;
+    
+    
+    
+    
+    
 };
 namespace query {
 class partition_slice;
@@ -2688,8 +2647,8 @@ class partition_slice;
  */
 class schema_extension {
 public:
-    virtual ~schema_extension() ;;
-    virtual bytes serialize() const = 0;
+    ;
+    
     virtual bool is_placeholder() const ;
 };
 /*
