@@ -320,48 +320,16 @@ public:
                (((most_sig_bits >> 16) & 0xFFFF) << 32) |
                (((uint64_t)most_sig_bits) >> 32);
     }
-    sstring to_sstring() const {
-        return format("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
-                ((uint64_t)most_sig_bits >> 32),
-                ((uint64_t)most_sig_bits >> 16 & 0xffff),
-                ((uint64_t)most_sig_bits & 0xffff),
-                ((uint64_t)least_sig_bits >> 48 & 0xffff),
-                ((uint64_t)least_sig_bits & 0xffffffffffffLL));
-    }
+    sstring to_sstring() const ;
     friend std::ostream& operator<<(std::ostream& out, const UUID& uuid);
-    bool operator==(const UUID& v) const {
-        return most_sig_bits == v.most_sig_bits
-                && least_sig_bits == v.least_sig_bits
-                ;
-    }
-    bool operator!=(const UUID& v) const {
-        return !(*this == v);
-    }
-    bool operator<(const UUID& v) const {
-         if (most_sig_bits != v.most_sig_bits) {
-             return uint64_t(most_sig_bits) < uint64_t(v.most_sig_bits);
-         } else {
-             return uint64_t(least_sig_bits) < uint64_t(v.least_sig_bits);
-         }
-    }
-    bool operator>(const UUID& v) const {
-        return v < *this;
-    }
-    bool operator<=(const UUID& v) const {
-        return !(*this > v);
-    }
-    bool operator>=(const UUID& v) const {
-        return !(*this < v);
-    }
-    bytes serialize() const {
-        bytes b(bytes::initialized_later(), serialized_size());
-        auto i = b.begin();
-        serialize(i);
-        return b;
-    }
-    static size_t serialized_size() noexcept {
-        return 16;
-    }
+    bool operator==(const UUID& v) const ;
+    bool operator!=(const UUID& v) const ;
+    bool operator<(const UUID& v) const ;
+    bool operator>(const UUID& v) const ;
+    bool operator<=(const UUID& v) const ;
+    bool operator>=(const UUID& v) const ;
+    bytes serialize() const ;
+    static size_t serialized_size() noexcept ;
     template <typename CharOutputIterator>
     void serialize(CharOutputIterator& out) const {
         serialize_int64(out, most_sig_bits);
