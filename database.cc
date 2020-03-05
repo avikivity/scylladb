@@ -251,11 +251,7 @@ static can_gc_fn always_gc = [] (tombstone) { return true; };
 
 #include <seastar/util/optimized_optional.hh>
 
-#include <iosfwd>
-#include <functional>
 
-#include <string_view>
-#include <seastar/core/sstring.hh>
 
 template<typename CharT>
 class basic_mutable_view {
@@ -351,27 +347,12 @@ struct appending_hash<bytes_view> {
 
 int32_t compare_unsigned(bytes_view v1, bytes_view v2);
 
-#include <optional>
-#include <iosfwd>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <stdint.h>
-#include <cassert>
-#include <array>
-#include <iosfwd>
 
-#include <seastar/core/sstring.hh>
 #include <seastar/core/print.hh>
-#include <seastar/net/byteorder.hh>
 
-#include <stdint.h>
 
-#include <seastar/util/gcc6-concepts.hh>
-#include <seastar/core/sstring.hh>
 #include <seastar/net/byteorder.hh>
-#include <iosfwd>
-#include <iterator>
 
 
 class UTFDataFormatException { };
@@ -611,7 +592,6 @@ struct hash<utils::UUID> {
 };
 }
 
-#include <seastar/net/byteorder.hh>
 #include <seastar/util/log.hh>
 
 namespace logging {
@@ -639,16 +619,8 @@ using seastar::level_name;
 
 }
 
-#include <seastar/net/byteorder.hh>
-#include <cstdint>
-#include <iosfwd>
-#include <seastar/util/gcc6-concepts.hh>
-#include <seastar/util/variant_utils.hh>
 
-#include <array>
-#include <type_traits>
 
-#include <seastar/util/gcc6-concepts.hh>
 
 namespace meta {
 
@@ -799,9 +771,7 @@ static constexpr bool all_of = std::conjunction_v<Predicate<Ts>...>;
 }
 
 #include <boost/range/algorithm/copy.hpp>
-#include <boost/range/algorithm/for_each.hpp>
 
-#include <seastar/util/gcc6-concepts.hh>
 
 enum class mutable_view { no, yes, };
 
@@ -870,10 +840,8 @@ public:
 #include <map>
 
 
-#include <vector>
 
 #include <seastar/core/iostream.hh>
-#include <seastar/core/print.hh>
 #include <seastar/core/temporary_buffer.hh>
 #include <seastar/core/simple-stream.hh>
 
