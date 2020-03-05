@@ -842,13 +842,9 @@ public:
 
 
 #include <seastar/core/iostream.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/core/simple-stream.hh>
 
 
-#include <boost/range/iterator_range.hpp>
 
-#include <seastar/core/unaligned.hh>
 #include <seastar/core/simple-stream.hh>
 /**
  * Utility for writing data into a buffer when its final size is not known up front.
@@ -1329,13 +1325,7 @@ public:
     future<fragmented_temporary_buffer> read_exactly(input_stream<char>& in, size_t length);
 };
 
-#include <vector>
-#include <unordered_set>
 #include <list>
-#include <array>
-#include <seastar/core/sstring.hh>
-#include <unordered_map>
-#include <optional>
 
 namespace ser {
 
@@ -1506,7 +1496,6 @@ void merge_column(const abstract_type& def,
         atomic_cell_or_collection& old,
         const atomic_cell_or_collection& neww);
 
-#include <iosfwd>
 
 using cql_protocol_version_type = uint8_t;
 
@@ -1536,22 +1525,9 @@ public:
     }
 };
 
-#include <seastar/core/sstring.hh>
-#include <vector>
-#include <sstream>
 #include <unordered_set>
 #include <set>
-#include <optional>
 
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
-#include <new>
-#include <utility>
-#include <algorithm>
-#include <initializer_list>
-#include <memory>
-#include <stdexcept>
 
 namespace utils {
 
@@ -1992,15 +1968,6 @@ public:
 
 }
 
-#include <boost/range/algorithm/equal.hpp>
-#include <boost/algorithm/clamp.hpp>
-#include <boost/version.hpp>
-#include <memory>
-#include <type_traits>
-#include <iterator>
-#include <utility>
-#include <algorithm>
-#include <stdexcept>
 
 namespace utils {
 
@@ -2368,12 +2335,7 @@ std::ostream& operator<<(std::ostream& os, const std::optional<T>& opt) {
 
 }
 
-#include <seastar/core/sstring.hh>
 
-#include <cstdint>
-#include <string_view>
-#include <ostream>
-#include <stdexcept>
 
 // Wrapper for a value with a type-tag for differentiating instances.
 template <class Value, class Tag>
@@ -2490,7 +2452,6 @@ seastar::sstring to_string(const cql_duration&);
 bool operator==(const cql_duration&, const cql_duration&) noexcept;
 bool operator!=(const cql_duration&, const cql_duration&) noexcept;
 
-#include <stdexcept>
 
 class marshal_exception : public std::exception {
     sstring _why;
@@ -2501,14 +2462,9 @@ public:
 };
 
 #include <seastar/net/ip.hh>
-#include <seastar/net/inet_address.hh>
 #include <seastar/util/backtrace.hh>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/on_internal_error.hh>
 
-#include <functional>
-#include <system_error>
 
 namespace seastar { class logger; }
 
@@ -3409,16 +3365,7 @@ using user_type = shared_ptr<const user_type_impl>;
 using tuple_type = shared_ptr<const tuple_type_impl>;
 
 
-#include <iosfwd>
-#include <algorithm>
-#include <vector>
-#include <boost/range/iterator_range.hpp>
 #include <boost/range/adaptor/transformed.hpp>
-#include <seastar/util/backtrace.hh>
-#include <iosfwd>
-#include <seastar/core/print.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/enum.hh>
 
 namespace unimplemented {
 
@@ -3643,16 +3590,9 @@ public:
 
 using compound_prefix = compound_type<allow_prefixes::yes>;
 
-#include <optional>
-#include <unordered_map>
-#include <boost/range/iterator_range.hpp>
 #include <boost/range/join.hpp>
-#include <boost/range/algorithm/transform.hpp>
-#include <boost/lexical_cast.hpp>
 #include <boost/dynamic_bitset.hpp>
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/util/backtrace.hh>
 
 namespace dht {
 
@@ -4443,9 +4383,6 @@ inline void check_schema_version(table_schema_version expected, const schema& ac
     }
 }
 
-#include <stdexcept>
-#include <type_traits>
-#include <seastar/core/sstring.hh>
 
 namespace sstables {
 
@@ -5024,13 +4961,7 @@ int composite::tri_compare::operator()(const composite& v1, const composite& v2)
     return (*this)(composite_view(v1), composite_view(v2));
 }
 
-#include <stdint.h>
-#include <memory>
 #include <any>
-#include <cstdlib>
-#include <seastar/core/memory.hh>
-#include <seastar/util/alloc_failure_injector.hh>
-#include <malloc.h>
 
 // A function used by compacting collectors to migrate objects during
 // compaction. The function should reconstruct the object located at src
@@ -5311,10 +5242,6 @@ decltype(auto) with_allocator(allocation_strategy& alloc, Func&& func) {
     allocator_lock l(alloc);
     return func();
 }
-#include <seastar/core/unaligned.hh>
-#include <seastar/util/alloc_failure_injector.hh>
-#include <unordered_map>
-#include <type_traits>
 
 struct blob_storage {
     struct [[gnu::packed]] ref_type {
@@ -6295,15 +6222,7 @@ public:
     static bool make_full(const schema& s, clustering_key_prefix& ck);    friend std::ostream& operator<<(std::ostream& out, const clustering_key_prefix& ckp);
 };
 
-#include <functional>
-#include <list>
-#include <vector>
-#include <optional>
-#include <iosfwd>
-#include <boost/range/algorithm/copy.hpp>
 #include <boost/range/adaptor/sliced.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-#include <seastar/util/gcc6-concepts.hh>
 
 template<typename T>
 class range_bound {
@@ -7131,11 +7050,7 @@ public:
         return out << "{bound: prefix=" << b._prefix.get() << ", kind=" << b._kind << "}";
     }
 };
-#include <optional>
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
-#include <memory>
 #include <random>
 #include <utility>
 #include <vector>
