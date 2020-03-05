@@ -5277,9 +5277,7 @@ public:
     bool ready() const {
         return elapsed.count() >= 0 && !_consumed;
     }
-    void set_consumed() {
-        _consumed = true;
-    }
+    void set_consumed() ;
 };
 class one_session_records {
 private:
@@ -5298,17 +5296,11 @@ public:
     /**
      * Consume a single record from the per-shard budget.
      */
-    void consume_from_budget() {
-        ++(*budget_ptr);
-    }
+    void consume_from_budget() ;
     /**
      * Drop all pending records and return the budget.
      */
-    void drop_records() {
-        (*budget_ptr) -= size();
-        events_recs.clear();
-        session_rec.set_consumed();
-    }
+    void drop_records() ;
     /**
      * Should be called when a record is scheduled for write.
      * From that point till data_consumed() call all new records will be written
@@ -5322,12 +5314,8 @@ public:
      * explicitly committed for write in order to be written during the write event.
      */
     inline void data_consumed();
-    bool is_pending_for_write() const {
-        return _is_pending_for_write;
-    }
-    uint64_t size() const {
-        return events_recs.size() + session_rec.ready();
-    }
+    bool is_pending_for_write() const ;
+    uint64_t size() const ;
 private:
     bool _is_pending_for_write = false;
 };
@@ -5368,40 +5356,19 @@ private:
     std::chrono::microseconds _slow_query_duration_threshold;
     std::chrono::seconds _slow_query_record_ttl;
 public:
-    uint64_t get_next_rand_uint64() {
-        return _gen();
-    }
-    i_tracing_backend_helper& backend_helper() {
-        return *_tracing_backend_helper_ptr;
-    }
-    const sstring& get_thread_name() const {
-        return _thread_name;
-    }
-    static seastar::sharded<tracing>& tracing_instance() {
-        static seastar::sharded<tracing>* tracing_inst = new seastar::sharded<tracing>();
-        return *tracing_inst;
-    }
-    static tracing& get_local_tracing_instance() {
-        return tracing_instance().local();
-    }
-    bool started() const {
-        return !_down;
-    }
+    uint64_t get_next_rand_uint64() ;
+    i_tracing_backend_helper& backend_helper() ;
+    const sstring& get_thread_name() const ;
+    static seastar::sharded<tracing>& tracing_instance() ;
+    static tracing& get_local_tracing_instance() ;
+    bool started() const ;
     static future<> create_tracing(const backend_registry& br, sstring tracing_backend_helper_class_name);
     static future<> start_tracing();
     tracing(const backend_registry& br, sstring tracing_backend_helper_class_name);
     future<> start();
     future<> stop();
     future<> shutdown();
-    void write_pending_records() {
-        if (_pending_for_write_records_bulk.size()) {
-            _flushing_records += _pending_for_write_records_count;
-            stats.trace_records_count += _pending_for_write_records_count;
-            _pending_for_write_records_count = 0;
-            _tracing_backend_helper_ptr->write_records_bulk(_pending_for_write_records_bulk);
-            _pending_for_write_records_bulk.clear();
-        }
-    }
+    void write_pending_records() ;
     void write_complete(uint64_t nr = 1) ;
     trace_state_ptr create_session(trace_type type, trace_state_props_set props) noexcept;
     trace_state_ptr create_session(const trace_info& secondary_session_info) noexcept;
@@ -5424,36 +5391,11 @@ public:
     std::chrono::seconds slow_query_record_ttl() const ;
 private:
     void write_timer_callback();
-    bool may_create_new_session(const std::optional<utils::UUID>& session_id = std::nullopt) {
-        if (!have_records_budget(exp_trace_events_per_session) || _active_sessions >= max_pending_sessions + write_event_sessions_threshold) {
-            if (session_id) {
-                tracing_logger.trace("{}: Too many outstanding tracing records or sessions. Dropping a secondary session", *session_id);
-            } else {
-                tracing_logger.trace("Too many outstanding tracing records or sessions. Dropping a primary session");
-            }
-            if (++stats.dropped_sessions % tracing::log_warning_period == 1) {
-                tracing_logger.warn("Dropped {} sessions: open_sessions {}, cached_records {} pending_for_write_records {}, flushing_records {}",
-                            stats.dropped_sessions, _active_sessions, _cached_records, _pending_for_write_records_count, _flushing_records);
-            }
-            return false;
-        }
-        return true;
-    }
+    bool may_create_new_session(const std::optional<utils::UUID>& session_id = std::nullopt) ;
 };
-void one_session_records::set_pending_for_write() {
-    _is_pending_for_write = true;
-    budget_ptr = _local_tracing_ptr->get_pending_records_ptr();
-}
-void one_session_records::data_consumed() {
-    if (session_rec.ready()) {
-        session_rec.set_consumed();
-    }
-    _is_pending_for_write = false;
-    budget_ptr = _local_tracing_ptr->get_cached_records_ptr();
-}
-inline span_id span_id::make_span_id() {
-    return 1 + (tracing::get_local_tracing_instance().get_next_rand_uint64() << 1);
-}
+
+
+
 }
 class position_in_partition_view;
 namespace query {
@@ -5720,24 +5662,8 @@ private:
     size_t _size;
     std::list<bytes> _linearized_values;
 private:
-    size_t remove_current_prefix(size_t size) {
-        if (size < _current.size()) {
-            _current.remove_prefix(size);
-            _size -= size;
-            return size;
-        }
-        const auto ret = _current.size();
-        _size -= ret;
-        ++_it;
-        _current = (_it == _end) ? fragment_type{} : *_it;
-        return ret;
-    }
-    void check_size(size_t size) const {
-        if (size > _size) {
-            seastar::throw_with_backtrace<Exception>(
-                    fmt::format("linearizing_input_stream::check_size() - not enough bytes (requested {:d}, got {:d})", size, _size));
-        }
-    }
+    size_t remove_current_prefix(size_t size) ;
+    void check_size(size_t size) const ;
     std::pair<bytes_view, bool> do_read(size_t size) {
         check_size(size);
         if (size <= _current.size()) {
