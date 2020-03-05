@@ -3782,8 +3782,7 @@ public:
 class partition_key : public compound_wrapper<partition_key, partition_key_view> {
 public:
     using c_type = compound_type<allow_prefixes::no>;
-    template<typename RangeOfSerializedComponents>
-    static partition_key from_range(RangeOfSerializedComponents&& v);
+    ;
     /*!
      * \brief create a partition_key from a nodetool style string
      * takes a nodetool style string representation of a partition key and returns a partition_key.
@@ -3791,13 +3790,13 @@ public:
      * For example if a composite key is has two columns (col1, col2) to get the partition key that
      * have col1=val1 and col2=val2 use the string 'val1:val2'
      */
-    static partition_key from_nodetool_style_string(const schema_ptr s, const sstring& key);
-    partition_key(std::vector<bytes> v);
-    partition_key(partition_key&& v) = default;
-    partition_key(const partition_key& v) = default;
-    partition_key(partition_key& v) = default;
-    partition_key& operator=(const partition_key&) = default;
-    partition_key& operator=(partition_key&) = default;
+    
+    
+    
+    
+    
+    
+    
     
     
     using compound = lw_shared_ptr<c_type>;
@@ -3904,61 +3903,17 @@ public:
      ;
      ;
      ;
-    template<typename Comparator>
-    std::optional<wrapping_range<T>> split_after(const T& split_point, Comparator&& cmp) const ;
-    template<typename Bound, typename Transformer, typename U = transformed_type<Transformer>>
-    static std::optional<typename wrapping_range<U>::bound> transform_bound(Bound&& b, Transformer&& transformer) ;
-    template<typename Transformer, typename U = transformed_type<Transformer>>
-    wrapping_range<U> transform(Transformer&& transformer) && {
-        return wrapping_range<U>(transform_bound(std::move(_start), transformer), transform_bound(std::move(_end), transformer), _singular);
-    }
-    template<typename Transformer, typename U = transformed_type<Transformer>>
-    wrapping_range<U> transform(Transformer&& transformer) const & {
-        return wrapping_range<U>(transform_bound(_start, transformer), transform_bound(_end, transformer), _singular);
-    }
-    template<typename Comparator>
-    bool equal(const wrapping_range& other, Comparator&& cmp) const {
-        return bool(_start) == bool(other._start)
-               && bool(_end) == bool(other._end)
-               && (!_start || _start->equal(*other._start, cmp))
-               && (!_end || _end->equal(*other._end, cmp))
-               && _singular == other._singular;
-    }
-    bool operator==(const wrapping_range& other) const {
-        return (_start == other._start) && (_end == other._end) && (_singular == other._singular);
-    }
-    template<typename U>
-    friend std::ostream& operator<<(std::ostream& out, const wrapping_range<U>& r);
+     ;
+     ;
+    
+    
+    
+    
+    ;
 private:
     friend class nonwrapping_range<T>;
 };
-template<typename U>
-std::ostream& operator<<(std::ostream& out, const wrapping_range<U>& r) {
-    if (r.is_singular()) {
-        return out << "{" << r.start()->value() << "}";
-    }
-    if (!r.start()) {
-        out << "(-inf, ";
-    } else {
-        if (r.start()->is_inclusive()) {
-            out << "[";
-        } else {
-            out << "(";
-        }
-        out << r.start()->value() << ", ";
-    }
-    if (!r.end()) {
-        out << "+inf)";
-    } else {
-        out << r.end()->value();
-        if (r.end()->is_inclusive()) {
-            out << "]";
-        } else {
-            out << ")";
-        }
-    }
-    return out;
-}
+
 template<typename T>
 class nonwrapping_range {
     template <typename U>
@@ -3970,10 +3925,8 @@ public:
 private:
     wrapping_range<T> _range;
 public:
-    nonwrapping_range(T value)
-        : _range(std::move(value))
-    { }
-    nonwrapping_range() : nonwrapping_range({}, {}) { }
+    
+    
     nonwrapping_range(optional<bound> start, optional<bound> end, bool singular = false)
         : _range(std::move(start), std::move(end), singular)
     { }
