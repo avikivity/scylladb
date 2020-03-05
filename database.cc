@@ -6071,23 +6071,21 @@ public:
     reverter apply_reversibly(const schema& s, range_tombstone_list& rt_list);
     friend std::ostream& operator<<(std::ostream& out, const range_tombstone_list&);
     bool equal(const schema&, const range_tombstone_list&) const;
-    size_t external_memory_usage(const schema& s) const ;
+    
 private:
-    void apply_reversibly(const schema& s, clustering_key_prefix start, bound_kind start_kind,
-                          clustering_key_prefix end, bound_kind end_kind, tombstone tomb, reverter& rev);
-    void insert_from(const schema& s, range_tombstones_type::iterator it, clustering_key_prefix start,
-                     bound_kind start_kind, clustering_key_prefix end, bound_kind end_kind, tombstone tomb, reverter& rev);
-    range_tombstones_type::iterator find(const schema& s, const range_tombstone& rt);
+    
+    
+    
 };
 namespace query {
 class clustering_key_filter_ranges {
 public:
-    clustering_key_filter_ranges(const clustering_row_ranges& ranges);
+    
     struct reversed { };
-    clustering_key_filter_ranges(reversed, const clustering_row_ranges& ranges);
-    clustering_key_filter_ranges(clustering_key_filter_ranges&& other) noexcept;
-    clustering_key_filter_ranges& operator=(clustering_key_filter_ranges&& other) noexcept;
-    static clustering_key_filter_ranges get_ranges(const schema& schema, const query::partition_slice& slice, const partition_key& key);
+    
+    
+    
+    
 };
 }
 template<typename T>
@@ -6095,30 +6093,19 @@ class managed;
 template<typename T>
 struct managed_ref {
     managed<T>* _ptr;
-    managed_ref()  ;
-    managed_ref(const managed_ref&) = delete;
-    managed_ref(managed_ref&& other) 
-    ;
-    ~managed_ref() ;
-    managed_ref& operator=(managed_ref&& o) ;
-    T* get() ;
-    const T* get() const ;
-    T& operator*() ;
-    const T& operator*() const {
-        return _ptr->_value;
-    }
-    T* operator->() {
-        return &_ptr->_value;
-    }
-    const T* operator->() const {
-        return &_ptr->_value;
-    }
-    explicit operator bool() const {
-        return _ptr != nullptr;
-    }
-    size_t external_memory_usage() const {
-        return _ptr ? current_allocator().object_memory_size_in_allocator(_ptr) : 0;
-    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 };
 template<typename T>
 class managed {
@@ -6128,54 +6115,38 @@ class managed {
     friend struct managed_ref;
 public:
     static_assert(std::is_nothrow_move_constructible<T>::value, "Throwing move constructor not supported");
-    managed(managed<T>** backref, T&& v) noexcept
-        : _backref(backref)
-        , _value(std::move(v))
-    {
-        *_backref = this;
-    }
-    managed(managed&& other) noexcept
-        : _backref(other._backref)
-        , _value(std::move(other._value))
-    {
-        *_backref = this;
-    }
+    
+    
 };
-template<typename T, typename... Args>
-managed_ref<T>
-make_managed(Args&&... args) {
-    managed_ref<T> ref;
-    current_allocator().construct<managed<T>>(&ref._ptr, T(std::forward<Args>(args)...));
-    return ref;
-}
+
 class mutation_fragment;
 class clustering_row;
 struct cell_hash {
     using size_type = uint64_t;
     static constexpr size_type no_hash = 0;
     size_type hash = no_hash;
-    explicit operator bool() const noexcept;
+    
 };
 using cell_hash_opt = seastar::optimized_optional<cell_hash>;
 struct cell_and_hash {
     mutable cell_hash_opt hash;
-    cell_and_hash() = default;
-    cell_and_hash(cell_and_hash&&) noexcept = default;
-    cell_and_hash& operator=(cell_and_hash&&) noexcept = default;
+    
+    
+    
 };
 class compaction_garbage_collector;
 class row {
     class cell_entry {
         friend class row;
     public:
-        cell_entry(column_id id);
-        cell_entry(cell_entry&&) noexcept;
-        column_id id() const;
-        const cell_hash_opt& hash() const;
+        
+        
+        
+        
         struct compare {
-            bool operator()(const cell_entry& e1, const cell_entry& e2) const ;
-            bool operator()(column_id id1, const cell_entry& e2) const;
-            bool operator()(const cell_entry& e1, column_id id2) const;
+            
+            
+            
         };
     };
     using size_type = std::make_unsigned_t<column_id>;
@@ -6445,37 +6416,30 @@ public:
     const gc_clock::time_point max_deletion_time() const ;
     const tombstone& regular() const ;
     const shadowable_tombstone& shadowable() const ;
-    bool is_shadowable() const ;
-    void maybe_shadow(const row_marker& marker) noexcept ;
-    void apply(tombstone regular) noexcept ;
-    void apply(shadowable_tombstone shadowable, row_marker marker) noexcept ;
-    void apply(row_tombstone t, row_marker marker) noexcept ;
-    friend std::ostream& operator<<(std::ostream& out, const row_tombstone& t) ;
+    
+    
+    
+    
+    
+    
 };
 class deletable_row final {
     row_tombstone _deleted_at;
     row_marker _marker;
     row _cells;
 public:
-    deletable_row() ;
-    explicit deletable_row(clustering_row&&);
-    deletable_row(const schema& s, const deletable_row& other) 
-    ;
-    deletable_row(const schema& s, row_tombstone tomb, const row_marker& marker, const row& cells) 
-    ;
-    void apply(const schema&, clustering_row);
-    void apply(tombstone deleted_at) ;
-    void apply(shadowable_tombstone deleted_at) ;
-    void apply(row_tombstone deleted_at) ;
-    void apply(const row_marker& rm) {
-        _marker.apply(rm);
-        _deleted_at.maybe_shadow(_marker);
-    }
-    void remove_tombstone() {
-        _deleted_at = {};
-    }
-    void apply(const schema& s, deletable_row&& src);
-    void apply_monotonically(const schema& s, deletable_row&& src);
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 public:
     row_tombstone deleted_at() const { return _deleted_at; }
     api::timestamp_type created_at() const ;
