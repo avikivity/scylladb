@@ -1484,12 +1484,12 @@ public:
     const T& front() const { return *cbegin(); }
     T& front() { return *begin(); }
     iterator begin() { return iterator(_chunks.data(), 0); }
-    iterator end() { return iterator(_chunks.data(), _size); }
-    const_iterator begin() const { return const_iterator(_chunks.data(), 0); }
-    const_iterator end() const { return const_iterator(_chunks.data(), _size); }
-    const_iterator cbegin() const { return const_iterator(_chunks.data(), 0); }
-    const_iterator cend() const { return const_iterator(_chunks.data(), _size); }
-    std::reverse_iterator<iterator> rbegin() { return std::reverse_iterator(end()); }
+    iterator end() ;
+    const_iterator begin() const ;
+    const_iterator end() const ;
+    const_iterator cbegin() const ;
+    const_iterator cend() const ;
+    std::reverse_iterator<iterator> rbegin() ;
     std::reverse_iterator<iterator> rend() ;
     std::reverse_iterator<const_iterator> rbegin() const ;
     std::reverse_iterator<const_iterator> rend() const ;
@@ -1540,20 +1540,11 @@ std::ostream& operator<<(std::ostream& os, const std::tuple<T...>& p) ;
 template <typename T>
 std::ostream& operator<<(std::ostream& os, const std::unordered_set<T>& items) ;
 template <typename T>
-std::ostream& operator<<(std::ostream& os, const std::set<T>& items) {
-    os << "{" << join(", ", items) << "}";
-    return os;
-}
+std::ostream& operator<<(std::ostream& os, const std::set<T>& items) ;
 template<typename T, size_t N>
-std::ostream& operator<<(std::ostream& os, const std::array<T, N>& items) {
-    os << "{" << join(", ", items) << "}";
-    return os;
-}
+std::ostream& operator<<(std::ostream& os, const std::array<T, N>& items) ;
 template <typename K, typename V, typename... Args>
-std::ostream& operator<<(std::ostream& os, const std::unordered_map<K, V, Args...>& items) {
-    os << "{" << join(", ", items) << "}";
-    return os;
-}
+std::ostream& operator<<(std::ostream& os, const std::unordered_map<K, V, Args...>& items) ;
 template <typename K, typename V, typename... Args>
 std::ostream& operator<<(std::ostream& os, const std::map<K, V, Args...>& items) {
     os << "{" << join(", ", items) << "}";
