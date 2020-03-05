@@ -3586,62 +3586,10 @@ public:
         }
         o._u.small.size = 0;
     }
-    managed_bytes& operator=(managed_bytes&& o) noexcept {
-        if (this != &o) {
-            this->~managed_bytes();
-            new (this) managed_bytes(std::move(o));
-        }
-        return *this;
-    }
-    managed_bytes& operator=(const managed_bytes& o) {
-        if (this != &o) {
-            managed_bytes tmp(o);
-            this->~managed_bytes();
-            new (this) managed_bytes(std::move(tmp));
-        }
-        return *this;
-    }
-    bool operator==(const managed_bytes& o) const {
-        if (size() != o.size()) {
-            return false;
-        }
-        if (!external()) {
-            return bytes_view(*this) == bytes_view(o);
-        } else {
-            auto a = _u.ptr;
-            auto a_data = a->data;
-            auto a_remain = a->frag_size;
-            a = a->next;
-            auto b = o._u.ptr;
-            auto b_data = b->data;
-            auto b_remain = b->frag_size;
-            b = b->next;
-            while (a_remain || b_remain) {
-                auto now = std::min(a_remain, b_remain);
-                if (bytes_view(a_data, now) != bytes_view(b_data, now)) {
-                    return false;
-                }
-                a_data += now;
-                a_remain -= now;
-                if (!a_remain && a) {
-                    a_data = a->data;
-                    a_remain = a->frag_size;
-                    a = a->next;
-                }
-                b_data += now;
-                b_remain -= now;
-                if (!b_remain && b) {
-                    b_data = b->data;
-                    b_remain = b->frag_size;
-                    b = b->next;
-                }
-            }
-            return true;
-        }
-    }
-    bool operator!=(const managed_bytes& o) const {
-        return !(*this == o);
-    }
+    managed_bytes& operator=(managed_bytes&& o) noexcept ;
+    managed_bytes& operator=(const managed_bytes& o) ;
+    bool operator==(const managed_bytes& o) const ;
+    bool operator!=(const managed_bytes& o) const ;
     operator bytes_view() const {
         return { data(), size() };
     }
@@ -3652,26 +3600,11 @@ public:
         assert(!is_fragmented());
         return { data(), size() };
     };
-    bytes_view::value_type& operator[](size_type index) {
-        return value_at_index(index);
-    }
-    const bytes_view::value_type& operator[](size_type index) const {
-        return const_cast<const bytes_view::value_type&>(
-                const_cast<managed_bytes*>(this)->value_at_index(index));
-    }
-    size_type size() const {
-        if (external()) {
-            return _u.ptr->size;
-        } else {
-            return _u.small.size;
-        }
-    }
-    const blob_storage::char_type* begin() const {
-        return data();
-    }
-    const blob_storage::char_type* end() const {
-        return data() + size();
-    }
+    bytes_view::value_type& operator[](size_type index) ;
+    const bytes_view::value_type& operator[](size_type index) const ;
+    size_type size() const ;
+    const blob_storage::char_type* begin() const ;
+    const blob_storage::char_type* end() const ;
     blob_storage::char_type* begin() {
         return data();
     }
