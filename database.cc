@@ -1550,69 +1550,41 @@ public:
     const_iterator cbegin() const { return const_iterator(_chunks.data(), 0); }
     const_iterator cend() const { return const_iterator(_chunks.data(), _size); }
     std::reverse_iterator<iterator> rbegin() { return std::reverse_iterator(end()); }
-    std::reverse_iterator<iterator> rend() { return std::reverse_iterator(begin()); }
-    std::reverse_iterator<const_iterator> rbegin() const { return std::reverse_iterator(end()); }
-    std::reverse_iterator<const_iterator> rend() const { return std::reverse_iterator(begin()); }
-    std::reverse_iterator<const_iterator> crbegin() const { return std::reverse_iterator(cend()); }
-    std::reverse_iterator<const_iterator> crend() const { return std::reverse_iterator(cbegin()); }
+    std::reverse_iterator<iterator> rend() ;
+    std::reverse_iterator<const_iterator> rbegin() const ;
+    std::reverse_iterator<const_iterator> rend() const ;
+    std::reverse_iterator<const_iterator> crbegin() const ;
+    std::reverse_iterator<const_iterator> crend() const ;
 public:
-    bool operator==(const chunked_vector& x) const {
-        return boost::equal(*this, x);
-    }
-    bool operator!=(const chunked_vector& x) const {
-        return !operator==(x);
-    }
+    bool operator==(const chunked_vector& x) const ;
+    bool operator!=(const chunked_vector& x) const ;
 };
 }
 template<typename Iterator>
-static inline
-sstring join(sstring delimiter, Iterator begin, Iterator end) {
-    std::ostringstream oss;
-    while (begin != end) {
-        oss << *begin;
-        ++begin;
-        if (begin != end) {
-            oss << delimiter;
-        }
-    }
-    return oss.str();
-}
+static
+sstring join(sstring delimiter, Iterator begin, Iterator end) ;
 template<typename PrintableRange>
-static inline
-sstring join(sstring delimiter, const PrintableRange& items) {
-    return join(delimiter, items.begin(), items.end());
-}
+static
+sstring join(sstring delimiter, const PrintableRange& items) ;
 template<bool NeedsComma, typename Printable>
 struct print_with_comma {
     const Printable& v;
 };
 template<bool NeedsComma, typename Printable>
-std::ostream& operator<<(std::ostream& os, const print_with_comma<NeedsComma, Printable>& x) {
-    os << x.v;
-    if (NeedsComma) {
-        os << ", ";
-    }
-    return os;
-}
+std::ostream& operator<<(std::ostream& os, const print_with_comma<NeedsComma, Printable>& x) ;
 namespace std {
 template<typename Printable>
-static inline
+static
 sstring
-to_string(const std::vector<Printable>& items) {
-    return "[" + join(", ", items) + "]";
-}
+to_string(const std::vector<Printable>& items) ;
 template<typename Printable>
-static inline
+static
 sstring
-to_string(const std::set<Printable>& items) {
-    return "{" + join(", ", items) + "}";
-}
+to_string(const std::set<Printable>& items) ;
 template<typename Printable>
-static inline
+static
 sstring
-to_string(const std::unordered_set<Printable>& items) {
-    return "{" + join(", ", items) + "}";
-}
+to_string(const std::unordered_set<Printable>& items) ;
 template<typename Printable>
 static inline
 sstring
@@ -1620,23 +1592,13 @@ to_string(std::initializer_list<Printable> items) {
     return "[" + join(", ", std::begin(items), std::end(items)) + "]";
 }
 template <typename K, typename V>
-std::ostream& operator<<(std::ostream& os, const std::pair<K, V>& p) {
-    os << "{" << p.first << ", " << p.second << "}";
-    return os;
-}
+std::ostream& operator<<(std::ostream& os, const std::pair<K, V>& p) ;
 template<typename... T, size_t... I>
-std::ostream& print_tuple(std::ostream& os, const std::tuple<T...>& p, std::index_sequence<I...>) {
-    return ((os << "{" ) << ... << print_with_comma<I < sizeof...(I) - 1, T>{std::get<I>(p)}) << "}";
-}
+std::ostream& print_tuple(std::ostream& os, const std::tuple<T...>& p, std::index_sequence<I...>) ;
 template <typename... T>
-std::ostream& operator<<(std::ostream& os, const std::tuple<T...>& p) {
-    return print_tuple(os, p, std::make_index_sequence<sizeof...(T)>());
-}
+std::ostream& operator<<(std::ostream& os, const std::tuple<T...>& p) ;
 template <typename T>
-std::ostream& operator<<(std::ostream& os, const std::unordered_set<T>& items) {
-    os << "{" << join(", ", items) << "}";
-    return os;
-}
+std::ostream& operator<<(std::ostream& os, const std::unordered_set<T>& items) ;
 template <typename T>
 std::ostream& operator<<(std::ostream& os, const std::set<T>& items) {
     os << "{" << join(", ", items) << "}";
