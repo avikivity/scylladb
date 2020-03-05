@@ -1366,44 +1366,16 @@ public:
     size_t size() const {
         return _size;
     }
-    T& operator[](size_t i) {
-        return *addr(i);
-    }
-    const T& operator[](size_t i) const {
-        return *addr(i);
-    }
-    T& at(size_t i) {
-        check_bounds(i);
-        return *addr(i);
-    }
-    const T& at(size_t i) const {
-        check_bounds(i);
-        return *addr(i);
-    }
-    void push_back(const T& x) {
-        reserve_for_push_back();
-        new (addr(_size)) T(x);
-        ++_size;
-    }
-    void push_back(T&& x) {
-        reserve_for_push_back();
-        new (addr(_size)) T(std::move(x));
-        ++_size;
-    }
+    T& operator[](size_t i) ;
+    const T& operator[](size_t i) const ;
+    T& at(size_t i) ;
+    const T& at(size_t i) const ;
+    void push_back(const T& x) ;
+    void push_back(T&& x) ;
     template <typename... Args>
-    T& emplace_back(Args&&... args) {
-        reserve_for_push_back();
-        auto& ret = *new (addr(_size)) T(std::forward<Args>(args)...);
-        ++_size;
-        return ret;
-    }
-    void pop_back() {
-        --_size;
-        addr(_size)->~T();
-    }
-    const T& back() const {
-        return *addr(_size - 1);
-    }
+    T& emplace_back(Args&&... args) ;
+    void pop_back() ;
+    const T& back() const ;
     T& back() {
         return *addr(_size - 1);
     }
