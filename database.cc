@@ -3713,33 +3713,19 @@ public:
     };
     struct hashing {
         typename TopLevelView::compound _t;
-        hashing(const schema& s) : _t(get_compound_type(s)) {}
-        size_t operator()(const TopLevelView& o) const {
-            return _t->hash(o.representation());
-        }
+        hashing(const schema& s)  ;
+        size_t operator()(const TopLevelView& o) const ;
     };
     struct equality {
         typename TopLevelView::compound _t;
-        equality(const schema& s) : _t(get_compound_type(s)) {}
-        bool operator()(const TopLevelView& o1, const TopLevelView& o2) const {
-            return _t->equal(o1.representation(), o2.representation());
-        }
+        equality(const schema& s)  ;
+        bool operator()(const TopLevelView& o1, const TopLevelView& o2) const ;
     };
-    bool equal(const schema& s, const TopLevelView& other) const {
-        return get_compound_type(s)->equal(representation(), other.representation());
-    }
-    auto begin() const {
-        return TopLevelView::compound::element_type::begin(representation());
-    }
-    auto end() const {
-        return TopLevelView::compound::element_type::end(representation());
-    }
-    auto begin(const schema& s) const {
-        return begin();
-    }
-    auto end(const schema& s) const {
-        return end();
-    }
+    bool equal(const schema& s, const TopLevelView& other) const ;
+    auto begin() const ;
+    auto end() const ;
+    auto begin(const schema& s) const ;
+    auto end(const schema& s) const ;
     bytes_view get_component(const schema& s, size_t idx) const {
         auto it = begin(s);
         std::advance(it, idx);
