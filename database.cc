@@ -3887,51 +3887,50 @@ public:
     partition_key(partition_key& v) = default;
     partition_key& operator=(const partition_key&) = default;
     partition_key& operator=(partition_key&) = default;
-    partition_key& operator=(partition_key&&) = default;
-    partition_key(partition_key_view key);
+    
+    
     using compound = lw_shared_ptr<c_type>;
-    static partition_key from_bytes(bytes_view b);
-    static const compound& get_compound_type(const schema& s);
-    const legacy_compound_view<c_type> legacy_form(const schema& s) const;
-    int legacy_tri_compare(const schema& s, const partition_key& o) const;
-    bool legacy_equal(const schema& s, const partition_key& o) const;
-    void validate(const schema& s) const;
-    friend std::ostream& operator<<(std::ostream& out, const partition_key& pk);
+    
+    
+    
+    
+    
+    
+    
 };
-std::ostream& operator<<(std::ostream& out, const partition_key::with_schema_wrapper& pk);
+
 class exploded_clustering_prefix {
 public:
-    exploded_clustering_prefix(std::vector<bytes>&& v);
-    exploded_clustering_prefix();
-    size_t size() const;
-    auto const& components() const;
-    explicit operator bool() const;
-    bool is_full(const schema& s) const;
-    friend std::ostream& operator<<(std::ostream& os, const exploded_clustering_prefix& ecp);
+    
+    
+    
+    
+    
+    
+    
 };
 class clustering_key_prefix_view : public prefix_compound_view_wrapper<clustering_key_prefix_view, clustering_key> {
 public:
-    static clustering_key_prefix_view from_bytes(bytes_view v);
+    
     using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
-    static const compound& get_compound_type(const schema& s);
-    static clustering_key_prefix_view make_empty();};
+    
+    };
 class clustering_key_prefix : public prefix_compound_wrapper<clustering_key_prefix, clustering_key_prefix_view, clustering_key> {
 public:
-    template<typename RangeOfSerializedComponents>
-    static clustering_key_prefix from_range(RangeOfSerializedComponents&& v);
-    clustering_key_prefix(std::vector<bytes> v);
-    clustering_key_prefix(clustering_key_prefix&& v) = default;
-    clustering_key_prefix(const clustering_key_prefix& v) = default;
-    clustering_key_prefix(clustering_key_prefix& v) = default;
-    clustering_key_prefix& operator=(const clustering_key_prefix&) = default;
-    clustering_key_prefix& operator=(clustering_key_prefix&) = default;
-    clustering_key_prefix& operator=(clustering_key_prefix&&) = default;
-    clustering_key_prefix(clustering_key_prefix_view v);
+    ;
+    
+    
+    
+    
+    
+    
+    
+    
     using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
-    static clustering_key_prefix from_bytes(bytes_view b);
-    static const compound& get_compound_type(const schema& s);
-    static clustering_key_prefix from_clustering_prefix(const schema& s, const exploded_clustering_prefix& prefix);
-    static bool make_full(const schema& s, clustering_key_prefix& ck);    friend std::ostream& operator<<(std::ostream& out, const clustering_key_prefix& ckp);
+    
+    
+    
+        
 };
 #include <boost/range/adaptor/sliced.hpp>
 template<typename T>
@@ -3939,16 +3938,12 @@ class range_bound {
     T _value;
     bool _inclusive;
 public:
-    range_bound(T value, bool inclusive = true)
-              : _value(std::move(value))
-              , _inclusive(inclusive)
-    { }
-    const T& value() const & { return _value; }
-    T&& value() && { return std::move(_value); }
-    bool is_inclusive() const { return _inclusive; }
-    bool operator==(const range_bound& other) const ;
-    template<typename Comparator>
-    bool equal(const range_bound& other, Comparator&& cmp) const ;
+    
+    
+    
+    
+    
+     ;
 };
 template<typename T>
 class nonwrapping_range;
@@ -3965,53 +3960,39 @@ private:
     optional<bound> _end;
     bool _singular;
 public:
-    wrapping_range(optional<bound> start, optional<bound> end, bool singular = false)  ;
-    wrapping_range(T value) 
-    ;
-    wrapping_range()  ;
+    
+    
+    
 private:
     struct start_bound_ref { const optional<bound>& b; };
     struct end_bound_ref { const optional<bound>& b; };
-    start_bound_ref start_bound() const ;
-    end_bound_ref end_bound() const ;
-    template<typename Comparator>
-    static bool greater_than_or_equal(end_bound_ref end, start_bound_ref start, Comparator&& cmp) ;
-    template<typename Comparator>
-    static bool less_than(end_bound_ref end, start_bound_ref start, Comparator&& cmp) ;
-    template<typename Comparator>
-    static bool less_than_or_equal(start_bound_ref first, start_bound_ref second, Comparator&& cmp) ;
-    template<typename Comparator>
-    static bool less_than(start_bound_ref first, start_bound_ref second, Comparator&& cmp) ;
-    template<typename Comparator>
-    static bool greater_than_or_equal(end_bound_ref first, end_bound_ref second, Comparator&& cmp) ;
+    
+    
+     ;
+     ;
+     ;
+     ;
+     ;
 public:
-    template<typename Comparator>
-    bool before(const T& point, Comparator&& cmp) const ;
-    template<typename Comparator>
-    bool after(const T& point, Comparator&& cmp) const ;
-    template<typename Comparator>
-    bool overlaps(const wrapping_range& other, Comparator&& cmp) const ;
-    static wrapping_range make(bound start, bound end) ;
-    static wrapping_range make_open_ended_both_sides() ;
-    static wrapping_range make_singular(T value) ;
-    static wrapping_range make_starting_with(bound b) ;
-    static wrapping_range make_ending_with(bound b) ;
-    bool is_singular() const ;
-    bool is_full() const ;
-    void reverse() ;
-    const optional<bound>& start() const ;
-    const optional<bound>& end() const ;
-    template<typename Comparator>
-    bool is_wrap_around(Comparator&& cmp) const ;
-    std::pair<wrapping_range, wrapping_range> unwrap() const ;
-    template<typename Comparator>
-    bool contains(const T& point, Comparator&& cmp) const ;
-    template<typename Comparator>
-    bool contains(const wrapping_range& other, Comparator&& cmp) const ;
-    template<typename Comparator>
-    std::vector<wrapping_range> subtract(const wrapping_range& other, Comparator&& cmp) const ;
-    template<typename Comparator>
-    std::pair<wrapping_range<T>, wrapping_range<T>> split(const T& split_point, Comparator&& cmp) const ;
+     ;
+     ;
+     ;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+     ;
+    
+     ;
+     ;
+     ;
+     ;
     template<typename Comparator>
     std::optional<wrapping_range<T>> split_after(const T& split_point, Comparator&& cmp) const ;
     template<typename Bound, typename Transformer, typename U = transformed_type<Transformer>>
