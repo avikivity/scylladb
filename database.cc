@@ -8120,16 +8120,8 @@ public:
 };
 #include <random>
 #include <seastar/core/sharded.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <utility>
 
-#include <seastar/core/print.hh>
-#include <seastar/net/ip.hh>
 #include <seastar/net/inet_address.hh>
-#include <seastar/net/socket_defs.hh>
-#include <sstream>
-#include <optional>
 
 namespace gms {
 
@@ -8946,7 +8938,6 @@ constexpr auto max_partitions = std::numeric_limits<uint32_t>::max();
 
 }
 
-#include <optional>
 
 lexicographical_relation relation_for_lower_bound(composite_view v);
 lexicographical_relation relation_for_upper_bound(composite_view v);
@@ -9211,10 +9202,6 @@ public:
 
 class clustering_interval_set;
 
-#include <list>
-#include <fmt/format.h>
-#include <seastar/net/byteorder.hh>
-#include <seastar/util/backtrace.hh>
 
 
 namespace utils {
@@ -9321,7 +9308,6 @@ public:
 };
 
 } // namespace utils
-#include <iosfwd>
 
 class abstract_type;
 class bytes_ostream;
@@ -9478,8 +9464,6 @@ enum class digest_algorithm : uint8_t {
 };
 
 }
-#include <optional>
-#include <seastar/util/bool_class.hh>
 
 namespace query {
 
@@ -9841,8 +9825,6 @@ std::ostream& operator<<(std::ostream& os, const query::result::printer&);
 }
 
 #include <boost/intrusive/set.hpp>
-#include <boost/range/algorithm.hpp>
-#include <optional>
 
 namespace bi = boost::intrusive;
 
@@ -10138,7 +10120,6 @@ public:
     virtual void accept_row_cell(column_id id, collection_mutation_view) = 0;
 };
 
-#include <seastar/core/simple-stream.hh>
 
 namespace utils {
 
@@ -10205,8 +10186,6 @@ public:
     std::optional<clustering_key> first_row_key() const;
     std::optional<clustering_key> last_row_key() const;
 };
-#include <array>
-#include <type_traits>
 
 
 template<typename T, unsigned InternalSize = 0, typename SizeType = size_t>
@@ -10433,12 +10412,10 @@ public:
         return 0;
     }
 };
-#include <seastar/util/bool_class.hh>
 
 class is_preemptible_tag;
 using is_preemptible = bool_class<is_preemptible_tag>;
 
-#include <iosfwd>
 #include <variant>
 
 class range_tombstone_list final {
