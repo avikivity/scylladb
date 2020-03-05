@@ -7638,73 +7638,33 @@ public:
     int compare(const row_tombstone& t) const {
         return _shadowable.compare(t._shadowable);
     }
-    explicit operator bool() const {
-        return bool(_shadowable);
-    }
-    const tombstone& tomb() const {
-        return _shadowable.tomb();
-    }
-    const gc_clock::time_point max_deletion_time() const {
-        return std::max(_regular.deletion_time, _shadowable.tomb().deletion_time);
-    }
-    const tombstone& regular() const {
-        return _regular;
-    }
-    const shadowable_tombstone& shadowable() const {
-        return _shadowable;
-    }
-    bool is_shadowable() const {
-        return _shadowable.tomb() > _regular;
-    }
-    void maybe_shadow(const row_marker& marker) noexcept {
-        _shadowable.maybe_shadow(_regular, marker);
-    }
-    void apply(tombstone regular) noexcept {
-        _shadowable.apply(regular);
-        _regular.apply(regular);
-    }
-    void apply(shadowable_tombstone shadowable, row_marker marker) noexcept {
-        _shadowable.apply(shadowable.tomb());
-        _shadowable.maybe_shadow(_regular, marker);
-    }
-    void apply(row_tombstone t, row_marker marker) noexcept {
-        _regular.apply(t._regular);
-        _shadowable.apply(t._shadowable);
-        _shadowable.maybe_shadow(_regular, marker);
-    }
-    friend std::ostream& operator<<(std::ostream& out, const row_tombstone& t) {
-        if (t) {
-            return out << "{row_tombstone: " << t._regular << (t.is_shadowable() ? t._shadowable : shadowable_tombstone()) << "}";
-        } else {
-            return out << "{row_tombstone: none}";
-        }
-    }
+    explicit operator bool() const ;
+    const tombstone& tomb() const ;
+    const gc_clock::time_point max_deletion_time() const ;
+    const tombstone& regular() const ;
+    const shadowable_tombstone& shadowable() const ;
+    bool is_shadowable() const ;
+    void maybe_shadow(const row_marker& marker) noexcept ;
+    void apply(tombstone regular) noexcept ;
+    void apply(shadowable_tombstone shadowable, row_marker marker) noexcept ;
+    void apply(row_tombstone t, row_marker marker) noexcept ;
+    friend std::ostream& operator<<(std::ostream& out, const row_tombstone& t) ;
 };
 class deletable_row final {
     row_tombstone _deleted_at;
     row_marker _marker;
     row _cells;
 public:
-    deletable_row() {}
+    deletable_row() ;
     explicit deletable_row(clustering_row&&);
-    deletable_row(const schema& s, const deletable_row& other)
-        : _deleted_at(other._deleted_at)
-        , _marker(other._marker)
-        , _cells(s, column_kind::regular_column, other._cells)
-    { }
-    deletable_row(const schema& s, row_tombstone tomb, const row_marker& marker, const row& cells)
-        : _deleted_at(tomb), _marker(marker), _cells(s, column_kind::regular_column, cells)
-    {}
+    deletable_row(const schema& s, const deletable_row& other) 
+    ;
+    deletable_row(const schema& s, row_tombstone tomb, const row_marker& marker, const row& cells) 
+    ;
     void apply(const schema&, clustering_row);
-    void apply(tombstone deleted_at) {
-        _deleted_at.apply(deleted_at);
-    }
-    void apply(shadowable_tombstone deleted_at) {
-        _deleted_at.apply(deleted_at, _marker);
-    }
-    void apply(row_tombstone deleted_at) {
-        _deleted_at.apply(deleted_at, _marker);
-    }
+    void apply(tombstone deleted_at) ;
+    void apply(shadowable_tombstone deleted_at) ;
+    void apply(row_tombstone deleted_at) ;
     void apply(const row_marker& rm) {
         _marker.apply(rm);
         _deleted_at.maybe_shadow(_marker);
