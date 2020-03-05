@@ -12447,8 +12447,6 @@ public:
 
 }
 
-#include <seastar/util/gcc6-concepts.hh>
-#include <seastar/core/thread.hh>
 
 using seastar::future;
 
@@ -12785,11 +12783,7 @@ class frozen_mutation_fragment {
 
 frozen_mutation_fragment freeze(const schema& s, const mutation_fragment& mf);
 
-#include <seastar/core/do_with.hh>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/do_with.hh>
 
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/file.hh>
