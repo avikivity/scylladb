@@ -12785,8 +12785,6 @@ frozen_mutation_fragment freeze(const schema& s, const mutation_fragment& mf);
 
 
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/file.hh>
 
 struct reader_resources {
     int count = 0;
