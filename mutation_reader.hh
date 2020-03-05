@@ -23,7 +23,6 @@
 
 #include <vector>
 
-#include "mutation.hh"
 #include <seastar/core/future.hh>
 #include <seastar/core/future-util.hh>
 #include <seastar/core/do_with.hh>

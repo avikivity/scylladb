@@ -908,8 +908,438 @@ public:
 #include <seastar/core/temporary_buffer.hh>
 #include <seastar/core/simple-stream.hh>
 
-#include "bytes_ostream.hh"
-#include "utils/fragment_range.hh"
+
+#include <boost/range/iterator_range.hpp>
+
+#include <seastar/core/unaligned.hh>
+#include <seastar/core/simple-stream.hh>
+/**
+ * Utility for writing data into a buffer when its final size is not known up front.
+ *
+ * Internally the data is written into a chain of chunks allocated on-demand.
+ * No resizing of previously written data happens.
+ *
+ */
+class bytes_ostream {
+public:
+    using size_type = bytes::size_type;
+    using value_type = bytes::value_type;
+    using fragment_type = bytes_view;
+    static constexpr size_type max_chunk_size() { return 128 * 1024; }
+private:
+    static_assert(sizeof(value_type) == 1, "value_type is assumed to be one byte long");
+    struct chunk {
+        // FIXME: group fragment pointers to reduce pointer chasing when packetizing
+        std::unique_ptr<chunk> next;
+        ~chunk() {
+            auto p = std::move(next);
+            while (p) {
+                // Avoid recursion when freeing chunks
+                auto p_next = std::move(p->next);
+                p = std::move(p_next);
+            }
+        }
+        size_type offset; // Also means "size" after chunk is closed
+        size_type size;
+        value_type data[0];
+        void operator delete(void* ptr) { free(ptr); }
+    };
+    static constexpr size_type default_chunk_size{512};
+private:
+    std::unique_ptr<chunk> _begin;
+    chunk* _current;
+    size_type _size;
+    size_type _initial_chunk_size = default_chunk_size;
+public:
+    class fragment_iterator : public std::iterator<std::input_iterator_tag, bytes_view> {
+        chunk* _current = nullptr;
+    public:
+        fragment_iterator() = default;
+        fragment_iterator(chunk* current) : _current(current) {}
+        fragment_iterator(const fragment_iterator&) = default;
+        fragment_iterator& operator=(const fragment_iterator&) = default;
+        bytes_view operator*() const {
+            return { _current->data, _current->offset };
+        }
+        bytes_view operator->() const {
+            return *(*this);
+        }
+        fragment_iterator& operator++() {
+            _current = _current->next.get();
+            return *this;
+        }
+        fragment_iterator operator++(int) {
+            fragment_iterator tmp(*this);
+            ++(*this);
+            return tmp;
+        }
+        bool operator==(const fragment_iterator& other) const {
+            return _current == other._current;
+        }
+        bool operator!=(const fragment_iterator& other) const {
+            return _current != other._current;
+        }
+    };
+    using const_iterator = fragment_iterator;
+
+    class output_iterator {
+    public:
+        using iterator_category = std::output_iterator_tag;
+        using difference_type = std::ptrdiff_t;
+        using value_type = bytes_ostream::value_type;
+        using pointer = bytes_ostream::value_type*;
+        using reference = bytes_ostream::value_type&;
+
+        friend class bytes_ostream;
+
+    private:
+        bytes_ostream* _ostream = nullptr;
+
+    private:
+        explicit output_iterator(bytes_ostream& os) : _ostream(&os) { }
+
+    public:
+        reference operator*() const { return *_ostream->write_place_holder(1); }
+        output_iterator& operator++() { return *this; }
+        output_iterator operator++(int) { return *this; }
+    };
+private:
+    inline size_type current_space_left() const {
+        if (!_current) {
+            return 0;
+        }
+        return _current->size - _current->offset;
+    }
+    // Figure out next chunk size.
+    //   - must be enough for data_size
+    //   - must be at least _initial_chunk_size
+    //   - try to double each time to prevent too many allocations
+    //   - do not exceed max_chunk_size
+    size_type next_alloc_size(size_t data_size) const {
+        auto next_size = _current
+                ? _current->size * 2
+                : _initial_chunk_size;
+        next_size = std::min(next_size, max_chunk_size());
+        // FIXME: check for overflow?
+        return std::max<size_type>(next_size, data_size + sizeof(chunk));
+    }
+    // Makes room for a contiguous region of given size.
+    // The region is accounted for as already written.
+    // size must not be zero.
+    [[gnu::always_inline]]
+    value_type* alloc(size_type size) {
+        if (__builtin_expect(size <= current_space_left(), true)) {
+            auto ret = _current->data + _current->offset;
+            _current->offset += size;
+            _size += size;
+            return ret;
+        } else {
+            return alloc_new(size);
+        }
+    }
+    [[gnu::noinline]]
+    value_type* alloc_new(size_type size) {
+            auto alloc_size = next_alloc_size(size);
+            auto space = malloc(alloc_size);
+            if (!space) {
+                throw std::bad_alloc();
+            }
+            auto new_chunk = std::unique_ptr<chunk>(new (space) chunk());
+            new_chunk->offset = size;
+            new_chunk->size = alloc_size - sizeof(chunk);
+            if (_current) {
+                _current->next = std::move(new_chunk);
+                _current = _current->next.get();
+            } else {
+                _begin = std::move(new_chunk);
+                _current = _begin.get();
+            }
+            _size += size;
+            return _current->data;
+    }
+public:
+    explicit bytes_ostream(size_t initial_chunk_size) noexcept
+        : _begin()
+        , _current(nullptr)
+        , _size(0)
+        , _initial_chunk_size(initial_chunk_size)
+    { }
+
+    bytes_ostream() noexcept : bytes_ostream(default_chunk_size) {}
+
+    bytes_ostream(bytes_ostream&& o) noexcept
+        : _begin(std::move(o._begin))
+        , _current(o._current)
+        , _size(o._size)
+        , _initial_chunk_size(o._initial_chunk_size)
+    {
+        o._current = nullptr;
+        o._size = 0;
+    }
+
+    bytes_ostream(const bytes_ostream& o)
+        : _begin()
+        , _current(nullptr)
+        , _size(0)
+        , _initial_chunk_size(o._initial_chunk_size)
+    {
+        append(o);
+    }
+
+    bytes_ostream& operator=(const bytes_ostream& o) {
+        if (this != &o) {
+            auto x = bytes_ostream(o);
+            *this = std::move(x);
+        }
+        return *this;
+    }
+
+    bytes_ostream& operator=(bytes_ostream&& o) noexcept {
+        if (this != &o) {
+            this->~bytes_ostream();
+            new (this) bytes_ostream(std::move(o));
+        }
+        return *this;
+    }
+
+    template <typename T>
+    struct place_holder {
+        value_type* ptr;
+        // makes the place_holder looks like a stream
+        seastar::simple_output_stream get_stream() {
+            return seastar::simple_output_stream(reinterpret_cast<char*>(ptr), sizeof(T));
+        }
+    };
+
+    // Returns a place holder for a value to be written later.
+    template <typename T>
+    inline
+    std::enable_if_t<std::is_fundamental<T>::value, place_holder<T>>
+    write_place_holder() {
+        return place_holder<T>{alloc(sizeof(T))};
+    }
+
+    [[gnu::always_inline]]
+    value_type* write_place_holder(size_type size) {
+        return alloc(size);
+    }
+
+    // Writes given sequence of bytes
+    [[gnu::always_inline]]
+    inline void write(bytes_view v) {
+        if (v.empty()) {
+            return;
+        }
+
+        auto this_size = std::min(v.size(), size_t(current_space_left()));
+        if (__builtin_expect(this_size, true)) {
+            memcpy(_current->data + _current->offset, v.begin(), this_size);
+            _current->offset += this_size;
+            _size += this_size;
+            v.remove_prefix(this_size);
+        }
+
+        while (!v.empty()) {
+            auto this_size = std::min(v.size(), size_t(max_chunk_size()));
+            std::copy_n(v.begin(), this_size, alloc_new(this_size));
+            v.remove_prefix(this_size);
+        }
+    }
+
+    [[gnu::always_inline]]
+    void write(const char* ptr, size_t size) {
+        write(bytes_view(reinterpret_cast<const signed char*>(ptr), size));
+    }
+
+    bool is_linearized() const {
+        return !_begin || !_begin->next;
+    }
+
+    // Call only when is_linearized()
+    bytes_view view() const {
+        assert(is_linearized());
+        if (!_current) {
+            return bytes_view();
+        }
+
+        return bytes_view(_current->data, _size);
+    }
+
+    // Makes the underlying storage contiguous and returns a view to it.
+    // Invalidates all previously created placeholders.
+    bytes_view linearize() {
+        if (is_linearized()) {
+            return view();
+        }
+
+        auto space = malloc(_size + sizeof(chunk));
+        if (!space) {
+            throw std::bad_alloc();
+        }
+
+        auto new_chunk = std::unique_ptr<chunk>(new (space) chunk());
+        new_chunk->offset = _size;
+        new_chunk->size = _size;
+
+        auto dst = new_chunk->data;
+        auto r = _begin.get();
+        while (r) {
+            auto next = r->next.get();
+            dst = std::copy_n(r->data, r->offset, dst);
+            r = next;
+        }
+
+        _current = new_chunk.get();
+        _begin = std::move(new_chunk);
+        return bytes_view(_current->data, _size);
+    }
+
+    // Returns the amount of bytes written so far
+    size_type size() const {
+        return _size;
+    }
+
+    // For the FragmentRange concept
+    size_type size_bytes() const {
+        return _size;
+    }
+
+    bool empty() const {
+        return _size == 0;
+    }
+
+    void reserve(size_t size) {
+        // FIXME: implement
+    }
+
+    void append(const bytes_ostream& o) {
+        for (auto&& bv : o.fragments()) {
+            write(bv);
+        }
+    }
+
+    // Removes n bytes from the end of the bytes_ostream.
+    // Beware of O(n) algorithm.
+    void remove_suffix(size_t n) {
+        _size -= n;
+        auto left = _size;
+        auto current = _begin.get();
+        while (current) {
+            if (current->offset >= left) {
+                current->offset = left;
+                _current = current;
+                current->next.reset();
+                return;
+            }
+            left -= current->offset;
+            current = current->next.get();
+        }
+    }
+
+    // begin() and end() form an input range to bytes_view representing fragments.
+    // Any modification of this instance invalidates iterators.
+    fragment_iterator begin() const { return { _begin.get() }; }
+    fragment_iterator end() const { return { nullptr }; }
+
+    output_iterator write_begin() { return output_iterator(*this); }
+
+    boost::iterator_range<fragment_iterator> fragments() const {
+        return { begin(), end() };
+    }
+
+    struct position {
+        chunk* _chunk;
+        size_type _offset;
+    };
+
+    position pos() const {
+        return { _current, _current ? _current->offset : 0 };
+    }
+
+    // Returns the amount of bytes written since given position.
+    // "pos" must be valid.
+    size_type written_since(position pos) {
+        chunk* c = pos._chunk;
+        if (!c) {
+            return _size;
+        }
+        size_type total = c->offset - pos._offset;
+        c = c->next.get();
+        while (c) {
+            total += c->offset;
+            c = c->next.get();
+        }
+        return total;
+    }
+
+    // Rollbacks all data written after "pos".
+    // Invalidates all placeholders and positions created after "pos".
+    void retract(position pos) {
+        if (!pos._chunk) {
+            *this = {};
+            return;
+        }
+        _size -= written_since(pos);
+        _current = pos._chunk;
+        _current->next = nullptr;
+        _current->offset = pos._offset;
+    }
+
+    void reduce_chunk_count() {
+        // FIXME: This is a simplified version. It linearizes the whole buffer
+        // if its size is below max_chunk_size. We probably could also gain
+        // some read performance by doing "real" reduction, i.e. merging
+        // all chunks until all but the last one is max_chunk_size.
+        if (size() < max_chunk_size()) {
+            linearize();
+        }
+    }
+
+    bool operator==(const bytes_ostream& other) const {
+        auto as = fragments().begin();
+        auto as_end = fragments().end();
+        auto bs = other.fragments().begin();
+        auto bs_end = other.fragments().end();
+
+        auto a = *as++;
+        auto b = *bs++;
+        while (!a.empty() || !b.empty()) {
+            auto now = std::min(a.size(), b.size());
+            if (!std::equal(a.begin(), a.begin() + now, b.begin(), b.begin() + now)) {
+                return false;
+            }
+            a.remove_prefix(now);
+            if (a.empty() && as != as_end) {
+                a = *as++;
+            }
+            b.remove_prefix(now);
+            if (b.empty() && bs != bs_end) {
+                b = *bs++;
+            }
+        }
+        return true;
+    }
+
+    bool operator!=(const bytes_ostream& other) const {
+        return !(*this == other);
+    }
+
+    // Makes this instance empty.
+    //
+    // The first buffer is not deallocated, so callers may rely on the
+    // fact that if they write less than the initial chunk size between
+    // the clear() calls then writes will not involve any memory allocations,
+    // except for the first write made on this instance.
+    void clear() {
+        if (_begin) {
+            _begin->offset = 0;
+            _size = 0;
+            _current = _begin.get();
+            _begin->next.reset();
+        }
+    }
+};
+
 
 /// Fragmented buffer consisting of multiple temporary_buffer<char>
 class fragmented_temporary_buffer {
@@ -962,7 +1392,68 @@ public:
     future<fragmented_temporary_buffer> read_exactly(input_stream<char>& in, size_t length);
 };
 
-#include "serializer.hh"
+#include <vector>
+#include <unordered_set>
+#include <list>
+#include <array>
+#include <seastar/core/sstring.hh>
+#include <unordered_map>
+#include <optional>
+
+namespace ser {
+
+/// A fragmented view of an opaque buffer in a stream of serialised data
+///
+/// This class allows reading large, fragmented blobs serialised by the IDL
+/// infrastructure without linearising or copying them. The view remains valid
+/// as long as the underlying IDL-serialised buffer is alive.
+///
+/// Satisfies FragmentRange concept.
+template<typename FragmentIterator>
+class buffer_view {
+public:
+    using fragment_type = bytes_view;
+
+    class iterator {
+    public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = bytes_view;
+        using pointer = const bytes_view*;
+        using reference = const bytes_view&;
+        using difference_type = std::ptrdiff_t;
+
+        iterator() = default;
+        iterator(bytes_view current, size_t left, FragmentIterator next);
+        bytes_view operator*() const;
+        const bytes_view* operator->() const;
+        iterator& operator++();
+        iterator operator++(int);
+        bool operator==(const iterator& other) const;
+        bool operator!=(const iterator& other) const;
+    };
+    using const_iterator = iterator;
+
+    explicit buffer_view(bytes_view current);
+
+    buffer_view(bytes_view current, size_t size, FragmentIterator it);
+    explicit buffer_view(typename seastar::memory_input_stream<FragmentIterator>::simple stream);
+
+    explicit buffer_view(typename seastar::memory_input_stream<FragmentIterator>::fragmented stream);
+
+    iterator begin() const;
+    iterator end() const;
+
+    size_t size_bytes() const;
+    bool empty() const;
+    bytes linearize() const;
+};
+
+
+}
+
+/*
+ * Import the auto generated forward decleration code
+ */
 
 class abstract_type;
 class collection_type_impl;
@@ -1078,17 +1569,345 @@ void merge_column(const abstract_type& def,
         atomic_cell_or_collection& old,
         const atomic_cell_or_collection& neww);
 
-#include "cql_serialization_format.hh"
-#include "tombstone.hh"
-#include "to_string.hh"
-#include "duration.hh"
-#include "marshal_exception.hh"
+#include <iosfwd>
+
+using cql_protocol_version_type = uint8_t;
+
+// Abstraction of transport protocol-dependent serialization format
+// Protocols v1, v2 used 16 bits for collection sizes, while v3 and
+// above use 32 bits.  But letting every bit of the code know what
+// transport protocol we're using (and in some cases, we aren't using
+// any transport -- it's for internal storage) is bad, so abstract it
+// away here.
+
+class cql_serialization_format {
+    cql_protocol_version_type _version;
+public:
+    static constexpr cql_protocol_version_type latest_version = 4;
+    explicit cql_serialization_format(cql_protocol_version_type version) : _version(version) {}
+    static cql_serialization_format latest() { return cql_serialization_format{latest_version}; }
+    static cql_serialization_format internal() { return latest(); }
+    bool using_32_bits_for_collections() const { return _version >= 3; }
+    bool operator==(cql_serialization_format x) const { return _version == x._version; }
+    bool operator!=(cql_serialization_format x) const { return !operator==(x); }
+    cql_protocol_version_type protocol_version() const { return _version; }
+    friend std::ostream& operator<<(std::ostream& out, const cql_serialization_format& sf) {
+        return out << static_cast<int>(sf._version);
+    }
+    bool collection_format_unchanged(cql_serialization_format other = cql_serialization_format::latest()) const {
+        return using_32_bits_for_collections() == other.using_32_bits_for_collections();
+    }
+};
+
+#include <seastar/core/sstring.hh>
+#include <vector>
+#include <sstream>
+#include <unordered_set>
+#include <set>
+#include <optional>
+
+#include "utils/chunked_vector.hh"
+
+template<typename Iterator>
+static inline
+sstring join(sstring delimiter, Iterator begin, Iterator end) {
+    std::ostringstream oss;
+    while (begin != end) {
+        oss << *begin;
+        ++begin;
+        if (begin != end) {
+            oss << delimiter;
+        }
+    }
+    return oss.str();
+}
+
+template<typename PrintableRange>
+static inline
+sstring join(sstring delimiter, const PrintableRange& items) {
+    return join(delimiter, items.begin(), items.end());
+}
+
+template<bool NeedsComma, typename Printable>
+struct print_with_comma {
+    const Printable& v;
+};
+
+template<bool NeedsComma, typename Printable>
+std::ostream& operator<<(std::ostream& os, const print_with_comma<NeedsComma, Printable>& x) {
+    os << x.v;
+    if (NeedsComma) {
+        os << ", ";
+    }
+    return os;
+}
+
+namespace std {
+
+template<typename Printable>
+static inline
+sstring
+to_string(const std::vector<Printable>& items) {
+    return "[" + join(", ", items) + "]";
+}
+
+template<typename Printable>
+static inline
+sstring
+to_string(const std::set<Printable>& items) {
+    return "{" + join(", ", items) + "}";
+}
+
+template<typename Printable>
+static inline
+sstring
+to_string(const std::unordered_set<Printable>& items) {
+    return "{" + join(", ", items) + "}";
+}
+
+template<typename Printable>
+static inline
+sstring
+to_string(std::initializer_list<Printable> items) {
+    return "[" + join(", ", std::begin(items), std::end(items)) + "]";
+}
+
+template <typename K, typename V>
+std::ostream& operator<<(std::ostream& os, const std::pair<K, V>& p) {
+    os << "{" << p.first << ", " << p.second << "}";
+    return os;
+}
+
+template<typename... T, size_t... I>
+std::ostream& print_tuple(std::ostream& os, const std::tuple<T...>& p, std::index_sequence<I...>) {
+    return ((os << "{" ) << ... << print_with_comma<I < sizeof...(I) - 1, T>{std::get<I>(p)}) << "}";
+}
+
+template <typename... T>
+std::ostream& operator<<(std::ostream& os, const std::tuple<T...>& p) {
+    return print_tuple(os, p, std::make_index_sequence<sizeof...(T)>());
+}
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const std::unordered_set<T>& items) {
+    os << "{" << join(", ", items) << "}";
+    return os;
+}
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const std::set<T>& items) {
+    os << "{" << join(", ", items) << "}";
+    return os;
+}
+
+template<typename T, size_t N>
+std::ostream& operator<<(std::ostream& os, const std::array<T, N>& items) {
+    os << "{" << join(", ", items) << "}";
+    return os;
+}
+
+template <typename K, typename V, typename... Args>
+std::ostream& operator<<(std::ostream& os, const std::unordered_map<K, V, Args...>& items) {
+    os << "{" << join(", ", items) << "}";
+    return os;
+}
+
+template <typename K, typename V, typename... Args>
+std::ostream& operator<<(std::ostream& os, const std::map<K, V, Args...>& items) {
+    os << "{" << join(", ", items) << "}";
+    return os;
+}
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const utils::chunked_vector<T>& items) {
+    os << "[" << join(", ", items) << "]";
+    return os;
+}
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const std::list<T>& items) {
+    os << "[" << join(", ", items) << "]";
+    return os;
+}
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const std::optional<T>& opt) {
+    if (opt) {
+        os << "{" << *opt << "}";
+    } else {
+        os << "{}";
+    }
+    return os;
+}
+
+}
+
+#include <seastar/core/sstring.hh>
+
+#include <cstdint>
+#include <string_view>
+#include <ostream>
+#include <stdexcept>
+
+// Wrapper for a value with a type-tag for differentiating instances.
+template <class Value, class Tag>
+class cql_duration_counter final {
+public:
+    using value_type = Value;
+
+    explicit constexpr cql_duration_counter(value_type count) noexcept : _count(count) {}
+
+    constexpr operator value_type() const noexcept { return _count; }
+private:
+    value_type _count;
+};
+
+using months_counter = cql_duration_counter<int32_t, struct month_tag>;
+using days_counter = cql_duration_counter<int32_t, struct day_tag>;
+using nanoseconds_counter = cql_duration_counter<int64_t, struct nanosecond_tag>;
+
+class cql_duration_error : public std::invalid_argument {
+public:
+    explicit cql_duration_error(std::string_view what) : std::invalid_argument(what.data()) {}
+
+    virtual ~cql_duration_error() = default;
+};
+
+//
+// A duration of time.
+//
+// Three counters represent the time: the number of months, of days, and of nanoseconds. This is necessary because
+// the number hours in a day can vary during daylight savings and because the number of days in a month vary.
+//
+// As a consequence of this representation, there can exist no total ordering relation on durations. To see why,
+// consider a duration `1mo5s` (1 month and 5 seconds). In a month with 30 days, this represents a smaller duration of
+// time than in a month with 31 days.
+//
+// The primary use of this type is to manipulate absolute time-stamps with relative offsets. For example,
+// `"Jan. 31 2005 at 23:15" + 3mo5d`.
+//
+class cql_duration final {
+public:
+    using common_counter_type = int64_t;
+
+    static_assert(
+            (sizeof(common_counter_type) >= sizeof(months_counter::value_type)) &&
+            (sizeof(common_counter_type) >= sizeof(days_counter::value_type)) &&
+            (sizeof(common_counter_type) >= sizeof(nanoseconds_counter::value_type)),
+            "The common counter type is smaller than one of the component counter types.");
+
+    // A zero-valued duration.
+    constexpr cql_duration() noexcept = default;
+
+    // Construct a duration with explicit values for its three counters.
+    constexpr cql_duration(months_counter m, days_counter d, nanoseconds_counter n) noexcept :
+            months(m),
+            days(d),
+            nanoseconds(n) {}
+
+    //
+    // Parse a duration string.
+    //
+    // Three formats for durations are supported:
+    //
+    // 1. "Standard" format. This consists of one or more pairs of a count and a unit specifier. Examples are "23d1mo"
+    //    and "5h23m10s". Components of the total duration must be written in decreasing order. That is, "5h2y" is
+    //    an invalid duration string.
+    //
+    //    The allowed units are:
+    //      - "y": years
+    //      - "mo": months
+    //      - "w": weeks
+    //      - "d": days
+    //      - "h": hours
+    //      - "m": minutes
+    //      - "s": seconds
+    //      - "ms": milliseconds
+    //      - "us" or "µs": microseconds
+    //      - "ns": nanoseconds
+    //
+    //    Units are case-insensitive.
+    //
+    // 2. ISO-8601 format. "P[n]Y[n]M[n]DT[n]H[n]M[n]S" or "P[n]W". All specifiers are optional. Examples are
+    //    "P23Y1M" or "P10W".
+    //
+    // 3. ISO-8601 alternate format. "P[YYYY]-[MM]-[DD]T[hh]:[mm]:[ss]". All specifiers are mandatory. An example is
+    //    "P2000-10-14T07:22:30".
+    //
+    // For all formats, a negative duration is indicated by beginning the string with the '-' symbol. For example,
+    // "-2y10ns".
+    //
+    // Throws `cql_duration_error` in the event of a parsing error.
+    //
+    explicit cql_duration(std::string_view s);
+
+    months_counter::value_type months{0};
+    days_counter::value_type days{0};
+    nanoseconds_counter::value_type nanoseconds{0};
+};
+
+//
+// Pretty-print a duration using the standard format.
+//
+// Durations are simplified during printing so that `duration(24, 0, 0)` is printed as "2y".
+//
+std::ostream& operator<<(std::ostream& os, const cql_duration& d);
+
+// See above.
+seastar::sstring to_string(const cql_duration&);
+
+//
+// Note that equality comparison is based on exact counter matches. It is not valid to expect equivalency across
+// counters like months and days. See the documentation for `duration` for more.
+//
+
+bool operator==(const cql_duration&, const cql_duration&) noexcept;
+bool operator!=(const cql_duration&, const cql_duration&) noexcept;
+
+#include <stdexcept>
+
+class marshal_exception : public std::exception {
+    sstring _why;
+public:
+    marshal_exception() = delete;
+    marshal_exception(sstring why) : _why(sstring("marshaling error: ") + why) {}
+    virtual const char* what() const noexcept override { return _why.c_str(); }
+};
+
 #include <seastar/net/ip.hh>
 #include <seastar/net/inet_address.hh>
 #include <seastar/util/backtrace.hh>
-#include "hashing.hh"
-#include "utils/fragmented_temporary_buffer.hh"
-#include "utils/exceptions.hh"
+
+#include <seastar/core/sstring.hh>
+#include <seastar/core/on_internal_error.hh>
+
+#include <functional>
+#include <system_error>
+
+namespace seastar { class logger; }
+
+typedef std::function<bool (const std::system_error &)> system_error_lambda_t;
+
+bool check_exception(system_error_lambda_t f);
+bool is_system_error_errno(int err_no);
+bool is_timeout_exception(std::exception_ptr e);
+
+class storage_io_error : public std::exception {
+private:
+    std::error_code _code;
+    std::string _what;
+public:
+    storage_io_error(std::system_error& e) noexcept
+        : _code{e.code()}
+        , _what{std::string("Storage I/O error: ") + std::to_string(e.code().value()) + ": " + e.what()}
+    { }
+
+    virtual const char* what() const noexcept override {
+        return _what.c_str();
+    }
+
+    const std::error_code& code() const { return _code; }
+};
 
 class tuple_type_impl;
 class big_decimal;
@@ -2206,18 +3025,9 @@ using compound_prefix = compound_type<allow_prefixes::yes>;
 #include <boost/lexical_cast.hpp>
 #include <boost/dynamic_bitset.hpp>
 
-#include "cql3/column_specification.hh"
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/util/backtrace.hh>
-#include "compound.hh"
-#include "gc_clock.hh"
-#include "unimplemented.hh"
-#include "utils/UUID.hh"
-#include "compress.hh"
-#include "compaction_strategy.hh"
-#include "caching_options.hh"
-#include "column_computation.hh"
-#include "cdc/cdc_options.hh"
+#include "json.hh"
 
 namespace dht {
 
@@ -2423,155 +3233,6 @@ enum class index_metadata_kind {
 };
 
 class index_metadata final {
-public:
-    struct is_local_index_tag {};
-    using is_local_index = bool_class<is_local_index_tag>;
-private:
-    utils::UUID _id;
-    sstring _name;
-    index_metadata_kind _kind;
-    index_options_map _options;
-    bool _local;
-public:
-    index_metadata(const sstring& name, const index_options_map& options, index_metadata_kind kind, is_local_index local);
-    bool operator==(const index_metadata& other) const;
-    bool equals_noname(const index_metadata& other) const;
-    const utils::UUID& id() const;
-    const sstring& name() const;
-    const index_metadata_kind kind() const;
-    const index_options_map& options() const;
-    bool local() const;
-    static sstring get_default_index_name(const sstring& cf_name, std::optional<sstring> root);
-};
-
-class column_definition final {
-public:
-    struct name_comparator {
-        data_type type;
-        name_comparator(data_type type) : type(type) {}
-        bool operator()(const column_definition& cd1, const column_definition& cd2) const {
-            return type->less(cd1.name(), cd2.name());
-        }
-    };
-private:
-    bytes _name;
-    api::timestamp_type _dropped_at;
-    bool _is_atomic;
-    bool _is_counter;
-    column_view_virtual _is_view_virtual;
-    column_computation_ptr _computation;
-
-    struct thrift_bits {
-        thrift_bits()
-            : is_on_all_components(0)
-        {}
-        uint8_t is_on_all_components : 1;
-        // more...?
-    };
-
-    thrift_bits _thrift_bits;
-    friend class schema;
-public:
-    column_definition(bytes name, data_type type, column_kind kind,
-        column_id component_index = 0,
-        column_view_virtual view_virtual = column_view_virtual::no,
-        column_computation_ptr = nullptr,
-        api::timestamp_type dropped_at = api::missing_timestamp);
-
-    data_type type;
-
-    // Unique within (kind, schema instance).
-    // schema::position() and component_index() depend on the fact that for PK columns this is
-    // equivalent to component index.
-    column_id id;
-
-    // Unique within schema instance
-    ordinal_column_id ordinal_id;
-
-    column_kind kind;
-    ::shared_ptr<cql3::column_specification> column_specification;
-
-    // NOTICE(sarna): This copy constructor is hand-written instead of default,
-    // because it involves deep copying of the computation object.
-    // Computation has a strict ownership policy provided by
-    // unique_ptr, and as such cannot rely on default copying.
-    column_definition(const column_definition& other)
-            : _name(other._name)
-            , _dropped_at(other._dropped_at)
-            , _is_atomic(other._is_atomic)
-            , _is_counter(other._is_counter)
-            , _is_view_virtual(other._is_view_virtual)
-            , _computation(other.get_computation_ptr())
-            , _thrift_bits(other._thrift_bits)
-            , type(other.type)
-            , id(other.id)
-            , ordinal_id(other.ordinal_id)
-            , kind(other.kind)
-            , column_specification(other.column_specification)
-        {}
-
-    column_definition& operator=(const column_definition& other) {
-        if (this == &other) {
-            return *this;
-        }
-        column_definition tmp(other);
-        *this = std::move(tmp);
-        return *this;
-    }
-
-    column_definition& operator=(column_definition&& other) = default;
-
-    bool is_static() const { return kind == column_kind::static_column; }
-    bool is_regular() const { return kind == column_kind::regular_column; }
-    bool is_partition_key() const { return kind == column_kind::partition_key; }
-    bool is_clustering_key() const { return kind == column_kind::clustering_key; }
-    bool is_primary_key() const { return kind == column_kind::partition_key || kind == column_kind::clustering_key; }
-    bool is_atomic() const { return _is_atomic; }
-    bool is_multi_cell() const { return !_is_atomic; }
-    bool is_counter() const { return _is_counter; }
-    // "virtual columns" appear in a materialized view as placeholders for
-    // unselected columns, with liveness information but without data, and
-    // allow view rows to remain alive despite having no data (issue #3362).
-    // These columns should be hidden from the user's SELECT queries.
-    bool is_view_virtual() const { return _is_view_virtual == column_view_virtual::yes; }
-    column_view_virtual view_virtual() const { return _is_view_virtual; }
-    // Computed column values are generated from other columns (and possibly other sources) during updates.
-    // Their values are still stored on disk, same as a regular columns.
-    bool is_computed() const { return bool(_computation); }
-    const column_computation& get_computation() const { return *_computation; }
-    column_computation_ptr get_computation_ptr() const {
-        return _computation ? _computation->clone() : nullptr;
-    }
-    void set_computed(column_computation_ptr computation) { _computation = std::move(computation); }
-    // Columns hidden from CQL cannot be in any way retrieved by the user,
-    // either explicitly or via the '*' operator, or functions, aggregates, etc.
-    bool is_hidden_from_cql() const { return is_view_virtual(); }
-    const sstring& name_as_text() const;
-    const bytes& name() const;
-    sstring name_as_cql_string() const;
-    friend std::ostream& operator<<(std::ostream& os, const column_definition& cd);
-    friend std::ostream& operator<<(std::ostream& os, const column_definition* cd) {
-        return cd != nullptr ? os << *cd : os << "(null)";
-    }
-    bool has_component_index() const {
-        return is_primary_key();
-    }
-    uint32_t component_index() const {
-        assert(has_component_index());
-        return id;
-    }
-    uint32_t position() const {
-        if (has_component_index()) {
-            return component_index();
-        }
-        return 0;
-    }
-    bool is_on_all_components() const;
-    bool is_part_of_cell_name() const {
-        return is_regular() || is_static();
-    }
-    api::timestamp_type dropped_at() const { return _dropped_at; }
-    friend bool operator==(const column_definition&, const column_definition&);
 };
 
 class schema_builder;
@@ -2781,7 +3442,6 @@ private:
         data_type _regular_column_name_type;
         data_type _default_validation_class = bytes_type;
         double _bloom_filter_fp_chance = 0.01;
-        compression_parameters _compressor_params;
         extensions_map _extensions;
         bool _is_dense = false;
         bool _is_compound = true;
@@ -2799,11 +3459,7 @@ private:
         speculative_retry _speculative_retry = ::speculative_retry(speculative_retry::type::PERCENTILE, 0.99);
         // FIXME: SizeTiered doesn't really work yet. Being it marked here only means that this is the strategy
         // we will use by default - when we have the choice.
-        sstables::compaction_strategy_type _compaction_strategy = sstables::compaction_strategy_type::size_tiered;
-        std::map<sstring, sstring> _compaction_strategy_options;
         bool _compaction_enabled = true;
-        caching_options _caching_options;
-        cdc::options _cdc_options;
         table_schema_version _version;
         std::unordered_map<sstring, dropped_column> _dropped_columns;
         std::map<bytes, data_type> _collections;
@@ -2879,9 +3535,6 @@ public:
         return _raw._bloom_filter_fp_chance;
     }
     sstring thrift_key_validator() const;
-    const compression_parameters& get_compressor_params() const {
-        return _raw._compressor_params;
-    }
     const extensions_map& extensions() const {
         return _raw._extensions;
     }
@@ -2963,32 +3616,12 @@ public:
         return _raw._memtable_flush_period;
     }
 
-    sstables::compaction_strategy_type configured_compaction_strategy() const {
-        return _raw._compaction_strategy;
-    }
-
-    sstables::compaction_strategy_type compaction_strategy() const {
-        return _raw._compaction_enabled ? _raw._compaction_strategy : sstables::compaction_strategy_type::null;
-    }
-
-    const std::map<sstring, sstring>& compaction_strategy_options() const {
-        return _raw._compaction_strategy_options;
-    }
-
     bool compaction_enabled() const {
         return _raw._compaction_enabled;
     }
 
-    const cdc::options& cdc_options() const {
-        return _raw._cdc_options;
-    }
-
     const ::speculative_retry& speculative_retry() const {
         return _raw._speculative_retry;
-    }
-
-    const ::caching_options& caching_options() const {
-        return _raw._caching_options;
     }
 
     dht::i_partitioner& get_partitioner() const;
@@ -3014,10 +3647,10 @@ public:
     bool has_static_columns() const;
     column_count_type columns_count(column_kind kind) const;
     column_count_type partition_key_size() const;
-    column_count_type clustering_key_size() const { return _clustering_key_size; }
-    column_count_type static_columns_count() const { return _static_column_count; }
-    column_count_type regular_columns_count() const { return _regular_column_count; }
-    column_count_type all_columns_count() const { return _raw._columns.size(); }
+    column_count_type clustering_key_size() const;
+    column_count_type static_columns_count() const;
+    column_count_type regular_columns_count() const;
+    column_count_type all_columns_count() const;
     // Returns a range of column definitions
     const_iterator_range_type partition_key_columns() const;
     // Returns a range of column definitions
@@ -3185,7 +3818,49 @@ inline void check_schema_version(table_schema_version expected, const schema& ac
     }
 }
 
-#include "sstables/version.hh"
+#include <stdexcept>
+#include <type_traits>
+#include <seastar/core/sstring.hh>
+
+namespace sstables {
+
+enum class sstable_version_types { ka, la, mc };
+enum class sstable_format_types { big };
+
+inline sstable_version_types from_string(const seastar::sstring& format) {
+    if (format == "ka") {
+        return sstable_version_types::ka;
+    }
+    if (format == "la") {
+        return sstable_version_types::la;
+    }
+    if (format == "mc") {
+        return sstable_version_types::mc;
+    }
+    throw std::invalid_argument("Wrong sstable format name: " + format);
+}
+
+inline seastar::sstring to_string(sstable_version_types format) {
+    switch (format) {
+        case sstable_version_types::ka: return "ka";
+        case sstable_version_types::la: return "la";
+        case sstable_version_types::mc: return "mc";
+    }
+    throw std::runtime_error("Wrong sstable format");
+}
+
+inline bool is_latest_supported(sstable_version_types format) {
+    return format == sstable_version_types::mc;
+}
+
+inline bool is_later(sstable_version_types a, sstable_version_types b) {
+    auto to_int = [] (sstable_version_types x) {
+        return static_cast<std::underlying_type_t<sstable_version_types>>(x);
+    };
+    return to_int(a) > to_int(b);
+}
+
+}
 
 //
 // This header provides adaptors between the representation used by our compound_type<>
@@ -3726,8 +4401,291 @@ int composite::tri_compare::operator()(const composite& v1, const composite& v2)
 
 #include <stdint.h>
 #include <memory>
-#include "bytes.hh"
-#include "utils/allocation_strategy.hh"
+#include <any>
+#include <cstdlib>
+#include <seastar/core/memory.hh>
+#include <seastar/util/alloc_failure_injector.hh>
+#include <malloc.h>
+
+// A function used by compacting collectors to migrate objects during
+// compaction. The function should reconstruct the object located at src
+// in the location pointed by dst. The object at old location should be
+// destroyed. See standard_migrator() above for example. Both src and dst
+// are aligned as requested during alloc()/construct().
+class migrate_fn_type {
+    // Migrators may be registered by thread-local objects. The table of all
+    // registered migrators is also thread-local which may cause problems with
+    // the order of object destruction and lead to use-after-free.
+    // This can be worked around by making migrators keep a shared pointer
+    // to the table of migrators. std::any is used so that its type doesn't
+    // have to be made public.
+    std::any _migrators;
+    uint32_t _align = 0;
+    uint32_t _index;
+private:
+    static uint32_t register_migrator(migrate_fn_type* m);
+    static void unregister_migrator(uint32_t index);
+public:
+    explicit migrate_fn_type(size_t align) : _align(align), _index(register_migrator(this)) {}
+    virtual ~migrate_fn_type() { unregister_migrator(_index); }
+    virtual void migrate(void* src, void* dsts, size_t size) const noexcept = 0;
+    virtual size_t size(const void* obj) const = 0;
+    size_t align() const { return _align; }
+    uint32_t index() const { return _index; }
+};
+
+// Non-constant-size classes (ending with `char data[0]`) must override this
+// to tell the allocator about the real size of the object
+template <typename T>
+inline
+size_t
+size_for_allocation_strategy(const T& obj) {
+    return sizeof(T);
+}
+
+template <typename T>
+class standard_migrator final : public migrate_fn_type {
+public:
+    standard_migrator() : migrate_fn_type(alignof(T)) {}
+    virtual void migrate(void* src, void* dst, size_t size) const noexcept override {
+        static_assert(std::is_nothrow_move_constructible<T>::value, "T must be nothrow move-constructible.");
+        static_assert(std::is_nothrow_destructible<T>::value, "T must be nothrow destructible.");
+
+        T* src_t = static_cast<T*>(src);
+        new (static_cast<T*>(dst)) T(std::move(*src_t));
+        src_t->~T();
+    }
+    virtual size_t size(const void* obj) const override {
+        return size_for_allocation_strategy(*static_cast<const T*>(obj));
+    }
+};
+
+template <typename T>
+standard_migrator<T>& get_standard_migrator()
+{
+    static thread_local standard_migrator<T> instance;
+    return instance;
+}
+
+//
+// Abstracts allocation strategy for managed objects.
+//
+// Managed objects may be moved by the allocator during compaction, which
+// invalidates any references to those objects. Compaction may be started
+// synchronously with allocations. To ensure that references remain valid, use
+// logalloc::compaction_lock.
+//
+// Because references may get invalidated, managing allocators can't be used
+// with standard containers, because they assume the reference is valid until freed.
+//
+// For example containers compatible with compacting allocators see:
+//   - managed_ref - managed version of std::unique_ptr<>
+//   - managed_bytes - managed version of "bytes"
+//
+// Note: When object is used as an element inside intrusive containers,
+// typically no extra measures need to be taken for reference tracking, if the
+// link member is movable. When object is moved, the member hook will be moved
+// too and it should take care of updating any back-references. The user must
+// be aware though that any iterators into such container may be invalidated
+// across deferring points.
+//
+class allocation_strategy {
+protected:
+    size_t _preferred_max_contiguous_allocation = std::numeric_limits<size_t>::max();
+    uint64_t _invalidate_counter = 1;
+public:
+    using migrate_fn = const migrate_fn_type*;
+
+    virtual ~allocation_strategy() {}
+
+    //
+    // Allocates space for a new ManagedObject. The caller must construct the
+    // object before compaction runs. "size" is the amount of space to reserve
+    // in bytes. It can be larger than MangedObjects's size.
+    //
+    // Throws std::bad_alloc on allocation failure.
+    //
+    // Doesn't invalidate references to objects allocated with this strategy.
+    //
+    virtual void* alloc(migrate_fn, size_t size, size_t alignment) = 0;
+
+    // Releases storage for the object. Doesn't invoke object's destructor.
+    // Doesn't invalidate references to objects allocated with this strategy.
+    virtual void free(void* object, size_t size) = 0;
+    virtual void free(void* object) = 0;
+
+    // Returns the total immutable memory size used by the allocator to host
+    // this object.  This will be at least the size of the object itself, plus
+    // any immutable overhead needed to represent the object (if any).
+    //
+    // The immutable overhead is the overhead that cannot change over the
+    // lifetime of the object (such as padding, etc).
+    virtual size_t object_memory_size_in_allocator(const void* obj) const noexcept = 0;
+
+    // Like alloc() but also constructs the object with a migrator using
+    // standard move semantics. Allocates respecting object's alignment
+    // requirement.
+    template<typename T, typename... Args>
+    T* construct(Args&&... args) {
+        void* storage = alloc(&get_standard_migrator<T>(), sizeof(T), alignof(T));
+        try {
+            return new (storage) T(std::forward<Args>(args)...);
+        } catch (...) {
+            free(storage, sizeof(T));
+            throw;
+        }
+    }
+
+    // Destroys T and releases its storage.
+    // Doesn't invalidate references to allocated objects.
+    template<typename T>
+    void destroy(T* obj) {
+        size_t size = size_for_allocation_strategy(*obj);
+        obj->~T();
+        free(obj, size);
+    }
+
+    size_t preferred_max_contiguous_allocation() const {
+        return _preferred_max_contiguous_allocation;
+    }
+
+    // Returns a number which is increased when references to objects managed by this allocator
+    // are invalidated, e.g. due to internal events like compaction or eviction.
+    // When the value returned by this method doesn't change, references obtained
+    // between invocations remain valid.
+    uint64_t invalidate_counter() const {
+        return _invalidate_counter;
+    }
+
+    void invalidate_references() {
+        ++_invalidate_counter;
+    }
+};
+
+class standard_allocation_strategy : public allocation_strategy {
+public:
+    virtual void* alloc(migrate_fn, size_t size, size_t alignment) override {
+        seastar::memory::on_alloc_point();
+        // ASAN doesn't intercept aligned_alloc() and complains on free().
+        void* ret;
+        // The system posix_memalign will return EINVAL if alignment is not
+        // a multiple of pointer size.
+        if (alignment < sizeof(void*)) {
+            alignment = sizeof(void*);
+        }
+        if (posix_memalign(&ret, alignment, size) != 0) {
+            throw std::bad_alloc();
+        }
+        return ret;
+    }
+
+    virtual void free(void* obj, size_t size) override {
+        ::free(obj);
+    }
+
+    virtual void free(void* obj) override {
+        ::free(obj);
+    }
+
+    virtual size_t object_memory_size_in_allocator(const void* obj) const noexcept {
+        return ::malloc_usable_size(const_cast<void *>(obj));
+    }
+};
+
+extern standard_allocation_strategy standard_allocation_strategy_instance;
+
+inline
+standard_allocation_strategy& standard_allocator() {
+    return standard_allocation_strategy_instance;
+}
+
+inline
+allocation_strategy*& current_allocation_strategy_ptr() {
+    static thread_local allocation_strategy* current = &standard_allocation_strategy_instance;
+    return current;
+}
+
+inline
+allocation_strategy& current_allocator() {
+    return *current_allocation_strategy_ptr();
+}
+
+template<typename T>
+inline
+auto current_deleter() {
+    auto& alloc = current_allocator();
+    return [&alloc] (T* obj) {
+        alloc.destroy(obj);
+    };
+}
+
+template<typename T>
+struct alloc_strategy_deleter {
+    void operator()(T* ptr) const noexcept {
+        current_allocator().destroy(ptr);
+    }
+};
+
+// std::unique_ptr which can be used for owning an object allocated using allocation_strategy.
+// Must be destroyed before the pointer is invalidated. For compacting allocators, that
+// means it must not escape outside allocating_section or reclaim lock.
+// Must be destroyed in the same allocating context in which T was allocated.
+template<typename T>
+using alloc_strategy_unique_ptr = std::unique_ptr<T, alloc_strategy_deleter<T>>;
+
+//
+// Passing allocators to objects.
+//
+// The same object type can be allocated using different allocators, for
+// example standard allocator (for temporary data), or log-structured
+// allocator for long-lived data. In case of LSA, objects may be allocated
+// inside different LSA regions. Objects should be freed only from the region
+// which owns it.
+//
+// There's a problem of how to ensure correct usage of allocators. Storing the
+// reference to the allocator used for construction of some object inside that
+// object is a possible solution. This has a disadvantage of extra space
+// overhead per-object though. We could avoid that if the code which decides
+// about which allocator to use is also the code which controls object's life
+// time. That seems to be the case in current uses, so a simplified scheme of
+// passing allocators will do. Allocation strategy is set in a thread-local
+// context, as shown below. From there, aware objects pick up the allocation
+// strategy. The code controling the objects must ensure that object allocated
+// in one regime is also freed in the same regime.
+//
+// with_allocator() provides a way to set the current allocation strategy used
+// within given block of code. with_allocator() can be nested, which will
+// temporarily shadow enclosing strategy. Use current_allocator() to obtain
+// currently active allocation strategy. Use current_deleter() to obtain a
+// Deleter object using current allocation strategy to destroy objects.
+//
+// Example:
+//
+//   logalloc::region r;
+//   with_allocator(r.allocator(), [] {
+//       auto obj = make_managed<int>();
+//   });
+//
+
+class allocator_lock {
+    allocation_strategy* _prev;
+public:
+    allocator_lock(allocation_strategy& alloc) {
+        _prev = current_allocation_strategy_ptr();
+        current_allocation_strategy_ptr() = &alloc;
+    }
+
+    ~allocator_lock() {
+        current_allocation_strategy_ptr() = _prev;
+    }
+};
+
+template<typename Func>
+inline
+decltype(auto) with_allocator(allocation_strategy& alloc, Func&& func) {
+    allocator_lock l(alloc);
+    return func();
+}
 #include <seastar/core/unaligned.hh>
 #include <seastar/util/alloc_failure_injector.hh>
 #include <unordered_map>
@@ -4712,7 +5670,274 @@ public:
     static bool make_full(const schema& s, clustering_key_prefix& ck);    friend std::ostream& operator<<(std::ostream& out, const clustering_key_prefix& ckp);
 };
 
-#include "position_in_partition.hh"
+#include "clustering_bounds_comparator.hh"
+#include "query-request.hh"
+
+#include <optional>
+
+lexicographical_relation relation_for_lower_bound(composite_view v);
+lexicographical_relation relation_for_upper_bound(composite_view v);
+
+enum class bound_weight : int8_t {
+    before_all_prefixed = -1,
+    equal = 0,
+    after_all_prefixed = 1,
+};
+
+bound_weight position_weight(bound_kind k);
+
+enum class partition_region : uint8_t {
+    partition_start,
+    static_row,
+    clustered,
+    partition_end,
+};
+
+class position_in_partition_view {
+    friend class position_in_partition;
+public:
+    position_in_partition_view(partition_region type, bound_weight weight, const clustering_key_prefix* ck);
+    bool is_before_key() const;
+    bool is_after_key() const;
+private:
+    // Returns placement of this position_in_partition relative to *_ck,
+    // or lexicographical_relation::at_prefix if !_ck.
+    lexicographical_relation relation() const;
+public:
+    struct partition_start_tag_t { };
+    struct end_of_partition_tag_t { };
+    struct static_row_tag_t { };
+    struct clustering_row_tag_t { };
+    struct range_tag_t { };
+    using range_tombstone_tag_t = range_tag_t;
+
+    explicit position_in_partition_view(partition_start_tag_t);
+    explicit position_in_partition_view(end_of_partition_tag_t);
+    explicit position_in_partition_view(static_row_tag_t);
+    position_in_partition_view(clustering_row_tag_t, const clustering_key_prefix& ck);
+    position_in_partition_view(const clustering_key_prefix& ck);
+    position_in_partition_view(range_tag_t, bound_view bv);
+    position_in_partition_view(const clustering_key_prefix& ck, bound_weight w);
+
+    static position_in_partition_view for_range_start(const query::clustering_range& r);
+
+    static position_in_partition_view for_range_end(const query::clustering_range& r);
+
+    static position_in_partition_view before_all_clustered_rows();
+
+    static position_in_partition_view after_all_clustered_rows();
+
+    static position_in_partition_view for_static_row();
+
+    static position_in_partition_view for_key(const clustering_key& ck);
+
+    static position_in_partition_view after_key(const clustering_key& ck);
+
+    static position_in_partition_view before_key(const clustering_key& ck);
+
+    partition_region region() const;
+    bound_weight get_bound_weight() const;
+    bool is_partition_start() const;
+    bool is_partition_end() const;
+    bool is_static_row() const;
+    bool is_clustering_row() const;
+    bool has_clustering_key() const;
+
+    // Returns true if all fragments that can be seen for given schema have
+    // positions >= than this. partition_start is ignored.
+    bool is_before_all_fragments(const schema& s) const;
+
+    bool is_after_all_clustered_rows(const schema& s) const;
+
+    // Valid when >= before_all_clustered_rows()
+    const clustering_key_prefix& key() const;
+
+    // Can be called only when !is_static_row && !is_clustering_row().
+    bound_view as_start_bound_view() const;
+
+    bound_view as_end_bound_view() const;
+
+    class printer {
+    public:
+        printer(const schema& schema, const position_in_partition_view& pipv);
+        friend std::ostream& operator<<(std::ostream& os, printer p);
+    };
+
+    friend std::ostream& operator<<(std::ostream& os, printer p);
+    friend std::ostream& operator<<(std::ostream&, position_in_partition_view);
+    friend bool no_clustering_row_between(const schema&, position_in_partition_view, position_in_partition_view);
+};
+
+class position_in_partition {
+public:
+    friend class clustering_interval_set;
+    struct partition_start_tag_t { };
+    struct end_of_partition_tag_t { };
+    struct static_row_tag_t { };
+    struct after_static_row_tag_t { };
+    struct clustering_row_tag_t { };
+    struct after_clustering_row_tag_t { };
+    struct before_clustering_row_tag_t { };
+    struct range_tag_t { };
+    using range_tombstone_tag_t = range_tag_t;
+    partition_region get_type() const;
+    bound_weight get_bound_weight() const;
+    const std::optional<clustering_key_prefix>& get_clustering_key_prefix() const;
+    position_in_partition(partition_region type, bound_weight weight, std::optional<clustering_key_prefix> ck);
+    explicit position_in_partition(partition_start_tag_t);
+    explicit position_in_partition(end_of_partition_tag_t);
+    explicit position_in_partition(static_row_tag_t);
+    position_in_partition(clustering_row_tag_t, clustering_key_prefix ck);
+    position_in_partition(after_clustering_row_tag_t, clustering_key_prefix ck);
+    position_in_partition(after_clustering_row_tag_t, position_in_partition_view pos);
+    position_in_partition(before_clustering_row_tag_t, clustering_key_prefix ck);
+    position_in_partition(range_tag_t, bound_view bv);
+    position_in_partition(range_tag_t, bound_kind kind, clustering_key_prefix&& prefix);
+    position_in_partition(after_static_row_tag_t);
+    explicit position_in_partition(position_in_partition_view view);
+    position_in_partition& operator=(position_in_partition_view view);
+
+    static position_in_partition before_all_clustered_rows();
+
+    static position_in_partition after_all_clustered_rows();
+
+    static position_in_partition before_key(clustering_key ck);
+
+    static position_in_partition after_key(clustering_key ck);
+
+    // If given position is a clustering row position, returns a position
+    // right after it. Otherwise returns it unchanged.
+    // The position "pos" must be a clustering position.
+    static position_in_partition after_key(position_in_partition_view pos);
+
+    static position_in_partition for_key(clustering_key ck);
+
+    static position_in_partition for_partition_start();
+
+    static position_in_partition for_static_row();
+
+    static position_in_partition min();
+
+    static position_in_partition for_range_start(const query::clustering_range&);
+    static position_in_partition for_range_end(const query::clustering_range&);
+
+    partition_region region() const;
+    bool is_partition_start() const;
+    bool is_partition_end() const;
+    bool is_static_row() const;
+    bool is_clustering_row() const;
+    bool has_clustering_key() const;
+
+    bool is_after_all_clustered_rows(const schema& s) const;
+    bool is_before_all_clustered_rows(const schema& s) const;
+
+    template<typename Hasher>
+    void feed_hash(Hasher& hasher, const schema& s) const;
+    const clustering_key_prefix& key() const;
+    operator position_in_partition_view() const;
+
+    // Defines total order on the union of position_and_partition and composite objects.
+    //
+    // The ordering is compatible with position_range (r). The following is satisfied for
+    // all cells with name c included by the range:
+    //
+    //   r.start() <= c < r.end()
+    //
+    // The ordering on composites given by this is compatible with but weaker than the cell name order.
+    //
+    // The ordering on position_in_partition given by this is compatible but weaker than the ordering
+    // given by position_in_partition::tri_compare.
+    //
+    class composite_tri_compare {
+    public:
+        static int rank(partition_region t);
+
+        composite_tri_compare(const schema& s);
+
+        int operator()(position_in_partition_view a, position_in_partition_view b) const;
+
+        int operator()(position_in_partition_view a, composite_view b) const;
+        int operator()(composite_view a, position_in_partition_view b) const;
+    };
+
+    // Less comparator giving the same order as composite_tri_compare.
+    class composite_less_compare {
+    public:
+        composite_less_compare(const schema& s);
+
+        template<typename T, typename U>
+        bool operator()(const T& a, const U& b) const;
+    };
+
+    class tri_compare {
+    public:
+        tri_compare(const schema& s);
+        int operator()(const position_in_partition& a, const position_in_partition& b) const;
+        int operator()(const position_in_partition_view& a, const position_in_partition_view& b) const;
+        int operator()(const position_in_partition& a, const position_in_partition_view& b) const;
+        int operator()(const position_in_partition_view& a, const position_in_partition& b) const;
+    };
+    class less_compare {
+    public:
+        less_compare(const schema& s);
+        bool operator()(const position_in_partition& a, const position_in_partition& b) const;
+        bool operator()(const position_in_partition_view& a, const position_in_partition_view& b) const;
+        bool operator()(const position_in_partition& a, const position_in_partition_view& b) const;
+        bool operator()(const position_in_partition_view& a, const position_in_partition& b) const;
+    };
+    class equal_compare {
+        template<typename T, typename U>
+        bool compare(const T& a, const U& b) const;
+    public:
+        equal_compare(const schema& s);
+        bool operator()(const position_in_partition& a, const position_in_partition& b) const;
+        bool operator()(const position_in_partition_view& a, const position_in_partition_view& b) const;
+        bool operator()(const position_in_partition_view& a, const position_in_partition& b) const;
+        bool operator()(const position_in_partition& a, const position_in_partition_view& b) const;
+    };
+    friend std::ostream& operator<<(std::ostream&, const position_in_partition&);
+};
+
+// Returns true if and only if there can't be any clustering_row with position > a and < b.
+// It is assumed that a <= b.
+bool no_clustering_row_between(const schema& s, position_in_partition_view a, position_in_partition_view b);
+
+// Includes all position_in_partition objects "p" for which: start <= p < end
+// And only those.
+class position_range {
+public:
+    static position_range from_range(const query::clustering_range&);
+
+    static position_range for_static_row();
+
+    static position_range full();
+
+    static position_range all_clustered_rows();
+
+    position_range(position_range&&) = default;
+    position_range& operator=(position_range&&) = default;
+    position_range(const position_range&) = default;
+    position_range& operator=(const position_range&) = default;
+
+    // Constructs position_range which covers the same rows as given clustering_range.
+    // position_range includes a fragment if it includes position of that fragment.
+    position_range(const query::clustering_range&);
+    position_range(query::clustering_range&&);
+
+    position_range(position_in_partition start, position_in_partition end);
+
+    const position_in_partition& start() const&;
+    position_in_partition&& start() &&;
+    const position_in_partition& end() const&;
+    position_in_partition&& end() &&;
+    bool contains(const schema& s, position_in_partition_view pos) const;
+    bool overlaps(const schema& s, position_in_partition_view start, position_in_partition_view end) const;
+
+    friend std::ostream& operator<<(std::ostream&, const position_range&);
+};
+
+class clustering_interval_set;
+
 #include "atomic_cell_or_collection.hh"
 #include "query-result.hh"
 #include "mutation_partition_view.hh"
@@ -5862,8 +7087,6 @@ class memtable_list;
 // of a common class.
 class memtable_list {
 };
-
-using sstable_list = sstables::sstable_list;
 
 
 class table;
