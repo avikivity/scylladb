@@ -3758,16 +3758,12 @@ protected:
     }
 public:
     struct with_schema_wrapper {
-        with_schema_wrapper(const schema& s, const TopLevel& key) : s(s), key(key) {}
+        with_schema_wrapper(const schema& s, const TopLevel& key)  ;
         const schema& s;
         const TopLevel& key;
     };
-    with_schema_wrapper with_schema(const schema& s) const {
-        return with_schema_wrapper(s, *static_cast<const TopLevel*>(this));
-    }
-    static TopLevel make_empty() {
-        return from_exploded(std::vector<bytes>());
-    }
+    with_schema_wrapper with_schema(const schema& s) const ;
+    static TopLevel make_empty() ;
     static TopLevel make_empty(const schema&) ;
     template<typename RangeOfSerializedComponents>
     static TopLevel from_exploded(RangeOfSerializedComponents&& v) ;
@@ -3793,15 +3789,9 @@ public:
     struct less_compare {
         typename TopLevel::compound _t;
         less_compare(const schema& s)  ;
-        bool operator()(const TopLevel& k1, const TopLevel& k2) const {
-            return _t->less(k1.representation(), k2.representation());
-        }
-        bool operator()(const TopLevelView& k1, const TopLevel& k2) const {
-            return _t->less(k1.representation(), k2.representation());
-        }
-        bool operator()(const TopLevel& k1, const TopLevelView& k2) const {
-            return _t->less(k1.representation(), k2.representation());
-        }
+        bool operator()(const TopLevel& k1, const TopLevel& k2) const ;
+        bool operator()(const TopLevelView& k1, const TopLevel& k2) const ;
+        bool operator()(const TopLevel& k1, const TopLevelView& k2) const ;
     };
     struct hashing {
         hashing(const schema& s);
@@ -3818,18 +3808,12 @@ public:
     bool equal(const schema& s, const TopLevelView& other) const ;
     operator bytes_view() const;
     const managed_bytes& representation() const;
-    auto begin(const schema& s) const {
-        return get_compound_type(s)->begin(_bytes);
-    }
-    auto end(const schema& s) const {
-        return get_compound_type(s)->end(_bytes);
-    }
+    auto begin(const schema& s) const ;
+    auto end(const schema& s) const ;
     bool is_empty() const;
     explicit operator bool() const;
     bool is_empty(const schema& s) const;
-    auto components() const {
-        return TopLevelView::compound::element_type::components(representation());
-    }
+    auto components() const ;
     auto components(const schema& s) const;
     bytes_view get_component(const schema& s, size_t idx) const;
     size_t size(const schema& s) const;
