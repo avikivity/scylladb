@@ -4168,70 +4168,31 @@ public:
     static TopLevel make_empty() {
         return from_exploded(std::vector<bytes>());
     }
-    static TopLevel make_empty(const schema&) {
-        return make_empty();
-    }
+    static TopLevel make_empty(const schema&) ;
     template<typename RangeOfSerializedComponents>
-    static TopLevel from_exploded(RangeOfSerializedComponents&& v) {
-        return TopLevel::from_range(std::forward<RangeOfSerializedComponents>(v));
-    }
-    static TopLevel from_exploded(const schema& s, const std::vector<bytes>& v) {
-        return from_exploded(v);
-    }
-    static TopLevel from_exploded_view(const std::vector<bytes_view>& v) {
-        return from_exploded(v);
-    }
-    static TopLevel from_optional_exploded(const schema& s, const std::vector<bytes_opt>& v) {
-        return TopLevel::from_bytes(get_compound_type(s)->serialize_optionals(v));
-    }
-    static TopLevel from_deeply_exploded(const schema& s, const std::vector<data_value>& v) {
-        return TopLevel::from_bytes(get_compound_type(s)->serialize_value_deep(v));
-    }
-    static TopLevel from_single_value(const schema& s, bytes v) {
-        return TopLevel::from_bytes(get_compound_type(s)->serialize_single(std::move(v)));
-    }
+    static TopLevel from_exploded(RangeOfSerializedComponents&& v) ;
+    static TopLevel from_exploded(const schema& s, const std::vector<bytes>& v) ;
+    static TopLevel from_exploded_view(const std::vector<bytes_view>& v) ;
+    static TopLevel from_optional_exploded(const schema& s, const std::vector<bytes_opt>& v) ;
+    static TopLevel from_deeply_exploded(const schema& s, const std::vector<data_value>& v) ;
+    static TopLevel from_single_value(const schema& s, bytes v) ;
     template <typename T>
     static
-    TopLevel from_singular(const schema& s, const T& v) {
-        auto ct = get_compound_type(s);
-        if (!ct->is_singular()) {
-            throw std::invalid_argument("compound is not singular");
-        }
-        auto type = ct->types()[0];
-        return from_single_value(s, type->decompose(v));
-    }
-    TopLevelView view() const {
-        return TopLevelView::from_bytes(_bytes);
-    }
-    operator TopLevelView() const {
-        return view();
-    }
-    std::vector<bytes> explode(const schema& s) const {
-        return get_compound_type(s)->deserialize_value(_bytes);
-    }
-    std::vector<bytes> explode() const {
-        std::vector<bytes> result;
-        for (bytes_view c : components()) {
-            result.emplace_back(to_bytes(c));
-        }
-        return result;
-    }
+    TopLevel from_singular(const schema& s, const T& v) ;
+    TopLevelView view() const ;
+    operator TopLevelView() const ;
+    std::vector<bytes> explode(const schema& s) const ;
+    std::vector<bytes> explode() const ;
     struct tri_compare {
         typename TopLevel::compound _t;
-        tri_compare(const schema& s) : _t(get_compound_type(s)) {}
-        int operator()(const TopLevel& k1, const TopLevel& k2) const {
-            return _t->compare(k1.representation(), k2.representation());
-        }
-        int operator()(const TopLevelView& k1, const TopLevel& k2) const {
-            return _t->compare(k1.representation(), k2.representation());
-        }
-        int operator()(const TopLevel& k1, const TopLevelView& k2) const {
-            return _t->compare(k1.representation(), k2.representation());
-        }
+        tri_compare(const schema& s)  ;
+        int operator()(const TopLevel& k1, const TopLevel& k2) const ;
+        int operator()(const TopLevelView& k1, const TopLevel& k2) const ;
+        int operator()(const TopLevel& k1, const TopLevelView& k2) const ;
     };
     struct less_compare {
         typename TopLevel::compound _t;
-        less_compare(const schema& s) : _t(get_compound_type(s)) {}
+        less_compare(const schema& s)  ;
         bool operator()(const TopLevel& k1, const TopLevel& k2) const {
             return _t->less(k1.representation(), k2.representation());
         }
@@ -5602,68 +5563,34 @@ public:
         return {mask_for(e)};
     }
     template<enum_type e>
-    static constexpr prepared prepare() {
-        return {mask_for<e>()};
-    }
+    static constexpr prepared prepare() ;
     static_assert(std::numeric_limits<mask_type>::max() >= ((size_t)1 << Enum::max_sequence), "mask type too small");
     template<enum_type e>
-    bool contains() const {
-        return bool(_mask & mask_for<e>());
-    }
-    bool contains(enum_type e) const {
-        return bool(_mask & mask_for(e));
-    }
+    bool contains() const ;
+    bool contains(enum_type e) const ;
     template<enum_type e>
-    void remove() {
-        _mask &= ~mask_for<e>();
-    }
-    void remove(enum_type e) {
-        _mask &= ~mask_for(e);
-    }
+    void remove() ;
+    void remove(enum_type e) ;
     template<enum_type e>
-    void set() {
-        _mask |= mask_for<e>();
-    }
+    void set() ;
     template<enum_type e>
-    void set_if(bool condition) {
-        _mask |= mask_type(condition) << shift_for<e>();
-    }
-    void set(enum_type e) {
-        _mask |= mask_for(e);
-    }
-    void add(const enum_set& other) {
-        _mask |= other._mask;
-    }
-    explicit operator bool() const {
-        return bool(_mask);
-    }
-    mask_type mask() const {
-        return _mask;
-    }
-    iterator begin() const {
-        return make_iterator(mask_iterator(_mask));
-    }
-    iterator end() const {
-        return make_iterator(mask_iterator(0));
-    }
+    void set_if(bool condition) ;
+    void set(enum_type e) ;
+    void add(const enum_set& other) ;
+    explicit operator bool() const ;
+    mask_type mask() const ;
+    iterator begin() const ;
+    iterator end() const ;
     template<enum_type... items>
     struct frozen {
         template<enum_type first>
-        static constexpr mask_type make_mask() {
-            return mask_for<first>();
-        }
-        static constexpr mask_type make_mask() {
-            return 0;
-        }
+        static constexpr mask_type make_mask() ;
+        static constexpr mask_type make_mask() ;
         template<enum_type first, enum_type second, enum_type... rest>
-        static constexpr mask_type make_mask() {
-            return mask_for<first>() | make_mask<second, rest...>();
-        }
+        static constexpr mask_type make_mask() ;
         static constexpr mask_type mask = make_mask<items...>();
         template<enum_type Elem>
-        static constexpr bool contains() {
-            return mask & mask_for<Elem>();
-        }
+        static constexpr bool contains() ;
         static bool contains(enum_type e) {
             return mask & mask_for(e);
         }
@@ -5999,96 +5926,26 @@ public:
             _pending_for_write_records_bulk.clear();
         }
     }
-    void write_complete(uint64_t nr = 1) {
-        if (nr > _flushing_records) {
-            throw std::logic_error(seastar::format("completing more records ({:d}) than there are pending ({:d})", nr, _flushing_records));
-        }
-        _flushing_records -= nr;
-    }
+    void write_complete(uint64_t nr = 1) ;
     trace_state_ptr create_session(trace_type type, trace_state_props_set props) noexcept;
     trace_state_ptr create_session(const trace_info& secondary_session_info) noexcept;
-    void write_maybe() {
-        if (_pending_for_write_records_count >= write_event_records_threshold || _pending_for_write_records_bulk.size() >= write_event_sessions_threshold) {
-            write_pending_records();
-        }
-    }
-    void end_session() {
-        --_active_sessions;
-    }
-    void write_session_records(lw_shared_ptr<one_session_records> records, bool write_now) {
-        if (_down) {
-            return;
-        }
-        try {
-            schedule_for_write(std::move(records));
-        } catch (...) {
-            ++stats.trace_errors;
-            return;
-        }
-        if (write_now) {
-            write_pending_records();
-        } else {
-            write_maybe();
-        }
-    }
+    void write_maybe() ;
+    void end_session() ;
+    void write_session_records(lw_shared_ptr<one_session_records> records, bool write_now) ;
     void set_trace_probability(double p);
-    double get_trace_probability() const {
-        return _trace_probability;
-    }
-    bool trace_next_query() {
-        return _normalized_trace_probability != 0 && _gen() < _normalized_trace_probability;
-    }
-    std::unique_ptr<backend_session_state_base> allocate_backend_session_state() const {
-        return _tracing_backend_helper_ptr->allocate_session_state();
-    }
-    bool have_records_budget(uint64_t nr = 1) {
-        if (_pending_for_write_records_count + _cached_records + _flushing_records + nr > max_pending_trace_records + write_event_records_threshold) {
-            return false;
-        }
-        return true;
-    }
-    uint64_t* get_pending_records_ptr() {
-        return &_pending_for_write_records_count;
-    }
-    uint64_t* get_cached_records_ptr() {
-        return &_cached_records;
-    }
-    void schedule_for_write(lw_shared_ptr<one_session_records> records) {
-        if (records->is_pending_for_write()) {
-            return;
-        }
-        _pending_for_write_records_bulk.emplace_back(records);
-        records->set_pending_for_write();
-        auto current_records_num = records->size();
-        _cached_records -= current_records_num;
-        _pending_for_write_records_count += current_records_num;
-    }
-    void set_slow_query_enabled(bool enable = true) {
-        _slow_query_logging_enabled = enable;
-    }
-    bool slow_query_tracing_enabled() const {
-        return _slow_query_logging_enabled;
-    }
-    void set_slow_query_threshold(std::chrono::microseconds new_threshold) {
-        if (new_threshold.count() > std::numeric_limits<uint32_t>::max()) {
-            _slow_query_duration_threshold = std::chrono::microseconds(std::numeric_limits<uint32_t>::max());
-            return;
-        }
-        _slow_query_duration_threshold = new_threshold;
-    }
-    std::chrono::microseconds slow_query_threshold() const {
-        return _slow_query_duration_threshold;
-    }
-    void set_slow_query_record_ttl(std::chrono::seconds new_ttl) {
-        if (new_ttl.count() > std::numeric_limits<int32_t>::max()) {
-            _slow_query_record_ttl = std::chrono::seconds(std::numeric_limits<int32_t>::max());
-            return;
-        }
-        _slow_query_record_ttl = new_ttl;
-    }
-    std::chrono::seconds slow_query_record_ttl() const {
-        return _slow_query_record_ttl;
-    }
+    double get_trace_probability() const ;
+    bool trace_next_query() ;
+    std::unique_ptr<backend_session_state_base> allocate_backend_session_state() const ;
+    bool have_records_budget(uint64_t nr = 1) ;
+    uint64_t* get_pending_records_ptr() ;
+    uint64_t* get_cached_records_ptr() ;
+    void schedule_for_write(lw_shared_ptr<one_session_records> records) ;
+    void set_slow_query_enabled(bool enable = true) ;
+    bool slow_query_tracing_enabled() const ;
+    void set_slow_query_threshold(std::chrono::microseconds new_threshold) ;
+    std::chrono::microseconds slow_query_threshold() const ;
+    void set_slow_query_record_ttl(std::chrono::seconds new_ttl) ;
+    std::chrono::seconds slow_query_record_ttl() const ;
 private:
     void write_timer_callback();
     bool may_create_new_session(const std::optional<utils::UUID>& session_id = std::nullopt) {
