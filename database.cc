@@ -11660,9 +11660,6 @@ private:
 
 
 
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/semaphore.hh>
-#include <chrono>
 
 namespace db {
 using timeout_clock = seastar::lowres_clock;
@@ -12186,7 +12183,6 @@ GCC6_CONCEPT(
     }
 )
 
-#include <seastar/util/optimized_optional.hh>
 
 class mutation final {
     mutation() = default;
@@ -12429,9 +12425,6 @@ public:
 
 
 
-#include <seastar/core/future-util.hh>
-#include <seastar/util/bool_class.hh>
-#include <seastar/core/future.hh>
 
 
 namespace cql3{
