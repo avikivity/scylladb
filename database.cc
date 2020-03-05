@@ -5069,24 +5069,24 @@ public:
     static future<> start_tracing();
     tracing(const backend_registry& br, sstring tracing_backend_helper_class_name);
     future<> start();
-    future<> stop();
-    future<> shutdown();
-    void write_pending_records() ;
-    void write_complete(uint64_t nr = 1) ;
-    trace_state_ptr create_session(trace_type type, trace_state_props_set props) noexcept;
-    trace_state_ptr create_session(const trace_info& secondary_session_info) noexcept;
-    void write_maybe() ;
-    void end_session() ;
-    void write_session_records(lw_shared_ptr<one_session_records> records, bool write_now) ;
-    void set_trace_probability(double p);
-    double get_trace_probability() const ;
-    bool trace_next_query() ;
-    std::unique_ptr<backend_session_state_base> allocate_backend_session_state() const ;
-    bool have_records_budget(uint64_t nr = 1) ;
-    uint64_t* get_pending_records_ptr() ;
-    uint64_t* get_cached_records_ptr() ;
-    void schedule_for_write(lw_shared_ptr<one_session_records> records) ;
-    void set_slow_query_enabled(bool enable = true) ;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     bool slow_query_tracing_enabled() const ;
     void set_slow_query_threshold(std::chrono::microseconds new_threshold) ;
     std::chrono::microseconds slow_query_threshold() const ;
@@ -5157,11 +5157,11 @@ public:
     const clustering_row_ranges& row_ranges(const schema&, const partition_key&) const;
     void set_range(const schema&, const partition_key&, clustering_row_ranges);
     void clear_range(const schema&, const partition_key&);
-    void clear_ranges();    
-    clustering_row_ranges get_all_ranges() const;
-    const clustering_row_ranges& default_row_ranges() const;
-    const std::unique_ptr<specific_ranges>& get_specific_ranges() const;
-    const cql_serialization_format& cql_format() const;
+        
+    
+    
+    
+    
     
     
     
@@ -5330,19 +5330,19 @@ public:
     
     
     
-    static position_range all_clustered_rows();
-    position_range(position_range&&) = default;
-    position_range& operator=(position_range&&) = default;
-    position_range(const position_range&) = default;
-    position_range& operator=(const position_range&) = default;
-    position_range(const query::clustering_range&);
-    position_range(query::clustering_range&&);
-    position_range(position_in_partition start, position_in_partition end);
-    const position_in_partition& start() const&;
-    position_in_partition&& start() &&;
-    const position_in_partition& end() const&;
-    position_in_partition&& end() &&;
-    bool contains(const schema& s, position_in_partition_view pos) const;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     bool overlaps(const schema& s, position_in_partition_view start, position_in_partition_view end) const;
     friend std::ostream& operator<<(std::ostream&, const position_range&);
 };
