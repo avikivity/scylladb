@@ -2450,54 +2450,16 @@ public:
         }
         const value_type& operator*() const { return _current; }
         const value_type* operator->() const { return &_current; }
-        bool operator!=(const iterator& i) const { return _v.begin() != i._v.begin(); }
-        bool operator==(const iterator& i) const { return _v.begin() == i._v.begin(); }
+        bool operator!=(const iterator& i) const ;
+        bool operator==(const iterator& i) const ;
     };
-    static iterator begin(const bytes_view& v) {
-        return iterator(v);
-    }
-    static iterator end(const bytes_view& v) {
-        return iterator(typename iterator::end_iterator_tag(), v);
-    }
-    static boost::iterator_range<iterator> components(const bytes_view& v) {
-        return { begin(v), end(v) };
-    }
-    value_type deserialize_value(bytes_view v) {
-        std::vector<bytes> result;
-        result.reserve(_types.size());
-        std::transform(begin(v), end(v), std::back_inserter(result), [] (auto&& v) {
-            return bytes(v.begin(), v.end());
-        });
-        return result;
-    }
-    bool less(bytes_view b1, bytes_view b2) {
-        return compare(b1, b2) < 0;
-    }
-    size_t hash(bytes_view v) {
-        if (_byte_order_equal) {
-            return std::hash<bytes_view>()(v);
-        }
-        auto t = _types.begin();
-        size_t h = 0;
-        for (auto&& value : components(v)) {
-            h ^= (*t)->hash(value);
-            ++t;
-        }
-        return h;
-    }
-    int compare(bytes_view b1, bytes_view b2) {
-        if (_byte_order_comparable) {
-            if (_is_reversed) {
-                return compare_unsigned(b2, b1);
-            } else {
-                return compare_unsigned(b1, b2);
-            }
-        }
-        return lexicographical_tri_compare(_types.begin(), _types.end(),
-            begin(b1), end(b1), begin(b2), end(b2), [] (auto&& type, auto&& v1, auto&& v2) {
-                return type->compare(v1, v2);
-            });
-    }
+    static iterator begin(const bytes_view& v) ;
+    static iterator end(const bytes_view& v) ;
+    static boost::iterator_range<iterator> components(const bytes_view& v) ;
+    value_type deserialize_value(bytes_view v) ;
+    bool less(bytes_view b1, bytes_view b2) ;
+    size_t hash(bytes_view v) ;
+    int compare(bytes_view b1, bytes_view b2) ;
     bool is_full(bytes_view v) const {
         assert(AllowPrefixes == allow_prefixes::yes);
         return std::distance(begin(v), end(v)) == (ssize_t)_types.size();
@@ -2546,16 +2508,10 @@ public:
         column_count_type bit = static_cast<column_count_type>(id);
         return _mask.test(bit);
     }
-    size_type count() const { return _mask.count(); }
-    ordinal_column_id find_first() const {
-        return static_cast<ordinal_column_id>(_mask.find_first());
-    }
-    ordinal_column_id find_next(ordinal_column_id pos) const {
-        return static_cast<ordinal_column_id>(_mask.find_next(static_cast<column_count_type>(pos)));
-    }
-    void union_with(const column_set& with) {
-        _mask |= with._mask;
-    }
+    size_type count() const ;
+    ordinal_column_id find_first() const ;
+    ordinal_column_id find_next(ordinal_column_id pos) const ;
+    void union_with(const column_set& with) ;
 private:
     bitset _mask;
 };
@@ -2579,22 +2535,8 @@ enum class cf_type : uint8_t {
     standard,
     super,
 };
-inline sstring cf_type_to_sstring(cf_type t) {
-    if (t == cf_type::standard) {
-        return "Standard";
-    } else if (t == cf_type::super) {
-        return "Super";
-    }
-    throw std::invalid_argument(format("unknown type: {:d}\n", uint8_t(t)));
-}
-inline cf_type sstring_to_cf_type(sstring name) {
-    if (name == "Standard") {
-        return cf_type::standard;
-    } else if (name == "Super") {
-        return cf_type::super;
-    }
-    throw std::invalid_argument(format("unknown type: {}\n", name));
-}
+ sstring cf_type_to_sstring(cf_type t) ;
+ cf_type sstring_to_cf_type(sstring name) ;
 struct speculative_retry {
     enum class type {
         NONE, CUSTOM, PERCENTILE, ALWAYS
@@ -2603,48 +2545,9 @@ private:
     type _t;
     double _v;
 public:
-    speculative_retry(type t, double v) : _t(t), _v(v) {}
-    sstring to_sstring() const {
-        if (_t == type::NONE) {
-            return "NONE";
-        } else if (_t == type::ALWAYS) {
-            return "ALWAYS";
-        } else if (_t == type::CUSTOM) {
-            return format("{:.2f}ms", _v);
-        } else if (_t == type::PERCENTILE) {
-            return format("{:.1f}PERCENTILE", 100 * _v);
-        } else {
-            throw std::invalid_argument(format("unknown type: {:d}\n", uint8_t(_t)));
-        }
-    }
-    static speculative_retry from_sstring(sstring str) {
-        std::transform(str.begin(), str.end(), str.begin(), ::toupper);
-        sstring ms("MS");
-        sstring percentile("PERCENTILE");
-        auto convert = [&str] (sstring& t) {
-            try {
-                return boost::lexical_cast<double>(str.substr(0, str.size() - t.size()));
-            } catch (boost::bad_lexical_cast& e) {
-                throw std::invalid_argument(format("cannot convert {} to speculative_retry\n", str));
-            }
-        };
-        type t;
-        double v = 0;
-        if (str == "NONE") {
-            t = type::NONE;
-        } else if (str == "ALWAYS") {
-            t = type::ALWAYS;
-        } else if (str.compare(str.size() - ms.size(), ms.size(), ms) == 0) {
-            t = type::CUSTOM;
-            v = convert(ms);
-        } else if (str.compare(str.size() - percentile.size(), percentile.size(), percentile) == 0) {
-            t = type::PERCENTILE;
-            v = convert(percentile) / 100;
-        } else {
-            throw std::invalid_argument(format("cannot convert {} to speculative_retry\n", str));
-        }
-        return speculative_retry(t, v);
-    }
+    speculative_retry(type t, double v)  ;
+    sstring to_sstring() const ;
+    static speculative_retry from_sstring(sstring str) ;
     type get_type() const {
         return _t;
     }
@@ -2720,13 +2623,7 @@ public:
         }
         return _columns[id];
     }
-    const column_mapping_entry& regular_column_at(column_id id) const {
-        auto n_regular = _columns.size() - _n_static;
-        if (id >= n_regular) {
-            throw std::out_of_range(format("regular column id {:d} >= {:d}", id, n_regular));
-        }
-        return _columns[id + _n_static];
-    }
+    const column_mapping_entry& regular_column_at(column_id id) const ;
     friend std::ostream& operator<<(std::ostream& out, const column_mapping& cm);
 };
 /**
@@ -2740,18 +2637,10 @@ class raw_view_info final {
     sstring _where_clause;
 public:
     raw_view_info(utils::UUID base_id, sstring base_name, bool include_all_columns, sstring where_clause);
-    const utils::UUID& base_id() const {
-        return _base_id;
-    }
-    const sstring& base_name() const {
-        return _base_name;
-    }
-    bool include_all_columns() const {
-        return _include_all_columns;
-    }
-    const sstring& where_clause() const {
-        return _where_clause;
-    }
+    const utils::UUID& base_id() const ;
+    const sstring& base_name() const ;
+    bool include_all_columns() const ;
+    const sstring& where_clause() const ;
     friend bool operator==(const raw_view_info&, const raw_view_info&);
     friend std::ostream& operator<<(std::ostream& os, const raw_view_info& view);
 };
@@ -2799,11 +2688,9 @@ class partition_slice;
  */
 class schema_extension {
 public:
-    virtual ~schema_extension() {};
+    virtual ~schema_extension() ;;
     virtual bytes serialize() const = 0;
-    virtual bool is_placeholder() const {
-        return false;
-    }
+    virtual bool is_placeholder() const ;
 };
 /*
  * Effectively immutable.
@@ -2816,9 +2703,7 @@ public:
     struct dropped_column {
         data_type type;
         api::timestamp_type timestamp;
-        bool operator==(const dropped_column& rhs) const {
-            return type == rhs.type && timestamp == rhs.timestamp;
-        }
+        bool operator==(const dropped_column& rhs) const ;
     };
     using extensions_map = std::map<sstring, ::shared_ptr<schema_extension>>;
 private:
@@ -2967,36 +2852,16 @@ public:
     const auto& collections() const ;
     gc_clock::duration default_time_to_live() const ;
     data_type make_legacy_default_validator() const;
-    const sstring& ks_name() const {
-        return _raw._ks_name;
-    }
-    const sstring& cf_name() const {
-        return _raw._cf_name;
-    }
-    const lw_shared_ptr<compound_type<allow_prefixes::no>>& partition_key_type() const {
-        return _partition_key_type;
-    }
-    const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_type() const {
-        return _clustering_key_type;
-    }
-    const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_prefix_type() const {
-        return _clustering_key_type;
-    }
-    const data_type& regular_column_name_type() const {
-        return _raw._regular_column_name_type;
-    }
-    const data_type& static_column_name_type() const {
-        return utf8_type;
-    }
-    const std::unique_ptr<::view_info>& view_info() const {
-        return _view_info;
-    }
-    bool is_view() const {
-        return bool(_view_info);
-    }
-    const query::partition_slice& full_slice() const {
-        return *_full_slice;
-    }
+    const sstring& ks_name() const ;
+    const sstring& cf_name() const ;
+    const lw_shared_ptr<compound_type<allow_prefixes::no>>& partition_key_type() const ;
+    const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_type() const ;
+    const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_prefix_type() const ;
+    const data_type& regular_column_name_type() const ;
+    const data_type& static_column_name_type() const ;
+    const std::unique_ptr<::view_info>& view_info() const ;
+    bool is_view() const ;
+    const query::partition_slice& full_slice() const ;
     std::vector<sstring> index_names() const;
     std::vector<index_metadata> indices() const;
     const std::unordered_map<sstring, index_metadata>& all_indices() const;
@@ -3108,60 +2973,20 @@ public:
             : _offset(-2)
             , _i(v._type.end(v._packed))
         { }
-        value_type operator*() const {
-            int32_t component_size = _i->size();
-            if (_offset == -2) {
-                return (component_size >> 8) & 0xff;
-            } else if (_offset == -1) {
-                return component_size & 0xff;
-            } else if (_offset < component_size) {
-                return (*_i)[_offset];
-            } else { 
-                return 0; 
-            }
-        }
-        iterator& operator++() {
-            auto component_size = (int32_t) _i->size();
-            if (_offset < component_size
-                && (!_singular || _offset != (component_size - 1)))
-            {
-                ++_offset;
-            } else {
-                ++_i;
-                _offset = -2;
-            }
-            return *this;
-        }
-        bool operator==(const iterator& other) const {
-            return _offset == other._offset && other._i == _i;
-        }
-        bool operator!=(const iterator& other) const {
-            return !(*this == other);
-        }
+        value_type operator*() const ;
+        iterator& operator++() ;
+        bool operator==(const iterator& other) const ;
+        bool operator!=(const iterator& other) const ;
     };
     struct tri_comparator {
         const CompoundType& _type;
-        tri_comparator(const CompoundType& type)
-            : _type(type)
-        { }
+        tri_comparator(const CompoundType& type) 
+        ;
         int operator()(bytes_view k1, bytes_view k2) const;
     };
-    size_t size() const {
-        if (_type.is_singular()) {
-            return _type.begin(_packed)->size();
-        }
-        size_t s = 0;
-        for (auto&& component : _type.components(_packed)) {
-            s += 2  + component.size() + 1 ;
-        }
-        return s;
-    }
-    iterator begin() const {
-        return iterator(*this);
-    }
-    iterator end() const {
-        return iterator(*this, typename iterator::end_tag());
-    }
+    size_t size() const ;
+    iterator begin() const ;
+    iterator end() const ;
 };
 template <typename CompoundType>
 static
@@ -3342,9 +3167,7 @@ public:
     bool is_static() const ;
     bool is_compound() const ;
     template <typename ClusteringElement>
-    static composite from_clustering_element(const schema& s, const ClusteringElement& ce) {
-        return serialize_value(ce.components(s), s.is_compound());
-    }
+    static composite from_clustering_element(const schema& s, const ClusteringElement& ce) ;
     static composite from_exploded(const std::vector<bytes_view>& v, bool is_compound, eoc marker = eoc::none) {
         if (v.size() == 0) {
             return composite(bytes(size_t(1), bytes::value_type(marker)), is_compound);
@@ -3403,32 +3226,13 @@ public:
     composite::iterator begin() const {
         return composite::iterator(_bytes, _is_compound, is_static());
     }
-    composite::iterator end() const {
-        return composite::iterator(composite::iterator::end_iterator_tag());
-    }
-    boost::iterator_range<composite::iterator> components() const {
-        return { begin(), end() };
-    }
-    composite::eoc last_eoc() const {
-        if (!_is_compound || _bytes.empty()) {
-            return composite::eoc::none;
-        }
-        bytes_view v(_bytes);
-        v.remove_prefix(v.size() - 1);
-        return composite::to_eoc(read_simple<composite::eoc_type>(v));
-    }
-    auto values() const {
-        return components() | boost::adaptors::transformed([](auto&& c) { return c.first; });
-    }
-    size_t size() const {
-        return _bytes.size();
-    }
-    bool empty() const {
-        return _bytes.empty();
-    }
-    bool is_static() const {
-        return composite::is_static(_bytes, _is_compound);
-    }
+    composite::iterator end() const ;
+    boost::iterator_range<composite::iterator> components() const ;
+    composite::eoc last_eoc() const ;
+    auto values() const ;
+    size_t size() const ;
+    bool empty() const ;
+    bool is_static() const ;
     explicit operator bytes_view() const {
         return _bytes;
     }
@@ -3438,14 +3242,9 @@ public:
         return os << "{" << ::join(", ", v.components()) << ", compound=" << v._is_compound << ", static=" << v.is_static() << "}";
     }
 };
-inline
-std::ostream& operator<<(std::ostream& os, const composite& v) {
-    return os << composite_view(v);
-}
-inline
-int composite::tri_compare::operator()(const composite& v1, const composite& v2) const {
-    return (*this)(composite_view(v1), composite_view(v2));
-}
+
+std::ostream& operator<<(std::ostream& os, const composite& v) ;
+
 #include <any>
 class migrate_fn_type {
     std::any _migrators;
@@ -3485,63 +3284,30 @@ public:
 };
 template <typename T>
 standard_migrator<T>& get_standard_migrator()
-{
-    static thread_local standard_migrator<T> instance;
-    return instance;
-}
+;
 class allocation_strategy {
 protected:
     size_t _preferred_max_contiguous_allocation = std::numeric_limits<size_t>::max();
     uint64_t _invalidate_counter = 1;
 public:
     using migrate_fn = const migrate_fn_type*;
-    virtual ~allocation_strategy() {}
+    virtual ~allocation_strategy() ;
     virtual void* alloc(migrate_fn, size_t size, size_t alignment) = 0;
     virtual void free(void* object, size_t size) = 0;
     virtual void free(void* object) = 0;
     virtual size_t object_memory_size_in_allocator(const void* obj) const noexcept = 0;
     template<typename T, typename... Args>
-    T* construct(Args&&... args) {
-        void* storage = alloc(&get_standard_migrator<T>(), sizeof(T), alignof(T));
-        try {
-            return new (storage) T(std::forward<Args>(args)...);
-        } catch (...) {
-            free(storage, sizeof(T));
-            throw;
-        }
-    }
+    T* construct(Args&&... args) ;
     template<typename T>
-    void destroy(T* obj) {
-        size_t size = size_for_allocation_strategy(*obj);
-        obj->~T();
-        free(obj, size);
-    }
-    size_t preferred_max_contiguous_allocation() const {
-        return _preferred_max_contiguous_allocation;
-    }
-    uint64_t invalidate_counter() const {
-        return _invalidate_counter;
-    }
-    void invalidate_references() {
-        ++_invalidate_counter;
-    }
+    void destroy(T* obj) ;
+    size_t preferred_max_contiguous_allocation() const ;
+    uint64_t invalidate_counter() const ;
+    void invalidate_references() ;
 };
 class standard_allocation_strategy : public allocation_strategy {
 public:
-    virtual void* alloc(migrate_fn, size_t size, size_t alignment) override {
-        seastar::memory::on_alloc_point();
-        void* ret;
-        if (alignment < sizeof(void*)) {
-            alignment = sizeof(void*);
-        }
-        if (posix_memalign(&ret, alignment, size) != 0) {
-            throw std::bad_alloc();
-        }
-        return ret;
-    }
-    virtual void free(void* obj, size_t size) override {
-        ::free(obj);
-    }
+    virtual void* alloc(migrate_fn, size_t size, size_t alignment) override ;
+    virtual void free(void* obj, size_t size) override ;
     virtual void free(void* obj) override {
         ::free(obj);
     }
