@@ -3249,30 +3249,19 @@ public:
     }
 };
 template <typename CompoundType>
-static inline
-bytes to_legacy(CompoundType& type, bytes_view packed) {
-    legacy_compound_view<CompoundType> lv(type, packed);
-    bytes legacy_form(bytes::initialized_later(), lv.size());
-    std::copy(lv.begin(), lv.end(), legacy_form.begin());
-    return legacy_form;
-}
+static
+bytes to_legacy(CompoundType& type, bytes_view packed) ;
 class composite_view;
 class composite final {
     bytes _bytes;
     bool _is_compound;
 public:
-    composite(bytes&& b, bool is_compound)
-            : _bytes(std::move(b))
-            , _is_compound(is_compound)
-    { }
-    explicit composite(bytes&& b)
-            : _bytes(std::move(b))
-            , _is_compound(true)
-    { }
-    composite()
-            : _bytes()
-            , _is_compound(true)
-    { }
+    composite(bytes&& b, bool is_compound) 
+    ;
+    explicit composite(bytes&& b) 
+    ;
+    composite() 
+    ;
     using size_type = uint16_t;
     using eoc_type = int8_t;
     /*
@@ -3424,51 +3413,19 @@ public:
         bool operator!=(const iterator& i) const { return _v.begin() != i._v.begin(); }
         bool operator==(const iterator& i) const { return _v.begin() == i._v.begin(); }
     };
-    iterator begin() const {
-        return iterator(_bytes, _is_compound, is_static());
-    }
-    iterator end() const {
-        return iterator(iterator::end_iterator_tag());
-    }
-    boost::iterator_range<iterator> components() const & {
-        return { begin(), end() };
-    }
-    auto values() const & {
-        return components() | boost::adaptors::transformed([](auto&& c) { return c.first; });
-    }
-    std::vector<component> components() const && {
-        std::vector<component> result;
-        std::transform(begin(), end(), std::back_inserter(result), [](auto&& p) {
-            return component(bytes(p.first.begin(), p.first.end()), p.second);
-        });
-        return result;
-    }
-    std::vector<bytes> values() const && {
-        std::vector<bytes> result;
-        boost::copy(components() | boost::adaptors::transformed([](auto&& c) { return to_bytes(c.first); }), std::back_inserter(result));
-        return result;
-    }
-    const bytes& get_bytes() const {
-        return _bytes;
-    }
-    bytes release_bytes() && {
-        return std::move(_bytes);
-    }
-    size_t size() const {
-        return _bytes.size();
-    }
-    bool empty() const {
-        return _bytes.empty();
-    }
-    static bool is_static(bytes_view bytes, bool is_compound) {
-        return is_compound && bytes.size() > 2 && (bytes[0] & bytes[1] & 0xff) == 0xff;
-    }
-    bool is_static() const {
-        return is_static(_bytes, _is_compound);
-    }
-    bool is_compound() const {
-        return _is_compound;
-    }
+    iterator begin() const ;
+    iterator end() const ;
+    boost::iterator_range<iterator> components() const & ;
+    auto values() const & ;
+    std::vector<component> components() const && ;
+    std::vector<bytes> values() const && ;
+    const bytes& get_bytes() const ;
+    bytes release_bytes() && ;
+    size_t size() const ;
+    bool empty() const ;
+    static bool is_static(bytes_view bytes, bool is_compound) ;
+    bool is_static() const ;
+    bool is_compound() const ;
     template <typename ClusteringElement>
     static composite from_clustering_element(const schema& s, const ClusteringElement& ce) {
         return serialize_value(ce.components(s), s.is_compound());
