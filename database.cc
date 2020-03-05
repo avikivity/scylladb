@@ -6145,25 +6145,11 @@ public:
         }
         return true;
     }
-    void set_start(const schema& s, position_in_partition_view pos) {
-        bound_view new_start = pos.as_start_bound_view();
-        start = new_start.prefix();
-        start_kind = new_start.kind();
-    }
-    size_t external_memory_usage(const schema&) const {
-        return start.external_memory_usage() + end.external_memory_usage();
-    }
-    size_t memory_usage(const schema& s) const {
-        return sizeof(range_tombstone) + external_memory_usage(s);
-    }
+    void set_start(const schema& s, position_in_partition_view pos) ;
+    size_t external_memory_usage(const schema&) const ;
+    size_t memory_usage(const schema& s) const ;
 private:
-    void move_assign(range_tombstone&& rt) {
-        start = std::move(rt.start);
-        start_kind = rt.start_kind;
-        end = std::move(rt.end);
-        end_kind = rt.end_kind;
-        tomb = std::move(rt.tomb);
-    }
+    void move_assign(range_tombstone&& rt) ;
     void update_node(bi::set_member_hook<bi::link_mode<bi::auto_unlink>>& other_link) {
         if (other_link.is_linked()) {
             container_type::node_algorithms::replace_node(other_link.this_ptr(), _link.this_ptr());
@@ -6194,22 +6180,11 @@ private:
     void update_current_tombstone();
     void drop_unneeded_tombstones(const clustering_key_prefix& ck, int w = 0);
 public:
-    range_tombstone_accumulator(const schema& s, bool reversed)
-        : _cmp(s), _reversed(reversed) { }
-    void set_partition_tombstone(tombstone t) {
-        _partition_tombstone = t;
-        update_current_tombstone();
-    }
-    tombstone get_partition_tombstone() const {
-        return _partition_tombstone;
-    }
-    tombstone current_tombstone() const {
-        return _current_tombstone;
-    }
-    tombstone tombstone_for_row(const clustering_key_prefix& ck) {
-        drop_unneeded_tombstones(ck);
-        return _current_tombstone;
-    }
+    range_tombstone_accumulator(const schema& s, bool reversed)  ;
+    void set_partition_tombstone(tombstone t) ;
+    tombstone get_partition_tombstone() const ;
+    tombstone current_tombstone() const ;
+    tombstone tombstone_for_row(const clustering_key_prefix& ck) ;
     const std::deque<range_tombstone>& range_tombstones_for_row(const clustering_key_prefix& ck) {
         drop_unneeded_tombstones(ck);
         return _range_tombstones;
@@ -6320,7 +6295,7 @@ private:
     };
     union maybe_constructed {
         maybe_constructed() { }
-        ~maybe_constructed() { }
+        ~maybe_constructed() ;
         T object;
     };
 private:
@@ -6330,68 +6305,16 @@ private:
     T* _data = reinterpret_cast<T*>(_internal.data());
     friend class external;
 private:
-    bool is_external() const {
-        return _data != reinterpret_cast<const T*>(_internal.data());
-    }
-    external* get_external() {
-        auto ptr = reinterpret_cast<char*>(_data) - offsetof(external, _data);
-        return reinterpret_cast<external*>(ptr);
-    }
-    void maybe_grow(size_type new_size) {
-        if (new_size <= _capacity) {
-            return;
-        }
-        auto new_capacity = std::max({ _capacity + std::min(_capacity, size_type(1024)), new_size, size_type(InternalSize + 8) });
-        reserve(new_capacity);
-    }
-    void clear_and_release() noexcept {
-        clear();
-        if (is_external()) {
-            current_allocator().free(get_external(), get_external()->storage_size());
-        }
-    }
+    bool is_external() const ;
+    external* get_external() ;
+    void maybe_grow(size_type new_size) ;
+    void clear_and_release() noexcept ;
 public:
     managed_vector() = default;
-    managed_vector(const managed_vector& other) {
-        reserve(other._size);
-        try {
-            for (const auto& v : other) {
-                push_back(v);
-            }
-        } catch (...) {
-            clear_and_release();
-            throw;
-        }
-    }
-    managed_vector(managed_vector&& other) noexcept : _size(other._size), _capacity(other._capacity) {
-        if (other.is_external()) {
-            _data = other._data;
-            other._data = reinterpret_cast<T*>(other._internal.data());
-            get_external()->_backref = this;
-        } else {
-            for (unsigned i = 0; i < _size; i++) {
-                new (_data + i) T(std::move(other._data[i]));
-                other._data[i].~T();
-            }
-        }
-        other._size = 0;
-        other._capacity = InternalSize;
-    }
-    managed_vector& operator=(const managed_vector& other) {
-        if (this != &other) {
-            managed_vector tmp(other);
-            this->~managed_vector();
-            new (this) managed_vector(std::move(tmp));
-        }
-        return *this;
-    }
-    managed_vector& operator=(managed_vector&& other) noexcept {
-        if (this != &other) {
-            this->~managed_vector();
-            new (this) managed_vector(std::move(other));
-        }
-        return *this;
-    }
+    managed_vector(const managed_vector& other) ;
+    managed_vector(managed_vector&& other)  ;
+    managed_vector& operator=(const managed_vector& other) ;
+    managed_vector& operator=(managed_vector&& other) noexcept ;
     ~managed_vector() ;
     T& at(size_type pos) ;
     const T& at(size_type pos) const ;
@@ -6409,52 +6332,16 @@ public:
     iterator end() noexcept ;
     const_iterator end() const noexcept ;
     const_iterator cend() const noexcept ;
-    bool empty() const noexcept { return !_size; }
-    size_type size() const noexcept { return _size; }
-    size_type capacity() const noexcept { return _capacity; }
-    void clear() {
-        while (_size) {
-            pop_back();
-        }
-    }
-    void reserve(size_type new_capacity) {
-        if (new_capacity <= _capacity) {
-            return;
-        }
-        auto ptr = current_allocator().alloc(&get_standard_migrator<external>(),
-            sizeof(external) + sizeof(T) * new_capacity, alignof(external));
-        auto ext = static_cast<external*>(ptr);
-        ext->_backref = this;
-        T* data_ptr = ext->_data;
-        for (unsigned i = 0; i < _size; i++) {
-            new (data_ptr + i) T(std::move(_data[i]));
-            _data[i].~T();
-        }
-        if (is_external()) {
-            current_allocator().free(get_external(), get_external()->storage_size());
-        }
-        _data = data_ptr;
-        _capacity = new_capacity;
-    }
-    iterator erase(iterator it) {
-        std::move(it + 1, end(), it);
-        _data[_size - 1].~T();
-        _size--;
-        return it;
-    }
-    void push_back(const T& value) {
-        emplace_back(value);
-    }
-    void push_back(T&& value) {
-        emplace_back(std::move(value));
-    }
+    bool empty() const noexcept ;
+    size_type size() const noexcept ;
+    size_type capacity() const noexcept ;
+    void clear() ;
+    void reserve(size_type new_capacity) ;
+    iterator erase(iterator it) ;
+    void push_back(const T& value) ;
+    void push_back(T&& value) ;
     template<typename... Args>
-    T& emplace_back(Args&&... args) {
-        maybe_grow(_size + 1);
-        T* elem = new (_data + _size) T(std::forward<Args>(args)...);
-        _size++;
-        return *elem;
-    }
+    T& emplace_back(Args&&... args) ;
     void pop_back() {
         _data[_size - 1].~T();
         _size--;
@@ -6570,32 +6457,15 @@ public:
     range_tombstones_type& tombstones() {
         return _tombstones;
     }
-    auto begin() {
-        return _tombstones.begin();
-    }
-    auto begin() const {
-        return _tombstones.begin();
-    }
-    auto end() {
-        return _tombstones.end();
-    }
-    auto end() const {
-        return _tombstones.end();
-    }
-    void apply(const schema& s, const bound_view& start_bound, const bound_view& end_bound, tombstone tomb) {
-        apply(s, start_bound.prefix(), start_bound.kind(), end_bound.prefix(), end_bound.kind(), std::move(tomb));
-    }
-    void apply(const schema& s, const range_tombstone& rt) {
-        apply(s, rt.start, rt.start_kind, rt.end, rt.end_kind, rt.tomb);
-    }
-    void apply(const schema& s, range_tombstone&& rt) {
-        apply(s, std::move(rt.start), rt.start_kind, std::move(rt.end), rt.end_kind, std::move(rt.tomb));
-    }
+    auto begin() ;
+    auto begin() const ;
+    auto end() ;
+    auto end() const ;
+    void apply(const schema& s, const bound_view& start_bound, const bound_view& end_bound, tombstone tomb) ;
+    void apply(const schema& s, const range_tombstone& rt) ;
+    void apply(const schema& s, range_tombstone&& rt) ;
     void apply(const schema& s, clustering_key_prefix start, bound_kind start_kind,
-               clustering_key_prefix end, bound_kind end_kind, tombstone tomb) {
-        nop_reverter rev(s, *this);
-        apply_reversibly(s, std::move(start), start_kind, std::move(end), end_kind, std::move(tomb), rev);
-    }
+               clustering_key_prefix end, bound_kind end_kind, tombstone tomb) ;
     void apply_monotonically(const schema& s, const range_tombstone& rt);
     void apply_monotonically(const schema& s, const range_tombstone_list& list);
     stop_iteration apply_monotonically(const schema& s, range_tombstone_list&& list, is_preemptible = is_preemptible::no);
@@ -6607,33 +6477,14 @@ public:
     void trim(const schema& s, const query::clustering_row_ranges&);
     range_tombstone_list difference(const schema& s, const range_tombstone_list& rt_list) const;
     template <typename Pred>
-    void erase_where(Pred filter) {
-        static_assert(std::is_same<bool, std::result_of_t<Pred(const range_tombstone&)>>::value,
-                      "bad Pred signature");
-        auto it = begin();
-        while (it != end()) {
-            if (filter(*it)) {
-                it = _tombstones.erase_and_dispose(it, current_deleter<range_tombstone>());
-            } else {
-                ++it;
-            }
-        }
-    }
-    void clear() {
-        _tombstones.clear_and_dispose(current_deleter<range_tombstone>());
-    }
+    void erase_where(Pred filter) ;
+    void clear() ;
     stop_iteration clear_gently() noexcept;
     void apply(const schema& s, const range_tombstone_list& rt_list);
     reverter apply_reversibly(const schema& s, range_tombstone_list& rt_list);
     friend std::ostream& operator<<(std::ostream& out, const range_tombstone_list&);
     bool equal(const schema&, const range_tombstone_list&) const;
-    size_t external_memory_usage(const schema& s) const {
-        size_t result = 0;
-        for (auto& rtb : _tombstones) {
-            result += rtb.memory_usage(s);
-        }
-        return result;
-    }
+    size_t external_memory_usage(const schema& s) const ;
 private:
     void apply_reversibly(const schema& s, clustering_key_prefix start, bound_kind start_kind,
                           clustering_key_prefix end, bound_kind end_kind, tombstone tomb, reverter& rev);
@@ -6657,35 +6508,15 @@ class managed;
 template<typename T>
 struct managed_ref {
     managed<T>* _ptr;
-    managed_ref() : _ptr(nullptr) {}
+    managed_ref()  ;
     managed_ref(const managed_ref&) = delete;
-    managed_ref(managed_ref&& other) noexcept
-        : _ptr(other._ptr)
-    {
-        other._ptr = nullptr;
-        if (_ptr) {
-            _ptr->_backref = &_ptr;
-        }
-    }
-    ~managed_ref() {
-        if (_ptr) {
-            current_allocator().destroy(_ptr);
-        }
-    }
-    managed_ref& operator=(managed_ref&& o) {
-        this->~managed_ref();
-        new (this) managed_ref(std::move(o));
-        return *this;
-    }
-    T* get() {
-        return _ptr ? &_ptr->_value : nullptr;
-    }
-    const T* get() const {
-        return _ptr ? &_ptr->_value : nullptr;
-    }
-    T& operator*() {
-        return _ptr->_value;
-    }
+    managed_ref(managed_ref&& other) 
+    ;
+    ~managed_ref() ;
+    managed_ref& operator=(managed_ref&& o) ;
+    T* get() ;
+    const T* get() const ;
+    T& operator*() ;
     const T& operator*() const {
         return _ptr->_value;
     }
@@ -7078,20 +6909,20 @@ public:
     void apply_monotonically(const schema& s, deletable_row&& src);
 public:
     row_tombstone deleted_at() const { return _deleted_at; }
-    api::timestamp_type created_at() const { return _marker.timestamp(); }
-    row_marker& marker() { return _marker; }
-    const row_marker& marker() const { return _marker; }
-    const row& cells() const { return _cells; }
-    row& cells() { return _cells; }
+    api::timestamp_type created_at() const ;
+    row_marker& marker() ;
+    const row_marker& marker() const ;
+    const row& cells() const ;
+    row& cells() ;
     bool equal(column_kind, const schema& s, const deletable_row& other, const schema& other_schema) const;
     bool is_live(const schema& s, tombstone base_tombstone = tombstone(), gc_clock::time_point query_time = gc_clock::time_point::min()) const;
-    bool empty() const { return !_deleted_at && _marker.is_missing() && !_cells.size(); }
+    bool empty() const ;
     deletable_row difference(const schema&, column_kind, const deletable_row& other) const;
     class printer {
         const schema& _schema;
         const deletable_row& _deletable_row;
     public:
-        printer(const schema& s, const deletable_row& r) : _schema(s), _deletable_row(r) { }
+        printer(const schema& s, const deletable_row& r)  ;
         printer(const printer&) = delete;
         printer(printer&&) = delete;
         friend std::ostream& operator<<(std::ostream& os, const printer& p);
@@ -7334,8 +7165,8 @@ class static_row {
     row _cells;
 public:
     static_row() = default;
-    static_row(const schema& s, const static_row& other) : static_row(s, other._cells) { }
-    explicit static_row(const schema& s, const row& r) : _cells(s, column_kind::static_column, r) { }
+    static_row(const schema& s, const static_row& other)  ;
+    explicit static_row(const schema& s, const row& r)  ;
     explicit static_row(row&& r) : _cells(std::move(r)) { }
     row& cells() { return _cells; }
     const row& cells() const { return _cells; }
