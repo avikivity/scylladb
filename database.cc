@@ -6990,39 +6990,23 @@ public:
         }
         return *this;
     }
-    ~managed_vector() {
-        clear_and_release();
-    }
-    T& at(size_type pos) {
-        if (pos >= _size) {
-            throw std::out_of_range("out of range");
-        }
-        return operator[](pos);
-    }
-    const T& at(size_type pos) const {
-        if (pos >= _size) {
-            throw std::out_of_range("out of range");
-        }
-        return operator[](pos);
-    }
-    T& operator[](size_type pos) noexcept {
-        return _data[pos];
-    }
-    const T& operator[](size_type pos) const noexcept {
-        return _data[pos];
-    }
-    T& front() noexcept { return *_data; }
-    const T& front() const noexcept { return *_data;  }
-    T& back() noexcept { return _data[_size - 1]; }
-    const T& back() const noexcept { return _data[_size - 1]; }
-    T* data() noexcept { return _data; }
-    const T* data() const noexcept { return _data; }
-    iterator begin() noexcept { return _data; }
-    const_iterator begin() const noexcept { return _data; }
-    const_iterator cbegin() const noexcept { return _data; }
-    iterator end() noexcept { return _data + _size; }
-    const_iterator end() const noexcept { return _data + _size; }
-    const_iterator cend() const noexcept { return _data + _size; }
+    ~managed_vector() ;
+    T& at(size_type pos) ;
+    const T& at(size_type pos) const ;
+    T& operator[](size_type pos) noexcept ;
+    const T& operator[](size_type pos) const noexcept ;
+    T& front() noexcept ;
+    const T& front() const noexcept ;
+    T& back() noexcept ;
+    const T& back() const noexcept ;
+    T* data() noexcept ;
+    const T* data() const noexcept ;
+    iterator begin() noexcept ;
+    const_iterator begin() const noexcept ;
+    const_iterator cbegin() const noexcept ;
+    iterator end() noexcept ;
+    const_iterator end() const noexcept ;
+    const_iterator cend() const noexcept ;
     bool empty() const noexcept { return !_size; }
     size_type size() const noexcept { return _size; }
     size_type capacity() const noexcept { return _capacity; }
