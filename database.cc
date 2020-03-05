@@ -1780,9 +1780,7 @@ public:
     const data_type& type() const {
         return _type;
     }
-    bool is_null() const {   
-        return !_value;
-    }
+    bool is_null() const ;
     size_t serialized_size() const;
     void serialize(bytes::iterator& out) const;
     bytes_opt serialize() const;
@@ -1790,13 +1788,9 @@ public:
     friend bool operator==(const data_value& x, const data_value& y);
     friend inline bool operator!=(const data_value& x, const data_value& y);
     friend class abstract_type;
-    static data_value make_null(data_type type) {
-        return data_value(nullptr, std::move(type));
-    }
+    static data_value make_null(data_type type) ;
     template <typename T>
-    static data_value make(data_type type, std::unique_ptr<T> value) {
-        return data_value(value.release(), std::move(type));
-    }
+    static data_value make(data_type type, std::unique_ptr<T> value) ;
     friend class empty_type_impl;
     template <typename T> friend const T& value_cast(const data_value&);
     template <typename T> friend T&& value_cast(data_value&&);
@@ -1810,9 +1804,7 @@ public:
     friend inline auto visit(const data_value& v, Func&& f);
 };
 template<typename T>
-inline bytes serialized(T v) {
-    return data_value(v).serialize_nonnull();
-}
+ bytes serialized(T v) ;
 class serialized_compare;
 class serialized_tri_compare;
 class user_type_impl;
@@ -1853,7 +1845,7 @@ public:
 private:
     kind _kind;
 public:
-    kind get_kind() const { return _kind; }
+    kind get_kind() const ;
     virtual ~abstract_type();
     bool less(bytes_view v1, bytes_view v2) const;
     serialized_compare as_less_comparator() const ;
@@ -1919,9 +1911,7 @@ private:
 protected:
     void* native_value_clone(const void* from) const;
     const std::type_info& native_typeid() const;
-    static const void* get_value_ptr(const data_value& v) {
-        return v._value;
-    }
+    static const void* get_value_ptr(const data_value& v) ;
     friend void write_collection_value(bytes::iterator& out, cql_serialization_format sf, data_type type, const data_value& value);
     friend class tuple_type_impl;
     friend class data_value;
@@ -1941,15 +1931,9 @@ public:
     using native_type = maybe_empty<NativeType>;
     using AbstractType::AbstractType;
 public:
-    data_value make_value(std::unique_ptr<native_type> value) const {
-        return data_value::make(this->shared_from_this(), std::move(value));
-    }
-    data_value make_value(native_type value) const {
-        return make_value(std::make_unique<native_type>(std::move(value)));
-    }
-    data_value make_null() const {
-        return data_value::make_null(this->shared_from_this());
-    }
+    data_value make_value(std::unique_ptr<native_type> value) const ;
+    data_value make_value(native_type value) const ;
+    data_value make_null() const ;
     data_value make_empty() const {
         return make_value(native_type(empty_t()));
     }
