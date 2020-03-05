@@ -43,10 +43,6 @@
 // partition appears in the sstables.
 
 class clustering_row {
-    clustering_key_prefix _ck;
-    row_tombstone _t;
-    row_marker _marker;
-    row _cells;
 public:
     explicit clustering_row(clustering_key_prefix ck);
     clustering_row(clustering_key_prefix ck, row_tombstone t, row_marker marker, row cells);
@@ -60,72 +56,33 @@ public:
     void remove_tombstone();
     row_tombstone tomb() const;
 
-    const row_marker& marker() const { return _marker; }
-    row_marker& marker() { return _marker; }
+    const row_marker& marker() const;
+    row_marker& marker();
 
-    const row& cells() const { return _cells; }
-    row& cells() { return _cells; }
+    const row& cells() const;
+    row& cells();
 
-    bool empty() const {
-        return !_t && _marker.is_missing() && _cells.empty();
-    }
+    bool empty() const;
 
-    bool is_live(const schema& s, tombstone base_tombstone = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const {
-        base_tombstone.apply(_t.tomb());
-        return _marker.is_live(base_tombstone, now) || _cells.is_live(s, column_kind::regular_column, base_tombstone, now);
-    }
-
-    void apply(const schema& s, clustering_row&& cr) {
-        _marker.apply(std::move(cr._marker));
-        _t.apply(cr._t, _marker);
-        _cells.apply(s, column_kind::regular_column, std::move(cr._cells));
-    }
-    void apply(const schema& s, const clustering_row& cr) {
-        _marker.apply(cr._marker);
-        _t.apply(cr._t, _marker);
-        _cells.apply(s, column_kind::regular_column, cr._cells);
-    }
-    void set_cell(const column_definition& def, atomic_cell_or_collection&& value) {
-        _cells.apply(def, std::move(value));
-    }
-    void apply(row_marker rm) {
-        _marker.apply(std::move(rm));
-        _t.maybe_shadow(_marker);
-    }
-    void apply(tombstone t) {
-        _t.apply(t);
-    }
-    void apply(shadowable_tombstone t) {
-        _t.apply(t, _marker);
-    }
-    void apply(const schema& s, const rows_entry& r) {
-        _marker.apply(r.row().marker());
-        _t.apply(r.row().deleted_at(), _marker);
-        _cells.apply(s, column_kind::regular_column, r.row().cells());
-    }
-
+    bool is_live(const schema& s, tombstone base_tombstone = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const;
+    void apply(const schema& s, clustering_row&& cr);
+    void apply(const schema& s, const clustering_row& cr);
+    void set_cell(const column_definition& def, atomic_cell_or_collection&& value);
+    void apply(row_marker rm);
+    void apply(tombstone t);
+    void apply(shadowable_tombstone t);
+    void apply(const schema& s, const rows_entry& r);
     position_in_partition_view position() const;
 
-    size_t external_memory_usage(const schema& s) const {
-        return _ck.external_memory_usage() + _cells.external_memory_usage(s, column_kind::regular_column);
-    }
+    size_t external_memory_usage(const schema& s) const;
 
-    size_t memory_usage(const schema& s) const {
-        return sizeof(clustering_row) + external_memory_usage(s);
-    }
+    size_t memory_usage(const schema& s) const;
 
-    bool equal(const schema& s, const clustering_row& other) const {
-        return _ck.equal(s, other._ck)
-               && _t == other._t
-               && _marker == other._marker
-               && _cells.equal(column_kind::regular_column, s, other._cells, s);
-    }
+    bool equal(const schema& s, const clustering_row& other) const;
 
     class printer {
-        const schema& _schema;
-        const clustering_row& _clustering_row;
     public:
-        printer(const schema& s, const clustering_row& r) : _schema(s), _clustering_row(r) { }
+        printer(const schema& s, const clustering_row& r);
         printer(const printer&) = delete;
         printer(printer&&) = delete;
 

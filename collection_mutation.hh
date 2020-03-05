@@ -24,7 +24,6 @@
 #include "utils/chunked_vector.hh"
 #include "schema_fwd.hh"
 #include "gc_clock.hh"
-#include "atomic_cell.hh"
 #include "cql_serialization_format.hh"
 #include "marshal_exception.hh"
 #include "utils/linearizing_input_stream.hh"
@@ -70,7 +69,7 @@ struct collection_mutation_view_description {
     collection_mutation serialize(const abstract_type&) const;
 };
 
-using collection_mutation_input_stream = utils::linearizing_input_stream<atomic_cell_value_view, marshal_exception>;
+using collection_mutation_input_stream = struct {};
 
 // Given a linearized collection_mutation_view, returns an auxiliary struct allowing the inspection of each cell.
 // The struct is an observer of the data given by the collection_mutation_view and is only valid while the
@@ -80,7 +79,6 @@ collection_mutation_view_description deserialize_collection_mutation(const abstr
 
 class collection_mutation_view {
 public:
-    atomic_cell_value_view data;
 
     // Is this a noop mutation?
     bool is_empty() const;
@@ -93,13 +91,6 @@ public:
     // The maximum of timestamps of the mutation's cells and tombstone.
     api::timestamp_type last_update(const abstract_type&) const;
 
-    // Given a function that operates on a collection_mutation_view_description,
-    // calls it on the corresponding description of `this`.
-    template <typename F>
-    inline decltype(auto) with_deserialized(const abstract_type& type, F f) const {
-        auto stream = collection_mutation_input_stream(data);
-        return f(deserialize_collection_mutation(type, stream));
-    }
 
     class printer {
         const abstract_type& _type;
@@ -122,8 +113,6 @@ public:
 //  The mutation may also contain a collection-wide tombstone.
 class collection_mutation {
 public:
-    using imr_object_type =  imr::utils::object<data::cell::structure>;
-    imr_object_type _data;
 
     collection_mutation() {}
     collection_mutation(const abstract_type&, collection_mutation_view);

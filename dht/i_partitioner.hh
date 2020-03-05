@@ -42,14 +42,11 @@
 
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/sstring.hh>
-#include "types.hh"
-#include "keys.hh"
-#include "utils/managed_bytes.hh"
 #include <memory>
 #include <random>
 #include <utility>
 #include <vector>
-#include <range.hh>
+#include "range.hh"
 #include <byteswap.h>
 #include "dht/token.hh"
 

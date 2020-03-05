@@ -277,8 +277,6 @@ static can_gc_fn always_gc = [] (tombstone) { return true; };
 
 #include <iosfwd>
 
-#include <iosfwd>
-
 #include <seastar/core/bitset-iter.hh>
 #include <seastar/util/optimized_optional.hh>
 
@@ -373,59 +371,722 @@ std::ostream& operator<<(std::ostream& os, const bytes_view& b);
 template<>
 struct appending_hash<bytes> {
     template<typename Hasher>
-    void operator()(Hasher& h, const bytes& v) const {
-        feed_hash(h, v.size());
-        h.update(reinterpret_cast<const char*>(v.cbegin()), v.size() * sizeof(bytes::value_type));
-    }
+    void operator()(Hasher& h, const bytes& v) const;
 };
 
 template<>
 struct appending_hash<bytes_view> {
     template<typename Hasher>
-    void operator()(Hasher& h, bytes_view v) const {
-        feed_hash(h, v.size());
-        h.update(reinterpret_cast<const char*>(v.begin()), v.size() * sizeof(bytes_view::value_type));
-    }
+    void operator()(Hasher& h, bytes_view v) const;
 };
 
-inline int32_t compare_unsigned(bytes_view v1, bytes_view v2) {
-    auto n = memcmp(v1.begin(), v2.begin(), std::min(v1.size(), v2.size()));
-    if (n) {
-        return n;
-    }
-    return (int32_t) (v1.size() - v2.size());
-}
-
-#include <boost/range/algorithm/copy.hpp>
-#include <boost/range/adaptor/transformed.hpp>
+int32_t compare_unsigned(bytes_view v1, bytes_view v2);
 
 #include <optional>
-#include <boost/functional/hash.hpp>
 #include <iosfwd>
-#include <sstream>
 
 #include <seastar/core/sstring.hh>
 #include <seastar/core/shared_ptr.hh>
-#include "utils/UUID.hh"
+#include <stdint.h>
+#include <cassert>
+#include <array>
+#include <iosfwd>
+
+#include <seastar/core/sstring.hh>
+#include <seastar/core/print.hh>
 #include <seastar/net/byteorder.hh>
-#include "db_clock.hh"
-#include "bytes.hh"
-#include "log.hh"
-#include "atomic_cell.hh"
+
+#include <stdint.h>
+
+#include <seastar/util/gcc6-concepts.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/net/byteorder.hh>
+#include <iosfwd>
+#include <iterator>
+
+
+class UTFDataFormatException { };
+class EOFException { };
+
+static constexpr size_t serialize_int8_size = 1;
+static constexpr size_t serialize_bool_size = 1;
+static constexpr size_t serialize_int16_size = 2;
+static constexpr size_t serialize_int32_size = 4;
+static constexpr size_t serialize_int64_size = 8;
+
+namespace internal_impl {
+
+template <typename ExplicitIntegerType, typename CharOutputIterator, typename IntegerType>
+GCC6_CONCEPT(requires std::is_integral<ExplicitIntegerType>::value && std::is_integral<IntegerType>::value && requires (CharOutputIterator it) {
+    *it++ = 'a';
+})
+inline
+void serialize_int(CharOutputIterator& out, IntegerType val) {
+    ExplicitIntegerType nval = net::hton(ExplicitIntegerType(val));
+    out = std::copy_n(reinterpret_cast<const char*>(&nval), sizeof(nval), out);
+}
+
+}
+
+template <typename CharOutputIterator>
+inline
+void serialize_int8(CharOutputIterator& out, uint8_t val) {
+    internal_impl::serialize_int<uint8_t>(out, val);
+}
+
+template <typename CharOutputIterator>
+inline
+void serialize_int16(CharOutputIterator& out, uint16_t val) {
+    internal_impl::serialize_int<uint16_t>(out, val);
+}
+
+template <typename CharOutputIterator>
+inline
+void serialize_int32(CharOutputIterator& out, uint32_t val) {
+    internal_impl::serialize_int<uint32_t>(out, val);
+}
+
+template <typename CharOutputIterator>
+inline
+void serialize_int64(CharOutputIterator& out, uint64_t val) {
+    internal_impl::serialize_int<uint64_t>(out, val);
+}
+
+template <typename CharOutputIterator>
+inline
+void serialize_bool(CharOutputIterator& out, bool val) {
+    serialize_int8(out, val ? 1 : 0);
+}
+
+// The following serializer is compatible with Java's writeUTF().
+// In our C++ implementation, we assume the string is already UTF-8
+// encoded. Unfortunately, Java's implementation is a bit different from
+// UTF-8 for encoding characters above 16 bits in unicode (see
+// http://docs.oracle.com/javase/7/docs/api/java/io/DataInput.html#modified-utf-8)
+// For now we'll just assume those aren't in the string...
+// TODO: fix the compatibility with Java even in this case.
+template <typename CharOutputIterator>
+GCC6_CONCEPT(requires requires (CharOutputIterator it) {
+    *it++ = 'a';
+})
+inline
+void serialize_string(CharOutputIterator& out, const sstring& s) {
+    // Java specifies that nulls in the string need to be replaced by the
+    // two bytes 0xC0, 0x80. Let's not bother with such transformation
+    // now, but just verify wasn't needed.
+    for (char c : s) {
+        if (c == '\0') {
+            throw UTFDataFormatException();
+        }
+    }
+    if (s.size() > std::numeric_limits<uint16_t>::max()) {
+        // Java specifies the string length is written as uint16_t, so we
+        // can't serialize longer strings.
+        throw UTFDataFormatException();
+    }
+    serialize_int16(out, s.size());
+    out = std::copy(s.begin(), s.end(), out);
+}
+
+template <typename CharOutputIterator>
+GCC6_CONCEPT(requires requires (CharOutputIterator it) {
+    *it++ = 'a';
+})
+inline
+void serialize_string(CharOutputIterator& out, const char* s) {
+    // TODO: like above, need to change UTF-8 when above 16-bit.
+    auto len = strlen(s);
+    if (len > std::numeric_limits<uint16_t>::max()) {
+        // Java specifies the string length is written as uint16_t, so we
+        // can't serialize longer strings.
+        throw UTFDataFormatException();
+    }
+    serialize_int16(out, len);
+    out = std::copy_n(s, len, out);
+}
+
+inline
+size_t serialize_string_size(const sstring& s) {;
+    // As above, this code is missing the case of modified utf-8
+    return serialize_int16_size + s.size();
+}
+
+template<typename T, typename CharOutputIterator>
+static inline
+void write(CharOutputIterator& out, const T& val) {
+    auto v = net::ntoh(val);
+    out = std::copy_n(reinterpret_cast<char*>(&v), sizeof(v), out);
+}
+
+namespace utils {
+
+class UUID {
+private:
+    int64_t most_sig_bits;
+    int64_t least_sig_bits;
+public:
+    UUID() : most_sig_bits(0), least_sig_bits(0) {}
+    UUID(int64_t most_sig_bits, int64_t least_sig_bits)
+        : most_sig_bits(most_sig_bits), least_sig_bits(least_sig_bits) {}
+    explicit UUID(const sstring& uuid_string) : UUID(sstring_view(uuid_string)) { }
+    explicit UUID(const char * s) : UUID(sstring_view(s)) {}
+    explicit UUID(sstring_view uuid_string);
+
+    int64_t get_most_significant_bits() const {
+        return most_sig_bits;
+    }
+    int64_t get_least_significant_bits() const {
+        return least_sig_bits;
+    }
+    int version() const {
+        return (most_sig_bits >> 12) & 0xf;
+    }
+
+    bool is_timestamp() const {
+        return version() == 1;
+    }
+
+    int64_t timestamp() const {
+        //if (version() != 1) {
+        //     throw new UnsupportedOperationException("Not a time-based UUID");
+        //}
+        assert(is_timestamp());
+
+        return ((most_sig_bits & 0xFFF) << 48) |
+               (((most_sig_bits >> 16) & 0xFFFF) << 32) |
+               (((uint64_t)most_sig_bits) >> 32);
+
+    }
+
+    // This matches Java's UUID.toString() actual implementation. Note that
+    // that method's documentation suggest something completely different!
+    sstring to_sstring() const {
+        return format("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+                ((uint64_t)most_sig_bits >> 32),
+                ((uint64_t)most_sig_bits >> 16 & 0xffff),
+                ((uint64_t)most_sig_bits & 0xffff),
+                ((uint64_t)least_sig_bits >> 48 & 0xffff),
+                ((uint64_t)least_sig_bits & 0xffffffffffffLL));
+    }
+
+    friend std::ostream& operator<<(std::ostream& out, const UUID& uuid);
+
+    bool operator==(const UUID& v) const {
+        return most_sig_bits == v.most_sig_bits
+                && least_sig_bits == v.least_sig_bits
+                ;
+    }
+    bool operator!=(const UUID& v) const {
+        return !(*this == v);
+    }
+
+    bool operator<(const UUID& v) const {
+         if (most_sig_bits != v.most_sig_bits) {
+             return uint64_t(most_sig_bits) < uint64_t(v.most_sig_bits);
+         } else {
+             return uint64_t(least_sig_bits) < uint64_t(v.least_sig_bits);
+         }
+    }
+
+    bool operator>(const UUID& v) const {
+        return v < *this;
+    }
+
+    bool operator<=(const UUID& v) const {
+        return !(*this > v);
+    }
+
+    bool operator>=(const UUID& v) const {
+        return !(*this < v);
+    }
+
+    bytes serialize() const {
+        bytes b(bytes::initialized_later(), serialized_size());
+        auto i = b.begin();
+        serialize(i);
+        return b;
+    }
+
+    static size_t serialized_size() noexcept {
+        return 16;
+    }
+
+    template <typename CharOutputIterator>
+    void serialize(CharOutputIterator& out) const {
+        serialize_int64(out, most_sig_bits);
+        serialize_int64(out, least_sig_bits);
+    }
+};
+
+UUID make_random_uuid();
+
+}
+
+template<>
+struct appending_hash<utils::UUID> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const utils::UUID& id) const {
+        feed_hash(h, id.get_most_significant_bits());
+        feed_hash(h, id.get_least_significant_bits());
+    }
+};
+
+namespace std {
+template<>
+struct hash<utils::UUID> {
+    size_t operator()(const utils::UUID& id) const {
+        auto hilo = id.get_most_significant_bits()
+                ^ id.get_least_significant_bits();
+        return size_t((hilo >> 32) ^ hilo);
+    }
+};
+}
+
+#include <seastar/net/byteorder.hh>
+#include <seastar/util/log.hh>
+
+namespace logging {
+
+//
+// Seastar changed the names of some of these types. Maintain the old names here to avoid too much churn.
+//
+
+using log_level = seastar::log_level;
+using logger = seastar::logger;
+using registry = seastar::logger_registry;
+
+inline registry& logger_registry() noexcept {
+    return seastar::global_logger_registry();
+}
+
+using settings = seastar::logging_settings;
+
+inline void apply_settings(const settings& s) {
+    seastar::apply_logging_settings(s);
+}
+
+using seastar::pretty_type_name;
+using seastar::level_name;
+
+}
+
+#include <seastar/net/byteorder.hh>
+#include <cstdint>
+#include <iosfwd>
+#include <seastar/util/gcc6-concepts.hh>
+#include <seastar/util/variant_utils.hh>
+
+#include <array>
+#include <type_traits>
+
+#include <seastar/util/gcc6-concepts.hh>
+
+namespace meta {
+
+// Wrappers that allows returning a list of types. All helpers defined in this
+// file accept both unpacked and packed lists of types.
+template<typename... Ts>
+struct list { };
+
+namespace internal {
+
+template<bool... Vs>
+constexpr ssize_t do_find_if_unpacked() {
+    ssize_t i = -1;
+    ssize_t j = 0;
+    (..., ((Vs && i == -1) ? i = j : j++));
+    return i;
+}
+
+template<ssize_t N>
+struct negative_to_empty : std::integral_constant<size_t, N> { };
+
+template<>
+struct negative_to_empty<-1> { };
+
+template<typename T>
+struct is_same_as {
+    template<typename U>
+    using type = std::is_same<T, U>;
+};
+
+template<template<class> typename Predicate, typename... Ts>
+struct do_find_if : internal::negative_to_empty<internal::do_find_if_unpacked<Predicate<Ts>::value...>()> { };
+
+template<template<class> typename Predicate, typename... Ts>
+struct do_find_if<Predicate, meta::list<Ts...>> : internal::negative_to_empty<internal::do_find_if_unpacked<Predicate<Ts>::value...>()> { };
+
+}
+
+// Returns the index of the first type in the list of types list of types Ts for
+// which Predicate<T::value is true.
+template<template<class> typename Predicate, typename... Ts>
+constexpr size_t find_if = internal::do_find_if<Predicate, Ts...>::value;
+
+// Returns the index of the first occurrence of type T in the list of types Ts.
+template<typename T, typename... Ts>
+constexpr size_t find = find_if<internal::is_same_as<T>::template type, Ts...>;
+
+namespace internal {
+
+template<size_t N, typename... Ts>
+struct do_get_unpacked { };
+
+template<size_t N, typename T, typename... Ts>
+struct do_get_unpacked<N, T, Ts...> : do_get_unpacked<N - 1, Ts...> { };
+
+template<typename T, typename... Ts>
+struct do_get_unpacked<0, T, Ts...> {
+    using type = T;
+};
+
+template<size_t N, typename... Ts>
+struct do_get : do_get_unpacked<N, Ts...> { };
+
+template<size_t N, typename... Ts>
+struct do_get<N, meta::list<Ts...>> : do_get_unpacked<N, Ts...> { };
+
+}
+
+// Returns the Nth type in the provided list of types.
+template<size_t N, typename... Ts>
+using get = typename internal::do_get<N, Ts...>::type;
+
+namespace internal {
+
+template<size_t N, typename Result, typename... Ts>
+struct do_take_unpacked { };
+
+template<typename... Ts>
+struct do_take_unpacked<0, list<Ts...>> {
+    using type = list<Ts...>;
+};
+
+template<typename... Ts, typename U, typename... Us>
+struct do_take_unpacked<0, list<Ts...>, U, Us...> {
+    using type = list<Ts...>;
+};
+
+template<size_t N, typename... Ts, typename U, typename... Us>
+struct do_take_unpacked<N, list<Ts...>, U, Us...> {
+    using type = typename do_take_unpacked<N - 1, list<Ts..., U>, Us...>::type;
+};
+
+template<size_t N, typename Result, typename... Ts>
+struct do_take : do_take_unpacked<N, Result, Ts...> { };
+
+
+template<size_t N, typename Result, typename... Ts>
+struct do_take<N, Result, meta::list<Ts...>> : do_take_unpacked<N, Result, Ts...> { };
+
+}
+
+// Returns a list containing N first elements of the provided list of types.
+template<size_t N, typename... Ts>
+using take = typename internal::do_take<N, list<>, Ts...>::type;
+
+namespace internal {
+
+template<typename... Ts>
+struct do_for_each_unpacked {
+    template<typename Function>
+    static constexpr void run(Function&& fn) {
+        (..., fn(static_cast<Ts*>(nullptr)));
+    }
+};
+
+template<typename... Ts>
+struct do_for_each : do_for_each_unpacked<Ts...> { };
+
+template<typename... Ts>
+struct do_for_each<meta::list<Ts...>> : do_for_each_unpacked<Ts...> { };
+
+}
+
+// Executes the provided function for each element in the provided list of
+// types. For each type T the Function is called with an argument of type T*.
+template<typename... Ts, typename Function>
+constexpr void for_each(Function&& fn) {
+    internal::do_for_each<Ts...>::run(std::forward<Function>(fn));
+};
+
+namespace internal {
+
+template<typename... Ts>
+struct get_size : std::integral_constant<size_t, sizeof...(Ts)> { };
+
+template<typename... Ts>
+struct get_size<meta::list<Ts...>> : std::integral_constant<size_t, sizeof...(Ts)> { };
+
+}
+
+// Returns the size of a list of types.
+template<typename... Ts>
+constexpr size_t size = internal::get_size<Ts...>::value;
+
+template<template <class> typename Predicate, typename... Ts>
+static constexpr bool all_of = std::conjunction_v<Predicate<Ts>...>;
+
+}
+
+#include <boost/range/algorithm/copy.hpp>
+#include <boost/range/algorithm/for_each.hpp>
+
+#include <seastar/util/gcc6-concepts.hh>
+
+enum class mutable_view { no, yes, };
+
+GCC6_CONCEPT(
+
+/// Fragmented buffer
+///
+/// Concept `FragmentedBuffer` is satisfied by any class that is a range of
+/// fragments and provides a method `size_bytes()` which returns the total
+/// size of the buffer. The interfaces accepting `FragmentedBuffer` will attempt
+/// to avoid unnecessary linearisation.
+template<typename T>
+concept bool FragmentRange = requires (T range) {
+    typename T::fragment_type;
+    requires std::is_same_v<typename T::fragment_type, bytes_view>
+        || std::is_same_v<typename T::fragment_type, bytes_mutable_view>;
+    { *range.begin() } -> typename T::fragment_type;
+    { *range.end() } -> typename T::fragment_type;
+    { range.size_bytes() } -> size_t;
+    { range.empty() } -> bool; // returns true iff size_bytes() == 0.
+};
+
+)
+
+template<typename T, typename = void>
+struct is_fragment_range : std::false_type { };
+
+template<typename T>
+struct is_fragment_range<T, std::void_t<typename T::fragment_type>> : std::true_type { };
+
+template<typename T>
+static constexpr bool is_fragment_range_v = is_fragment_range<T>::value;
+
+/// A non-mutable view of a FragmentRange
+///
+/// Provide a trivially copyable and movable, non-mutable view on a
+/// fragment range. This allows uniform ownership semantics across
+/// multi-fragment ranges and the single fragment and empty fragment
+/// adaptors below, i.e. it allows treating all fragment ranges
+/// uniformly as views.
+template <typename T>
+GCC6_CONCEPT(
+    requires FragmentRange<T>
+)
+class fragment_range_view {
+    const T* _range;
+public:
+    using fragment_type = typename T::fragment_type;
+    using iterator = typename T::const_iterator;
+    using const_iterator = typename T::const_iterator;
+
+public:
+    explicit fragment_range_view(const T& range) : _range(&range) { }
+
+    const_iterator begin() const { return _range->begin(); }
+    const_iterator end() const { return _range->end(); }
+
+    size_t size_bytes() const { return _range->size_bytes(); }
+    bool empty() const { return _range->empty(); }
+};
+
+
+
+
+
+#include <map>
+
+
+#include <vector>
+
+#include <seastar/core/iostream.hh>
+#include <seastar/core/print.hh>
+#include <seastar/core/temporary_buffer.hh>
+#include <seastar/core/simple-stream.hh>
+
+#include "bytes_ostream.hh"
+#include "utils/fragment_range.hh"
+
+/// Fragmented buffer consisting of multiple temporary_buffer<char>
+class fragmented_temporary_buffer {
+    using vector_type = std::vector<seastar::temporary_buffer<char>>;
+public:
+    static constexpr size_t default_fragment_size = 128 * 1024;
+
+    class view;
+    class istream;
+    class reader;
+    using ostream = seastar::memory_output_stream<vector_type::iterator>;
+
+    fragmented_temporary_buffer() = default;
+
+    fragmented_temporary_buffer(std::vector<seastar::temporary_buffer<char>> fragments, size_t size_bytes) noexcept;
+    explicit operator view() const noexcept;
+
+    istream get_istream() const noexcept;
+
+    ostream get_ostream() noexcept ;
+
+    size_t size_bytes() const;
+    bool empty() const;
+
+    // Linear complexity, invalidates views and istreams
+    void remove_prefix(size_t n) noexcept;
+
+    // Linear complexity, invalidates views and istreams
+    void remove_suffix(size_t n) noexcept;
+};
+
+
+
+namespace fragmented_temporary_buffer_concepts {
+
+GCC6_CONCEPT(
+template<typename T>
+concept bool ExceptionThrower = requires(T obj, size_t n) {
+    obj.throw_out_of_range(n, n);
+};
+)
+
+}
+
+
+class fragmented_temporary_buffer::reader {
+    std::vector<temporary_buffer<char>> _fragments;
+    size_t _left = 0;
+public:
+    future<fragmented_temporary_buffer> read_exactly(input_stream<char>& in, size_t length);
+};
+
+#include "serializer.hh"
+
+class abstract_type;
+class collection_type_impl;
+
+/// View of an atomic cell
+template<mutable_view is_mutable>
+class basic_atomic_cell_view {
+protected:
+    friend class atomic_cell;
+public:
+    using pointer_type = std::conditional_t<is_mutable == mutable_view::no, const uint8_t*, uint8_t*>;
+protected:
+    friend class atomic_cell_or_collection;
+public:
+    operator basic_atomic_cell_view<mutable_view::no>() const noexcept;
+
+    void swap(basic_atomic_cell_view& other) noexcept;
+
+    bool is_counter_update() const;
+    bool is_live() const;
+    bool is_live(tombstone t, bool is_counter) const;
+    bool is_live(tombstone t, gc_clock::time_point now, bool is_counter) const;
+    bool is_live_and_has_ttl() const;
+    bool is_dead(gc_clock::time_point now) const;
+    bool is_covered_by(tombstone t, bool is_counter) const;
+    // Can be called on live and dead cells
+    api::timestamp_type timestamp() const;
+    void set_timestamp(api::timestamp_type ts);
+    // Can be called on live cells only
+    size_t value_size() const;
+    bool is_value_fragmented() const;
+    // Can be called on live counter update cells only
+    int64_t counter_update_value() const;
+    // Can be called only when is_dead(gc_clock::time_point)
+    gc_clock::time_point deletion_time() const;
+    // Can be called only when is_live_and_has_ttl()
+    gc_clock::time_point expiry() const;
+    // Can be called only when is_live_and_has_ttl()
+    gc_clock::duration ttl() const;
+    // Can be called on live and dead cells
+    bool has_expired(gc_clock::time_point now) const;
+
+    bytes_view serialize() const;
+};
+
+class atomic_cell_view final : public basic_atomic_cell_view<mutable_view::no> {
+    friend class atomic_cell;
+public:
+    friend std::ostream& operator<<(std::ostream& os, const atomic_cell_view& acv);
+
+    class printer {
+        const abstract_type& _type;
+        const atomic_cell_view& _cell;
+    public:
+        printer(const abstract_type& type, const atomic_cell_view& cell) : _type(type), _cell(cell) {}
+        friend std::ostream& operator<<(std::ostream& os, const printer& acvp);
+    };
+};
+
+class atomic_cell_mutable_view final : public basic_atomic_cell_view<mutable_view::yes> {
+public:
+
+    friend class atomic_cell;
+};
+
+using atomic_cell_ref = atomic_cell_mutable_view;
+
+class atomic_cell final : public basic_atomic_cell_view<mutable_view::yes> {
+public:
+    class collection_member_tag;
+    using collection_member = bool_class<collection_member_tag>;
+
+    atomic_cell(atomic_cell&&) = default;
+    atomic_cell& operator=(const atomic_cell&) = delete;
+    atomic_cell& operator=(atomic_cell&&) = default;
+    void swap(atomic_cell& other) noexcept;
+    operator atomic_cell_view() const;
+    atomic_cell(const abstract_type& t, atomic_cell_view other);
+    static atomic_cell make_dead(api::timestamp_type timestamp, gc_clock::time_point deletion_time);
+    static atomic_cell make_live(const abstract_type& type, api::timestamp_type timestamp, bytes_view value,
+                                 collection_member = collection_member::no);
+    static atomic_cell make_live(const abstract_type& type, api::timestamp_type timestamp, ser::buffer_view<bytes_ostream::fragment_iterator> value,
+                                 collection_member = collection_member::no);
+    static atomic_cell make_live(const abstract_type& type, api::timestamp_type timestamp, const fragmented_temporary_buffer::view& value,
+                                 collection_member = collection_member::no);
+    static atomic_cell make_live(const abstract_type& type, api::timestamp_type timestamp, const bytes& value,
+                                 collection_member cm = collection_member::no);
+    static atomic_cell make_live_counter_update(api::timestamp_type timestamp, int64_t value);
+    static atomic_cell make_live(const abstract_type&, api::timestamp_type timestamp, bytes_view value,
+        gc_clock::time_point expiry, gc_clock::duration ttl, collection_member = collection_member::no);
+    static atomic_cell make_live(const abstract_type&, api::timestamp_type timestamp, ser::buffer_view<bytes_ostream::fragment_iterator> value,
+        gc_clock::time_point expiry, gc_clock::duration ttl, collection_member = collection_member::no);
+    static atomic_cell make_live(const abstract_type&, api::timestamp_type timestamp, const fragmented_temporary_buffer::view& value,
+        gc_clock::time_point expiry, gc_clock::duration ttl, collection_member = collection_member::no);
+    static atomic_cell make_live(const abstract_type& type, api::timestamp_type timestamp, const bytes& value,
+                                 gc_clock::time_point expiry, gc_clock::duration ttl, collection_member cm = collection_member::no);
+    static atomic_cell make_live(const abstract_type& type, api::timestamp_type timestamp, bytes_view value, ttl_opt ttl, collection_member cm = collection_member::no);
+    static atomic_cell make_live_uninitialized(const abstract_type& type, api::timestamp_type timestamp, size_t size);
+    friend class atomic_cell_or_collection;
+    friend std::ostream& operator<<(std::ostream& os, const atomic_cell& ac);
+
+    class printer : atomic_cell_view::printer {
+    public:
+        printer(const abstract_type& type, const atomic_cell_view& cell);
+        friend std::ostream& operator<<(std::ostream& os, const printer& acvp);
+    };
+};
+
+class column_definition;
+
+int compare_atomic_cell_for_merge(atomic_cell_view left, atomic_cell_view right);
+void merge_column(const abstract_type& def,
+        atomic_cell_or_collection& old,
+        const atomic_cell_or_collection& neww);
+
 #include "cql_serialization_format.hh"
 #include "tombstone.hh"
 #include "to_string.hh"
 #include "duration.hh"
 #include "marshal_exception.hh"
-#include <boost/range/adaptor/transformed.hpp>
-#include <boost/range/algorithm/for_each.hpp>
-#include <boost/range/numeric.hpp>
-#include <boost/range/combine.hpp>
 #include <seastar/net/ip.hh>
 #include <seastar/net/inet_address.hh>
 #include <seastar/util/backtrace.hh>
 #include "hashing.hh"
-#include <boost/multiprecision/cpp_int.hpp>  // FIXME: remove somehow
 #include "utils/fragmented_temporary_buffer.hh"
 #include "utils/exceptions.hh"
 
@@ -630,7 +1291,6 @@ public:
     data_value(time_native_type);
     data_value(timeuuid_native_type);
     data_value(date_type_native_type);
-    data_value(boost::multiprecision::cpp_int);
     data_value(big_decimal);
     data_value(cql_duration);
     explicit data_value(std::optional<bytes>);
@@ -687,7 +1347,6 @@ class user_type_impl;
 class abstract_type : public enable_shared_from_this<abstract_type> {
     sstring _name;
     std::optional<uint32_t> _value_length_if_fixed;
-    data::type_imr_descriptor _imr_state;
 public:
     enum class kind : int8_t {
         ascii,
@@ -724,11 +1383,8 @@ private:
 public:
     kind get_kind() const { return _kind; }
 
-    abstract_type(kind k, sstring name, std::optional<uint32_t> value_length_if_fixed, data::type_info ti)
-        : _name(name), _value_length_if_fixed(std::move(value_length_if_fixed)), _imr_state(ti), _kind(k) {}
-    virtual ~abstract_type() {}
-    const data::type_imr_descriptor& imr_state() const { return _imr_state; }
-    bool less(bytes_view v1, bytes_view v2) const { return compare(v1, v2) < 0; }
+    virtual ~abstract_type();
+    bool less(bytes_view v1, bytes_view v2) const;
     // returns a callable that can be called with two byte_views, and calls this->less() on them.
     serialized_compare as_less_comparator() const ;
     serialized_tri_compare as_tri_comparator() const ;
@@ -737,15 +1393,9 @@ public:
     bool equal(bytes_view v1, bytes_view v2) const;
     int32_t compare(bytes_view v1, bytes_view v2) const;
     data_value deserialize(bytes_view v) const;
-    data_value deserialize_value(bytes_view v) const {
-        return deserialize(v);
-    };
+    data_value deserialize_value(bytes_view v) const;
     void validate(bytes_view v, cql_serialization_format sf) const;
-    virtual void validate(const fragmented_temporary_buffer::view& view, cql_serialization_format sf) const {
-        with_linearized(view, [this, sf] (bytes_view bv) {
-            validate(bv, sf);
-        });
-    }
+    virtual void validate(const fragmented_temporary_buffer::view& view, cql_serialization_format sf) const;
     bool is_compatible_with(const abstract_type& previous) const;
     /*
      * Types which are wrappers over other types return the inner type.
@@ -772,15 +1422,11 @@ public:
     std::optional<data_type> update_user_type(const shared_ptr<const user_type_impl> updated) const;
 
     bool references_duration() const;
-    std::optional<uint32_t> value_length_if_fixed() const {
-        return _value_length_if_fixed;
-    }
+    std::optional<uint32_t> value_length_if_fixed() const;
 public:
     bytes decompose(const data_value& value) const;
     // Safe to call across shards
-    const sstring& name() const {
-        return _name;
-    }
+    const sstring& name() const;
 
     /**
      * When returns true then equal values have the same byte representation and if byte
@@ -790,32 +1436,28 @@ public:
      */
     bool is_byte_order_equal() const;
     sstring get_string(const bytes& b) const;
-    sstring to_string(bytes_view bv) const {
-        return to_string_impl(deserialize(bv));
-    }
-    sstring to_string(const bytes& b) const {
-        return to_string(bytes_view(b));
-    }
+    sstring to_string(bytes_view bv) const;
+    sstring to_string(const bytes& b) const;
     sstring to_string_impl(const data_value& v) const;
     bytes from_string(sstring_view text) const;
     bool is_counter() const;
     bool is_string() const;
     bool is_collection() const;
-    bool is_map() const { return _kind == kind::map; }
-    bool is_set() const { return _kind == kind::set; }
-    bool is_list() const { return _kind == kind::list; }
+    bool is_map() const;
+    bool is_set() const;
+    bool is_list() const;
     // Lists and sets are similar: they are both represented as std::vector<data_value>
     // @sa listlike_collection_type_impl
-    bool is_listlike() const { return _kind == kind::list || _kind == kind::set; }
+    bool is_listlike() const;
     bool is_multi_cell() const;
-    bool is_atomic() const { return !is_multi_cell(); }
-    bool is_reversed() const { return _kind == kind::reversed; }
+    bool is_atomic() const;
+    bool is_reversed() const;
     bool is_tuple() const;
-    bool is_user_type() const { return _kind == kind::user; }
+    bool is_user_type() const;
     bool is_native() const;
     cql3::cql3_type as_cql3_type() const;
     const sstring& cql3_type_name() const;
-    virtual shared_ptr<const abstract_type> freeze() const { return shared_from_this(); }
+    virtual shared_ptr<const abstract_type> freeze() const;
     friend class list_type_impl;
 private:
     mutable sstring _cql3_type_name;
@@ -837,34 +1479,13 @@ protected:
     friend bool operator==(const abstract_type& x, const abstract_type& y);
 };
 
-inline bool operator==(const abstract_type& x, const abstract_type& y)
-{
-     return &x == &y;
-}
+bool operator==(const abstract_type& x, const abstract_type& y);
 
 template <typename T>
-inline
-data_value
-data_value::make_new(data_type type, T&& v) {
-    maybe_empty<std::remove_reference_t<T>> value(std::forward<T>(v));
-    return data_value(type->native_value_clone(&value), type);
-}
+const T& value_cast(const data_value& value);
 
 template <typename T>
-const T& value_cast(const data_value& value) {
-    return value_cast<T>(const_cast<data_value&&>(value));
-}
-
-template <typename T>
-T&& value_cast(data_value&& value) {
-    if (typeid(maybe_empty<T>) != value.type()->native_typeid()) {
-        throw std::bad_cast();
-    }
-    if (value.is_null()) {
-        throw std::runtime_error("value is null");
-    }
-    return std::move(*reinterpret_cast<maybe_empty<T>*>(value._value));
-}
+T&& value_cast(data_value&& value);
 
 // CRTP: implements translation between a native_type (C++ type) to abstract_type
 // AbstractType is parametrized because we want a
@@ -1026,11 +1647,7 @@ class reversed_type_impl : public abstract_type {
     friend struct shared_ptr_make_helper<reversed_type_impl, true>;
 
     data_type _underlying_type;
-    reversed_type_impl(data_type t)
-        : abstract_type(kind::reversed, "org.apache.cassandra.db.marshal.ReversedType(" + t->name() + ")",
-                        t->value_length_if_fixed(), t->imr_state().type_info())
-        , _underlying_type(t)
-    {}
+    reversed_type_impl(data_type t);
 public:
     const data_type& underlying_type() const {
         return _underlying_type;
@@ -1219,84 +1836,44 @@ shared_ptr<const abstract_type> data_type_for<double>() {
 
 template <>
 inline
-shared_ptr<const abstract_type> data_type_for<boost::multiprecision::cpp_int>() {
-    return varint_type;
-}
-
-template <>
-inline
 shared_ptr<const abstract_type> data_type_for<big_decimal>() {
     return decimal_type;
 }
 
 namespace std {
 
-template <>
-struct hash<shared_ptr<const abstract_type>> : boost::hash<shared_ptr<abstract_type>> {
-};
 
 }
 
 // FIXME: make more explicit
-inline
 bytes
-to_bytes(const char* x) {
-    return bytes(reinterpret_cast<const int8_t*>(x), std::strlen(x));
-}
+to_bytes(const char* x);
 
 // FIXME: make more explicit
-inline
 bytes
-to_bytes(const std::string& x) {
-    return bytes(reinterpret_cast<const int8_t*>(x.data()), x.size());
-}
+to_bytes(const std::string& x);
 
-inline
 bytes_view
-to_bytes_view(const std::string& x) {
-    return bytes_view(reinterpret_cast<const int8_t*>(x.data()), x.size());
-}
+to_bytes_view(const std::string& x);
 
-inline
 bytes
-to_bytes(bytes_view x) {
-    return bytes(x.begin(), x.size());
-}
+to_bytes(bytes_view x);
 
-inline
 bytes_opt
-to_bytes_opt(bytes_view_opt bv) {
-    if (bv) {
-        return to_bytes(*bv);
-    }
-    return std::nullopt;
-}
+to_bytes_opt(bytes_view_opt bv);
 
 std::vector<bytes_opt> to_bytes_opt_vec(const std::vector<bytes_view_opt>&);
 
-inline
 bytes_view_opt
-as_bytes_view_opt(const bytes_opt& bv) {
-    if (bv) {
-        return bytes_view{*bv};
-    }
-    return std::nullopt;
-}
+as_bytes_view_opt(const bytes_opt& bv);
 
 // FIXME: make more explicit
-inline
 bytes
-to_bytes(const sstring& x) {
-    return bytes(reinterpret_cast<const int8_t*>(x.c_str()), x.size());
-}
+to_bytes(const sstring& x);
 
-inline
 bytes_view
-to_bytes_view(const sstring& x) {
-    return bytes_view(reinterpret_cast<const int8_t*>(x.c_str()), x.size());
-}
+to_bytes_view(const sstring& x);
 
-inline
 bytes
 to_bytes(const utils::UUID& uuid) {
     struct {
@@ -1369,40 +1946,13 @@ T read_simple_exactly(bytes_view v) {
     return net::ntoh(*reinterpret_cast<const net::packed<T>*>(p));
 }
 
-inline
 bytes_view
-read_simple_bytes(bytes_view& v, size_t n) {
-    if (v.size() < n) {
-        throw_with_backtrace<marshal_exception>(format("read_simple_bytes - not enough bytes (requested {:d}, got {:d})", n, v.size()));
-    }
-    bytes_view ret(v.begin(), n);
-    v.remove_prefix(n);
-    return ret;
-}
+read_simple_bytes(bytes_view& v, size_t n);
 
 template<typename T>
-std::optional<T> read_simple_opt(bytes_view& v) {
-    if (v.empty()) {
-        return {};
-    }
-    if (v.size() != sizeof(T)) {
-        throw_with_backtrace<marshal_exception>(format("read_simple_opt - size mismatch (expected {:d}, got {:d})", sizeof(T), v.size()));
-    }
-    auto p = v.begin();
-    v.remove_prefix(sizeof(T));
-    return { net::ntoh(*reinterpret_cast<const net::packed<T>*>(p)) };
-}
+std::optional<T> read_simple_opt(bytes_view& v);
 
-inline sstring read_simple_short_string(bytes_view& v) {
-    uint16_t len = read_simple<uint16_t>(v);
-    if (v.size() < len) {
-        throw_with_backtrace<marshal_exception>(format("read_simple_short_string - not enough bytes ({:d})", v.size()));
-    }
-    sstring ret(sstring::initialized_later(), len);
-    std::copy(v.begin(), v.begin() + len, ret.begin());
-    v.remove_prefix(len);
-    return ret;
-}
+sstring read_simple_short_string(bytes_view& v);
 
 size_t collection_size_len(cql_serialization_format sf);
 size_t collection_value_len(cql_serialization_format sf);
@@ -1413,33 +1963,62 @@ void write_collection_value(bytes::iterator& out, cql_serialization_format sf, d
 using user_type = shared_ptr<const user_type_impl>;
 using tuple_type = shared_ptr<const tuple_type_impl>;
 
-inline
-data_value::data_value(std::optional<bytes> v)
-        : data_value(v ? data_value(*v) : data_value::make_null(data_type_for<bytes>())) {
-}
-
-template <typename NativeType>
-data_value::data_value(std::optional<NativeType> v)
-        : data_value(v ? data_value(*v) : data_value::make_null(data_type_for<NativeType>())) {
-}
-
-template<>
-struct appending_hash<data_type> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const data_type& v) const {
-        feed_hash(h, v->name());
-    }
-};
-
 
 #include <iosfwd>
 #include <algorithm>
 #include <vector>
 #include <boost/range/iterator_range.hpp>
 #include <boost/range/adaptor/transformed.hpp>
-#include "utils/serialization.hh"
 #include <seastar/util/backtrace.hh>
-#include "unimplemented.hh"
+#include <iosfwd>
+#include <seastar/core/print.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/enum.hh>
+
+namespace unimplemented {
+
+enum class cause {
+    API,
+    INDEXES,
+    LWT,
+    PAGING,
+    AUTH,
+    PERMISSIONS,
+    TRIGGERS,
+    COUNTERS,
+    METRICS,
+    MIGRATIONS,
+    GOSSIP,
+    TOKEN_RESTRICTION,
+    LEGACY_COMPOSITE_KEYS,
+    COLLECTION_RANGE_TOMBSTONES,
+    RANGE_DELETES,
+    THRIFT,
+    VALIDATION,
+    REVERSED,
+    COMPRESSION,
+    NONATOMIC,
+    CONSISTENCY,
+    HINT,
+    SUPER,
+    WRAP_AROUND, // Support for handling wrap around ranges in queries on database level and below
+    STORAGE_SERVICE,
+    SCHEMA_CHANGE,
+    MIXED_CF,
+    SSTABLE_FORMAT_M,
+};
+
+[[noreturn]] void fail(cause what);
+void warn(cause what);
+
+}
+
+namespace std {
+
+template <>
+struct hash<unimplemented::cause> : seastar::enum_hash<unimplemented::cause> {};
+
+}
 
 enum class allow_prefixes { no, yes };
 
@@ -1505,42 +2084,12 @@ public:
         return serialize_value({std::move(v)});
     }
     template<typename RangeOfSerializedComponents>
-    static bytes serialize_value(RangeOfSerializedComponents&& values) {
-        auto size = serialized_size(values);
-        if (size > std::numeric_limits<size_type>::max()) {
-            throw std::runtime_error(format("Key size too large: {:d} > {:d}", size, std::numeric_limits<size_type>::max()));
-        }
-        bytes b(bytes::initialized_later(), size);
-        auto i = b.begin();
-        serialize_value(values, i);
-        return b;
-    }
+    static bytes serialize_value(RangeOfSerializedComponents&& values);
     template<typename T>
-    static bytes serialize_value(std::initializer_list<T> values) {
-        return serialize_value(boost::make_iterator_range(values.begin(), values.end()));
-    }
-    bytes serialize_optionals(const std::vector<bytes_opt>& values) {
-        return serialize_value(values | boost::adaptors::transformed([] (const bytes_opt& bo) -> bytes_view {
-            if (!bo) {
-                throw std::logic_error("attempted to create key component from empty optional");
-            }
-            return *bo;
-        }));
-    }
-    bytes serialize_value_deep(const std::vector<data_value>& values) {
-        // TODO: Optimize
-        std::vector<bytes> partial;
-        partial.reserve(values.size());
-        auto i = _types.begin();
-        for (auto&& component : values) {
-            assert(i != _types.end());
-            partial.push_back((*i++)->decompose(component));
-        }
-        return serialize_value(partial);
-    }
-    bytes decompose_value(const value_type& values) {
-        return serialize_value(values);
-    }
+    static bytes serialize_value(std::initializer_list<T> values);
+    bytes serialize_optionals(const std::vector<bytes_opt>& values);
+    bytes serialize_value_deep(const std::vector<data_value>& values);
+    bytes decompose_value(const value_type& values);
     class iterator : public std::iterator<std::input_iterator_tag, const bytes_view> {
     private:
         bytes_view _v;
@@ -1649,7 +2198,993 @@ public:
 
 using compound_prefix = compound_type<allow_prefixes::yes>;
 
-#include "schema.hh"
+#include <optional>
+#include <unordered_map>
+#include <boost/range/iterator_range.hpp>
+#include <boost/range/join.hpp>
+#include <boost/range/algorithm/transform.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/dynamic_bitset.hpp>
+
+#include "cql3/column_specification.hh"
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/util/backtrace.hh>
+#include "compound.hh"
+#include "gc_clock.hh"
+#include "unimplemented.hh"
+#include "utils/UUID.hh"
+#include "compress.hh"
+#include "compaction_strategy.hh"
+#include "caching_options.hh"
+#include "column_computation.hh"
+#include "cdc/cdc_options.hh"
+
+namespace dht {
+
+class i_partitioner;
+
+}
+
+using column_count_type = uint32_t;
+
+// Column ID, unique within column_kind
+using column_id = column_count_type;
+
+// Column ID unique within a schema. Enum class to avoid
+// mixing wtih column id.
+enum class ordinal_column_id: column_count_type {};
+
+std::ostream& operator<<(std::ostream& os, ordinal_column_id id);
+
+// Maintains a set of columns used in a query. The columns are
+// identified by ordinal_id.
+//
+// @sa column_definition::ordinal_id.
+class column_set {
+public:
+    using bitset = boost::dynamic_bitset<uint64_t>;
+    using size_type = bitset::size_type;
+
+    // column_count_type is more narrow than size_type, but truncating a size_type max value does
+    // give column_count_type max value. This is used to avoid extra branching in
+    // find_first()/find_next().
+    static_assert(static_cast<column_count_type>(boost::dynamic_bitset<uint64_t>::npos) == ~static_cast<column_count_type>(0));
+    static constexpr ordinal_column_id npos = static_cast<ordinal_column_id>(bitset::npos);
+
+    explicit column_set(column_count_type num_bits = 0)
+        : _mask(num_bits)
+    {
+    }
+
+    void resize(column_count_type num_bits) {
+        _mask.resize(num_bits);
+    }
+
+    // Set the appropriate bit for column id.
+    void set(ordinal_column_id id) {
+        column_count_type bit = static_cast<column_count_type>(id);
+        _mask.set(bit);
+    }
+    // Test the mask for use of a given column id.
+    bool test(ordinal_column_id id) const {
+        column_count_type bit = static_cast<column_count_type>(id);
+        return _mask.test(bit);
+    }
+    // @sa boost::dynamic_bistet docs
+    size_type count() const { return _mask.count(); }
+    ordinal_column_id find_first() const {
+        return static_cast<ordinal_column_id>(_mask.find_first());
+    }
+    ordinal_column_id find_next(ordinal_column_id pos) const {
+        return static_cast<ordinal_column_id>(_mask.find_next(static_cast<column_count_type>(pos)));
+    }
+    // Logical or
+    void union_with(const column_set& with) {
+        _mask |= with._mask;
+    }
+
+private:
+    bitset _mask;
+};
+
+// Cluster-wide identifier of schema version of particular table.
+//
+// The version changes the value not only on structural changes but also
+// temporal. For example, schemas with the same set of columns but created at
+// different times should have different versions. This allows nodes to detect
+// if the version they see was already synchronized with or not even if it has
+// the same structure as the past versions.
+//
+// Schema changes merged in any order should result in the same final version.
+//
+// When table_schema_version changes, schema_tables::calculate_schema_digest() should
+// also change when schema mutations are applied.
+using table_schema_version = utils::UUID;
+
+class schema;
+class schema_registry_entry;
+class schema_builder;
+
+// Useful functions to manipulate the schema's comparator field
+namespace cell_comparator {
+sstring to_sstring(const schema& s);
+bool check_compound(sstring comparator);
+void read_collections(schema_builder& builder, sstring comparator);
+}
+
+namespace db {
+class extensions;
+}
+// make sure these match the order we like columns back from schema
+enum class column_kind { partition_key, clustering_key, static_column, regular_column };
+
+enum class column_view_virtual { no, yes };
+
+sstring to_sstring(column_kind k);
+bool is_compatible(column_kind k1, column_kind k2);
+
+enum class cf_type : uint8_t {
+    standard,
+    super,
+};
+
+inline sstring cf_type_to_sstring(cf_type t) {
+    if (t == cf_type::standard) {
+        return "Standard";
+    } else if (t == cf_type::super) {
+        return "Super";
+    }
+    throw std::invalid_argument(format("unknown type: {:d}\n", uint8_t(t)));
+}
+
+inline cf_type sstring_to_cf_type(sstring name) {
+    if (name == "Standard") {
+        return cf_type::standard;
+    } else if (name == "Super") {
+        return cf_type::super;
+    }
+    throw std::invalid_argument(format("unknown type: {}\n", name));
+}
+
+struct speculative_retry {
+    enum class type {
+        NONE, CUSTOM, PERCENTILE, ALWAYS
+    };
+private:
+    type _t;
+    double _v;
+public:
+    speculative_retry(type t, double v) : _t(t), _v(v) {}
+
+    sstring to_sstring() const {
+        if (_t == type::NONE) {
+            return "NONE";
+        } else if (_t == type::ALWAYS) {
+            return "ALWAYS";
+        } else if (_t == type::CUSTOM) {
+            return format("{:.2f}ms", _v);
+        } else if (_t == type::PERCENTILE) {
+            return format("{:.1f}PERCENTILE", 100 * _v);
+        } else {
+            throw std::invalid_argument(format("unknown type: {:d}\n", uint8_t(_t)));
+        }
+    }
+    static speculative_retry from_sstring(sstring str) {
+        std::transform(str.begin(), str.end(), str.begin(), ::toupper);
+
+        sstring ms("MS");
+        sstring percentile("PERCENTILE");
+
+        auto convert = [&str] (sstring& t) {
+            try {
+                return boost::lexical_cast<double>(str.substr(0, str.size() - t.size()));
+            } catch (boost::bad_lexical_cast& e) {
+                throw std::invalid_argument(format("cannot convert {} to speculative_retry\n", str));
+            }
+        };
+
+        type t;
+        double v = 0;
+        if (str == "NONE") {
+            t = type::NONE;
+        } else if (str == "ALWAYS") {
+            t = type::ALWAYS;
+        } else if (str.compare(str.size() - ms.size(), ms.size(), ms) == 0) {
+            t = type::CUSTOM;
+            v = convert(ms);
+        } else if (str.compare(str.size() - percentile.size(), percentile.size(), percentile) == 0) {
+            t = type::PERCENTILE;
+            v = convert(percentile) / 100;
+        } else {
+            throw std::invalid_argument(format("cannot convert {} to speculative_retry\n", str));
+        }
+        return speculative_retry(t, v);
+    }
+    type get_type() const {
+        return _t;
+    }
+    double get_value() const {
+        return _v;
+    }
+    bool operator==(const speculative_retry& other) const {
+        return _t == other._t && _v == other._v;
+    }
+    bool operator!=(const speculative_retry& other) const {
+        return !(*this == other);
+    }
+};
+
+typedef std::unordered_map<sstring, sstring> index_options_map;
+
+enum class index_metadata_kind {
+    keys,
+    custom,
+    composites,
+};
+
+class index_metadata final {
+public:
+    struct is_local_index_tag {};
+    using is_local_index = bool_class<is_local_index_tag>;
+private:
+    utils::UUID _id;
+    sstring _name;
+    index_metadata_kind _kind;
+    index_options_map _options;
+    bool _local;
+public:
+    index_metadata(const sstring& name, const index_options_map& options, index_metadata_kind kind, is_local_index local);
+    bool operator==(const index_metadata& other) const;
+    bool equals_noname(const index_metadata& other) const;
+    const utils::UUID& id() const;
+    const sstring& name() const;
+    const index_metadata_kind kind() const;
+    const index_options_map& options() const;
+    bool local() const;
+    static sstring get_default_index_name(const sstring& cf_name, std::optional<sstring> root);
+};
+
+class column_definition final {
+public:
+    struct name_comparator {
+        data_type type;
+        name_comparator(data_type type) : type(type) {}
+        bool operator()(const column_definition& cd1, const column_definition& cd2) const {
+            return type->less(cd1.name(), cd2.name());
+        }
+    };
+private:
+    bytes _name;
+    api::timestamp_type _dropped_at;
+    bool _is_atomic;
+    bool _is_counter;
+    column_view_virtual _is_view_virtual;
+    column_computation_ptr _computation;
+
+    struct thrift_bits {
+        thrift_bits()
+            : is_on_all_components(0)
+        {}
+        uint8_t is_on_all_components : 1;
+        // more...?
+    };
+
+    thrift_bits _thrift_bits;
+    friend class schema;
+public:
+    column_definition(bytes name, data_type type, column_kind kind,
+        column_id component_index = 0,
+        column_view_virtual view_virtual = column_view_virtual::no,
+        column_computation_ptr = nullptr,
+        api::timestamp_type dropped_at = api::missing_timestamp);
+
+    data_type type;
+
+    // Unique within (kind, schema instance).
+    // schema::position() and component_index() depend on the fact that for PK columns this is
+    // equivalent to component index.
+    column_id id;
+
+    // Unique within schema instance
+    ordinal_column_id ordinal_id;
+
+    column_kind kind;
+    ::shared_ptr<cql3::column_specification> column_specification;
+
+    // NOTICE(sarna): This copy constructor is hand-written instead of default,
+    // because it involves deep copying of the computation object.
+    // Computation has a strict ownership policy provided by
+    // unique_ptr, and as such cannot rely on default copying.
+    column_definition(const column_definition& other)
+            : _name(other._name)
+            , _dropped_at(other._dropped_at)
+            , _is_atomic(other._is_atomic)
+            , _is_counter(other._is_counter)
+            , _is_view_virtual(other._is_view_virtual)
+            , _computation(other.get_computation_ptr())
+            , _thrift_bits(other._thrift_bits)
+            , type(other.type)
+            , id(other.id)
+            , ordinal_id(other.ordinal_id)
+            , kind(other.kind)
+            , column_specification(other.column_specification)
+        {}
+
+    column_definition& operator=(const column_definition& other) {
+        if (this == &other) {
+            return *this;
+        }
+        column_definition tmp(other);
+        *this = std::move(tmp);
+        return *this;
+    }
+
+    column_definition& operator=(column_definition&& other) = default;
+
+    bool is_static() const { return kind == column_kind::static_column; }
+    bool is_regular() const { return kind == column_kind::regular_column; }
+    bool is_partition_key() const { return kind == column_kind::partition_key; }
+    bool is_clustering_key() const { return kind == column_kind::clustering_key; }
+    bool is_primary_key() const { return kind == column_kind::partition_key || kind == column_kind::clustering_key; }
+    bool is_atomic() const { return _is_atomic; }
+    bool is_multi_cell() const { return !_is_atomic; }
+    bool is_counter() const { return _is_counter; }
+    // "virtual columns" appear in a materialized view as placeholders for
+    // unselected columns, with liveness information but without data, and
+    // allow view rows to remain alive despite having no data (issue #3362).
+    // These columns should be hidden from the user's SELECT queries.
+    bool is_view_virtual() const { return _is_view_virtual == column_view_virtual::yes; }
+    column_view_virtual view_virtual() const { return _is_view_virtual; }
+    // Computed column values are generated from other columns (and possibly other sources) during updates.
+    // Their values are still stored on disk, same as a regular columns.
+    bool is_computed() const { return bool(_computation); }
+    const column_computation& get_computation() const { return *_computation; }
+    column_computation_ptr get_computation_ptr() const {
+        return _computation ? _computation->clone() : nullptr;
+    }
+    void set_computed(column_computation_ptr computation) { _computation = std::move(computation); }
+    // Columns hidden from CQL cannot be in any way retrieved by the user,
+    // either explicitly or via the '*' operator, or functions, aggregates, etc.
+    bool is_hidden_from_cql() const { return is_view_virtual(); }
+    const sstring& name_as_text() const;
+    const bytes& name() const;
+    sstring name_as_cql_string() const;
+    friend std::ostream& operator<<(std::ostream& os, const column_definition& cd);
+    friend std::ostream& operator<<(std::ostream& os, const column_definition* cd) {
+        return cd != nullptr ? os << *cd : os << "(null)";
+    }
+    bool has_component_index() const {
+        return is_primary_key();
+    }
+    uint32_t component_index() const {
+        assert(has_component_index());
+        return id;
+    }
+    uint32_t position() const {
+        if (has_component_index()) {
+            return component_index();
+        }
+        return 0;
+    }
+    bool is_on_all_components() const;
+    bool is_part_of_cell_name() const {
+        return is_regular() || is_static();
+    }
+    api::timestamp_type dropped_at() const { return _dropped_at; }
+    friend bool operator==(const column_definition&, const column_definition&);
+};
+
+class schema_builder;
+
+/*
+ * Sub-schema for thrift aspects. Should be kept isolated (and starved)
+ */
+class thrift_schema {
+    bool _compound = true;
+    bool _is_dynamic = false;
+public:
+    bool has_compound_comparator() const;
+    bool is_dynamic() const;
+    friend class schema;
+};
+
+bool operator==(const column_definition&, const column_definition&);
+inline bool operator!=(const column_definition& a, const column_definition& b) { return !(a == b); }
+
+static constexpr int DEFAULT_MIN_COMPACTION_THRESHOLD = 4;
+static constexpr int DEFAULT_MAX_COMPACTION_THRESHOLD = 32;
+static constexpr int DEFAULT_MIN_INDEX_INTERVAL = 128;
+static constexpr int DEFAULT_GC_GRACE_SECONDS = 864000;
+
+// Unsafe to access across shards.
+// Safe to copy across shards.
+class column_mapping_entry {
+    bytes _name;
+    data_type _type;
+    bool _is_atomic;
+public:
+    column_mapping_entry(bytes name, data_type type)
+        : _name(std::move(name)), _type(std::move(type)), _is_atomic(_type->is_atomic()) { }
+    column_mapping_entry(bytes name, sstring type_name);
+    column_mapping_entry(const column_mapping_entry&);
+    column_mapping_entry& operator=(const column_mapping_entry&);
+    column_mapping_entry(column_mapping_entry&&) = default;
+    column_mapping_entry& operator=(column_mapping_entry&&) = default;
+    const bytes& name() const { return _name; }
+    const data_type& type() const { return _type; }
+    const sstring& type_name() const { return _type->name(); }
+    bool is_atomic() const { return _is_atomic; }
+};
+
+// Encapsulates information needed for converting mutations between different schema versions.
+//
+// Unsafe to access across shards.
+// Safe to copy across shards.
+class column_mapping {
+private:
+    // Contains _n_static definitions for static columns followed by definitions for regular columns,
+    // both ordered by consecutive column_ids.
+    // Primary key column sets are not mutable so we don't need to map them.
+    std::vector<column_mapping_entry> _columns;
+    column_count_type _n_static = 0;
+public:
+    column_mapping() {}
+    column_mapping(std::vector<column_mapping_entry> columns, column_count_type n_static)
+            : _columns(std::move(columns))
+            , _n_static(n_static)
+    { }
+    const std::vector<column_mapping_entry>& columns() const { return _columns; }
+    column_count_type n_static() const { return _n_static; }
+    const column_mapping_entry& column_at(column_kind kind, column_id id) const {
+        assert(kind == column_kind::regular_column || kind == column_kind::static_column);
+        return kind == column_kind::regular_column ? regular_column_at(id) : static_column_at(id);
+    }
+    const column_mapping_entry& static_column_at(column_id id) const {
+        if (id >= _n_static) {
+            throw std::out_of_range(format("static column id {:d} >= {:d}", id, _n_static));
+        }
+        return _columns[id];
+    }
+    const column_mapping_entry& regular_column_at(column_id id) const {
+        auto n_regular = _columns.size() - _n_static;
+        if (id >= n_regular) {
+            throw std::out_of_range(format("regular column id {:d} >= {:d}", id, n_regular));
+        }
+        return _columns[id + _n_static];
+    }
+    friend std::ostream& operator<<(std::ostream& out, const column_mapping& cm);
+};
+
+/**
+ * Augments a schema with fields related to materialized views.
+ * Effectively immutable.
+ */
+class raw_view_info final {
+    utils::UUID _base_id;
+    sstring _base_name;
+    bool _include_all_columns;
+    sstring _where_clause;
+public:
+    raw_view_info(utils::UUID base_id, sstring base_name, bool include_all_columns, sstring where_clause);
+
+    const utils::UUID& base_id() const {
+        return _base_id;
+    }
+
+    const sstring& base_name() const {
+        return _base_name;
+    }
+
+    bool include_all_columns() const {
+        return _include_all_columns;
+    }
+
+    const sstring& where_clause() const {
+        return _where_clause;
+    }
+
+    friend bool operator==(const raw_view_info&, const raw_view_info&);
+    friend std::ostream& operator<<(std::ostream& os, const raw_view_info& view);
+};
+
+bool operator==(const raw_view_info&, const raw_view_info&);
+std::ostream& operator<<(std::ostream& os, const raw_view_info& view);
+
+class view_info;
+
+// Represents a column set which is compactible with Cassandra 3.x.
+//
+// This layout differs from the layout Scylla uses in schema/schema_builder for static compact tables.
+// For such tables, Scylla expects all columns to be of regular type and no clustering columns,
+// whereas in v3 those columns are static and there is a clustering column with type matching the
+// cell name comparator and a regular column with type matching the default validator.
+// See issues #2555 and #1474.
+class v3_columns {
+    bool _is_dense = false;
+    bool _is_compound = false;
+    std::vector<column_definition> _columns;
+    std::unordered_map<bytes, const column_definition*> _columns_by_name;
+public:
+    v3_columns(std::vector<column_definition> columns, bool is_dense, bool is_compound);
+    v3_columns() = default;
+    v3_columns(v3_columns&&) = default;
+    v3_columns& operator=(v3_columns&&) = default;
+    v3_columns(const v3_columns&) = delete;
+    static v3_columns from_v2_schema(const schema&);
+public:
+    const std::vector<column_definition>& all_columns() const;
+    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const;
+    bool is_static_compact() const;
+    bool is_compact() const;
+    void apply_to(schema_builder&) const;
+};
+
+namespace query {
+class partition_slice;
+}
+
+/**
+ * Schema extension. An opaque type representing
+ * entries in the "extensions" part of a table/view (see schema_tables).
+ *
+ * An extension has a name (the mapping key), and it can re-serialize
+ * itself to bytes again, when we write back into schema tables.
+ *
+ * Code using a particular extension can locate it by name in the schema map,
+ * and barring the "is_placeholder" says true, cast it to whatever might
+ * be the expeceted implementation.
+ *
+ * We allow placeholder object since an extension written to schema tables
+ * might be unavailable on next boot/other node. To avoid loosing the config data,
+ * a placeholder object is put into schema map, which at least can
+ * re-serialize the data back.
+ *
+ */
+class schema_extension {
+public:
+    virtual ~schema_extension() {};
+    virtual bytes serialize() const = 0;
+    virtual bool is_placeholder() const {
+        return false;
+    }
+};
+
+/*
+ * Effectively immutable.
+ * Not safe to access across cores because of shared_ptr's.
+ * Use global_schema_ptr for safe across-shard access.
+ */
+class schema final : public enable_lw_shared_from_this<schema> {
+    friend class v3_columns;
+public:
+    struct dropped_column {
+        data_type type;
+        api::timestamp_type timestamp;
+        bool operator==(const dropped_column& rhs) const {
+            return type == rhs.type && timestamp == rhs.timestamp;
+        }
+    };
+    using extensions_map = std::map<sstring, ::shared_ptr<schema_extension>>;
+private:
+    // More complex fields are derived from these inside rebuild().
+    // Contains only fields which can be safely default-copied.
+    struct raw_schema {
+        raw_schema(utils::UUID id);
+        utils::UUID _id;
+        sstring _ks_name;
+        sstring _cf_name;
+        // regular columns are sorted by name
+        // static columns are sorted by name, but present only when there's any clustering column
+        std::vector<column_definition> _columns;
+        sstring _comment;
+        gc_clock::duration _default_time_to_live = gc_clock::duration::zero();
+        data_type _regular_column_name_type;
+        data_type _default_validation_class = bytes_type;
+        double _bloom_filter_fp_chance = 0.01;
+        compression_parameters _compressor_params;
+        extensions_map _extensions;
+        bool _is_dense = false;
+        bool _is_compound = true;
+        bool _is_counter = false;
+        cf_type _type = cf_type::standard;
+        int32_t _gc_grace_seconds = DEFAULT_GC_GRACE_SECONDS;
+        double _dc_local_read_repair_chance = 0.1;
+        double _read_repair_chance = 0.0;
+        double _crc_check_chance = 1;
+        int32_t _min_compaction_threshold = DEFAULT_MIN_COMPACTION_THRESHOLD;
+        int32_t _max_compaction_threshold = DEFAULT_MAX_COMPACTION_THRESHOLD;
+        int32_t _min_index_interval = DEFAULT_MIN_INDEX_INTERVAL;
+        int32_t _max_index_interval = 2048;
+        int32_t _memtable_flush_period = 0;
+        speculative_retry _speculative_retry = ::speculative_retry(speculative_retry::type::PERCENTILE, 0.99);
+        // FIXME: SizeTiered doesn't really work yet. Being it marked here only means that this is the strategy
+        // we will use by default - when we have the choice.
+        sstables::compaction_strategy_type _compaction_strategy = sstables::compaction_strategy_type::size_tiered;
+        std::map<sstring, sstring> _compaction_strategy_options;
+        bool _compaction_enabled = true;
+        caching_options _caching_options;
+        cdc::options _cdc_options;
+        table_schema_version _version;
+        std::unordered_map<sstring, dropped_column> _dropped_columns;
+        std::map<bytes, data_type> _collections;
+        std::unordered_map<sstring, index_metadata> _indices_by_name;
+        // The flag is not stored in the schema mutation and does not affects schema digest.
+        // It is set locally on a system tables that should be extra durable
+        bool _wait_for_sync = false; // true if all writes using this schema have to be synced immediately by commitlog
+    };
+    raw_schema _raw;
+    thrift_schema _thrift;
+    v3_columns _v3_columns;
+    mutable schema_registry_entry* _registry_entry = nullptr;
+    std::unique_ptr<::view_info> _view_info;
+
+    const std::array<column_count_type, 3> _offsets;
+
+    inline column_count_type column_offset(column_kind k) const {
+        return k == column_kind::partition_key ? 0 : _offsets[column_count_type(k) - 1];
+    }
+
+    std::unordered_map<bytes, const column_definition*> _columns_by_name;
+    lw_shared_ptr<compound_type<allow_prefixes::no>> _partition_key_type;
+    lw_shared_ptr<compound_type<allow_prefixes::yes>> _clustering_key_type;
+    column_mapping _column_mapping;
+    shared_ptr<query::partition_slice> _full_slice;
+    column_count_type _clustering_key_size;
+    column_count_type _regular_column_count;
+    column_count_type _static_column_count;
+
+    extensions_map& extensions() {
+        return _raw._extensions;
+    }
+
+    friend class db::extensions;
+    friend class schema_builder;
+public:
+    using row_column_ids_are_ordered_by_name = std::true_type;
+
+    typedef std::vector<column_definition> columns_type;
+    typedef typename columns_type::iterator iterator;
+    typedef typename columns_type::const_iterator const_iterator;
+    typedef boost::iterator_range<iterator> iterator_range_type;
+    typedef boost::iterator_range<const_iterator> const_iterator_range_type;
+
+    static constexpr int32_t NAME_LENGTH = 48;
+
+
+    struct column {
+        bytes name;
+        data_type type;
+    };
+private:
+    ::shared_ptr<cql3::column_specification> make_column_specification(const column_definition& def);
+    void rebuild();
+    schema(const raw_schema&, std::optional<raw_view_info>);
+public:
+    // deprecated, use schema_builder.
+    schema(std::optional<utils::UUID> id,
+        std::string_view ks_name,
+        std::string_view cf_name,
+        std::vector<column> partition_key,
+        std::vector<column> clustering_key,
+        std::vector<column> regular_columns,
+        std::vector<column> static_columns,
+        data_type regular_column_name_type,
+        std::string_view comment = {});
+    schema(const schema&);
+    ~schema();
+    table_schema_version version() const {
+        return _raw._version;
+    }
+    double bloom_filter_fp_chance() const {
+        return _raw._bloom_filter_fp_chance;
+    }
+    sstring thrift_key_validator() const;
+    const compression_parameters& get_compressor_params() const {
+        return _raw._compressor_params;
+    }
+    const extensions_map& extensions() const {
+        return _raw._extensions;
+    }
+    bool is_dense() const {
+        return _raw._is_dense;
+    }
+
+    bool is_compound() const {
+        return _raw._is_compound;
+    }
+
+    bool is_cql3_table() const {
+        return !is_super() && !is_dense() && is_compound();
+    }
+    bool is_compact_table() const {
+        return !is_cql3_table();
+    }
+    bool is_static_compact_table() const {
+        return !is_super() && !is_dense() && !is_compound();
+    }
+
+    thrift_schema& thrift() {
+        return _thrift;
+    }
+    const thrift_schema& thrift() const {
+        return _thrift;
+    }
+    const utils::UUID& id() const {
+        return _raw._id;
+    }
+    const sstring& comment() const {
+        return _raw._comment;
+    }
+    bool is_counter() const {
+        return _raw._is_counter;
+    }
+
+    const cf_type type() const {
+        return _raw._type;
+    }
+
+    bool is_super() const {
+        return _raw._type == cf_type::super;
+    }
+
+    gc_clock::duration gc_grace_seconds() const {
+        auto seconds = std::chrono::seconds(_raw._gc_grace_seconds);
+        return std::chrono::duration_cast<gc_clock::duration>(seconds);
+    }
+
+    double dc_local_read_repair_chance() const {
+        return _raw._dc_local_read_repair_chance;
+    }
+
+    double read_repair_chance() const {
+        return _raw._read_repair_chance;
+    }
+    double crc_check_chance() const {
+        return _raw._crc_check_chance;
+    }
+
+    int32_t min_compaction_threshold() const {
+        return _raw._min_compaction_threshold;
+    }
+
+    int32_t max_compaction_threshold() const {
+        return _raw._max_compaction_threshold;
+    }
+
+    int32_t min_index_interval() const {
+        return _raw._min_index_interval;
+    }
+
+    int32_t max_index_interval() const {
+        return _raw._max_index_interval;
+    }
+
+    int32_t memtable_flush_period() const {
+        return _raw._memtable_flush_period;
+    }
+
+    sstables::compaction_strategy_type configured_compaction_strategy() const {
+        return _raw._compaction_strategy;
+    }
+
+    sstables::compaction_strategy_type compaction_strategy() const {
+        return _raw._compaction_enabled ? _raw._compaction_strategy : sstables::compaction_strategy_type::null;
+    }
+
+    const std::map<sstring, sstring>& compaction_strategy_options() const {
+        return _raw._compaction_strategy_options;
+    }
+
+    bool compaction_enabled() const {
+        return _raw._compaction_enabled;
+    }
+
+    const cdc::options& cdc_options() const {
+        return _raw._cdc_options;
+    }
+
+    const ::speculative_retry& speculative_retry() const {
+        return _raw._speculative_retry;
+    }
+
+    const ::caching_options& caching_options() const {
+        return _raw._caching_options;
+    }
+
+    dht::i_partitioner& get_partitioner() const;
+
+    const column_definition* get_column_definition(const bytes& name) const;
+    const column_definition& column_at(column_kind, column_id) const;
+    // Find a column definition given column ordinal id in the schema
+    const column_definition& column_at(ordinal_column_id ordinal_id) const;
+    const_iterator regular_begin() const;
+    const_iterator regular_end() const;
+    const_iterator regular_lower_bound(const bytes& name) const;
+    const_iterator regular_upper_bound(const bytes& name) const;
+    const_iterator static_begin() const;
+    const_iterator static_end() const;
+    const_iterator static_lower_bound(const bytes& name) const;
+    const_iterator static_upper_bound(const bytes& name) const;
+    data_type column_name_type(const column_definition& def) const;
+    const column_definition& clustering_column_at(column_id id) const;
+    const column_definition& regular_column_at(column_id id) const;
+    const column_definition& static_column_at(column_id id) const;
+    bool is_last_partition_key(const column_definition& def) const;
+    bool has_multi_cell_collections() const;
+    bool has_static_columns() const;
+    column_count_type columns_count(column_kind kind) const;
+    column_count_type partition_key_size() const;
+    column_count_type clustering_key_size() const { return _clustering_key_size; }
+    column_count_type static_columns_count() const { return _static_column_count; }
+    column_count_type regular_columns_count() const { return _regular_column_count; }
+    column_count_type all_columns_count() const { return _raw._columns.size(); }
+    // Returns a range of column definitions
+    const_iterator_range_type partition_key_columns() const;
+    // Returns a range of column definitions
+    const_iterator_range_type clustering_key_columns() const;
+    // Returns a range of column definitions
+    const_iterator_range_type static_columns() const;
+    // Returns a range of column definitions
+    const_iterator_range_type regular_columns() const;
+    // Returns a range of column definitions
+
+    typedef boost::range::joined_range<const_iterator_range_type, const_iterator_range_type>
+        select_order_range;
+
+    select_order_range all_columns_in_select_order() const;
+    uint32_t position(const column_definition& column) const;
+
+    const columns_type& all_columns() const {
+        return _raw._columns;
+    }
+
+    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const {
+        return _columns_by_name;
+    }
+
+    const auto& dropped_columns() const {
+        return _raw._dropped_columns;
+    }
+
+    const auto& collections() const {
+        return _raw._collections;
+    }
+
+    gc_clock::duration default_time_to_live() const {
+        return _raw._default_time_to_live;
+    }
+
+    data_type make_legacy_default_validator() const;
+
+    const sstring& ks_name() const {
+        return _raw._ks_name;
+    }
+    const sstring& cf_name() const {
+        return _raw._cf_name;
+    }
+    const lw_shared_ptr<compound_type<allow_prefixes::no>>& partition_key_type() const {
+        return _partition_key_type;
+    }
+    const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_type() const {
+        return _clustering_key_type;
+    }
+    const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_prefix_type() const {
+        return _clustering_key_type;
+    }
+    const data_type& regular_column_name_type() const {
+        return _raw._regular_column_name_type;
+    }
+    const data_type& static_column_name_type() const {
+        return utf8_type;
+    }
+    const std::unique_ptr<::view_info>& view_info() const {
+        return _view_info;
+    }
+    bool is_view() const {
+        return bool(_view_info);
+    }
+    const query::partition_slice& full_slice() const {
+        return *_full_slice;
+    }
+    // Returns all index names of this schema.
+    std::vector<sstring> index_names() const;
+    // Returns all indices of this schema.
+    std::vector<index_metadata> indices() const;
+    const std::unordered_map<sstring, index_metadata>& all_indices() const;
+    // Search for an index with a given name.
+    bool has_index(const sstring& index_name) const;
+    // Search for an existing index with same kind and options.
+    std::optional<index_metadata> find_index_noname(const index_metadata& target) const;
+    friend std::ostream& operator<<(std::ostream& os, const schema& s);
+    /*!
+     * \brief stream the CQL DESCRIBE output.
+     *
+     * CQL DESCRIBE is implemented at the driver level. This method mimic that functionality
+     * inside Scylla.
+     *
+     * The output of DESCRIBE is the CQL command to create the described table with its indexes and views.
+     *
+     * For tables with Indexes or Materialized Views, the CQL DESCRIBE is split between the base and view tables.
+     * Calling the describe method on the base table schema would result with the CQL "CREATE TABLE"
+     * command for creating that table only.
+     *
+     * Calling the describe method on a view schema would result with the appropriate "CREATE MATERIALIZED VIEW"
+     * or "CREATE INDEX" depends on the type of index that schema describes (ie. Materialized View, Global
+     * Index or Local Index).
+     *
+     */
+    std::ostream& describe(std::ostream& os) const;
+    friend bool operator==(const schema&, const schema&);
+    const column_mapping& get_column_mapping() const;
+    friend class schema_registry_entry;
+    // May be called from different shard
+    schema_registry_entry* registry_entry() const noexcept;
+    // Returns true iff this schema version was synced with on current node.
+    // Schema version is said to be synced with when its mutations were merged
+    // into current node's schema, so that current node's schema is at least as
+    // recent as this version.
+    bool is_synced() const;
+    bool equal_columns(const schema&) const;
+    bool wait_for_sync_to_commitlog() const {
+        return _raw._wait_for_sync;
+    }
+public:
+    const v3_columns& v3() const {
+        return _v3_columns;
+    }
+};
+
+bool operator==(const schema&, const schema&);
+
+using schema_ptr = lw_shared_ptr<const schema>;
+
+/**
+ * Wrapper for schema_ptr used by functions that expect an engaged view_info field.
+ */
+class view_ptr final {
+    schema_ptr _schema;
+public:
+    explicit view_ptr(schema_ptr schema) noexcept : _schema(schema) {
+        if (schema) {
+            assert(_schema->is_view());
+        }
+    }
+
+    const schema& operator*() const noexcept { return *_schema; }
+    const schema* operator->() const noexcept { return _schema.operator->(); }
+    const schema* get() const noexcept { return _schema.get(); }
+
+    operator schema_ptr() const noexcept {
+        return _schema;
+    }
+
+    explicit operator bool() const noexcept {
+        return bool(_schema);
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const view_ptr& s);
+};
+
+std::ostream& operator<<(std::ostream& os, const view_ptr& view);
+
+utils::UUID generate_legacy_id(const sstring& ks_name, const sstring& cf_name);
+
+
+// Thrown when attempted to access a schema-dependent object using
+// an incompatible version of the schema object.
+class schema_mismatch_error : public std::runtime_error {
+public:
+    schema_mismatch_error(table_schema_version expected, const schema& access);
+};
+
+// Throws schema_mismatch_error when a schema-dependent object of "expected" version
+// cannot be accessed using "access" schema.
+inline void check_schema_version(table_schema_version expected, const schema& access) {
+    if (expected != access.version()) {
+        throw_with_backtrace<schema_mismatch_error>(expected, access);
+    }
+}
+
 #include "sstables/version.hh"
 
 //
@@ -2189,10 +3724,460 @@ int composite::tri_compare::operator()(const composite& v1, const composite& v2)
     return (*this)(composite_view(v1), composite_view(v2));
 }
 
-#include "utils/managed_bytes.hh"
-#include "hashing.hh"
-#include "database_fwd.hh"
-#include "schema_fwd.hh"
+#include <stdint.h>
+#include <memory>
+#include "bytes.hh"
+#include "utils/allocation_strategy.hh"
+#include <seastar/core/unaligned.hh>
+#include <seastar/util/alloc_failure_injector.hh>
+#include <unordered_map>
+#include <type_traits>
+
+struct blob_storage {
+    struct [[gnu::packed]] ref_type {
+        blob_storage* ptr;
+
+        ref_type() {}
+        ref_type(blob_storage* ptr) : ptr(ptr) {}
+        operator blob_storage*() const { return ptr; }
+        blob_storage* operator->() const { return ptr; }
+        blob_storage& operator*() const { return *ptr; }
+    };
+    using size_type = uint32_t;
+    using char_type = bytes_view::value_type;
+
+    ref_type* backref;
+    size_type size;
+    size_type frag_size;
+    ref_type next;
+    char_type data[];
+
+    blob_storage(ref_type* backref, size_type size, size_type frag_size) noexcept
+        : backref(backref)
+        , size(size)
+        , frag_size(frag_size)
+        , next(nullptr)
+    {
+        *backref = this;
+    }
+
+    blob_storage(blob_storage&& o) noexcept
+        : backref(o.backref)
+        , size(o.size)
+        , frag_size(o.frag_size)
+        , next(o.next)
+    {
+        *backref = this;
+        o.next = nullptr;
+        if (next) {
+            next->backref = &next;
+        }
+        memcpy(data, o.data, frag_size);
+    }
+} __attribute__((packed));
+
+// A managed version of "bytes" (can be used with LSA).
+class managed_bytes {
+    static thread_local std::unordered_map<const blob_storage*, std::unique_ptr<bytes_view::value_type[]>> _lc_state;
+    struct linearization_context {
+        unsigned _nesting = 0;
+        // Map from first blob_storage address to linearized version
+        // We use the blob_storage address to be insentive to moving
+        // a managed_bytes object.
+        // linearization_context is entered often in the fast path, but it is
+        // actually used only in rare (slow) cases.
+        std::unordered_map<const blob_storage*, std::unique_ptr<bytes_view::value_type[]>>* _state_ptr = nullptr;
+        void enter() {
+            ++_nesting;
+        }
+        void leave() {
+            if (!--_nesting && _state_ptr) {
+                _state_ptr->clear();
+                _state_ptr = nullptr;
+            }
+        }
+        void forget(const blob_storage* p) noexcept;
+    };
+    static thread_local linearization_context _linearization_context;
+public:
+    struct linearization_context_guard {
+        linearization_context_guard() {
+            _linearization_context.enter();
+        }
+        ~linearization_context_guard() {
+            _linearization_context.leave();
+        }
+    };
+private:
+    static constexpr size_t max_inline_size = 15;
+    struct small_blob {
+        bytes_view::value_type data[max_inline_size];
+        int8_t size; // -1 -> use blob_storage
+    };
+    union u {
+        u() {}
+        ~u() {}
+        blob_storage::ref_type ptr;
+        small_blob small;
+    } _u;
+    static_assert(sizeof(small_blob) > sizeof(blob_storage*), "inline size too small");
+private:
+    bool external() const {
+        return _u.small.size < 0;
+    }
+    size_t max_seg(allocation_strategy& alctr) {
+        return alctr.preferred_max_contiguous_allocation() - sizeof(blob_storage);
+    }
+    void free_chain(blob_storage* p) noexcept {
+        if (p->next && _linearization_context._nesting) {
+            _linearization_context.forget(p);
+        }
+        auto& alctr = current_allocator();
+        while (p) {
+            auto n = p->next;
+            alctr.destroy(p);
+            p = n;
+        }
+    }
+    const bytes_view::value_type* read_linearize() const {
+        seastar::memory::on_alloc_point();
+        if (!external()) {
+            return _u.small.data;
+        } else  if (!_u.ptr->next) {
+            return _u.ptr->data;
+        } else {
+            return do_linearize();
+        }
+    }
+    bytes_view::value_type& value_at_index(blob_storage::size_type index) {
+        if (!external()) {
+            return _u.small.data[index];
+        }
+        blob_storage* a = _u.ptr;
+        while (index >= a->frag_size) {
+            index -= a->frag_size;
+            a = a->next;
+        }
+        return a->data[index];
+    }
+    const bytes_view::value_type* do_linearize() const;
+public:
+    using size_type = blob_storage::size_type;
+    struct initialized_later {};
+
+    managed_bytes() {
+        _u.small.size = 0;
+    }
+
+    managed_bytes(const blob_storage::char_type* ptr, size_type size)
+        : managed_bytes(bytes_view(ptr, size)) {}
+
+    managed_bytes(const bytes& b) : managed_bytes(static_cast<bytes_view>(b)) {}
+
+    managed_bytes(initialized_later, size_type size) {
+        memory::on_alloc_point();
+        if (size <= max_inline_size) {
+            _u.small.size = size;
+        } else {
+            _u.small.size = -1;
+            auto& alctr = current_allocator();
+            auto maxseg = max_seg(alctr);
+            auto now = std::min(size_t(size), maxseg);
+            void* p = alctr.alloc(&get_standard_migrator<blob_storage>(),
+                sizeof(blob_storage) + now, alignof(blob_storage));
+            auto first = new (p) blob_storage(&_u.ptr, size, now);
+            auto last = first;
+            size -= now;
+            try {
+                while (size) {
+                    auto now = std::min(size_t(size), maxseg);
+                    void* p = alctr.alloc(&get_standard_migrator<blob_storage>(),
+                        sizeof(blob_storage) + now, alignof(blob_storage));
+                    last = new (p) blob_storage(&last->next, 0, now);
+                    size -= now;
+                }
+            } catch (...) {
+                free_chain(first);
+                throw;
+            }
+        }
+    }
+
+    managed_bytes(bytes_view v) : managed_bytes(initialized_later(), v.size()) {
+        if (!external()) {
+            // Workaround for https://github.com/scylladb/scylla/issues/4086
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Warray-bounds"
+            std::copy(v.begin(), v.end(), _u.small.data);
+            #pragma GCC diagnostic pop
+            return;
+        }
+        auto p = v.data();
+        auto s = v.size();
+        auto b = _u.ptr;
+        while (s) {
+            memcpy(b->data, p, b->frag_size);
+            p += b->frag_size;
+            s -= b->frag_size;
+            b = b->next;
+        }
+        assert(!b);
+    }
+
+    managed_bytes(std::initializer_list<bytes::value_type> b) : managed_bytes(b.begin(), b.size()) {}
+
+    ~managed_bytes() noexcept {
+        if (external()) {
+            free_chain(_u.ptr);
+        }
+    }
+
+    managed_bytes(const managed_bytes& o) : managed_bytes(initialized_later(), o.size()) {
+        if (!external()) {
+            memcpy(data(), o.data(), size());
+            return;
+        }
+        auto s = size();
+        const blob_storage::ref_type* next_src = &o._u.ptr;
+        blob_storage* blob_src = nullptr;
+        size_type size_src = 0;
+        size_type offs_src = 0;
+        blob_storage::ref_type* next_dst = &_u.ptr;
+        blob_storage* blob_dst = nullptr;
+        size_type size_dst = 0;
+        size_type offs_dst = 0;
+        while (s) {
+            if (!size_src) {
+                blob_src = *next_src;
+                next_src = &blob_src->next;
+                size_src = blob_src->frag_size;
+                offs_src = 0;
+            }
+            if (!size_dst) {
+                blob_dst = *next_dst;
+                next_dst = &blob_dst->next;
+                size_dst = blob_dst->frag_size;
+                offs_dst = 0;
+            }
+            auto now = std::min(size_src, size_dst);
+            memcpy(blob_dst->data + offs_dst, blob_src->data + offs_src, now);
+            s -= now;
+            offs_src += now; size_src -= now;
+            offs_dst += now; size_dst -= now;
+        }
+        assert(size_src == 0 && size_dst == 0);
+    }
+
+    managed_bytes(managed_bytes&& o) noexcept
+        : _u(o._u)
+    {
+        if (external()) {
+            if (_u.ptr) {
+                _u.ptr->backref = &_u.ptr;
+            }
+        }
+        o._u.small.size = 0;
+    }
+
+    managed_bytes& operator=(managed_bytes&& o) noexcept {
+        if (this != &o) {
+            this->~managed_bytes();
+            new (this) managed_bytes(std::move(o));
+        }
+        return *this;
+    }
+
+    managed_bytes& operator=(const managed_bytes& o) {
+        if (this != &o) {
+            managed_bytes tmp(o);
+            this->~managed_bytes();
+            new (this) managed_bytes(std::move(tmp));
+        }
+        return *this;
+    }
+
+    bool operator==(const managed_bytes& o) const {
+        if (size() != o.size()) {
+            return false;
+        }
+        if (!external()) {
+            return bytes_view(*this) == bytes_view(o);
+        } else {
+            auto a = _u.ptr;
+            auto a_data = a->data;
+            auto a_remain = a->frag_size;
+            a = a->next;
+            auto b = o._u.ptr;
+            auto b_data = b->data;
+            auto b_remain = b->frag_size;
+            b = b->next;
+            while (a_remain || b_remain) {
+                auto now = std::min(a_remain, b_remain);
+                if (bytes_view(a_data, now) != bytes_view(b_data, now)) {
+                    return false;
+                }
+                a_data += now;
+                a_remain -= now;
+                if (!a_remain && a) {
+                    a_data = a->data;
+                    a_remain = a->frag_size;
+                    a = a->next;
+                }
+                b_data += now;
+                b_remain -= now;
+                if (!b_remain && b) {
+                    b_data = b->data;
+                    b_remain = b->frag_size;
+                    b = b->next;
+                }
+            }
+            return true;
+        }
+    }
+
+    bool operator!=(const managed_bytes& o) const {
+        return !(*this == o);
+    }
+
+    operator bytes_view() const {
+        return { data(), size() };
+    }
+
+    bool is_fragmented() const {
+        return external() && _u.ptr->next;
+    }
+
+    operator bytes_mutable_view() {
+        assert(!is_fragmented());
+        return { data(), size() };
+    };
+
+    bytes_view::value_type& operator[](size_type index) {
+        return value_at_index(index);
+    }
+
+    const bytes_view::value_type& operator[](size_type index) const {
+        return const_cast<const bytes_view::value_type&>(
+                const_cast<managed_bytes*>(this)->value_at_index(index));
+    }
+
+    size_type size() const {
+        if (external()) {
+            return _u.ptr->size;
+        } else {
+            return _u.small.size;
+        }
+    }
+
+    const blob_storage::char_type* begin() const {
+        return data();
+    }
+
+    const blob_storage::char_type* end() const {
+        return data() + size();
+    }
+
+    blob_storage::char_type* begin() {
+        return data();
+    }
+
+    blob_storage::char_type* end() {
+        return data() + size();
+    }
+
+    bool empty() const {
+        return _u.small.size == 0;
+    }
+
+    blob_storage::char_type* data() {
+        if (external()) {
+            assert(!_u.ptr->next);  // must be linearized
+            return _u.ptr->data;
+        } else {
+            return _u.small.data;
+        }
+    }
+
+    const blob_storage::char_type* data() const {
+        return read_linearize();
+    }
+
+    // Returns the amount of external memory used.
+    size_t external_memory_usage() const {
+        if (external()) {
+            size_t mem = 0;
+            blob_storage* blob = _u.ptr;
+            while (blob) {
+                mem += blob->frag_size + sizeof(blob_storage);
+                blob = blob->next;
+            }
+            return mem;
+        }
+        return 0;
+    }
+
+    template <typename Func>
+    friend std::result_of_t<Func()> with_linearized_managed_bytes(Func&& func);
+};
+
+// Run func() while ensuring that reads of managed_bytes objects are
+// temporarlily linearized
+template <typename Func>
+inline
+std::result_of_t<Func()>
+with_linearized_managed_bytes(Func&& func) {
+    managed_bytes::linearization_context_guard g;
+    return func();
+}
+
+namespace std {
+
+template <>
+struct hash<managed_bytes> {
+    size_t operator()(const managed_bytes& v) const {
+        return hash<bytes_view>()(v);
+    }
+};
+
+}
+
+// blob_storage is a variable-size type
+inline
+size_t
+size_for_allocation_strategy(const blob_storage& bs) {
+    return sizeof(bs) + bs.frag_size;
+}
+
+// database.hh
+class database;
+class keyspace;
+class table;
+using column_family = table;
+class memtable_list;
+
+// mutation.hh
+class mutation;
+class mutation_partition;
+
+// schema.hh
+class schema;
+class column_definition;
+class column_mapping;
+
+// schema_mutations.hh
+class schema_mutations;
+
+// keys.hh
+class exploded_clustering_prefix;
+class partition_key;
+class partition_key_view;
+class clustering_key_prefix;
+class clustering_key_prefix_view;
+using clustering_key = clustering_key_prefix;
+using clustering_key_view = clustering_key_prefix_view;
+
+// memtable.hh
+class memtable;
 
 //
 // This header defines type system for primary key holders.
@@ -2752,14 +4737,12 @@ struct cell_hash {
 using cell_hash_opt = seastar::optimized_optional<cell_hash>;
 
 struct cell_and_hash {
-    atomic_cell_or_collection cell;
     mutable cell_hash_opt hash;
 
     cell_and_hash() = default;
     cell_and_hash(cell_and_hash&&) noexcept = default;
     cell_and_hash& operator=(cell_and_hash&&) noexcept = default;
 
-    cell_and_hash(atomic_cell_or_collection&& cell, cell_hash_opt hash);
 };
 
 class compaction_garbage_collector;
@@ -2778,18 +4761,11 @@ class row {
     class cell_entry {
         friend class row;
     public:
-        cell_entry(column_id id, cell_and_hash c_a_h);
-        cell_entry(column_id id, atomic_cell_or_collection cell);
         cell_entry(column_id id);
         cell_entry(cell_entry&&) noexcept;
-        cell_entry(const abstract_type&, const cell_entry&);
 
         column_id id() const;
-        const atomic_cell_or_collection& cell() const;
-        atomic_cell_or_collection& cell();
         const cell_hash_opt& hash() const;
-        const cell_and_hash& get_cell_and_hash() const;
-        cell_and_hash& get_cell_and_hash();
 
         struct compare {
             bool operator()(const cell_entry& e1, const cell_entry& e2) const ;
@@ -2815,12 +4791,6 @@ public:
 
     void reserve(column_id);
 
-    const atomic_cell_or_collection& cell_at(column_id id) const;
-
-    // Returns a pointer to cell's value or nullptr if column is not set.
-    const atomic_cell_or_collection* find_cell(column_id id) const;
-    // Returns a pointer to cell's value and hash or nullptr if column is not set.
-    const cell_and_hash* find_cell_and_hash(column_id id) const;
 private:
     template<typename Func>
     void remove_if(Func&& func);
@@ -3686,8 +5656,6 @@ private:
 };
 
 
-#include "keys.hh"
-#include "schema_fwd.hh"
 #include "dht/i_partitioner.hh"
 #include "hashing.hh"
 #include "mutation_fragment.hh"

@@ -296,11 +296,6 @@ struct normalize<bytes_view> {
 };
 
 template <>
-struct normalize<managed_bytes> {
-     using type = bytes;
-};
-
-template <>
 struct normalize<bytes_ostream> {
     using type = bytes;
 };
@@ -351,26 +346,11 @@ inline bool gc_clock_using_3_1_0_serialization = false;
 
 template <typename Output>
 void
-serialize_gc_clock_duration_value(Output& out, int64_t v) {
-    if (!gc_clock_using_3_1_0_serialization) {
-        // This should have been caught by the CQL layer, so this is just
-        // for extra safety.
-        assert(int32_t(v) == v);
-        serializer<int32_t>::write(out, v);
-    } else {
-        serializer<int64_t>::write(out, v);
-    }
-}
+serialize_gc_clock_duration_value(Output& out, int64_t v);
 
 template <typename Input>
 int64_t
-deserialize_gc_clock_duration_value(Input& in) {
-    if (!gc_clock_using_3_1_0_serialization) {
-        return serializer<int32_t>::read(in);
-    } else {
-        return serializer<int64_t>::read(in);
-    }
-}
+deserialize_gc_clock_duration_value(Input& in);
 
 }
 
