@@ -4132,78 +4132,31 @@ public:
     explicit nonwrapping_range(const wrapping_range<T>& r)
         : _range(r)
     { }
-    operator wrapping_range<T>() const & {
-        return _range;
-    }
-    operator wrapping_range<T>() && {
-        return std::move(_range);
-    }
+    operator wrapping_range<T>() const & ;
+    operator wrapping_range<T>() && ;
     template<typename Comparator>
-    bool before(const T& point, Comparator&& cmp) const {
-        return _range.before(point, std::forward<Comparator>(cmp));
-    }
+    bool before(const T& point, Comparator&& cmp) const ;
     template<typename Comparator>
-    bool after(const T& point, Comparator&& cmp) const {
-        return _range.after(point, std::forward<Comparator>(cmp));
-    }
+    bool after(const T& point, Comparator&& cmp) const ;
     template<typename Comparator>
-    bool overlaps(const nonwrapping_range& other, Comparator&& cmp) const {
-        if (!start() && !other.start()) {
-            return true;
-        }
-        return wrapping_range<T>::greater_than_or_equal(_range.end_bound(), other._range.start_bound(), cmp)
-            && wrapping_range<T>::greater_than_or_equal(other._range.end_bound(), _range.start_bound(), cmp);
-    }
-    static nonwrapping_range make(bound start, bound end) {
-        return nonwrapping_range({std::move(start)}, {std::move(end)});
-    }
-    static nonwrapping_range make_open_ended_both_sides() {
-        return {{}, {}};
-    }
-    static nonwrapping_range make_singular(T value) {
-        return {std::move(value)};
-    }
-    static nonwrapping_range make_starting_with(bound b) {
-        return {{std::move(b)}, {}};
-    }
-    static nonwrapping_range make_ending_with(bound b) {
-        return {{}, {std::move(b)}};
-    }
-    bool is_singular() const {
-        return _range.is_singular();
-    }
-    bool is_full() const {
-        return _range.is_full();
-    }
-    const optional<bound>& start() const {
-        return _range.start();
-    }
-    const optional<bound>& end() const {
-        return _range.end();
-    }
+    bool overlaps(const nonwrapping_range& other, Comparator&& cmp) const ;
+    static nonwrapping_range make(bound start, bound end) ;
+    static nonwrapping_range make_open_ended_both_sides() ;
+    static nonwrapping_range make_singular(T value) ;
+    static nonwrapping_range make_starting_with(bound b) ;
+    static nonwrapping_range make_ending_with(bound b) ;
+    bool is_singular() const ;
+    bool is_full() const ;
+    const optional<bound>& start() const ;
+    const optional<bound>& end() const ;
     template<typename Comparator>
-    bool contains(const T& point, Comparator&& cmp) const {
-        return !before(point, cmp) && !after(point, cmp);
-    }
+    bool contains(const T& point, Comparator&& cmp) const ;
     template<typename Comparator>
-    bool contains(const nonwrapping_range& other, Comparator&& cmp) const {
-        return wrapping_range<T>::less_than_or_equal(_range.start_bound(), other._range.start_bound(), cmp)
-                && wrapping_range<T>::greater_than_or_equal(_range.end_bound(), other._range.end_bound(), cmp);
-    }
+    bool contains(const nonwrapping_range& other, Comparator&& cmp) const ;
     template<typename Comparator>
-    std::vector<nonwrapping_range> subtract(const nonwrapping_range& other, Comparator&& cmp) const {
-        auto subtracted = _range.subtract(other._range, std::forward<Comparator>(cmp));
-        return boost::copy_range<std::vector<nonwrapping_range>>(subtracted | boost::adaptors::transformed([](auto&& r) {
-            return nonwrapping_range(std::move(r));
-        }));
-    }
+    std::vector<nonwrapping_range> subtract(const nonwrapping_range& other, Comparator&& cmp) const ;
     template<typename Comparator>
-    std::pair<nonwrapping_range<T>, nonwrapping_range<T>> split(const T& split_point, Comparator&& cmp) const {
-        assert(contains(split_point, std::forward<Comparator>(cmp)));
-        nonwrapping_range left(start(), bound(split_point));
-        nonwrapping_range right(bound(split_point, false), end());
-        return std::make_pair(std::move(left), std::move(right));
-    }
+    std::pair<nonwrapping_range<T>, nonwrapping_range<T>> split(const T& split_point, Comparator&& cmp) const ;
     template<typename Comparator>
     std::optional<nonwrapping_range> split_after(const T& split_point, Comparator&& cmp) const {
         if (end() && cmp(split_point, end()->value()) >= 0) {
@@ -4512,18 +4465,9 @@ public:
     bool is_maximum() const {
         return _kind == kind::after_all_keys;
     }
-    size_t external_memory_usage() const {
-        return 0;
-    }
-    size_t memory_usage() const {
-        return sizeof(token);
-    }
-    bytes data() const {
-        auto t = net::hton(_data);
-        bytes b(bytes::initialized_later(), sizeof(_data));
-        std::copy_n(reinterpret_cast<int8_t*>(&t), sizeof(_data), b.begin());
-        return b;
-    }
+    size_t external_memory_usage() const ;
+    size_t memory_usage() const ;
+    bytes data() const ;
     /**
      * @return a string representation of this token
      */
@@ -4559,18 +4503,16 @@ public:
     /**
      * Gets the first shard of the minimum token.
      */
-    static unsigned shard_of_minimum_token() {
-        return 0;  
-    }
+    static unsigned shard_of_minimum_token() ;
 };
 const token& minimum_token();
 const token& maximum_token();
 int tri_compare(const token& t1, const token& t2);
-inline bool operator==(const token& t1, const token& t2) { return tri_compare(t1, t2) == 0; }
-inline bool operator<(const token& t1, const token& t2) { return tri_compare(t1, t2) < 0; }
-inline bool operator!=(const token& t1, const token& t2) { return std::rel_ops::operator!=(t1, t2); }
-inline bool operator>(const token& t1, const token& t2) { return std::rel_ops::operator>(t1, t2); }
-inline bool operator<=(const token& t1, const token& t2) { return std::rel_ops::operator<=(t1, t2); }
+ bool operator==(const token& t1, const token& t2) ;
+ bool operator<(const token& t1, const token& t2) ;
+ bool operator!=(const token& t1, const token& t2) ;
+ bool operator>(const token& t1, const token& t2) ;
+ bool operator<=(const token& t1, const token& t2) ;
 inline bool operator>=(const token& t1, const token& t2) { return std::rel_ops::operator>=(t1, t2); }
 std::ostream& operator<<(std::ostream& out, const token& t);
 } 
