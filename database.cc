@@ -20,17 +20,11 @@
  */
 
 
-#include <algorithm>
 #include <atomic>
-#include <chrono>
-#include <cstdint>
 
 extern std::atomic<int64_t> clocks_offset;
 
 
-#include <chrono>
-#include <optional>
-#include <seastar/core/byteorder.hh>
 #include <seastar/core/sstring.hh>
 
 namespace seastar {
@@ -92,8 +86,6 @@ void feed_hash(H& h, const T& value, Args&&... args);
 
 #include <seastar/core/lowres_clock.hh>
 
-#include <chrono>
-#include <optional>
 
 class gc_clock final {
 public:
@@ -122,9 +114,6 @@ std::ostream& operator<<(std::ostream& os, gc_clock::time_point tp);
 
 
 
-#include <chrono>
-#include <cstdint>
-#include <ratio>
 
 // the database clock follows Java - 1ms granularity, 64-bit counter, 1970 epoch
 
@@ -147,9 +136,6 @@ gc_clock::time_point to_gc_clock(db_clock::time_point tp);
 std::ostream& operator<<(std::ostream&, db_clock::time_point);
 
 
-#include <chrono>
-#include <functional>
-#include <cstdint>
 #include <iosfwd>
 #include <optional>
 #include <string.h>
