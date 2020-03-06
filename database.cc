@@ -157,7 +157,6 @@ future< mutation_opt >
 read_mutation_from_flat_mutation_reader(int ,
                                         db::timeout_clock::time_point );
 class locked_cell;
-class frozen_mutation;
 class table {
 public:
   future< std::vector< locked_cell > >
@@ -165,7 +164,7 @@ public:
 };
 class database {
   future< mutation > do_apply_counter_update(
-      column_family &, const frozen_mutation &, schema_ptr ,
+      column_family &,  mutation m, schema_ptr ,
       db::timeout_clock::time_point );
 };
 template < typename Consumer >
@@ -177,19 +176,14 @@ void consume_partitions(db::timeout_clock::time_point timeout) {
     });
   });
 }
-class frozen_mutation {
-public:
-  mutation unfreeze() const;
-};
 class mutation_source {};
 future< int > counter_write_query(schema_ptr, const mutation_source ,
                                   const int ,
                                   const query::partition_slice);
 class locked_cell {};
 future< mutation > database::do_apply_counter_update(
-    column_family &cf, const frozen_mutation &fm, schema_ptr ,
+    column_family &cf, mutation m, schema_ptr ,
     db::timeout_clock::time_point timeout ) {
-  auto m = fm.unfreeze();
   query::column_id_vector static_columns;
   query::clustering_row_ranges cr_ranges;
   query::column_id_vector regular_columns;
