@@ -120,8 +120,6 @@ public:
   using time_point = lowres_clock_impl;
 };
 namespace query {
-using clustering_range = int;
-typedef std::vector< clustering_range > clustering_row_ranges;
 class specific_ranges {};
 auto max_rows = std::numeric_limits< uint32_t >::max();
 } namespace db {
@@ -161,7 +159,6 @@ class locked_cell {};
 future< mutation > database::do_apply_counter_update(
     mutation m, schema_ptr ,
     db::timeout_clock::time_point timeout ) {
-  query::clustering_row_ranges cr_ranges;
   return do_with(
       (m), std::vector< locked_cell >(),
       [this, timeout](mutation m,
