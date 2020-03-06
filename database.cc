@@ -26,7 +26,8 @@
            class cql_serialization_format {
           cql_protocol_version_type _version;
         public:     static constexpr cql_protocol_version_type latest_version = 4;
-          explicit cql_serialization_format(cql_protocol_version_type version)         : _version() {}
+          int cql_serialization_format_version;
+explicit cql_serialization_format(void)         : _version() {}
           static cql_serialization_format latest0 ;
           static cql_serialization_format internal() ;
          };
@@ -189,7 +190,9 @@
         public:       trace_state_ptr(nullptr_t);
         };
          
-          template <typename Consumer>     inline future<> consume_partitions(flat_mutation_reader & reader,                                        Consumer consumer,                                        db::timeout_clock::time_point timeout) {
+          template <typename Consumer>     inline future<> consume_partitions(                                                                                db::timeout_clock::time_point timeout) {
+    Consumer consumer;
+    class flat_mutation_reader & reader;
            using futurator = futurize<std::result_of_t<Consumer>>;
            return do_with(           std::move, [&reader, timeout](Consumer &c) -> future<> {
                 return repeat([&reader, &c, timeout] {
@@ -200,13 +203,13 @@
     );
          }
           class frozen_mutation final {
-         public:       mutation unfreeze(schema_ptr s) const;
+         public:       mutation unfreeze(void) const;
          };
           class mutation_source {};
           future<mutation_opt> counter_write_query(         schema_ptr, const mutation_source &, const dht::decorated_key &dk,         const query::partition_slice &slice,         trace_state_ptr trace_ptr);
           class locked_cell {};
           future<mutation> database::do_apply_counter_update(         column_family & cf, const frozen_mutation &fm, schema_ptr m_schema,         db::timeout_clock::time_point timeout,         trace_state_ptr trace_state) {
-           auto m = fm.unfreeze(m_schema);
+           auto m = fm.unfreeze();
            query::column_id_vector static_columns;
            query::clustering_row_ranges cr_ranges;
            query::column_id_vector regular_columns;
