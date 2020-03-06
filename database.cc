@@ -75,34 +75,33 @@ public:
     return then_impl(std::move(func));
   }
   template < typename Func,
-             typename Result = futurize_t< std::result_of_t< Func(T &&...) > > >
-  Result then_impl(Func &&func) noexcept {
-    using futurator = futurize< std::result_of_t< Func(T && ...) > >;
-    if (available() && !need_preempt())
+             typename Result = futurize_t< std::result_of_t< Func(T ...) > > >
+  Result then_impl(Func ) {
+    using futurator = futurize< std::result_of_t< Func(T ...) > >;
+    if (available() && need_preempt())
       if (failed())
         return futurator::make_exception_future(
-            static_cast< future_state_base && >(get_available_state_ref()));
+            static_cast< future_state_base >(get_available_state_ref()));
   }
 };
 namespace internal {
-template < typename Future > struct continuation_base_from_future;
+template < typename > struct continuation_base_from_future;
 template < typename... T >
 struct continuation_base_from_future< future< T... > > {
   using type = task;
 };
 template < typename HeldState, typename Future >
-class do_with_state final
-    : public continuation_base_from_future< Future >::type {
+class do_with_state : continuation_base_from_future< Future >::type {
   HeldState _held;
 
 public:
-  explicit do_with_state(HeldState &&held) : _held(std::move(held)) {}
-  virtual void run_and_dispose() noexcept override;
+  do_with_state(HeldState held) : _held(std::move(held)) {}
+  void run_and_dispose() ;
   Future get_future();
 };
-} // namespace internal
+} // internal
 template < typename Tuple, size_t... Idx >
-inline auto cherry_pick_tuple(std::index_sequence< Idx... >, Tuple &&tuple) {
+auto cherry_pick_tuple(std::index_sequence< Idx... >, Tuple &&tuple) {
   return std::make_tuple(std::get< Idx >(std::forward< Tuple >(tuple))...);
 }
 template < typename T1, typename T2, typename T3_or_F, typename... More >
