@@ -10240,30 +10240,14 @@ struct ipv4_address {
     friend bool operator==(ipv4_address x, ipv4_address y) {
         return x.ip == y.ip;
     }
-    friend bool operator!=(ipv4_address x, ipv4_address y) {
-        return x.ip != y.ip;
-    }
-    static ipv4_address read(const char* p) {
-        ipv4_address ia;
-        ia.ip = read_be<uint32_t>(p);
-        return ia;
-    }
-    static ipv4_address consume(const char*& p) {
-        auto ia = read(p);
-        p += 4;
-        return ia;
-    }
-    void write(char* p) const {
-        write_be<uint32_t>(p, ip);
-    }
-    void produce(char*& p) const {
-        produce_be<uint32_t>(p, ip);
-    }
-    static constexpr size_t size() {
-        return 4;
-    }
+    friend bool operator!=(ipv4_address x, ipv4_address y) ;
+    static ipv4_address read(const char* p) ;
+    static ipv4_address consume(const char*& p) ;
+    void write(char* p) const ;
+    void produce(char*& p) const ;
+    static constexpr size_t size() ;
 } __attribute__((packed));
-static inline bool is_unspecified(ipv4_address addr) { return addr.ip == 0; }
+static bool is_unspecified(ipv4_address addr) ;
 std::ostream& operator<<(std::ostream& os, const ipv4_address& a);
 struct ipv6_address {
     using ipv6_bytes = std::array<uint8_t, 16>;
@@ -10276,24 +10260,16 @@ struct ipv6_address {
     ipv6_address(const ipv6_addr& addr);
     ipv6_bytes ip;
     template <typename Adjuster>
-    auto adjust_endianness(Adjuster a) { return a(ip); }
-    bool operator==(const ipv6_address& y) const {
-        return bytes() == y.bytes();
-    }
-    bool operator!=(const ipv6_address& y) const {
-        return !(*this == y);
-    }
-    const ipv6_bytes& bytes() const {
-        return ip;
-    }
+    auto adjust_endianness(Adjuster a) ;
+    bool operator==(const ipv6_address& y) const ;
+    bool operator!=(const ipv6_address& y) const ;
+    const ipv6_bytes& bytes() const ;
     bool is_unspecified() const;
     static ipv6_address read(const char*);
     static ipv6_address consume(const char*& p);
     void write(char* p) const;
     void produce(char*& p) const;
-    static constexpr size_t size() {
-        return sizeof(ipv6_bytes);
-    }
+    static constexpr size_t size() ;
 } __attribute__((packed));
 std::ostream& operator<<(std::ostream&, const ipv6_address&);
 }
@@ -10320,9 +10296,7 @@ struct ipv4_traits {
         ip_protocol_num proto_num;
     };
     using packet_provider_type = std::function<compat::optional<l4packet> ()>;
-    static void tcp_pseudo_header_checksum(checksummer& csum, ipv4_address src, ipv4_address dst, uint16_t len) {
-        csum.sum_many(src.ip.raw, dst.ip.raw, uint8_t(0), uint8_t(ip_protocol_num::tcp), len);
-    }
+    static void tcp_pseudo_header_checksum(checksummer& csum, ipv4_address src, ipv4_address dst, uint16_t len) ;
     static void udp_pseudo_header_checksum(checksummer& csum, ipv4_address src, ipv4_address dst, uint16_t len) {
         csum.sum_many(src.ip.raw, dst.ip.raw, uint8_t(0), uint8_t(ip_protocol_num::udp), len);
     }
@@ -10446,26 +10420,20 @@ public:
         uint16_t _port;
     public:
         registration(ipv4_udp &proto, uint16_t port) : _proto(proto), _port(port) {};
-        void unregister() {
-            _proto._channels.erase(_proto._channels.find(_port));
-        }
-        uint16_t port() const {
-            return _port;
-        }
+        void unregister() ;
+        uint16_t port() const ;
     };
     ipv4_udp(ipv4& inet);
     udp_channel make_channel(ipv4_addr addr);
     virtual void received(packet p, ipv4_address from, ipv4_address to) override;
     void send(uint16_t src_port, ipv4_addr dst, packet &&p);
     bool forward(forward_hash& out_hash_data, packet& p, size_t off) override;
-    void set_queue_size(int size) { _queue_size = size; }
-    const ipv4& inet() const {
-        return _inet;
-    }
+    void set_queue_size(int size) ;
+    const ipv4& inet() const ;
 };
 struct ip_hdr;
 struct ip_packet_filter {
-    virtual ~ip_packet_filter() {};
+    virtual ~ip_packet_filter() ;;
     virtual future<> handle(packet& p, ip_hdr* iph, ethernet_address from, bool & handled) = 0;
 };
 struct ipv4_frag_id {
@@ -10474,24 +10442,11 @@ struct ipv4_frag_id {
     ipv4_address dst_ip;
     uint16_t identification;
     uint8_t protocol;
-    bool operator==(const ipv4_frag_id& x) const {
-        return src_ip == x.src_ip &&
-               dst_ip == x.dst_ip &&
-               identification == x.identification &&
-               protocol == x.protocol;
-    }
+    bool operator==(const ipv4_frag_id& x) const ;
 };
 struct ipv4_frag_id::hash : private std::hash<ipv4_address>,
     private std::hash<uint16_t>, private std::hash<uint8_t> {
-    size_t operator()(const ipv4_frag_id& id) const noexcept {
-        using h1 = std::hash<ipv4_address>;
-        using h2 = std::hash<uint16_t>;
-        using h3 = std::hash<uint8_t>;
-        return h1::operator()(id.src_ip) ^
-               h1::operator()(id.dst_ip) ^
-               h2::operator()(id.identification) ^
-               h3::operator()(id.protocol);
-    }
+    size_t operator()(const ipv4_frag_id& id) const noexcept ;
 };
 struct ipv4_tag {};
 using ipv4_packet_merger = packet_merger<uint32_t, ipv4_tag>;
@@ -10500,8 +10455,8 @@ public:
     using clock_type = lowres_clock;
     using address_type = ipv4_address;
     using proto_type = uint16_t;
-    static address_type broadcast_address() { return ipv4_address(0xffffffff); }
-    static proto_type arp_protocol_type() { return proto_type(eth_protocol_num::ipv4); }
+    static address_type broadcast_address() ;
+    static proto_type arp_protocol_type() ;
 private:
     interface* _netif;
     std::vector<ipv4_traits::packet_provider_type> _pkt_providers;
@@ -10544,14 +10499,8 @@ private:
     void frag_limit_mem();
     void frag_timeout();
     void frag_drop(ipv4_frag_id frag_id, uint32_t dropped_size);
-    void frag_arm(clock_type::time_point now) {
-        auto tp = now + _frag_timeout;
-        _frag_timer.arm(tp);
-    }
-    void frag_arm() {
-        auto now = clock_type::now();
-        frag_arm(now);
-    }
+    void frag_arm(clock_type::time_point now) ;
+    void frag_arm() ;
 public:
     explicit ipv4(interface* netif);
     void set_host_address(ipv4_address ip);
@@ -10560,13 +10509,11 @@ public:
     ipv4_address gw_address() const;
     void set_netmask_address(ipv4_address ip);
     ipv4_address netmask_address() const;
-    interface * netif() const {
-        return _netif;
-    }
+    interface * netif() const ;
     void set_packet_filter(ip_packet_filter *);
     ip_packet_filter * packet_filter() const;
     void send(ipv4_address to, ip_protocol_num proto_num, packet p, ethernet_address e_dst);
-    tcp<ipv4_traits>& get_tcp() { return *_tcp._tcp; }
+    tcp<ipv4_traits>& get_tcp() ;
     ipv4_udp& get_udp() { return _udp; }
     void register_l4(proto_type id, ip_protocol* handler);
     const net::hw_features& hw_features() const { return _netif->hw_features(); }
