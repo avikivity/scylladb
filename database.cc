@@ -126,7 +126,6 @@ public:
 };
 class table;
 using column_family = table;
-class trace_state_ptr;
 namespace query {
 using column_id_vector = utils::small_vector< column_id, 8 >;
 using clustering_range = int;
@@ -167,11 +166,7 @@ public:
 class database {
   future< mutation > do_apply_counter_update(
       column_family &, const frozen_mutation &, schema_ptr ,
-      db::timeout_clock::time_point , trace_state_ptr );
-};
-class trace_state_ptr {
-public:
-  trace_state_ptr(nullptr_t);
+      db::timeout_clock::time_point );
 };
 template < typename Consumer >
 void consume_partitions(db::timeout_clock::time_point timeout) {
@@ -189,12 +184,11 @@ public:
 class mutation_source {};
 future< int > counter_write_query(schema_ptr, const mutation_source ,
                                   const int ,
-                                  const query::partition_slice ,
-                                  trace_state_ptr );
+                                  const query::partition_slice);
 class locked_cell {};
 future< mutation > database::do_apply_counter_update(
     column_family &cf, const frozen_mutation &fm, schema_ptr ,
-    db::timeout_clock::time_point timeout, trace_state_ptr ) {
+    db::timeout_clock::time_point timeout ) {
   auto m = fm.unfreeze();
   query::column_id_vector static_columns;
   query::clustering_row_ranges cr_ranges;
@@ -209,7 +203,7 @@ future< mutation > database::do_apply_counter_update(
         return cf.lock_counter_cells(m, timeout)
             .then([&](std::vector< locked_cell > ) {
               return counter_write_query(schema_ptr(), mutation_source(),
-                                         m.decorated_key(), slice, nullptr)
+                                         m.decorated_key(), slice)
                   .then([m](auto ) {
                     return (m);
                   });
