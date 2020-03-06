@@ -1544,11 +1544,6 @@ namespace seastar {
     class double_registration : public std::runtime_error {
     public:
     };
-    using metric_type_def = sstring;
-    using metric_name_type = sstring;
-    class description {
-      enum class data_type : uint8_t {};
-    };
     };
 }
 ;
@@ -1563,16 +1558,6 @@ namespace std {
 namespace seastar {
     namespace internal {}
     class reactor {
-      struct io_stats {};
-      class signals {
-        struct signal_handler {};
-      };
-      friend class alien::message_queue;
-      friend class pollable_fd;
-      friend class scheduling_group;
-      metrics::metric_groups _metric_groups;
-      ;
-      ;
       ;
       ;
     public:
