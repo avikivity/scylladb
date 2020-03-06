@@ -19,12 +19,8 @@ class basic_sstring {};
 } 
 using namespace seastar;
 #define GCC6_CONCEPT(x...)
-GCC6_CONCEPT(template <typename H> concept bool Hasher() {
-    ) template <typename T, typename Enable = void> struct appending_hash;
     namespace seastar {
     struct lw_shared_ptr_counter_base {};
-    template <typename T>
-    struct shared_ptr_no_esft : private lw_shared_ptr_counter_base {};
     template <typename T> struct lw_shared_ptr_deleter;
     namespace internal {
     template <typename... T> using void_t = void;
@@ -49,8 +45,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
      T &operator*() noexcept { return _object; }
    };
    }
-    namespace utils {
-   }
     using cql_protocol_version_type = uint8_t;
     class cql_serialization_format {
     cql_protocol_version_type _version;
@@ -65,10 +59,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
    };
     namespace utils {
     template <typename T, size_t N> class small_vector {
-      static_assert(N > 0);
-      static_assert(std::is_nothrow_move_constructible_v<T>);
-      static_assert(std::is_nothrow_move_assignable_v<T>);
-      static_assert(std::is_nothrow_destructible_v<T>);
     private:
       T *_begin;
       T *_end;
@@ -89,14 +79,10 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
         if (!ptr) {
           throw std::bad_alloc();
         }
-        auto n_end = std::uninitialized_move(begin(), end(), ptr);
-        std::destroy(begin(), end());
         if (!uses_internal_storage()) {
           std::free(_begin);
         }
         _begin = ptr;
-        _end = n_end;
-        _capacity_end = ptr + new_capacity;
       }
       [[gnu::cold]] [[gnu::noinline]] void
       slow_copy_assignment(const small_vector &other) {
@@ -109,8 +95,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
         try {
           n_end = std::uninitialized_copy(other.begin(), other.end(), n_end);
         } catch (...) {
-          std::free(ptr);
-          throw;
         }
         std::destroy(begin(), end());
         _capacity_end = n_end;
@@ -125,10 +109,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
       }
     public:
       using value_type = T;
-      using pointer = T *;
-      using const_pointer = const T *;
-      using reference = T &;
-      using const_reference = const T &;
       using iterator = T *;
       using const_iterator = const T *;
       using reverse_iterator = std::reverse_iterator<iterator>;
@@ -143,8 +123,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
                           typename std::iterator_traits<
                               InputIterator>::iterator_category>) {
           reserve(std::distance(first, last));
-          _end = std::uninitialized_copy(first, last, _end);
-        } else {
           std::copy(first, last, std::back_inserter(*this));
         }
       }
@@ -155,22 +133,10 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
           _begin = _internal.storage;
           _capacity_end = _begin + N;
           if constexpr (std::is_trivially_copyable_v<T>) {
-            std::memcpy(_internal.storage, other._internal.storage,
-                        N * sizeof(T));
-            _end = _begin + other.size();
-          } else {
             _end = _begin;
             for (auto &e : other) {
-              new (_end++) T(std::move(e));
-              e.~T();
             }
           }
-          other._end = other._internal.storage;
-        } else {
-          _begin = std::exchange(other._begin, other._internal.storage);
-          _end = std::exchange(other._end, other._internal.storage);
-          _capacity_end =
-              std::exchange(other._capacity_end, other._internal.storage + N);
         }
       }
       small_vector(const small_vector &other) noexcept : small_vector() {
@@ -181,28 +147,14 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
         clear();
         if (other.uses_internal_storage()) {
           if (__builtin_expect(!uses_internal_storage(), false)) {
-            std::free(_begin);
-            _begin = _internal.storage;
-            _end = _begin + other.size();
-          } else {
             _end = _begin;
             for (auto &e : other) {
-              new (_end++) T(std::move(e));
-              e.~T();
             }
           }
-          other._end = other._internal.storage;
-        } else {
-          _capacity_end =
-              std::exchange(other._capacity_end, other._internal.storage + N);
         }
         return *this;
-      }
-      small_vector &operator=(const small_vector &other) {
         if constexpr (std::is_nothrow_copy_constructible_v<T>) {
           if (capacity() >= other.size()) {
-            clear();
-            _end = std::uninitialized_copy(other.begin(), other.end(), _end);
             return *this;
           }
         }
