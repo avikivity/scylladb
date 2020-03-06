@@ -533,14 +533,6 @@ make_object_deleter(deleter d, T&& obj) {
 //
 // Tell Eclipse that IN_ECLIPSE is defined so it will ignore all the unknown syntax.
 
-#ifndef IN_ECLIPSE
-
-#else
-
-// Eclipse doesn't grok alignof
-#define alignof sizeof
-
-#endif
 #include <algorithm>
 
 namespace seastar {
@@ -1477,17 +1469,10 @@ std::ostream& operator<<(std::ostream& os, const std::unordered_map<Key, T, Hash
 }
 }
 using namespace seastar;
-#ifndef SEASTAR_HAVE_GCC6_CONCEPTS
 
 #define GCC6_CONCEPT(x...)
 #define GCC6_NO_CONCEPT(x...) x
 
-#else
-
-#define GCC6_CONCEPT(x...) x
-#define GCC6_NO_CONCEPT(x...)
-
-#endif
 GCC6_CONCEPT(template <typename H> concept bool Hasher() {
   return requires(H & h, const char *ptr, size_t size) {
     { h.update(ptr, size) }
@@ -1580,11 +1565,7 @@ namespace seastar {
 // and lw_enable_shared_from_this<>().
 //
 
-#ifndef SEASTAR_DEBUG_SHARED_PTR
 using shared_ptr_counter_type = long;
-#else
-using shared_ptr_counter_type = debug_shared_ptr_counter_type;
-#endif
 
 template <typename T>
 class lw_shared_ptr;
@@ -3613,7 +3594,6 @@ struct preemption_monitor {
 extern __thread const internal::preemption_monitor* g_need_preempt;
 
 inline bool need_preempt() noexcept {
-#ifndef SEASTAR_DEBUG
     // prevent compiler from eliminating loads in a loop
     std::atomic_signal_fence(std::memory_order_seq_cst);
     auto np = g_need_preempt;
@@ -3624,9 +3604,6 @@ inline bool need_preempt() noexcept {
     // Possible optimization: read head and tail in a single 64-bit load,
     // and find a funky way to compare the two 32-bit halves.
     return __builtin_expect(head != tail, false);
-#else
-    return true;
-#endif
 }
 
 }
@@ -3642,14 +3619,7 @@ class thread_context;
 class scheduling_group;
 
 struct jmp_buf_link {
-#ifdef SEASTAR_ASAN_ENABLED
-    ucontext_t context;
-    void* fake_stack = nullptr;
-    const void* stack_bottom;
-    size_t stack_size;
-#else
     jmp_buf jmpbuf;
-#endif
     jmp_buf_link* link;
     thread_context* thread;
 public:
@@ -3956,27 +3926,13 @@ alloc_failure_injector& local_failure_injector() {
     return the_alloc_failure_injector;
 }
 
-#ifdef SEASTAR_ENABLE_ALLOC_FAILURE_INJECTION
-
-struct disable_failure_guard {
-    disable_failure_guard() { ++local_failure_injector()._suppressed; }
-    ~disable_failure_guard() { --local_failure_injector()._suppressed; }
-};
-
-#else
-
 struct disable_failure_guard {
     ~disable_failure_guard() {}
 };
 
-#endif
-
 // Marks a point in code which should be considered for failure injection
 inline
 void on_alloc_point() {
-#ifdef SEASTAR_ENABLE_ALLOC_FAILURE_INJECTION
-    local_failure_injector().on_alloc_point();
-#endif
 }
 
 }
@@ -4575,12 +4531,6 @@ public:
         }
     }
 
-#if SEASTAR_COROUTINES_TS
-    void set_coroutine(future_state<T...>& state, task& coroutine) noexcept {
-        _state = &state;
-        _task = &coroutine;
-    }
-#endif
 private:
     template <typename Func>
     void schedule(Func&& func) noexcept {
@@ -5106,14 +5056,7 @@ public:
     GCC6_CONCEPT( requires ::seastar::CanApply<Func, T...> )
     Result
     then(Func&& func) noexcept {
-#ifndef SEASTAR_TYPE_ERASE_MORE
         return then_impl(std::move(func));
-#else
-        using futurator = futurize<std::result_of_t<Func(T&&...)>>;
-        return then_impl(noncopyable_function<Result (T&&...)>([func = std::forward<Func>(func)] (T&&... args) mutable {
-            return futurator::apply(func, std::forward_as_tuple(std::move(args)...));
-        }));
-#endif
     }
 
 private:
@@ -5181,14 +5124,7 @@ private:
     template <bool AsSelf, typename FuncResult, typename Func>
     futurize_t<FuncResult>
     then_wrapped_maybe_erase(Func&& func) noexcept {
-#ifndef SEASTAR_TYPE_ERASE_MORE
         return then_wrapped_common<AsSelf, FuncResult>(std::forward<Func>(func));
-#else
-        using futurator = futurize<FuncResult>;
-        return then_wrapped_common<AsSelf, FuncResult>(noncopyable_function<typename futurator::type (future&&)>([func = std::forward<Func>(func)] (future&& f) mutable {
-            return futurator::apply(std::forward<Func>(func), std::move(f));
-        }));
-#endif
     }
 
     template <bool AsSelf, typename FuncResult, typename Func>
@@ -5406,13 +5342,6 @@ public:
         _state.ignore();
     }
 
-#if SEASTAR_COROUTINES_TS
-    void set_coroutine(task& coroutine) noexcept {
-        assert(!_state.available());
-        assert(_promise);
-        detach_promise()->set_coroutine(_state, coroutine);
-    }
-#endif
 private:
     void set_callback(continuation_base<T...>* callback) noexcept {
         if (_state.available()) {
@@ -5901,21 +5830,10 @@ const bool_class<Tag> bool_class<Tag>::no { false };
 }
 
 // For IDEs that don't see SEASTAR_API_LEVEL, generate a nice default
-#ifndef SEASTAR_API_LEVEL
 #define SEASTAR_API_LEVEL 2
-#endif
-
-#if SEASTAR_API_LEVEL >= 2
-
-#define SEASTAR_INCLUDE_API_V2 inline
-#define SEASTAR_INCLUDE_API_V1
-
-#else
 
 #define SEASTAR_INCLUDE_API_V2
 #define SEASTAR_INCLUDE_API_V1 inline
-
-#endif
 
 namespace seastar {
 
@@ -5926,11 +5844,7 @@ template <class CharType> class output_stream;
 // reactor.hh
 SEASTAR_INCLUDE_API_V2 namespace api_v2 { class server_socket; }
 
-#if SEASTAR_API_LEVEL <= 1
-
 SEASTAR_INCLUDE_API_V1 namespace api_v1 { class server_socket; }
-
-#endif
 
 class connected_socket;
 class socket_address;
@@ -10560,13 +10474,6 @@ get_iocb(const linux_abi::io_event& ev) {
 inline
 void
 set_nowait(linux_abi::iocb& iocb, bool nowait) {
-#ifdef RWF_NOWAIT
-    if (nowait) {
-        iocb.aio_rw_flags |= RWF_NOWAIT;
-    } else {
-        iocb.aio_rw_flags &= ~RWF_NOWAIT;
-    }
-#endif
 }
 
 }
@@ -11285,11 +11192,7 @@ using keepalive_params = compat::variant<tcp_keepalive_params, sctp_keepalive_pa
 class connected_socket_impl;
 class socket_impl;
 
-#if SEASTAR_API_LEVEL <= 1
-
 SEASTAR_INCLUDE_API_V1 namespace api_v1 { class server_socket_impl; }
-
-#endif
 
 SEASTAR_INCLUDE_API_V2 namespace api_v2 { class server_socket_impl; }
 class udp_channel_impl;
@@ -11512,8 +11415,6 @@ public:
 
 }
 
-#if SEASTAR_API_LEVEL <= 1
-
 SEASTAR_INCLUDE_API_V1 namespace api_v1 {
 
 class server_socket {
@@ -11536,8 +11437,6 @@ public:
 };
 
 }
-
-#endif
 
 /// @}
 
@@ -14548,11 +14447,7 @@ namespace memory {
 
 /// \cond internal
 
-#ifdef SEASTAR_OVERRIDE_ALLOCATOR_PAGE_SIZE
-#define SEASTAR_INTERNAL_ALLOCATOR_PAGE_SIZE (SEASTAR_OVERRIDE_ALLOCATOR_PAGE_SIZE)
-#else
 #define SEASTAR_INTERNAL_ALLOCATOR_PAGE_SIZE 4096
-#endif
 
 static constexpr size_t page_size = SEASTAR_INTERNAL_ALLOCATOR_PAGE_SIZE;
 static constexpr size_t page_bits = log2ceil(page_size);
@@ -16908,13 +16803,6 @@ struct pollfn {
 
 }
 
-#ifdef HAVE_OSV
-#include <osv/sched.hh>
-#include <osv/mutex.h>
-#include <osv/condvar.h>
-#include <osv/newpoll.hh>
-#endif
-
 struct _Unwind_Exception;
 extern "C" int _Unwind_RaiseException(struct _Unwind_Exception *h);
 
@@ -17061,16 +16949,7 @@ private:
     reactor_config _cfg;
     file_desc _notify_eventfd;
     file_desc _task_quota_timer;
-#ifdef HAVE_OSV
-    reactor_backend_osv _backend;
-    sched::thread _timer_thread;
-    sched::thread *_engine_thread;
-    mutable mutex _timer_mutex;
-    condvar _timer_cond;
-    s64 _timer_due = 0;
-#else
     std::unique_ptr<reactor_backend> _backend;
-#endif
     sigset_t _active_sigmask; // holds sigmask while sleeping with sig disabled
     std::vector<pollfn*> _pollers;
 
@@ -17390,18 +17269,11 @@ public:
         _at_destroy_tasks->_q.push_back(make_task(default_scheduling_group(), std::forward<Func>(func)));
     }
 
-#ifdef SEASTAR_SHUFFLE_TASK_QUEUE
-    void shuffle(task*&, task_queue&);
-#endif
-
     void add_task(task* t) noexcept {
         auto sg = t->group();
         auto* q = _task_queues[sg._id].get();
         bool was_empty = q->_q.empty();
         q->_q.push_back(std::move(t));
-#ifdef SEASTAR_SHUFFLE_TASK_QUEUE
-        shuffle(q->_q.back(), *q);
-#endif
         if (was_empty) {
             activate(*q);
         }
@@ -17411,9 +17283,6 @@ public:
         auto* q = _task_queues[sg._id].get();
         bool was_empty = q->_q.empty();
         q->_q.push_front(std::move(t));
-#ifdef SEASTAR_SHUFFLE_TASK_QUEUE
-        shuffle(q->_q.front(), *q);
-#endif
         if (was_empty) {
             activate(*q);
         }
@@ -17445,10 +17314,6 @@ public:
 
     const io_stats& get_io_stats() const { return _io_stats; }
     uint64_t abandoned_failed_futures() const { return _abandoned_failed_futures; }
-#ifdef HAVE_OSV
-    void timer_thread_func();
-    void set_timer(sched::timer &tmr, s64 t);
-#endif
 private:
     /**
      * Add a new "poller" - a non-blocking function returning a boolean, that
