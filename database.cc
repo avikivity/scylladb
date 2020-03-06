@@ -154,13 +154,6 @@ class bytes_ostream {
    [[gnu::noinline]] value_type *alloc_new(size_type size) {     auto alloc_size = next_alloc_size(size);     auto space = malloc(alloc_size);     if (!space) {       throw std::bad_alloc();     }     auto new_chunk = std::unique_ptr<chunk>(new (space) chunk());     new_chunk->offset = size;     new_chunk->size = alloc_size - sizeof(chunk);     if (_current) {       _current->next = std::move(new_chunk);       _current = _current->next.get();     } else {       _begin = std::move(new_chunk);       _current = _begin.get();     }     _size += size;     return _current->data;   }
  public:   explicit bytes_ostream(size_t initial_chunk_size) noexcept       : _begin(), _current(nullptr), _size(0),         _initial_chunk_size(initial_chunk_size) {}
    bytes_ostream() noexcept : bytes_ostream(default_chunk_size) {}
-   bytes_ostream(bytes_ostream &&o) noexcept       : _begin(std::move(o._begin)), _current(o._current), _size(o._size),         _initial_chunk_size(o._initial_chunk_size) {     o._current = nullptr;     o._size = 0;   }
-   bytes_ostream(const bytes_ostream &o)       : _begin(), _current(nullptr), _size(0),         _initial_chunk_size(o._initial_chunk_size) {     append(o);   }
-   bytes_ostream &operator=(const bytes_ostream &o) {     if (this != &o) {       auto x = bytes_ostream(o);       *this = std::move(x);     }     return *this;   }
-   bytes_ostream &operator=(bytes_ostream &&o) noexcept {     if (this != &o) {       this->~bytes_ostream();       new (this) bytes_ostream(std::move(o));     }     return *this;   }
-   template <typename T> struct place_holder {     value_type *ptr;     seastar::simple_output_stream get_stream() {       return seastar::simple_output_stream(reinterpret_cast<char *>(ptr),                                            sizeof(T));     }   };
-   template <typename T>   inline std::enable_if_t<std::is_fundamental<T>::value, place_holder<T>>   write_place_holder() {     return place_holder<T>{alloc(sizeof(T))};   }
-   [[gnu::always_inline]] value_type *write_place_holder(size_type size) {     return alloc(size);   }
    [[gnu::always_inline]] inline void write(bytes_view v) {     if (v.empty()) {       return;     }     auto this_size = std::min(v.size(), size_t(current_space_left()));     if (__builtin_expect(this_size, true)) {       memcpy(_current->data + _current->offset, v.begin(), this_size);       _current->offset += this_size;       _size += this_size;       v.remove_prefix(this_size);     }     while (!v.empty()) {       auto this_size = std::min(v.size(), size_t(max_chunk_size()));       std::copy_n(v.begin(), this_size, alloc_new(this_size));       v.remove_prefix(this_size);     }   }
    [[gnu::always_inline]] void write(const char *ptr, size_t size) {     write(bytes_view(reinterpret_cast<const signed char *>(ptr), size));   }
    bool is_linearized() const { return !_begin || !_begin->next; }
@@ -294,13 +287,6 @@ class bytes_ostream {
   static constexpr int DEFAULT_MIN_INDEX_INTERVAL = 128;
   static constexpr int DEFAULT_GC_GRACE_SECONDS = 864000;
   class column_mapping_entry {
-   bytes _name;
-   data_type _type;
-   bool _is_atomic;
- public: };
-  class column_mapping {
- private:   std::vector<column_mapping_entry> _columns;
-   column_count_type _n_static = 0;
  public: };
   class raw_view_info final {
    utils::UUID _base_id;
@@ -329,13 +315,6 @@ class bytes_ostream {
    mutable schema_registry_entry *_registry_entry = nullptr;
    std::unique_ptr<::view_info> _view_info;
    const std::array<column_count_type, 3> _offsets;
-   std::unordered_map<bytes, const column_definition *> _columns_by_name;
-   lw_shared_ptr<compound_type<allow_prefixes::no>> _partition_key_type;
-   lw_shared_ptr<compound_type<allow_prefixes::yes>> _clustering_key_type;
-   column_mapping _column_mapping;
-   shared_ptr<query::partition_slice> _full_slice;
-   column_count_type _clustering_key_size;
-   column_count_type _regular_column_count;
    column_count_type _static_column_count;
    friend class db::extensions;
    friend class schema_builder;
@@ -357,20 +336,6 @@ class bytes_ostream {
    bool has_static_columns() const;
    column_count_type columns_count(column_kind kind) const;
    column_count_type partition_key_size() const;
-   column_count_type clustering_key_size() const;
-   typedef boost::range::joined_range<const_iterator_range_type,                                      const_iterator_range_type>       select_order_range;
-   const std::unordered_map<bytes, const column_definition *> &   columns_by_name() const;
-   const auto &dropped_columns() const;
-   const auto &collections() const;
-   gc_clock::duration default_time_to_live() const;
-   data_type make_legacy_default_validator() const;
-   const sstring &ks_name() const;
-   const sstring &cf_name() const;
-   const lw_shared_ptr<compound_type<allow_prefixes::no>> &   partition_key_type() const;
-   const lw_shared_ptr<compound_type<allow_prefixes::yes>> &   clustering_key_type() const;
-   const lw_shared_ptr<compound_type<allow_prefixes::yes>> &   clustering_key_prefix_type() const;
-   const data_type &regular_column_name_type() const;
-   const data_type &static_column_name_type() const;
    const std::unique_ptr<::view_info> &view_info() const;
    bool is_view() const;
    const query::partition_slice &full_slice() const;
@@ -504,13 +469,6 @@ class migrate_fn_type {
   template <typename T> class nonwrapping_range;
   template <typename T> class wrapping_range {
    template <typename U> using optional = std::optional<U>;
- public:   using bound = range_bound<T>;
-   template <typename Transformer>   using transformed_type = typename std::remove_cv_t<       std::remove_reference_t<std::result_of_t<Transformer(T)>>>;
- private:   optional<bound> _start;
-   optional<bound> _end;
-   bool _singular;
- public: private:   struct start_bound_ref {     const optional<bound> &b;   };
-   struct end_bound_ref {     const optional<bound> &b;   };
    ;
    ;
  private:   friend class nonwrapping_range<T>;
@@ -799,18 +757,9 @@ namespace bi = boost::intrusive;
   namespace mutation_reader {
  using forwarding = flat_mutation_reader::partition_range_forwarding;
  }
-  enum class partition_presence_checker_result {
-   definitely_doesnt_exist,   maybe_exists };
-  using partition_presence_checker =     std::function<partition_presence_checker_result(         const dht::decorated_key &key)>;
   class mutation_source {
    using partition_range = const dht::partition_range &;
    using io_priority = const io_priority_class &;
-   using flat_reader_factory_type = std::function<flat_mutation_reader(       schema_ptr, reader_permit, partition_range,       const query::partition_slice &, io_priority, tracing::trace_state_ptr,       streamed_mutation::forwarding, mutation_reader::forwarding)>;
- public:   mutation_source() = default;
-   explicit operator bool() const;
-   friend class optimized_optional<mutation_source>;
- public:   flat_mutation_reader   make_reader(schema_ptr s, reader_permit permit = no_reader_permit(),               partition_range range = query::full_partition_range) const;
-   partition_presence_checker make_partition_presence_checker();
  };
   future<mutation_opt> counter_write_query(schema_ptr, const mutation_source &,                                          const dht::decorated_key &dk,                                          const query::partition_slice &slice,                                          tracing::trace_state_ptr trace_ptr);
   class locked_cell {
