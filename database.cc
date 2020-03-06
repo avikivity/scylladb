@@ -399,10 +399,6 @@ namespace bi = boost::intrusive;
  using flat_mutation_reader_opt = optimized_optional<flat_mutation_reader>;
  template<typename Impl, typename... Args> flat_mutation_reader make_flat_mutation_reader(Args &&... args) {     return flat_mutation_reader(std::make_unique<Impl>(std::forward<Args>(args)...)); }
  template<typename T> GCC6_CONCEPT(     requires StreamedMutationTranformer<T>() ) flat_mutation_reader transform(flat_mutation_reader r, T t);
- inline flat_mutation_reader& to_reference(flat_mutation_reader& r) { return r; }
- inline const flat_mutation_reader& to_reference(const flat_mutation_reader& r) { return r; }
-     flat_mutation_reader flat_mutation_reader_from_mutations(std::vector<mutation>, const dht::partition_range& pr = query::full_partition_range, streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
- inline flat_mutation_reader flat_mutation_reader_from_mutations(std::vector<mutation> ms, streamed_mutation::forwarding fwd) {     return flat_mutation_reader_from_mutations(std::move(ms), query::full_partition_range, fwd); }
  flat_mutation_reader flat_mutation_reader_from_mutations(std::vector<mutation> ms,                                     const query::partition_slice& slice,                                     streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
  flat_mutation_reader flat_mutation_reader_from_mutations(std::vector<mutation> ms,                                     const dht::partition_range& pr,                                     const query::partition_slice& slice,                                     streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
      flat_mutation_reader make_flat_mutation_reader_from_fragments(schema_ptr, std::deque<mutation_fragment>, const dht::partition_range& pr, const query::partition_slice& slice);
