@@ -1339,11 +1339,6 @@ namespace seastar {
       friend future<U...> make_ready_future(A &&... value);
       template <typename... U>
       friend future<U...>
-      make_exception_future(std::exception_ptr &&ex) noexcept;
-      template <typename... U, typename Exception>
-      friend future<U...> make_exception_future(Exception &&ex) noexcept;
-      template <typename... U>
-      friend future<U...>
       internal::make_exception_future(future_state_base &&state) noexcept;
       template <typename... U, typename V>
       friend void internal::set_callback(future<U...> &, V *) noexcept;
@@ -1433,26 +1428,6 @@ namespace seastar {
  namespace seastar {
     template <typename Timer, boost::intrusive::list_member_hook<> Timer::*link>
     class timer_set {
-    public:
-      using time_point = typename Timer::time_point;
-      using timer_list_t = boost::intrusive::list<
-          Timer, boost::intrusive::member_hook<
-                     Timer, boost::intrusive::list_member_hook<>, link>>;
-    private:
-      using duration = typename Timer::duration;
-      using timestamp_t = typename Timer::duration::rep;
-      static constexpr timestamp_t max_timestamp =
-          std::numeric_limits<timestamp_t>::max();
-      static constexpr int timestamp_bits =
-          std::numeric_limits<timestamp_t>::digits;
-      static constexpr int n_buckets = timestamp_bits + 1;
-      std::array<timer_list_t, n_buckets> _buckets;
-      timestamp_t _last;
-      timestamp_t _next;
-      std::bitset<n_buckets> _non_empty_buckets;
-    private:
-      static timestamp_t get_timestamp(time_point _time_point);
-    public:
     };
    };
     namespace seastar {
