@@ -97,16 +97,8 @@ namespace seastar { class logger; }
  class serialized_tri_compare;
  class user_type_impl;
  class abstract_type : public enable_shared_from_this<abstract_type> {   sstring _name;   std::optional<uint32_t> _value_length_if_fixed; public:   enum class kind : int8_t {     ascii,     boolean,     byte,     bytes,     counter,     date,     decimal,     double_kind,     duration,     empty,     float_kind,     inet,     int32,     list,     long_kind,     map,     reversed,     set,     short_kind,     simple_date,     time,     timestamp,     timeuuid,     tuple,     user,     utf8,     uuid,     varint,   }; private:   kind _kind; public:   kind get_kind() const;                                  public:                        bool is_reversed() const;   friend class list_type_impl; private:   mutable sstring _cql3_type_name; protected:   friend class tuple_type_impl;   friend class data_value;   friend class reversed_type_impl;   template <typename T> friend const T &value_cast(const data_value &value);   ; };
- bool operator==(const data_value &x, const data_value &y);
- using bytes_view_opt = std::optional<bytes_view>;
- static bool optional_equal(data_type t, bytes_view_opt e1, bytes_view_opt e2);
- static bool less_compare(data_type t, bytes_view e1, bytes_view e2);
  static int tri_compare(data_type t, bytes_view e1, bytes_view e2);
- int tri_compare_opt(data_type t, bytes_view_opt v1, bytes_view_opt v2);
  extern thread_local const shared_ptr<const abstract_type> bytes_type;
- extern thread_local const shared_ptr<const abstract_type> utf8_type;
- extern thread_local const shared_ptr<const abstract_type> boolean_type;
- template <typename Type> static typename Type::value_type deserialize_value(Type &t,                                                           bytes_view v) ;
  template <typename T> T read_simple(bytes_view &v) ;
 #include <boost/range/adaptor/transformed.hpp>
   enum class allow_prefixes { no, yes };
