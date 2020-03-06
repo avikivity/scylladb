@@ -7975,12 +7975,8 @@ public:
             _sem.signal();
         }
     }
-    void broadcast() {
-        _sem.signal(_sem.waiters());
-    }
-    void broken() {
-        _sem.broken();
-    }
+    void broadcast() ;
+    void broken() ;
 };
 }
 #include <mutex>
@@ -8015,14 +8011,7 @@ private:
         const void* object;
     };
     template <typename Arg>
-    stringer stringer_for(const Arg& arg) {
-        return stringer{
-            [] (std::ostream& os, const void* object) {
-                os << *static_cast<const std::remove_reference_t<Arg>*>(object);
-            },
-            &arg
-        };
-    };
+    stringer stringer_for(const Arg& arg) ;;
     template <typename... Args>
     void do_log(log_level level, const char* fmt, Args&&... args);
     void really_do_log(log_level level, const char* fmt, const stringer* stringers, size_t n);
@@ -8032,51 +8021,23 @@ public:
     logger(logger&& x);
     ~logger();
     bool is_shard_zero();
-    bool is_enabled(log_level level) const {
-        return __builtin_expect(level <= _level.load(std::memory_order_relaxed), false);
-    }
+    bool is_enabled(log_level level) const ;
     template <typename... Args>
-    void log(log_level level, const char* fmt, const Args&... args) {
-        if (is_enabled(level)) {
-            try {
-                do_log(level, fmt, args...);
-            } catch (...) {
-                failed_to_log(std::current_exception());
-            }
-        }
-    }
+    void log(log_level level, const char* fmt, const Args&... args) ;
     template <typename... Args>
-    void error(const char* fmt, Args&&... args) {
-        log(log_level::error, fmt, std::forward<Args>(args)...);
-    }
+    void error(const char* fmt, Args&&... args) ;
     template <typename... Args>
-    void warn(const char* fmt, Args&&... args) {
-        log(log_level::warn, fmt, std::forward<Args>(args)...);
-    }
+    void warn(const char* fmt, Args&&... args) ;
     template <typename... Args>
-    void info(const char* fmt, Args&&... args) {
-        log(log_level::info, fmt, std::forward<Args>(args)...);
-    }
+    void info(const char* fmt, Args&&... args) ;
     template <typename... Args>
-    void info0(const char* fmt, Args&&... args) {
-        if (is_shard_zero()) {
-            log(log_level::info, fmt, std::forward<Args>(args)...);
-        }
-    }
+    void info0(const char* fmt, Args&&... args) ;
     template <typename... Args>
-    void debug(const char* fmt, Args&&... args) {
-        log(log_level::debug, fmt, std::forward<Args>(args)...);
-    }
+    void debug(const char* fmt, Args&&... args) ;
     template <typename... Args>
-    void trace(const char* fmt, Args&&... args) {
-        log(log_level::trace, fmt, std::forward<Args>(args)...);
-    }
-    const sstring& name() const {
-        return _name;
-    }
-    log_level level() const {
-        return _level.load(std::memory_order_relaxed);
-    }
+    void trace(const char* fmt, Args&&... args) ;
+    const sstring& name() const ;
+    log_level level() const ;
     void set_level(log_level level) {
         _level.store(level, std::memory_order_relaxed);
     }
@@ -8456,39 +8417,18 @@ enum class data_type : uint8_t {
 struct metric_value {
     compat::variant<double, histogram> u;
     data_type _type;
-    data_type type() const {
-        return _type;
-    }
-    double d() const {
-        return compat::get<double>(u);
-    }
-    uint64_t ui() const {
-        return compat::get<double>(u);
-    }
-    int64_t i() const {
-        return compat::get<double>(u);
-    }
-    metric_value()
-            : _type(data_type::GAUGE) {
-    }
-    metric_value(histogram&& h, data_type t = data_type::HISTOGRAM) :
-        u(std::move(h)), _type(t) {
-    }
-    metric_value(const histogram& h, data_type t = data_type::HISTOGRAM) :
-        u(h), _type(t) {
-    }
-    metric_value(double d, data_type t)
-            : u(d), _type(t) {
-    }
+    data_type type() const ;
+    double d() const ;
+    uint64_t ui() const ;
+    int64_t i() const ;
+    metric_value()  ;
+    metric_value(histogram&& h, data_type t = data_type::HISTOGRAM)  ;
+    metric_value(const histogram& h, data_type t = data_type::HISTOGRAM)  ;
+    metric_value(double d, data_type t)  ;
     metric_value& operator=(const metric_value& c) = default;
-    metric_value& operator+=(const metric_value& c) {
-        *this = *this + c;
-        return *this;
-    }
+    metric_value& operator+=(const metric_value& c) ;
     metric_value operator+(const metric_value& c);
-    const histogram& get_histogram() const {
-        return compat::get<histogram>(u);
-    }
+    const histogram& get_histogram() const ;
 };
 using metric_function = std::function<metric_value()>;
 struct metric_type {
@@ -8548,83 +8488,53 @@ extern label shard_label;
 extern label type_label;
 template<typename T>
 impl::metric_definition_impl make_gauge(metric_name_type name,
-        T&& val, description d=description(), std::vector<label_instance> labels = {}) {
-    return {name, {impl::data_type::GAUGE, "gauge"}, make_function(std::forward<T>(val), impl::data_type::GAUGE), d, labels};
-}
+        T&& val, description d=description(), std::vector<label_instance> labels = {}) ;
 template<typename T>
 impl::metric_definition_impl make_gauge(metric_name_type name,
-        description d, T&& val) {
-    return {name, {impl::data_type::GAUGE, "gauge"}, make_function(std::forward<T>(val), impl::data_type::GAUGE), d, {}};
-}
+        description d, T&& val) ;
 template<typename T>
 impl::metric_definition_impl make_gauge(metric_name_type name,
-        description d, std::vector<label_instance> labels, T&& val) {
-    return {name, {impl::data_type::GAUGE, "gauge"}, make_function(std::forward<T>(val), impl::data_type::GAUGE), d, labels};
-}
+        description d, std::vector<label_instance> labels, T&& val) ;
 template<typename T>
 impl::metric_definition_impl make_derive(metric_name_type name,
-        T&& val, description d=description(), std::vector<label_instance> labels = {}) {
-    return {name, {impl::data_type::DERIVE, "derive"}, make_function(std::forward<T>(val), impl::data_type::DERIVE), d, labels};
-}
+        T&& val, description d=description(), std::vector<label_instance> labels = {}) ;
 template<typename T>
 impl::metric_definition_impl make_derive(metric_name_type name, description d,
-        T&& val) {
-    return {name, {impl::data_type::DERIVE, "derive"}, make_function(std::forward<T>(val), impl::data_type::DERIVE), d, {}};
-}
+        T&& val) ;
 template<typename T>
 impl::metric_definition_impl make_derive(metric_name_type name, description d, std::vector<label_instance> labels,
-        T&& val) {
-    return {name, {impl::data_type::DERIVE, "derive"}, make_function(std::forward<T>(val), impl::data_type::DERIVE), d, labels};
-}
+        T&& val) ;
 template<typename T>
 impl::metric_definition_impl make_counter(metric_name_type name,
-        T&& val, description d=description(), std::vector<label_instance> labels = {}) {
-    return {name, {impl::data_type::COUNTER, "counter"}, make_function(std::forward<T>(val), impl::data_type::COUNTER), d, labels};
-}
+        T&& val, description d=description(), std::vector<label_instance> labels = {}) ;
 template<typename T>
 impl::metric_definition_impl make_absolute(metric_name_type name,
-        T&& val, description d=description(), std::vector<label_instance> labels = {}) {
-    return {name, {impl::data_type::ABSOLUTE, "absolute"}, make_function(std::forward<T>(val), impl::data_type::ABSOLUTE), d, labels};
-}
+        T&& val, description d=description(), std::vector<label_instance> labels = {}) ;
 template<typename T>
 impl::metric_definition_impl make_histogram(metric_name_type name,
-        T&& val, description d=description(), std::vector<label_instance> labels = {}) {
-    return  {name, {impl::data_type::HISTOGRAM, "histogram"}, make_function(std::forward<T>(val), impl::data_type::HISTOGRAM), d, labels};
-}
+        T&& val, description d=description(), std::vector<label_instance> labels = {}) ;
 template<typename T>
 impl::metric_definition_impl make_histogram(metric_name_type name,
-        description d, std::vector<label_instance> labels, T&& val) {
-    return  {name, {impl::data_type::HISTOGRAM, "histogram"}, make_function(std::forward<T>(val), impl::data_type::HISTOGRAM), d, labels};
-}
+        description d, std::vector<label_instance> labels, T&& val) ;
 template<typename T>
 impl::metric_definition_impl make_histogram(metric_name_type name,
-        description d, T&& val) {
-    return  {name, {impl::data_type::HISTOGRAM, "histogram"}, make_function(std::forward<T>(val), impl::data_type::HISTOGRAM), d, {}};
-}
+        description d, T&& val) ;
 template<typename T>
 impl::metric_definition_impl make_total_bytes(metric_name_type name,
         T&& val, description d=description(), std::vector<label_instance> labels = {},
-        instance_id_type instance = impl::shard()) {
-    return make_derive(name, std::forward<T>(val), d, labels)(type_label("total_bytes"));
-}
+        instance_id_type instance = impl::shard()) ;
 template<typename T>
 impl::metric_definition_impl make_current_bytes(metric_name_type name,
         T&& val, description d=description(), std::vector<label_instance> labels = {},
-        instance_id_type instance = impl::shard()) {
-    return make_derive(name, std::forward<T>(val), d, labels)(type_label("bytes"));
-}
+        instance_id_type instance = impl::shard()) ;
 template<typename T>
 impl::metric_definition_impl make_queue_length(metric_name_type name,
         T&& val, description d=description(), std::vector<label_instance> labels = {},
-        instance_id_type instance = impl::shard()) {
-    return make_gauge(name, std::forward<T>(val), d, labels)(type_label("queue_length"));
-}
+        instance_id_type instance = impl::shard()) ;
 template<typename T>
 impl::metric_definition_impl make_total_operations(metric_name_type name,
         T&& val, description d=description(), std::vector<label_instance> labels = {},
-        instance_id_type instance = impl::shard()) {
-    return make_derive(name, std::forward<T>(val), d, labels)(type_label("total_operations"));
-}
+        instance_id_type instance = impl::shard()) ;
 }
 }
 #include <deque>
@@ -8642,7 +8552,7 @@ struct smp_service_group_config {
 class smp_service_group {
     unsigned _id;
 private:
-    explicit smp_service_group(unsigned id) : _id(id) {}
+    explicit smp_service_group(unsigned id)  ;
     friend unsigned internal::smp_service_group_id(smp_service_group ssg);
     friend smp_service_group default_smp_service_group();
     friend future<smp_service_group> create_smp_service_group(smp_service_group_config ssgc);
