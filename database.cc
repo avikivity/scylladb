@@ -92,7 +92,7 @@ namespace seastar {
         };
          }
           template <typename... T>     class promise : private internal::promise_base_with_type<T...> {
-         public:       promise();
+         public:       
            future<T...> get_future() noexcept;
     };
           template <typename T> struct futurize {
@@ -137,18 +137,8 @@ namespace seastar {
            }
           }
          };
-          template <typename T>     template <typename Func, typename... FuncArgs>     typename futurize<T>::type futurize<T>::apply(         Func && func, std::tuple<FuncArgs...> && args) noexcept {
-           try {
-          }
-     catch (...) {
-          }
-         }
-          template <typename... Args>     template <typename Func, typename... FuncArgs>     typename futurize<future<Args...>>::type futurize<future<Args...>>::apply(         Func && func, std::tuple<FuncArgs...> && args) noexcept {
-           try {
-          }
-     catch (...) {
-          }
-         }
+          
+          
           template <typename Tag> class bool_class {
          };
           namespace internal {
