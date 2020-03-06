@@ -356,21 +356,6 @@ class migrate_fn_type {
    size_t align() const { return _align; }
    uint32_t index() const { return _index; }
  };
-  class allocation_strategy {
- protected:   size_t _preferred_max_contiguous_allocation =       std::numeric_limits<size_t>::max();
-   uint64_t _invalidate_counter = 1;
- public:   using migrate_fn = const migrate_fn_type *;
-   virtual ~allocation_strategy();
-   virtual void *alloc(migrate_fn, size_t size, size_t alignment) = 0;
-   virtual void free(void *object, size_t size) = 0;
-   virtual void free(void *object) = 0;
-   virtual size_t object_memory_size_in_allocator(const void *obj) const       noexcept = 0;
-   template <typename T, typename... Args> T *construct(Args &&... args);
-   template <typename T> void destroy(T *obj);
-   size_t preferred_max_contiguous_allocation() const;
-   uint64_t invalidate_counter() const;
-   void invalidate_references();
- };
   struct blob_storage {
    struct [[gnu::packed]] ref_type {     blob_storage *ptr;     ref_type() {}     ref_type(blob_storage * ptr) : ptr(ptr) {}     operator blob_storage *() const { return ptr; }     blob_storage *operator->() const { return ptr; }     blob_storage &operator*() const { return *ptr; }   };
    using size_type = uint32_t;
@@ -385,27 +370,12 @@ class migrate_fn_type {
   __attribute__((packed));
   class managed_bytes {
    static thread_local std::unordered_map<       const blob_storage *, std::unique_ptr<bytes_view::value_type[]>>       _lc_state;
-   struct linearization_context {     unsigned _nesting = 0;     std::unordered_map<const blob_storage *,                        std::unique_ptr<bytes_view::value_type[]>> *_state_ptr =         nullptr;   };
-   static thread_local linearization_context _linearization_context;
- public:   struct linearization_context_guard {};
  private:   static constexpr size_t max_inline_size = 15;
    struct small_blob {     bytes_view::value_type data[max_inline_size];     int8_t size;   };
    union u {     blob_storage::ref_type ptr;     small_blob small;   }
  _u;
    static_assert(sizeof(small_blob) > sizeof(blob_storage *),                 "inline size too small");
  private:   bool external() const;
-   size_t max_seg(allocation_strategy &alctr) {     return alctr.preferred_max_contiguous_allocation() - sizeof(blob_storage);   }
-   void free_chain(blob_storage *p) noexcept;
-   const bytes_view::value_type *read_linearize() const;
-   bytes_view::value_type &value_at_index(blob_storage::size_type index);
-   const bytes_view::value_type *do_linearize() const;
- public:   using size_type = blob_storage::size_type;
-   struct initialized_later {};
-   managed_bytes &operator=(const managed_bytes &o);
-   bool operator==(const managed_bytes &o) const;
-   blob_storage::char_type *data();
-   const blob_storage::char_type *data() const;
-   size_t external_memory_usage() const;
    template <typename Func>   friend std::result_of_t<Func()> with_linearized_managed_bytes(Func &&func);
  };
   class table;
