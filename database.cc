@@ -23,7 +23,6 @@ template < typename... T >
 struct future_state
     : future_state_base,
       internal::uninitialized_wrapper< std::tuple< T... > > {
-  static_assert(std::is_nothrow_move_constructible< std::tuple< T... > >::value);
 };
 template < typename T > struct futurize {
   using type = future< T >;
