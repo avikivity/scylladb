@@ -1135,25 +1135,17 @@ namespace seastar {
       enum class option {
         send_clustering_key,
         send_partition_key,
-        send_timestamp,
-        send_expiry,
-        reversed,
-        distinct,
-        bypass_cache,
         always_return_static_content,
       };
       using option_set = enum_set<super_enum<
           option, option::send_clustering_key, option::send_partition_key,
-          option::send_timestamp, option::send_expiry, option::reversed,
           option::always_return_static_content>>;
-    public:
       partition_slice(
           clustering_row_ranges row_ranges, column_id_vector static_columns,
           column_id_vector regular_columns, option_set options,
           std::unique_ptr<specific_ranges> specific_ranges = nullptr,
           cql_serialization_format = cql_serialization_format::internal(),
           uint32_t partition_row_limit = max_rows);
-      partition_slice(const partition_slice &);
     };  }
     namespace db {
     using timeout_clock = seastar::lowres_clock;  }
@@ -1175,18 +1167,15 @@ namespace seastar {
                          db::timeout_clock::time_point timeout);
     };
     class database {
-    private:
       future<mutation>
       do_apply_counter_update(column_family &cf, const frozen_mutation &fm,
                               schema_ptr m_schema,
                               db::timeout_clock::time_point timeout,
                               tracing::trace_state_ptr trace_state);
-    public:
     };
     namespace tracing {
     class trace_state_ptr final {
     public:
-      trace_state_ptr();
       trace_state_ptr(nullptr_t);
     };
     }
@@ -1209,7 +1198,6 @@ namespace seastar {
     }
     class frozen_mutation final {
     public:
-      frozen_mutation(const mutation &m);
       mutation unfreeze(schema_ptr s) const;
     };
     class mutation_source {};
@@ -1236,7 +1224,6 @@ namespace seastar {
                                std::vector<locked_cell> &locks) mutable {
             return cf.lock_counter_cells(m, timeout)
                 .then([&, timeout, this](std::vector<locked_cell> lcs) mutable {
-                  locks = std::move(lcs);
                   return counter_write_query(schema_ptr(), mutation_source(),
                                              m.decorated_key(), slice, nullptr)
                       .then([this, &cf, &m, timeout](auto mopt) {
