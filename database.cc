@@ -124,7 +124,6 @@ class lowres_clock {
 public:
   using time_point = lowres_clock_impl;
 };
-class table;
 namespace query {
 using column_id_vector = utils::small_vector< column_id, 8 >;
 using clustering_range = int;
@@ -145,14 +144,11 @@ future< mutation_opt >
 read_mutation_from_flat_mutation_reader(int ,
                                         db::timeout_clock::time_point );
 class locked_cell;
-class table {
-public:
   future< std::vector< locked_cell > >
   lock_counter_cells(mutation , db::timeout_clock::time_point );
-};
 class database {
   future< mutation > do_apply_counter_update(
-      table &,  mutation m, schema_ptr ,
+      mutation m, schema_ptr ,
       db::timeout_clock::time_point );
 };
 template < typename Consumer >
@@ -169,16 +165,16 @@ future< int > counter_write_query(schema_ptr, const mutation_source ,
                                   const int);
 class locked_cell {};
 future< mutation > database::do_apply_counter_update(
-    table &cf, mutation m, schema_ptr ,
+    mutation m, schema_ptr ,
     db::timeout_clock::time_point timeout ) {
   query::column_id_vector static_columns;
   query::clustering_row_ranges cr_ranges;
   query::column_id_vector regular_columns;
   return do_with(
       (m), std::vector< locked_cell >(),
-      [this, cf, timeout](mutation m,
+      [this, timeout](mutation m,
                            std::vector< locked_cell > ) mutable {
-        return cf.lock_counter_cells(m, timeout)
+        return lock_counter_cells(m, timeout)
             .then([&](std::vector< locked_cell > ) {
               return counter_write_query(schema_ptr(), mutation_source(),
                                          m.decorated_key())
