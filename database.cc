@@ -23,21 +23,11 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
     ) template <typename T, typename Enable = void> struct appending_hash;
     namespace seastar {
     struct lw_shared_ptr_counter_base {};
-    namespace internal {
-    template <class T, class U> struct lw_shared_ptr_accessors;
-    }
-    template <typename T>
-    class enable_lw_shared_from_this : private lw_shared_ptr_counter_base {};
     template <typename T>
     struct shared_ptr_no_esft : private lw_shared_ptr_counter_base {};
     template <typename T> struct lw_shared_ptr_deleter;
     namespace internal {
     template <typename... T> using void_t = void;
-    template <typename T>
-    struct lw_shared_ptr_accessors<
-        T, void_t<decltype(lw_shared_ptr_deleter<T>{})>> {
-      using concrete_type = T;
-    };
     }
     template <typename T> class lw_shared_ptr {};
     template <typename T> class shared_ptr {};
@@ -123,11 +113,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
           throw;
         }
         std::destroy(begin(), end());
-        if (!uses_internal_storage()) {
-          std::free(_begin);
-        }
-        _begin = ptr;
-        _end = n_end;
         _capacity_end = n_end;
       }
       void reserve_at_least(size_t n) {
@@ -198,11 +183,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
           if (__builtin_expect(!uses_internal_storage(), false)) {
             std::free(_begin);
             _begin = _internal.storage;
-          }
-          _capacity_end = _begin + N;
-          if constexpr (std::is_trivially_copyable_v<T>) {
-            std::memcpy(_internal.storage, other._internal.storage,
-                        N * sizeof(T));
             _end = _begin + other.size();
           } else {
             _end = _begin;
@@ -213,11 +193,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
           }
           other._end = other._internal.storage;
         } else {
-          if (__builtin_expect(!uses_internal_storage(), false)) {
-            std::free(_begin);
-          }
-          _begin = std::exchange(other._begin, other._internal.storage);
-          _end = std::exchange(other._end, other._internal.storage);
           _capacity_end =
               std::exchange(other._capacity_end, other._internal.storage + N);
         }
@@ -238,11 +213,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
         clear();
         if (__builtin_expect(!uses_internal_storage(), false)) {
           std::free(_begin);
-        }
-      }
-      void reserve(size_t n) {
-        if (__builtin_expect(_begin + n > _capacity_end, false)) {
-          expand(n);
         }
       }
       void clear() noexcept {
@@ -318,11 +288,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
           auto pos = _begin + idx;
           auto after = std::distance(pos, end());
           if (__builtin_expect(pos == end(), true)) {
-            _end = std::uninitialized_copy(first, last, end());
-            return pos;
-          } else if (after > new_count) {
-            std::uninitialized_move(end() - new_count, end(), end());
-            std::move_backward(pos, end() - new_count, end());
             try {
               std::copy(first, last, pos);
             } catch (...) {
@@ -373,16 +338,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
         if (pos != _end) {
           new (_end) T(std::move(_end[-1]));
           std::move_backward(pos, _end - 1, _end);
-          pos->~T();
-        }
-        try {
-          new (pos) T(std::forward<Args>(args)...);
-        } catch (...) {
-          if (pos != _end) {
-            new (pos) T(std::move(pos[1]));
-            std::move(pos + 2, _end + 1, pos + 1);
-            _end->~T();
-          }
           throw;
         }
         _end++;
@@ -418,11 +373,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
       }
       iterator erase(const_iterator cfirst, const_iterator clast) noexcept {
         auto first = const_cast<iterator>(cfirst);
-        auto last = const_cast<iterator>(clast);
-        std::move(last, end(), first);
-        auto nend = _end - (clast - cfirst);
-        std::destroy(nend, _end);
-        _end = nend;
         return first;
       }
       void swap(small_vector &other) noexcept { std::swap(*this, other); }
@@ -739,14 +689,10 @@ namespace seastar {
     struct future_state
         : public future_state_base,
           private internal::uninitialized_wrapper<std::tuple<T...>> {
-      static constexpr bool copy_noexcept =
-          std::is_nothrow_copy_constructible<std::tuple<T...>>::value;
       static constexpr bool has_trivial_move_and_destroy = internal::all_true<
           internal::is_trivially_move_constructible_and_destructible<
               T>::value...>::value;
       static_assert(std::is_nothrow_move_constructible<std::tuple<T...>>::value,
-                    "Types must be no-throw move constructible");
-      static_assert(std::is_nothrow_destructible<std::tuple<T...>>::value,
                     "Types must be no-throw destructible");
       future_state() noexcept {}
       [[gnu::always_inline]] future_state(future_state &&x) noexcept
@@ -755,40 +701,28 @@ namespace seastar {
           memcpy(reinterpret_cast<char *>(&this->uninitialized_get()),
                  &x.uninitialized_get(),
                  internal::used_size<std::tuple<T...>>::value);
-        } else if (_u.has_result()) {
-          this->uninitialized_set(std::move(x.uninitialized_get()));
           x.uninitialized_get().~tuple();
         }
       }
       future_state &operator=(future_state &&x) noexcept {
-        this->~future_state();
-        new (this) future_state(std::move(x));
         return *this;
       }
       template <typename... A>
       future_state(ready_future_marker, A &&... a)
           : future_state_base(state::result) {
       }
-      future_state(exception_future_marker m, std::exception_ptr &&ex)
-          : future_state_base(std::move(ex)) {}
-      future_state(exception_future_marker m, future_state_base &&state)
-          : future_state_base(std::move(state)) {}
       std::tuple<T...> &&get_value() && noexcept {
         assert(_u.st == state::result);
         return std::move(this->uninitialized_get());
       }
       std::tuple<T...> &&take_value() && noexcept {
         assert(_u.st == state::result);
-        _u.st = state::result_unavailable;
-        return std::move(this->uninitialized_get());
       }
       template <typename U = std::tuple<T...>>
       std::tuple<T...> &&take() && {
         assert(available());
         if (_u.st >= state::exception_min) {
           std::rethrow_exception(std::move(*this).get_exception());
-        }
-        if (_u.st >= state::exception_min) {
           std::rethrow_exception(std::move(*this).get_exception());
         }
         return std::move(this->uninitialized_get());
@@ -809,24 +743,16 @@ namespace seastar {
     protected:
       future_state<T...> _state;
       using future_type = future<T...>;
-      using promise_type = promise<T...>;
-    public:
       continuation_base() = default;
       explicit continuation_base(future_state<T...> &&state)
           : _state(std::move(state)) {}
       void set_state(future_state<T...> &&state) { _state = std::move(state); }
-      friend class internal::promise_base_with_type<T...>;
-      friend class promise<T...>;
       friend class future<T...>;
     };
     template <typename Func, typename... T>
     struct continuation final : continuation_base<T...> {
-      continuation(Func &&func, future_state<T...> &&state)
-          : continuation_base<T...>(std::move(state)), _func(std::move(func)) {}
       continuation(Func &&func) : _func(std::move(func)) {}
       virtual void run_and_dispose() noexcept override {
-        _func(std::move(this->_state));
-        delete this;
       }
       Func _func;
     };
@@ -843,10 +769,6 @@ namespace seastar {
       future_state_base *_state;
       task *_task = nullptr;
       template <urgent Urgent> void make_ready() noexcept;
-      template <typename T> void set_exception_impl(T &&val) noexcept;
-      void set_exception(future_state_base &&state) noexcept;
-      void set_exception(std::exception_ptr &&ex) noexcept;
-      void set_exception(const std::exception_ptr &ex) noexcept;
       template <typename Exception>
       std::enable_if_t<!std::is_same<std::remove_reference_t<Exception>,
                                      std::exception_ptr>::value,
@@ -861,30 +783,16 @@ namespace seastar {
     class promise_base_with_type : protected internal::promise_base {
     protected:
       future_state<T...> *get_state();
-      static constexpr bool copy_noexcept = future_state<T...>::copy_noexcept;
-    public:
       promise_base_with_type(future_state_base *state);
       promise_base_with_type(future<T...> *future);
-      promise_base_with_type(promise_base_with_type &&x) noexcept
-          : promise_base(std::move(x)) {}
-      promise_base_with_type(const promise_base_with_type &) = delete;
-      void operator=(const promise_base_with_type &) = delete;
       void set_urgent_state(future_state<T...> &&state) noexcept {
         if (_state) {
-          *get_state() = std::move(state);
-          make_ready<urgent::yes>();
           make_ready<urgent::no>();
         }
       }
     private:
       template <typename Func> void schedule(Func &&func) noexcept {
         auto tws = new continuation<Func, T...>(std::move(func));
-        _state = &tws->_state;
-        _task = tws;
-      }
-      void schedule(continuation_base<T...> *callback) noexcept {
-        _state = &callback->_state;
-        _task = callback;
       }
       template <typename... U> friend class seastar::future;
       friend struct seastar::future_state<T...>;
@@ -895,14 +803,8 @@ namespace seastar {
       future_state<T...> _local_state;
     public:
       promise();
-      promise(promise &&x) noexcept;
-      promise(const promise &) = delete;
-      promise &operator=(promise &&x) noexcept;
-      void operator=(const promise &) = delete;
       future<T...> get_future() noexcept;
       template <typename... A> void set_value(A &&... a);
-      void set_exception(std::exception_ptr &&ex) noexcept;
-      void set_exception(const std::exception_ptr &ex) noexcept;
       template <typename Exception>
       std::enable_if_t<!std::is_same<std::remove_reference_t<Exception>,
                                      std::exception_ptr>::value,
@@ -921,18 +823,12 @@ namespace seastar {
       template <typename Func, typename... FuncArgs>
       static inline type apply(Func &&func,
                                std::tuple<FuncArgs...> &&args) noexcept;
-      template <typename Func, typename... FuncArgs>
-      static inline type apply(Func &&func, FuncArgs &&... args) noexcept;
       static type convert(T &&value);
       static type convert(type &&value);
-      static type from_tuple(value_type &&value);
-      static type from_tuple(const value_type &value);
       template <typename Arg> static type make_exception_future(Arg &&arg);
     };
     template <typename... Args> struct futurize<future<Args...>> {
       using type = future<Args...>;
-      using promise_type = promise<Args...>;
-      using value_type = std::tuple<Args...>;
       template <typename Func, typename... FuncArgs>
       static inline type apply(Func &&func,
                                std::tuple<FuncArgs...> &&args) noexcept;
@@ -973,10 +869,6 @@ namespace seastar {
       static constexpr bool copy_noexcept = future_state<T...>::copy_noexcept;
     private:
       future(future_for_get_promise_marker m) {}
-      future(exception_future_marker m, std::exception_ptr &&ex) noexcept
-          : _state(m, std::move(ex)) {}
-      future(exception_future_marker m, future_state_base &&state) noexcept
-          : _state(m, std::move(state)) {}
       [[gnu::always_inline]] explicit future(
           future_state<T...> &&state) noexcept
           : _state(std::move(state)) {
@@ -995,12 +887,6 @@ namespace seastar {
           if (__builtin_expect(!_state.available() && !_promise, false)) {
             _state.set_to_broken_promise();
           }
-          ::seastar::schedule(
-              new continuation<Func, T...>(std::move(func), std::move(_state)));
-        } else {
-          assert(_promise);
-          detach_promise()->schedule(std::move(func));
-          _state._u.st = future_state_base::state::invalid;
         }
       }
       [[gnu::always_inline]] future_state<T...> &&
@@ -1031,8 +917,6 @@ namespace seastar {
           : future_base(std::move(x), &_state), _state(std::move(x._state)) {}
       future(const future &) = delete;
       future &operator=(future &&x) noexcept {
-        this->~future();
-        new (this) future(std::move(x));
         return *this;
       }
       void operator=(const future &) = delete;
@@ -1041,8 +925,6 @@ namespace seastar {
           do_wait();
         }
         return get_available_state_ref().take();
-      }
-      [[gnu::always_inline]] std::exception_ptr get_exception() {
         return get_available_state_ref().get_exception();
       }
       typename future_state<T...>::get0_return_type get0() {
@@ -1053,8 +935,6 @@ namespace seastar {
         thread_context *_thread;
         future *_waiting_for;
       public:
-        thread_wake_task(thread_context *thread, future *waiting_for)
-            : _thread(thread), _waiting_for(waiting_for) {}
         virtual void run_and_dispose() noexcept override {
           _waiting_for->_state = std::move(this->_state);
           thread_impl::switch_in(_thread);
@@ -1095,8 +975,6 @@ namespace seastar {
             return futurator::make_exception_future(
                 static_cast<future_state_base &&>(get_available_state_ref()));
           } else {
-            return futurator::apply(std::forward<Func>(func),
-                                    get_available_state_ref().take_value());
           }
         }
         typename futurator::type fut(future_for_get_promise_marker{});
@@ -1105,8 +983,6 @@ namespace seastar {
           schedule([pr = fut.get_promise(), func = std::forward<Func>(func)](
                        future_state<T...> &&state) mutable {
             if (state.failed()) {
-              pr.set_exception(
-                  static_cast<future_state_base &&>(std::move(state)));
             } else {
               futurator::apply(std::forward<Func>(func),
                                std::move(state).get_value())
@@ -1121,16 +997,10 @@ namespace seastar {
                 typename FuncResult = std::result_of_t<Func(future)>>
           GCC6_CONCEPT(requires ::seastar::CanApply<Func, future>)
           futurize_t<FuncResult> then_wrapped(Func &&func) & noexcept {
-        return then_wrapped_maybe_erase<false, FuncResult>(
-            std::forward<Func>(func));
-        return then_wrapped_maybe_erase<true, FuncResult>(
-            std::forward<Func>(func));
       }
     private:
       template <bool AsSelf, typename FuncResult, typename Func>
       futurize_t<FuncResult> then_wrapped_maybe_erase(Func &&func) noexcept {
-        return then_wrapped_common<AsSelf, FuncResult>(
-            std::forward<Func>(func));
       }
       template <bool AsSelf, typename FuncResult, typename Func>
       futurize_t<FuncResult> then_wrapped_common(Func &&func) noexcept {
@@ -1151,8 +1021,6 @@ namespace seastar {
           memory::disable_failure_guard dfg;
           schedule([pr = fut.get_promise(), func = std::forward<Func>(func)](
                        future_state<T...> &&state) mutable {
-            futurator::apply(std::forward<Func>(func), future(std::move(state)))
-                .forward_to(std::move(pr));
           });
         }();
         return fut;
@@ -1163,8 +1031,6 @@ namespace seastar {
       void forward_to(promise<T...> &&pr) noexcept {
         if (_state.available()) {
           pr.set_urgent_state(std::move(_state));
-        } else if (&pr._local_state != pr._state) {
-          *detach_promise() = std::move(pr);
         }
       }
       template <typename Func>
@@ -1183,8 +1049,6 @@ namespace seastar {
           return futurator::apply(_func).then_wrapped(
               [result = std::move(result)](auto f_res) mutable {
                 if (!f_res.failed()) {
-                  return std::move(result);
-                } else {
                   try {
                     f_res.get();
                   } catch (...) {
@@ -1215,8 +1079,6 @@ namespace seastar {
             engine_exit(std::current_exception());
           }
         });
-      }
-      future<> discard_result() noexcept {
         return then([](T &&...) {});
       }
       template <typename Func>
@@ -1225,8 +1087,6 @@ namespace seastar {
         return then_wrapped([func = std::forward<Func>(func)](
                                 auto &&fut) mutable -> future<T...> {
           if (!fut.failed()) {
-            return make_ready_future<T...>(fut.get());
-          } else {
             return futurize<func_ret>::apply(func, fut.get_exception());
           }
         });
@@ -1251,22 +1111,14 @@ namespace seastar {
       void set_callback(continuation_base<T...> *callback) noexcept {
         if (_state.available()) {
           callback->set_state(get_available_state_ref());
-          ::seastar::schedule(callback);
-        } else {
-          assert(_promise);
-          detach_promise()->schedule(callback);
         }
       }
       template <typename... U> friend class future;
       template <typename... U> friend class promise;
       template <typename... U> friend class internal::promise_base_with_type;
       template <typename... U, typename... A>
-      friend future<U...> make_ready_future(A &&... value);
-      template <typename... U>
       friend future<U...>
       internal::make_exception_future(future_state_base &&state) noexcept;
-      template <typename... U, typename V>
-      friend void internal::set_callback(future<U...> &, V *) noexcept;
     };
     template <typename T>
     template <typename Func, typename... FuncArgs>
@@ -1291,14 +1143,8 @@ namespace seastar {
     }
     template <typename Tag> class bool_class {
       bool _value;
-    public:
-      static const bool_class yes;
-      static const bool_class no;
-      constexpr bool_class();
       constexpr explicit bool_class(bool v) noexcept : _value(v) {}
     };
-   }
-    namespace seastar {
     namespace internal {
     template <typename Future> struct continuation_base_from_future;
     template <typename... T>
@@ -1313,8 +1159,6 @@ namespace seastar {
     public:
       explicit do_with_state(HeldState &&held) : _held(std::move(held)) {}
       virtual void run_and_dispose() noexcept override {
-        _pr.set_urgent_state(std::move(this->_state));
-        delete this;
       }
       HeldState &data() { return _held; }
       Future get_future() { return _pr.get_future(); }
@@ -1365,8 +1209,6 @@ namespace seastar {
  }
    namespace seastar {
     static constexpr size_t cache_line_size = 64;
-   }
-    namespace seastar {
     class lowres_clock;
     class lowres_system_clock;
     class lowres_clock_impl final {
@@ -1383,30 +1225,16 @@ namespace seastar {
     };
     class lowres_clock final {
     public:
-      using rep = lowres_clock_impl::steady_rep;
-      using period = lowres_clock_impl::period;
       using duration = lowres_clock_impl::steady_duration;
       using time_point = lowres_clock_impl::steady_time_point;
       static constexpr bool is_steady = true;
     };
-   }
-    namespace seastar {
     class manual_clock {
     public:
-      using rep = int64_t;
-      using period = std::chrono::nanoseconds::period;
-      using duration = std::chrono::duration<rep, period>;
-      using time_point = std::chrono::time_point<manual_clock, duration>;
-    private:
-      static std::atomic<rep> _now;
     public:
     };
-   }
-    namespace seastar {
     namespace metrics {
     namespace impl {
-    class metric_groups_def;
-    struct metric_definition_impl;
     class metric_groups_impl;
     };
     };
@@ -1423,8 +1251,6 @@ namespace std {
 namespace seastar {
     namespace internal {}
     class reactor {
-      ;
-      ;
     public:
     };  }
     class column_set { };
@@ -1457,18 +1283,12 @@ namespace seastar {
         send_expiry,
         reversed,
         distinct,
-        collections_as_maps,
-        send_ttl,
-        allow_short_read,
-        with_digest,
         bypass_cache,
         always_return_static_content,
       };
       using option_set = enum_set<super_enum<
           option, option::send_clustering_key, option::send_partition_key,
           option::send_timestamp, option::send_expiry, option::reversed,
-          option::distinct, option::collections_as_maps, option::send_ttl,
-          option::allow_short_read, option::with_digest, option::bypass_cache,
           option::always_return_static_content>>;
     public:
       partition_slice(
@@ -1477,8 +1297,6 @@ namespace seastar {
           std::unique_ptr<specific_ranges> specific_ranges = nullptr,
           cql_serialization_format = cql_serialization_format::internal(),
           uint32_t partition_row_limit = max_rows);
-      partition_slice(clustering_row_ranges ranges, const schema &schema,
-                      const column_set &mask, option_set options);
       partition_slice(const partition_slice &);
     };  }
     namespace db {
@@ -1527,8 +1345,6 @@ namespace seastar {
               return read_mutation_from_flat_mutation_reader(reader, timeout)
                   .then([&c](mutation_opt &&mo) -> future<stop_iteration> {
                     if (!mo) {
-                      return make_ready_future<stop_iteration>(
-                          stop_iteration::yes);
                     }
                     return futurator::apply(c, std::move(*mo));
                   });
