@@ -125,7 +125,6 @@ public:
   using time_point = lowres_clock_impl;
 };
 class table;
-using column_family = table;
 namespace query {
 using column_id_vector = utils::small_vector< column_id, 8 >;
 using clustering_range = int;
@@ -153,7 +152,7 @@ public:
 };
 class database {
   future< mutation > do_apply_counter_update(
-      column_family &,  mutation m, schema_ptr ,
+      table &,  mutation m, schema_ptr ,
       db::timeout_clock::time_point );
 };
 template < typename Consumer >
@@ -170,7 +169,7 @@ future< int > counter_write_query(schema_ptr, const mutation_source ,
                                   const int);
 class locked_cell {};
 future< mutation > database::do_apply_counter_update(
-    column_family &cf, mutation m, schema_ptr ,
+    table &cf, mutation m, schema_ptr ,
     db::timeout_clock::time_point timeout ) {
   query::column_id_vector static_columns;
   query::clustering_row_ranges cr_ranges;
