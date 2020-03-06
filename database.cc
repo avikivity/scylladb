@@ -5,7 +5,6 @@ namespace compat {
 template < typename T > using optional = std::optional< T >;
 }
 #include <algorithm>
-#define GCC6_CONCEPT()
 using column_count_type = uint32_t;
 using column_id = column_count_type;
 using schema_ptr = int;
@@ -15,13 +14,13 @@ template < typename T > class optimized_optional {
 ;
 class cql_serialization_format {
 public:
-  static cql_serialization_format internal();
+  ;
 };
 namespace utils {
 template < typename , size_t > class small_vector {};
 } template < typename... > class future;
 class task {
-  virtual void run_and_dispose() ;
+  ;
 };
 bool need_preempt() ;
 namespace internal {
@@ -57,12 +56,11 @@ namespace internal {
   class future_base {};
 }
 template < typename... T >
-class future : internal::future_base {
+class future {
   future_state< T... > _state;
   future_state<> get_available_state_ref() ;
 
 public:
-  bool available() ;
   bool failed() ;
   template < typename Func,
              typename Result = futurize_t< std::result_of_t< Func(T ...) > > >
@@ -106,7 +104,7 @@ auto do_with(T1 rv1, T2 rv2, T3_or_F rv3, More ... more) {
   constexpr size_t nr = std::tuple_size< decltype(all) >::value - 1;
   using idx = std::make_index_sequence< nr >;
   auto just_values = cherry_pick_tuple(idx(), move(all));
-  auto just_func = std::move(std::get< nr >(move(all)));
+  auto just_func = (std::get< nr >(move(all)));
   using value_tuple = std::remove_reference_t< decltype(just_values) >;
   using ret_type = decltype(apply(just_func, just_values));
   auto task =
@@ -119,7 +117,7 @@ class lowres_clock_impl {
 public:
   using base_steady_clock = std::chrono::steady_clock;
   using period = std::ratio< 11000 >;
-  using steady_rep = base_steady_clock;
+  ;
   using steady_duration = std::chrono::duration< period >;
   using steady_time_point =
       std::chrono::time_point< steady_duration >;
@@ -139,14 +137,13 @@ class specific_ranges {};
 auto max_rows = std::numeric_limits< uint32_t >::max();
 class partition_slice {
 public:
-  enum {
-    send_clustering_keysend_partition_keyalways_return_static_content};
+  ;
   using option_set = int;
   partition_slice(
       clustering_row_ranges , column_id_vector ,
       column_id_vector , option_set ,
       std::unique_ptr< specific_ranges > ,
-      cql_serialization_format = cql_serialization_format(),
+      cql_serialization_format ,
       uint32_t = max_rows);
 };
 } namespace db {
@@ -181,7 +178,7 @@ public:
 template < typename Consumer >
 void consume_partitions(db::timeout_clock::time_point timeout) {
   int reader;
-  (std::move, [reader, timeout](Consumer c) -> future<> {
+  (std::move, [reader, timeout](Consumer c) {
     return ([reader, timeout] {
       return read_mutation_from_flat_mutation_reader(reader, timeout).then;
     });
@@ -205,11 +202,11 @@ future< mutation > database::do_apply_counter_update(
   query::clustering_row_ranges cr_ranges;
   query::column_id_vector regular_columns;
   auto slice = query::partition_slice(
-      move(cr_ranges), std::move(static_columns),
-      std::move(regular_columns), {}, {}, cql_serialization_format(),
+      move(cr_ranges), (static_columns),
+      (regular_columns), {}, {}, cql_serialization_format(),
       query::max_rows);
   return do_with(
-      std::move(slice), std::move(m), std::vector< locked_cell >(),
+      (slice), (m), std::vector< locked_cell >(),
       [this, cf, timeout](query::partition_slice slice, mutation m,
                            std::vector< locked_cell > ) mutable {
         return cf.lock_counter_cells(m, timeout)
@@ -217,7 +214,7 @@ future< mutation > database::do_apply_counter_update(
               return counter_write_query(schema_ptr(), mutation_source(),
                                          m.decorated_key(), slice, nullptr)
                   .then([m](auto ) {
-                    return std::move(m);
+                    return (m);
                   });
             });
       });
