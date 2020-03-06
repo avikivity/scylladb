@@ -513,46 +513,11 @@ class migrate_fn_type {
    struct end_bound_ref {     const optional<bound> &b;   };
    ;
    ;
-   ;
-   ;
-   ;
- public:   ;
-   ;
-   ;
-   ;
-   ;
-   ;
-   ;
-   ;
-   ;
-   ;
-   ;
  private:   friend class nonwrapping_range<T>;
  };
   template <typename T> class nonwrapping_range {
    template <typename U> using optional = std::optional<U>;
  public:   using bound = range_bound<T>;
-   template <typename Transformer>   using transformed_type =       typename wrapping_range<T>::template transformed_type<Transformer>;
- private:   wrapping_range<T> _range;
- public:   ;
-   ;
-   ;
-   bool is_singular() const;
-   bool is_full() const;
-   const optional<bound> &start() const;
-   const optional<bound> &end() const;
-   template <typename Comparator>   bool contains(const T &point, Comparator &&cmp) const;
-   template <typename Comparator>   bool contains(const nonwrapping_range &other, Comparator &&cmp) const;
-   template <typename Comparator>   std::vector<nonwrapping_range> subtract(const nonwrapping_range &other,                                           Comparator &&cmp) const;
-   ;
-   ;
-   ;
-   ;
-   ;
- private:   struct std_ {};
-   struct built_in_ : std_ {};
-   template <typename Range, typename LessComparator,             typename = decltype(std::declval<Range>().lower_bound(                 std::declval<T>(), std::declval<LessComparator>()))>   typename std::remove_reference<Range>::type::const_iterator   do_lower_bound(const T &value, Range &&r, LessComparator &&cmp,                  built_in_) const {     return r.lower_bound(value, std::forward<LessComparator>(cmp));   }
-   template <typename Range, typename LessComparator,             typename = decltype(std::declval<Range>().upper_bound(                 std::declval<T>(), std::declval<LessComparator>()))>   typename std::remove_reference<Range>::type::const_iterator   do_upper_bound(const T &value, Range &&r, LessComparator &&cmp,                  built_in_) const {     return r.upper_bound(value, std::forward<LessComparator>(cmp));   }
  };
   GCC6_CONCEPT(template <template <typename> typename T, typename U>              concept bool Range =                  std::is_same<T<U>, wrapping_range<U>>::value ||                  std::is_same<T<U>, nonwrapping_range<U>>::value;
  ) namespace std {
