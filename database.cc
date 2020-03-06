@@ -49,7 +49,6 @@
           };
             template <typename... Args> struct futurize<future<Args...>> {
             using type = future<Args...>;
-            ;
             template <typename Arg> static type make_exception_future(Arg &&arg);
           };
             template <typename T> using futurize_t = typename futurize<T>::type;
@@ -128,9 +127,7 @@
          public:       trace_state_ptr(nullptr_t);
          };
                       template <typename Consumer>     void  consume_partitions(                                                                                db::timeout_clock::time_point timeout) {
-     int consumer;
       int & reader;
-            using futurator = futurize<std::result_of_t<Consumer>>;
             return do_with(           std::move, [&reader, timeout](Consumer &c) -> future<> {                 return repeat([&reader, &c, timeout] {                  return read_mutation_from_flat_mutation_reader(reader, timeout)                   .then;                }    );               }
      );
           }
