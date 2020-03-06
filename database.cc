@@ -345,24 +345,12 @@ class migrate_fn_type {
    namespace dht {
  class decorated_key;
  class ring_position;
- using partition_range = nonwrapping_range<ring_position>;
- class decorated_key { public:   dht::token _token;   partition_key _key;   struct less_comparator {     schema_ptr s;                       };   bool equal(const schema &s, const decorated_key &other) const;   bool less_compare(const schema &s, const decorated_key &other) const;   bool less_compare(const schema &s, const ring_position &other) const;   int tri_compare(const schema &s, const decorated_key &other) const;   int tri_compare(const schema &s, const ring_position &other) const;   const dht::token &token() const ;   const partition_key &key() const ;   size_t external_memory_usage() const ;   size_t memory_usage() const ; };
- class decorated_key_equals_comparator {   const schema &_schema; public:   explicit decorated_key_equals_comparator(const schema &schema)       : _schema(schema) {} };
- using decorated_key_opt = std::optional<decorated_key>;
  }
    template <typename EnumType, EnumType... Items> struct super_enum {
    using enum_type = EnumType;
-   template <enum_type... values> struct max {     static constexpr enum_type max_of(enum_type a, enum_type b) {       return a > b ? a : b;     }     template <enum_type first, enum_type second, enum_type... rest>     static constexpr enum_type get() {       return max_of(first, get<second, rest...>());     }     template <enum_type first> static constexpr enum_type get() {       return first;     }     static constexpr enum_type value = get<values...>();   };
-   template <enum_type... values> struct min {     static constexpr enum_type min_of(enum_type a, enum_type b) {       return a < b ? a : b;     }     template <enum_type first, enum_type second, enum_type... rest>     static constexpr enum_type get() {       return min_of(first, get<second, rest...>());     }     template <enum_type first> static constexpr enum_type get() {       return first;     }     static constexpr enum_type value = get<values...>();   };
    using sequence_type = typename std::underlying_type<enum_type>::type;
-   template <enum_type Elem> static constexpr sequence_type sequence_for() {     return static_cast<sequence_type>(Elem);   }
-   static sequence_type sequence_for(enum_type elem) {     return static_cast<sequence_type>(elem);   }
-   static constexpr sequence_type max_sequence =       sequence_for<max<Items...>::value>();
-   static constexpr sequence_type min_sequence =       sequence_for<min<Items...>::value>();
-   static_assert(min_sequence >= 0, "negative enum values unsupported");
  };
   class bad_enum_set_mask : public std::invalid_argument {
- public:   bad_enum_set_mask()       : std::invalid_argument(             "Bit mask contains invalid enumeration indices.") {}
  };
   template <typename Enum> class enum_set {
  public:   using mask_type = size_t;
