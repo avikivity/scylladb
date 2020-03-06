@@ -46,21 +46,11 @@ namespace seastar {
         }
        namespace seastar {
          template <typename Func, typename Args, typename IndexList>     struct apply_helper;
-         template <typename Func, typename Tuple, size_t... I>     struct apply_helper<Func, Tuple, std::index_sequence<I...>> {
-          static auto apply(Func &&func, Tuple args) {
-         }
-        };
-         template <typename Func, typename... T>     inline auto apply(Func && func, const std::tuple<T...> &args) {
-        }
          template <typename... T> class future;
          class task {
           virtual void run_and_dispose() noexcept = 0;
         };
          bool need_preempt() noexcept;
-        }
- namespace seastar {
-         namespace internal {
-        }
         }
 #define SEASTAR_NODISCARD [[nodiscard]]
 namespace seastar {
