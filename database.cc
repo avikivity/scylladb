@@ -96,19 +96,6 @@ class bytes_ostream { public:   using size_type = bytes::size_type;   using valu
   namespace utils { struct chunked_vector_free_deleter {   void operator()(void *x) const { ::free(x); } }; template <typename T, size_t max_contiguous_allocation = 128 * 1024> class chunked_vector {   static_assert(std::is_nothrow_move_constructible<T>::value,                 "T must be nothrow move constructible");   using chunk_ptr = std::unique_ptr<T[], chunked_vector_free_deleter>;   utils::small_vector<chunk_ptr, 1> _chunks;   size_t _size = 0;   size_t _capacity = 0; private:   static size_t max_chunk_capacity() {     return std::max(max_contiguous_allocation / sizeof(T), size_t(1));   }   void reserve_for_push_back() {     if (_size == _capacity) {       do_reserve_for_push_back();     }   }   void do_reserve_for_push_back();   void make_room(size_t n);   chunk_ptr new_chunk(size_t n);   T *addr(size_t i) const {     return &_chunks[i / max_chunk_capacity()][i % max_chunk_capacity()];   }   void check_bounds(size_t i) const {     if (i >= _size) {       throw std::out_of_range("chunked_vector out of range access");     }   }   static void migrate(T *begin, T *end, T *result); public:   using value_type = T;   using size_type = size_t;   using difference_type = ssize_t;   using reference = T &;   using const_reference = const T &;   using pointer = T *;   using const_pointer = const T *; public:   ;   bool empty() const { return !_size; }; public:   template <class ValueType> class iterator_type {     const chunk_ptr *_chunks;     size_t _i;   public:     using iterator_category = std::random_access_iterator_tag;     using value_type = ValueType;     using difference_type = ssize_t;     using pointer = ValueType *;     using reference = ValueType &;   private:   public:     iterator_type() = default;     iterator_type(const iterator_type<std::remove_const_t<ValueType>> &x)         : _chunks(x._chunks), _i(x._i) {}     reference operator*() const { return *addr(); }     pointer operator->() const { return addr(); }     reference operator[](ssize_t n) const { return *(*this + n); }     iterator_type &operator++() {       ++_i;       return *this;     }     iterator_type operator++(int) {       auto x = *this;       ++_i;       return x;     }     iterator_type &operator--() {       --_i;       return *this;     }     iterator_type operator--(int) {       auto x = *this;       --_i;       return x;     }     iterator_type &operator+=(ssize_t n) {       _i += n;       return *this;     }     iterator_type &operator-=(ssize_t n) {       _i -= n;       return *this;     }     iterator_type operator+(ssize_t n) const {       auto x = *this;       return x += n;     }     iterator_type operator-(ssize_t n) const {       auto x = *this;       return x -= n;     }     friend iterator_type operator+(ssize_t n, iterator_type a) { return a + n; }     friend ssize_t operator-(iterator_type a, iterator_type b) {       return a._i - b._i;     }     bool operator==(iterator_type x) const { return _i == x._i; }     bool operator!=(iterator_type x) const { return _i != x._i; }     bool operator<(iterator_type x) const { return _i < x._i; }     bool operator<=(iterator_type x) const { return _i <= x._i; }     bool operator>(iterator_type x) const { return _i > x._i; }     bool operator>=(iterator_type x) const { return _i >= x._i; }     friend class chunked_vector;   };   using iterator = iterator_type<T>;   using const_iterator = iterator_type<const T>; public:   const_iterator cbegin() const;   std::reverse_iterator<const_iterator> rend() const;   std::reverse_iterator<const_iterator> crbegin() const;   std::reverse_iterator<const_iterator> crend() const; public:   bool operator==(const chunked_vector &x) const;   bool operator!=(const chunked_vector &x) const; }; }
   template <typename Iterator> static sstring join(sstring delimiter, Iterator begin, Iterator end);
  template <typename PrintableRange> static sstring join(sstring delimiter, const PrintableRange &items);
- template <bool NeedsComma, typename Printable> struct print_with_comma {   const Printable &v; };
- template <bool NeedsComma, typename Printable> std::ostream &operator<<(std::ostream &os,                          const print_with_comma<NeedsComma, Printable> &x);
- namespace std { ; ; ; template <typename Printable> static inline sstring to_string(std::initializer_list<Printable> items) {   return "[" + join(", ", std::begin(items), std::end(items)) + "]"; }; ; ; ; ; ; ; }
-  template <class Value, class Tag> class cql_duration_counter final { public:   using value_type = Value; private:   value_type _count; };
- using months_counter = cql_duration_counter<int32_t, struct month_tag>;
- using days_counter = cql_duration_counter<int32_t, struct day_tag>;
- using nanoseconds_counter =     cql_duration_counter<int64_t, struct nanosecond_tag>;
- class cql_duration_error : public std::invalid_argument { public: };
- class cql_duration final { public:   using common_counter_type = int64_t;   static_assert(       (sizeof(common_counter_type) >= sizeof(months_counter::value_type)) &&           (sizeof(common_counter_type) >= sizeof(days_counter::value_type)) &&           (sizeof(common_counter_type) >=            sizeof(nanoseconds_counter::value_type)),       "The common counter type is smaller than one of the component counter "       "types.");   explicit cql_duration(std::string_view s);   months_counter::value_type months{0};   days_counter::value_type days{0};   nanoseconds_counter::value_type nanoseconds{0}; };
- std::ostream &operator<<(std::ostream &os, const cql_duration &d);
- seastar::sstring to_string(const cql_duration &);
- bool operator==(const cql_duration &, const cql_duration &) noexcept;
- bool operator!=(const cql_duration &, const cql_duration &) noexcept;
  class marshal_exception : public std::exception {   sstring _why; public:   marshal_exception() = delete;   marshal_exception(sstring why) : _why(sstring("marshaling error: ") + why) {}   virtual const char *what() const noexcept override { return _why.c_str(); } };
 #include <seastar/net/ip.hh>
 #include <seastar/util/backtrace.hh>
@@ -158,12 +145,6 @@ namespace seastar { class logger; }
  static bool less_compare(data_type t, bytes_view e1, bytes_view e2);
  static int tri_compare(data_type t, bytes_view e1, bytes_view e2);
  int tri_compare_opt(data_type t, bytes_view_opt v1, bytes_view_opt v2);
- static bool equal(data_type t, bytes_view e1, bytes_view e2);
- extern thread_local const shared_ptr<const abstract_type> byte_type;
- extern thread_local const shared_ptr<const abstract_type> short_type;
- extern thread_local const shared_ptr<const abstract_type> int32_type;
- extern thread_local const shared_ptr<const abstract_type> long_type;
- extern thread_local const shared_ptr<const abstract_type> ascii_type;
  extern thread_local const shared_ptr<const abstract_type> bytes_type;
  extern thread_local const shared_ptr<const abstract_type> utf8_type;
  extern thread_local const shared_ptr<const abstract_type> boolean_type;
@@ -254,12 +235,6 @@ class migrate_fn_type {   std::any _migrators;   uint32_t _align = 0;   uint32_t
  class memtable_list;
  class mutation;
  class mutation_partition;
- class schema;
- class column_definition;
- class column_mapping;
- class schema_mutations;
- class exploded_clustering_prefix;
- class partition_key;
  class partition_key_view;
  class clustering_key_prefix;
  class clustering_key_prefix_view;
@@ -416,18 +391,12 @@ namespace bi = boost::intrusive;
  class reader_concurrency_semaphore;
  class reader_permit {   struct impl {     reader_concurrency_semaphore &semaphore;     reader_resources base_cost;   };   friend reader_permit no_reader_permit(); public:   class memory_units {     reader_concurrency_semaphore *_semaphore = nullptr;     size_t _memory = 0;     friend class reader_permit;   private:   public:     operator size_t() const { return _memory; }   }; private:   lw_shared_ptr<impl> _impl; private:   reader_permit() = default; public:   reader_permit(reader_concurrency_semaphore &semaphore,                 reader_resources base_cost);   bool operator==(const reader_permit &o) const { return _impl == o._impl; }   operator bool() const { return bool(_impl); }   memory_units get_memory_units(size_t memory = 0);   void release(); };
  reader_permit no_reader_permit();
- template <typename Char> temporary_buffer<Char> make_tracked_temporary_buffer(temporary_buffer<Char> buf,                                                      reader_permit &permit) {   return temporary_buffer<Char>(       buf.get_write(), buf.size(),       make_deleter(buf.release(),                    [units = permit.get_memory_units(buf.size())]() mutable {                      units.reset();                    })); }
- file make_tracked_file(file f, reader_permit p);
- using namespace seastar;
  class reader_concurrency_semaphore {};
  namespace mutation_reader { using forwarding = flat_mutation_reader::partition_range_forwarding; }
  enum class partition_presence_checker_result {   definitely_doesnt_exist,   maybe_exists };
  using partition_presence_checker =     std::function<partition_presence_checker_result(         const dht::decorated_key &key)>;
  partition_presence_checker make_default_partition_presence_checker();
  class mutation_source {   using partition_range = const dht::partition_range &;   using io_priority = const io_priority_class &;   using flat_reader_factory_type = std::function<flat_mutation_reader(       schema_ptr, reader_permit, partition_range,       const query::partition_slice &, io_priority, tracing::trace_state_ptr,       streamed_mutation::forwarding, mutation_reader::forwarding)>; public:   mutation_source() = default;   explicit operator bool() const;   friend class optimized_optional<mutation_source>; public:   flat_mutation_reader   make_reader(schema_ptr s, reader_permit permit = no_reader_permit(),               partition_range range = query::full_partition_range) const;   partition_presence_checker make_partition_presence_checker(); };
- using mutation_source_opt = optimized_optional<mutation_source>;
- class reconcilable_result;
- class frozen_reconcilable_result;
  struct partition {};
  future<mutation_opt> counter_write_query(schema_ptr, const mutation_source &,                                          const dht::decorated_key &dk,                                          const query::partition_slice &slice,                                          tracing::trace_state_ptr trace_ptr);
  using namespace std::chrono_literals;
