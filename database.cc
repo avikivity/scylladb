@@ -7613,17 +7613,16 @@ public:
     template <typename Rep, typename Period>
     future<> wait_for_stop(std::chrono::duration<Rep, Period> timeout) ;
     void at_exit(noncopyable_function<future<> ()> func);
-    template <typename Func>
-    void at_destroy(Func&& func) ;
-    void add_task(task* t) noexcept ;
-    void add_urgent_task(task* t) noexcept ;
-    void set_idle_cpu_handler(idle_cpu_handler&& handler) ;
-    void force_poll();
-    void add_high_priority_task(task*) noexcept;
-    network_stack& net() ;
-    shard_id cpu_id() const ;
-    void sleep();
-    steady_clock_type::duration total_idle_time();
+     ;
+    
+    
+    
+    
+    
+    
+    
+    
+    
     steady_clock_type::duration total_busy_time();
     std::chrono::nanoseconds total_steal_time();
     const io_stats& get_io_stats() const ;
@@ -7813,7 +7812,7 @@ struct eth_hdr {
     template <typename Adjuster>
     auto adjust_endianness(Adjuster a) ;
 } __attribute__((packed));
-ethernet_address parse_ethernet_address(std::string addr);
+
 }
 }
 namespace seastar {
@@ -7827,9 +7826,9 @@ class forward_hash {
     uint8_t data[64];
     size_t end_idx = 0;
 public:
-    size_t size() const ;
-    void push_back(uint8_t b) ;
-    void push_back(uint16_t b) ;
+    
+    
+    
     
     
 };
@@ -7877,7 +7876,7 @@ private:
 public:
     
     
-    const net::hw_features& hw_features() const { return _hw_features; }
+    
     
     
     
@@ -7930,7 +7929,7 @@ protected:
 public:
     
     
-    virtual future<> send(packet p) = 0;
+    
     
     ;
     
@@ -7950,10 +7949,10 @@ public:
     
     
     
-    future<> receive(std::function<future<> (packet)> next_packet);
-    virtual ethernet_address hw_address() = 0;
-    virtual net::hw_features hw_features() = 0;
-    virtual rss_key_type rss_key() const ;
+    
+    
+    
+    
     virtual uint16_t hw_queues_count() ;
     virtual future<> link_ready() ;
     virtual std::unique_ptr<qp> init_local_queue(boost::program_options::variables_map opts, uint16_t qid) = 0;
@@ -8285,7 +8284,7 @@ struct udp_channel_state {
     semaphore _user_queue_space = {212992};
     udp_channel_state(size_t queue_size) : _queue(queue_size) {}
     future<> wait_for_send_buffer(size_t len) { return _user_queue_space.wait(len); }
-    void complete_send(size_t len) { _user_queue_space.signal(len); }
+    
 };
 }
 }
@@ -8299,12 +8298,10 @@ struct ipv4_address;
 template <typename InetTraits>
 class tcp;
 struct ipv4_address {
-    ipv4_address() : ip(0) {}
-    explicit ipv4_address(uint32_t ip) : ip(ip) {}
-    explicit ipv4_address(const std::string& addr);
-    ipv4_address(ipv4_addr addr) {
-        ip = addr.ip;
-    }
+    
+    
+    
+    
     packed<uint32_t> ip;
     
     
@@ -8330,11 +8327,11 @@ struct ipv6_address {
      ;
     
     
-    const ipv6_bytes& bytes() const ;
-    bool is_unspecified() const;
-    static ipv6_address read(const char*);
-    static ipv6_address consume(const char*& p);
-    void write(char* p) const;
+    
+    
+    
+    
+    
     void produce(char*& p) const;
     static constexpr size_t size() ;
 } __attribute__((packed));
@@ -8507,7 +8504,7 @@ public:
     using address_type = ipv4_address;
     using proto_type = uint16_t;
     static address_type broadcast_address() ;
-    static proto_type arp_protocol_type() ;
+    
 private:
     interface* _netif;
     std::vector<ipv4_traits::packet_provider_type> _pkt_providers;
@@ -8528,9 +8525,9 @@ private:
         clock_type::time_point rx_time;
         uint32_t mem_size = 0;
         bool last_frag_received = false;
-        packet get_assembled_packet(ethernet_address from, ethernet_address to);
-        int32_t merge(ip_hdr &h, uint16_t offset, packet p);
-        bool is_complete();
+        
+        
+        
     };
     std::unordered_map<ipv4_frag_id, frag, ipv4_frag_id::hash> _frags;
     std::list<ipv4_frag_id> _frags_age;
@@ -8543,12 +8540,12 @@ private:
     unsigned _pkt_provider_idx = 0;
     metrics::metric_groups _metrics;
 private:
-    future<> handle_received_packet(packet p, ethernet_address from);
-    bool forward(forward_hash& out_hash_data, packet& p, size_t off);
-    compat::optional<l3_protocol::l3packet> get_packet();
-    bool in_my_netmask(ipv4_address a) const;
-    void frag_limit_mem();
-    void frag_timeout();
+    
+    
+    
+    
+    
+    
     
     
     
@@ -8568,10 +8565,10 @@ public:
     
     
     
-    static bool needs_frag(packet& p, ip_protocol_num proto_num, net::hw_features hw_features);
-    void learn(ethernet_address l2, ipv4_address l3) ;
-    void register_packet_provider(ipv4_traits::packet_provider_type&& func) ;
-    future<ethernet_address> get_l2_dst_address(ipv4_address to);
+    
+    
+    
+    
 };
 
 
@@ -8590,24 +8587,16 @@ struct ip_hdr {
     ipv4_address src_ip;
     ipv4_address dst_ip;
     uint8_t options[0];
-    template <typename Adjuster>
-    auto adjust_endianness(Adjuster a) ;
-    bool mf() ;
-    bool df() ;
-    uint16_t offset() { return frag << uint8_t(frag_bits::offset_shift); }
+     ;
+    
+    
+    
 } __attribute__((packed));
 template <typename InetTraits>
 struct l4connid<InetTraits>::connid_hash : private std::hash<ipaddr>, private std::hash<uint16_t> {
-    size_t operator()(const l4connid<InetTraits>& id) const noexcept {
-        using h1 = std::hash<ipaddr>;
-        using h2 = std::hash<uint16_t>;
-        return h1::operator()(id.local_ip)
-            ^ h1::operator()(id.foreign_ip)
-            ^ h2::operator()(id.local_port)
-            ^ h2::operator()(id.foreign_port);
-    }
+    
 };
-void arp_learn(ethernet_address l2, ipv4_address l3);
+
 }
 }
 using data_type = shared_ptr<const abstract_type>;
