@@ -46,37 +46,21 @@ namespace seastar {
           namespace internal {
          template <typename T, bool is_trivial_class>     struct uninitialized_wrapper_base;
          template <typename T> struct uninitialized_wrapper_base<T, false> {};
-         template <typename T>     struct uninitialized_wrapper_base<T, true> : private T {
-        };
+         template <typename T>     struct uninitialized_wrapper_base<T, true> : private T {};
          template <typename T>     constexpr bool can_inherit = std::is_same<std::tuple<>, T>::value ||                                  (std::is_trivially_destructible<T>::value &&                                   std::is_trivially_constructible<T>::value &&                                   !std::is_final<T>::value);
-         template <typename T>     struct uninitialized_wrapper         : public uninitialized_wrapper_base<T, can_inherit<T>> {
-   };
+         template <typename T>     struct uninitialized_wrapper         : public uninitialized_wrapper_base<T, can_inherit<T>> {};
          }
-          struct future_state_base {
-           enum class state : uintptr_t ;
-           union any {
-            state st;
-          }
-     _u;
-         public:       bool available() const noexcept ;
-           bool failed() const noexcept;
-    };
+          struct future_state_base {};
           template <typename... T>     struct future_state         : public future_state_base,           private internal::uninitialized_wrapper<std::tuple<T...>> {
            static_assert(std::is_nothrow_move_constructible<std::tuple<T...>>::value,                     "Types must be no-throw destructible");
            std::tuple<T...> &&get_value() && noexcept ;
          };
-          template <typename... T> class continuation_base : public task {
-         };
+          template <typename... T> class continuation_base : public task {};
           namespace internal {
-         class promise_base {
-        };
-         template <typename... T>     class promise_base_with_type : protected internal::promise_base {
-        };
+         class promise_base {};
+         template <typename... T>     class promise_base_with_type : protected internal::promise_base {};
          }
-          template <typename... T>     class promise : private internal::promise_base_with_type<T...> {
-         public:       
-           future<T...> get_future() noexcept;
-    };
+          template <typename... T>     class promise : private internal::promise_base_with_type<T...> {};
           template <typename T> struct futurize {
            using type = future<T>;
            template <typename Func, typename... FuncArgs>       static inline type apply(Func &&func,                                std::tuple<FuncArgs...> &&args) noexcept;
@@ -90,8 +74,7 @@ namespace seastar {
           template <typename T> using futurize_t = typename futurize<T>::type;
           GCC6_CONCEPT(template  concept bool Future =                      is_future::value;
      )     namespace internal {
-           class future_base {
-          };
+           class future_base {};
            template <bool IsVariadic> struct warn_variadic_future {
           };
          }
