@@ -51,11 +51,11 @@ struct future_state
 };
 template < typename T > struct futurize {
   using type = future< T >;
-  template < typename Arg > static type make_exception_future(Arg &&arg);
+  template < typename Arg > static type make_exception_future(Arg );
 };
 template < typename... Args > struct futurize< future< Args... > > {
   using type = future< Args... >;
-  template < typename Arg > static type make_exception_future(Arg &&arg);
+  template < typename Arg > static type make_exception_future(Arg );
 };
 template < typename T > using futurize_t = typename futurize< T >::type;
 GCC6_CONCEPT() namespace internal {
