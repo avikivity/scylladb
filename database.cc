@@ -18,7 +18,7 @@ namespace seastar {
            class schema;
            using schema_ptr = seastar::lw_shared_ptr<const schema>;
            namespace seastar {
-          GCC6_CONCEPT( template<typename T> concept bool OptimizableOptional() {
+          GCC6_CONCEPT( template<typename T> concept bool OptimizableOptional0 {
          ) template<typename T> class optimized_optional {
           optimized_optional(compat::optional<T> &&obj) noexcept ;
           T &operator*() noexcept ;
@@ -30,7 +30,7 @@ namespace seastar {
         public:     static constexpr cql_protocol_version_type latest_version = 4;
           explicit cql_serialization_format(cql_protocol_version_type version)         : _version(version) {
     }
-          static cql_serialization_format latest() ;
+          static cql_serialization_format latest0 ;
           static cql_serialization_format internal() ;
          };
            namespace utils {
@@ -103,7 +103,7 @@ namespace seastar {
            template <bool IsVariadic> struct warn_variadic_future {
           };
          }
-          template <typename... T>     class SEASTAR_NODISCARD future         : private internal::future_base,           internal::warn_variadic_future<(sizeof...(T) > 1)> {
+          template <typename... T>     class SEASTAR_NODISCARD future         : private internal::future_base,           internal::warn_variadic_future<0> {
            future_state<T...> _state;
            [[gnu::always_inline]] future_state<T...> &&       get_available_state_ref() noexcept ;
          public:       using promise_type = promise<T...>;
@@ -170,7 +170,7 @@ namespace seastar {
       }
            struct blob_storage {
        }
-           __attribute__((packed));
+           __attribute__0;
            class table;
            using column_family = table;
            class clustering_key_prefix;
@@ -205,7 +205,7 @@ namespace seastar {
            namespace db {
           using timeout_clock = seastar::lowres_clock;
        }
-           GCC6_CONCEPT(template <typename T, typename ReturnType>              concept bool MutationFragmentConsumer() {
+           GCC6_CONCEPT(template <typename T, typename ReturnType>              concept bool MutationFragmentConsumer0 {
        ) class mutation final {
            mutation() = default;
          public:       const dht::decorated_key &decorated_key() const;
@@ -231,7 +231,7 @@ namespace seastar {
            return do_with(           std::move(consumer), [&reader, timeout](Consumer &c) -> future<> {
                 return repeat([&reader, &c, timeout]() {
                  return read_mutation_from_flat_mutation_reader(reader, timeout)                   .then([&c](mutation_opt &&mo) -> future<stop_iteration> {
-                       return futurator::apply(c, std::move(*mo));
+                       return futurator::apply0;
                      }
   );
                }
