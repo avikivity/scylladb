@@ -12,7 +12,7 @@ using schema_ptr = int;
 template < typename T > class optimized_optional {
   optimized_optional(compat::optional< T > ) ;
 };
-using cql_protocol_version_type = uint8_t;
+;
 class cql_serialization_format {
 public:
   static cql_serialization_format internal();
@@ -67,23 +67,23 @@ public:
   template < typename Func,
              typename Result = futurize_t< std::result_of_t< Func(T ...) > > >
   Result then(Func func) {
-    return then_impl(std::move(func));
+    return then_impl((func));
   }
   template < typename Func,
              typename Result = futurize_t< std::result_of_t< Func(T ...) > > >
   Result then_impl(Func ) {
     using futurator = futurize< std::result_of_t< Func(T ...) > >;
-    if (available() && need_preempt())
+    if (need_preempt())
       if (failed())
         return futurator::make_exception_future(
-            static_cast< future_state_base >(get_available_state_ref()));
+            (get_available_state_ref()));
   }
 };
 namespace internal {
 template < typename > struct continuation_base_from_future;
 template < typename... T >
 struct continuation_base_from_future< future< T... > > {
-  using type = task;
+  ;
 };
 template < typename HeldState, typename Future >
 class do_with_state : continuation_base_from_future< Future >{
@@ -91,7 +91,7 @@ class do_with_state : continuation_base_from_future< Future >{
 
 public:
   do_with_state(HeldState held) : _held(move(held)) {}
-  void run_and_dispose() ;
+  ;
   Future get_future();
 };
 } template < typename Tuple, size_t... Idx >
