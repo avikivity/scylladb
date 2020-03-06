@@ -281,24 +281,15 @@ namespace bi = boost::intrusive;
 ) class mutation final {   mutation() = default;   friend class optimized_optional<mutation>; public:   const dht::decorated_key &decorated_key() const; public:   mutation sliced(const query::clustering_row_ranges &) const; private:   friend std::ostream &operator<<(std::ostream &os, const mutation &m); };
  struct mutation_equals_by_key {   bool operator()(const mutation &m1, const mutation &m2) const; };
  struct mutation_hash_by_key {   size_t operator()(const mutation &m) const; };
- struct mutation_decorated_key_less_comparator {   bool operator()(const mutation &m1, const mutation &m2) const; };
  using mutation_opt = optimized_optional<mutation>;
- boost::iterator_range<std::vector<mutation>::const_iterator> slice(const std::vector<mutation> &partitions, const dht::partition_range &);
  class flat_mutation_reader;
  future<mutation_opt> read_mutation_from_flat_mutation_reader(flat_mutation_reader &reader,                                         db::timeout_clock::time_point timeout);
- class cell_locker;
- class cell_locker_stats;
  class locked_cell;
  class frozen_mutation;
- class reconcilable_result;
  class table { public:   future<std::vector<locked_cell>>   lock_counter_cells(const mutation &m, db::timeout_clock::time_point timeout); };
  class database { private:   future<mutation>   do_apply_counter_update(column_family &cf, const frozen_mutation &fm,                           schema_ptr m_schema,                           db::timeout_clock::time_point timeout,                           tracing::trace_state_ptr trace_state); public: };
- namespace cql3 { class query_options; struct raw_value_view; namespace statements { class prepared_statement; } }
   namespace tracing { class trace_state_ptr final { public:   trace_state_ptr();   trace_state_ptr(nullptr_t); }; }
-  using seastar::future;
- class mutation_source;
  GCC6_CONCEPT(template <typename Consumer>              concept bool FlatMutationReaderConsumer() {                return requires(Consumer c, mutation_fragment mf) {                  { c(std::move(mf)) }                  ->stop_iteration;                };              }
-) GCC6_CONCEPT(     template <typename T> concept bool FlattenedConsumer() {       return StreamedMutationConsumer<T>() &&              requires(T obj, const dht::decorated_key &dk) {         obj.consume_new_partition(dk);         obj.consume_end_of_partition();       };     }
 ) class flat_mutation_reader final { public:   class impl {}; private:   std::unique_ptr<impl> _impl;   flat_mutation_reader() = default;   explicit operator bool() const noexcept;   friend class optimized_optional<flat_mutation_reader>;   void do_upgrade_schema(const schema_ptr &); public:   class partition_range_forwarding_tag;   using partition_range_forwarding = bool_class<partition_range_forwarding_tag>;   flat_mutation_reader(std::unique_ptr<impl> impl) noexcept;   future<mutation_fragment_opt>   operator()(db::timeout_clock::time_point timeout);   void next_partition();   future<> fill_buffer(db::timeout_clock::time_point timeout);   future<> fast_forward_to(const dht::partition_range &pr,                            db::timeout_clock::time_point timeout);   future<> fast_forward_to(position_range cr,                            db::timeout_clock::time_point timeout);   bool is_end_of_stream() const;   bool is_buffer_empty() const;   bool is_buffer_full() const;   mutation_fragment pop_mutation_fragment();   void unpop_mutation_fragment(mutation_fragment mf);   const schema_ptr &schema() const;   void set_max_buffer_size(size_t size);   future<mutation_fragment *> peek(db::timeout_clock::time_point timeout);   const mutation_fragment &peek_buffer() const;   size_t buffer_size() const;   circular_buffer<mutation_fragment> detach_buffer();   void move_buffer_content_to(impl &other);   void upgrade_schema(const schema_ptr &s); };
  template <typename Consumer> inline future<> consume_partitions(flat_mutation_reader &reader,                                    Consumer consumer,                                    db::timeout_clock::time_point timeout) {   static_assert(       std::is_same<future<stop_iteration>,                    futurize_t<std::result_of_t<Consumer(mutation &&)>>>::value,       "bad Consumer signature");   using futurator = futurize<std::result_of_t<Consumer(mutation &&)>>;   return do_with(       std::move(consumer), [&reader, timeout](Consumer &c) -> future<> {         return repeat([&reader, &c, timeout]() {           return read_mutation_from_flat_mutation_reader(reader, timeout)               .then([&c](mutation_opt &&mo) -> future<stop_iteration> {                 if (!mo) {                   return make_ready_future<stop_iteration>(stop_iteration::yes);                 }                 return futurator::apply(c, std::move(*mo));               });         });       }); }
  namespace ser { class mutation_view; }
