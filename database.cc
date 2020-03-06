@@ -1,16 +1,12 @@
 #include <atomic>
 #include <cstring>
-#ifdef SEASTAR_USE_STD_OPTIONAL_VARIANT_STRINGVIEW
 #include <optional>
 #include <filesystem>
 namespace seastar {
     }
-#endif
 namespace seastar {
     namespace compat {
-#ifdef SEASTAR_USE_STD_OPTIONAL_VARIANT_STRINGVIEW
 template <typename T> using optional = std::optional<T>;
-#endif
  }
     }
 #include <algorithm>
@@ -60,9 +56,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
       explicit operator bool() const noexcept ;
       T& operator*() noexcept { return _object; }
   };
-   }
-     template <typename CharOutputIterator> GCC6_CONCEPT(requires requires(CharOutputIterator it) {
-   ) inline void serialize_string(CharOutputIterator &out, const char *s) {
    }
     namespace utils {
    }
