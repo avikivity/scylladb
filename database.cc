@@ -1,27 +1,27 @@
 #include <atomic>
 #include <filesystem>
 #include <optional>
-namespace seastar {
+
        namespace compat {
       template <typename T> using optional = std::optional<T>;
       }
-       }
+       
 #include <algorithm>
-    using namespace seastar;
+    
 #define GCC6_CONCEPT(x...)
-    namespace seastar {
+    
            template <typename T> class lw_shared_ptr {};
-           }
+           
            using column_count_type = uint32_t;
            using column_id = column_count_type;
            class schema;
-           using schema_ptr = seastar::lw_shared_ptr<const schema>;
-           namespace seastar {
+           using schema_ptr = lw_shared_ptr<const schema>;
+           
           GCC6_CONCEPT() template<typename T> class optimized_optional {
           optimized_optional(compat::optional<T> &&obj) noexcept ;
           T &operator*() noexcept ;
         };
-         }
+         
            using cql_protocol_version_type = uint8_t;
            class cql_serialization_format {
           cql_protocol_version_type _version;
@@ -33,15 +33,15 @@ namespace seastar {
            namespace utils {
           template <typename T, size_t N> class small_vector {};
          }
-        namespace seastar {
+        
           template <typename... T> class future;
           class task {
            virtual void run_and_dispose() noexcept = 0;
          };
           bool need_preempt() noexcept;
-         }
+         
 #define SEASTAR_NODISCARD 
-namespace seastar {
+
           namespace internal {
          template <typename T, bool is_trivial_class>     struct uninitialized_wrapper_base;
          template <typename T> struct uninitialized_wrapper_base<T, false> {};
@@ -137,22 +137,22 @@ namespace seastar {
           class lowres_clock final {
          public:       using time_point = lowres_clock_impl::steady_time_point;
          };
-      }
+      
            struct blob_storage {}
            __attribute__0;
            class table;
            using column_family = table;
            class clustering_key_prefix;
            template <typename T> class nonwrapping_range {};
-           GCC6_CONCEPT() namespace std {}
+           GCC6_CONCEPT() 
            namespace dht {
           class decorated_key;
        }
            template <typename EnumType, EnumType... Items> struct super_enum ;
            template <typename Enum> class enum_set {};
-           namespace tracing {
+           
           class trace_state_ptr;
-       }
+       
            namespace query {
           using column_id_vector = utils::small_vector<column_id, 8>;
           using clustering_range = nonwrapping_range<clustering_key_prefix>;
@@ -167,7 +167,7 @@ namespace seastar {
          };
        }
            namespace db {
-          using timeout_clock = seastar::lowres_clock;
+          using timeout_clock = lowres_clock;
        }
            GCC6_CONCEPT() class mutation final {
            mutation() = default;
@@ -182,13 +182,13 @@ namespace seastar {
          public:       future<std::vector<locked_cell>>       lock_counter_cells(const mutation &m,                          db::timeout_clock::time_point timeout);
          };
           class database {
-           future<mutation>       do_apply_counter_update(column_family &cf, const frozen_mutation &fm,                               schema_ptr m_schema,                               db::timeout_clock::time_point timeout,                               tracing::trace_state_ptr trace_state);
+           future<mutation>       do_apply_counter_update(column_family &cf, const frozen_mutation &fm,                               schema_ptr m_schema,                               db::timeout_clock::time_point timeout,                               trace_state_ptr trace_state);
          };
-          namespace tracing {
+          
          class trace_state_ptr final {
         public:       trace_state_ptr(nullptr_t);
         };
-         }
+         
           template <typename Consumer>     inline future<> consume_partitions(flat_mutation_reader & reader,                                        Consumer consumer,                                        db::timeout_clock::time_point timeout) {
            using futurator = futurize<std::result_of_t<Consumer>>;
            return do_with(           std::move, [&reader, timeout](Consumer &c) -> future<> {
@@ -203,9 +203,9 @@ namespace seastar {
          public:       mutation unfreeze(schema_ptr s) const;
          };
           class mutation_source {};
-          future<mutation_opt> counter_write_query(         schema_ptr, const mutation_source &, const dht::decorated_key &dk,         const query::partition_slice &slice,         tracing::trace_state_ptr trace_ptr);
+          future<mutation_opt> counter_write_query(         schema_ptr, const mutation_source &, const dht::decorated_key &dk,         const query::partition_slice &slice,         trace_state_ptr trace_ptr);
           class locked_cell {};
-          future<mutation> database::do_apply_counter_update(         column_family & cf, const frozen_mutation &fm, schema_ptr m_schema,         db::timeout_clock::time_point timeout,         tracing::trace_state_ptr trace_state) {
+          future<mutation> database::do_apply_counter_update(         column_family & cf, const frozen_mutation &fm, schema_ptr m_schema,         db::timeout_clock::time_point timeout,         trace_state_ptr trace_state) {
            auto m = fm.unfreeze(m_schema);
            query::column_id_vector static_columns;
            query::clustering_row_ranges cr_ranges;
