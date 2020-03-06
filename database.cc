@@ -40,17 +40,14 @@ memory_resource* pmr_get_default_resource() {
 namespace seastar {
 namespace compat {
 class memory_resource {};
-static inline
-memory_resource* pmr_get_default_resource() {
-    static memory_resource stub;
-    return &stub;
-}
+static
+memory_resource* pmr_get_default_resource() ;
 template <typename T>
 class polymorphic_allocator {
 public:
-    explicit polymorphic_allocator(memory_resource*){}
-    T* allocate( std::size_t n ) { __builtin_abort(); }
-    void deallocate(T* p, std::size_t n ) { __builtin_abort(); }
+    explicit polymorphic_allocator(memory_resource*);
+    T* allocate( std::size_t n ) ;
+    void deallocate(T* p, std::size_t n ) ;
 };
 }
 }
@@ -127,9 +124,7 @@ inline constexpr optional<std::decay_t<T>> make_optional(T&& value) {
 template <typename CharT, typename Traits = std::char_traits<CharT>>
 using basic_string_view = std::experimental::basic_string_view<CharT, Traits>;
 template <typename CharT, typename Traits = std::char_traits<CharT>>
-std::string string_view_to_string(const basic_string_view<CharT, Traits>& v) {
-    return v.to_string();
-}
+std::string string_view_to_string(const basic_string_view<CharT, Traits>& v) ;
 template <typename... Types>
 using variant = boost::variant<Types...>;
 template<typename U, typename... Types>
@@ -141,21 +136,15 @@ U&& get(variant<Types...>&& v) {
     return boost::get<U, Types...>(v);
 }
 template<typename U, typename... Types>
-const U& get(const variant<Types...>& v) {
-    return boost::get<U, Types...>(v);
-}
+const U& get(const variant<Types...>& v) ;
 template<typename U, typename... Types>
-const U&& get(const variant<Types...>&& v) {
-    return boost::get<U, Types...>(v);
-}
+const U&& get(const variant<Types...>&& v) ;
 template<typename U, typename... Types>
 U* get_if(variant<Types...>* v) {
     return boost::get<U, Types...>(v);
 }
 template<typename U, typename... Types>
-const U* get_if(const variant<Types...>* v) {
-    return boost::get<U, Types...>(v);
-}
+const U* get_if(const variant<Types...>* v) ;
 #endif
 namespace filesystem = std::filesystem;
 using string_view = basic_string_view<char>;
@@ -176,19 +165,15 @@ private:
 public:
     deleter() = default;
     deleter(const deleter&) = delete;
-    deleter(deleter&& x) noexcept : _impl(x._impl) { x._impl = nullptr; }
-    explicit deleter(impl* i) : _impl(i) {}
-    deleter(raw_object_tag tag, void* object)
-        : _impl(from_raw_object(object)) {}
+    deleter(deleter&& x)  ;
+    explicit deleter(impl* i)  ;
+    deleter(raw_object_tag tag, void* object)  ;
     ~deleter();
     deleter& operator=(deleter&& x) noexcept;
     deleter& operator=(deleter&) = delete;
     deleter share();
-    explicit operator bool() const { return bool(_impl); }
-    void reset(impl* i) {
-        this->~deleter();
-        new (this) deleter(i);
-    }
+    explicit operator bool() const ;
+    void reset(impl* i) ;
     void append(deleter d);
 private:
     static bool is_raw_object(impl* i) {
@@ -6966,193 +6951,26 @@ circular_buffer<T, Alloc>::for_each(Func func) {
         func(s[i & m]);
     }
 }
-template <typename T, typename Alloc>
-inline
-circular_buffer<T, Alloc>::~circular_buffer() {
-    for_each([this] (T& obj) {
-        _impl.destroy(&obj);
-    });
-    _impl.deallocate(_impl.storage, _impl.capacity);
-}
-template <typename T, typename Alloc>
-void
-circular_buffer<T, Alloc>::expand() {
-    expand(std::max<size_t>(_impl.capacity * 2, 1));
-}
-template <typename T, typename Alloc>
-void
-circular_buffer<T, Alloc>::expand(size_t new_cap) {
-    auto new_storage = _impl.allocate(new_cap);
-    auto p = new_storage;
-    try {
-        for_each([this, &p] (T& obj) {
-            transfer_pass1(_impl, &obj, p);
-            p++;
-        });
-    } catch (...) {
-        while (p != new_storage) {
-            _impl.destroy(--p);
-        }
-        _impl.deallocate(new_storage, new_cap);
-        throw;
-    }
-    p = new_storage;
-    for_each([this, &p] (T& obj) {
-        transfer_pass2(_impl, &obj, p++);
-    });
-    std::swap(_impl.storage, new_storage);
-    std::swap(_impl.capacity, new_cap);
-    _impl.begin = 0;
-    _impl.end = p - _impl.storage;
-    _impl.deallocate(new_storage, new_cap);
-}
-template <typename T, typename Alloc>
-inline
-void
-circular_buffer<T, Alloc>::maybe_expand(size_t nr) {
-    if (_impl.end - _impl.begin + nr > _impl.capacity) {
-        expand();
-    }
-}
-template <typename T, typename Alloc>
-inline
-void
-circular_buffer<T, Alloc>::push_front(const T& data) {
-    maybe_expand();
-    auto p = &_impl.storage[mask(_impl.begin - 1)];
-    _impl.construct(p, data);
-    --_impl.begin;
-}
-template <typename T, typename Alloc>
-inline
-void
-circular_buffer<T, Alloc>::push_front(T&& data) {
-    maybe_expand();
-    auto p = &_impl.storage[mask(_impl.begin - 1)];
-    _impl.construct(p, std::move(data));
-    --_impl.begin;
-}
-template <typename T, typename Alloc>
-template <typename... Args>
-inline
-void
-circular_buffer<T, Alloc>::emplace_front(Args&&... args) {
-    maybe_expand();
-    auto p = &_impl.storage[mask(_impl.begin - 1)];
-    _impl.construct(p, std::forward<Args>(args)...);
-    --_impl.begin;
-}
-template <typename T, typename Alloc>
-inline
-void
-circular_buffer<T, Alloc>::push_back(const T& data) {
-    maybe_expand();
-    auto p = &_impl.storage[mask(_impl.end)];
-    _impl.construct(p, data);
-    ++_impl.end;
-}
-template <typename T, typename Alloc>
-inline
-void
-circular_buffer<T, Alloc>::push_back(T&& data) {
-    maybe_expand();
-    auto p = &_impl.storage[mask(_impl.end)];
-    _impl.construct(p, std::move(data));
-    ++_impl.end;
-}
-template <typename T, typename Alloc>
-template <typename... Args>
-inline
-void
-circular_buffer<T, Alloc>::emplace_back(Args&&... args) {
-    maybe_expand();
-    auto p = &_impl.storage[mask(_impl.end)];
-    _impl.construct(p, std::forward<Args>(args)...);
-    ++_impl.end;
-}
-template <typename T, typename Alloc>
-inline
-T&
-circular_buffer<T, Alloc>::front() {
-    return _impl.storage[mask(_impl.begin)];
-}
-template <typename T, typename Alloc>
-inline
-const T&
-circular_buffer<T, Alloc>::front() const {
-    return _impl.storage[mask(_impl.begin)];
-}
-template <typename T, typename Alloc>
-inline
-T&
-circular_buffer<T, Alloc>::back() {
-    return _impl.storage[mask(_impl.end - 1)];
-}
-template <typename T, typename Alloc>
-inline
-const T&
-circular_buffer<T, Alloc>::back() const {
-    return _impl.storage[mask(_impl.end - 1)];
-}
-template <typename T, typename Alloc>
-inline
-void
-circular_buffer<T, Alloc>::pop_front() {
-    _impl.destroy(&front());
-    ++_impl.begin;
-}
-template <typename T, typename Alloc>
-inline
-void
-circular_buffer<T, Alloc>::pop_back() {
-    _impl.destroy(&back());
-    --_impl.end;
-}
-template <typename T, typename Alloc>
-inline
-T&
-circular_buffer<T, Alloc>::operator[](size_t idx) {
-    return _impl.storage[mask(_impl.begin + idx)];
-}
-template <typename T, typename Alloc>
-inline
-const T&
-circular_buffer<T, Alloc>::operator[](size_t idx) const {
-    return _impl.storage[mask(_impl.begin + idx)];
-}
-template <typename T, typename Alloc>
-inline
-T&
-circular_buffer<T, Alloc>::access_element_unsafe(size_t idx) {
-    return _impl.storage[mask(_impl.begin + idx)];
-}
-template <typename T, typename Alloc>
-inline
-typename circular_buffer<T, Alloc>::iterator
-circular_buffer<T, Alloc>::erase(iterator first, iterator last) {
-    static_assert(std::is_nothrow_move_assignable<T>::value, "erase() assumes move assignment does not throw");
-    if (first == last) {
-        return last;
-    }
-    if (std::distance(begin(), first) < std::distance(last, end())) {
-        auto new_start = std::move_backward(begin(), first, last);
-        auto i = begin();
-        while (i < new_start) {
-            _impl.destroy(&*i++);
-        }
-        _impl.begin = new_start.idx;
-        return last;
-    } else {
-        auto new_end = std::move(last, end(), first);
-        auto i = new_end;
-        auto e = end();
-        while (i < e) {
-            _impl.destroy(&*i++);
-        }
-        _impl.end = new_end.idx;
-        return first;
-    }
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
 #include <functional>
 namespace seastar {
@@ -7169,28 +6987,16 @@ private:
     promise<> _done;
     promise<> _ready;
     next_fn _next;
-    void start(next_fn next) {
-        _next = std::move(next);
-        _ready.set_value();
-    }
+    void start(next_fn next) ;
 public:
     stream() = default;
     stream(const stream&) = delete;
     stream(stream&&) = delete;
-    ~stream() {
-        if (_sub) {
-            _sub->_stream = nullptr;
-        }
-    }
+    ~stream() ;
     void operator=(const stream&) = delete;
     void operator=(stream&&) = delete;
-    subscription<T...> listen() {
-        return subscription<T...>(this);
-    }
-    subscription<T...> listen(next_fn next) {
-        start(std::move(next));
-        return subscription<T...>(this);
-    }
+    subscription<T...> listen() ;
+    subscription<T...> listen(next_fn next) ;
     future<> started() {
         return _ready.get_future();
     }
@@ -9545,27 +9351,13 @@ public:
         return boost::irange(0u, count);
     }
     template<typename Func>
-    static future<> invoke_on_all(smp_submit_to_options options, Func&& func) {
-        static_assert(std::is_same<future<>, typename futurize<std::result_of_t<Func()>>::type>::value, "bad Func signature");
-        return parallel_for_each(all_cpus(), [options, &func] (unsigned id) {
-            return smp::submit_to(id, options, Func(func));
-        });
-    }
+    static future<> invoke_on_all(smp_submit_to_options options, Func&& func) ;
     template<typename Func>
-    static future<> invoke_on_all(Func&& func) {
-        return invoke_on_all(smp_submit_to_options{}, std::forward<Func>(func));
-    }
+    static future<> invoke_on_all(Func&& func) ;
     template<typename Func>
-    static future<> invoke_on_others(unsigned cpu_id, smp_submit_to_options options, Func func) {
-        static_assert(std::is_same<future<>, typename futurize<std::result_of_t<Func()>>::type>::value, "bad Func signature");
-        return parallel_for_each(all_cpus(), [cpu_id, options, func = std::move(func)] (unsigned id) {
-            return id != cpu_id ? smp::submit_to(id, options, func) : make_ready_future<>();
-        });
-    }
+    static future<> invoke_on_others(unsigned cpu_id, smp_submit_to_options options, Func func) ;
     template<typename Func>
-    static future<> invoke_on_others(unsigned cpu_id, Func func) {
-        return invoke_on_others(cpu_id, smp_submit_to_options{}, std::move(func));
-    }
+    static future<> invoke_on_others(unsigned cpu_id, Func func) ;
 private:
     static void start_all_queues();
     static void pin(unsigned cpu_id);
@@ -9608,171 +9400,55 @@ private:
         socklen_t socklen;
     } _size;
     kernel_completion* _kernel_completion;
-    explicit io_request(operation op, int fd, int flags, ::msghdr* msg)
-        : _op(op)
-        , _fd(fd)
-    {
-        _attr.flags = flags;
-        _ptr.msghdr = msg;
-    }
-    explicit io_request(operation op, int fd, sockaddr* sa, socklen_t sl)
-        : _op(op)
-        , _fd(fd)
-    {
-        _ptr.sockaddr = sa;
-        _size.socklen = sl;
-    }
-    explicit io_request(operation op, int fd, int flags, sockaddr* sa, socklen_t* sl)
-        : _op(op)
-        , _fd(fd)
-    {
-        _attr.flags = flags;
-        _ptr.sockaddr = sa;
-        _size.socklen_ptr = sl;
-    }
-    explicit io_request(operation op, int fd, uint64_t pos, char* ptr, size_t size)
-        : _op(op)
-        , _fd(fd)
-    {
-        _attr.pos = pos;
-        _ptr.addr = ptr;
-        _size.len = size;
-    }
-    explicit io_request(operation op, int fd, uint64_t pos, iovec* ptr, size_t size)
-        : _op(op)
-        , _fd(fd)
-    {
-        _attr.pos = pos;
-        _ptr.iovec = ptr;
-        _size.len = size;
-    }
-    explicit io_request(operation op, int fd)
-        : _op(op)
-        , _fd(fd)
-    {}
-    explicit io_request(operation op, int fd, int events)
-        : _op(op)
-        , _fd(fd)
-    {
-        _attr.events = events;
-    }
-    explicit io_request(operation op, int fd, char *ptr)
-        : _op(op)
-        , _fd(fd)
-    {
-        _ptr.addr = ptr;
-    }
+    explicit io_request(operation op, int fd, int flags, ::msghdr* msg) 
+    ;
+    explicit io_request(operation op, int fd, sockaddr* sa, socklen_t sl) 
+    ;
+    explicit io_request(operation op, int fd, int flags, sockaddr* sa, socklen_t* sl) 
+    ;
+    explicit io_request(operation op, int fd, uint64_t pos, char* ptr, size_t size) 
+    ;
+    explicit io_request(operation op, int fd, uint64_t pos, iovec* ptr, size_t size) 
+    ;
+    explicit io_request(operation op, int fd) 
+    ;
+    explicit io_request(operation op, int fd, int events) 
+    ;
+    explicit io_request(operation op, int fd, char *ptr) 
+    ;
 public:
-    bool is_read() const {
-        switch (_op) {
-        case operation::read:
-        case operation::readv:
-        case operation::recvmsg:
-        case operation::recv:
-            return true;
-        default:
-            return false;
-        }
-    }
-    bool is_write() const {
-        switch (_op) {
-        case operation::write:
-        case operation::writev:
-        case operation::send:
-        case operation::sendmsg:
-            return true;
-        default:
-            return false;
-        }
-    }
+    bool is_read() const ;
+    bool is_write() const ;
     sstring opname() const;
-    operation opcode() const {
-        return _op;
-    }
-    int fd() const {
-        return _fd;
-    }
-    uint64_t pos() const {
-        return _attr.pos;
-    }
-    int flags() const {
-        return _attr.flags;
-    }
-    int events() const {
-        return _attr.events;
-    }
-    void* address() const {
-        return reinterpret_cast<void*>(_ptr.addr);
-    }
-    iovec* iov() const {
-        return _ptr.iovec;
-    }
-    ::sockaddr* posix_sockaddr() const {
-        return _ptr.sockaddr;
-    }
-    ::msghdr* msghdr() const {
-        return _ptr.msghdr;
-    }
-    size_t size() const {
-        return _size.len;
-    }
-    size_t iov_len() const {
-        return _size.len;
-    }
-    socklen_t socklen() const {
-        return _size.socklen;
-    }
-    socklen_t* socklen_ptr() const {
-        return _size.socklen_ptr;
-    }
-    void attach_kernel_completion(kernel_completion* kc) {
-        _kernel_completion = kc;
-    }
-    kernel_completion* get_kernel_completion() const {
-        return _kernel_completion;
-    }
-    static io_request make_read(int fd, uint64_t pos, void* address, size_t size) {
-        return io_request(operation::read, fd, pos, reinterpret_cast<char*>(address), size);
-    }
-    static io_request make_readv(int fd, uint64_t pos, std::vector<iovec>& iov) {
-        return io_request(operation::readv, fd, pos, iov.data(), iov.size());
-    }
-    static io_request make_recv(int fd, void* address, size_t size, int flags) {
-        return io_request(operation::recv, fd, flags, reinterpret_cast<char*>(address), size);
-    }
-    static io_request make_recvmsg(int fd, ::msghdr* msg, int flags) {
-        return io_request(operation::recvmsg, fd, flags, msg);
-    }
-    static io_request make_send(int fd, const void* address, size_t size, int flags) {
-        return io_request(operation::send, fd, flags, const_cast<char*>(reinterpret_cast<const char*>(address)), size);
-    }
-    static io_request make_sendmsg(int fd, ::msghdr* msg, int flags) {
-        return io_request(operation::sendmsg, fd, flags, msg);
-    }
-    static io_request make_write(int fd, uint64_t pos, const void* address, size_t size) {
-        return io_request(operation::write, fd, pos, const_cast<char*>(reinterpret_cast<const char*>(address)), size);
-    }
-    static io_request make_writev(int fd, uint64_t pos, std::vector<iovec>& iov) {
-        return io_request(operation::writev, fd, pos, iov.data(), iov.size());
-    }
-    static io_request make_fdatasync(int fd) {
-        return io_request(operation::fdatasync, fd);
-    }
-    static io_request make_accept(int fd, struct sockaddr* addr, socklen_t* addrlen, int flags) {
-        return io_request(operation::accept, fd, flags, addr, addrlen);
-    }
-    static io_request make_connect(int fd, struct sockaddr* addr, socklen_t addrlen) {
-        return io_request(operation::connect, fd, addr, addrlen);
-    }
-    static io_request make_poll_add(int fd, int events) {
-        return io_request(operation::poll_add, fd, events);
-    }
-    static io_request make_poll_remove(int fd, void *addr) {
-        return io_request(operation::poll_remove, fd, reinterpret_cast<char*>(addr));
-    }
-    static io_request make_cancel(int fd, void *addr) {
-        return io_request(operation::cancel, fd, reinterpret_cast<char*>(addr));
-    }
+    operation opcode() const ;
+    int fd() const ;
+    uint64_t pos() const ;
+    int flags() const ;
+    int events() const ;
+    void* address() const ;
+    iovec* iov() const ;
+    ::sockaddr* posix_sockaddr() const ;
+    ::msghdr* msghdr() const ;
+    size_t size() const ;
+    size_t iov_len() const ;
+    socklen_t socklen() const ;
+    socklen_t* socklen_ptr() const ;
+    void attach_kernel_completion(kernel_completion* kc) ;
+    kernel_completion* get_kernel_completion() const ;
+    static io_request make_read(int fd, uint64_t pos, void* address, size_t size) ;
+    static io_request make_readv(int fd, uint64_t pos, std::vector<iovec>& iov) ;
+    static io_request make_recv(int fd, void* address, size_t size, int flags) ;
+    static io_request make_recvmsg(int fd, ::msghdr* msg, int flags) ;
+    static io_request make_send(int fd, const void* address, size_t size, int flags) ;
+    static io_request make_sendmsg(int fd, ::msghdr* msg, int flags) ;
+    static io_request make_write(int fd, uint64_t pos, const void* address, size_t size) ;
+    static io_request make_writev(int fd, uint64_t pos, std::vector<iovec>& iov) ;
+    static io_request make_fdatasync(int fd) ;
+    static io_request make_accept(int fd, struct sockaddr* addr, socklen_t* addrlen, int flags) ;
+    static io_request make_connect(int fd, struct sockaddr* addr, socklen_t addrlen) ;
+    static io_request make_poll_add(int fd, int events) ;
+    static io_request make_poll_remove(int fd, void *addr) ;
+    static io_request make_cancel(int fd, void *addr) ;
 };
 }
 }
@@ -9793,14 +9469,14 @@ using pollable_fd_state_ptr = boost::intrusive_ptr<pollable_fd_state>;
 class pollable_fd_state {
     unsigned _refs = 0;
 public:
-    virtual ~pollable_fd_state() {}
+    virtual ~pollable_fd_state() ;
     struct speculation {
         int events = 0;
-        explicit speculation(int epoll_events_guessed = 0) : events(epoll_events_guessed) {}
+        explicit speculation(int epoll_events_guessed = 0)  ;
     };
     pollable_fd_state(const pollable_fd_state&) = delete;
     void operator=(const pollable_fd_state&) = delete;
-    void speculate_epoll(int events) { events_known |= events; }
+    void speculate_epoll(int events) ;
     file_desc fd;
     bool events_rw = false;   
     bool no_more_recv = false; 
@@ -9829,15 +9505,12 @@ public:
     future<size_t> recvmsg(struct msghdr *msg);
     future<size_t> sendto(socket_address addr, const void* buf, size_t len);
 protected:
-    explicit pollable_fd_state(file_desc fd, speculation speculate = speculation())
-        : fd(std::move(fd)), events_known(speculate.events) {}
+    explicit pollable_fd_state(file_desc fd, speculation speculate = speculation())  ;
 private:
     void maybe_no_more_recv();
     void maybe_no_more_send();
     void forget(); 
-    friend void intrusive_ptr_add_ref(pollable_fd_state* fd) {
-        ++fd->_refs;
-    }
+    friend void intrusive_ptr_add_ref(pollable_fd_state* fd) ;
     friend void intrusive_ptr_release(pollable_fd_state* fd);
 };
 class pollable_fd {
@@ -10354,19 +10027,17 @@ public:
             activate(*q);
         }
     }
-    void set_idle_cpu_handler(idle_cpu_handler&& handler) {
-        _idle_cpu_handler = std::move(handler);
-    }
+    void set_idle_cpu_handler(idle_cpu_handler&& handler) ;
     void force_poll();
     void add_high_priority_task(task*) noexcept;
-    network_stack& net() { return *_network_stack; }
-    shard_id cpu_id() const { return _id; }
+    network_stack& net() ;
+    shard_id cpu_id() const ;
     void sleep();
     steady_clock_type::duration total_idle_time();
     steady_clock_type::duration total_busy_time();
     std::chrono::nanoseconds total_steal_time();
-    const io_stats& get_io_stats() const { return _io_stats; }
-    uint64_t abandoned_failed_futures() const { return _abandoned_failed_futures; }
+    const io_stats& get_io_stats() const ;
+    uint64_t abandoned_failed_futures() const ;
 private:
     /**
      * Add a new "poller" - a non-blocking function returning a boolean, that
@@ -10445,43 +10116,15 @@ public:
     void set_stall_detector_report_function(std::function<void ()> report);
     std::function<void ()> get_stall_detector_report_function() const;
 };
-template <typename Func> 
-inline
-std::unique_ptr<reactor::pollfn>
-reactor::make_pollfn(Func&& func) {
-    struct the_pollfn : pollfn {
-        the_pollfn(Func&& func) : func(std::forward<Func>(func)) {}
-        Func func;
-        virtual bool poll() override final {
-            return func();
-        }
-        virtual bool pure_poll() override final {
-            return poll(); 
-        }
-    };
-    return std::make_unique<the_pollfn>(std::forward<Func>(func));
-}
+
 extern __thread reactor* local_engine;
 extern __thread size_t task_quota;
-inline reactor& engine() {
-    return *local_engine;
-}
-inline bool engine_is_ready() {
-    return local_engine != nullptr;
-}
-inline
+ reactor& engine() ;
+ bool engine_is_ready() ;
+
 size_t iovec_len(const iovec* begin, size_t len)
-{
-    size_t ret = 0;
-    auto end = begin + len;
-    while (begin != end) {
-        ret += begin++->iov_len;
-    }
-    return ret;
-}
-inline int hrtimer_signal() {
-    return SIGRTMIN;
-}
+;
+ int hrtimer_signal() ;
 extern logger seastar_logger;
 }
 namespace seastar {
@@ -10507,92 +10150,18 @@ public:
     future<> not_full();
     future<T> pop_eventually();
     future<> push_eventually(T&& data);
-    size_t size() const { return _q.size(); }
-    size_t max_size() const { return _max; }
-    void set_max_size(size_t max) {
-        _max = max;
-        if (!full()) {
-            notify_not_full();
-        }
-    }
-    void abort(std::exception_ptr ex) {
-        while (!_q.empty()) {
-            _q.pop();
-        }
-        _ex = ex;
-        if (_not_full) {
-            _not_full->set_exception(ex);
-            _not_full= compat::nullopt;
-        }
-        if (_not_empty) {
-            _not_empty->set_exception(std::move(ex));
-            _not_empty = compat::nullopt;
-        }
-    }
-    bool has_blocked_consumer() const {
-        return bool(_not_empty);
-    }
+    size_t size() const ;
+    size_t max_size() const ;
+    void set_max_size(size_t max) ;
+    void abort(std::exception_ptr ex) ;
+    bool has_blocked_consumer() const ;
 };
-template <typename T>
-inline
-queue<T>::queue(size_t size)
-    : _max(size) {
-}
-template <typename T>
-inline
-void queue<T>::notify_not_empty() {
-    if (_not_empty) {
-        _not_empty->set_value();
-        _not_empty = compat::optional<promise<>>();
-    }
-}
-template <typename T>
-inline
-void queue<T>::notify_not_full() {
-    if (_not_full) {
-        _not_full->set_value();
-        _not_full = compat::optional<promise<>>();
-    }
-}
-template <typename T>
-inline
-bool queue<T>::push(T&& data) {
-    if (_q.size() < _max) {
-        _q.push(std::move(data));
-        notify_not_empty();
-        return true;
-    } else {
-        return false;
-    }
-}
-template <typename T>
-inline
-T queue<T>::pop() {
-    if (_q.size() == _max) {
-        notify_not_full();
-    }
-    T data = std::move(_q.front());
-    _q.pop();
-    return data;
-}
-template <typename T>
-inline
-future<T> queue<T>::pop_eventually() {
-    if (_ex) {
-        return make_exception_future<T>(_ex);
-    }
-    if (empty()) {
-        return not_empty().then([this] {
-            if (_ex) {
-                return make_exception_future<T>(_ex);
-            } else {
-                return make_ready_future<T>(pop());
-            }
-        });
-    } else {
-        return make_ready_future<T>(pop());
-    }
-}
+
+
+
+
+
+
 template <typename T>
 inline
 future<> queue<T>::push_eventually(T&& data) {
