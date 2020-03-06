@@ -1039,29 +1039,17 @@ struct lw_shared_ptr_accessors_esft {
     static T* to_value(lw_shared_ptr_counter_base* counter) {
         return static_cast<T*>(counter);
     }
-    static void dispose(lw_shared_ptr_counter_base* counter) {
-        dispose(static_cast<T*>(counter));
-    }
-    static void dispose(T* value_ptr) {
-        delete value_ptr;
-    }
-    static void instantiate_to_value(lw_shared_ptr_counter_base* p) {
-    }
+    static void dispose(lw_shared_ptr_counter_base* counter) ;
+    static void dispose(T* value_ptr) ;
+    static void instantiate_to_value(lw_shared_ptr_counter_base* p) ;
 };
 template <typename T>
 struct lw_shared_ptr_accessors_no_esft {
     using concrete_type = shared_ptr_no_esft<T>;
-    static T* to_value(lw_shared_ptr_counter_base* counter) {
-        return &static_cast<concrete_type*>(counter)->_value;
-    }
-    static void dispose(lw_shared_ptr_counter_base* counter) {
-        delete static_cast<concrete_type*>(counter);
-    }
-    static void dispose(T* value_ptr) {
-        delete boost::intrusive::get_parent_from_member(value_ptr, &concrete_type::_value);
-    }
-    static void instantiate_to_value(lw_shared_ptr_counter_base* p) {
-    }
+    static T* to_value(lw_shared_ptr_counter_base* counter) ;
+    static void dispose(lw_shared_ptr_counter_base* counter) ;
+    static void dispose(T* value_ptr) ;
+    static void instantiate_to_value(lw_shared_ptr_counter_base* p) ;
 };
 template <typename T, typename U = void>
 struct lw_shared_ptr_accessors : std::conditional_t<
@@ -1075,12 +1063,8 @@ template <typename T>
 struct lw_shared_ptr_accessors<T, void_t<decltype(lw_shared_ptr_deleter<T>{})>> {
     using concrete_type = T;
     static T* to_value(lw_shared_ptr_counter_base* counter);
-    static void dispose(lw_shared_ptr_counter_base* counter) {
-        lw_shared_ptr_deleter<T>::dispose(to_value(counter));
-    }
-    static void instantiate_to_value(lw_shared_ptr_counter_base* p) {
-        to_value(p);
-    }
+    static void dispose(lw_shared_ptr_counter_base* counter) ;
+    static void instantiate_to_value(lw_shared_ptr_counter_base* p) ;
 };
 }
 template <typename T>
@@ -1089,27 +1073,15 @@ class lw_shared_ptr {
     using concrete_type = typename accessors::concrete_type;
     mutable lw_shared_ptr_counter_base* _p = nullptr;
 private:
-    lw_shared_ptr(lw_shared_ptr_counter_base* p) noexcept : _p(p) {
-        if (_p) {
-            ++_p->_count;
-        }
-    }
+    lw_shared_ptr(lw_shared_ptr_counter_base* p)  ;
     template <typename... A>
-    static lw_shared_ptr make(A&&... a) {
-        auto p = new concrete_type(std::forward<A>(a)...);
-        accessors::instantiate_to_value(p);
-        return lw_shared_ptr(p);
-    }
+    static lw_shared_ptr make(A&&... a) ;
 public:
     using element_type = T;
-    static void dispose(T* p) noexcept {
-        accessors::dispose(const_cast<std::remove_const_t<T>*>(p));
-    }
+    static void dispose(T* p) noexcept ;
     class disposer {
     public:
-        void operator()(T* p) const noexcept {
-            dispose(p);
-        }
+        void operator()(T* p) const noexcept ;
     };
     lw_shared_ptr() noexcept = default;
     lw_shared_ptr(std::nullptr_t) noexcept : lw_shared_ptr() {}
@@ -1412,89 +1384,51 @@ struct shared_ptr_make_helper<T, true> {
     }
 };
 template <typename T, typename... A>
-inline
+
 shared_ptr<T>
-make_shared(A&&... a) {
-    using helper = shared_ptr_make_helper<T, std::is_base_of<shared_ptr_count_base, T>::value>;
-    return helper::make(std::forward<A>(a)...);
-}
+make_shared(A&&... a) ;
 template <typename T>
-inline
+
 shared_ptr<T>
-make_shared(T&& a) {
-    using helper = shared_ptr_make_helper<T, std::is_base_of<shared_ptr_count_base, T>::value>;
-    return helper::make(std::forward<T>(a));
-}
+make_shared(T&& a) ;
 template <typename T, typename U>
-inline
+
 shared_ptr<T>
-static_pointer_cast(const shared_ptr<U>& p) {
-    return shared_ptr<T>(p._b, static_cast<T*>(p._p));
-}
+static_pointer_cast(const shared_ptr<U>& p) ;
 template <typename T, typename U>
-inline
+
 shared_ptr<T>
-dynamic_pointer_cast(const shared_ptr<U>& p) {
-    auto q = dynamic_cast<T*>(p._p);
-    return shared_ptr<T>(q ? p._b : nullptr, q);
-}
+dynamic_pointer_cast(const shared_ptr<U>& p) ;
 template <typename T, typename U>
-inline
+
 shared_ptr<T>
-const_pointer_cast(const shared_ptr<U>& p) {
-    return shared_ptr<T>(p._b, const_cast<T*>(p._p));
-}
-template <typename T>
-inline
-shared_ptr<T>
-enable_shared_from_this<T>::shared_from_this() {
-    auto unconst = reinterpret_cast<enable_shared_from_this<std::remove_const_t<T>>*>(this);
-    return shared_ptr<T>(unconst);
-}
-template <typename T>
-inline
-shared_ptr<const T>
-enable_shared_from_this<T>::shared_from_this() const {
-    auto esft = const_cast<enable_shared_from_this*>(this);
-    auto unconst = reinterpret_cast<enable_shared_from_this<std::remove_const_t<T>>*>(esft);
-    return shared_ptr<const T>(unconst);
-}
+const_pointer_cast(const shared_ptr<U>& p) ;
+
+
 template <typename T, typename U>
-inline
+
 bool
-operator==(const shared_ptr<T>& x, const shared_ptr<U>& y) {
-    return x.get() == y.get();
-}
+operator==(const shared_ptr<T>& x, const shared_ptr<U>& y) ;
 template <typename T>
-inline
+
 bool
-operator==(const shared_ptr<T>& x, std::nullptr_t) {
-    return x.get() == nullptr;
-}
+operator==(const shared_ptr<T>& x, std::nullptr_t) ;
 template <typename T>
-inline
+
 bool
-operator==(std::nullptr_t, const shared_ptr<T>& y) {
-    return nullptr == y.get();
-}
+operator==(std::nullptr_t, const shared_ptr<T>& y) ;
 template <typename T, typename U>
-inline
+
 bool
-operator!=(const shared_ptr<T>& x, const shared_ptr<U>& y) {
-    return x.get() != y.get();
-}
+operator!=(const shared_ptr<T>& x, const shared_ptr<U>& y) ;
 template <typename T>
-inline
+
 bool
-operator!=(const shared_ptr<T>& x, std::nullptr_t) {
-    return x.get() != nullptr;
-}
+operator!=(const shared_ptr<T>& x, std::nullptr_t) ;
 template <typename T>
-inline
+
 bool
-operator!=(std::nullptr_t, const shared_ptr<T>& y) {
-    return nullptr != y.get();
-}
+operator!=(std::nullptr_t, const shared_ptr<T>& y) ;
 template <typename T, typename U>
 inline
 bool
