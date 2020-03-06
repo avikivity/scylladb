@@ -18,7 +18,7 @@ namespace seastar {
            class schema;
            using schema_ptr = seastar::lw_shared_ptr<const schema>;
            namespace seastar {
-          GCC6_CONCEPT( template<typename T> concept bool OptimizableOptional0 {
+          GCC6_CONCEPT( template concept bool OptimizableOptional0 {
          ) template<typename T> class optimized_optional {
           optimized_optional(compat::optional<T> &&obj) noexcept ;
           T &operator*() noexcept ;
@@ -226,13 +226,10 @@ namespace seastar {
         };
          }
           template <typename Consumer>     inline future<> consume_partitions(flat_mutation_reader & reader,                                        Consumer consumer,                                        db::timeout_clock::time_point timeout) {
-           using futurator = futurize<std::result_of_t<Consumer(mutation &&)>>;
-           return do_with(           std::move(consumer), [&reader, timeout](Consumer &c) -> future<> {
-                return repeat([&reader, &c, timeout]() {
-                 return read_mutation_from_flat_mutation_reader(reader, timeout)                   .then([&c](mutation_opt &&mo) -> future<stop_iteration> {
-                       return futurator::apply0;
-                     }
-  );
+           using futurator = futurize<std::result_of_t<Consumer>>;
+           return do_with(           std::move, [&reader, timeout](Consumer &c) -> future<> {
+                return repeat([&reader, &c, timeout] {
+                 return read_mutation_from_flat_mutation_reader(reader, timeout)                   .then;
                }
    );
               }
