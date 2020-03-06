@@ -62,12 +62,12 @@ class UTFDataFormatException { };
  static constexpr size_t serialize_int16_size = 2;
  static constexpr size_t serialize_int32_size = 4;
  static constexpr size_t serialize_int64_size = 8;
- namespace internal_impl { template <typename ExplicitIntegerType, typename CharOutputIterator, typename IntegerType> GCC6_CONCEPT(requires std::is_integral<ExplicitIntegerType>::value && std::is_integral<IntegerType>::value && requires (CharOutputIterator it) {     *it++ = 'a'; }) inline void serialize_int(CharOutputIterator& out, IntegerType val) {     ExplicitIntegerType nval = net::hton(ExplicitIntegerType(val));     out = std::copy_n(reinterpret_cast<const char*>(&nval), sizeof(nval), out); } }
- template <typename CharOutputIterator> inline void serialize_int8(CharOutputIterator& out, uint8_t val) {     internal_impl::serialize_int<uint8_t>(out, val); }
- template <typename CharOutputIterator> inline void serialize_int16(CharOutputIterator& out, uint16_t val) {     internal_impl::serialize_int<uint16_t>(out, val); }
- template <typename CharOutputIterator> inline void serialize_int32(CharOutputIterator& out, uint32_t val) {     internal_impl::serialize_int<uint32_t>(out, val); }
- template <typename CharOutputIterator> inline void serialize_int64(CharOutputIterator& out, uint64_t val) {     internal_impl::serialize_int<uint64_t>(out, val); }
- template <typename CharOutputIterator> inline void serialize_bool(CharOutputIterator& out, bool val) {     serialize_int8(out, val ? 1 : 0); }
+ namespace internal_impl { template <typename ExplicitIntegerType, typename CharOutputIterator, typename IntegerType> GCC6_CONCEPT(requires std::is_integral<ExplicitIntegerType>::value && std::is_integral<IntegerType>::value && requires (CharOutputIterator it) {     *it++ = 'a'; })  void serialize_int(CharOutputIterator& out, IntegerType val) ; }
+ template <typename CharOutputIterator>  void serialize_int8(CharOutputIterator& out, uint8_t val) ;
+ template <typename CharOutputIterator>  void serialize_int16(CharOutputIterator& out, uint16_t val) ;
+ template <typename CharOutputIterator>  void serialize_int32(CharOutputIterator& out, uint32_t val) ;
+ template <typename CharOutputIterator>  void serialize_int64(CharOutputIterator& out, uint64_t val) ;
+ template <typename CharOutputIterator>  void serialize_bool(CharOutputIterator& out, bool val) ;
  template <typename CharOutputIterator> GCC6_CONCEPT(requires requires (CharOutputIterator it) {     *it++ = 'a'; }
 ) inline void serialize_string(CharOutputIterator& out, const sstring& s) {     for (char c : s) {         if (c == '\0') {             throw UTFDataFormatException();         }     }     if (s.size() > std::numeric_limits<uint16_t>::max()) {         throw UTFDataFormatException();     }     serialize_int16(out, s.size());     out = std::copy(s.begin(), s.end(), out); }
  template <typename CharOutputIterator> GCC6_CONCEPT(requires requires (CharOutputIterator it) {     *it++ = 'a'; }
