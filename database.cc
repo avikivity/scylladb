@@ -2691,20 +2691,12 @@ public:
     std::copy_n(b.begin(), sizeof(_data), reinterpret_cast<int8_t *>(&_data));
     _data = net::ntoh(_data);
   }
-  token(kind k, bytes_view b) : _kind(std::move(k)) {
-    if (b.size() != sizeof(_data)) {
-      throw std::runtime_error(
-          fmt::format("Wrong token bytes size: expected {} but got {}",
-                      sizeof(_data), b.size()));
-    }
-    std::copy_n(b.begin(), sizeof(_data), reinterpret_cast<int8_t *>(&_data));
-    _data = net::ntoh(_data);
-  }
-  bool is_minimum() const ;
-  bool is_maximum() const ;
-  size_t external_memory_usage() const;
-  size_t memory_usage() const;
-  bytes data() const;
+  
+  
+  
+  
+  
+  
 };
 } 
 namespace sstables {
@@ -2724,10 +2716,10 @@ public:
   partition_key _key;
   struct less_comparator {
     schema_ptr s;
-    less_comparator(schema_ptr s);
-    bool operator()(const decorated_key &k1, const decorated_key &k2) const;
-    bool operator()(const decorated_key &k1, const ring_position &k2) const;
-    bool operator()(const ring_position &k1, const decorated_key &k2) const;
+    
+    
+    
+    
   };
   bool equal(const schema &s, const decorated_key &other) const;
   bool less_compare(const schema &s, const decorated_key &other) const;
@@ -2921,16 +2913,16 @@ public:
                     ((size_t)1 << Enum::max_sequence),
                 "mask type too small");
   ;
-  bool contains(enum_type e) const;
-  template <enum_type e> void remove();
-  void remove(enum_type e);
-  template <enum_type e> void set();
-  template <enum_type e> void set_if(bool condition);
-  void set(enum_type e);
-  void add(const enum_set &other);
-  explicit operator bool() const;
-  mask_type mask() const;
-  iterator begin() const;
+  
+  ;
+  
+  ;
+  ;
+  
+  
+  
+  
+  
   iterator end() const;
   template <enum_type... items> struct frozen {
     template <enum_type first> static constexpr mask_type make_mask();
