@@ -10,7 +10,6 @@ template < typename T > using optional = std::optional< T >;
 }
 using column_count_type = uint32_t;
 using column_id = column_count_type;
-using schema_ptr = int;
 template < typename T > class optimized_optional {
   optimized_optional(compat::optional< T > ) ;
 };
@@ -140,7 +139,7 @@ class locked_cell;
   lock_counter_cells(mutation , db::timeout_clock::time_point );
 class database {
   future< mutation > do_apply_counter_update(
-      mutation m, schema_ptr ,
+      mutation m, 
       db::timeout_clock::time_point );
 };
 template < typename Consumer >
@@ -152,19 +151,17 @@ void consume_partitions(db::timeout_clock::time_point timeout) {
     });
   });
 }
-future< int > counter_write_query(schema_ptr, const int);
+future< int > counter_write_query(const int);
 class locked_cell {};
 future< mutation > database::do_apply_counter_update(
-    mutation m, schema_ptr ,
-    db::timeout_clock::time_point timeout ) {
+    mutation m,     db::timeout_clock::time_point timeout ) {
   return do_with(
       (m), std::vector< locked_cell >(),
       [this, timeout](mutation m,
                            std::vector< locked_cell > ) mutable {
         return lock_counter_cells(m, timeout)
             .then([&](std::vector< locked_cell > ) {
-              return counter_write_query(schema_ptr(),
-                                         m.decorated_key())
+              return counter_write_query(m.decorated_key())
                   .then([m](auto ) {
                     return (m);
                   });
