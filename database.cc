@@ -2383,7 +2383,6 @@ public:
   ;
   using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
 };
-#include <boost/range/adaptor/sliced.hpp>
 template <typename T> class range_bound {
   T _value;
   bool _inclusive;
