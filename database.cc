@@ -17,8 +17,7 @@ namespace seastar {
            class schema;
            using schema_ptr = seastar::lw_shared_ptr<const schema>;
            namespace seastar {
-          GCC6_CONCEPT( template concept bool OptimizableOptional0 {
-         ) template<typename T> class optimized_optional {
+          GCC6_CONCEPT() template<typename T> class optimized_optional {
           optimized_optional(compat::optional<T> &&obj) noexcept ;
           T &operator*() noexcept ;
         };
@@ -27,7 +26,7 @@ namespace seastar {
            class cql_serialization_format {
           cql_protocol_version_type _version;
         public:     static constexpr cql_protocol_version_type latest_version = 4;
-          explicit cql_serialization_format(cql_protocol_version_type version)         : _version(version) {}
+          explicit cql_serialization_format(cql_protocol_version_type version)         : _version() {}
           static cql_serialization_format latest0 ;
           static cql_serialization_format internal() ;
          };
@@ -63,7 +62,7 @@ namespace seastar {
           template <typename... T>     class promise : private internal::promise_base_with_type<T...> {};
           template <typename T> struct futurize {
            using type = future<T>;
-           template <typename Func, typename... FuncArgs>       static inline type apply(Func &&func,                                std::tuple<FuncArgs...> &&args) noexcept;
+           template <typename Func, typename... FuncArgs>       static inline type apply() noexcept;
            template <typename Arg> static type make_exception_future(Arg &&arg);
          };
           template <typename... Args> struct futurize<future<Args...>> {
@@ -152,8 +151,7 @@ namespace seastar {
           class decorated_key;
        }
            template <typename EnumType, EnumType... Items> struct super_enum ;
-           template <typename Enum> class enum_set {
-      };
+           template <typename Enum> class enum_set {};
            namespace tracing {
           class trace_state_ptr;
        }
@@ -161,8 +159,7 @@ namespace seastar {
           using column_id_vector = utils::small_vector<column_id, 8>;
           using clustering_range = nonwrapping_range<clustering_key_prefix>;
           typedef std::vector<clustering_range> clustering_row_ranges;
-          class specific_ranges {
-    };
+          class specific_ranges {};
           constexpr auto max_rows = std::numeric_limits<uint32_t>::max();
           class partition_slice {
          public:       enum class option {
@@ -208,20 +205,16 @@ namespace seastar {
           class frozen_mutation final {
          public:       mutation unfreeze(schema_ptr s) const;
          };
-          class mutation_source {
-    };
+          class mutation_source {};
           future<mutation_opt> counter_write_query(         schema_ptr, const mutation_source &, const dht::decorated_key &dk,         const query::partition_slice &slice,         tracing::trace_state_ptr trace_ptr);
-          class locked_cell {
-    };
+          class locked_cell {};
           future<mutation> database::do_apply_counter_update(         column_family & cf, const frozen_mutation &fm, schema_ptr m_schema,         db::timeout_clock::time_point timeout,         tracing::trace_state_ptr trace_state) {
            auto m = fm.unfreeze(m_schema);
            query::column_id_vector static_columns;
            query::clustering_row_ranges cr_ranges;
            query::column_id_vector regular_columns;
-           auto slice = query::partition_slice(           std::move(cr_ranges), std::move(static_columns),           std::move(regular_columns), {
-   }
-    , {
-   }
+           auto slice = query::partition_slice(           std::move(cr_ranges), std::move(static_columns),           std::move(regular_columns), {}
+    , {}
     ,           cql_serialization_format::internal(), query::max_rows);
            return do_with(           std::move(slice), std::move(m), std::vector<locked_cell>(),           [this, &cf, timeout](const query::partition_slice &slice, mutation &m,                                std::vector<locked_cell> &locks) mutable {
                 return cf.lock_counter_cells(m, timeout)                 .then([&, timeout, this](std::vector<locked_cell> lcs) mutable {
