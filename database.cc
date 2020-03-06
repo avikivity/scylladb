@@ -16,7 +16,6 @@ template < typename T > class optimized_optional {
 };
 
 namespace utils {
-template < typename , size_t > class small_vector {};
 } template < typename... > class future;
 bool need_preempt ;
 namespace internal {
@@ -121,7 +120,6 @@ public:
   using time_point = lowres_clock_impl;
 };
 namespace query {
-using column_id_vector = utils::small_vector< column_id, 8 >;
 using clustering_range = int;
 typedef std::vector< clustering_range > clustering_row_ranges;
 class specific_ranges {};
@@ -163,9 +161,7 @@ class locked_cell {};
 future< mutation > database::do_apply_counter_update(
     mutation m, schema_ptr ,
     db::timeout_clock::time_point timeout ) {
-  query::column_id_vector static_columns;
   query::clustering_row_ranges cr_ranges;
-  query::column_id_vector regular_columns;
   return do_with(
       (m), std::vector< locked_cell >(),
       [this, timeout](mutation m,
