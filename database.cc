@@ -5,7 +5,7 @@ namespace seastar {
 template <typename T> class shared_ptr;
 template <typename T> shared_ptr<T> make_shared(T &&);
 template <typename T, typename... A> shared_ptr<T> make_shared(A &&... a);
-} // namespace seastar
+} 
 using namespace seastar;
 using seastar::make_shared;
 using seastar::shared_ptr;
@@ -74,7 +74,7 @@ public:
   using time_point = std::chrono::time_point<timestamp_clock, duration>;
   static constexpr bool is_steady = base::is_steady;
 };
-} // namespace api
+} 
 GCC6_CONCEPT(template <typename T> concept bool HasTriCompare =
                  requires(const T &t) {
                    { t.compare(t) }
@@ -150,7 +150,7 @@ template <> struct hash<bytes_view> {
         {reinterpret_cast<const char *>(v.begin()), v.size()});
   }
 };
-} // namespace std
+} 
 bytes from_hex(sstring_view s);
 sstring to_hex(bytes_view b);
 sstring to_hex(const bytes &b);
@@ -222,7 +222,7 @@ public:
   int version() const;
   ;
 };
-} // namespace utils
+} 
 template <> struct appending_hash<utils::UUID> {
   template <typename Hasher>
   void operator()(Hasher &h, const utils::UUID &id) const {
@@ -238,7 +238,7 @@ template <> struct hash<utils::UUID> {
     return size_t((hilo >> 32) ^ hilo);
   }
 };
-} // namespace std
+} 
 #include <seastar/util/log.hh>
 namespace logging {
 using log_level = seastar::log_level;
@@ -247,7 +247,7 @@ using registry = seastar::logger_registry;
 using settings = seastar::logging_settings;
 using seastar::level_name;
 using seastar::pretty_type_name;
-} // namespace logging
+} 
 namespace meta {
 template <typename... Ts> struct list {};
 namespace internal {
@@ -271,7 +271,7 @@ template <template <class> typename Predicate, typename... Ts>
 struct do_find_if<Predicate, meta::list<Ts...>>
     : internal::negative_to_empty<
           internal::do_find_if_unpacked<Predicate<Ts>::value...>()> {};
-} // namespace internal
+} 
 template <template <class> typename Predicate, typename... Ts>
 constexpr size_t find_if = internal::do_find_if<Predicate, Ts...>::value;
 template <typename T, typename... Ts>
@@ -287,7 +287,7 @@ template <size_t N, typename... Ts>
 struct do_get : do_get_unpacked<N, Ts...> {};
 template <size_t N, typename... Ts>
 struct do_get<N, meta::list<Ts...>> : do_get_unpacked<N, Ts...> {};
-} // namespace internal
+} 
 template <size_t N, typename... Ts>
 using get = typename internal::do_get<N, Ts...>::type;
 namespace internal {
@@ -308,7 +308,7 @@ struct do_take : do_take_unpacked<N, Result, Ts...> {};
 template <size_t N, typename Result, typename... Ts>
 struct do_take<N, Result, meta::list<Ts...>>
     : do_take_unpacked<N, Result, Ts...> {};
-} // namespace internal
+} 
 template <size_t N, typename... Ts>
 using take = typename internal::do_take<N, list<>, Ts...>::type;
 namespace internal {
@@ -320,7 +320,7 @@ template <typename... Ts> struct do_for_each_unpacked {
 template <typename... Ts> struct do_for_each : do_for_each_unpacked<Ts...> {};
 template <typename... Ts>
 struct do_for_each<meta::list<Ts...>> : do_for_each_unpacked<Ts...> {};
-} // namespace internal
+} 
 template <typename... Ts, typename Function>
 constexpr void for_each(Function &&fn) {
   internal::do_for_each<Ts...>::run(std::forward<Function>(fn));
@@ -331,12 +331,12 @@ struct get_size : std::integral_constant<size_t, sizeof...(Ts)> {};
 template <typename... Ts>
 struct get_size<meta::list<Ts...>>
     : std::integral_constant<size_t, sizeof...(Ts)> {};
-} // namespace internal
+} 
 template <typename... Ts>
 constexpr size_t size = internal::get_size<Ts...>::value;
 template <template <class> typename Predicate, typename... Ts>
 static constexpr bool all_of = std::conjunction_v<Predicate<Ts>...>;
-} // namespace meta
+} 
 enum class mutable_view {
   no,
   yes,
@@ -639,7 +639,7 @@ public:
   };
   using const_iterator = iterator;
 };
-} // namespace ser
+} 
 class abstract_type;
 class collection_type_impl;
 template <mutable_view is_mutable> class basic_atomic_cell_view {
@@ -1065,7 +1065,7 @@ public:
     return !(*this == other);
   }
 };
-} // namespace utils
+} 
 namespace utils {
 struct chunked_vector_free_deleter {
   void operator()(void *x) const { ::free(x); }
@@ -1185,7 +1185,7 @@ public:
   bool operator==(const chunked_vector &x) const;
   bool operator!=(const chunked_vector &x) const;
 };
-} // namespace utils
+} 
 template <typename Iterator>
 static sstring join(sstring delimiter, Iterator begin, Iterator end);
 template <typename PrintableRange>
@@ -1210,7 +1210,7 @@ static inline sstring to_string(std::initializer_list<Printable> items) {
 ;
 ;
 ;
-} // namespace std
+} 
 template <class Value, class Tag> class cql_duration_counter final {
 public:
   using value_type = Value;
@@ -1276,7 +1276,7 @@ class big_decimal;
 namespace cql3 {
 class cql3_type;
 class column_specification;
-} // namespace cql3
+} 
 enum class lexicographical_relation : int8_t {
   before_all_prefixed,
   before_all_strictly_prefixed,
@@ -1546,11 +1546,11 @@ enum class cause {
 };
 [[noreturn]] void fail(cause what);
 void warn(cause what);
-} // namespace unimplemented
+} 
 namespace std {
 template <>
 struct hash<unimplemented::cause> : seastar::enum_hash<unimplemented::cause> {};
-} // namespace std
+} 
 enum class allow_prefixes { no, yes };
 template <allow_prefixes AllowPrefixes = allow_prefixes::no>
 class compound_type final {
@@ -1853,7 +1853,7 @@ public:
 namespace sstables {
 enum class sstable_version_types { ka, la, mc };
 enum class sstable_format_types { big };
-} // namespace sstables
+} 
 template <typename CompoundType> class legacy_compound_view {
   static_assert(!CompoundType::is_prefixable,
                 "Legacy view not defined for prefixes");
@@ -2239,7 +2239,7 @@ template <> struct hash<managed_bytes> {
     return hash<bytes_view>()(v);
   }
 };
-} // namespace std
+} 
 class database;
 class keyspace;
 class table;
@@ -2725,11 +2725,11 @@ public:
   size_t memory_usage() const;
   bytes data() const;
 };
-} // namespace dht
+} 
 namespace sstables {
 class key_view;
 class decorated_key_view;
-} // namespace sstables
+} 
 namespace dht {
 class decorated_key;
 class ring_position;
@@ -2833,7 +2833,7 @@ std::unique_ptr<dht::i_partitioner>
 make_partitioner(sstring name, unsigned shard_count,
                  unsigned sharding_ignore_msb_bits);
 extern std::unique_ptr<i_partitioner> default_partitioner;
-} // namespace dht
+} 
 namespace std {
 template <> struct hash<dht::token> {
   size_t operator()(const dht::token &t) const { return bswap_64(t._data); }
@@ -2844,7 +2844,7 @@ template <> struct hash<dht::decorated_key> {
     return h_token(k.token());
   }
 };
-} // namespace std
+} 
 template <typename EnumType, EnumType... Items> struct super_enum {
   using enum_type = EnumType;
   template <enum_type... values> struct max {
@@ -3015,14 +3015,14 @@ public:
                                      opt_family preferred = {});
 };
 std::ostream &operator<<(std::ostream &os, const inet_address &x);
-} // namespace gms
+} 
 namespace std {
 template <> struct hash<gms::inet_address> {
   size_t operator()(gms::inet_address a) const {
     return std::hash<net::inet_address>()(a._addr);
   }
 };
-} // namespace std
+} 
 namespace tracing {
 using elapsed_clock = std::chrono::steady_clock;
 extern logging::logger tracing_logger;
@@ -3186,7 +3186,7 @@ private:
   bool may_create_new_session(
       const std::optional<utils::UUID> &session_id = std::nullopt);
 };
-} // namespace tracing
+} 
 class position_in_partition_view;
 namespace query {
 using column_id_vector = utils::small_vector<column_id, 8>;
@@ -3240,7 +3240,7 @@ public:
   partition_slice(const partition_slice &);
 };
 constexpr auto max_partitions = std::numeric_limits<uint32_t>::max();
-} // namespace query
+} 
 enum class bound_weight : int8_t {
   before_all_prefixed = -1,
   equal = 0,
@@ -3361,7 +3361,7 @@ public:
     }
   }
 };
-} // namespace utils
+} 
 class abstract_type;
 class bytes_ostream;
 class compaction_garbage_collector;
@@ -3452,7 +3452,7 @@ public:
     const query::result &res;
   };
 };
-} // namespace query
+} 
 #include <boost/intrusive/set.hpp>
 namespace bi = boost::intrusive;
 class range_tombstone final {
@@ -3607,7 +3607,7 @@ class clustering_key_filter_ranges {
 public:
   struct reversed {};
 };
-} // namespace query
+} 
 template <typename T> class managed;
 template <typename T> struct managed_ref { managed<T> *_ptr; };
 template <typename T> class managed {
@@ -3762,7 +3762,7 @@ using timeout_semaphore_units =
                              timeout_clock>;
 static constexpr timeout_clock::time_point no_timeout =
     timeout_clock::time_point::max();
-} // namespace db
+} 
 class clustering_row {
 public:
   clustering_row(const schema &s, const clustering_row &other);
@@ -4044,7 +4044,7 @@ using mutation_fragment_opt = optimized_optional<mutation_fragment>;
 namespace streamed_mutation {
 class forwarding_tag;
 using forwarding = bool_class<forwarding_tag>;
-} // namespace streamed_mutation
+} 
 class range_tombstone_stream {
   const schema &_schema;
   position_in_partition::less_compare _cmp;
@@ -4126,14 +4126,14 @@ struct raw_value_view;
 namespace statements {
 class prepared_statement;
 }
-} // namespace cql3
+} 
 namespace tracing {
 class trace_state_ptr final {
 public:
   trace_state_ptr();
   trace_state_ptr(nullptr_t);
 };
-} // namespace tracing
+} 
 using seastar::future;
 class mutation_source;
 GCC6_CONCEPT(template <typename Consumer>
