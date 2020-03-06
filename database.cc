@@ -19,7 +19,7 @@
            
           GCC6_CONCEPT() template<typename T> class optimized_optional {
           optimized_optional(compat::optional<T> &&obj) noexcept ;
-          T &operator*() noexcept ;
+          
         };
          
            using cql_protocol_version_type = uint8_t;
@@ -63,12 +63,12 @@ explicit cql_serialization_format(void)         : _version() {}
           template <typename... T>     class promise : private internal::promise_base_with_type<> {};
           template <typename T> struct futurize {
            using type = future<T>;
-           template <typename Func, typename... FuncArgs>       static inline type apply() noexcept;
+           template <typename Func, typename... FuncArgs>       void  apply() noexcept;
            template <typename Arg> static type make_exception_future(Arg &&arg);
          };
           template <typename... Args> struct futurize<future<Args...>> {
            using type = future<Args...>;
-           template <typename Func, typename... FuncArgs>       static inline type apply() noexcept;
+           template <typename Func, typename... FuncArgs>       void  apply() noexcept;
            template <typename Arg> static type make_exception_future(Arg &&arg);
          };
           template <typename T> using futurize_t = typename futurize<T>::type;
@@ -190,7 +190,7 @@ explicit cql_serialization_format(void)         : _version() {}
         public:       trace_state_ptr(nullptr_t);
         };
          
-          template <typename Consumer>     inline future<> consume_partitions(                                                                                db::timeout_clock::time_point timeout) {
+          template <typename Consumer>     void  consume_partitions(                                                                                db::timeout_clock::time_point timeout) {
     Consumer consumer;
     class flat_mutation_reader & reader;
            using futurator = futurize<std::result_of_t<Consumer>>;
