@@ -508,21 +508,12 @@ class migrate_fn_type {
  class decorated_key { public:   dht::token _token;   partition_key _key;   struct less_comparator {     schema_ptr s;                       };   bool equal(const schema &s, const decorated_key &other) const;   bool less_compare(const schema &s, const decorated_key &other) const;   bool less_compare(const schema &s, const ring_position &other) const;   int tri_compare(const schema &s, const decorated_key &other) const;   int tri_compare(const schema &s, const ring_position &other) const;   const dht::token &token() const ;   const partition_key &key() const ;   size_t external_memory_usage() const ;   size_t memory_usage() const ; };
  class decorated_key_equals_comparator {   const schema &_schema; public:   explicit decorated_key_equals_comparator(const schema &schema)       : _schema(schema) {} };
  using decorated_key_opt = std::optional<decorated_key>;
- class i_partitioner { protected:   unsigned _shard_count;   unsigned _sharding_ignore_msb_bits;   std::vector<uint64_t> _shard_start; public: };
- class ring_position { public:   enum class token_bound : int8_t { start = -1, end = 1 }; private:   friend class ring_position_comparator;   friend class ring_position_ext;   dht::token _token;   token_bound _token_bound{};   std::optional<partition_key> _key; public:   friend std::ostream &operator<<(std::ostream &, const ring_position &); };
- class ring_position_view {   friend int ring_position_tri_compare(const schema &s, ring_position_view lh,                                        ring_position_view rh);   friend class ring_position_comparator;   friend class ring_position_ext;   const dht::token *_token;   const partition_key *_key;   int8_t _weight; public:   using token_bound = ring_position::token_bound;   struct after_key_tag {};   using after_key = bool_class<after_key_tag>;   static ring_position_view min(); };
- future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const i_partitioner &partitioner, const schema &s,                             const dht::partition_range &pr, shard_id shard);
- std::unique_ptr<dht::i_partitioner> make_partitioner(sstring name, unsigned shard_count,                  unsigned sharding_ignore_msb_bits);
- extern std::unique_ptr<i_partitioner> default_partitioner;
  }
    template <typename EnumType, EnumType... Items> struct super_enum {
    using enum_type = EnumType;
    template <enum_type... values> struct max {     static constexpr enum_type max_of(enum_type a, enum_type b) {       return a > b ? a : b;     }     template <enum_type first, enum_type second, enum_type... rest>     static constexpr enum_type get() {       return max_of(first, get<second, rest...>());     }     template <enum_type first> static constexpr enum_type get() {       return first;     }     static constexpr enum_type value = get<values...>();   };
    template <enum_type... values> struct min {     static constexpr enum_type min_of(enum_type a, enum_type b) {       return a < b ? a : b;     }     template <enum_type first, enum_type second, enum_type... rest>     static constexpr enum_type get() {       return min_of(first, get<second, rest...>());     }     template <enum_type first> static constexpr enum_type get() {       return first;     }     static constexpr enum_type value = get<values...>();   };
    using sequence_type = typename std::underlying_type<enum_type>::type;
-   template <enum_type first, enum_type... rest> struct valid_sequence {     static constexpr bool apply(sequence_type v) noexcept {       return (v == static_cast<sequence_type>(first)) ||              valid_sequence<rest...>::apply(v);     }   };
-   template <enum_type first> struct valid_sequence<first> {     static constexpr bool apply(sequence_type v) noexcept {       return v == static_cast<sequence_type>(first);     }   };
-   static constexpr bool is_valid_sequence(sequence_type v) noexcept {     return valid_sequence<Items...>::apply(v);   }
    template <enum_type Elem> static constexpr sequence_type sequence_for() {     return static_cast<sequence_type>(Elem);   }
    static sequence_type sequence_for(enum_type elem) {     return static_cast<sequence_type>(elem);   }
    static constexpr sequence_type max_sequence =       sequence_for<max<Items...>::value>();
@@ -548,9 +539,6 @@ class migrate_fn_type {
    ;
    static_assert(std::numeric_limits<mask_type>::max() >=                     ((size_t)1 << Enum::max_sequence),                 "mask type too small");
    ;
-      ;
-      ;
-   ;
                   iterator end() const;
    template <enum_type... items> struct frozen {     template <enum_type first> static constexpr mask_type make_mask();     static constexpr mask_type make_mask();     template <enum_type first, enum_type second, enum_type... rest>     static constexpr mask_type make_mask();     static constexpr mask_type mask = make_mask<items...>();     template <enum_type Elem> static constexpr bool contains();     static bool contains(enum_type e);     static bool contains(prepared e);     static constexpr enum_set<Enum> unfreeze();   };
    template <enum_type... items> static constexpr enum_set<Enum> of() {     return frozen<items...>::unfreeze();   }
@@ -571,9 +559,6 @@ namespace gms {
  enum class trace_type : uint8_t {   NONE,   QUERY,   REPAIR, };
  extern std::vector<sstring> trace_type_names;
  class span_id { private:   uint64_t _id = illegal_id; public:   static constexpr uint64_t illegal_id = 0; public: };
- enum class trace_state_props {   write_on_close,   primary,   log_slow_query,   full_tracing };
- using trace_state_props_set = enum_set<     super_enum<trace_state_props, trace_state_props::write_on_close,                trace_state_props::primary, trace_state_props::log_slow_query,                trace_state_props::full_tracing>>;
- class trace_info { public:   utils::UUID session_id;   trace_type type;   bool write_on_close;   trace_state_props_set state_props;   uint32_t slow_query_threshold_us;   uint32_t slow_query_ttl_sec;   span_id parent_id; public: };
  struct one_session_records;
  using records_bulk = std::deque<lw_shared_ptr<one_session_records>>;
  struct backend_session_state_base {   virtual ~backend_session_state_base(){}; };
@@ -604,48 +589,24 @@ namespace gms {
  public: private: public:   struct partition_start_tag_t {};
    class printer {   public:   };
  };
-  class position_range {
- public: };
-  class row_tombstone;
 #include <boost/intrusive/set.hpp>
 namespace bi = boost::intrusive;
   class range_tombstone final {
-   bi::set_member_hook<bi::link_mode<bi::auto_unlink>> _link;
- public:   clustering_key_prefix start;
-   bound_kind start_kind;
-   clustering_key_prefix end;
-   bound_kind end_kind;
-   tombstone tomb;
  };
   class row {
    class cell_entry {     friend class row;   public:     struct compare {};   };
-   using size_type = std::make_unsigned_t<column_id>;
- public:   static constexpr size_t max_vector_size = 32;
-   static constexpr size_t internal_count = 5;
  private: public: private:   ;
  };
   class row_marker;
   class rows_entry {
    friend class cache_tracker;
    friend class size_calculator;
-   struct flags {};
-   friend class mutation_partition;
- public:   struct last_dummy_tag {};
-   struct tri_compare {};
-   struct compare {};
-   class printer {   public:   };
  };
   namespace db {
  using timeout_clock = seastar::lowres_clock;
- using timeout_semaphore =     seastar::basic_semaphore<seastar::default_timeout_exception_factory,                              timeout_clock>;
- using timeout_semaphore_units =     seastar::semaphore_units<seastar::default_timeout_exception_factory,                              timeout_clock>;
- static constexpr timeout_clock::time_point no_timeout =     timeout_clock::time_point::max();
  }
    class clustering_row {
  public:   clustering_row(const schema &s, const clustering_row &other);
-   clustering_row(const schema &s, const rows_entry &re);
-   const row &cells() const;
-   row &cells();
    class printer {   public:   };
  };
   class static_row {
@@ -661,9 +622,6 @@ namespace bi = boost::intrusive;
   GCC6_CONCEPT(template <typename T, typename ReturnType>              concept bool MutationFragmentConsumer() {
                 return requires(T t, static_row sr, clustering_row cr,                                range_tombstone rt, partition_start ph,                                partition_end pe) {                  { t.consume(std::move(sr)) }                  ->ReturnType;                  { t.consume(std::move(cr)) }                  ->ReturnType;                  { t.consume(std::move(rt)) }                  ->ReturnType;                  { t.consume(std::move(ph)) }                  ->ReturnType;                  { t.consume(std::move(pe)) }                  ->ReturnType;                };
               }
- )         GCC6_CONCEPT(template <typename T, typename ReturnType>                      concept bool MutationFragmentVisitor() {
-                        return requires(                            T t, const static_row &sr, const clustering_row &cr,                            const range_tombstone &rt, const partition_start &ph,                            const partition_end &eop) {                          { t(sr) }                          ->ReturnType;                          { t(cr) }                          ->ReturnType;                          { t(rt) }                          ->ReturnType;                          { t(ph) }                          ->ReturnType;                          { t(eop) }                          ->ReturnType;                        };
-                      }
  ) class mutation_fragment {
    bool equal(const schema &s, const mutation_fragment &other) const;
    bool mergeable_with(const mutation_fragment &mf) const;
