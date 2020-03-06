@@ -221,10 +221,10 @@ future< mutation > database::do_apply_counter_update(
       [this, cf, timeout](query::partition_slice slice, mutation m,
                            std::vector< locked_cell > ) mutable {
         return cf.lock_counter_cells(m, timeout)
-            .then([&, timeout, this](std::vector< locked_cell > ) mutable {
+            .then([&, timeout, this](std::vector< locked_cell > ) {
               return counter_write_query(schema_ptr(), mutation_source(),
                                          m.decorated_key(), slice, nullptr)
-                  .then([this, &cf, &m, timeout](auto mopt) {
+                  .then([this, cf, m, timeout](auto ) {
                     return std::move(m);
                   });
             });
