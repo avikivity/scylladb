@@ -3688,17 +3688,9 @@ void init();
 /// \endcond
 
 
-#include <memory>
-#include <type_traits>
 #include <assert.h>
-#include <cstdlib>
 
-#include <limits>
-#include <cstdint>
-#include <functional>
 
-#include <stddef.h>
-#include <type_traits>
 
 namespace seastar {
 namespace internal {
@@ -3711,7 +3703,6 @@ struct used_size {
 }
 }
 
-#include <utility>
 #include <type_traits>
 #include <functional>
 
