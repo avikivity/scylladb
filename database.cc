@@ -609,13 +609,6 @@ class migrate_fn_type {
  class i_partitioner { protected:   unsigned _shard_count;   unsigned _sharding_ignore_msb_bits;   std::vector<uint64_t> _shard_start; public: };
  class ring_position { public:   enum class token_bound : int8_t { start = -1, end = 1 }; private:   friend class ring_position_comparator;   friend class ring_position_ext;   dht::token _token;   token_bound _token_bound{};   std::optional<partition_key> _key; public:   friend std::ostream &operator<<(std::ostream &, const ring_position &); };
  class ring_position_view {   friend int ring_position_tri_compare(const schema &s, ring_position_view lh,                                        ring_position_view rh);   friend class ring_position_comparator;   friend class ring_position_ext;   const dht::token *_token;   const partition_key *_key;   int8_t _weight; public:   using token_bound = ring_position::token_bound;   struct after_key_tag {};   using after_key = bool_class<after_key_tag>;   static ring_position_view min(); };
- using ring_position_ext_view = ring_position_view;
- class ring_position_ext {   dht::token _token;   std::optional<partition_key> _key;   int8_t _weight; public:   using token_bound = ring_position::token_bound;   struct after_key_tag {};   using after_key = bool_class<after_key_tag>; };
- int ring_position_tri_compare(const schema &s, ring_position_view lh,                               ring_position_view rh);
- struct ring_position_comparator {   const schema &s; };
- struct ring_position_less_comparator {   ring_position_comparator tri; };
- struct token_comparator {};
- class partition_ranges_view {   const dht::partition_range *_data = nullptr;   size_t _size = 0; public: };
  future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const i_partitioner &partitioner, const schema &s,                             const dht::partition_range &pr, shard_id shard);
  std::unique_ptr<dht::i_partitioner> make_partitioner(sstring name, unsigned shard_count,                  unsigned sharding_ignore_msb_bits);
  extern std::unique_ptr<i_partitioner> default_partitioner;
@@ -707,13 +700,6 @@ namespace gms {
   class position_in_partition_view {
    friend class position_in_partition;
  public: private: public:   struct partition_start_tag_t {};
-   struct end_of_partition_tag_t {};
-   struct static_row_tag_t {};
-   struct clustering_row_tag_t {};
-   struct range_tag_t {};
-   using range_tombstone_tag_t = range_tag_t;
-   bound_view as_start_bound_view() const;
-   bound_view as_end_bound_view() const;
    class printer {   public:   };
  };
   class position_range {
@@ -728,20 +714,6 @@ namespace bi = boost::intrusive;
    clustering_key_prefix end;
    bound_kind end_kind;
    tombstone tomb;
-   range_tombstone(clustering_key_prefix start, bound_kind start_kind,                   clustering_key_prefix end, bound_kind end_kind,                   tombstone tomb)       : start(std::move(start)), start_kind(start_kind), end(std::move(end)),         end_kind(end_kind), tomb(std::move(tomb)) {}
-   range_tombstone(bound_view start, bound_view end, tombstone tomb)       : range_tombstone(start.prefix(), start.kind(), end.prefix(), end.kind(),                         std::move(tomb)) {}
-   range_tombstone(position_in_partition_view start,                   position_in_partition_view end, tombstone tomb)       : range_tombstone(start.as_start_bound_view(), end.as_end_bound_view(),                         tomb) {}
-   struct without_link {};
-   const bound_view end_bound() const { return bound_view(end, end_kind); }
-   position_in_partition_view position() const;
-   position_in_partition_view end_position() const;
-   struct compare {     bound_view::compare _c;     compare(const schema &s) : _c(s) {}   };
-   using container_type = bi::set<       range_tombstone,       bi::member_hook<range_tombstone,                       bi::set_member_hook<bi::link_mode<bi::auto_unlink>>,                       &range_tombstone::_link>,       bi::compare<range_tombstone::compare>, bi::constant_time_size<false>>;
-   void set_start(const schema &s, position_in_partition_view pos);
-   size_t external_memory_usage(const schema &) const;
-   size_t memory_usage(const schema &s) const;
- private:   void move_assign(range_tombstone &&rt);
-   void   update_node(bi::set_member_hook<bi::link_mode<bi::auto_unlink>> &other_link) {     if (other_link.is_linked()) {       container_type::node_algorithms::replace_node(other_link.this_ptr(),                                                     _link.this_ptr());       container_type::node_algorithms::init(other_link.this_ptr());     }   }
  };
   class row {
    class cell_entry {     friend class row;   public:     struct compare {};   };
@@ -749,13 +721,6 @@ namespace bi = boost::intrusive;
  public:   static constexpr size_t max_vector_size = 32;
    static constexpr size_t internal_count = 5;
  private: public: private:   ;
- private:   ;
-   ;
- public:   ;
-   ;
-   ;
-   bool equal(column_kind kind, const schema &this_schema, const row &other,              const schema &other_schema) const;
-   class printer {   public:   };
  };
   class row_marker;
   class rows_entry {
@@ -777,13 +742,6 @@ namespace bi = boost::intrusive;
    class clustering_row {
  public:   clustering_row(const schema &s, const clustering_row &other);
    clustering_row(const schema &s, const rows_entry &re);
-   clustering_row(rows_entry &&re);
-   clustering_key_prefix &key();
-   const clustering_key_prefix &key() const;
-   void remove_tombstone();
-   row_tombstone tomb() const;
-   const row_marker &marker() const;
-   row_marker &marker();
    const row &cells() const;
    row &cells();
    class printer {   public:   };
@@ -791,13 +749,6 @@ namespace bi = boost::intrusive;
   class static_row {
    row _cells;
  public:   static_row() = default;
-   static_row(const schema &s, const static_row &other);
-   explicit static_row(const schema &s, const row &r);
-   position_in_partition_view position() const;
-   size_t external_memory_usage(const schema &s) const;
-   size_t memory_usage(const schema &s) const {     return sizeof(static_row) + external_memory_usage(s);   }
-   bool equal(const schema &s, const static_row &other) const {     return _cells.equal(column_kind::static_column, s, other._cells, s);   }
-   class printer {     const schema &_schema;     const static_row &_static_row;   public:     printer(const schema &s, const static_row &r)         : _schema(s), _static_row(r) {}     printer(const printer &) = delete;   };
  };
   class partition_start final {
    dht::decorated_key _key;
@@ -812,20 +763,6 @@ namespace bi = boost::intrusive;
                         return requires(                            T t, const static_row &sr, const clustering_row &cr,                            const range_tombstone &rt, const partition_start &ph,                            const partition_end &eop) {                          { t(sr) }                          ->ReturnType;                          { t(cr) }                          ->ReturnType;                          { t(rt) }                          ->ReturnType;                          { t(ph) }                          ->ReturnType;                          { t(eop) }                          ->ReturnType;                        };
                       }
  ) class mutation_fragment {
- public:   enum class kind {     static_row,     clustering_row,     range_tombstone,     partition_start,     partition_end,   };
- private:   struct data {     data() {}     ~data() {}     std::optional<size_t> _size_in_bytes;     union {       static_row _static_row;       clustering_row _clustering_row;       range_tombstone _range_tombstone;       partition_start _partition_start;       partition_end _partition_end;     };   };
- private:   kind _kind;
-   std::unique_ptr<data> _data;
-   range_tombstone &as_mutable_range_tombstone() {     _data->_size_in_bytes = std::nullopt;     return _data->_range_tombstone;   }
-   partition_start &as_mutable_partition_start() {     _data->_size_in_bytes = std::nullopt;     return _data->_partition_start;   }
-   partition_end &as_mutable_end_of_partition();
-   static_row &&as_static_row() &&;
-   clustering_row &&as_clustering_row() &&;
-   range_tombstone &&as_range_tombstone() &&;
-   partition_start &&as_partition_start() &&;
-   partition_end &&as_end_of_partition() &&;
-   const static_row &as_static_row() const &;
-   const clustering_row &as_clustering_row() const &;
    bool equal(const schema &s, const mutation_fragment &other) const;
    bool mergeable_with(const mutation_fragment &mf) const;
    class printer {     const schema &_schema;     const mutation_fragment &_mutation_fragment;   public:     printer(const schema &s, const mutation_fragment &mf);     printer(const printer &) = delete;     printer(printer &&) = delete;     friend std::ostream &operator<<(std::ostream &os, const printer &p);   };
