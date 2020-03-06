@@ -181,9 +181,6 @@ class bytes_ostream {
    static cql_serialization_format latest() {     return cql_serialization_format{latest_version};   }
    static cql_serialization_format internal() { return latest(); }
    bool using_32_bits_for_collections() const { return _version >= 3; }
-   bool operator==(cql_serialization_format x) const {     return _version == x._version;   }
-   bool operator!=(cql_serialization_format x) const;
-   cql_protocol_version_type protocol_version() const;
    friend std::ostream &operator<<(std::ostream &out,                                   const cql_serialization_format &sf);
    bool   collection_format_unchanged(cql_serialization_format other =                                   cql_serialization_format::latest()) const;
  };
@@ -196,9 +193,6 @@ class bytes_ostream {
  }
   class marshal_exception : public std::exception {
    sstring _why;
- public:   marshal_exception() = delete;
-   marshal_exception(sstring why) : _why(sstring("marshaling error: ") + why) {}
-   virtual const char *what() const noexcept override { return _why.c_str(); }
  };
 #include <seastar/net/ip.hh>
 #include <seastar/util/backtrace.hh>
@@ -208,15 +202,9 @@ class bytes_ostream {
   class abstract_type : public enable_shared_from_this<abstract_type> {
    sstring _name;
    std::optional<uint32_t> _value_length_if_fixed;
- public:   enum class kind : int8_t {     ascii,     boolean,     byte,     bytes,     counter,     date,     decimal,     double_kind,     duration,     empty,     float_kind,     inet,     int32,     list,     long_kind,     map,     reversed,     set,     short_kind,     simple_date,     time,     timestamp,     timeuuid,     tuple,     user,     utf8,     uuid,     varint,   };
- private:   kind _kind;
- public:   kind get_kind() const;
                                   public:                        bool is_reversed() const;
    friend class list_type_impl;
  private:   mutable sstring _cql3_type_name;
- protected:   friend class tuple_type_impl;
-   friend class data_value;
-   friend class reversed_type_impl;
    template <typename T> friend const T &value_cast(const data_value &value);
    ;
  };
@@ -238,12 +226,6 @@ class bytes_ostream {
    compound_type(std::vector<data_type> types)       : _types(std::move(types)),         _byte_order_equal(             std::all_of(_types.begin(), _types.end(),                         [](auto t) { return t->is_byte_order_equal(); }
 )),         _byte_order_comparable(false),         _is_reversed(_types.size() == 1 && _types[0]->is_reversed()) {}
    compound_type(compound_type &&) = default;
-   auto const &types() const { return _types; }
-   bool is_singular() const { return _types.size() == 1; }
-   prefix_type as_prefix() { return prefix_type(_types); }
- private:   template <typename RangeOfSerializedComponents, typename CharOutputIterator>   static void serialize_value(RangeOfSerializedComponents &&values,                               CharOutputIterator &out) {     for (auto &&val : values) {       assert(val.size() <= std::numeric_limits<size_type>::max());       write<size_type>(out, size_type(val.size()));       out = std::copy(val.begin(), val.end(), out);     }   }
- public:   ;
-   ;
    class iterator       : public std::iterator<std::input_iterator_tag, const bytes_view> {   private:     bytes_view _v;     bytes_view _current;   private:     void read_current() {       size_type len;       {         if (_v.empty()) {           _v = bytes_view(nullptr, 0);           return;         }         len = read_simple<size_type>(_v);         if (_v.size() < len) {           throw_with_backtrace<marshal_exception>(               format("compound_type iterator - not enough bytes, expected "                      "{:d}, got {:d}",                      len, _v.size()));         }       }       _current = bytes_view(_v.begin(), len);       _v.remove_prefix(len);     }   public:     struct end_iterator_tag {};     iterator operator++(int) {       iterator i(*this);       ++(*this);       return i;     }     const value_type &operator*() const { return _current; }     const value_type *operator->() const { return &_current; }     bool operator!=(const iterator &i) const;     bool operator==(const iterator &i) const;   };
    static iterator begin(const bytes_view &v);
    static iterator end(const bytes_view &v);
