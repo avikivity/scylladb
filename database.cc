@@ -5,7 +5,7 @@ namespace compat {
 template < typename T > using optional = std::optional< T >;
 }
 #include <algorithm>
-#define GCC6_CONCEPT(x...)
+#define GCC6_CONCEPT()
 using column_count_type = uint32_t;
 using column_id = column_count_type;
 using schema_ptr = int;
