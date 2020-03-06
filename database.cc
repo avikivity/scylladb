@@ -319,12 +319,6 @@ class bytes_ostream {
    friend class db::extensions;
    friend class schema_builder;
  public:   using row_column_ids_are_ordered_by_name = std::true_type;
-   typedef std::vector<column_definition> columns_type;
-   typedef typename columns_type::iterator iterator;
-   typedef typename columns_type::const_iterator const_iterator;
-   typedef boost::iterator_range<iterator> iterator_range_type;
-   typedef boost::iterator_range<const_iterator> const_iterator_range_type;
-   static constexpr int32_t NAME_LENGTH = 48;
    struct column {     bytes name;     data_type type;   };
  private:   void rebuild();
    schema(const raw_schema &, std::optional<raw_view_info>);
@@ -334,27 +328,12 @@ class bytes_ostream {
    ~schema();
    bool is_static_compact_table() const;
    bool has_static_columns() const;
-   column_count_type columns_count(column_kind kind) const;
-   column_count_type partition_key_size() const;
-   const std::unique_ptr<::view_info> &view_info() const;
-   bool is_view() const;
-   const query::partition_slice &full_slice() const;
-   std::vector<sstring> index_names() const;
    friend class schema_registry_entry;
  public: };
 #include <any>
 class migrate_fn_type {
    std::any _migrators;
    uint32_t _align = 0;
-   uint32_t _index;
- private:   static uint32_t register_migrator(migrate_fn_type *m);
-   static void unregister_migrator(uint32_t index);
- public:   explicit migrate_fn_type(size_t align)       : _align(align), _index(register_migrator(this)) {}
-   virtual ~migrate_fn_type() { unregister_migrator(_index); }
-   virtual void migrate(void *src, void *dsts, size_t size) const noexcept = 0;
-   virtual size_t size(const void *obj) const = 0;
-   size_t align() const { return _align; }
-   uint32_t index() const { return _index; }
  };
   struct blob_storage {
    struct [[gnu::packed]] ref_type {     blob_storage *ptr;     ref_type() {}     ref_type(blob_storage * ptr) : ptr(ptr) {}     operator blob_storage *() const { return ptr; }     blob_storage *operator->() const { return ptr; }     blob_storage &operator*() const { return *ptr; }   };
