@@ -1459,39 +1459,6 @@ namespace seastar {
     using steady_clock_type = std::chrono::steady_clock;
     template <typename Clock = steady_clock_type> class timer {
     public:
-      typedef typename Clock::time_point time_point;
-      typedef typename Clock::duration duration;
-      typedef Clock clock;
-    private:
-      using callback_t = noncopyable_function<void()>;
-      boost::intrusive::list_member_hook<> _link;
-      callback_t _callback;
-      time_point _expiry;
-      compat::optional<duration> _period;
-      bool _armed = false;
-      bool _queued = false;
-      bool _expired = false;
-    public:
-      void arm(duration delta) { return arm(Clock::now() + delta); }
-      
-      
-      
-      friend class reactor;
-      friend class timer_set<timer, &timer::_link>;
-    };
-    namespace internal {
-    ;
-    ;
-    }
-    class parallel_for_each_state final : private continuation_base<> {
-      std::vector<future<>> _incomplete;
-      promise<> _result;
-      std::exception_ptr _ex;
-    private:
-      
-    public:
-      
-      future<> get_future();
     };
     struct stop_iteration_tag {};
     using stop_iteration = bool_class<stop_iteration_tag>;
