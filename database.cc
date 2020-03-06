@@ -355,9 +355,9 @@ public:
         return *this;
     }
     const CharType* get() const { return _buffer; }
-    CharType* get_write() { return _buffer; }
-    size_t size() const { return _size; }
-    const CharType* begin() const { return _buffer; }
+    CharType* get_write() ;
+    size_t size() const ;
+    const CharType* begin() const ;
     const CharType* end() const ;
     temporary_buffer prefix(size_t size) && ;
     CharType operator[](size_t pos) const ;
@@ -417,33 +417,19 @@ class basic_sstring {
     template <typename string_type>
     static string_type to_sstring(long long value) ;
     template <typename string_type>
-    static inline string_type to_sstring(unsigned long long value) {
-        return to_sstring_sprintf<string_type>(value, "%llu");
-    }
+    static string_type to_sstring(unsigned long long value) ;
     template <typename string_type>
-    static inline string_type to_sstring(float value) {
-        return to_sstring_sprintf<string_type>(value, "%g");
-    }
+    static string_type to_sstring(float value) ;
     template <typename string_type>
-    static inline string_type to_sstring(double value) {
-        return to_sstring_sprintf<string_type>(value, "%g");
-    }
+    static string_type to_sstring(double value) ;
     template <typename string_type>
-    static inline string_type to_sstring(long double value) {
-        return to_sstring_sprintf<string_type>(value, "%Lg");
-    }
+    static string_type to_sstring(long double value) ;
     template <typename string_type>
-    static inline string_type to_sstring(const char* value) {
-        return string_type(value);
-    }
+    static string_type to_sstring(const char* value) ;
     template <typename string_type>
-    static inline string_type to_sstring(sstring value) {
-        return value;
-    }
+    static string_type to_sstring(sstring value) ;
     template <typename string_type>
-    static inline string_type to_sstring(const temporary_buffer<char>& buf) {
-        return string_type(buf.get(), buf.size());
-    }
+    static string_type to_sstring(const temporary_buffer<char>& buf) ;
 public:
     using value_type = char_type;
     using traits_type = std::char_traits<char_type>;
@@ -457,36 +443,12 @@ public:
     using difference_type = ssize_t;  
     using size_type = Size;
     static constexpr size_type  npos = static_cast<size_type>(-1);
-    static constexpr unsigned padding() { return unsigned(NulTerminate); }
+    static constexpr unsigned padding() ;
 public:
     struct initialized_later {};
-    basic_sstring() noexcept {
-        u.internal.size = 0;
-        if (NulTerminate) {
-            u.internal.str[0] = '\0';
-        }
-    }
-    basic_sstring(const basic_sstring& x) {
-        if (x.is_internal()) {
-            u.internal = x.u.internal;
-        } else {
-            u.internal.size = -1;
-            u.external.str = reinterpret_cast<char_type*>(std::malloc(x.u.external.size + padding()));
-            if (!u.external.str) {
-                throw std::bad_alloc();
-            }
-            std::copy(x.u.external.str, x.u.external.str + x.u.external.size + padding(), u.external.str);
-            u.external.size = x.u.external.size;
-        }
-    }
-    basic_sstring(basic_sstring&& x) noexcept {
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuninitialized"
-        u = x.u;
-#pragma GCC diagnostic pop
-        x.u.internal.size = 0;
-        x.u.internal.str[0] = '\0';
-    }
+    basic_sstring() noexcept ;
+    basic_sstring(const basic_sstring& x) ;
+    basic_sstring(basic_sstring&& x) noexcept ;
     basic_sstring(initialized_later, size_t size) {
         if (size_type(size) != size) {
             throw std::overflow_error("sstring overflow");
@@ -1243,14 +1205,8 @@ class shared_ptr {
     mutable shared_ptr_count_base* _b = nullptr;
     mutable T* _p = nullptr;
 private:
-    explicit shared_ptr(shared_ptr_count_for<T>* b) noexcept : _b(b), _p(&b->data) {
-        ++_b->count;
-    }
-    shared_ptr(shared_ptr_count_base* b, T* p) noexcept : _b(b), _p(p) {
-        if (_b) {
-            ++_b->count;
-        }
-    }
+    explicit shared_ptr(shared_ptr_count_for<T>* b)  ;
+    shared_ptr(shared_ptr_count_base* b, T* p)  ;
     explicit shared_ptr(enable_shared_from_this<std::remove_const_t<T>>* p) noexcept : _b(p), _p(static_cast<T*>(p)) {
         if (_b) {
             ++_b->count;
@@ -1371,17 +1327,12 @@ struct shared_ptr_make_helper;
 template <typename T>
 struct shared_ptr_make_helper<T, false> {
     template <typename... A>
-    static shared_ptr<T> make(A&&... a) {
-        return shared_ptr<T>(new shared_ptr_count_for<T>(std::forward<A>(a)...));
-    }
+    static shared_ptr<T> make(A&&... a) ;
 };
 template <typename T>
 struct shared_ptr_make_helper<T, true> {
     template <typename... A>
-    static shared_ptr<T> make(A&&... a) {
-        auto p = new T(std::forward<A>(a)...);
-        return shared_ptr<T>(p, p);
-    }
+    static shared_ptr<T> make(A&&... a) ;
 };
 template <typename T, typename... A>
 
@@ -1551,10 +1502,7 @@ public:
     }
     optimized_optional(const optimized_optional&) = default;
     optimized_optional(optimized_optional&&) = default;
-    optimized_optional& operator=(compat::nullopt_t) noexcept {
-        _object = T();
-        return *this;
-    }
+    optimized_optional& operator=(compat::nullopt_t) noexcept ;
     template<typename U>
     std::enable_if_t<std::is_same<std::decay_t<U>, T>::value, optimized_optional&>
     operator=(U&& obj) noexcept {
@@ -1563,10 +1511,8 @@ public:
     }
     optimized_optional& operator=(const optimized_optional&) = default;
     optimized_optional& operator=(optimized_optional&&) = default;
-    explicit operator bool() const noexcept {
-        return bool(_object);
-    }
-    T* operator->() noexcept { return &_object; }
+    explicit operator bool() const noexcept ;
+    T* operator->() noexcept ;
     const T* operator->() const noexcept { return &_object; }
     T& operator*() noexcept { return _object; }
     const T& operator*() const noexcept { return _object; }
