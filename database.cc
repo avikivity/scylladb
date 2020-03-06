@@ -49,7 +49,6 @@ namespace seastar {
         template <typename Func, typename Args, typename IndexList>     struct apply_helper;
         template <typename Func, typename Tuple, size_t... I>     struct apply_helper<Func, Tuple, std::index_sequence<I...>> {
          static auto apply(Func &&func, Tuple args) {
-          return func(std::get<I>(std::forward<Tuple>(args))...);
         }
        };
         template <typename Func, typename... T>     inline auto apply(Func && func, const std::tuple<T...> &args) {
@@ -60,7 +59,6 @@ namespace seastar {
        };
         bool need_preempt() noexcept;
        }
-#include <assert.h>
 namespace seastar {
         namespace internal {
        }
@@ -95,7 +93,6 @@ namespace seastar {
         template <typename... T>     struct future_state         : public future_state_base,           private internal::uninitialized_wrapper<std::tuple<T...>> {
          static_assert(std::is_nothrow_move_constructible<std::tuple<T...>>::value,                     "Types must be no-throw destructible");
          std::tuple<T...> &&get_value() && noexcept {
-          assert(_u.st == state::result);
         }
        };
         template <typename... T> class continuation_base : public task {
@@ -104,8 +101,6 @@ namespace seastar {
        class promise_base {
       };
        template <typename... T>     class promise_base_with_type : protected internal::promise_base {
-        promise_base_with_type(future<T...> *future);
-        template <typename... U> friend class seastar::future;
       };
        }
         template <typename... T>     class promise : private internal::promise_base_with_type<T...> {
@@ -115,7 +110,6 @@ namespace seastar {
         template <typename T> struct futurize {
          using type = future<T>;
          template <typename Func, typename... FuncArgs>       static inline type apply(Func &&func,                                std::tuple<FuncArgs...> &&args) noexcept;
-         static type convert(T &&value);
          template <typename Arg> static type make_exception_future(Arg &&arg);
        };
         template <typename... Args> struct futurize<future<Args...>> {
@@ -154,18 +148,15 @@ namespace seastar {
            }
          }
         }
-         template <typename... U> friend class future;
        };
         template <typename T>     template <typename Func, typename... FuncArgs>     typename futurize<T>::type futurize<T>::apply(         Func && func, std::tuple<FuncArgs...> && args) noexcept {
          try {
-          return convert(             ::seastar::apply(std::forward<Func>(func), std::move(args)));
         }
    catch (...) {
         }
        }
         template <typename... Args>     template <typename Func, typename... FuncArgs>     typename futurize<future<Args...>>::type futurize<future<Args...>>::apply(         Func && func, std::tuple<FuncArgs...> && args) noexcept {
          try {
-          return ::seastar::apply(std::forward<Func>(func), std::move(args));
         }
    catch (...) {
         }
