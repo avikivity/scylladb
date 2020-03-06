@@ -328,17 +328,9 @@ class migrate_fn_type {
  }
   enum class bound_kind : uint8_t {
    excl_end = 0,   incl_start = 1,   incl_end = 6,   excl_start = 7, };
-  std::ostream &operator<<(std::ostream &out, const bound_kind k);
-  int32_t weight(bound_kind k);
   class bound_view {
-   const static thread_local clustering_key _empty_prefix;
-   std::reference_wrapper<const clustering_key_prefix> _prefix;
-   bound_kind _kind;
-   template <template <typename> typename R>   GCC6_CONCEPT(requires Range<R, clustering_key_prefix_view>)   static std::optional<typename R<       clustering_key_prefix_view>::bound> to_range_bound(const bound_view &bv) {     if (&bv._prefix.get() == &_empty_prefix) {       return {};     }     bool inclusive =         bv._kind != bound_kind::excl_end && bv._kind != bound_kind::excl_start;     return {typename R<clustering_key_prefix_view>::bound(         bv._prefix.get().view(), inclusive)};   }
-   friend std::ostream &operator<<(std::ostream &out, const bound_view &b) {     return out << "{bound: prefix=" << b._prefix.get() << ", kind=" << b._kind                << "}";   }
  };
  namespace dht {
- class token;
  }
    namespace dht {
  class decorated_key;
