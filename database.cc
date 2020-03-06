@@ -60,8 +60,7 @@ namespace seastar {
    };
          }
           struct future_state_base {
-           enum class state : uintptr_t {
-            result = 3,         exception_min = 4,       };
+           enum class state : uintptr_t ;
            union any {
             state st;
           }
