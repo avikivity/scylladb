@@ -27,12 +27,10 @@ using column_count_type = uint32_t;
  class schema_extension;
  using schema_ptr = seastar::lw_shared_ptr<const schema>;
  namespace api { using timestamp_type = int64_t; timestamp_type constexpr missing_timestamp = std::numeric_limits<timestamp_type>::min(); timestamp_type constexpr min_timestamp = std::numeric_limits<timestamp_type>::min() + 1; timestamp_type constexpr max_timestamp = std::numeric_limits<timestamp_type>::max(); class timestamp_clock final {     using base = std::chrono::system_clock; public:     using rep = timestamp_type;     using duration = std::chrono::microseconds;     using period = typename duration::period;     using time_point = std::chrono::time_point<timestamp_clock, duration>;     static constexpr bool is_steady = base::is_steady;     static time_point now(); }; timestamp_type new_timestamp(); }
- /* For debugging and log messages. */
 std::string format_timestamp(api::timestamp_type);
  GCC6_CONCEPT( template<typename T> concept bool HasTriCompare =     requires(const T& t) {         { t.compare(t) } -> int;     }
  && std::is_same<std::result_of_t<decltype(&T::compare)(T, T)>, int>::value;
   ) template<typename T> class with_relational_operators { private:     template<typename U>     GCC6_CONCEPT( requires HasTriCompare<U> )     int do_compare(const U& t) const; public:     bool operator<(const T& t) const ;     bool operator<=(const T& t) const;     bool operator>(const T& t) const;     bool operator>=(const T& t) const;     bool operator==(const T& t) const;     bool operator!=(const T& t) const; };
- /**  * Represents deletion operation. Can be commuted with other tombstones via apply() method.  * Can be empty.  */
 struct tombstone final : public with_relational_operators<tombstone> {     api::timestamp_type timestamp;     gc_clock::time_point deletion_time;     tombstone(api::timestamp_type timestamp, gc_clock::time_point deletion_time);     tombstone();     int compare(const tombstone& t) const;     explicit operator bool() const;     void apply(const tombstone& t) noexcept;     void apply_reversibly(tombstone& t) noexcept;     void revert(tombstone& t) noexcept;     tombstone operator+(const tombstone& t);     friend std::ostream& operator<<(std::ostream& out, const tombstone& t); };
  template<> struct appending_hash<tombstone> {     template<typename Hasher>     void operator()(Hasher& h, const tombstone& t) const; };
  using can_gc_fn = std::function<bool(tombstone)>;
@@ -90,13 +88,11 @@ enum class mutable_view { no, yes, };
  template <typename T> GCC6_CONCEPT(     requires FragmentRange<T> ) class fragment_range_view {     const T* _range; public:     using fragment_type = typename T::fragment_type;     using iterator = typename T::const_iterator;     using const_iterator = typename T::const_iterator; public:     explicit fragment_range_view(const T& range) : _range(&range) { }     const_iterator begin() const { return _range->begin(); }     const_iterator end() const { return _range->end(); }     size_t size_bytes() const { return _range->size_bytes(); }     bool empty() const { return _range->empty(); } };
 #include <seastar/core/iostream.hh>
 #include <seastar/core/simple-stream.hh>
-/**  * Utility for writing data into a buffer when its final size is not known up front.  *  * Internally the data is written into a chain of chunks allocated on-demand.  * No resizing of previously written data happens.  *  */
 class bytes_ostream { public:     using size_type = bytes::size_type;     using value_type = bytes::value_type;     using fragment_type = bytes_view;     static constexpr size_type max_chunk_size() { return 128 * 1024; } private:     static_assert(sizeof(value_type) == 1, "value_type is assumed to be one byte long");     struct chunk {         std::unique_ptr<chunk> next;         ~chunk() {             auto p = std::move(next);             while (p) {                 auto p_next = std::move(p->next);                 p = std::move(p_next);             }         }         size_type offset;          size_type size;         value_type data[0];         void operator delete(void* ptr) { free(ptr); }     };     static constexpr size_type default_chunk_size{512}; private:     std::unique_ptr<chunk> _begin;     chunk* _current;     size_type _size;     size_type _initial_chunk_size = default_chunk_size; public:     class fragment_iterator : public std::iterator<std::input_iterator_tag, bytes_view> {         chunk* _current = nullptr;     public:         fragment_iterator() = default;         fragment_iterator(chunk* current) : _current(current) {}         fragment_iterator(const fragment_iterator&) = default;         fragment_iterator& operator=(const fragment_iterator&) = default;         bytes_view operator*() const ;         bytes_view operator->() const ;         fragment_iterator& operator++() ;         fragment_iterator operator++(int) ;         bool operator==(const fragment_iterator& other) const ;         bool operator!=(const fragment_iterator& other) const ;     };     using const_iterator = fragment_iterator;     class output_iterator {     public:         using iterator_category = std::output_iterator_tag;         using difference_type = std::ptrdiff_t;         using value_type = bytes_ostream::value_type;         using pointer = bytes_ostream::value_type*;         using reference = bytes_ostream::value_type&;         friend class bytes_ostream;     private:         bytes_ostream* _ostream = nullptr;     private:         explicit output_iterator(bytes_ostream& os)  ;     public:         reference operator*() const ;         output_iterator& operator++() ;         output_iterator operator++(int) ;     }; private:      size_type current_space_left() const ;     size_type next_alloc_size(size_t data_size) const ;     [[gnu::always_inline]]     value_type* alloc(size_type size) {         if (__builtin_expect(size <= current_space_left(), true)) {             auto ret = _current->data + _current->offset;             _current->offset += size;             _size += size;             return ret;         } else {             return alloc_new(size);         }     }     [[gnu::noinline]]     value_type* alloc_new(size_type size) {             auto alloc_size = next_alloc_size(size);             auto space = malloc(alloc_size);             if (!space) {                 throw std::bad_alloc();             }             auto new_chunk = std::unique_ptr<chunk>(new (space) chunk());             new_chunk->offset = size;             new_chunk->size = alloc_size - sizeof(chunk);             if (_current) {                 _current->next = std::move(new_chunk);                 _current = _current->next.get();             } else {                 _begin = std::move(new_chunk);                 _current = _begin.get();             }             _size += size;             return _current->data;     } public:     explicit bytes_ostream(size_t initial_chunk_size) noexcept         : _begin()         , _current(nullptr)         , _size(0)         , _initial_chunk_size(initial_chunk_size)     { }     bytes_ostream() noexcept : bytes_ostream(default_chunk_size) {}     bytes_ostream(bytes_ostream&& o) noexcept         : _begin(std::move(o._begin))         , _current(o._current)         , _size(o._size)         , _initial_chunk_size(o._initial_chunk_size)     {         o._current = nullptr;         o._size = 0;     }     bytes_ostream(const bytes_ostream& o)         : _begin()         , _current(nullptr)         , _size(0)         , _initial_chunk_size(o._initial_chunk_size)     {         append(o);     }     bytes_ostream& operator=(const bytes_ostream& o) {         if (this != &o) {             auto x = bytes_ostream(o);             *this = std::move(x);         }         return *this;     }     bytes_ostream& operator=(bytes_ostream&& o) noexcept {         if (this != &o) {             this->~bytes_ostream();             new (this) bytes_ostream(std::move(o));         }         return *this;     }     template <typename T>     struct place_holder {         value_type* ptr;         seastar::simple_output_stream get_stream() {             return seastar::simple_output_stream(reinterpret_cast<char*>(ptr), sizeof(T));         }     };     template <typename T>     inline     std::enable_if_t<std::is_fundamental<T>::value, place_holder<T>>     write_place_holder() {         return place_holder<T>{alloc(sizeof(T))};     }     [[gnu::always_inline]]     value_type* write_place_holder(size_type size) {         return alloc(size);     }     [[gnu::always_inline]]     inline void write(bytes_view v) {         if (v.empty()) {             return;         }         auto this_size = std::min(v.size(), size_t(current_space_left()));         if (__builtin_expect(this_size, true)) {             memcpy(_current->data + _current->offset, v.begin(), this_size);             _current->offset += this_size;             _size += this_size;             v.remove_prefix(this_size);         }         while (!v.empty()) {             auto this_size = std::min(v.size(), size_t(max_chunk_size()));             std::copy_n(v.begin(), this_size, alloc_new(this_size));             v.remove_prefix(this_size);         }     }     [[gnu::always_inline]]     void write(const char* ptr, size_t size) {         write(bytes_view(reinterpret_cast<const signed char*>(ptr), size));     }     bool is_linearized() const {         return !_begin || !_begin->next;     }     bytes_view view() const {         assert(is_linearized());         if (!_current) {             return bytes_view();         }         return bytes_view(_current->data, _size);     }     bytes_view linearize() {         if (is_linearized()) {             return view();         }         auto space = malloc(_size + sizeof(chunk));         if (!space) {             throw std::bad_alloc();         }         auto new_chunk = std::unique_ptr<chunk>(new (space) chunk());         new_chunk->offset = _size;         new_chunk->size = _size;         auto dst = new_chunk->data;         auto r = _begin.get();         while (r) {             auto next = r->next.get();             dst = std::copy_n(r->data, r->offset, dst);             r = next;         }         _current = new_chunk.get();         _begin = std::move(new_chunk);         return bytes_view(_current->data, _size);     }     size_type size() const {         return _size;     }     size_type size_bytes() const {         return _size;     }     bool empty() const {         return _size == 0;     }     void reserve(size_t size) {     }     void append(const bytes_ostream& o) {         for (auto&& bv : o.fragments()) {             write(bv);         }     }     void remove_suffix(size_t n) {         _size -= n;         auto left = _size;         auto current = _begin.get();         while (current) {             if (current->offset >= left) {                 current->offset = left;                 _current = current;                 current->next.reset();                 return;             }             left -= current->offset;             current = current->next.get();         }     }     fragment_iterator begin() const { return { _begin.get() }; }     fragment_iterator end() const { return { nullptr }; }     output_iterator write_begin() { return output_iterator(*this); }     boost::iterator_range<fragment_iterator> fragments() const {         return { begin(), end() };     }     struct position {         chunk* _chunk;         size_type _offset;     };     position pos() const ;     size_type written_since(position pos) ;     void retract(position pos) ;     void reduce_chunk_count() ;     bool operator==(const bytes_ostream& other) const ;     bool operator!=(const bytes_ostream& other) const {         return !(*this == other);     }     void clear() {         if (_begin) {             _begin->offset = 0;             _size = 0;             _current = _begin.get();             _begin->next.reset();         }     } };
  class fragmented_temporary_buffer {     using vector_type = std::vector<seastar::temporary_buffer<char>>; public:     static constexpr size_t default_fragment_size = 128 * 1024;     class view;     class istream;     class reader;     using ostream = seastar::memory_output_stream<vector_type::iterator>;     fragmented_temporary_buffer() = default;                                         };
  namespace fragmented_temporary_buffer_concepts { GCC6_CONCEPT( template<typename T> concept bool ExceptionThrower = requires(T obj, size_t n) {     obj.throw_out_of_range(n, n); }; ) }
  class fragmented_temporary_buffer::reader {     std::vector<temporary_buffer<char>> _fragments;     size_t _left = 0; public:      };
 namespace ser { template<typename FragmentIterator> class buffer_view { public:     using fragment_type = bytes_view;     class iterator {     public:         using iterator_category = std::input_iterator_tag;         using value_type = bytes_view;         using pointer = const bytes_view*;         using reference = const bytes_view&;         using difference_type = std::ptrdiff_t;                                                                             };     using const_iterator = iterator;                                              }; }
- /*  * Import the auto generated forward decleration code  */
 class abstract_type;
  class collection_type_impl;
  template<mutable_view is_mutable> class basic_atomic_cell_view { protected:     friend class atomic_cell; public:     using pointer_type = std::conditional_t<is_mutable == mutable_view::no, const uint8_t*, uint8_t*>; protected:     friend class atomic_cell_or_collection; public:                                                                 bool is_value_fragmented() const;     int64_t counter_update_value() const;     gc_clock::time_point deletion_time() const;     gc_clock::time_point expiry() const;     gc_clock::duration ttl() const;     bool has_expired(gc_clock::time_point now) const;     bytes_view serialize() const; };
@@ -165,11 +161,7 @@ namespace seastar { class logger; }
  class serialized_compare;
  class serialized_tri_compare;
  class user_type_impl;
- class abstract_type : public enable_shared_from_this<abstract_type> {     sstring _name;     std::optional<uint32_t> _value_length_if_fixed; public:     enum class kind : int8_t {         ascii,         boolean,         byte,         bytes,         counter,         date,         decimal,         double_kind,         duration,         empty,         float_kind,         inet,         int32,         list,         long_kind,         map,         reversed,         set,         short_kind,         simple_date,         time,         timestamp,         timeuuid,         tuple,         user,         utf8,         uuid,         varint,     }; private:     kind _kind; public:     kind get_kind() const ;     virtual ~abstract_type();     bool less(bytes_view v1, bytes_view v2) const;     serialized_compare as_less_comparator() const ;     serialized_tri_compare as_tri_comparator() const ;     static data_type parse_type(const sstring& name);     size_t hash(bytes_view v) const;     bool equal(bytes_view v1, bytes_view v2) const;     int32_t compare(bytes_view v1, bytes_view v2) const;     data_value deserialize(bytes_view v) const;     data_value deserialize_value(bytes_view v) const;     void validate(bytes_view v, cql_serialization_format sf) const;               /*      * Types which are wrappers over other types return the inner type.      * For example the reversed_type returns the type it is reversing.      */         /**      * Returns true if values of the other AbstractType can be read and "reasonably" interpreted by the this      * AbstractType. Note that this is a weaker version of isCompatibleWith, as it does not require that both type      * compare values the same way.      *      * The restriction on the other type being "reasonably" interpreted is to prevent, for example, IntegerType from      * being compatible with all other types.  Even though any byte string is a valid IntegerType value, it doesn't
-     * necessarily make sense to interpret a UUID or a UTF8 string as an integer.
-     *
-     * Note that a type should be compatible with at least itself.
-     */
+ class abstract_type : public enable_shared_from_this<abstract_type> {     sstring _name;     std::optional<uint32_t> _value_length_if_fixed; public:     enum class kind : int8_t {         ascii,         boolean,         byte,         bytes,         counter,         date,         decimal,         double_kind,         duration,         empty,         float_kind,         inet,         int32,         list,         long_kind,         map,         reversed,         set,         short_kind,         simple_date,         time,         timestamp,         timeuuid,         tuple,         user,         utf8,         uuid,         varint,     }; private:     kind _kind; public:     kind get_kind() const ;     virtual ~abstract_type();     bool less(bytes_view v1, bytes_view v2) const;     serialized_compare as_less_comparator() const ;     serialized_tri_compare as_tri_comparator() const ;     static data_type parse_type(const sstring& name);     size_t hash(bytes_view v) const;     bool equal(bytes_view v1, bytes_view v2) const;     int32_t compare(bytes_view v1, bytes_view v2) const;     data_value deserialize(bytes_view v) const;     data_value deserialize_value(bytes_view v) const;     void validate(bytes_view v, cql_serialization_format sf) const;                        
 public:
     bool is_collection() const;
     bool is_map() const;
@@ -616,11 +608,6 @@ public:
         return prefix_type(_types);
     }
 private:
-    /*
-     * Format:
-     *   <len(value1)><value1><len(value2)><value2>...<len(value_n)><value_n>
-     *
-     */
     template<typename RangeOfSerializedComponents, typename CharOutputIterator>
     static void serialize_value(RangeOfSerializedComponents&& values, CharOutputIterator& out) {
         for (auto&& val : values) {
@@ -742,10 +729,6 @@ private:
     column_count_type _n_static = 0;
 public:
 };
-/**
- * Augments a schema with fields related to materialized views.
- * Effectively immutable.
- */
 class raw_view_info final {
     utils::UUID _base_id;
     sstring _base_name;
@@ -765,37 +748,11 @@ public:
 namespace query {
 class partition_slice;
 }
-/**
- * Schema extension. An opaque type representing
- * entries in the "extensions" part of a table/view (see schema_tables).
- *
- * An extension has a name (the mapping key), and it can re-serialize
- * itself to bytes again, when we write back into schema tables.
- *
- * Code using a particular extension can locate it by name in the schema map,
- * and barring the "is_placeholder" says true, cast it to whatever might
- * be the expeceted implementation.
- *
- * We allow placeholder object since an extension written to schema tables
- * might be unavailable on next boot/other node. To avoid loosing the config data,
- * a placeholder object is put into schema map, which at least can
- * re-serialize the data back.
- *
- */
 class schema_extension {
 public:
     ;
 };
-/*
- * Effectively immutable.
- * Not safe to access across cores because of shared_ptr's.  * Use global_schema_ptr for safe across-shard access.  */class schema final : public enable_lw_shared_from_this<schema> {     friend class v3_columns; public:     struct dropped_column {         data_type type;         api::timestamp_type timestamp;              };     using extensions_map = std::map<sstring, ::shared_ptr<schema_extension>>; private:     struct raw_schema {                  utils::UUID _id;         sstring _ks_name;         sstring _cf_name;         std::vector<column_definition> _columns;         sstring _comment;         gc_clock::duration _default_time_to_live = gc_clock::duration::zero();         data_type _regular_column_name_type;         data_type _default_validation_class = bytes_type;         double _bloom_filter_fp_chance = 0.01;         extensions_map _extensions;         bool _is_dense = false;         bool _is_compound = true;         bool _is_counter = false;         cf_type _type = cf_type::standard;         int32_t _gc_grace_seconds = DEFAULT_GC_GRACE_SECONDS;         double _dc_local_read_repair_chance = 0.1;         double _read_repair_chance = 0.0;         double _crc_check_chance = 1;         int32_t _min_compaction_threshold = DEFAULT_MIN_COMPACTION_THRESHOLD;         int32_t _max_compaction_threshold = DEFAULT_MAX_COMPACTION_THRESHOLD;         int32_t _min_index_interval = DEFAULT_MIN_INDEX_INTERVAL;         int32_t _max_index_interval = 2048;         int32_t _memtable_flush_period = 0;         speculative_retry _speculative_retry = ::speculative_retry(speculative_retry::type::PERCENTILE, 0.99);         bool _compaction_enabled = true;         table_schema_version _version;         std::unordered_map<sstring, dropped_column> _dropped_columns;         std::map<bytes, data_type> _collections;         std::unordered_map<sstring, index_metadata> _indices_by_name;         bool _wait_for_sync = false;      };     raw_schema _raw;     thrift_schema _thrift;     v3_columns _v3_columns;     mutable schema_registry_entry* _registry_entry = nullptr;     std::unique_ptr<::view_info> _view_info;     const std::array<column_count_type, 3> _offsets;           std::unordered_map<bytes, const column_definition*> _columns_by_name;     lw_shared_ptr<compound_type<allow_prefixes::no>> _partition_key_type;     lw_shared_ptr<compound_type<allow_prefixes::yes>> _clustering_key_type;     column_mapping _column_mapping;     shared_ptr<query::partition_slice> _full_slice;     column_count_type _clustering_key_size;     column_count_type _regular_column_count;     column_count_type _static_column_count;          friend class db::extensions;     friend class schema_builder; public:     using row_column_ids_are_ordered_by_name = std::true_type;     typedef std::vector<column_definition> columns_type;     typedef typename columns_type::iterator iterator;     typedef typename columns_type::const_iterator const_iterator;     typedef boost::iterator_range<iterator> iterator_range_type;     typedef boost::iterator_range<const_iterator> const_iterator_range_type;     static constexpr int32_t NAME_LENGTH = 48;     struct column {         bytes name;         data_type type;     }; private:          void rebuild();     schema(const raw_schema&, std::optional<raw_view_info>); public:     schema(std::optional<utils::UUID> id,         std::string_view ks_name,         std::string_view cf_name,         std::vector<column> partition_key,         std::vector<column> clustering_key,         std::vector<column> regular_columns,         std::vector<column> static_columns,         data_type regular_column_name_type,         std::string_view comment = {});     schema(const schema&);     ~schema();     table_schema_version version() const ;     double bloom_filter_fp_chance() const ;     sstring thrift_key_validator() const;     const extensions_map& extensions() const ;     bool is_dense() const ;     bool is_compound() const ;     bool is_cql3_table() const ;     bool is_compact_table() const ;     bool is_static_compact_table() const ;                                                                                                                                                                                         bool has_static_columns() const;     column_count_type columns_count(column_kind kind) const;     column_count_type partition_key_size() const;     column_count_type clustering_key_size() const;                                        typedef boost::range::joined_range<const_iterator_range_type, const_iterator_range_type>         select_order_range;                    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const ;     const auto& dropped_columns() const ;     const auto& collections() const ;     gc_clock::duration default_time_to_live() const ;     data_type make_legacy_default_validator() const;     const sstring& ks_name() const ;     const sstring& cf_name() const ;     const lw_shared_ptr<compound_type<allow_prefixes::no>>& partition_key_type() const ;     const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_type() const ;     const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_prefix_type() const ;     const data_type& regular_column_name_type() const ;     const data_type& static_column_name_type() const ;     const std::unique_ptr<::view_info>& view_info() const ;     bool is_view() const ;     const query::partition_slice& full_slice() const ;     std::vector<sstring> index_names() const;     std::vector<index_metadata> indices() const;     const std::unordered_map<sstring, index_metadata>& all_indices() const;     bool has_index(const sstring& index_name) const;     std::optional<index_metadata> find_index_noname(const index_metadata& target) const;                         friend class schema_registry_entry;                     public:      };  using schema_ptr = lw_shared_ptr<const schema>; class view_ptr final {     schema_ptr _schema; public:                                    };   class schema_mismatch_error : public std::runtime_error { public:      };  namespace sstables { enum class sstable_version_types { ka, la, mc }; enum class sstable_format_types { big };     } template <typename CompoundType> class legacy_compound_view {     static_assert(!CompoundType::is_prefixable, "Legacy view not defined for prefixes");     CompoundType& _type;     bytes_view _packed; public:          class iterator : public std::iterator<std::input_iterator_tag, bytes::value_type> {         bool _singular;         int32_t _offset;         typename CompoundType::iterator _i;     public:         struct end_tag {};                                                           };     struct tri_comparator {         const CompoundType& _type;                       };                }; template <typename CompoundType> static bytes to_legacy(CompoundType& type, bytes_view packed) ; class composite_view; class composite final {     bytes _bytes;     bool _is_compound; public:     composite(bytes&& b, bool is_compound)      ;     explicit composite(bytes&& b)      ;     composite()      ;     using size_type = uint16_t;     using eoc_type = int8_t;     /*      * The 'end-of-component' byte should always be 0 for actual column name.      * However, it can set to 1 for query bounds. This allows to query for the      * equivalent of 'give me the full range'. That is, if a slice query is:      *   start = <3><"foo".getBytes()><0>      *   end   = <3><"foo".getBytes()><1>      * then we'll return *all* the columns whose first component is "foo".
-     * If for a component, the 'end-of-component' is != 0, there should not be any
-     * following component. The end-of-component can also be -1 to allow
-     * non-inclusive query. For instance:
-     *   end = <3><"foo".getBytes()><-1>
-     * allows to query everything that is smaller than <3><"foo".getBytes()>, but
-     * not <3><"foo".getBytes()> itself.
-     */
+class schema final : public enable_lw_shared_from_this<schema> {     friend class v3_columns; public:     struct dropped_column {         data_type type;         api::timestamp_type timestamp;              };     using extensions_map = std::map<sstring, ::shared_ptr<schema_extension>>; private:     struct raw_schema {                  utils::UUID _id;         sstring _ks_name;         sstring _cf_name;         std::vector<column_definition> _columns;         sstring _comment;         gc_clock::duration _default_time_to_live = gc_clock::duration::zero();         data_type _regular_column_name_type;         data_type _default_validation_class = bytes_type;         double _bloom_filter_fp_chance = 0.01;         extensions_map _extensions;         bool _is_dense = false;         bool _is_compound = true;         bool _is_counter = false;         cf_type _type = cf_type::standard;         int32_t _gc_grace_seconds = DEFAULT_GC_GRACE_SECONDS;         double _dc_local_read_repair_chance = 0.1;         double _read_repair_chance = 0.0;         double _crc_check_chance = 1;         int32_t _min_compaction_threshold = DEFAULT_MIN_COMPACTION_THRESHOLD;         int32_t _max_compaction_threshold = DEFAULT_MAX_COMPACTION_THRESHOLD;         int32_t _min_index_interval = DEFAULT_MIN_INDEX_INTERVAL;         int32_t _max_index_interval = 2048;         int32_t _memtable_flush_period = 0;         speculative_retry _speculative_retry = ::speculative_retry(speculative_retry::type::PERCENTILE, 0.99);         bool _compaction_enabled = true;         table_schema_version _version;         std::unordered_map<sstring, dropped_column> _dropped_columns;         std::map<bytes, data_type> _collections;         std::unordered_map<sstring, index_metadata> _indices_by_name;         bool _wait_for_sync = false;      };     raw_schema _raw;     thrift_schema _thrift;     v3_columns _v3_columns;     mutable schema_registry_entry* _registry_entry = nullptr;     std::unique_ptr<::view_info> _view_info;     const std::array<column_count_type, 3> _offsets;           std::unordered_map<bytes, const column_definition*> _columns_by_name;     lw_shared_ptr<compound_type<allow_prefixes::no>> _partition_key_type;     lw_shared_ptr<compound_type<allow_prefixes::yes>> _clustering_key_type;     column_mapping _column_mapping;     shared_ptr<query::partition_slice> _full_slice;     column_count_type _clustering_key_size;     column_count_type _regular_column_count;     column_count_type _static_column_count;          friend class db::extensions;     friend class schema_builder; public:     using row_column_ids_are_ordered_by_name = std::true_type;     typedef std::vector<column_definition> columns_type;     typedef typename columns_type::iterator iterator;     typedef typename columns_type::const_iterator const_iterator;     typedef boost::iterator_range<iterator> iterator_range_type;     typedef boost::iterator_range<const_iterator> const_iterator_range_type;     static constexpr int32_t NAME_LENGTH = 48;     struct column {         bytes name;         data_type type;     }; private:          void rebuild();     schema(const raw_schema&, std::optional<raw_view_info>); public:     schema(std::optional<utils::UUID> id,         std::string_view ks_name,         std::string_view cf_name,         std::vector<column> partition_key,         std::vector<column> clustering_key,         std::vector<column> regular_columns,         std::vector<column> static_columns,         data_type regular_column_name_type,         std::string_view comment = {});     schema(const schema&);     ~schema();     table_schema_version version() const ;     double bloom_filter_fp_chance() const ;     sstring thrift_key_validator() const;     const extensions_map& extensions() const ;     bool is_dense() const ;     bool is_compound() const ;     bool is_cql3_table() const ;     bool is_compact_table() const ;     bool is_static_compact_table() const ;                                                                                                                                                                                         bool has_static_columns() const;     column_count_type columns_count(column_kind kind) const;     column_count_type partition_key_size() const;     column_count_type clustering_key_size() const;                                        typedef boost::range::joined_range<const_iterator_range_type, const_iterator_range_type>         select_order_range;                    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const ;     const auto& dropped_columns() const ;     const auto& collections() const ;     gc_clock::duration default_time_to_live() const ;     data_type make_legacy_default_validator() const;     const sstring& ks_name() const ;     const sstring& cf_name() const ;     const lw_shared_ptr<compound_type<allow_prefixes::no>>& partition_key_type() const ;     const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_type() const ;     const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_prefix_type() const ;     const data_type& regular_column_name_type() const ;     const data_type& static_column_name_type() const ;     const std::unique_ptr<::view_info>& view_info() const ;     bool is_view() const ;     const query::partition_slice& full_slice() const ;     std::vector<sstring> index_names() const;     std::vector<index_metadata> indices() const;     const std::unordered_map<sstring, index_metadata>& all_indices() const;     bool has_index(const sstring& index_name) const;     std::optional<index_metadata> find_index_noname(const index_metadata& target) const;                         friend class schema_registry_entry;                     public:      };  using schema_ptr = lw_shared_ptr<const schema>; class view_ptr final {     schema_ptr _schema; public:                                    };   class schema_mismatch_error : public std::runtime_error { public:      };  namespace sstables { enum class sstable_version_types { ka, la, mc }; enum class sstable_format_types { big };     } template <typename CompoundType> class legacy_compound_view {     static_assert(!CompoundType::is_prefixable, "Legacy view not defined for prefixes");     CompoundType& _type;     bytes_view _packed; public:          class iterator : public std::iterator<std::input_iterator_tag, bytes::value_type> {         bool _singular;         int32_t _offset;         typename CompoundType::iterator _i;     public:         struct end_tag {};                                                           };     struct tri_comparator {         const CompoundType& _type;                       };                }; template <typename CompoundType> static bytes to_legacy(CompoundType& type, bytes_view packed) ; class composite_view; class composite final {     bytes _bytes;     bool _is_compound; public:     composite(bytes&& b, bool is_compound)      ;     explicit composite(bytes&& b)      ;     composite()      ;     using size_type = uint16_t;     using eoc_type = int8_t;     
     enum class eoc : eoc_type {
         start = -1,
         none = 0,
@@ -1443,13 +1400,6 @@ class partition_key : public compound_wrapper<partition_key, partition_key_view>
 public:
     using c_type = compound_type<allow_prefixes::no>;
     ;
-    /*!
-     * \brief create a partition_key from a nodetool style string
-     * takes a nodetool style string representation of a partition key and returns a partition_key.
-     * With composite keys, columns are concatenate using ':'.
-     * For example if a composite key is has two columns (col1, col2) to get the partition key that
-     * have col1=val1 and col2=val2 use the string 'val1:val2'
-     */
     using compound = lw_shared_ptr<c_type>;
 };
 class exploded_clustering_prefix {
@@ -1686,9 +1636,6 @@ struct hash<nonwrapping_range<T>> {
     }
 };
 }
-/**
- * Represents the kind of bound in a range tombstone.
- */
 enum class bound_kind : uint8_t {
     excl_end = 0,
     incl_start = 1,
@@ -1802,7 +1749,6 @@ public:
         return out << "{bound: prefix=" << b._prefix.get() << ", kind=" << b._kind << "}";
     }
 };
-#include <random>
 #include <byteswap.h>
 namespace dht {
 class token;
@@ -1847,34 +1793,6 @@ public:
     size_t external_memory_usage() const ;
     size_t memory_usage() const ;
     bytes data() const ;
-    /**
-     * @return a string representation of this token
-     */
-    /**
-     * Calculate a token representing the approximate "middle" of the given
-     * range.
-     *
-     * @return The approximate midpoint between left and right.
-     */
-    /**
-     * @return a randomly generated token
-     */
-    /**
-     * @return a token from string representation
-     */
-    /**
-     * @return a token from its byte representation
-     */
-    /**
-     * Calculate the deltas between tokens in the ring in order to compare
-     *  relative sizes.
-     *
-     * @param sortedtokens a sorted List of tokens
-     * @return the mapping from 'token' to 'percentage of the ring owned by that token'.
-     */
-    /**
-     * Gets the first shard of the minimum token.
-     */
 };
 } 
 namespace sstables {
@@ -1929,47 +1847,6 @@ protected:
     unsigned _sharding_ignore_msb_bits;
     std::vector<uint64_t> _shard_start;
 public:
-    /**
-     * Transform key to object representation of the on-disk format.
-     *
-     * @param key the raw, client-facing key
-     * @return decorated version of key
-     */
-    /**
-     * Transform key to object representation of the on-disk format.
-     *
-     * @param key the raw, client-facing key
-     * @return decorated version of key
-     */
-    /**
-     * @return a token that can be used to route a given key
-     * (This is NOT a method to create a token from its string representation;
-     * for that, use tokenFactory.fromString.)
-     */
-    /**
-     * @return True if the implementing class preserves key order in the tokens
-     * it generates.
-     */
-    /**
-     * @return name of partitioner.
-     */
-    /**
-     * Calculates the shard that handles a particular token.
-     */
-    /**
-     * Gets the first token greater than `t` that is in shard `shard`, and is a shard boundary (its first token).
-     *
-     * If the `spans` parameter is greater than zero, the result is the same as if the function
-     * is called `spans` times, each time applied to its return value, but efficiently. This allows
-     * selecting ranges that include multiple round trips around the 0..smp::count-1 shard span:
-     *
-     *     token_for_next_shard(t, shard, spans) == token_for_next_shard(token_for_shard(t, shard, 1), spans - 1)
-     *
-     * On overflow, maximum_token() is returned.
-     */
-    /**
-     * @return number of shards configured for this partitioner
-     */
 };
 class ring_position {
 public:
@@ -2051,24 +1928,6 @@ struct hash<dht::decorated_key> {
     }
 };
 }
-/**
- *
- * Allows to take full advantage of compile-time information when operating
- * on a set of enum values.
- *
- * Examples:
- *
- *   enum class x { A, B, C };
- *   using my_enum = super_enum<x, x::A, x::B, x::C>;
- *   using my_enumset = enum_set<my_enum>;
- *
- *   static_assert(my_enumset::frozen<x::A, x::B>::contains<x::A>(), "it should...");
- *
- *   assert(my_enumset::frozen<x::A, x::B>::contains(my_enumset::prepare<x::A>()));
- *
- *   assert(my_enumset::frozen<x::A, x::B>::contains(x::A));
- *
- */
 template<typename EnumType, EnumType... Items>
 struct super_enum {
     using enum_type = EnumType;
@@ -2152,9 +2011,6 @@ private:
 public:
     using iterator = std::invoke_result_t<decltype(&enum_set::make_iterator), mask_iterator>;
     constexpr enum_set() : _mask(0) {}
-    /**
-     * \throws \ref bad_enum_set_mask
-     */
     static constexpr enum_set from_mask(mask_type mask) {
         const auto bit_range = seastar::bitsets::for_each_set(std::bitset<mask_digits>(mask));
         if (!std::all_of(bit_range.begin(), bit_range.end(), &Enum::is_valid_sequence)) {
@@ -2307,12 +2163,6 @@ extern std::vector<sstring> trace_type_names;
 inline const sstring& type_to_string(trace_type t) {
     return trace_type_names.at(static_cast<int>(t));
 }
-/**
- * Returns a TTL for a given trace type
- * @param t trace type
- *
- * @return TTL
- */
 inline std::chrono::seconds ttl_by_type(const trace_type t) {
     switch (t) {
     case trace_type::NONE:
@@ -2324,11 +2174,6 @@ inline std::chrono::seconds ttl_by_type(const trace_type t) {
         throw std::invalid_argument("unknown trace type: " + std::to_string(int(t)));
     }
 }
-/**
- * @brief represents an ID of a single tracing span.
- *
- * Currently span ID is a random 64-bit integer.
- */
 class span_id {
 private:
     uint64_t _id = illegal_id;
@@ -2338,9 +2183,6 @@ public:
     span_id() = default;
     uint64_t get_id() const { return _id; }
     span_id(uint64_t id) : _id(id) {}
-    /**
-     * @return New span_id with a random legal value
-     */
     static span_id make_span_id();
 };
 std::ostream& operator<<(std::ostream& os, const span_id& id);
@@ -2434,23 +2276,6 @@ public:
     uint64_t* budget_ptr;
     span_id parent_id;
     span_id my_span_id;
-    /**
-     * Consume a single record from the per-shard budget.
-     */
-    /**
-     * Drop all pending records and return the budget.
-     */
-    /**
-     * Should be called when a record is scheduled for write.
-     * From that point till data_consumed() call all new records will be written
-     * in the next write event.
-     */
-    /**
-     * Should be called after all data pending to be written in this record has
-     * been processed.
-     * From that point on new records are cached internally and have to be
-     * explicitly committed for write in order to be written during the write event.
-     */
 private:
     bool _is_pending_for_write = false;
 };
@@ -2838,9 +2663,6 @@ public:
 }
 #include <boost/intrusive/set.hpp>
 namespace bi = boost::intrusive;
-/**
- * Represents a ranged deletion operation. Can be empty.
- */
 class range_tombstone final {
     bi::set_member_hook<bi::link_mode<bi::auto_unlink>> _link;
 public:
@@ -3876,18 +3698,6 @@ GCC6_CONCEPT(
         { filter.on_end_of_stream() } -> void;
     };
 )
-/*
- * Allows iteration on mutations using mutation_fragments.
- * It iterates over mutations one by one and for each mutation
- * it returns:
- *      1. partition_start mutation_fragment
- *      2. static_row mutation_fragment if one exists
- *      3. mutation_fragments for all clustering rows and range tombstones
- *         in clustering key order
- *      4. partition_end mutation_fragment
- * The best way to consume those mutation_fragments is to call
- * flat_mutation_reader::consume with a consumer that receives the fragments.
- */
 class flat_mutation_reader final {
 public:
     class impl {
