@@ -458,21 +458,11 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
     unsigned scheduling_group_index(scheduling_group sg);
     }
     class scheduling_group_key {
-    public:
-    private:
-      unsigned long _id;
-      friend class reactor;
-      ;
       ;
     };
     class scheduling_group {
       unsigned _id;
     private:
-    public:
-      constexpr scheduling_group();
-      ;
-      bool operator==(scheduling_group x) const;
-      ;
       friend class reactor;
       friend unsigned internal::scheduling_group_index(scheduling_group sg);
       ;
@@ -508,11 +498,6 @@ namespace seastar {
     class thread_context;
     struct jmp_buf_link {
       jmp_buf jmpbuf;
-      jmp_buf_link *link;
-      thread_context *thread;
-    public:
-      void initial_switch_in(ucontext_t *initial_context,
-                             const void *stack_bottom, size_t stack_size);
       void switch_in();
       void switch_out();
       void initial_switch_in_completed();
@@ -743,11 +728,6 @@ namespace seastar {
       bool failed() const noexcept;
       void set_to_broken_promise() noexcept;
       void ignore() noexcept;
-      void set_exception(std::exception_ptr &&ex) noexcept;
-      future_state_base &operator=(future_state_base &&x) noexcept;
-      void set_exception(future_state_base &&state) noexcept;
-      std::exception_ptr get_exception() && noexcept;
-      const std::exception_ptr &get_exception() const &noexcept;
       static future_state_base current_exception();
       template <typename... U>
       friend future<U...> internal::current_exception_as_future() noexcept;
