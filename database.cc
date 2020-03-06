@@ -411,32 +411,18 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
       ;
     };
     class scheduling_group {
-      unsigned _id;
-    private:
-      friend class reactor;
-      friend unsigned internal::scheduling_group_index(scheduling_group sg);
-      ;
-      ;
     };
     namespace internal {
-    unsigned scheduling_group_index(scheduling_group sg);
-    scheduling_group *current_scheduling_group_ptr();
     }
     scheduling_group current_scheduling_group();
     class task {
       scheduling_group _sg;
-    protected:
-      ~task() = default;
-    public:
-      explicit task(scheduling_group sg = current_scheduling_group());
       virtual void run_and_dispose() noexcept = 0;
       scheduling_group group() const;
     };
     void schedule(task * t) noexcept;
     namespace internal {
     struct preemption_monitor {
-      std::atomic<uint32_t> head;
-      std::atomic<uint32_t> tail;
     };
     }
     extern __thread const internal::preemption_monitor *g_need_preempt;
@@ -447,18 +433,12 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
 namespace seastar {
     class thread_context;
     struct jmp_buf_link {
-      jmp_buf jmpbuf;
-      void switch_in();
-      void switch_out();
-      void initial_switch_in_completed();
       void final_switch_out();
     };
     extern thread_local jmp_buf_link *g_current_context;
     namespace thread_impl {
     thread_context *get();
     bool should_yield();
-    scheduling_group sched_group(const thread_context *);
-    void yield();
     void switch_in(thread_context *to);
     void switch_out(thread_context *from);
     }
@@ -489,8 +469,6 @@ namespace seastar {
       static void empty_destroy(noncopyable_function_base *func);
       static void indirect_move(noncopyable_function_base *from,
                                 noncopyable_function_base *to);
-      ;
-    private:
       storage _storage;
       template <typename Signature> friend class seastar::noncopyable_function;
     };
@@ -501,8 +479,6 @@ namespace seastar {
       using call_type = Ret (*)(const noncopyable_function *func, Args...);
       struct vtable {
         const call_type call;
-        const move_type move;
-        const destroy_type destroy;
       };
     private:
       const vtable *_vtable;
@@ -515,16 +491,12 @@ namespace seastar {
         static void move(noncopyable_function_base *from,
                          noncopyable_function_base *to);
         static constexpr move_type select_move_thunk();
-        static void destroy(noncopyable_function_base *func);
-        static constexpr destroy_type select_destroy_thunk();
         static void initialize(Func &&from, noncopyable_function *to);
         static constexpr vtable make_vtable();
         static const vtable s_vtable;
       };
       template <typename Func> struct indirect_vtable_for {
         static Func *access(noncopyable_function *func);
-        static const Func *access(const noncopyable_function *func);
-        static Func *access(noncopyable_function_base *func);
         static Ret call(const noncopyable_function *func, Args... args);
         static void destroy(noncopyable_function_base *func);
         static void initialize(Func &&from, noncopyable_function *to);
@@ -535,8 +507,6 @@ namespace seastar {
       };
       template <typename Func, bool Direct = true>
       struct select_vtable_for : direct_vtable_for<Func> {};
-      template <typename Func>
-      struct select_vtable_for<Func, false> : indirect_vtable_for<Func> {};
       template <typename Func> static constexpr bool is_direct() {
         return sizeof(Func) <= nr_direct && alignof(Func) <= alignof(storage) &&
                std::is_nothrow_move_constructible<Func>::value;
@@ -555,16 +525,10 @@ namespace seastar {
     };
     namespace memory {
     class alloc_failure_injector {
-      uint64_t _alloc_count;
-      uint64_t _fail_at = std::numeric_limits<uint64_t>::max();
       noncopyable_function<void()> _on_alloc_failure = [] {
         throw std::bad_alloc();
       };
       bool _failed;
-      uint64_t _suppressed = 0;
-      friend struct disable_failure_guard;
-    private:
-    public:
     };
     extern thread_local alloc_failure_injector the_alloc_failure_injector;
     struct disable_failure_guard {
@@ -597,8 +561,6 @@ namespace seastar {
     template <typename T> struct uninitialized_wrapper_base<T, false> {
       union any {
         any();
-        ~any();
-        T value;
       } _v;
     public:
       void uninitialized_set(T &&v);
