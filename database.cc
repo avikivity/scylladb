@@ -1478,16 +1478,6 @@ namespace seastar {
       using steady_duration = std::chrono::duration<steady_rep, period>;
       using steady_time_point =
           std::chrono::time_point<lowres_clock, steady_duration>;
-      using system_rep = base_system_clock::rep;
-      using system_duration = std::chrono::duration<system_rep, period>;
-      using system_time_point =
-          std::chrono::time_point<lowres_system_clock, system_duration>;
-      friend class smp;
-    private:
-      struct alignas(seastar::cache_line_size) counters final {
-        static std::atomic<steady_rep> _steady_now;
-        static std::atomic<system_rep> _system_now;
-      };
       static constexpr std::chrono::milliseconds _granularity{10};
       timer<> _timer{};
     };
@@ -1518,31 +1508,6 @@ namespace seastar {
     class metric_groups_def;
     struct metric_definition_impl;
     class metric_groups_impl;
-    }
-    using group_name_type = sstring;
-    class metric_groups;
-    class metric_definition {
-      std::unique_ptr<impl::metric_definition_impl> _impl;
-    public:
-      friend metric_groups;
-      friend impl::metric_groups_impl;
-    };
-    class metric_group_definition {
-    public:
-      group_name_type name;
-      std::initializer_list<metric_definition> metrics;
-    };
-    class metric_groups {
-      std::unique_ptr<impl::metric_groups_def> _impl;
-    public:
-    };
-    class metric_group : public metric_groups {
-    public:
-    };
-    }
-    namespace metrics {
-    class double_registration : public std::runtime_error {
-    public:
     };
     };
 }
