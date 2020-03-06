@@ -1,1875 +1,182 @@
 #include <atomic>
 extern std::atomic<int64_t> clocks_offset;
 #include <seastar/core/sstring.hh>
-namespace seastar {
-template <typename T>
-class shared_ptr;
-template <typename T>
-shared_ptr<T> make_shared(T&&);
-template <typename T, typename... A>
-shared_ptr<T> make_shared(A&&... a);
-}
-using namespace seastar;
-using seastar::shared_ptr;
-using seastar::make_shared;
+namespace seastar { template <typename T> class shared_ptr; template <typename T> shared_ptr<T> make_shared(T&&); template <typename T, typename... A> shared_ptr<T> make_shared(A&&... a); }
+ using namespace seastar;
+ using seastar::shared_ptr;
+ using seastar::make_shared;
 #include <seastar/util/gcc6-concepts.hh>
-GCC6_CONCEPT(
-    template<typename H>
-    concept bool Hasher() {
-        return requires(H& h, const char* ptr, size_t size) {
-            { h.update(ptr, size) } -> void;
-        };
-    }
-)
-class hasher {
-public:
-    virtual ~hasher() = default;
-    virtual void update(const char* ptr, size_t size) = 0;
-};
-GCC6_CONCEPT(static_assert(Hasher<hasher>());)
-template<typename T, typename Enable = void>
-struct appending_hash;
-template<typename H, typename T, typename... Args>
-GCC6_CONCEPT(requires Hasher<H>())
-void feed_hash(H& h, const T& value, Args&&... args);
+GCC6_CONCEPT(     template<typename H>     concept bool Hasher() {         return requires(H& h, const char* ptr, size_t size) {             { h.update(ptr, size) } -> void;         };     }
+ ) class hasher { public:     virtual ~hasher() = default;     virtual void update(const char* ptr, size_t size) = 0; };
+ GCC6_CONCEPT(static_assert(Hasher<hasher>());
+) template<typename T, typename Enable = void> struct appending_hash;
+ template<typename H, typename T, typename... Args> GCC6_CONCEPT(requires Hasher<H>()) void feed_hash(H& h, const T& value, Args&&... args);
 #include <seastar/core/lowres_clock.hh>
-class gc_clock final {
-public:
-    using base = seastar::lowres_system_clock;
-    using rep = int64_t;
-    using period = std::ratio<1, 1>; 
-    using duration = std::chrono::duration<rep, period>;
-    using time_point = std::chrono::time_point<gc_clock, duration>;
-    static constexpr auto is_steady = base::is_steady;
-    static time_point now();
-    static int32_t as_int32(duration d);
-    static int32_t as_int32(time_point tp);
-};
-using expiry_opt = std::optional<gc_clock::time_point>;
-using ttl_opt = std::optional<gc_clock::duration>;
-static constexpr gc_clock::duration max_ttl = gc_clock::duration{20 * 365 * 24 * 60 * 60};
-std::ostream& operator<<(std::ostream& os, gc_clock::time_point tp);
-class db_clock final {
-public:
-    using base = std::chrono::system_clock;
-    using rep = int64_t;
-    using period = std::ratio<1, 1000>; 
-    using duration = std::chrono::duration<rep, period>;
-    using time_point = std::chrono::time_point<db_clock, duration>;
-    static constexpr bool is_steady = base::is_steady;
-    static time_point now() {
-        return time_point();
-    }
-};
-gc_clock::time_point to_gc_clock(db_clock::time_point tp);
-std::ostream& operator<<(std::ostream&, db_clock::time_point);
+class gc_clock final { public:     using base = seastar::lowres_system_clock;     using rep = int64_t;     using period = std::ratio<1, 1>;      using duration = std::chrono::duration<rep, period>;     using time_point = std::chrono::time_point<gc_clock, duration>;     static constexpr auto is_steady = base::is_steady;     static time_point now();     static int32_t as_int32(duration d);     static int32_t as_int32(time_point tp); };
+ using expiry_opt = std::optional<gc_clock::time_point>;
+ using ttl_opt = std::optional<gc_clock::duration>;
+ static constexpr gc_clock::duration max_ttl = gc_clock::duration{20 * 365 * 24 * 60 * 60};
+ std::ostream& operator<<(std::ostream& os, gc_clock::time_point tp);
+ class db_clock final { public:     using base = std::chrono::system_clock;     using rep = int64_t;     using period = std::ratio<1, 1000>;      using duration = std::chrono::duration<rep, period>;     using time_point = std::chrono::time_point<db_clock, duration>;     static constexpr bool is_steady = base::is_steady;     static time_point now() {         return time_point();     } };
+ gc_clock::time_point to_gc_clock(db_clock::time_point tp);
+ std::ostream& operator<<(std::ostream&, db_clock::time_point);
 #include <seastar/core/shared_ptr.hh>
 using column_count_type = uint32_t;
-using column_id = column_count_type;
-class schema;
-class schema_extension;
-using schema_ptr = seastar::lw_shared_ptr<const schema>;
-namespace api {
-using timestamp_type = int64_t;
-timestamp_type constexpr missing_timestamp = std::numeric_limits<timestamp_type>::min();
-timestamp_type constexpr min_timestamp = std::numeric_limits<timestamp_type>::min() + 1;
-timestamp_type constexpr max_timestamp = std::numeric_limits<timestamp_type>::max();
-class timestamp_clock final {
-    using base = std::chrono::system_clock;
-public:
-    using rep = timestamp_type;
-    using duration = std::chrono::microseconds;
-    using period = typename duration::period;
-    using time_point = std::chrono::time_point<timestamp_clock, duration>;
-    static constexpr bool is_steady = base::is_steady;
-    static time_point now();
-};
-timestamp_type new_timestamp();
-}
-/* For debugging and log messages. */
+ using column_id = column_count_type;
+ class schema;
+ class schema_extension;
+ using schema_ptr = seastar::lw_shared_ptr<const schema>;
+ namespace api { using timestamp_type = int64_t; timestamp_type constexpr missing_timestamp = std::numeric_limits<timestamp_type>::min(); timestamp_type constexpr min_timestamp = std::numeric_limits<timestamp_type>::min() + 1; timestamp_type constexpr max_timestamp = std::numeric_limits<timestamp_type>::max(); class timestamp_clock final {     using base = std::chrono::system_clock; public:     using rep = timestamp_type;     using duration = std::chrono::microseconds;     using period = typename duration::period;     using time_point = std::chrono::time_point<timestamp_clock, duration>;     static constexpr bool is_steady = base::is_steady;     static time_point now(); }; timestamp_type new_timestamp(); }
+ /* For debugging and log messages. */
 std::string format_timestamp(api::timestamp_type);
-GCC6_CONCEPT(
-template<typename T>
-concept bool HasTriCompare =
-    requires(const T& t) {
-        { t.compare(t) } -> int;
-    } && std::is_same<std::result_of_t<decltype(&T::compare)(T, T)>, int>::value; 
-)
-template<typename T>
-class with_relational_operators {
-private:
-    template<typename U>
-    GCC6_CONCEPT( requires HasTriCompare<U> )
-    int do_compare(const U& t) const;
-public:
-    bool operator<(const T& t) const ;
-    bool operator<=(const T& t) const;
-    bool operator>(const T& t) const;
-    bool operator>=(const T& t) const;
-    bool operator==(const T& t) const;
-    bool operator!=(const T& t) const;
-};
-/**
- * Represents deletion operation. Can be commuted with other tombstones via apply() method.
- * Can be empty.
- */
-struct tombstone final : public with_relational_operators<tombstone> {
-    api::timestamp_type timestamp;
-    gc_clock::time_point deletion_time;
-    tombstone(api::timestamp_type timestamp, gc_clock::time_point deletion_time);
-    tombstone();
-    int compare(const tombstone& t) const;
-    explicit operator bool() const;
-    void apply(const tombstone& t) noexcept;
-    void apply_reversibly(tombstone& t) noexcept;
-    void revert(tombstone& t) noexcept;
-    tombstone operator+(const tombstone& t);
-    friend std::ostream& operator<<(std::ostream& out, const tombstone& t);
-};
-template<>
-struct appending_hash<tombstone> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const tombstone& t) const;
-};
-using can_gc_fn = std::function<bool(tombstone)>;
-static can_gc_fn always_gc = [] (tombstone) { return true; };
+ GCC6_CONCEPT( template<typename T> concept bool HasTriCompare =     requires(const T& t) {         { t.compare(t) } -> int;     }
+ && std::is_same<std::result_of_t<decltype(&T::compare)(T, T)>, int>::value;
+  ) template<typename T> class with_relational_operators { private:     template<typename U>     GCC6_CONCEPT( requires HasTriCompare<U> )     int do_compare(const U& t) const; public:     bool operator<(const T& t) const ;     bool operator<=(const T& t) const;     bool operator>(const T& t) const;     bool operator>=(const T& t) const;     bool operator==(const T& t) const;     bool operator!=(const T& t) const; };
+ /**  * Represents deletion operation. Can be commuted with other tombstones via apply() method.  * Can be empty.  */
+struct tombstone final : public with_relational_operators<tombstone> {     api::timestamp_type timestamp;     gc_clock::time_point deletion_time;     tombstone(api::timestamp_type timestamp, gc_clock::time_point deletion_time);     tombstone();     int compare(const tombstone& t) const;     explicit operator bool() const;     void apply(const tombstone& t) noexcept;     void apply_reversibly(tombstone& t) noexcept;     void revert(tombstone& t) noexcept;     tombstone operator+(const tombstone& t);     friend std::ostream& operator<<(std::ostream& out, const tombstone& t); };
+ template<> struct appending_hash<tombstone> {     template<typename Hasher>     void operator()(Hasher& h, const tombstone& t) const; };
+ using can_gc_fn = std::function<bool(tombstone)>;
+ static can_gc_fn always_gc = [] (tombstone) { return true; };
 #include <seastar/util/optimized_optional.hh>
-template<typename CharT>
-class basic_mutable_view {
-    CharT* _begin = nullptr;
-    CharT* _end = nullptr;
-public:
-    using value_type = CharT;
-    using pointer = CharT*;
-    using iterator = CharT*;
-    using const_iterator = CharT*;
-    basic_mutable_view() = default;
-    template<typename U, U N>
-    basic_mutable_view(basic_sstring<CharT, U, N>& str)
-        : _begin(str.begin())
-        , _end(str.end())
-    { }
-    basic_mutable_view(CharT* ptr, size_t length)
-        : _begin(ptr)
-        , _end(ptr + length)
-    { }
-    operator std::basic_string_view<CharT>() const noexcept {
-        return std::basic_string_view<CharT>(begin(), size());
-    }
-    CharT& operator[](size_t idx) const { return _begin[idx]; }
-    iterator begin() const { return _begin; }
-    iterator end() const { return _end; }
-    CharT* data() const { return _begin; }
-    size_t size() const { return _end - _begin; }
-    bool empty() const { return _begin == _end; }
-    void remove_prefix(size_t n) {
-        _begin += n;
-    }
-    void remove_suffix(size_t n) {
-        _end -= n;
-    }
-};
-using bytes = basic_sstring<int8_t, uint32_t, 31, false>;
-using bytes_view = std::basic_string_view<int8_t>;
-using bytes_mutable_view = basic_mutable_view<bytes_view::value_type>;
-using bytes_opt = std::optional<bytes>;
-using sstring_view = std::string_view;
-inline sstring_view to_sstring_view(bytes_view view) {
-    return {reinterpret_cast<const char*>(view.data()), view.size()};
-}
-namespace std {
-template <>
-struct hash<bytes_view> {
-    size_t operator()(bytes_view v) const {
-        return hash<sstring_view>()({reinterpret_cast<const char*>(v.begin()), v.size()});
-    }
-};
-}
-bytes from_hex(sstring_view s);
-sstring to_hex(bytes_view b);
-sstring to_hex(const bytes& b);
-sstring to_hex(const bytes_opt& b);
-std::ostream& operator<<(std::ostream& os, const bytes& b);
-std::ostream& operator<<(std::ostream& os, const bytes_opt& b);
-namespace std {
-std::ostream& operator<<(std::ostream& os, const bytes_view& b);
-}
-template<>
-struct appending_hash<bytes> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const bytes& v) const;
-};
-template<>
-struct appending_hash<bytes_view> {
-    template<typename Hasher>
-    void operator()(Hasher& h, bytes_view v) const;
-};
-int32_t compare_unsigned(bytes_view v1, bytes_view v2);
+template<typename CharT> class basic_mutable_view {     CharT* _begin = nullptr;     CharT* _end = nullptr; public:     using value_type = CharT;     using pointer = CharT*;     using iterator = CharT*;     using const_iterator = CharT*;     basic_mutable_view() = default;     template<typename U, U N>     basic_mutable_view(basic_sstring<CharT, U, N>& str)         : _begin(str.begin())         , _end(str.end())     { }     basic_mutable_view(CharT* ptr, size_t length)         : _begin(ptr)         , _end(ptr + length)     { }     operator std::basic_string_view<CharT>() const noexcept {         return std::basic_string_view<CharT>(begin(), size());     }     CharT& operator[](size_t idx) const { return _begin[idx]; }     iterator begin() const { return _begin; }     iterator end() const { return _end; }     CharT* data() const { return _begin; }     size_t size() const { return _end - _begin; }     bool empty() const { return _begin == _end; }     void remove_prefix(size_t n) {         _begin += n;     }     void remove_suffix(size_t n) {         _end -= n;     } };
+ using bytes = basic_sstring<int8_t, uint32_t, 31, false>;
+ using bytes_view = std::basic_string_view<int8_t>;
+ using bytes_mutable_view = basic_mutable_view<bytes_view::value_type>;
+ using bytes_opt = std::optional<bytes>;
+ using sstring_view = std::string_view;
+ inline sstring_view to_sstring_view(bytes_view view) {     return {reinterpret_cast<const char*>(view.data()), view.size()}; }
+ namespace std { template <> struct hash<bytes_view> {     size_t operator()(bytes_view v) const {         return hash<sstring_view>()({reinterpret_cast<const char*>(v.begin()), v.size()});     } }; }
+ bytes from_hex(sstring_view s);
+ sstring to_hex(bytes_view b);
+ sstring to_hex(const bytes& b);
+ sstring to_hex(const bytes_opt& b);
+ std::ostream& operator<<(std::ostream& os, const bytes& b);
+ std::ostream& operator<<(std::ostream& os, const bytes_opt& b);
+ namespace std { std::ostream& operator<<(std::ostream& os, const bytes_view& b); }
+ template<> struct appending_hash<bytes> {     template<typename Hasher>     void operator()(Hasher& h, const bytes& v) const; };
+ template<> struct appending_hash<bytes_view> {     template<typename Hasher>     void operator()(Hasher& h, bytes_view v) const; };
+ int32_t compare_unsigned(bytes_view v1, bytes_view v2);
 #include <seastar/core/print.hh>
 #include <seastar/net/byteorder.hh>
 class UTFDataFormatException { };
-class EOFException { };
-static constexpr size_t serialize_int8_size = 1;
-static constexpr size_t serialize_bool_size = 1;
-static constexpr size_t serialize_int16_size = 2;
-static constexpr size_t serialize_int32_size = 4;
-static constexpr size_t serialize_int64_size = 8;
-namespace internal_impl {
-template <typename ExplicitIntegerType, typename CharOutputIterator, typename IntegerType>
-GCC6_CONCEPT(requires std::is_integral<ExplicitIntegerType>::value && std::is_integral<IntegerType>::value && requires (CharOutputIterator it) {
-    *it++ = 'a';
-})
-inline
-void serialize_int(CharOutputIterator& out, IntegerType val) {
-    ExplicitIntegerType nval = net::hton(ExplicitIntegerType(val));
-    out = std::copy_n(reinterpret_cast<const char*>(&nval), sizeof(nval), out);
-}
-}
-template <typename CharOutputIterator>
-inline
-void serialize_int8(CharOutputIterator& out, uint8_t val) {
-    internal_impl::serialize_int<uint8_t>(out, val);
-}
-template <typename CharOutputIterator>
-inline
-void serialize_int16(CharOutputIterator& out, uint16_t val) {
-    internal_impl::serialize_int<uint16_t>(out, val);
-}
-template <typename CharOutputIterator>
-inline
-void serialize_int32(CharOutputIterator& out, uint32_t val) {
-    internal_impl::serialize_int<uint32_t>(out, val);
-}
-template <typename CharOutputIterator>
-inline
-void serialize_int64(CharOutputIterator& out, uint64_t val) {
-    internal_impl::serialize_int<uint64_t>(out, val);
-}
-template <typename CharOutputIterator>
-inline
-void serialize_bool(CharOutputIterator& out, bool val) {
-    serialize_int8(out, val ? 1 : 0);
-}
-template <typename CharOutputIterator>
-GCC6_CONCEPT(requires requires (CharOutputIterator it) {
-    *it++ = 'a';
-})
-inline
-void serialize_string(CharOutputIterator& out, const sstring& s) {
-    for (char c : s) {
-        if (c == '\0') {
-            throw UTFDataFormatException();
-        }
-    }
-    if (s.size() > std::numeric_limits<uint16_t>::max()) {
-        throw UTFDataFormatException();
-    }
-    serialize_int16(out, s.size());
-    out = std::copy(s.begin(), s.end(), out);
-}
-template <typename CharOutputIterator>
-GCC6_CONCEPT(requires requires (CharOutputIterator it) {
-    *it++ = 'a';
-})
-inline
-void serialize_string(CharOutputIterator& out, const char* s) {
-    auto len = strlen(s);
-    if (len > std::numeric_limits<uint16_t>::max()) {
-        throw UTFDataFormatException();
-    }
-    serialize_int16(out, len);
-    out = std::copy_n(s, len, out);
-}
-inline
-size_t serialize_string_size(const sstring& s) {;
-    return serialize_int16_size + s.size();
-}
-template<typename T, typename CharOutputIterator>
-static inline
-void write(CharOutputIterator& out, const T& val) {
-    auto v = net::ntoh(val);
-    out = std::copy_n(reinterpret_cast<char*>(&v), sizeof(v), out);
-}
-namespace utils {
-class UUID {
-private:
-    int64_t most_sig_bits;
-    int64_t least_sig_bits;
-public:
-    UUID() : most_sig_bits(0), least_sig_bits(0) {}
-    UUID(int64_t most_sig_bits, int64_t least_sig_bits)
-        : most_sig_bits(most_sig_bits), least_sig_bits(least_sig_bits) {}
-    explicit UUID(const sstring& uuid_string) : UUID(sstring_view(uuid_string)) { }
-    explicit UUID(const char * s) : UUID(sstring_view(s)) {}
-    explicit UUID(sstring_view uuid_string);
-    int64_t get_most_significant_bits() const {
-        return most_sig_bits;
-    }
-    int64_t get_least_significant_bits() const {
-        return least_sig_bits;
-    }
-    int version() const {
-        return (most_sig_bits >> 12) & 0xf;
-    }
-    bool is_timestamp() const {
-        return version() == 1;
-    }
-    int64_t timestamp() const {
-        assert(is_timestamp());
-        return ((most_sig_bits & 0xFFF) << 48) |
-               (((most_sig_bits >> 16) & 0xFFFF) << 32) |
-               (((uint64_t)most_sig_bits) >> 32);
-    }
-    sstring to_sstring() const ;
-    friend std::ostream& operator<<(std::ostream& out, const UUID& uuid);
-    bool operator==(const UUID& v) const ;
-    bool operator!=(const UUID& v) const ;
-    bool operator<(const UUID& v) const ;
-    bool operator>(const UUID& v) const ;
-    bool operator<=(const UUID& v) const ;
-    bool operator>=(const UUID& v) const ;
-    bytes serialize() const ;
-    static size_t serialized_size() noexcept ;
-    template <typename CharOutputIterator>
-    void serialize(CharOutputIterator& out) const {
-        serialize_int64(out, most_sig_bits);
-        serialize_int64(out, least_sig_bits);
-    }
-};
-UUID make_random_uuid();
-}
-template<>
-struct appending_hash<utils::UUID> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const utils::UUID& id) const {
-        feed_hash(h, id.get_most_significant_bits());
-        feed_hash(h, id.get_least_significant_bits());
-    }
-};
-namespace std {
-template<>
-struct hash<utils::UUID> {
-    size_t operator()(const utils::UUID& id) const {
-        auto hilo = id.get_most_significant_bits()
-                ^ id.get_least_significant_bits();
-        return size_t((hilo >> 32) ^ hilo);
-    }
-};
-}
+ class EOFException { };
+ static constexpr size_t serialize_int8_size = 1;
+ static constexpr size_t serialize_bool_size = 1;
+ static constexpr size_t serialize_int16_size = 2;
+ static constexpr size_t serialize_int32_size = 4;
+ static constexpr size_t serialize_int64_size = 8;
+ namespace internal_impl { template <typename ExplicitIntegerType, typename CharOutputIterator, typename IntegerType> GCC6_CONCEPT(requires std::is_integral<ExplicitIntegerType>::value && std::is_integral<IntegerType>::value && requires (CharOutputIterator it) {     *it++ = 'a'; }) inline void serialize_int(CharOutputIterator& out, IntegerType val) {     ExplicitIntegerType nval = net::hton(ExplicitIntegerType(val));     out = std::copy_n(reinterpret_cast<const char*>(&nval), sizeof(nval), out); } }
+ template <typename CharOutputIterator> inline void serialize_int8(CharOutputIterator& out, uint8_t val) {     internal_impl::serialize_int<uint8_t>(out, val); }
+ template <typename CharOutputIterator> inline void serialize_int16(CharOutputIterator& out, uint16_t val) {     internal_impl::serialize_int<uint16_t>(out, val); }
+ template <typename CharOutputIterator> inline void serialize_int32(CharOutputIterator& out, uint32_t val) {     internal_impl::serialize_int<uint32_t>(out, val); }
+ template <typename CharOutputIterator> inline void serialize_int64(CharOutputIterator& out, uint64_t val) {     internal_impl::serialize_int<uint64_t>(out, val); }
+ template <typename CharOutputIterator> inline void serialize_bool(CharOutputIterator& out, bool val) {     serialize_int8(out, val ? 1 : 0); }
+ template <typename CharOutputIterator> GCC6_CONCEPT(requires requires (CharOutputIterator it) {     *it++ = 'a'; }
+) inline void serialize_string(CharOutputIterator& out, const sstring& s) {     for (char c : s) {         if (c == '\0') {             throw UTFDataFormatException();         }     }     if (s.size() > std::numeric_limits<uint16_t>::max()) {         throw UTFDataFormatException();     }     serialize_int16(out, s.size());     out = std::copy(s.begin(), s.end(), out); }
+ template <typename CharOutputIterator> GCC6_CONCEPT(requires requires (CharOutputIterator it) {     *it++ = 'a'; }
+) inline void serialize_string(CharOutputIterator& out, const char* s) {     auto len = strlen(s);     if (len > std::numeric_limits<uint16_t>::max()) {         throw UTFDataFormatException();     }     serialize_int16(out, len);     out = std::copy_n(s, len, out); }
+ inline size_t serialize_string_size(const sstring& s) {;     return serialize_int16_size + s.size(); }
+ template<typename T, typename CharOutputIterator> static inline void write(CharOutputIterator& out, const T& val) {     auto v = net::ntoh(val);     out = std::copy_n(reinterpret_cast<char*>(&v), sizeof(v), out); }
+ namespace utils { class UUID { private:     int64_t most_sig_bits;     int64_t least_sig_bits; public:     UUID() : most_sig_bits(0), least_sig_bits(0) {}     UUID(int64_t most_sig_bits, int64_t least_sig_bits)         : most_sig_bits(most_sig_bits), least_sig_bits(least_sig_bits) {}     explicit UUID(const sstring& uuid_string) : UUID(sstring_view(uuid_string)) { }     explicit UUID(const char * s) : UUID(sstring_view(s)) {}     explicit UUID(sstring_view uuid_string);     int64_t get_most_significant_bits() const {         return most_sig_bits;     }     int64_t get_least_significant_bits() const {         return least_sig_bits;     }     int version() const {         return (most_sig_bits >> 12) & 0xf;     }     bool is_timestamp() const {         return version() == 1;     }     int64_t timestamp() const {         assert(is_timestamp());         return ((most_sig_bits & 0xFFF) << 48) |                (((most_sig_bits >> 16) & 0xFFFF) << 32) |                (((uint64_t)most_sig_bits) >> 32);     }     sstring to_sstring() const ;     friend std::ostream& operator<<(std::ostream& out, const UUID& uuid);     bool operator==(const UUID& v) const ;     bool operator!=(const UUID& v) const ;     bool operator<(const UUID& v) const ;     bool operator>(const UUID& v) const ;     bool operator<=(const UUID& v) const ;     bool operator>=(const UUID& v) const ;     bytes serialize() const ;     static size_t serialized_size() noexcept ;     template <typename CharOutputIterator>     void serialize(CharOutputIterator& out) const {         serialize_int64(out, most_sig_bits);         serialize_int64(out, least_sig_bits);     } }; UUID make_random_uuid(); }
+ template<> struct appending_hash<utils::UUID> {     template<typename Hasher>     void operator()(Hasher& h, const utils::UUID& id) const {         feed_hash(h, id.get_most_significant_bits());         feed_hash(h, id.get_least_significant_bits());     } };
+ namespace std { template<> struct hash<utils::UUID> {     size_t operator()(const utils::UUID& id) const {         auto hilo = id.get_most_significant_bits()                 ^ id.get_least_significant_bits();         return size_t((hilo >> 32) ^ hilo);     } }; }
 #include <seastar/util/log.hh>
-namespace logging {
-using log_level = seastar::log_level;
-using logger = seastar::logger;
-using registry = seastar::logger_registry;
-inline registry& logger_registry() noexcept {
-    return seastar::global_logger_registry();
-}
-using settings = seastar::logging_settings;
-inline void apply_settings(const settings& s) {
-    seastar::apply_logging_settings(s);
-}
-using seastar::pretty_type_name;
-using seastar::level_name;
-}
-namespace meta {
-template<typename... Ts>
-struct list { };
-namespace internal {
-template<bool... Vs>
-constexpr ssize_t do_find_if_unpacked() {
-    ssize_t i = -1;
-    ssize_t j = 0;
-    (..., ((Vs && i == -1) ? i = j : j++));
-    return i;
-}
-template<ssize_t N>
-struct negative_to_empty : std::integral_constant<size_t, N> { };
-template<>
-struct negative_to_empty<-1> { };
-template<typename T>
-struct is_same_as {
-    template<typename U>
-    using type = std::is_same<T, U>;
-};
-template<template<class> typename Predicate, typename... Ts>
-struct do_find_if : internal::negative_to_empty<internal::do_find_if_unpacked<Predicate<Ts>::value...>()> { };
-template<template<class> typename Predicate, typename... Ts>
-struct do_find_if<Predicate, meta::list<Ts...>> : internal::negative_to_empty<internal::do_find_if_unpacked<Predicate<Ts>::value...>()> { };
-}
-template<template<class> typename Predicate, typename... Ts>
-constexpr size_t find_if = internal::do_find_if<Predicate, Ts...>::value;
-template<typename T, typename... Ts>
-constexpr size_t find = find_if<internal::is_same_as<T>::template type, Ts...>;
-namespace internal {
-template<size_t N, typename... Ts>
-struct do_get_unpacked { };
-template<size_t N, typename T, typename... Ts>
-struct do_get_unpacked<N, T, Ts...> : do_get_unpacked<N - 1, Ts...> { };
-template<typename T, typename... Ts>
-struct do_get_unpacked<0, T, Ts...> {
-    using type = T;
-};
-template<size_t N, typename... Ts>
-struct do_get : do_get_unpacked<N, Ts...> { };
-template<size_t N, typename... Ts>
-struct do_get<N, meta::list<Ts...>> : do_get_unpacked<N, Ts...> { };
-}
-template<size_t N, typename... Ts>
-using get = typename internal::do_get<N, Ts...>::type;
-namespace internal {
-template<size_t N, typename Result, typename... Ts>
-struct do_take_unpacked { };
-template<typename... Ts>
-struct do_take_unpacked<0, list<Ts...>> {
-    using type = list<Ts...>;
-};
-template<typename... Ts, typename U, typename... Us>
-struct do_take_unpacked<0, list<Ts...>, U, Us...> {
-    using type = list<Ts...>;
-};
-template<size_t N, typename... Ts, typename U, typename... Us>
-struct do_take_unpacked<N, list<Ts...>, U, Us...> {
-    using type = typename do_take_unpacked<N - 1, list<Ts..., U>, Us...>::type;
-};
-template<size_t N, typename Result, typename... Ts>
-struct do_take : do_take_unpacked<N, Result, Ts...> { };
-template<size_t N, typename Result, typename... Ts>
-struct do_take<N, Result, meta::list<Ts...>> : do_take_unpacked<N, Result, Ts...> { };
-}
-template<size_t N, typename... Ts>
-using take = typename internal::do_take<N, list<>, Ts...>::type;
-namespace internal {
-template<typename... Ts>
-struct do_for_each_unpacked {
-    template<typename Function>
-    static constexpr void run(Function&& fn) {
-        (..., fn(static_cast<Ts*>(nullptr)));
-    }
-};
-template<typename... Ts>
-struct do_for_each : do_for_each_unpacked<Ts...> { };
-template<typename... Ts>
-struct do_for_each<meta::list<Ts...>> : do_for_each_unpacked<Ts...> { };
-}
-template<typename... Ts, typename Function>
-constexpr void for_each(Function&& fn) {
-    internal::do_for_each<Ts...>::run(std::forward<Function>(fn));
-};
-namespace internal {
-template<typename... Ts>
-struct get_size : std::integral_constant<size_t, sizeof...(Ts)> { };
-template<typename... Ts>
-struct get_size<meta::list<Ts...>> : std::integral_constant<size_t, sizeof...(Ts)> { };
-}
-template<typename... Ts>
-constexpr size_t size = internal::get_size<Ts...>::value;
-template<template <class> typename Predicate, typename... Ts>
-static constexpr bool all_of = std::conjunction_v<Predicate<Ts>...>;
-}
+namespace logging { using log_level = seastar::log_level; using logger = seastar::logger; using registry = seastar::logger_registry; inline registry& logger_registry() noexcept {     return seastar::global_logger_registry(); } using settings = seastar::logging_settings; inline void apply_settings(const settings& s) {     seastar::apply_logging_settings(s); } using seastar::pretty_type_name; using seastar::level_name; }
+ namespace meta { template<typename... Ts> struct list { }; namespace internal { template<bool... Vs> constexpr ssize_t do_find_if_unpacked() {     ssize_t i = -1;     ssize_t j = 0;     (..., ((Vs && i == -1) ? i = j : j++));     return i; } template<ssize_t N> struct negative_to_empty : std::integral_constant<size_t, N> { }; template<> struct negative_to_empty<-1> { }; template<typename T> struct is_same_as {     template<typename U>     using type = std::is_same<T, U>; }; template<template<class> typename Predicate, typename... Ts> struct do_find_if : internal::negative_to_empty<internal::do_find_if_unpacked<Predicate<Ts>::value...>()> { }; template<template<class> typename Predicate, typename... Ts> struct do_find_if<Predicate, meta::list<Ts...>> : internal::negative_to_empty<internal::do_find_if_unpacked<Predicate<Ts>::value...>()> { }; } template<template<class> typename Predicate, typename... Ts> constexpr size_t find_if = internal::do_find_if<Predicate, Ts...>::value; template<typename T, typename... Ts> constexpr size_t find = find_if<internal::is_same_as<T>::template type, Ts...>; namespace internal { template<size_t N, typename... Ts> struct do_get_unpacked { }; template<size_t N, typename T, typename... Ts> struct do_get_unpacked<N, T, Ts...> : do_get_unpacked<N - 1, Ts...> { }; template<typename T, typename... Ts> struct do_get_unpacked<0, T, Ts...> {     using type = T; }; template<size_t N, typename... Ts> struct do_get : do_get_unpacked<N, Ts...> { }; template<size_t N, typename... Ts> struct do_get<N, meta::list<Ts...>> : do_get_unpacked<N, Ts...> { }; } template<size_t N, typename... Ts> using get = typename internal::do_get<N, Ts...>::type; namespace internal { template<size_t N, typename Result, typename... Ts> struct do_take_unpacked { }; template<typename... Ts> struct do_take_unpacked<0, list<Ts...>> {     using type = list<Ts...>; }; template<typename... Ts, typename U, typename... Us> struct do_take_unpacked<0, list<Ts...>, U, Us...> {     using type = list<Ts...>; }; template<size_t N, typename... Ts, typename U, typename... Us> struct do_take_unpacked<N, list<Ts...>, U, Us...> {     using type = typename do_take_unpacked<N - 1, list<Ts..., U>, Us...>::type; }; template<size_t N, typename Result, typename... Ts> struct do_take : do_take_unpacked<N, Result, Ts...> { }; template<size_t N, typename Result, typename... Ts> struct do_take<N, Result, meta::list<Ts...>> : do_take_unpacked<N, Result, Ts...> { }; } template<size_t N, typename... Ts> using take = typename internal::do_take<N, list<>, Ts...>::type; namespace internal { template<typename... Ts> struct do_for_each_unpacked {     template<typename Function>     static constexpr void run(Function&& fn) {         (..., fn(static_cast<Ts*>(nullptr)));     } }; template<typename... Ts> struct do_for_each : do_for_each_unpacked<Ts...> { }; template<typename... Ts> struct do_for_each<meta::list<Ts...>> : do_for_each_unpacked<Ts...> { }; } template<typename... Ts, typename Function> constexpr void for_each(Function&& fn) {     internal::do_for_each<Ts...>::run(std::forward<Function>(fn)); }; namespace internal { template<typename... Ts> struct get_size : std::integral_constant<size_t, sizeof...(Ts)> { }; template<typename... Ts> struct get_size<meta::list<Ts...>> : std::integral_constant<size_t, sizeof...(Ts)> { }; } template<typename... Ts> constexpr size_t size = internal::get_size<Ts...>::value; template<template <class> typename Predicate, typename... Ts> static constexpr bool all_of = std::conjunction_v<Predicate<Ts>...>; }
 #include <boost/range/algorithm/copy.hpp>
 enum class mutable_view { no, yes, };
-GCC6_CONCEPT(
-template<typename T>
-concept bool FragmentRange = requires (T range) {
-    typename T::fragment_type;
-    requires std::is_same_v<typename T::fragment_type, bytes_view>
-        || std::is_same_v<typename T::fragment_type, bytes_mutable_view>;
-    { *range.begin() } -> typename T::fragment_type;
-    { *range.end() } -> typename T::fragment_type;
-    { range.size_bytes() } -> size_t;
-    { range.empty() } -> bool; 
-};
-)
-template<typename T, typename = void>
-struct is_fragment_range : std::false_type { };
-template<typename T>
-struct is_fragment_range<T, std::void_t<typename T::fragment_type>> : std::true_type { };
-template<typename T>
-static constexpr bool is_fragment_range_v = is_fragment_range<T>::value;
-template <typename T>
-GCC6_CONCEPT(
-    requires FragmentRange<T>
-)
-class fragment_range_view {
-    const T* _range;
-public:
-    using fragment_type = typename T::fragment_type;
-    using iterator = typename T::const_iterator;
-    using const_iterator = typename T::const_iterator;
-public:
-    explicit fragment_range_view(const T& range) : _range(&range) { }
-    const_iterator begin() const { return _range->begin(); }
-    const_iterator end() const { return _range->end(); }
-    size_t size_bytes() const { return _range->size_bytes(); }
-    bool empty() const { return _range->empty(); }
-};
+ GCC6_CONCEPT( template<typename T> concept bool FragmentRange = requires (T range) {     typename T::fragment_type;     requires std::is_same_v<typename T::fragment_type, bytes_view>         || std::is_same_v<typename T::fragment_type, bytes_mutable_view>;     { *range.begin() } -> typename T::fragment_type;     { *range.end() } -> typename T::fragment_type;     { range.size_bytes() } -> size_t;     { range.empty() } -> bool;  };
+ ) template<typename T, typename = void> struct is_fragment_range : std::false_type { };
+ template<typename T> struct is_fragment_range<T, std::void_t<typename T::fragment_type>> : std::true_type { };
+ template<typename T> static constexpr bool is_fragment_range_v = is_fragment_range<T>::value;
+ template <typename T> GCC6_CONCEPT(     requires FragmentRange<T> ) class fragment_range_view {     const T* _range; public:     using fragment_type = typename T::fragment_type;     using iterator = typename T::const_iterator;     using const_iterator = typename T::const_iterator; public:     explicit fragment_range_view(const T& range) : _range(&range) { }     const_iterator begin() const { return _range->begin(); }     const_iterator end() const { return _range->end(); }     size_t size_bytes() const { return _range->size_bytes(); }     bool empty() const { return _range->empty(); } };
 #include <map>
 #include <seastar/core/iostream.hh>
 #include <seastar/core/simple-stream.hh>
-/**
- * Utility for writing data into a buffer when its final size is not known up front.
- *
- * Internally the data is written into a chain of chunks allocated on-demand.
- * No resizing of previously written data happens.
- *
- */
-class bytes_ostream {
-public:
-    using size_type = bytes::size_type;
-    using value_type = bytes::value_type;
-    using fragment_type = bytes_view;
-    static constexpr size_type max_chunk_size() { return 128 * 1024; }
-private:
-    static_assert(sizeof(value_type) == 1, "value_type is assumed to be one byte long");
-    struct chunk {
-        std::unique_ptr<chunk> next;
-        ~chunk() {
-            auto p = std::move(next);
-            while (p) {
-                auto p_next = std::move(p->next);
-                p = std::move(p_next);
-            }
-        }
-        size_type offset; 
-        size_type size;
-        value_type data[0];
-        void operator delete(void* ptr) { free(ptr); }
-    };
-    static constexpr size_type default_chunk_size{512};
-private:
-    std::unique_ptr<chunk> _begin;
-    chunk* _current;
-    size_type _size;
-    size_type _initial_chunk_size = default_chunk_size;
-public:
-    class fragment_iterator : public std::iterator<std::input_iterator_tag, bytes_view> {
-        chunk* _current = nullptr;
-    public:
-        fragment_iterator() = default;
-        fragment_iterator(chunk* current) : _current(current) {}
-        fragment_iterator(const fragment_iterator&) = default;
-        fragment_iterator& operator=(const fragment_iterator&) = default;
-        bytes_view operator*() const ;
-        bytes_view operator->() const ;
-        fragment_iterator& operator++() ;
-        fragment_iterator operator++(int) ;
-        bool operator==(const fragment_iterator& other) const ;
-        bool operator!=(const fragment_iterator& other) const ;
-    };
-    using const_iterator = fragment_iterator;
-    class output_iterator {
-    public:
-        using iterator_category = std::output_iterator_tag;
-        using difference_type = std::ptrdiff_t;
-        using value_type = bytes_ostream::value_type;
-        using pointer = bytes_ostream::value_type*;
-        using reference = bytes_ostream::value_type&;
-        friend class bytes_ostream;
-    private:
-        bytes_ostream* _ostream = nullptr;
-    private:
-        explicit output_iterator(bytes_ostream& os)  ;
-    public:
-        reference operator*() const ;
-        output_iterator& operator++() ;
-        output_iterator operator++(int) ;
-    };
-private:
-     size_type current_space_left() const ;
-    size_type next_alloc_size(size_t data_size) const ;
-    [[gnu::always_inline]]
-    value_type* alloc(size_type size) {
-        if (__builtin_expect(size <= current_space_left(), true)) {
-            auto ret = _current->data + _current->offset;
-            _current->offset += size;
-            _size += size;
-            return ret;
-        } else {
-            return alloc_new(size);
-        }
-    }
-    [[gnu::noinline]]
-    value_type* alloc_new(size_type size) {
-            auto alloc_size = next_alloc_size(size);
-            auto space = malloc(alloc_size);
-            if (!space) {
-                throw std::bad_alloc();
-            }
-            auto new_chunk = std::unique_ptr<chunk>(new (space) chunk());
-            new_chunk->offset = size;
-            new_chunk->size = alloc_size - sizeof(chunk);
-            if (_current) {
-                _current->next = std::move(new_chunk);
-                _current = _current->next.get();
-            } else {
-                _begin = std::move(new_chunk);
-                _current = _begin.get();
-            }
-            _size += size;
-            return _current->data;
-    }
-public:
-    explicit bytes_ostream(size_t initial_chunk_size) noexcept
-        : _begin()
-        , _current(nullptr)
-        , _size(0)
-        , _initial_chunk_size(initial_chunk_size)
-    { }
-    bytes_ostream() noexcept : bytes_ostream(default_chunk_size) {}
-    bytes_ostream(bytes_ostream&& o) noexcept
-        : _begin(std::move(o._begin))
-        , _current(o._current)
-        , _size(o._size)
-        , _initial_chunk_size(o._initial_chunk_size)
-    {
-        o._current = nullptr;
-        o._size = 0;
-    }
-    bytes_ostream(const bytes_ostream& o)
-        : _begin()
-        , _current(nullptr)
-        , _size(0)
-        , _initial_chunk_size(o._initial_chunk_size)
-    {
-        append(o);
-    }
-    bytes_ostream& operator=(const bytes_ostream& o) {
-        if (this != &o) {
-            auto x = bytes_ostream(o);
-            *this = std::move(x);
-        }
-        return *this;
-    }
-    bytes_ostream& operator=(bytes_ostream&& o) noexcept {
-        if (this != &o) {
-            this->~bytes_ostream();
-            new (this) bytes_ostream(std::move(o));
-        }
-        return *this;
-    }
-    template <typename T>
-    struct place_holder {
-        value_type* ptr;
-        seastar::simple_output_stream get_stream() {
-            return seastar::simple_output_stream(reinterpret_cast<char*>(ptr), sizeof(T));
-        }
-    };
-    template <typename T>
-    inline
-    std::enable_if_t<std::is_fundamental<T>::value, place_holder<T>>
-    write_place_holder() {
-        return place_holder<T>{alloc(sizeof(T))};
-    }
-    [[gnu::always_inline]]
-    value_type* write_place_holder(size_type size) {
-        return alloc(size);
-    }
-    [[gnu::always_inline]]
-    inline void write(bytes_view v) {
-        if (v.empty()) {
-            return;
-        }
-        auto this_size = std::min(v.size(), size_t(current_space_left()));
-        if (__builtin_expect(this_size, true)) {
-            memcpy(_current->data + _current->offset, v.begin(), this_size);
-            _current->offset += this_size;
-            _size += this_size;
-            v.remove_prefix(this_size);
-        }
-        while (!v.empty()) {
-            auto this_size = std::min(v.size(), size_t(max_chunk_size()));
-            std::copy_n(v.begin(), this_size, alloc_new(this_size));
-            v.remove_prefix(this_size);
-        }
-    }
-    [[gnu::always_inline]]
-    void write(const char* ptr, size_t size) {
-        write(bytes_view(reinterpret_cast<const signed char*>(ptr), size));
-    }
-    bool is_linearized() const {
-        return !_begin || !_begin->next;
-    }
-    bytes_view view() const {
-        assert(is_linearized());
-        if (!_current) {
-            return bytes_view();
-        }
-        return bytes_view(_current->data, _size);
-    }
-    bytes_view linearize() {
-        if (is_linearized()) {
-            return view();
-        }
-        auto space = malloc(_size + sizeof(chunk));
-        if (!space) {
-            throw std::bad_alloc();
-        }
-        auto new_chunk = std::unique_ptr<chunk>(new (space) chunk());
-        new_chunk->offset = _size;
-        new_chunk->size = _size;
-        auto dst = new_chunk->data;
-        auto r = _begin.get();
-        while (r) {
-            auto next = r->next.get();
-            dst = std::copy_n(r->data, r->offset, dst);
-            r = next;
-        }
-        _current = new_chunk.get();
-        _begin = std::move(new_chunk);
-        return bytes_view(_current->data, _size);
-    }
-    size_type size() const {
-        return _size;
-    }
-    size_type size_bytes() const {
-        return _size;
-    }
-    bool empty() const {
-        return _size == 0;
-    }
-    void reserve(size_t size) {
-    }
-    void append(const bytes_ostream& o) {
-        for (auto&& bv : o.fragments()) {
-            write(bv);
-        }
-    }
-    void remove_suffix(size_t n) {
-        _size -= n;
-        auto left = _size;
-        auto current = _begin.get();
-        while (current) {
-            if (current->offset >= left) {
-                current->offset = left;
-                _current = current;
-                current->next.reset();
-                return;
-            }
-            left -= current->offset;
-            current = current->next.get();
-        }
-    }
-    fragment_iterator begin() const { return { _begin.get() }; }
-    fragment_iterator end() const { return { nullptr }; }
-    output_iterator write_begin() { return output_iterator(*this); }
-    boost::iterator_range<fragment_iterator> fragments() const {
-        return { begin(), end() };
-    }
-    struct position {
-        chunk* _chunk;
-        size_type _offset;
-    };
-    position pos() const ;
-    size_type written_since(position pos) ;
-    void retract(position pos) ;
-    void reduce_chunk_count() ;
-    bool operator==(const bytes_ostream& other) const ;
-    bool operator!=(const bytes_ostream& other) const {
-        return !(*this == other);
-    }
-    void clear() {
-        if (_begin) {
-            _begin->offset = 0;
-            _size = 0;
-            _current = _begin.get();
-            _begin->next.reset();
-        }
-    }
-};
-class fragmented_temporary_buffer {
-    using vector_type = std::vector<seastar::temporary_buffer<char>>;
-public:
-    static constexpr size_t default_fragment_size = 128 * 1024;
-    class view;
-    class istream;
-    class reader;
-    using ostream = seastar::memory_output_stream<vector_type::iterator>;
-    fragmented_temporary_buffer() = default;
-    fragmented_temporary_buffer(std::vector<seastar::temporary_buffer<char>> fragments, size_t size_bytes) noexcept;
-    explicit operator view() const noexcept;
-    istream get_istream() const noexcept;
-    ostream get_ostream() noexcept ;
-    size_t size_bytes() const;
-    bool empty() const;
-    void remove_prefix(size_t n) noexcept;
-    void remove_suffix(size_t n) noexcept;
-};
-namespace fragmented_temporary_buffer_concepts {
-GCC6_CONCEPT(
-template<typename T>
-concept bool ExceptionThrower = requires(T obj, size_t n) {
-    obj.throw_out_of_range(n, n);
-};
-)
-}
-class fragmented_temporary_buffer::reader {
-    std::vector<temporary_buffer<char>> _fragments;
-    size_t _left = 0;
-public:
-    future<fragmented_temporary_buffer> read_exactly(input_stream<char>& in, size_t length);
-};
+/**  * Utility for writing data into a buffer when its final size is not known up front.  *  * Internally the data is written into a chain of chunks allocated on-demand.  * No resizing of previously written data happens.  *  */
+class bytes_ostream { public:     using size_type = bytes::size_type;     using value_type = bytes::value_type;     using fragment_type = bytes_view;     static constexpr size_type max_chunk_size() { return 128 * 1024; } private:     static_assert(sizeof(value_type) == 1, "value_type is assumed to be one byte long");     struct chunk {         std::unique_ptr<chunk> next;         ~chunk() {             auto p = std::move(next);             while (p) {                 auto p_next = std::move(p->next);                 p = std::move(p_next);             }         }         size_type offset;          size_type size;         value_type data[0];         void operator delete(void* ptr) { free(ptr); }     };     static constexpr size_type default_chunk_size{512}; private:     std::unique_ptr<chunk> _begin;     chunk* _current;     size_type _size;     size_type _initial_chunk_size = default_chunk_size; public:     class fragment_iterator : public std::iterator<std::input_iterator_tag, bytes_view> {         chunk* _current = nullptr;     public:         fragment_iterator() = default;         fragment_iterator(chunk* current) : _current(current) {}         fragment_iterator(const fragment_iterator&) = default;         fragment_iterator& operator=(const fragment_iterator&) = default;         bytes_view operator*() const ;         bytes_view operator->() const ;         fragment_iterator& operator++() ;         fragment_iterator operator++(int) ;         bool operator==(const fragment_iterator& other) const ;         bool operator!=(const fragment_iterator& other) const ;     };     using const_iterator = fragment_iterator;     class output_iterator {     public:         using iterator_category = std::output_iterator_tag;         using difference_type = std::ptrdiff_t;         using value_type = bytes_ostream::value_type;         using pointer = bytes_ostream::value_type*;         using reference = bytes_ostream::value_type&;         friend class bytes_ostream;     private:         bytes_ostream* _ostream = nullptr;     private:         explicit output_iterator(bytes_ostream& os)  ;     public:         reference operator*() const ;         output_iterator& operator++() ;         output_iterator operator++(int) ;     }; private:      size_type current_space_left() const ;     size_type next_alloc_size(size_t data_size) const ;     [[gnu::always_inline]]     value_type* alloc(size_type size) {         if (__builtin_expect(size <= current_space_left(), true)) {             auto ret = _current->data + _current->offset;             _current->offset += size;             _size += size;             return ret;         } else {             return alloc_new(size);         }     }     [[gnu::noinline]]     value_type* alloc_new(size_type size) {             auto alloc_size = next_alloc_size(size);             auto space = malloc(alloc_size);             if (!space) {                 throw std::bad_alloc();             }             auto new_chunk = std::unique_ptr<chunk>(new (space) chunk());             new_chunk->offset = size;             new_chunk->size = alloc_size - sizeof(chunk);             if (_current) {                 _current->next = std::move(new_chunk);                 _current = _current->next.get();             } else {                 _begin = std::move(new_chunk);                 _current = _begin.get();             }             _size += size;             return _current->data;     } public:     explicit bytes_ostream(size_t initial_chunk_size) noexcept         : _begin()         , _current(nullptr)         , _size(0)         , _initial_chunk_size(initial_chunk_size)     { }     bytes_ostream() noexcept : bytes_ostream(default_chunk_size) {}     bytes_ostream(bytes_ostream&& o) noexcept         : _begin(std::move(o._begin))         , _current(o._current)         , _size(o._size)         , _initial_chunk_size(o._initial_chunk_size)     {         o._current = nullptr;         o._size = 0;     }     bytes_ostream(const bytes_ostream& o)         : _begin()         , _current(nullptr)         , _size(0)         , _initial_chunk_size(o._initial_chunk_size)     {         append(o);     }     bytes_ostream& operator=(const bytes_ostream& o) {         if (this != &o) {             auto x = bytes_ostream(o);             *this = std::move(x);         }         return *this;     }     bytes_ostream& operator=(bytes_ostream&& o) noexcept {         if (this != &o) {             this->~bytes_ostream();             new (this) bytes_ostream(std::move(o));         }         return *this;     }     template <typename T>     struct place_holder {         value_type* ptr;         seastar::simple_output_stream get_stream() {             return seastar::simple_output_stream(reinterpret_cast<char*>(ptr), sizeof(T));         }     };     template <typename T>     inline     std::enable_if_t<std::is_fundamental<T>::value, place_holder<T>>     write_place_holder() {         return place_holder<T>{alloc(sizeof(T))};     }     [[gnu::always_inline]]     value_type* write_place_holder(size_type size) {         return alloc(size);     }     [[gnu::always_inline]]     inline void write(bytes_view v) {         if (v.empty()) {             return;         }         auto this_size = std::min(v.size(), size_t(current_space_left()));         if (__builtin_expect(this_size, true)) {             memcpy(_current->data + _current->offset, v.begin(), this_size);             _current->offset += this_size;             _size += this_size;             v.remove_prefix(this_size);         }         while (!v.empty()) {             auto this_size = std::min(v.size(), size_t(max_chunk_size()));             std::copy_n(v.begin(), this_size, alloc_new(this_size));             v.remove_prefix(this_size);         }     }     [[gnu::always_inline]]     void write(const char* ptr, size_t size) {         write(bytes_view(reinterpret_cast<const signed char*>(ptr), size));     }     bool is_linearized() const {         return !_begin || !_begin->next;     }     bytes_view view() const {         assert(is_linearized());         if (!_current) {             return bytes_view();         }         return bytes_view(_current->data, _size);     }     bytes_view linearize() {         if (is_linearized()) {             return view();         }         auto space = malloc(_size + sizeof(chunk));         if (!space) {             throw std::bad_alloc();         }         auto new_chunk = std::unique_ptr<chunk>(new (space) chunk());         new_chunk->offset = _size;         new_chunk->size = _size;         auto dst = new_chunk->data;         auto r = _begin.get();         while (r) {             auto next = r->next.get();             dst = std::copy_n(r->data, r->offset, dst);             r = next;         }         _current = new_chunk.get();         _begin = std::move(new_chunk);         return bytes_view(_current->data, _size);     }     size_type size() const {         return _size;     }     size_type size_bytes() const {         return _size;     }     bool empty() const {         return _size == 0;     }     void reserve(size_t size) {     }     void append(const bytes_ostream& o) {         for (auto&& bv : o.fragments()) {             write(bv);         }     }     void remove_suffix(size_t n) {         _size -= n;         auto left = _size;         auto current = _begin.get();         while (current) {             if (current->offset >= left) {                 current->offset = left;                 _current = current;                 current->next.reset();                 return;             }             left -= current->offset;             current = current->next.get();         }     }     fragment_iterator begin() const { return { _begin.get() }; }     fragment_iterator end() const { return { nullptr }; }     output_iterator write_begin() { return output_iterator(*this); }     boost::iterator_range<fragment_iterator> fragments() const {         return { begin(), end() };     }     struct position {         chunk* _chunk;         size_type _offset;     };     position pos() const ;     size_type written_since(position pos) ;     void retract(position pos) ;     void reduce_chunk_count() ;     bool operator==(const bytes_ostream& other) const ;     bool operator!=(const bytes_ostream& other) const {         return !(*this == other);     }     void clear() {         if (_begin) {             _begin->offset = 0;             _size = 0;             _current = _begin.get();             _begin->next.reset();         }     } };
+ class fragmented_temporary_buffer {     using vector_type = std::vector<seastar::temporary_buffer<char>>; public:     static constexpr size_t default_fragment_size = 128 * 1024;     class view;     class istream;     class reader;     using ostream = seastar::memory_output_stream<vector_type::iterator>;     fragmented_temporary_buffer() = default;                                         };
+ namespace fragmented_temporary_buffer_concepts { GCC6_CONCEPT( template<typename T> concept bool ExceptionThrower = requires(T obj, size_t n) {     obj.throw_out_of_range(n, n); }; ) }
+ class fragmented_temporary_buffer::reader {     std::vector<temporary_buffer<char>> _fragments;     size_t _left = 0; public:      };
 #include <list>
-namespace ser {
-template<typename FragmentIterator>
-class buffer_view {
-public:
-    using fragment_type = bytes_view;
-    class iterator {
-    public:
-        using iterator_category = std::input_iterator_tag;
-        using value_type = bytes_view;
-        using pointer = const bytes_view*;
-        using reference = const bytes_view&;
-        using difference_type = std::ptrdiff_t;
-        iterator() = default;
-        iterator(bytes_view current, size_t left, FragmentIterator next);
-        bytes_view operator*() const;
-        
-        
-        
-        
-        
-    };
-    using const_iterator = iterator;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-};
-}
-/*
- * Import the auto generated forward decleration code
- */
+namespace ser { template<typename FragmentIterator> class buffer_view { public:     using fragment_type = bytes_view;     class iterator {     public:         using iterator_category = std::input_iterator_tag;         using value_type = bytes_view;         using pointer = const bytes_view*;         using reference = const bytes_view&;         using difference_type = std::ptrdiff_t;                                                                             };     using const_iterator = iterator;                                              }; }
+ /*  * Import the auto generated forward decleration code  */
 class abstract_type;
-class collection_type_impl;
-template<mutable_view is_mutable>
-class basic_atomic_cell_view {
-protected:
-    friend class atomic_cell;
-public:
-    using pointer_type = std::conditional_t<is_mutable == mutable_view::no, const uint8_t*, uint8_t*>;
-protected:
-    friend class atomic_cell_or_collection;
-public:
-    
-    
-    
-    
-    bool is_live(tombstone t, bool is_counter) const;
-    bool is_live(tombstone t, gc_clock::time_point now, bool is_counter) const;
-    bool is_live_and_has_ttl() const;
-    bool is_dead(gc_clock::time_point now) const;
-    bool is_covered_by(tombstone t, bool is_counter) const;
-    api::timestamp_type timestamp() const;
-    void set_timestamp(api::timestamp_type ts);
-    size_t value_size() const;
-    bool is_value_fragmented() const;
-    int64_t counter_update_value() const;
-    gc_clock::time_point deletion_time() const;
-    gc_clock::time_point expiry() const;
-    gc_clock::duration ttl() const;
-    bool has_expired(gc_clock::time_point now) const;
-    bytes_view serialize() const;
-};
-class atomic_cell_view final : public basic_atomic_cell_view<mutable_view::no> {
-    friend class atomic_cell;
-public:
-    friend std::ostream& operator<<(std::ostream& os, const atomic_cell_view& acv);
-    class printer {
-        const abstract_type& _type;
-        const atomic_cell_view& _cell;
-    public:
-        printer(const abstract_type& type, const atomic_cell_view& cell) : _type(type), _cell(cell) {}
-        
-    };
-};
-class atomic_cell_mutable_view final : public basic_atomic_cell_view<mutable_view::yes> {
-public:
-    friend class atomic_cell;
-};
-using atomic_cell_ref = atomic_cell_mutable_view;
-class atomic_cell final : public basic_atomic_cell_view<mutable_view::yes> {
-public:
-    class collection_member_tag;
-    using collection_member = bool_class<collection_member_tag>;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    static atomic_cell make_live_uninitialized(const abstract_type& type, api::timestamp_type timestamp, size_t size);
-    friend class atomic_cell_or_collection;
-    friend std::ostream& operator<<(std::ostream& os, const atomic_cell& ac);
-    class printer : atomic_cell_view::printer {
-    public:
-        printer(const abstract_type& type, const atomic_cell_view& cell);
-        friend std::ostream& operator<<(std::ostream& os, const printer& acvp);
-    };
-};
-class column_definition;
-int compare_atomic_cell_for_merge(atomic_cell_view left, atomic_cell_view right);
-void merge_column(const abstract_type& def,
-        atomic_cell_or_collection& old,
-        const atomic_cell_or_collection& neww);
-using cql_protocol_version_type = uint8_t;
-class cql_serialization_format {
-    cql_protocol_version_type _version;
-public:
-    static constexpr cql_protocol_version_type latest_version = 4;
-    explicit cql_serialization_format(cql_protocol_version_type version) : _version(version) {}
-    static cql_serialization_format latest() { return cql_serialization_format{latest_version}; }
-    static cql_serialization_format internal() { return latest(); }
-    bool using_32_bits_for_collections() const { return _version >= 3; }
-    bool operator==(cql_serialization_format x) const { return _version == x._version; }
-    bool operator!=(cql_serialization_format x) const { return !operator==(x); }
-    cql_protocol_version_type protocol_version() const { return _version; }
-    friend std::ostream& operator<<(std::ostream& out, const cql_serialization_format& sf) {
-        return out << static_cast<int>(sf._version);
-    }
-    bool collection_format_unchanged(cql_serialization_format other = cql_serialization_format::latest()) const {
-        return using_32_bits_for_collections() == other.using_32_bits_for_collections();
-    }
-};
+ class collection_type_impl;
+ template<mutable_view is_mutable> class basic_atomic_cell_view { protected:     friend class atomic_cell; public:     using pointer_type = std::conditional_t<is_mutable == mutable_view::no, const uint8_t*, uint8_t*>; protected:     friend class atomic_cell_or_collection; public:                                                                 bool is_value_fragmented() const;     int64_t counter_update_value() const;     gc_clock::time_point deletion_time() const;     gc_clock::time_point expiry() const;     gc_clock::duration ttl() const;     bool has_expired(gc_clock::time_point now) const;     bytes_view serialize() const; };
+ class atomic_cell_view final : public basic_atomic_cell_view<mutable_view::no> {     friend class atomic_cell; public:     friend std::ostream& operator<<(std::ostream& os, const atomic_cell_view& acv);     class printer {         const abstract_type& _type;         const atomic_cell_view& _cell;     public:         printer(const abstract_type& type, const atomic_cell_view& cell) : _type(type), _cell(cell) {}              }; };
+ class atomic_cell_mutable_view final : public basic_atomic_cell_view<mutable_view::yes> { public:     friend class atomic_cell; };
+ using atomic_cell_ref = atomic_cell_mutable_view;
+ class atomic_cell final : public basic_atomic_cell_view<mutable_view::yes> { public:     class collection_member_tag;     using collection_member = bool_class<collection_member_tag>;                                                                                          static atomic_cell make_live_uninitialized(const abstract_type& type, api::timestamp_type timestamp, size_t size);     friend class atomic_cell_or_collection;     friend std::ostream& operator<<(std::ostream& os, const atomic_cell& ac);     class printer : atomic_cell_view::printer {     public:         printer(const abstract_type& type, const atomic_cell_view& cell);         friend std::ostream& operator<<(std::ostream& os, const printer& acvp);     }; };
+ class column_definition;
+ int compare_atomic_cell_for_merge(atomic_cell_view left, atomic_cell_view right);
+ void merge_column(const abstract_type& def,         atomic_cell_or_collection& old,         const atomic_cell_or_collection& neww);
+ using cql_protocol_version_type = uint8_t;
+ class cql_serialization_format {     cql_protocol_version_type _version; public:     static constexpr cql_protocol_version_type latest_version = 4;     explicit cql_serialization_format(cql_protocol_version_type version) : _version(version) {}     static cql_serialization_format latest() { return cql_serialization_format{latest_version}; }     static cql_serialization_format internal() { return latest(); }     bool using_32_bits_for_collections() const { return _version >= 3; }     bool operator==(cql_serialization_format x) const { return _version == x._version; }     bool operator!=(cql_serialization_format x) const { return !operator==(x); }     cql_protocol_version_type protocol_version() const { return _version; }     friend std::ostream& operator<<(std::ostream& out, const cql_serialization_format& sf) {         return out << static_cast<int>(sf._version);     }     bool collection_format_unchanged(cql_serialization_format other = cql_serialization_format::latest()) const {         return using_32_bits_for_collections() == other.using_32_bits_for_collections();     } };
 #include <unordered_set>
 #include <set>
-namespace utils {
-template<typename T, size_t N>
-class small_vector {
-    static_assert(N > 0);
-    static_assert(std::is_nothrow_move_constructible_v<T>);
-    static_assert(std::is_nothrow_move_assignable_v<T>);
-    static_assert(std::is_nothrow_destructible_v<T>);
-private:
-    T* _begin;
-    T* _end;
-    T* _capacity_end;
-    union internal {
-        internal() { }
-        ~internal() { }
-        T storage[N];
-    };
-    internal _internal;
-private:
-    bool uses_internal_storage() const noexcept {
-        return _begin == _internal.storage;
-    }
-    [[gnu::cold]] [[gnu::noinline]]
-    void expand(size_t new_capacity) {
-        auto ptr = static_cast<T*>(::aligned_alloc(alignof(T), new_capacity * sizeof(T)));
-        if (!ptr) {
-            throw std::bad_alloc();
-        }
-        auto n_end = std::uninitialized_move(begin(), end(), ptr);
-        std::destroy(begin(), end());
-        if (!uses_internal_storage()) {
-            std::free(_begin);
-        }
-        _begin = ptr;
-        _end = n_end;
-        _capacity_end = ptr + new_capacity;
-    }
-    [[gnu::cold]] [[gnu::noinline]]
-    void slow_copy_assignment(const small_vector& other) {
-        auto ptr = static_cast<T*>(::aligned_alloc(alignof(T), other.size() * sizeof(T)));
-        if (!ptr) {
-            throw std::bad_alloc();
-        }
-        auto n_end = ptr;
-        try {
-            n_end = std::uninitialized_copy(other.begin(), other.end(), n_end);
-        } catch (...) {
-            std::free(ptr);
-            throw;
-        }
-        std::destroy(begin(), end());
-        if (!uses_internal_storage()) {
-            std::free(_begin);
-        }
-        _begin = ptr;
-        _end = n_end;
-        _capacity_end = n_end;
-    }
-    void reserve_at_least(size_t n) {
-        if (__builtin_expect(_begin + n > _capacity_end, false)) {
-            expand(std::max(n, capacity() * 2));
-        }
-    }
-    [[noreturn]] [[gnu::cold]] [[gnu::noinline]]
-    void throw_out_of_range() {
-        throw std::out_of_range("out of range small vector access");
-    }
-public:
-    using value_type = T;
-    using pointer = T*;
-    using const_pointer = const T*;
-    using reference = T&;
-    using const_reference = const T&;
-    using iterator = T*;
-    using const_iterator = const T*;
-    using reverse_iterator = std::reverse_iterator<iterator>;
-    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
-    small_vector() noexcept
-        : _begin(_internal.storage)
-        , _end(_begin)
-        , _capacity_end(_begin + N)
-    { }
-    template<typename InputIterator>
-    small_vector(InputIterator first, InputIterator last) : small_vector() {
-        if constexpr (std::is_base_of_v<std::forward_iterator_tag, typename std::iterator_traits<InputIterator>::iterator_category>) {
-            reserve(std::distance(first, last));
-            _end = std::uninitialized_copy(first, last, _end);
-        } else {
-            std::copy(first, last, std::back_inserter(*this));
-        }
-    }
-    small_vector(std::initializer_list<T> list) : small_vector(list.begin(), list.end()) { }
-    small_vector(small_vector&& other) noexcept {
-        if (other.uses_internal_storage()) {
-            _begin = _internal.storage;
-            _capacity_end = _begin + N;
-            if constexpr (std::is_trivially_copyable_v<T>) {
-                std::memcpy(_internal.storage, other._internal.storage, N * sizeof(T));
-                _end = _begin + other.size();
-            } else {
-                _end = _begin;
-                for (auto& e : other) {
-                    new (_end++) T(std::move(e));
-                    e.~T();
-                }
-            }
-            other._end = other._internal.storage;
-        } else {
-            _begin = std::exchange(other._begin, other._internal.storage);
-            _end = std::exchange(other._end, other._internal.storage);
-            _capacity_end = std::exchange(other._capacity_end, other._internal.storage + N);
-        }
-    }
-    small_vector(const small_vector& other) noexcept : small_vector() {
-        reserve(other.size());
-        _end = std::uninitialized_copy(other.begin(), other.end(), _end);
-    }
-    small_vector& operator=(small_vector&& other) noexcept {
-        clear();
-        if (other.uses_internal_storage()) {
-            if (__builtin_expect(!uses_internal_storage(), false)) {
-                std::free(_begin);
-                _begin = _internal.storage;
-            }
-            _capacity_end = _begin + N;
-            if constexpr (std::is_trivially_copyable_v<T>) {
-                std::memcpy(_internal.storage, other._internal.storage, N * sizeof(T));
-                _end = _begin + other.size();
-            } else {
-                _end = _begin;
-                for (auto& e : other) {
-                    new (_end++) T(std::move(e));
-                    e.~T();
-                }
-            }
-            other._end = other._internal.storage;
-        } else {
-            if (__builtin_expect(!uses_internal_storage(), false)) {
-                std::free(_begin);
-            }
-            _begin = std::exchange(other._begin, other._internal.storage);
-            _end = std::exchange(other._end, other._internal.storage);
-            _capacity_end = std::exchange(other._capacity_end, other._internal.storage + N);
-        }
-        return *this;
-    }
-    small_vector& operator=(const small_vector& other) {
-        if constexpr (std::is_nothrow_copy_constructible_v<T>) {
-            if (capacity() >= other.size()) {
-                clear();
-                _end = std::uninitialized_copy(other.begin(), other.end(), _end);
-                return *this;
-            }
-        }
-        slow_copy_assignment(other);
-        return *this;
-    }
-    ~small_vector() {
-        clear();
-        if (__builtin_expect(!uses_internal_storage(), false)) {
-            std::free(_begin);
-        }
-    }
-    void reserve(size_t n) {
-        if (__builtin_expect(_begin + n > _capacity_end, false)) {
-            expand(n);
-        }
-    }
-    void clear() noexcept {
-        std::destroy(_begin, _end);
-        _end = _begin;
-    }
-    iterator begin() noexcept { return _begin; }
-    const_iterator begin() const noexcept { return _begin; }
-    const_iterator cbegin() const noexcept { return _begin; }
-    iterator end() noexcept { return _end; }
-    const_iterator end() const noexcept { return _end; }
-    const_iterator cend() const noexcept { return _end; }
-    reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
-    const_reverse_iterator rbegin() const noexcept { return const_reverse_iterator(end()); }
-    const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(end()); }
-    reverse_iterator rend() noexcept { return reverse_iterator(begin()); }
-    const_reverse_iterator rend() const noexcept { return const_reverse_iterator(begin()); }
-    const_reverse_iterator crend() const noexcept { return const_reverse_iterator(begin()); }
-    T* data() noexcept { return _begin; }
-    const T* data() const noexcept { return _begin; }
-    T& front() noexcept { return *begin(); }
-    const T& front() const noexcept { return *begin(); }
-    T& back() noexcept { return end()[-1]; }
-    const T& back() const noexcept { return end()[-1]; }
-    T& operator[](size_t idx) noexcept { return data()[idx]; }
-    const T& operator[](size_t idx) const noexcept { return data()[idx]; }
-    T& at(size_t idx) {
-        if (__builtin_expect(idx >= size(), false)) {
-            throw_out_of_range();
-        }
-        return operator[](idx);
-    }
-    const T& at(size_t idx) const {
-        if (__builtin_expect(idx >= size(), false)) {
-            throw_out_of_range();
-        }
-        return operator[](idx);
-    }
-    bool empty() const noexcept { return _begin == _end; }
-    size_t size() const noexcept { return _end - _begin; }
-    size_t capacity() const noexcept { return _capacity_end - _begin; }
-    template<typename... Args>
-    T& emplace_back(Args&&... args) {
-        if (__builtin_expect(_end == _capacity_end, false)) {
-            expand(std::max<size_t>(capacity() * 2, 1));
-        }
-        auto& ref = *new (_end) T(std::forward<Args>(args)...);
-        ++_end;
-        return ref;
-    }
-    T& push_back(const T& value) {
-        return emplace_back(value);
-    }
-    T& push_back(T&& value) {
-        return emplace_back(std::move(value));
-    }
-    template<typename InputIterator>
-    iterator insert(const_iterator cpos, InputIterator first, InputIterator last) {
-        if constexpr (std::is_base_of_v<std::forward_iterator_tag, typename std::iterator_traits<InputIterator>::iterator_category>) {
-            if (first == last) {
-                return const_cast<iterator>(cpos);
-            }
-            auto idx = cpos - _begin;
-            auto new_count = std::distance(first, last);
-            reserve_at_least(size() + new_count);
-            auto pos = _begin + idx;
-            auto after = std::distance(pos, end());
-            if (__builtin_expect(pos == end(), true)) {
-                _end = std::uninitialized_copy(first, last, end());
-                return pos;
-            } else if (after > new_count) {
-                std::uninitialized_move(end() - new_count, end(), end());
-                std::move_backward(pos, end() - new_count, end());
-                try {
-                    std::copy(first, last, pos);
-                } catch (...) {
-                    std::move(pos + new_count, end() + new_count, pos);
-                    std::destroy(end(), end() + new_count);
-                    throw;
-                }
-            } else {
-                std::uninitialized_move(pos, end(), pos + new_count);
-                auto mid = std::next(first, after);
-                try {
-                    std::uninitialized_copy(mid, last, end());
-                    try {
-                        std::copy(first, mid, pos);
-                    } catch (...) {
-                        std::destroy(end(), pos + new_count);
-                        throw;
-                    }
-                } catch (...) {
-                    std::move(pos + new_count, end() + new_count, pos);
-                    std::destroy(pos + new_count, end() + new_count);
-                    throw;
-                }
-            }
-            _end += new_count;
-            return pos;
-        } else {
-            auto start = cpos - _begin;
-            auto idx = start;
-            while (first != last) {
-                try {
-                    insert(begin() + idx, *first);
-                    ++first;
-                    ++idx;
-                } catch (...) {
-                    erase(begin() + start, begin() + idx);
-                    throw;
-                }
-            }
-            return begin() + idx;
-        }
-    }
-    template<typename... Args>
-    iterator emplace(const_iterator cpos, Args&&... args) {
-        auto idx = cpos - _begin;
-        reserve_at_least(size() + 1);
-        auto pos = _begin + idx;
-        if (pos != _end) {
-            new (_end) T(std::move(_end[-1]));
-            std::move_backward(pos, _end - 1, _end);
-            pos->~T();
-        }
-        try {
-            new (pos) T(std::forward<Args>(args)...);
-        } catch (...) {
-            if (pos != _end) {
-                new (pos) T(std::move(pos[1]));
-                std::move(pos + 2, _end + 1, pos + 1);
-                _end->~T();
-            }
-            throw;
-        }
-        _end++;
-        return pos;
-    }
-    iterator insert(const_iterator cpos, const T& obj) {
-        return emplace(cpos, obj);
-    }
-    iterator insert(const_iterator cpos, T&& obj) {
-        return emplace(cpos, std::move(obj));
-    }
-    void resize(size_t n) {
-        if (n < size()) {
-            erase(end() - (size() - n), end());
-        } else if (n > size()) {
-            reserve_at_least(n);
-            _end = std::uninitialized_value_construct_n(_end, n - size());
-        }
-    }
-    void resize(size_t n, const T& value) {
-        if (n < size()) {
-            erase(end() - (size() - n), end());
-        } else if (n > size()) {
-            reserve_at_least(n);
-            auto nend = _begin + n;
-            std::uninitialized_fill(_end, nend, value);
-            _end = nend;
-        }
-    }
-    void pop_back() noexcept {
-        (--_end)->~T();
-    }
-    iterator erase(const_iterator cit) noexcept {
-        return erase(cit, cit + 1);
-    }
-    iterator erase(const_iterator cfirst, const_iterator clast) noexcept {
-        auto first = const_cast<iterator>(cfirst);
-        auto last = const_cast<iterator>(clast);
-        std::move(last, end(), first);
-        auto nend = _end - (clast - cfirst);
-        std::destroy(nend, _end);
-        _end = nend;
-        return first;
-    }
-    void swap(small_vector& other) noexcept {
-        std::swap(*this, other);
-    }
-    bool operator==(const small_vector& other) const noexcept {
-        return size() == other.size() && std::equal(_begin, _end, other.begin());
-    }
-    bool operator!=(const small_vector& other) const noexcept {
-        return !(*this == other);
-    }
-};
-}
-namespace utils {
-struct chunked_vector_free_deleter {
-    void operator()(void* x) const { ::free(x); }
-};
-template <typename T, size_t max_contiguous_allocation = 128*1024>
-class chunked_vector {
-    static_assert(std::is_nothrow_move_constructible<T>::value, "T must be nothrow move constructible");
-    using chunk_ptr = std::unique_ptr<T[], chunked_vector_free_deleter>;
-    utils::small_vector<chunk_ptr, 1> _chunks;
-    size_t _size = 0;
-    size_t _capacity = 0;
-private:
-    static size_t max_chunk_capacity() {
-        return std::max(max_contiguous_allocation / sizeof(T), size_t(1));
-    }
-    void reserve_for_push_back() {
-        if (_size == _capacity) {
-            do_reserve_for_push_back();
-        }
-    }
-    void do_reserve_for_push_back();
-    void make_room(size_t n);
-    chunk_ptr new_chunk(size_t n);
-    T* addr(size_t i) const {
-        return &_chunks[i / max_chunk_capacity()][i % max_chunk_capacity()];
-    }
-    void check_bounds(size_t i) const {
-        if (i >= _size) {
-            throw std::out_of_range("chunked_vector out of range access");
-        }
-    }
-    static void migrate(T* begin, T* end, T* result);
-public:
-    using value_type = T;
-    using size_type = size_t;
-    using difference_type = ssize_t;
-    using reference = T&;
-    using const_reference = const T&;
-    using pointer = T*;
-    using const_pointer = const T*;
-public:
-    chunked_vector() = default;
-    chunked_vector(const chunked_vector& x);
-    chunked_vector(chunked_vector&& x) noexcept;
-    template <typename Iterator>
-    chunked_vector(Iterator begin, Iterator end);
-    explicit chunked_vector(size_t n, const T& value = T());
-    ~chunked_vector();
-    chunked_vector& operator=(const chunked_vector& x);
-    chunked_vector& operator=(chunked_vector&& x) noexcept;
-    bool empty() const {
-        return !_size;
-    }
-    
-    
-    
-    
-    
-    
-    
-     ;
-    
-    
-    
-    
-    
-    
-    
-    
-public:
-    template <class ValueType>
-    class iterator_type {
-        const chunk_ptr* _chunks;
-        size_t _i;
-    public:
-        using iterator_category = std::random_access_iterator_tag;
-        using value_type = ValueType;
-        using difference_type = ssize_t;
-        using pointer = ValueType*;
-        using reference = ValueType&;
-    private:
-        
-        
-    public:
-        iterator_type() = default;
-        iterator_type(const iterator_type<std::remove_const_t<ValueType>>& x) : _chunks(x._chunks), _i(x._i) {} 
-        reference operator*() const {
-            return *addr();
-        }
-        pointer operator->() const {
-            return addr();
-        }
-        reference operator[](ssize_t n) const {
-            return *(*this + n);
-        }
-        iterator_type& operator++() {
-            ++_i;
-            return *this;
-        }
-        iterator_type operator++(int) {
-            auto x = *this;
-            ++_i;
-            return x;
-        }
-        iterator_type& operator--() {
-            --_i;
-            return *this;
-        }
-        iterator_type operator--(int) {
-            auto x = *this;
-            --_i;
-            return x;
-        }
-        iterator_type& operator+=(ssize_t n) {
-            _i += n;
-            return *this;
-        }
-        iterator_type& operator-=(ssize_t n) {
-            _i -= n;
-            return *this;
-        }
-        iterator_type operator+(ssize_t n) const {
-            auto x = *this;
-            return x += n;
-        }
-        iterator_type operator-(ssize_t n) const {
-            auto x = *this;
-            return x -= n;
-        }
-        friend iterator_type operator+(ssize_t n, iterator_type a) {
-            return a + n;
-        }
-        friend ssize_t operator-(iterator_type a, iterator_type b) {
-            return a._i - b._i;
-        }
-        bool operator==(iterator_type x) const {
-            return _i == x._i;
-        }
-        bool operator!=(iterator_type x) const {
-            return _i != x._i;
-        }
-        bool operator<(iterator_type x) const {
-            return _i < x._i;
-        }
-        bool operator<=(iterator_type x) const {
-            return _i <= x._i;
-        }
-        bool operator>(iterator_type x) const {
-            return _i > x._i;
-        }
-        bool operator>=(iterator_type x) const {
-            return _i >= x._i;
-        }
-        friend class chunked_vector;
-    };
-    using iterator = iterator_type<T>;
-    using const_iterator = iterator_type<const T>;
-public:
-    const T& front() const { return *cbegin(); }
-    T& front() { return *begin(); }
-    iterator begin() { return iterator(_chunks.data(), 0); }
-    iterator end() ;
-    const_iterator begin() const ;
-    const_iterator end() const ;
-    const_iterator cbegin() const ;
-    const_iterator cend() const ;
-    std::reverse_iterator<iterator> rbegin() ;
-    std::reverse_iterator<iterator> rend() ;
-    std::reverse_iterator<const_iterator> rbegin() const ;
-    std::reverse_iterator<const_iterator> rend() const ;
-    std::reverse_iterator<const_iterator> crbegin() const ;
-    std::reverse_iterator<const_iterator> crend() const ;
-public:
-    bool operator==(const chunked_vector& x) const ;
-    bool operator!=(const chunked_vector& x) const ;
-};
-}
-template<typename Iterator>
-static
-sstring join(sstring delimiter, Iterator begin, Iterator end) ;
-template<typename PrintableRange>
-static
-sstring join(sstring delimiter, const PrintableRange& items) ;
-template<bool NeedsComma, typename Printable>
-struct print_with_comma {
-    const Printable& v;
-};
-template<bool NeedsComma, typename Printable>
-std::ostream& operator<<(std::ostream& os, const print_with_comma<NeedsComma, Printable>& x) ;
-namespace std {
-template<typename Printable>
-static
-sstring
-to_string(const std::vector<Printable>& items) ;
-template<typename Printable>
-static
-sstring
-to_string(const std::set<Printable>& items) ;
-template<typename Printable>
-static
-sstring
-to_string(const std::unordered_set<Printable>& items) ;
-template<typename Printable>
-static inline
-sstring
-to_string(std::initializer_list<Printable> items) {
-    return "[" + join(", ", std::begin(items), std::end(items)) + "]";
-}
-template <typename K, typename V>
-std::ostream& operator<<(std::ostream& os, const std::pair<K, V>& p) ;
-template<typename... T, size_t... I>
-std::ostream& print_tuple(std::ostream& os, const std::tuple<T...>& p, std::index_sequence<I...>) ;
-template <typename... T>
-std::ostream& operator<<(std::ostream& os, const std::tuple<T...>& p) ;
-template <typename T>
-std::ostream& operator<<(std::ostream& os, const std::unordered_set<T>& items) ;
-template <typename T>
-std::ostream& operator<<(std::ostream& os, const std::set<T>& items) ;
-template<typename T, size_t N>
-std::ostream& operator<<(std::ostream& os, const std::array<T, N>& items) ;
-template <typename K, typename V, typename... Args>
-std::ostream& operator<<(std::ostream& os, const std::unordered_map<K, V, Args...>& items) ;
-template <typename K, typename V, typename... Args>
-std::ostream& operator<<(std::ostream& os, const std::map<K, V, Args...>& items) {
-    os << "{" << join(", ", items) << "}";
-    return os;
-}
-template <typename T>
-std::ostream& operator<<(std::ostream& os, const utils::chunked_vector<T>& items) {
-    os << "[" << join(", ", items) << "]";
-    return os;
-}
-template <typename T>
-std::ostream& operator<<(std::ostream& os, const std::list<T>& items) {
-    os << "[" << join(", ", items) << "]";
-    return os;
-}
-template <typename T>
-std::ostream& operator<<(std::ostream& os, const std::optional<T>& opt) {
-    if (opt) {
-        os << "{" << *opt << "}";
-    } else {
-        os << "{}";
-    }
-    return os;
-}
-}
-template <class Value, class Tag>
-class cql_duration_counter final {
-public:
-    using value_type = Value;
-    explicit constexpr cql_duration_counter(value_type count) noexcept : _count(count) {}
-    constexpr operator value_type() const noexcept { return _count; }
-private:
-    value_type _count;
-};
-using months_counter = cql_duration_counter<int32_t, struct month_tag>;
-using days_counter = cql_duration_counter<int32_t, struct day_tag>;
-using nanoseconds_counter = cql_duration_counter<int64_t, struct nanosecond_tag>;
-class cql_duration_error : public std::invalid_argument {
-public:
-    explicit cql_duration_error(std::string_view what) : std::invalid_argument(what.data()) {}
-    virtual ~cql_duration_error() = default;
-};
-class cql_duration final {
-public:
-    using common_counter_type = int64_t;
-    static_assert(
-            (sizeof(common_counter_type) >= sizeof(months_counter::value_type)) &&
-            (sizeof(common_counter_type) >= sizeof(days_counter::value_type)) &&
-            (sizeof(common_counter_type) >= sizeof(nanoseconds_counter::value_type)),
-            "The common counter type is smaller than one of the component counter types.");
-    constexpr cql_duration() noexcept = default;
-    constexpr cql_duration(months_counter m, days_counter d, nanoseconds_counter n) noexcept :
-            months(m),
-            days(d),
-            nanoseconds(n) {}
-    explicit cql_duration(std::string_view s);
-    months_counter::value_type months{0};
-    days_counter::value_type days{0};
-    nanoseconds_counter::value_type nanoseconds{0};
-};
-std::ostream& operator<<(std::ostream& os, const cql_duration& d);
-seastar::sstring to_string(const cql_duration&);
-bool operator==(const cql_duration&, const cql_duration&) noexcept;
-bool operator!=(const cql_duration&, const cql_duration&) noexcept;
-class marshal_exception : public std::exception {
-    sstring _why;
-public:
-    marshal_exception() = delete;
-    marshal_exception(sstring why) : _why(sstring("marshaling error: ") + why) {}
-    virtual const char* what() const noexcept override { return _why.c_str(); }
-};
+namespace utils { template<typename T, size_t N> class small_vector {     static_assert(N > 0);     static_assert(std::is_nothrow_move_constructible_v<T>);     static_assert(std::is_nothrow_move_assignable_v<T>);     static_assert(std::is_nothrow_destructible_v<T>); private:     T* _begin;     T* _end;     T* _capacity_end;     union internal {         internal() { }         ~internal() { }         T storage[N];     };     internal _internal; private:     bool uses_internal_storage() const noexcept {         return _begin == _internal.storage;     }     [[gnu::cold]] [[gnu::noinline]]     void expand(size_t new_capacity) {         auto ptr = static_cast<T*>(::aligned_alloc(alignof(T), new_capacity * sizeof(T)));         if (!ptr) {             throw std::bad_alloc();         }         auto n_end = std::uninitialized_move(begin(), end(), ptr);         std::destroy(begin(), end());         if (!uses_internal_storage()) {             std::free(_begin);         }         _begin = ptr;         _end = n_end;         _capacity_end = ptr + new_capacity;     }     [[gnu::cold]] [[gnu::noinline]]     void slow_copy_assignment(const small_vector& other) {         auto ptr = static_cast<T*>(::aligned_alloc(alignof(T), other.size() * sizeof(T)));         if (!ptr) {             throw std::bad_alloc();         }         auto n_end = ptr;         try {             n_end = std::uninitialized_copy(other.begin(), other.end(), n_end);         } catch (...) {             std::free(ptr);             throw;         }         std::destroy(begin(), end());         if (!uses_internal_storage()) {             std::free(_begin);         }         _begin = ptr;         _end = n_end;         _capacity_end = n_end;     }     void reserve_at_least(size_t n) {         if (__builtin_expect(_begin + n > _capacity_end, false)) {             expand(std::max(n, capacity() * 2));         }     }     [[noreturn]] [[gnu::cold]] [[gnu::noinline]]     void throw_out_of_range() {         throw std::out_of_range("out of range small vector access");     } public:     using value_type = T;     using pointer = T*;     using const_pointer = const T*;     using reference = T&;     using const_reference = const T&;     using iterator = T*;     using const_iterator = const T*;     using reverse_iterator = std::reverse_iterator<iterator>;     using const_reverse_iterator = std::reverse_iterator<const_iterator>;     small_vector() noexcept         : _begin(_internal.storage)         , _end(_begin)         , _capacity_end(_begin + N)     { }     template<typename InputIterator>     small_vector(InputIterator first, InputIterator last) : small_vector() {         if constexpr (std::is_base_of_v<std::forward_iterator_tag, typename std::iterator_traits<InputIterator>::iterator_category>) {             reserve(std::distance(first, last));             _end = std::uninitialized_copy(first, last, _end);         } else {             std::copy(first, last, std::back_inserter(*this));         }     }     small_vector(std::initializer_list<T> list) : small_vector(list.begin(), list.end()) { }     small_vector(small_vector&& other) noexcept {         if (other.uses_internal_storage()) {             _begin = _internal.storage;             _capacity_end = _begin + N;             if constexpr (std::is_trivially_copyable_v<T>) {                 std::memcpy(_internal.storage, other._internal.storage, N * sizeof(T));                 _end = _begin + other.size();             } else {                 _end = _begin;                 for (auto& e : other) {                     new (_end++) T(std::move(e));                     e.~T();                 }             }             other._end = other._internal.storage;         } else {             _begin = std::exchange(other._begin, other._internal.storage);             _end = std::exchange(other._end, other._internal.storage);             _capacity_end = std::exchange(other._capacity_end, other._internal.storage + N);         }     }     small_vector(const small_vector& other) noexcept : small_vector() {         reserve(other.size());         _end = std::uninitialized_copy(other.begin(), other.end(), _end);     }     small_vector& operator=(small_vector&& other) noexcept {         clear();         if (other.uses_internal_storage()) {             if (__builtin_expect(!uses_internal_storage(), false)) {                 std::free(_begin);                 _begin = _internal.storage;             }             _capacity_end = _begin + N;             if constexpr (std::is_trivially_copyable_v<T>) {                 std::memcpy(_internal.storage, other._internal.storage, N * sizeof(T));                 _end = _begin + other.size();             } else {                 _end = _begin;                 for (auto& e : other) {                     new (_end++) T(std::move(e));                     e.~T();                 }             }             other._end = other._internal.storage;         } else {             if (__builtin_expect(!uses_internal_storage(), false)) {                 std::free(_begin);             }             _begin = std::exchange(other._begin, other._internal.storage);             _end = std::exchange(other._end, other._internal.storage);             _capacity_end = std::exchange(other._capacity_end, other._internal.storage + N);         }         return *this;     }     small_vector& operator=(const small_vector& other) {         if constexpr (std::is_nothrow_copy_constructible_v<T>) {             if (capacity() >= other.size()) {                 clear();                 _end = std::uninitialized_copy(other.begin(), other.end(), _end);                 return *this;             }         }         slow_copy_assignment(other);         return *this;     }     ~small_vector() {         clear();         if (__builtin_expect(!uses_internal_storage(), false)) {             std::free(_begin);         }     }     void reserve(size_t n) {         if (__builtin_expect(_begin + n > _capacity_end, false)) {             expand(n);         }     }     void clear() noexcept {         std::destroy(_begin, _end);         _end = _begin;     }     iterator begin() noexcept { return _begin; }     const_iterator begin() const noexcept { return _begin; }     const_iterator cbegin() const noexcept { return _begin; }     iterator end() noexcept { return _end; }     const_iterator end() const noexcept { return _end; }     const_iterator cend() const noexcept { return _end; }     reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }     const_reverse_iterator rbegin() const noexcept { return const_reverse_iterator(end()); }     const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(end()); }     reverse_iterator rend() noexcept { return reverse_iterator(begin()); }     const_reverse_iterator rend() const noexcept { return const_reverse_iterator(begin()); }     const_reverse_iterator crend() const noexcept { return const_reverse_iterator(begin()); }     T* data() noexcept { return _begin; }     const T* data() const noexcept { return _begin; }     T& front() noexcept { return *begin(); }     const T& front() const noexcept { return *begin(); }     T& back() noexcept { return end()[-1]; }     const T& back() const noexcept { return end()[-1]; }     T& operator[](size_t idx) noexcept { return data()[idx]; }     const T& operator[](size_t idx) const noexcept { return data()[idx]; }     T& at(size_t idx) {         if (__builtin_expect(idx >= size(), false)) {             throw_out_of_range();         }         return operator[](idx);     }     const T& at(size_t idx) const {         if (__builtin_expect(idx >= size(), false)) {             throw_out_of_range();         }         return operator[](idx);     }     bool empty() const noexcept { return _begin == _end; }     size_t size() const noexcept { return _end - _begin; }     size_t capacity() const noexcept { return _capacity_end - _begin; }     template<typename... Args>     T& emplace_back(Args&&... args) {         if (__builtin_expect(_end == _capacity_end, false)) {             expand(std::max<size_t>(capacity() * 2, 1));         }         auto& ref = *new (_end) T(std::forward<Args>(args)...);         ++_end;         return ref;     }     T& push_back(const T& value) {         return emplace_back(value);     }     T& push_back(T&& value) {         return emplace_back(std::move(value));     }     template<typename InputIterator>     iterator insert(const_iterator cpos, InputIterator first, InputIterator last) {         if constexpr (std::is_base_of_v<std::forward_iterator_tag, typename std::iterator_traits<InputIterator>::iterator_category>) {             if (first == last) {                 return const_cast<iterator>(cpos);             }             auto idx = cpos - _begin;             auto new_count = std::distance(first, last);             reserve_at_least(size() + new_count);             auto pos = _begin + idx;             auto after = std::distance(pos, end());             if (__builtin_expect(pos == end(), true)) {                 _end = std::uninitialized_copy(first, last, end());                 return pos;             } else if (after > new_count) {                 std::uninitialized_move(end() - new_count, end(), end());                 std::move_backward(pos, end() - new_count, end());                 try {                     std::copy(first, last, pos);                 } catch (...) {                     std::move(pos + new_count, end() + new_count, pos);                     std::destroy(end(), end() + new_count);                     throw;                 }             } else {                 std::uninitialized_move(pos, end(), pos + new_count);                 auto mid = std::next(first, after);                 try {                     std::uninitialized_copy(mid, last, end());                     try {                         std::copy(first, mid, pos);                     } catch (...) {                         std::destroy(end(), pos + new_count);                         throw;                     }                 } catch (...) {                     std::move(pos + new_count, end() + new_count, pos);                     std::destroy(pos + new_count, end() + new_count);                     throw;                 }             }             _end += new_count;             return pos;         } else {             auto start = cpos - _begin;             auto idx = start;             while (first != last) {                 try {                     insert(begin() + idx, *first);                     ++first;                     ++idx;                 } catch (...) {                     erase(begin() + start, begin() + idx);                     throw;                 }             }             return begin() + idx;         }     }     template<typename... Args>     iterator emplace(const_iterator cpos, Args&&... args) {         auto idx = cpos - _begin;         reserve_at_least(size() + 1);         auto pos = _begin + idx;         if (pos != _end) {             new (_end) T(std::move(_end[-1]));             std::move_backward(pos, _end - 1, _end);             pos->~T();         }         try {             new (pos) T(std::forward<Args>(args)...);         } catch (...) {             if (pos != _end) {                 new (pos) T(std::move(pos[1]));                 std::move(pos + 2, _end + 1, pos + 1);                 _end->~T();             }             throw;         }         _end++;         return pos;     }     iterator insert(const_iterator cpos, const T& obj) {         return emplace(cpos, obj);     }     iterator insert(const_iterator cpos, T&& obj) {         return emplace(cpos, std::move(obj));     }     void resize(size_t n) {         if (n < size()) {             erase(end() - (size() - n), end());         } else if (n > size()) {             reserve_at_least(n);             _end = std::uninitialized_value_construct_n(_end, n - size());         }     }     void resize(size_t n, const T& value) {         if (n < size()) {             erase(end() - (size() - n), end());         } else if (n > size()) {             reserve_at_least(n);             auto nend = _begin + n;             std::uninitialized_fill(_end, nend, value);             _end = nend;         }     }     void pop_back() noexcept {         (--_end)->~T();     }     iterator erase(const_iterator cit) noexcept {         return erase(cit, cit + 1);     }     iterator erase(const_iterator cfirst, const_iterator clast) noexcept {         auto first = const_cast<iterator>(cfirst);         auto last = const_cast<iterator>(clast);         std::move(last, end(), first);         auto nend = _end - (clast - cfirst);         std::destroy(nend, _end);         _end = nend;         return first;     }     void swap(small_vector& other) noexcept {         std::swap(*this, other);     }     bool operator==(const small_vector& other) const noexcept {         return size() == other.size() && std::equal(_begin, _end, other.begin());     }     bool operator!=(const small_vector& other) const noexcept {         return !(*this == other);     } }; }
+ namespace utils { struct chunked_vector_free_deleter {     void operator()(void* x) const { ::free(x); } }; template <typename T, size_t max_contiguous_allocation = 128*1024> class chunked_vector {     static_assert(std::is_nothrow_move_constructible<T>::value, "T must be nothrow move constructible");     using chunk_ptr = std::unique_ptr<T[], chunked_vector_free_deleter>;     utils::small_vector<chunk_ptr, 1> _chunks;     size_t _size = 0;     size_t _capacity = 0; private:     static size_t max_chunk_capacity() {         return std::max(max_contiguous_allocation / sizeof(T), size_t(1));     }     void reserve_for_push_back() {         if (_size == _capacity) {             do_reserve_for_push_back();         }     }     void do_reserve_for_push_back();     void make_room(size_t n);     chunk_ptr new_chunk(size_t n);     T* addr(size_t i) const {         return &_chunks[i / max_chunk_capacity()][i % max_chunk_capacity()];     }     void check_bounds(size_t i) const {         if (i >= _size) {             throw std::out_of_range("chunked_vector out of range access");         }     }     static void migrate(T* begin, T* end, T* result); public:     using value_type = T;     using size_type = size_t;     using difference_type = ssize_t;     using reference = T&;     using const_reference = const T&;     using pointer = T*;     using const_pointer = const T*; public:     chunked_vector() = default;     chunked_vector(const chunked_vector& x);     chunked_vector(chunked_vector&& x) noexcept;     template <typename Iterator>     chunked_vector(Iterator begin, Iterator end);     explicit chunked_vector(size_t n, const T& value = T());     ~chunked_vector();     chunked_vector& operator=(const chunked_vector& x);     chunked_vector& operator=(chunked_vector&& x) noexcept;     bool empty() const {         return !_size;     }                                         ;                                         public:     template <class ValueType>     class iterator_type {         const chunk_ptr* _chunks;         size_t _i;     public:         using iterator_category = std::random_access_iterator_tag;         using value_type = ValueType;         using difference_type = ssize_t;         using pointer = ValueType*;         using reference = ValueType&;     private:                       public:         iterator_type() = default;         iterator_type(const iterator_type<std::remove_const_t<ValueType>>& x) : _chunks(x._chunks), _i(x._i) {}          reference operator*() const {             return *addr();         }         pointer operator->() const {             return addr();         }         reference operator[](ssize_t n) const {             return *(*this + n);         }         iterator_type& operator++() {             ++_i;             return *this;         }         iterator_type operator++(int) {             auto x = *this;             ++_i;             return x;         }         iterator_type& operator--() {             --_i;             return *this;         }         iterator_type operator--(int) {             auto x = *this;             --_i;             return x;         }         iterator_type& operator+=(ssize_t n) {             _i += n;             return *this;         }         iterator_type& operator-=(ssize_t n) {             _i -= n;             return *this;         }         iterator_type operator+(ssize_t n) const {             auto x = *this;             return x += n;         }         iterator_type operator-(ssize_t n) const {             auto x = *this;             return x -= n;         }         friend iterator_type operator+(ssize_t n, iterator_type a) {             return a + n;         }         friend ssize_t operator-(iterator_type a, iterator_type b) {             return a._i - b._i;         }         bool operator==(iterator_type x) const {             return _i == x._i;         }         bool operator!=(iterator_type x) const {             return _i != x._i;         }         bool operator<(iterator_type x) const {             return _i < x._i;         }         bool operator<=(iterator_type x) const {             return _i <= x._i;         }         bool operator>(iterator_type x) const {             return _i > x._i;         }         bool operator>=(iterator_type x) const {             return _i >= x._i;         }         friend class chunked_vector;     };     using iterator = iterator_type<T>;     using const_iterator = iterator_type<const T>; public:                                   const_iterator cbegin() const ;                         std::reverse_iterator<const_iterator> rend() const ;     std::reverse_iterator<const_iterator> crbegin() const ;     std::reverse_iterator<const_iterator> crend() const ; public:     bool operator==(const chunked_vector& x) const ;     bool operator!=(const chunked_vector& x) const ; }; }
+ template<typename Iterator> static sstring join(sstring delimiter, Iterator begin, Iterator end) ;
+ template<typename PrintableRange> static sstring join(sstring delimiter, const PrintableRange& items) ;
+ template<bool NeedsComma, typename Printable> struct print_with_comma {     const Printable& v; };
+ template<bool NeedsComma, typename Printable> std::ostream& operator<<(std::ostream& os, const print_with_comma<NeedsComma, Printable>& x) ;
+ namespace std {  ;  ;  ; template<typename Printable> static inline sstring to_string(std::initializer_list<Printable> items) {     return "[" + join(", ", std::begin(items), std::end(items)) + "]"; }  ;  ;  ;  ;  ;  ;  ;     }
+ template <class Value, class Tag> class cql_duration_counter final { public:     using value_type = Value;           private:     value_type _count; };
+ using months_counter = cql_duration_counter<int32_t, struct month_tag>;
+ using days_counter = cql_duration_counter<int32_t, struct day_tag>;
+ using nanoseconds_counter = cql_duration_counter<int64_t, struct nanosecond_tag>;
+ class cql_duration_error : public std::invalid_argument { public:           };
+ class cql_duration final { public:     using common_counter_type = int64_t;     static_assert(             (sizeof(common_counter_type) >= sizeof(months_counter::value_type)) &&             (sizeof(common_counter_type) >= sizeof(days_counter::value_type)) &&             (sizeof(common_counter_type) >= sizeof(nanoseconds_counter::value_type)),             "The common counter type is smaller than one of the component counter types.");               explicit cql_duration(std::string_view s);     months_counter::value_type months{0};     days_counter::value_type days{0};     nanoseconds_counter::value_type nanoseconds{0}; };
+ std::ostream& operator<<(std::ostream& os, const cql_duration& d);
+ seastar::sstring to_string(const cql_duration&);
+ bool operator==(const cql_duration&, const cql_duration&) noexcept;
+ bool operator!=(const cql_duration&, const cql_duration&) noexcept;
+ class marshal_exception : public std::exception {     sstring _why; public:     marshal_exception() = delete;     marshal_exception(sstring why) : _why(sstring("marshaling error: ") + why) {}     virtual const char* what() const noexcept override { return _why.c_str(); } };
 #include <seastar/net/ip.hh>
 #include <seastar/util/backtrace.hh>
 namespace seastar { class logger; }
-typedef std::function<bool (const std::system_error &)> system_error_lambda_t;
-bool check_exception(system_error_lambda_t f);
-bool is_system_error_errno(int err_no);
-bool is_timeout_exception(std::exception_ptr e);
-class storage_io_error : public std::exception {
-private:
-    std::error_code _code;
-    std::string _what;
-public:
-    storage_io_error(std::system_error& e) noexcept
-        : _code{e.code()}
-        , _what{std::string("Storage I/O error: ") + std::to_string(e.code().value()) + ": " + e.what()}
-    { }
-    virtual const char* what() const noexcept override {
-        return _what.c_str();
-    }
-    const std::error_code& code() const { return _code; }
-};
-class tuple_type_impl;
-class big_decimal;
-namespace cql3 {
-class cql3_type;
-class column_specification;
-}
-enum class lexicographical_relation : int8_t {
-    before_all_prefixed,
-    before_all_strictly_prefixed,
-    after_all_prefixed
-};
-template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Compare>
-int prefix_equality_tri_compare(TypesIterator types, InputIt1 first1, InputIt1 last1,
-        InputIt2 first2, InputIt2 last2, Compare comp);
-template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Equality>
-bool is_prefixed_by(TypesIterator types, InputIt1 first1, InputIt1 last1,
-        InputIt2 first2, InputIt2 last2, Equality equality);
-struct runtime_exception : public std::exception {
-public:
-    runtime_exception(sstring why);
-    virtual const char* what() const noexcept override;
-};
-struct empty_t {};
-class empty_value_exception : public std::exception {
-public:
-    virtual const char* what() const noexcept override;
-};
-[[noreturn]] void on_types_internal_error(const sstring& reason);
-template <typename T>
-class emptyable {
-    static_assert(std::is_default_constructible<T>::value, "must be default constructible");
-public:
-    emptyable();
-    emptyable(const T& x);
-    emptyable(T&& x);
-    emptyable(empty_t);
-    template <typename... U>
-    emptyable(U&&... args);
-    bool empty() const;
-    operator const T& () const;
-    operator T&& () &&;
-    const T& get() const &;
-    T&& get() &&;
-};
-template <typename T>
-inline
-bool
-operator==(const emptyable<T>& me1, const emptyable<T>& me2);
-template <typename T>
-inline
-bool
-operator<(const emptyable<T>& me1, const emptyable<T>& me2);
-template <typename T>
-class has_empty {
-    template <typename X>
-    constexpr static auto check(const X* x) -> std::enable_if_t<std::is_same<bool, decltype(x->empty())>::value, bool> {
-        return true;
-    }
-    template <typename X>
-    constexpr static auto check(...) -> bool {
-        return false;
-    }
-public:
-    constexpr static bool value = check<T>(nullptr);
-};
-template <typename T>
-using maybe_empty =
-        std::conditional_t<has_empty<T>::value, T, emptyable<T>>;
-class abstract_type;
-class data_value;
-struct ascii_native_type {
-    using primary_type = sstring;
-    primary_type string;
-};
-struct simple_date_native_type {
-    using primary_type = uint32_t;
-    primary_type days;
-};
-struct date_type_native_type {
-    using primary_type = db_clock::time_point;
-    primary_type tp;
-};
-struct time_native_type {
-    using primary_type = int64_t;
-    primary_type nanoseconds;
-};
-struct timeuuid_native_type {
-    using primary_type = utils::UUID;
-    primary_type uuid;
-};
-using data_type = shared_ptr<const abstract_type>;
-template <typename T>
-const T& value_cast(const data_value& value);
-template <typename T>
-T&& value_cast(data_value&& value);
-class data_value {
-    void* _value;  
-    data_type _type;
-private:
-    data_value(void* value, data_type type) : _value(value), _type(std::move(type)) {}
-    template <typename T>
-    static data_value make_new(data_type type, T&& value);
-public:
-    ~data_value();
-    data_value(const data_value&);
-    data_value(data_value&& x) noexcept : _value(x._value), _type(std::move(x._type)) {
-        x._value = nullptr;
-    }
-    explicit data_value(bytes);
-    data_value(sstring&&);
-    data_value(std::string_view);
-    data_value(const char*);
-    data_value(const std::string&);
-    data_value(const sstring&);
-    data_value(ascii_native_type);
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    explicit data_value(std::optional<bytes>);
-    template <typename NativeType>
-    data_value(std::optional<NativeType>);
-    template <typename NativeType>
-    data_value(const std::unordered_set<NativeType>&);
-    data_value& operator=(const data_value&);
-    data_value& operator=(data_value&&);
-    const data_type& type() const {
-        return _type;
-    }
-    bool is_null() const ;
-    size_t serialized_size() const;
-    void serialize(bytes::iterator& out) const;
-    bytes_opt serialize() const;
-    bytes serialize_nonnull() const;
-    friend bool operator==(const data_value& x, const data_value& y);
-    friend inline bool operator!=(const data_value& x, const data_value& y);
-    friend class abstract_type;
-    static data_value make_null(data_type type) ;
-    template <typename T>
-    static data_value make(data_type type, std::unique_ptr<T> value) ;
-    friend class empty_type_impl;
-    template <typename T> friend const T& value_cast(const data_value&);
-    template <typename T> friend T&& value_cast(data_value&&);
-    friend std::ostream& operator<<(std::ostream&, const data_value&);
-    friend data_value make_tuple_value(data_type, maybe_empty<std::vector<data_value>>);
-    friend data_value make_set_value(data_type, maybe_empty<std::vector<data_value>>);
-    friend data_value make_list_value(data_type, maybe_empty<std::vector<data_value>>);
-    friend data_value make_map_value(data_type, maybe_empty<std::vector<std::pair<data_value, data_value>>>);
-    friend data_value make_user_value(data_type, std::vector<data_value>);
-    template <typename Func>
-    friend inline auto visit(const data_value& v, Func&& f);
-};
-template<typename T>
- bytes serialized(T v) ;
-class serialized_compare;
-class serialized_tri_compare;
-class user_type_impl;
-class abstract_type : public enable_shared_from_this<abstract_type> {
-    sstring _name;
-    std::optional<uint32_t> _value_length_if_fixed;
-public:
-    enum class kind : int8_t {
-        ascii,
-        boolean,
-        byte,
-        bytes,
-        counter,
-        date,
-        decimal,
-        double_kind,
-        duration,
-        empty,
-        float_kind,
-        inet,
-        int32,
-        list,
-        long_kind,
-        map,
-        reversed,
-        set,
-        short_kind,
-        simple_date,
-        time,
-        timestamp,
-        timeuuid,
-        tuple,
-        user,
-        utf8,
-        uuid,
-        varint,
-    };
-private:
-    kind _kind;
-public:
-    kind get_kind() const ;
-    virtual ~abstract_type();
-    bool less(bytes_view v1, bytes_view v2) const;
-    serialized_compare as_less_comparator() const ;
-    serialized_tri_compare as_tri_comparator() const ;
-    static data_type parse_type(const sstring& name);
-    size_t hash(bytes_view v) const;
-    bool equal(bytes_view v1, bytes_view v2) const;
-    int32_t compare(bytes_view v1, bytes_view v2) const;
-    data_value deserialize(bytes_view v) const;
-    data_value deserialize_value(bytes_view v) const;
-    void validate(bytes_view v, cql_serialization_format sf) const;
-    
-    
-    /*
-     * Types which are wrappers over other types return the inner type.
-     * For example the reversed_type returns the type it is reversing.
-     */
-    
-    /**
-     * Returns true if values of the other AbstractType can be read and "reasonably" interpreted by the this
-     * AbstractType. Note that this is a weaker version of isCompatibleWith, as it does not require that both type
-     * compare values the same way.
-     *
-     * The restriction on the other type being "reasonably" interpreted is to prevent, for example, IntegerType from
-     * being compatible with all other types.  Even though any byte string is a valid IntegerType value, it doesn't
+ typedef std::function<bool (const std::system_error &)> system_error_lambda_t;
+ bool check_exception(system_error_lambda_t f);
+ bool is_system_error_errno(int err_no);
+ bool is_timeout_exception(std::exception_ptr e);
+ class storage_io_error : public std::exception { private:     std::error_code _code;     std::string _what; public:     storage_io_error(std::system_error& e) noexcept         : _code{e.code()}         , _what{std::string("Storage I/O error: ") + std::to_string(e.code().value()) + ": " + e.what()}     { }     virtual const char* what() const noexcept override {         return _what.c_str();     }     const std::error_code& code() const { return _code; } };
+ class tuple_type_impl;
+ class big_decimal;
+ namespace cql3 { class cql3_type; class column_specification; }
+ enum class lexicographical_relation : int8_t {     before_all_prefixed,     before_all_strictly_prefixed,     after_all_prefixed };
+ template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Compare> int prefix_equality_tri_compare(TypesIterator types, InputIt1 first1, InputIt1 last1,         InputIt2 first2, InputIt2 last2, Compare comp);
+ template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Equality> bool is_prefixed_by(TypesIterator types, InputIt1 first1, InputIt1 last1,         InputIt2 first2, InputIt2 last2, Equality equality);
+ struct runtime_exception : public std::exception { public:     runtime_exception(sstring why);     virtual const char* what() const noexcept override; };
+ struct empty_t {};
+ class empty_value_exception : public std::exception { public:     virtual const char* what() const noexcept override; };
+ [[noreturn]] void on_types_internal_error(const sstring& reason);
+ template <typename T> class emptyable {     static_assert(std::is_default_constructible<T>::value, "must be default constructible"); public:                         ;                          };
+ template <typename T> inline bool operator==(const emptyable<T>& me1, const emptyable<T>& me2);
+ template <typename T> inline bool operator<(const emptyable<T>& me1, const emptyable<T>& me2);
+ template <typename T> class has_empty {     template <typename X>     constexpr static auto check(const X* x) -> std::enable_if_t<std::is_same<bool, decltype(x->empty())>::value, bool> {         return true;     }     template <typename X>     constexpr static auto check(...) -> bool {         return false;     } public:     constexpr static bool value = check<T>(nullptr); };
+ template <typename T> using maybe_empty =         std::conditional_t<has_empty<T>::value, T, emptyable<T>>;
+ class abstract_type;
+ class data_value;
+ struct ascii_native_type {     using primary_type = sstring;     primary_type string; };
+ struct simple_date_native_type {     using primary_type = uint32_t;     primary_type days; };
+ struct date_type_native_type {     using primary_type = db_clock::time_point;     primary_type tp; };
+ struct time_native_type {     using primary_type = int64_t;     primary_type nanoseconds; };
+ struct timeuuid_native_type {     using primary_type = utils::UUID;     primary_type uuid; };
+ using data_type = shared_ptr<const abstract_type>;
+ template <typename T> const T& value_cast(const data_value& value);
+ template <typename T> T&& value_cast(data_value&& value);
+ class data_value {     void* _value;       data_type _type; private:     data_value(void* value, data_type type) : _value(value), _type(std::move(type)) {}     template <typename T>     static data_value make_new(data_type type, T&& value); public:     ~data_value();     data_value(const data_value&);                                                                                                                                            ;     template <typename NativeType>     data_value(const std::unordered_set<NativeType>&);     data_value& operator=(const data_value&);     data_value& operator=(data_value&&);     const data_type& type() const {         return _type;     }     bool is_null() const ;     size_t serialized_size() const;     void serialize(bytes::iterator& out) const;     bytes_opt serialize() const;     bytes serialize_nonnull() const;     friend bool operator==(const data_value& x, const data_value& y);     ;     friend class abstract_type;           ;     friend class empty_type_impl;     template <typename T> friend const T& value_cast(const data_value&);     template <typename T> friend T&& value_cast(data_value&&);                                   ; };
+ template<typename T>  bytes serialized(T v) ;
+ class serialized_compare;
+ class serialized_tri_compare;
+ class user_type_impl;
+ class abstract_type : public enable_shared_from_this<abstract_type> {     sstring _name;     std::optional<uint32_t> _value_length_if_fixed; public:     enum class kind : int8_t {         ascii,         boolean,         byte,         bytes,         counter,         date,         decimal,         double_kind,         duration,         empty,         float_kind,         inet,         int32,         list,         long_kind,         map,         reversed,         set,         short_kind,         simple_date,         time,         timestamp,         timeuuid,         tuple,         user,         utf8,         uuid,         varint,     }; private:     kind _kind; public:     kind get_kind() const ;     virtual ~abstract_type();     bool less(bytes_view v1, bytes_view v2) const;     serialized_compare as_less_comparator() const ;     serialized_tri_compare as_tri_comparator() const ;     static data_type parse_type(const sstring& name);     size_t hash(bytes_view v) const;     bool equal(bytes_view v1, bytes_view v2) const;     int32_t compare(bytes_view v1, bytes_view v2) const;     data_value deserialize(bytes_view v) const;     data_value deserialize_value(bytes_view v) const;     void validate(bytes_view v, cql_serialization_format sf) const;               /*      * Types which are wrappers over other types return the inner type.      * For example the reversed_type returns the type it is reversing.      */         /**      * Returns true if values of the other AbstractType can be read and "reasonably" interpreted by the this      * AbstractType. Note that this is a weaker version of isCompatibleWith, as it does not require that both type      * compare values the same way.      *      * The restriction on the other type being "reasonably" interpreted is to prevent, for example, IntegerType from      * being compatible with all other types.  Even though any byte string is a valid IntegerType value, it doesn't
      * necessarily make sense to interpret a UUID or a UTF8 string as an integer.
      *
      * Note that a type should be compatible with at least itself.
      */
-    
-    
-    
-    
-    
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     bool is_collection() const;
     bool is_map() const;
     bool is_set() const;
@@ -1883,23 +190,16 @@ public:
     bool is_native() const;
     cql3::cql3_type as_cql3_type() const;
     const sstring& cql3_type_name() const;
-    virtual shared_ptr<const abstract_type> freeze() const;
     friend class list_type_impl;
 private:
     mutable sstring _cql3_type_name;
 protected:
-    void* native_value_clone(const void* from) const;
-    const std::type_info& native_typeid() const;
-    static const void* get_value_ptr(const data_value& v) ;
-    friend void write_collection_value(bytes::iterator& out, cql_serialization_format sf, data_type type, const data_value& value);
     friend class tuple_type_impl;
     friend class data_value;
     friend class reversed_type_impl;
     template <typename T> friend const T& value_cast(const data_value& value);
     template <typename T> friend T&& value_cast(data_value&& value);
-    friend bool operator==(const abstract_type& x, const abstract_type& y);
 };
-bool operator==(const abstract_type& x, const abstract_type& y);
 template <typename T>
 const T& value_cast(const data_value& value);
 template <typename T>
@@ -1910,12 +210,6 @@ public:
     using native_type = maybe_empty<NativeType>;
     using AbstractType::AbstractType;
 public:
-    data_value make_value(std::unique_ptr<native_type> value) const ;
-    data_value make_value(native_type value) const ;
-    data_value make_null() const ;
-    data_value make_empty() const {
-        return make_value(native_type(empty_t()));
-    }
     const native_type& from_value(const void* v) const {
         return *reinterpret_cast<const native_type*>(v);
     }
@@ -1925,10 +219,6 @@ public:
     friend class abstract_type;
 };
 bool operator==(const data_value& x, const data_value& y);
-inline bool operator!=(const data_value& x, const data_value& y)
-{
-    return !(x == y);
-}
 using bytes_view_opt = std::optional<bytes_view>;
 static inline
 bool optional_less_compare(data_type t, bytes_view_opt e1, bytes_view_opt e2) {
@@ -2212,48 +502,20 @@ bytes_view_opt
 as_bytes_view_opt(const bytes_opt& bv);
 bytes
 to_bytes(const sstring& x);
-bytes_view
-to_bytes_view(const sstring& x);
-bytes
-to_bytes(const utils::UUID& uuid) {
-    struct {
-        uint64_t msb;
-        uint64_t lsb;
-    } tmp = { net::hton(uint64_t(uuid.get_most_significant_bits())),
-        net::hton(uint64_t(uuid.get_least_significant_bits())) };
-    return bytes(reinterpret_cast<int8_t*>(&tmp), 16);
-}
 template <typename T>
 struct comparator {
-    comparator() = default;
-    comparator(std::function<int32_t (T& v1, T& v2)> fn)
-        : _compare_fn(std::move(fn))
-    { }
-    int32_t compare() { return _compare_fn(); }
 private:
     std::function<int32_t (T& v1, T& v2)> _compare_fn;
 };
-inline bool
-less_unsigned(bytes_view v1, bytes_view v2) {
-    return compare_unsigned(v1, v2) < 0;
-}
 class serialized_hash {
 private:
     data_type _type;
 public:
-    serialized_hash(data_type type) : _type(type) {}
-    size_t operator()(const bytes& v) const {
-        return _type->hash(v);
-    }
 };
 class serialized_equal {
 private:
     data_type _type;
 public:
-    serialized_equal(data_type type) : _type(type) {}
-    bool operator()(const bytes& v1, const bytes& v2) const {
-        return _type->equal(v1, v2);
-    }
 };
 template<typename Type>
 static inline
@@ -2373,25 +635,9 @@ private:
             out = std::copy(val.begin(), val.end(), out);
         }
     }
-    template <typename RangeOfSerializedComponents>
-    static size_t serialized_size(RangeOfSerializedComponents&& values) {
-        size_t len = 0;
-        for (auto&& val : values) {
-            len += sizeof(size_type) + val.size();
-        }
-        return len;
-    }
 public:
-    bytes serialize_single(bytes&& v) {
-        return serialize_value({std::move(v)});
-    }
-    template<typename RangeOfSerializedComponents>
-    static bytes serialize_value(RangeOfSerializedComponents&& values);
-    template<typename T>
-    static bytes serialize_value(std::initializer_list<T> values);
-    bytes serialize_optionals(const std::vector<bytes_opt>& values);
-    bytes serialize_value_deep(const std::vector<data_value>& values);
-    bytes decompose_value(const value_type& values);
+    ;
+    ;
     class iterator : public std::iterator<std::input_iterator_tag, const bytes_view> {
     private:
         bytes_view _v;
@@ -2414,14 +660,6 @@ public:
         }
     public:
         struct end_iterator_tag {};
-        iterator(const bytes_view& v) : _v(v) {
-            read_current();
-        }
-        iterator(end_iterator_tag, const bytes_view& v) : _v(nullptr, 0) {}
-        iterator& operator++() {
-            read_current();
-            return *this;
-        }
         iterator operator++(int) {
             iterator i(*this);
             ++(*this);
@@ -2435,14 +673,6 @@ public:
     static iterator begin(const bytes_view& v) ;
     static iterator end(const bytes_view& v) ;
     static boost::iterator_range<iterator> components(const bytes_view& v) ;
-    value_type deserialize_value(bytes_view v) ;
-    bool less(bytes_view b1, bytes_view b2) ;
-    
-    
-    
-    
-    
-    
 };
 using compound_prefix = compound_type<allow_prefixes::yes>;
 #include <boost/range/join.hpp>
@@ -2453,21 +683,12 @@ class i_partitioner;
 using column_count_type = uint32_t;
 using column_id = column_count_type;
 enum class ordinal_column_id: column_count_type {};
-
 class column_set {
 public:
     using bitset = boost::dynamic_bitset<uint64_t>;
     using size_type = bitset::size_type;
     static_assert(static_cast<column_count_type>(boost::dynamic_bitset<uint64_t>::npos) == ~static_cast<column_count_type>(0));
     static constexpr ordinal_column_id npos = static_cast<ordinal_column_id>(bitset::npos);
-    
-    
-    
-    
-    
-    
-    
-    
 private:
     bitset _mask;
 };
@@ -2476,23 +697,16 @@ class schema;
 class schema_registry_entry;
 class schema_builder;
 namespace cell_comparator {
-
-
-
 }
 namespace db {
 class extensions;
 }
 enum class column_kind { partition_key, clustering_key, static_column, regular_column };
 enum class column_view_virtual { no, yes };
-
-
 enum class cf_type : uint8_t {
     standard,
     super,
 };
- 
- 
 struct speculative_retry {
     enum class type {
         NONE, CUSTOM, PERCENTILE, ALWAYS
@@ -2502,14 +716,6 @@ private:
     double _v;
 public:
     speculative_retry(type t, double v)  ;
-    
-    
-    
-    
-    bool operator==(const speculative_retry& other) const {
-        return _t == other._t && _v == other._v;
-    }
-    
 };
 typedef std::unordered_map<sstring, sstring> index_options_map;
 enum class index_metadata_kind {
@@ -2524,12 +730,8 @@ class thrift_schema {
     bool _compound = true;
     bool _is_dynamic = false;
 public:
-    
-    
     friend class schema;
 };
-bool operator==(const column_definition&, const column_definition&);
-
 static constexpr int DEFAULT_MIN_COMPACTION_THRESHOLD = 4;
 static constexpr int DEFAULT_MAX_COMPACTION_THRESHOLD = 32;
 static constexpr int DEFAULT_MIN_INDEX_INTERVAL = 128;
@@ -2539,30 +741,12 @@ class column_mapping_entry {
     data_type _type;
     bool _is_atomic;
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 };
 class column_mapping {
 private:
     std::vector<column_mapping_entry> _columns;
     column_count_type _n_static = 0;
 public:
-    
-    
-    
-    
-    
-    
-    
-    
 };
 /**
  * Augments a schema with fields related to materialized views.
@@ -2574,16 +758,7 @@ class raw_view_info final {
     bool _include_all_columns;
     sstring _where_clause;
 public:
-    
-    
-    
-    
-    
-    
-    
 };
-
-
 class view_info;
 class v3_columns {
     bool _is_dense = false;
@@ -2591,18 +766,7 @@ class v3_columns {
     std::vector<column_definition> _columns;
     std::unordered_map<bytes, const column_definition*> _columns_by_name;
 public:
-    
-    
-    
-    
-    
-    
 public:
-    
-    
-    
-    
-    
 };
 namespace query {
 class partition_slice;
@@ -2627,276 +791,10 @@ class partition_slice;
 class schema_extension {
 public:
     ;
-    
-    virtual bool is_placeholder() const ;
 };
 /*
  * Effectively immutable.
- * Not safe to access across cores because of shared_ptr's.
- * Use global_schema_ptr for safe across-shard access.
- */
-class schema final : public enable_lw_shared_from_this<schema> {
-    friend class v3_columns;
-public:
-    struct dropped_column {
-        data_type type;
-        api::timestamp_type timestamp;
-        bool operator==(const dropped_column& rhs) const ;
-    };
-    using extensions_map = std::map<sstring, ::shared_ptr<schema_extension>>;
-private:
-    struct raw_schema {
-        raw_schema(utils::UUID id);
-        utils::UUID _id;
-        sstring _ks_name;
-        sstring _cf_name;
-        std::vector<column_definition> _columns;
-        sstring _comment;
-        gc_clock::duration _default_time_to_live = gc_clock::duration::zero();
-        data_type _regular_column_name_type;
-        data_type _default_validation_class = bytes_type;
-        double _bloom_filter_fp_chance = 0.01;
-        extensions_map _extensions;
-        bool _is_dense = false;
-        bool _is_compound = true;
-        bool _is_counter = false;
-        cf_type _type = cf_type::standard;
-        int32_t _gc_grace_seconds = DEFAULT_GC_GRACE_SECONDS;
-        double _dc_local_read_repair_chance = 0.1;
-        double _read_repair_chance = 0.0;
-        double _crc_check_chance = 1;
-        int32_t _min_compaction_threshold = DEFAULT_MIN_COMPACTION_THRESHOLD;
-        int32_t _max_compaction_threshold = DEFAULT_MAX_COMPACTION_THRESHOLD;
-        int32_t _min_index_interval = DEFAULT_MIN_INDEX_INTERVAL;
-        int32_t _max_index_interval = 2048;
-        int32_t _memtable_flush_period = 0;
-        speculative_retry _speculative_retry = ::speculative_retry(speculative_retry::type::PERCENTILE, 0.99);
-        bool _compaction_enabled = true;
-        table_schema_version _version;
-        std::unordered_map<sstring, dropped_column> _dropped_columns;
-        std::map<bytes, data_type> _collections;
-        std::unordered_map<sstring, index_metadata> _indices_by_name;
-        bool _wait_for_sync = false; 
-    };
-    raw_schema _raw;
-    thrift_schema _thrift;
-    v3_columns _v3_columns;
-    mutable schema_registry_entry* _registry_entry = nullptr;
-    std::unique_ptr<::view_info> _view_info;
-    const std::array<column_count_type, 3> _offsets;
-     column_count_type column_offset(column_kind k) const ;
-    std::unordered_map<bytes, const column_definition*> _columns_by_name;
-    lw_shared_ptr<compound_type<allow_prefixes::no>> _partition_key_type;
-    lw_shared_ptr<compound_type<allow_prefixes::yes>> _clustering_key_type;
-    column_mapping _column_mapping;
-    shared_ptr<query::partition_slice> _full_slice;
-    column_count_type _clustering_key_size;
-    column_count_type _regular_column_count;
-    column_count_type _static_column_count;
-    extensions_map& extensions() ;
-    friend class db::extensions;
-    friend class schema_builder;
-public:
-    using row_column_ids_are_ordered_by_name = std::true_type;
-    typedef std::vector<column_definition> columns_type;
-    typedef typename columns_type::iterator iterator;
-    typedef typename columns_type::const_iterator const_iterator;
-    typedef boost::iterator_range<iterator> iterator_range_type;
-    typedef boost::iterator_range<const_iterator> const_iterator_range_type;
-    static constexpr int32_t NAME_LENGTH = 48;
-    struct column {
-        bytes name;
-        data_type type;
-    };
-private:
-    ::shared_ptr<cql3::column_specification> make_column_specification(const column_definition& def);
-    void rebuild();
-    schema(const raw_schema&, std::optional<raw_view_info>);
-public:
-    schema(std::optional<utils::UUID> id,
-        std::string_view ks_name,
-        std::string_view cf_name,
-        std::vector<column> partition_key,
-        std::vector<column> clustering_key,
-        std::vector<column> regular_columns,
-        std::vector<column> static_columns,
-        data_type regular_column_name_type,
-        std::string_view comment = {});
-    schema(const schema&);
-    ~schema();
-    table_schema_version version() const ;
-    double bloom_filter_fp_chance() const ;
-    sstring thrift_key_validator() const;
-    const extensions_map& extensions() const ;
-    bool is_dense() const ;
-    bool is_compound() const ;
-    bool is_cql3_table() const ;
-    bool is_compact_table() const ;
-    bool is_static_compact_table() const ;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    bool has_static_columns() const;
-    column_count_type columns_count(column_kind kind) const;
-    column_count_type partition_key_size() const;
-    column_count_type clustering_key_size() const;
-    column_count_type static_columns_count() const;
-    column_count_type regular_columns_count() const;
-    column_count_type all_columns_count() const;
-    const_iterator_range_type partition_key_columns() const;
-    const_iterator_range_type clustering_key_columns() const;
-    const_iterator_range_type static_columns() const;
-    const_iterator_range_type regular_columns() const;
-    typedef boost::range::joined_range<const_iterator_range_type, const_iterator_range_type>
-        select_order_range;
-    select_order_range all_columns_in_select_order() const;
-    uint32_t position(const column_definition& column) const;
-    const columns_type& all_columns() const ;
-    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const ;
-    const auto& dropped_columns() const ;
-    const auto& collections() const ;
-    gc_clock::duration default_time_to_live() const ;
-    data_type make_legacy_default_validator() const;
-    const sstring& ks_name() const ;
-    const sstring& cf_name() const ;
-    const lw_shared_ptr<compound_type<allow_prefixes::no>>& partition_key_type() const ;
-    const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_type() const ;
-    const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_prefix_type() const ;
-    const data_type& regular_column_name_type() const ;
-    const data_type& static_column_name_type() const ;
-    const std::unique_ptr<::view_info>& view_info() const ;
-    bool is_view() const ;
-    const query::partition_slice& full_slice() const ;
-    std::vector<sstring> index_names() const;
-    std::vector<index_metadata> indices() const;
-    const std::unordered_map<sstring, index_metadata>& all_indices() const;
-    bool has_index(const sstring& index_name) const;
-    std::optional<index_metadata> find_index_noname(const index_metadata& target) const;
-    
-    
-    
-    
-    friend class schema_registry_entry;
-    
-    
-    
-    
-public:
-    
-};
-
-using schema_ptr = lw_shared_ptr<const schema>;
-class view_ptr final {
-    schema_ptr _schema;
-public:
-    
-    
-    
-    
-    
-    
-    
-};
-
-
-class schema_mismatch_error : public std::runtime_error {
-public:
-    
-};
-
-namespace sstables {
-enum class sstable_version_types { ka, la, mc };
-enum class sstable_format_types { big };
-
-
-
-
-}
-template <typename CompoundType>
-class legacy_compound_view {
-    static_assert(!CompoundType::is_prefixable, "Legacy view not defined for prefixes");
-    CompoundType& _type;
-    bytes_view _packed;
-public:
-    
-    class iterator : public std::iterator<std::input_iterator_tag, bytes::value_type> {
-        bool _singular;
-        int32_t _offset;
-        typename CompoundType::iterator _i;
-    public:
-        struct end_tag {};
-        
-        
-        
-        
-        
-        
-    };
-    struct tri_comparator {
-        const CompoundType& _type;
-        
-        
-    };
-    
-    
-    
-};
-template <typename CompoundType>
-static
-bytes to_legacy(CompoundType& type, bytes_view packed) ;
-class composite_view;
-class composite final {
-    bytes _bytes;
-    bool _is_compound;
-public:
-    composite(bytes&& b, bool is_compound) 
-    ;
-    explicit composite(bytes&& b) 
-    ;
-    composite() 
-    ;
-    using size_type = uint16_t;
-    using eoc_type = int8_t;
-    /*
-     * The 'end-of-component' byte should always be 0 for actual column name.
-     * However, it can set to 1 for query bounds. This allows to query for the
-     * equivalent of 'give me the full range'. That is, if a slice query is:
-     *   start = <3><"foo".getBytes()><0>
-     *   end   = <3><"foo".getBytes()><1>
-     * then we'll return *all* the columns whose first component is "foo".
+ * Not safe to access across cores because of shared_ptr's.  * Use global_schema_ptr for safe across-shard access.  */class schema final : public enable_lw_shared_from_this<schema> {     friend class v3_columns; public:     struct dropped_column {         data_type type;         api::timestamp_type timestamp;              };     using extensions_map = std::map<sstring, ::shared_ptr<schema_extension>>; private:     struct raw_schema {                  utils::UUID _id;         sstring _ks_name;         sstring _cf_name;         std::vector<column_definition> _columns;         sstring _comment;         gc_clock::duration _default_time_to_live = gc_clock::duration::zero();         data_type _regular_column_name_type;         data_type _default_validation_class = bytes_type;         double _bloom_filter_fp_chance = 0.01;         extensions_map _extensions;         bool _is_dense = false;         bool _is_compound = true;         bool _is_counter = false;         cf_type _type = cf_type::standard;         int32_t _gc_grace_seconds = DEFAULT_GC_GRACE_SECONDS;         double _dc_local_read_repair_chance = 0.1;         double _read_repair_chance = 0.0;         double _crc_check_chance = 1;         int32_t _min_compaction_threshold = DEFAULT_MIN_COMPACTION_THRESHOLD;         int32_t _max_compaction_threshold = DEFAULT_MAX_COMPACTION_THRESHOLD;         int32_t _min_index_interval = DEFAULT_MIN_INDEX_INTERVAL;         int32_t _max_index_interval = 2048;         int32_t _memtable_flush_period = 0;         speculative_retry _speculative_retry = ::speculative_retry(speculative_retry::type::PERCENTILE, 0.99);         bool _compaction_enabled = true;         table_schema_version _version;         std::unordered_map<sstring, dropped_column> _dropped_columns;         std::map<bytes, data_type> _collections;         std::unordered_map<sstring, index_metadata> _indices_by_name;         bool _wait_for_sync = false;      };     raw_schema _raw;     thrift_schema _thrift;     v3_columns _v3_columns;     mutable schema_registry_entry* _registry_entry = nullptr;     std::unique_ptr<::view_info> _view_info;     const std::array<column_count_type, 3> _offsets;           std::unordered_map<bytes, const column_definition*> _columns_by_name;     lw_shared_ptr<compound_type<allow_prefixes::no>> _partition_key_type;     lw_shared_ptr<compound_type<allow_prefixes::yes>> _clustering_key_type;     column_mapping _column_mapping;     shared_ptr<query::partition_slice> _full_slice;     column_count_type _clustering_key_size;     column_count_type _regular_column_count;     column_count_type _static_column_count;          friend class db::extensions;     friend class schema_builder; public:     using row_column_ids_are_ordered_by_name = std::true_type;     typedef std::vector<column_definition> columns_type;     typedef typename columns_type::iterator iterator;     typedef typename columns_type::const_iterator const_iterator;     typedef boost::iterator_range<iterator> iterator_range_type;     typedef boost::iterator_range<const_iterator> const_iterator_range_type;     static constexpr int32_t NAME_LENGTH = 48;     struct column {         bytes name;         data_type type;     }; private:          void rebuild();     schema(const raw_schema&, std::optional<raw_view_info>); public:     schema(std::optional<utils::UUID> id,         std::string_view ks_name,         std::string_view cf_name,         std::vector<column> partition_key,         std::vector<column> clustering_key,         std::vector<column> regular_columns,         std::vector<column> static_columns,         data_type regular_column_name_type,         std::string_view comment = {});     schema(const schema&);     ~schema();     table_schema_version version() const ;     double bloom_filter_fp_chance() const ;     sstring thrift_key_validator() const;     const extensions_map& extensions() const ;     bool is_dense() const ;     bool is_compound() const ;     bool is_cql3_table() const ;     bool is_compact_table() const ;     bool is_static_compact_table() const ;                                                                                                                                                                                         bool has_static_columns() const;     column_count_type columns_count(column_kind kind) const;     column_count_type partition_key_size() const;     column_count_type clustering_key_size() const;                                        typedef boost::range::joined_range<const_iterator_range_type, const_iterator_range_type>         select_order_range;                    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const ;     const auto& dropped_columns() const ;     const auto& collections() const ;     gc_clock::duration default_time_to_live() const ;     data_type make_legacy_default_validator() const;     const sstring& ks_name() const ;     const sstring& cf_name() const ;     const lw_shared_ptr<compound_type<allow_prefixes::no>>& partition_key_type() const ;     const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_type() const ;     const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_prefix_type() const ;     const data_type& regular_column_name_type() const ;     const data_type& static_column_name_type() const ;     const std::unique_ptr<::view_info>& view_info() const ;     bool is_view() const ;     const query::partition_slice& full_slice() const ;     std::vector<sstring> index_names() const;     std::vector<index_metadata> indices() const;     const std::unordered_map<sstring, index_metadata>& all_indices() const;     bool has_index(const sstring& index_name) const;     std::optional<index_metadata> find_index_noname(const index_metadata& target) const;                         friend class schema_registry_entry;                     public:      };  using schema_ptr = lw_shared_ptr<const schema>; class view_ptr final {     schema_ptr _schema; public:                                    };   class schema_mismatch_error : public std::runtime_error { public:      };  namespace sstables { enum class sstable_version_types { ka, la, mc }; enum class sstable_format_types { big };     } template <typename CompoundType> class legacy_compound_view {     static_assert(!CompoundType::is_prefixable, "Legacy view not defined for prefixes");     CompoundType& _type;     bytes_view _packed; public:          class iterator : public std::iterator<std::input_iterator_tag, bytes::value_type> {         bool _singular;         int32_t _offset;         typename CompoundType::iterator _i;     public:         struct end_tag {};                                                           };     struct tri_comparator {         const CompoundType& _type;                       };                }; template <typename CompoundType> static bytes to_legacy(CompoundType& type, bytes_view packed) ; class composite_view; class composite final {     bytes _bytes;     bool _is_compound; public:     composite(bytes&& b, bool is_compound)      ;     explicit composite(bytes&& b)      ;     composite()      ;     using size_type = uint16_t;     using eoc_type = int8_t;     /*      * The 'end-of-component' byte should always be 0 for actual column name.      * However, it can set to 1 for query bounds. This allows to query for the      * equivalent of 'give me the full range'. That is, if a slice query is:      *   start = <3><"foo".getBytes()><0>      *   end   = <3><"foo".getBytes()><1>      * then we'll return *all* the columns whose first component is "foo".
      * If for a component, the 'end-of-component' is != 0, there should not be any
      * following component. The end-of-component can also be -1 to allow
      * non-inclusive query. For instance:
@@ -3052,17 +950,7 @@ public:
     static bool is_static(bytes_view bytes, bool is_compound) ;
     bool is_static() const ;
     bool is_compound() const ;
-    template <typename ClusteringElement>
-    static composite from_clustering_element(const schema& s, const ClusteringElement& ce) ;
-    static composite from_exploded(const std::vector<bytes_view>& v, bool is_compound, eoc marker = eoc::none) {
-        if (v.size() == 0) {
-            return composite(bytes(size_t(1), bytes::value_type(marker)), is_compound);
-        }
-        return serialize_value(v, is_compound, marker);
-    }
-    static composite static_prefix(const schema& s) {
-        return serialize_static(s, std::vector<bytes_view>());
-    }
+     ;
     explicit operator bytes_view() const {
         return _bytes;
     }
@@ -3073,42 +961,12 @@ public:
     friend std::ostream& operator<<(std::ostream& os, const composite& v);
     struct tri_compare {
         const std::vector<data_type>& _types;
-        tri_compare(const std::vector<data_type>& types) : _types(types) {}
-        int operator()(const composite&, const composite&) const;
-        int operator()(composite_view, composite_view) const;
     };
 };
 class composite_view final {
     bytes_view _bytes;
     bool _is_compound;
 public:
-    composite_view(bytes_view b, bool is_compound = true)
-            : _bytes(b)
-            , _is_compound(is_compound)
-    { }
-    composite_view(const composite& c)
-            : composite_view(static_cast<bytes_view>(c), c.is_compound())
-    { }
-    composite_view()
-            : _bytes(nullptr, 0)
-            , _is_compound(true)
-    { }
-    std::vector<bytes_view> explode() const {
-        if (!_is_compound) {
-            return { _bytes };
-        }
-        std::vector<bytes_view> ret;
-        ret.reserve(8);
-        for (auto it = begin(), e = end(); it != e; ) {
-            ret.push_back(it->first);
-            auto marker = it->second;
-            ++it;
-            if (it != e && marker != composite::eoc::none) {
-                throw runtime_exception(format("non-zero component divider found ({:d}) mid", format("0x{:02x}", composite::eoc_type(marker) & 0xff)));
-            }
-        }
-        return ret;
-    }
     composite::iterator begin() const {
         return composite::iterator(_bytes, _is_compound, is_static());
     }
@@ -3128,9 +986,7 @@ public:
         return os << "{" << ::join(", ", v.components()) << ", compound=" << v._is_compound << ", static=" << v.is_static() << "}";
     }
 };
-
 std::ostream& operator<<(std::ostream& os, const composite& v) ;
-
 #include <any>
 class migrate_fn_type {
     std::any _migrators;
@@ -3368,111 +1224,6 @@ private:
 public:
     using size_type = blob_storage::size_type;
     struct initialized_later {};
-    managed_bytes() {
-        _u.small.size = 0;
-    }
-    managed_bytes(const blob_storage::char_type* ptr, size_type size)
-        : managed_bytes(bytes_view(ptr, size)) {}
-    managed_bytes(const bytes& b) : managed_bytes(static_cast<bytes_view>(b)) {}
-    managed_bytes(initialized_later, size_type size) {
-        memory::on_alloc_point();
-        if (size <= max_inline_size) {
-            _u.small.size = size;
-        } else {
-            _u.small.size = -1;
-            auto& alctr = current_allocator();
-            auto maxseg = max_seg(alctr);
-            auto now = std::min(size_t(size), maxseg);
-            void* p = alctr.alloc(&get_standard_migrator<blob_storage>(),
-                sizeof(blob_storage) + now, alignof(blob_storage));
-            auto first = new (p) blob_storage(&_u.ptr, size, now);
-            auto last = first;
-            size -= now;
-            try {
-                while (size) {
-                    auto now = std::min(size_t(size), maxseg);
-                    void* p = alctr.alloc(&get_standard_migrator<blob_storage>(),
-                        sizeof(blob_storage) + now, alignof(blob_storage));
-                    last = new (p) blob_storage(&last->next, 0, now);
-                    size -= now;
-                }
-            } catch (...) {
-                free_chain(first);
-                throw;
-            }
-        }
-    }
-    managed_bytes(bytes_view v) : managed_bytes(initialized_later(), v.size()) {
-        if (!external()) {
-            #pragma GCC diagnostic push
-            #pragma GCC diagnostic ignored "-Warray-bounds"
-            std::copy(v.begin(), v.end(), _u.small.data);
-            #pragma GCC diagnostic pop
-            return;
-        }
-        auto p = v.data();
-        auto s = v.size();
-        auto b = _u.ptr;
-        while (s) {
-            memcpy(b->data, p, b->frag_size);
-            p += b->frag_size;
-            s -= b->frag_size;
-            b = b->next;
-        }
-        assert(!b);
-    }
-    managed_bytes(std::initializer_list<bytes::value_type> b) : managed_bytes(b.begin(), b.size()) {}
-    ~managed_bytes() noexcept {
-        if (external()) {
-            free_chain(_u.ptr);
-        }
-    }
-    managed_bytes(const managed_bytes& o) : managed_bytes(initialized_later(), o.size()) {
-        if (!external()) {
-            memcpy(data(), o.data(), size());
-            return;
-        }
-        auto s = size();
-        const blob_storage::ref_type* next_src = &o._u.ptr;
-        blob_storage* blob_src = nullptr;
-        size_type size_src = 0;
-        size_type offs_src = 0;
-        blob_storage::ref_type* next_dst = &_u.ptr;
-        blob_storage* blob_dst = nullptr;
-        size_type size_dst = 0;
-        size_type offs_dst = 0;
-        while (s) {
-            if (!size_src) {
-                blob_src = *next_src;
-                next_src = &blob_src->next;
-                size_src = blob_src->frag_size;
-                offs_src = 0;
-            }
-            if (!size_dst) {
-                blob_dst = *next_dst;
-                next_dst = &blob_dst->next;
-                size_dst = blob_dst->frag_size;
-                offs_dst = 0;
-            }
-            auto now = std::min(size_src, size_dst);
-            memcpy(blob_dst->data + offs_dst, blob_src->data + offs_src, now);
-            s -= now;
-            offs_src += now; size_src -= now;
-            offs_dst += now; size_dst -= now;
-        }
-        assert(size_src == 0 && size_dst == 0);
-    }
-    managed_bytes(managed_bytes&& o) noexcept
-        : _u(o._u)
-    {
-        if (external()) {
-            if (_u.ptr) {
-                _u.ptr->backref = &_u.ptr;
-            }
-        }
-        o._u.small.size = 0;
-    }
-    managed_bytes& operator=(managed_bytes&& o) noexcept ;
     managed_bytes& operator=(const managed_bytes& o) ;
     bool operator==(const managed_bytes& o) const ;
     bool operator!=(const managed_bytes& o) const ;
@@ -3541,11 +1292,6 @@ struct hash<managed_bytes> {
     }
 };
 }
-inline
-size_t
-size_for_allocation_strategy(const blob_storage& bs) {
-    return sizeof(bs) + bs.frag_size;
-}
 class database;
 class keyspace;
 class table;
@@ -3570,49 +1316,22 @@ class compound_view_wrapper {
 protected:
     bytes_view _bytes;
 protected:
-    compound_view_wrapper(bytes_view v)
-        : _bytes(v)
-    { }
     static inline const auto& get_compound_type(const schema& s) {
         return TopLevelView::get_compound_type(s);
     }
 public:
-    std::vector<bytes> explode(const schema& s) const {
-        return get_compound_type(s)->deserialize_value(_bytes);
-    }
-    bytes_view representation() const {
-        return _bytes;
-    }
     struct less_compare {
         typename TopLevelView::compound _t;
-        
-        
     };
     struct tri_compare {
         typename TopLevelView::compound _t;
-        
-        
     };
     struct hashing {
         typename TopLevelView::compound _t;
-        
-        
     };
     struct equality {
         typename TopLevelView::compound _t;
-        
-        
     };
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     bool is_empty(const schema& s) const {
         return is_empty();
     }
@@ -3622,19 +1341,11 @@ class compound_wrapper {
 protected:
     managed_bytes _bytes;
 protected:
-    compound_wrapper(managed_bytes&& b) : _bytes(std::move(b)) {}
-    static inline const auto& get_compound_type(const schema& s) {
-        return TopLevel::get_compound_type(s);
-    }
 public:
     struct with_schema_wrapper {
-        with_schema_wrapper(const schema& s, const TopLevel& key)  ;
         const schema& s;
         const TopLevel& key;
     };
-    with_schema_wrapper with_schema(const schema& s) const ;
-    static TopLevel make_empty() ;
-    static TopLevel make_empty(const schema&) ;
     template<typename RangeOfSerializedComponents>
     static TopLevel from_exploded(RangeOfSerializedComponents&& v) ;
     static TopLevel from_exploded(const schema& s, const std::vector<bytes>& v) ;
@@ -3646,21 +1357,11 @@ public:
     static
     TopLevel from_singular(const schema& s, const T& v) ;
     TopLevelView view() const ;
-    operator TopLevelView() const ;
-    std::vector<bytes> explode(const schema& s) const ;
-    std::vector<bytes> explode() const ;
     struct tri_compare {
         typename TopLevel::compound _t;
-        tri_compare(const schema& s)  ;
-        int operator()(const TopLevel& k1, const TopLevel& k2) const ;
-        int operator()(const TopLevelView& k1, const TopLevel& k2) const ;
-        int operator()(const TopLevel& k1, const TopLevelView& k2) const ;
     };
     struct less_compare {
         typename TopLevel::compound _t;
-        less_compare(const schema& s)  ;
-        bool operator()(const TopLevel& k1, const TopLevel& k2) const ;
-        bool operator()(const TopLevelView& k1, const TopLevel& k2) const ;
         bool operator()(const TopLevel& k1, const TopLevelView& k2) const ;
     };
     struct hashing {
@@ -3675,17 +1376,7 @@ public:
         bool operator()(const TopLevel& o1, const TopLevelView& o2) const;
     };
     bool equal(const schema& s, const TopLevel& other) const ;
-    bool equal(const schema& s, const TopLevelView& other) const ;
     operator bytes_view() const;
-    const managed_bytes& representation() const;
-    auto begin(const schema& s) const ;
-    auto end(const schema& s) const ;
-    bool is_empty() const;
-    explicit operator bool() const;
-    bool is_empty(const schema& s) const;
-    auto components() const ;
-    auto components(const schema& s) const;
-    bytes_view get_component(const schema& s, size_t idx) const;
     size_t size(const schema& s) const;
     size_t external_memory_usage() const;
     size_t memory_usage() const;
@@ -3700,49 +1391,31 @@ public:
     struct less_compare_with_prefix {
         less_compare_with_prefix(const schema& s);
         bool operator()(const prefix_view_on_full_compound& k1, const PrefixTopLevel& k2) const;
-        
     };
 };
 template <typename TopLevel>
 class prefix_view_on_prefix_compound {
 public:
     using iterator = typename compound_type<allow_prefixes::yes>::iterator;
-    
-    
-    
     struct less_compare_with_prefix {
-        
-        
-        
     };
 };
 template <typename TopLevel, typename TopLevelView, typename PrefixTopLevel>
 class prefixable_full_compound : public compound_wrapper<TopLevel, TopLevelView> {
     using base = compound_wrapper<TopLevel, TopLevelView>;
 protected:
-    
 public:
     using prefix_view_type = prefix_view_on_full_compound<TopLevel, PrefixTopLevel>;
-    
     struct less_compare_with_prefix {
-        
-        
-        
     };
     struct prefix_equality_less_compare {
-        
-        
-        
     };
-    
 };
 template <typename TopLevel, typename FullTopLevel>
 class prefix_compound_view_wrapper : public compound_view_wrapper<TopLevel> {
     using base = compound_view_wrapper<TopLevel>;
 protected:
-    
 public:
-    
 };
 template <typename TopLevel, typename TopLevelView, typename FullTopLevel>
 class prefix_compound_wrapper : public compound_wrapper<TopLevel, TopLevelView> {
@@ -3771,13 +1444,6 @@ private:
     partition_key_view(bytes_view v);
 public:
     using compound = lw_shared_ptr<c_type>;
-    static partition_key_view from_bytes(bytes_view v);
-    static const compound& get_compound_type(const schema& s);
-    const legacy_compound_view<c_type> legacy_form(const schema& s) const;
-    int legacy_tri_compare(const schema& s, partition_key_view o) const;
-    bool legacy_equal(const schema& s, partition_key_view o) const;
-    int ring_order_tri_compare(const schema& s, partition_key_view o) const;
-    friend std::ostream& operator<<(std::ostream& out, const partition_key_view& pk);
 };
 class partition_key : public compound_wrapper<partition_key, partition_key_view> {
 public:
@@ -3790,57 +1456,19 @@ public:
      * For example if a composite key is has two columns (col1, col2) to get the partition key that
      * have col1=val1 and col2=val2 use the string 'val1:val2'
      */
-    
-    
-    
-    
-    
-    
-    
-    
-    
     using compound = lw_shared_ptr<c_type>;
-    
-    
-    
-    
-    
-    
-    
 };
-
 class exploded_clustering_prefix {
 public:
-    
-    
-    
-    
-    
-    
-    
 };
 class clustering_key_prefix_view : public prefix_compound_view_wrapper<clustering_key_prefix_view, clustering_key> {
 public:
-    
     using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
-    
     };
 class clustering_key_prefix : public prefix_compound_wrapper<clustering_key_prefix, clustering_key_prefix_view, clustering_key> {
 public:
     ;
-    
-    
-    
-    
-    
-    
-    
-    
     using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
-    
-    
-    
-        
 };
 #include <boost/range/adaptor/sliced.hpp>
 template<typename T>
@@ -3848,11 +1476,6 @@ class range_bound {
     T _value;
     bool _inclusive;
 public:
-    
-    
-    
-    
-    
      ;
 };
 template<typename T>
@@ -3870,14 +1493,9 @@ private:
     optional<bound> _end;
     bool _singular;
 public:
-    
-    
-    
 private:
     struct start_bound_ref { const optional<bound>& b; };
     struct end_bound_ref { const optional<bound>& b; };
-    
-    
      ;
      ;
      ;
@@ -3887,33 +1505,17 @@ public:
      ;
      ;
      ;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-     ;
-    
      ;
      ;
      ;
      ;
      ;
      ;
-    
-    
-    
-    
+     ;
     ;
 private:
     friend class nonwrapping_range<T>;
 };
-
 template<typename T>
 class nonwrapping_range {
     template <typename U>
@@ -3925,30 +1527,9 @@ public:
 private:
     wrapping_range<T> _range;
 public:
-    
-    
-    nonwrapping_range(optional<bound> start, optional<bound> end, bool singular = false)
-        : _range(std::move(start), std::move(end), singular)
-    { }
-    explicit nonwrapping_range(wrapping_range<T>&& r)
-        : _range(std::move(r))
-    { }
-    explicit nonwrapping_range(const wrapping_range<T>& r)
-        : _range(r)
-    { }
-    operator wrapping_range<T>() const & ;
-    operator wrapping_range<T>() && ;
-    template<typename Comparator>
-    bool before(const T& point, Comparator&& cmp) const ;
-    template<typename Comparator>
-    bool after(const T& point, Comparator&& cmp) const ;
-    template<typename Comparator>
-    bool overlaps(const nonwrapping_range& other, Comparator&& cmp) const ;
-    static nonwrapping_range make(bound start, bound end) ;
-    static nonwrapping_range make_open_ended_both_sides() ;
-    static nonwrapping_range make_singular(T value) ;
-    static nonwrapping_range make_starting_with(bound b) ;
-    static nonwrapping_range make_ending_with(bound b) ;
+     ;
+     ;
+     ;
     bool is_singular() const ;
     bool is_full() const ;
     const optional<bound>& start() const ;
@@ -4275,26 +1856,21 @@ public:
     /**
      * @return a string representation of this token
      */
-    sstring to_sstring() const;
     /**
      * Calculate a token representing the approximate "middle" of the given
      * range.
      *
      * @return The approximate midpoint between left and right.
      */
-    static token midpoint(const token& left, const token& right);
     /**
      * @return a randomly generated token
      */
-    static token get_random_token();
     /**
      * @return a token from string representation
      */
-    static dht::token from_sstring(const sstring& t);
     /**
      * @return a token from its byte representation
      */
-    static dht::token from_bytes(bytes_view bytes);
     /**
      * Calculate the deltas between tokens in the ring in order to compare
      *  relative sizes.
@@ -4302,23 +1878,10 @@ public:
      * @param sortedtokens a sorted List of tokens
      * @return the mapping from 'token' to 'percentage of the ring owned by that token'.
      */
-    static std::map<token, float> describe_ownership(const std::vector<token>& sorted_tokens);
-    static data_type get_token_validator();
     /**
      * Gets the first shard of the minimum token.
      */
-    static unsigned shard_of_minimum_token() ;
 };
-const token& minimum_token();
-const token& maximum_token();
-int tri_compare(const token& t1, const token& t2);
- bool operator==(const token& t1, const token& t2) ;
- bool operator<(const token& t1, const token& t2) ;
- bool operator!=(const token& t1, const token& t2) ;
- bool operator>(const token& t1, const token& t2) ;
- bool operator<=(const token& t1, const token& t2) ;
-inline bool operator>=(const token& t1, const token& t2) { return std::rel_ops::operator>=(t1, t2); }
-std::ostream& operator<<(std::ostream& out, const token& t);
 } 
 namespace sstables {
 class key_view;
@@ -4331,20 +1894,10 @@ using partition_range = nonwrapping_range<ring_position>;
 using token_range = nonwrapping_range<token>;
 using partition_range_vector = std::vector<partition_range>;
 using token_range_vector = std::vector<token_range>;
-template <typename T>
-inline auto get_random_number() {
-    static thread_local std::default_random_engine re{std::random_device{}()};
-    static thread_local std::uniform_int_distribution<T> dist{};
-    return dist(re);
-}
 class decorated_key {
 public:
     dht::token _token;
     partition_key _key;
-    decorated_key(dht::token t, partition_key k)
-        : _token(std::move(t))
-        , _key(std::move(k)) {
-    }
     struct less_comparator {
         schema_ptr s;
         less_comparator(schema_ptr s);
@@ -4374,7 +1927,6 @@ class decorated_key_equals_comparator {
     const schema& _schema;
 public:
     explicit decorated_key_equals_comparator(const schema& schema) : _schema(schema) {}
-    
 };
 using decorated_key_opt = std::optional<decorated_key>;
 class i_partitioner {
@@ -4383,42 +1935,33 @@ protected:
     unsigned _sharding_ignore_msb_bits;
     std::vector<uint64_t> _shard_start;
 public:
-    
-    
     /**
      * Transform key to object representation of the on-disk format.
      *
      * @param key the raw, client-facing key
      * @return decorated version of key
      */
-    
     /**
      * Transform key to object representation of the on-disk format.
      *
      * @param key the raw, client-facing key
      * @return decorated version of key
      */
-    
     /**
      * @return a token that can be used to route a given key
      * (This is NOT a method to create a token from its string representation;
      * for that, use tokenFactory.fromString.)
      */
-    
-    
     /**
      * @return True if the implementing class preserves key order in the tokens
      * it generates.
      */
-    
     /**
      * @return name of partitioner.
      */
-    
     /**
      * Calculates the shard that handles a particular token.
      */
-    
     /**
      * Gets the first token greater than `t` that is in shard `shard`, and is a shard boundary (its first token).
      *
@@ -4430,14 +1973,9 @@ public:
      *
      * On overflow, maximum_token() is returned.
      */
-    
     /**
      * @return number of shards configured for this partitioner
      */
-    
-    
-    
-    
 };
 class ring_position {
 public:
@@ -4449,26 +1987,6 @@ private:
     token_bound _token_bound{}; 
     std::optional<partition_key> _key;
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     friend std::ostream& operator<<(std::ostream&, const ring_position&);
 };
 class ring_position_view {
@@ -4487,23 +2005,6 @@ public:
     bool is_min() const ;
     bool is_max() const ;
     static ring_position_view for_range_start(const partition_range& r) ;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 };
 using ring_position_ext_view = ring_position_view;
 class ring_position_ext {
@@ -4514,80 +2015,28 @@ public:
     using token_bound = ring_position::token_bound;
     struct after_key_tag {};
     using after_key = bool_class<after_key_tag>;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     ring_position_ext(const ring_position_ext& pos) = default;
-    
-    
     ring_position_ext(after_key_tag, const ring_position_ext& v)
         : _token(v._token)
         , _key(v._key)
         , _weight(v._key ? 1 : v._weight)
     { }
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 };
 int ring_position_tri_compare(const schema& s, ring_position_view lh, ring_position_view rh);
 struct ring_position_comparator {
     const schema& s;
     ring_position_comparator(const schema& s_) : s(s_) {}
-    
-    
-    
 };
 struct ring_position_less_comparator {
     ring_position_comparator tri;
-    
-    
 };
 struct token_comparator {
-    
 };
-
-
-
 class partition_ranges_view {
     const dht::partition_range* _data = nullptr;
     size_t _size = 0;
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
 };
-
-
-
-
-
-
-
-
-
-
-
 future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const schema& s, const dht::partition_range& pr, shard_id shard);
 future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const i_partitioner& partitioner, const schema& s, const dht::partition_range& pr, shard_id shard);
 std::unique_ptr<dht::i_partitioner> make_partitioner(sstring name, unsigned shard_count, unsigned sharding_ignore_msb_bits);
@@ -4977,10 +2426,6 @@ public:
     session_record()
         : username("<unauthenticated request>")
         , elapsed(-1) {}
-    bool ready() const {
-        return elapsed.count() >= 0 && !_consumed;
-    }
-    void set_consumed() ;
 };
 class one_session_records {
 private:
@@ -4995,30 +2440,23 @@ public:
     uint64_t* budget_ptr;
     span_id parent_id;
     span_id my_span_id;
-    one_session_records();
     /**
      * Consume a single record from the per-shard budget.
      */
-    void consume_from_budget() ;
     /**
      * Drop all pending records and return the budget.
      */
-    void drop_records() ;
     /**
      * Should be called when a record is scheduled for write.
      * From that point till data_consumed() call all new records will be written
      * in the next write event.
      */
-    inline void set_pending_for_write();
     /**
      * Should be called after all data pending to be written in this record has
      * been processed.
      * From that point on new records are cached internally and have to be
      * explicitly committed for write in order to be written during the write event.
      */
-    inline void data_consumed();
-    bool is_pending_for_write() const ;
-    uint64_t size() const ;
 private:
     bool _is_pending_for_write = false;
 };
@@ -5059,7 +2497,6 @@ private:
     std::chrono::microseconds _slow_query_duration_threshold;
     std::chrono::seconds _slow_query_record_ttl;
 public:
-    uint64_t get_next_rand_uint64() ;
     i_tracing_backend_helper& backend_helper() ;
     const sstring& get_thread_name() const ;
     static seastar::sharded<tracing>& tracing_instance() ;
@@ -5069,24 +2506,6 @@ public:
     static future<> start_tracing();
     tracing(const backend_registry& br, sstring tracing_backend_helper_class_name);
     future<> start();
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     bool slow_query_tracing_enabled() const ;
     void set_slow_query_threshold(std::chrono::microseconds new_threshold) ;
     std::chrono::microseconds slow_query_threshold() const ;
@@ -5096,9 +2515,6 @@ private:
     void write_timer_callback();
     bool may_create_new_session(const std::optional<utils::UUID>& session_id = std::nullopt) ;
 };
-
-
-
 }
 class position_in_partition_view;
 namespace query {
@@ -5157,26 +2573,14 @@ public:
     const clustering_row_ranges& row_ranges(const schema&, const partition_key&) const;
     void set_range(const schema&, const partition_key&, clustering_row_ranges);
     void clear_range(const schema&, const partition_key&);
-        
-    
-    
-    
-    
-    
-    
-    
-    
 };
 constexpr auto max_partitions = std::numeric_limits<uint32_t>::max();
 }
-
-
 enum class bound_weight : int8_t {
     before_all_prefixed = -1,
     equal = 0,
     after_all_prefixed = 1,
 };
-
 enum class partition_region : uint8_t {
     partition_start,
     static_row,
@@ -5186,11 +2590,7 @@ enum class partition_region : uint8_t {
 class position_in_partition_view {
     friend class position_in_partition;
 public:
-    
-    
-    
 private:
-    
 public:
     struct partition_start_tag_t { };
     struct end_of_partition_tag_t { };
@@ -5198,41 +2598,11 @@ public:
     struct clustering_row_tag_t { };
     struct range_tag_t { };
     using range_tombstone_tag_t = range_tag_t;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     bound_view as_start_bound_view() const;
     bound_view as_end_bound_view() const;
     class printer {
     public:
-        
-        
     };
-    
-    
-    
 };
 class position_in_partition {
 public:
@@ -5246,103 +2616,29 @@ public:
     struct before_clustering_row_tag_t { };
     struct range_tag_t { };
     using range_tombstone_tag_t = range_tag_t;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     ;
-    
-    
     class composite_tri_compare {
     public:
-        
-        
-        
-        
-        
     };
     class composite_less_compare {
     public:
-        
         ;
     };
     class tri_compare {
     public:
-        
-        
-        
-        
-        
     };
     class less_compare {
     public:
         less_compare(const schema& s);
-        
         bool operator()(const position_in_partition_view& a, const position_in_partition_view& b) const;
-        
-        
     };
     class equal_compare {
         ;
     public:
-        
-        
-        
-        
-        
     };
-    
 };
-
 class position_range {
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     bool overlaps(const schema& s, position_in_partition_view start, position_in_partition_view end) const;
     friend std::ostream& operator<<(std::ostream&, const position_range&);
 };
@@ -5446,53 +2742,18 @@ public:
     public:
         printer(const abstract_type& type, const collection_mutation_view& cmv)
                 : _type(type), _cmv(cmv) {}
-        
     };
 };
 class collection_mutation {
 public:
-    
-    
-    
-    
 };
-
-
-
 class atomic_cell_or_collection final {
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     class printer {
     public:
-        
-        
-        
-        
     };
-    
 };
 namespace std {
-
 }
 namespace query {
 enum class digest_algorithm : uint8_t {
@@ -5522,17 +2783,6 @@ public:
     future<result_memory_accounter> new_mutation_read(size_t max_result_size);
     future<result_memory_accounter> new_data_read(size_t max_result_size);
     future<result_memory_accounter> new_digest_read(size_t max_result_size);
-    stop_iteration check() const {
-        return stop_iteration(_memory_limiter.current() <= 0);
-    }
-    stop_iteration update_and_check(size_t n) {
-        _memory_limiter.consume(n);
-        return check();
-    }
-    void release(size_t n) noexcept {
-        _memory_limiter.signal(n);
-    }
-    semaphore& sem() noexcept { return _memory_limiter; }
 };
 class result_memory_tracker {
     semaphore_units<> _units;
@@ -5540,10 +2790,6 @@ class result_memory_tracker {
 private:
     static thread_local semaphore _dummy;
 public:
-    result_memory_tracker() noexcept : _units(_dummy, 0), _used_memory(0) { }
-    result_memory_tracker(semaphore& sem, size_t blocked, size_t used) noexcept
-        : _units(sem, blocked), _used_memory(used) { }
-    size_t used_memory() const { return _used_memory; }
 };
 class result_memory_accounter {
     result_memory_limiter* _limiter = nullptr;
@@ -5554,26 +2800,11 @@ class result_memory_accounter {
     stop_iteration _stop_on_global_limit;
 private:
     struct mutation_query_tag { };
-    
     struct data_query_tag { };
-    
     struct digest_query_tag { };
-    
     friend class result_memory_limiter;
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
 };
-
-
-
 enum class result_request {
     only_result,
     only_digest,
@@ -5582,8 +2813,6 @@ enum class result_request {
 struct result_options {
     result_request request = result_request::only_result;
     digest_algorithm digest_algo = query::digest_algorithm::none;
-    
-    
 };
 class result_digest {
 public:
@@ -5591,11 +2820,6 @@ public:
 private:
     type _digest;
 public:
-    
-    
-    
-    
-    
 };
 struct short_read_tag { };
 using short_read = bool_class<short_read_tag>;
@@ -5611,29 +2835,12 @@ public:
     class builder;
     class partition_writer;
     friend class result_merger;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     struct printer {
         schema_ptr s;
         const query::partition_slice& slice;
         const query::result& res;
     };
-    sstring pretty_print(schema_ptr, const query::partition_slice&) const;
-    printer pretty_printer(schema_ptr, const query::partition_slice&) const;
 };
-std::ostream& operator<<(std::ostream& os, const query::result::printer&);
 }
 #include <boost/intrusive/set.hpp>
 namespace bi = boost::intrusive;
@@ -5699,49 +2906,14 @@ public:
     }
     position_in_partition_view position() const;
     position_in_partition_view end_position() const;
-    bool empty() const {
-        return !bool(tomb);
-    }
-    explicit operator bool() const {
-        return bool(tomb);
-    }
-    bool equal(const schema& s, const range_tombstone& other) const {
-        return tomb == other.tomb && start_bound().equal(s, other.start_bound()) && end_bound().equal(s, other.end_bound());
-    }
     struct compare {
         bound_view::compare _c;
         compare(const schema& s) : _c(s) {}
-        bool operator()(const range_tombstone& rt1, const range_tombstone& rt2) const {
-            return _c(rt1.start_bound(), rt2.start_bound());
-        }
     };
-    friend void swap(range_tombstone& rt1, range_tombstone& rt2) {
-        range_tombstone tmp(std::move(rt2), without_link());
-        rt2.move_assign(std::move(rt1));
-        rt1.move_assign(std::move(tmp));
-    }
-    friend std::ostream& operator<<(std::ostream& out, const range_tombstone& rt);
     using container_type = bi::set<range_tombstone,
             bi::member_hook<range_tombstone, bi::set_member_hook<bi::link_mode<bi::auto_unlink>>, &range_tombstone::_link>,
             bi::compare<range_tombstone::compare>,
             bi::constant_time_size<false>>;
-    static bool is_single_clustering_row_tombstone(const schema& s, const clustering_key_prefix& start,
-        bound_kind start_kind, const clustering_key_prefix& end, bound_kind end_kind)
-    {
-        return start.is_full(s) && start_kind == bound_kind::incl_start
-            && end_kind == bound_kind::incl_end && start.equal(s, end);
-    }
-    std::optional<range_tombstone> apply(const schema& s, range_tombstone&& src);
-    bool trim_front(const schema& s, position_in_partition_view pos) {
-        position_in_partition::less_compare less(s);
-        if (!less(pos, end_position())) {
-            return false;
-        }
-        if (less(position(), pos)) {
-            set_start(s, pos);
-        }
-        return true;
-    }
     void set_start(const schema& s, position_in_partition_view pos) ;
     size_t external_memory_usage(const schema&) const ;
     size_t memory_usage(const schema& s) const ;
@@ -5789,8 +2961,6 @@ public:
     std::deque<range_tombstone> range_tombstones() && {
         return std::move(_range_tombstones);
     }
-    void apply(range_tombstone rt);
-    void clear();
 };
 class row_marker;
 class row_tombstone;
@@ -5799,14 +2969,6 @@ class dummy_tag {};
 using is_dummy = bool_class<dummy_tag>;
 class mutation_partition_visitor {
 public:
-    virtual void accept_partition_tombstone(tombstone) = 0;
-    virtual void accept_static_cell(column_id, atomic_cell_view) = 0;
-    virtual void accept_static_cell(column_id, collection_mutation_view) = 0;
-    virtual void accept_row_tombstone(const range_tombstone&) = 0;
-    virtual void accept_row(position_in_partition_view key, const row_tombstone& deleted_at, const row_marker& rm,
-        is_dummy = is_dummy::no, is_continuous = is_continuous::yes) = 0;
-    virtual void accept_row_cell(column_id id, atomic_cell_view) = 0;
-    virtual void accept_row_cell(column_id id, collection_mutation_view) = 0;
 };
 namespace utils {
 using input_stream = seastar::memory_input_stream<bytes_ostream::fragment_iterator>;
@@ -5834,7 +2996,6 @@ concept bool MutationViewVisitor = requires (T& visitor, tombstone t, atomic_cel
 )
 class mutation_partition_view_virtual_visitor {
 public:
-    virtual ~mutation_partition_view_virtual_visitor();
     virtual void accept_partition_tombstone(tombstone t) = 0;
     virtual void accept_static_cell(column_id, atomic_cell ac) = 0;
     virtual void accept_static_cell(column_id, collection_mutation_view cmv) = 0;
@@ -5858,10 +3019,6 @@ public:
     }
     static mutation_partition_view from_view(ser::mutation_partition_view v);
     void accept(const schema& schema, partition_builder& visitor) const;
-    
-    
-    
-    
 };
 template<typename T, unsigned InternalSize = 0, typename SizeType = size_t>
 class managed_vector {
@@ -5876,13 +3033,8 @@ private:
     struct external {
         managed_vector* _backref;
         T _data[0];
-        
-        
-        
     };
     union maybe_constructed {
-        
-        
         T object;
     };
 private:
@@ -5893,34 +3045,8 @@ private:
     friend class external;
 private:
     bool is_external() const ;
-    
     void maybe_grow(size_type new_size) ;
-    
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     size_type capacity() const noexcept ;
     void clear() ;
     void reserve(size_type new_capacity) ;
@@ -6032,22 +3158,6 @@ public:
     { }
     range_tombstone_list(const range_tombstone_list&);
     range_tombstone_list& operator=(range_tombstone_list&) = delete;
-    range_tombstone_list(range_tombstone_list&&) = default;
-    range_tombstone_list& operator=(range_tombstone_list&&) = default;
-    ~range_tombstone_list();
-    size_t size() const {
-        return _tombstones.size();
-    }
-    bool empty() const {
-        return _tombstones.empty();
-    }
-    range_tombstones_type& tombstones() {
-        return _tombstones;
-    }
-    auto begin() ;
-    auto begin() const ;
-    auto end() ;
-    auto end() const ;
     void apply(const schema& s, const bound_view& start_bound, const bound_view& end_bound, tombstone tomb) ;
     void apply(const schema& s, const range_tombstone& rt) ;
     void apply(const schema& s, range_tombstone&& rt) ;
@@ -6069,23 +3179,12 @@ public:
     stop_iteration clear_gently() noexcept;
     void apply(const schema& s, const range_tombstone_list& rt_list);
     reverter apply_reversibly(const schema& s, range_tombstone_list& rt_list);
-    friend std::ostream& operator<<(std::ostream& out, const range_tombstone_list&);
-    bool equal(const schema&, const range_tombstone_list&) const;
-    
 private:
-    
-    
-    
 };
 namespace query {
 class clustering_key_filter_ranges {
 public:
-    
     struct reversed { };
-    
-    
-    
-    
 };
 }
 template<typename T>
@@ -6093,19 +3192,6 @@ class managed;
 template<typename T>
 struct managed_ref {
     managed<T>* _ptr;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 };
 template<typename T>
 class managed {
@@ -6115,38 +3201,24 @@ class managed {
     friend struct managed_ref;
 public:
     static_assert(std::is_nothrow_move_constructible<T>::value, "Throwing move constructor not supported");
-    
-    
 };
-
 class mutation_fragment;
 class clustering_row;
 struct cell_hash {
     using size_type = uint64_t;
     static constexpr size_type no_hash = 0;
     size_type hash = no_hash;
-    
 };
 using cell_hash_opt = seastar::optimized_optional<cell_hash>;
 struct cell_and_hash {
     mutable cell_hash_opt hash;
-    
-    
-    
 };
 class compaction_garbage_collector;
 class row {
     class cell_entry {
         friend class row;
     public:
-        
-        
-        
-        
         struct compare {
-            
-            
-            
         };
     };
     using size_type = std::make_unsigned_t<column_id>;
@@ -6155,17 +3227,9 @@ public:
     static constexpr size_t internal_count = 5;
 private:
 public:
-    row();
-    ~row();
-    row(const schema&, column_kind, const row&);
-    row(row&& other) noexcept;
-    row& operator=(row&& other) noexcept;
-    size_t size() const;
     bool empty() const;
-    void reserve(column_id);
 private:
-    template<typename Func>
-    void remove_if(Func&& func);
+    ;
 private:
     template<typename Func>
     auto with_both_ranges(const row& other, Func&& func) const;
@@ -6223,46 +3287,11 @@ class lazy_row {
 public:
     lazy_row() = default;
     explicit lazy_row(row&& r);
-    lazy_row(const schema& s, column_kind kind, const lazy_row& r);
-    lazy_row(const schema& s, column_kind kind, const row& r);
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     ;
     ;
     ;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     class printer {
     public:
-        
-        
-        
-        friend std::ostream& operator<<(std::ostream& os, const printer& p);
     };
 };
 class row_marker;
@@ -6275,37 +3304,11 @@ class row_marker {
     gc_clock::duration _ttl = no_ttl;
     gc_clock::time_point _expiry = no_expiry;
 public:
-    row_marker() = default;
-    explicit row_marker(api::timestamp_type created_at) : _timestamp(created_at) { }
-    row_marker(api::timestamp_type created_at, gc_clock::duration ttl, gc_clock::time_point expiry)
-        : _timestamp(created_at), _ttl(ttl), _expiry(expiry)
-    { }
-    explicit row_marker(tombstone deleted_at)
-        : _timestamp(deleted_at.timestamp), _ttl(dead), _expiry(deleted_at.deletion_time)
-    { }
     bool is_missing() const {
         return _timestamp == api::missing_timestamp;
     }
     bool is_live() const {
         return !is_missing() && _ttl != dead;
-    }
-    bool is_live(tombstone t, gc_clock::time_point now) const {
-        if (is_missing() || _ttl == dead) {
-            return false;
-        }
-        if (_ttl != no_ttl && _expiry <= now) {
-            return false;
-        }
-        return _timestamp > t.timestamp;
-    }
-    bool is_dead(gc_clock::time_point now) const {
-        if (_ttl == dead) {
-            return true;
-        }
-        return _ttl != no_ttl && _expiry <= now;
-    }
-    bool is_expiring() const {
-        return _ttl != no_ttl;
     }
     gc_clock::duration ttl() const {
         return _ttl;
@@ -6351,106 +3354,23 @@ public:
             }
         }
     }
-    friend std::ostream& operator<<(std::ostream& os, const row_marker& rm);
 };
 class clustering_row;
 class shadowable_tombstone : public with_relational_operators<shadowable_tombstone> {
     tombstone _tomb;
 public:
-    explicit shadowable_tombstone(api::timestamp_type timestamp, gc_clock::time_point deletion_time)
-            : _tomb(timestamp, deletion_time) {
-    }
-    explicit shadowable_tombstone(tombstone tomb = tombstone())
-            : _tomb(std::move(tomb)) {
-    }
-    int compare(const shadowable_tombstone& t) const {
-        return _tomb.compare(t._tomb);
-    }
-    explicit operator bool() const {
-        return bool(_tomb);
-    }
-    const tombstone& tomb() const {
-        return _tomb;
-    }
-    bool is_shadowed_by(const row_marker& marker) const {
-        return marker.is_live() && marker.timestamp() > _tomb.timestamp;
-    }
-    void maybe_shadow(tombstone t, row_marker marker) noexcept {
-        if (is_shadowed_by(marker)) {
-            _tomb = std::move(t);
-        }
-    }
-    void apply(tombstone t) noexcept {
-        _tomb.apply(t);
-    }
-    void apply(shadowable_tombstone t) noexcept {
-        _tomb.apply(t._tomb);
-    }
-    friend std::ostream& operator<<(std::ostream& out, const shadowable_tombstone& t) {
-        if (t) {
-            return out << "{shadowable tombstone: timestamp=" << t.tomb().timestamp
-                   << ", deletion_time=" << t.tomb().deletion_time.time_since_epoch().count()
-                   << "}";
-        } else {
-            return out << "{shadowable tombstone: none}";
-        }
-    }
 };
 class row_tombstone : public with_relational_operators<row_tombstone> {
     tombstone _regular;
     shadowable_tombstone _shadowable; 
 public:
-    explicit row_tombstone(tombstone regular, shadowable_tombstone shadowable)
-            : _regular(std::move(regular))
-            , _shadowable(std::move(shadowable)) {
-    }
-    explicit row_tombstone(tombstone regular)
-            : row_tombstone(regular, shadowable_tombstone(regular)) {
-    }
-    row_tombstone() = default;
-    int compare(const row_tombstone& t) const {
-        return _shadowable.compare(t._shadowable);
-    }
-    explicit operator bool() const ;
-    const tombstone& tomb() const ;
-    const gc_clock::time_point max_deletion_time() const ;
-    const tombstone& regular() const ;
-    const shadowable_tombstone& shadowable() const ;
-    
-    
-    
-    
-    
-    
 };
 class deletable_row final {
     row_tombstone _deleted_at;
     row_marker _marker;
     row _cells;
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 public:
-    row_tombstone deleted_at() const { return _deleted_at; }
-    api::timestamp_type created_at() const ;
-    row_marker& marker() ;
-    const row_marker& marker() const ;
-    const row& cells() const ;
-    row& cells() ;
-    bool equal(column_kind, const schema& s, const deletable_row& other, const schema& other_schema) const;
-    bool is_live(const schema& s, tombstone base_tombstone = tombstone(), gc_clock::time_point query_time = gc_clock::time_point::min()) const;
-    bool empty() const ;
-    deletable_row difference(const schema&, column_kind, const deletable_row& other) const;
     class printer {
         const schema& _schema;
         const deletable_row& _deletable_row;
@@ -6470,62 +3390,13 @@ class rows_entry {
     friend class mutation_partition;
 public:
     struct last_dummy_tag {};
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     struct tri_compare {
-        
-        
-        
-        
-        
-        
-        
     };
     struct compare {
-        
-        
-        
-        
-        
-        
-        
-        
-        
     };
-    
-    
-    
-    
     class printer {
     public:
-        
-        
-        
-        
     };
-    
 };
 struct mutation_application_stats {
 };
@@ -6537,89 +3408,18 @@ public:
 public:
     struct copy_comparators_only {};
     struct incomplete_tag {};
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     ;
     class printer {
     public:
-        
-        
-        
-        
     };
-    
 public:
-    
     bool static_row_continuous() const;
     void set_static_row_continuous(bool value);
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 private:
-    
-    
-    
     ;
 public:
-    
-    
-    
-    
-    
 public:
-    
-    
-    
-    
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     size_t row_count() const;
     size_t external_memory_usage(const schema&) const;
 private:
@@ -6649,27 +3449,9 @@ public:
     row_marker& marker();
     const row& cells() const;
     row& cells();
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     class printer {
     public:
-        
-        
-        
-        
     };
-    
 };
 class static_row {
     row _cells;
@@ -6711,33 +3493,15 @@ public:
     public:
         printer(const schema& s, const static_row& r) : _schema(s), _static_row(r) { }
         printer(const printer&) = delete;
-        
-        
     };
-    
 };
 class partition_start final {
     dht::decorated_key _key;
     tombstone _partition_tombstone;
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 };
 class partition_end final {
 public:
-    
-    
-    
-    
-    
 };
 GCC6_CONCEPT(
 template<typename T, typename ReturnType>
@@ -6973,20 +3737,6 @@ private:
     mutation_fragment_opt do_get_next();
 public:
     range_tombstone_stream(const schema& s) : _schema(s), _cmp(s), _list(s) { }
-    mutation_fragment_opt get_next(const rows_entry&);
-    mutation_fragment_opt get_next(const mutation_fragment&);
-    mutation_fragment_opt get_next(position_in_partition_view upper_bound);
-    mutation_fragment_opt get_next();
-    void forward_to(position_in_partition_view);
-    void apply(range_tombstone&& rt) {
-        _list.apply(_schema, std::move(rt));
-    }
-    void apply(const range_tombstone_list& list) {
-        _list.apply(_schema, list);
-    }
-    void apply(const range_tombstone_list&, const query::clustering_range&, bool trim_front = false);
-    void reset();
-    bool empty() const;
     friend std::ostream& operator<<(std::ostream& out, const range_tombstone_stream&);
 };
 GCC6_CONCEPT(
@@ -7000,45 +3750,10 @@ GCC6_CONCEPT(
 )
 class mutation final {
     mutation() = default;
-    
     friend class optimized_optional<mutation>;
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     const dht::decorated_key& decorated_key() const;
-    
-    
-    
-    
-    
-    
-    
-    
 public:
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     mutation sliced(const query::clustering_row_ranges&) const;
 private:
     friend std::ostream& operator<<(std::ostream& os, const mutation& m);
@@ -7294,20 +4009,9 @@ public:
     explicit frozen_mutation(bytes_ostream&& b);
     frozen_mutation(bytes_ostream&& b, partition_key key);
     frozen_mutation(frozen_mutation&& m) = default;
-    frozen_mutation(const frozen_mutation& m) = default;
-    
-    
-    
-    
-     
-    
-    
-    
     mutation unfreeze(schema_ptr s) const;
     struct printer;
-    
 };
-
 struct frozen_mutation_and_schema {
     frozen_mutation fm;
     schema_ptr s;
@@ -7315,27 +4019,17 @@ struct frozen_mutation_and_schema {
 class streamed_mutation_freezer;
 static constexpr size_t default_frozen_fragment_size = 128 * 1024;
 using frozen_mutation_consumer_fn = std::function<future<stop_iteration>(frozen_mutation, bool)>;
-
 class frozen_mutation_fragment {
 };
-
 struct reader_resources {
     int count = 0;
     ssize_t memory = 0;
-    
-    
-    
-    
-    
-    
 };
 class reader_concurrency_semaphore;
 class reader_permit {
     struct impl {
         reader_concurrency_semaphore& semaphore;
         reader_resources base_cost;
-        impl(reader_concurrency_semaphore& semaphore, reader_resources base_cost);
-        ~impl();
     };
     friend reader_permit no_reader_permit();
 public:
@@ -7344,14 +4038,7 @@ public:
         size_t _memory = 0;
         friend class reader_permit;
     private:
-        memory_units(reader_concurrency_semaphore* semaphore, ssize_t memory) noexcept;
     public:
-        memory_units(const memory_units&) = delete;
-        memory_units(memory_units&&) noexcept;
-        ~memory_units();
-        memory_units& operator=(const memory_units&) = delete;
-        memory_units& operator=(memory_units&&) noexcept;
-        void reset(size_t memory = 0);
         operator size_t() const {
             return _memory;
         }
@@ -7406,26 +4093,6 @@ public:
     explicit operator bool() const;
     friend class optimized_optional<mutation_source>;
 public:
-    mutation_source(flat_reader_factory_type fn, std::function<partition_presence_checker()> pcf = [] { return make_default_partition_presence_checker(); });
-    mutation_source(std::function<flat_mutation_reader(schema_ptr, reader_permit, partition_range, const query::partition_slice&, io_priority,
-                tracing::trace_state_ptr, streamed_mutation::forwarding)> fn);
-    mutation_source(std::function<flat_mutation_reader(schema_ptr, reader_permit, partition_range, const query::partition_slice&, io_priority)> fn);
-    mutation_source(std::function<flat_mutation_reader(schema_ptr, reader_permit, partition_range, const query::partition_slice&)> fn);
-    mutation_source(std::function<flat_mutation_reader(schema_ptr, reader_permit, partition_range range)> fn);
-    mutation_source(const mutation_source& other) = default;
-    mutation_source& operator=(const mutation_source& other) = default;
-    mutation_source(mutation_source&&) = default;
-    mutation_source& operator=(mutation_source&&) = default;
-    flat_mutation_reader
-    make_reader(
-        schema_ptr s,
-        reader_permit permit,
-        partition_range range,
-        const query::partition_slice& slice,
-        io_priority pc = default_priority_class(),
-        tracing::trace_state_ptr trace_state = nullptr,
-        streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
-        mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes) const;
     flat_mutation_reader
     make_reader(
         schema_ptr s,
