@@ -7350,11 +7350,9 @@ do_with(T1&& rv1, T2&& rv2, T3_or_F&& rv3, More&&... more) {
 /// @}
 
 }
-#include <array>
 #include <boost/intrusive/list.hpp>
 
 #include <bitset>
-#include <limits>
 
 namespace seastar {
 
@@ -7817,7 +7815,6 @@ extern template class timer<steady_clock_type>;
 
 }
 
-#include <tuple>
 #include <iterator>
 #include <vector>
 
