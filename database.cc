@@ -20,8 +20,6 @@ using column_count_type = uint32_t;
   };
 #include <seastar/util/optimized_optional.hh>
    using bytes = basic_sstring<int8_t, uint32_t, 31, false>;
- class UTFDataFormatException {
- };
     template <typename CharOutputIterator> GCC6_CONCEPT(requires requires(CharOutputIterator it) {
   *it++ = 'a';
   *it++ = 'a';
