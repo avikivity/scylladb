@@ -22,9 +22,6 @@ using column_count_type = uint32_t;
 template <typename CharT> class basic_mutable_view {  };
    using bytes = basic_sstring<int8_t, uint32_t, 31, false>;
    using bytes_view = std::basic_string_view<int8_t>;
-   using bytes_mutable_view = basic_mutable_view<bytes_view::value_type>;
-   using sstring_view = std::string_view;
-   namespace std {  std::ostream &operator<<(std::ostream &os, const bytes_view &b);  }
 #include <seastar/net/byteorder.hh>
 class UTFDataFormatException { };
    template <typename CharOutputIterator> GCC6_CONCEPT(requires requires(CharOutputIterator it) {  *it++ = 'a';  }
@@ -34,9 +31,6 @@ class UTFDataFormatException { };
    template <typename T, typename CharOutputIterator> static inline void write(CharOutputIterator &out, const T &val) {    auto v = net::ntoh(val);    out = std::copy_n(reinterpret_cast<char *>(&v), sizeof(v), out);  }
    namespace utils {  class UUID { private:   int64_t most_sig_bits;   int64_t least_sig_bits; public:                           ; };  }
 #include <seastar/util/log.hh>
-namespace logging {  using log_level = seastar::log_level;  using logger = seastar::logger;  using registry = seastar::logger_registry;  using settings = seastar::logging_settings;  using seastar::level_name;  using seastar::pretty_type_name;  }
-   GCC6_CONCEPT(     template <typename T> concept bool FragmentRange =         requires(T range) {            typename T::fragment_type;            requires std::is_same_v<typename T::fragment_type, bytes_view> ||               std::is_same_v<typename T::fragment_type, bytes_mutable_view>;            { *range.begin() }            ->typename T::fragment_type;            { *range.end() }            ->typename T::fragment_type;            { range.size_bytes() }            ->size_t;            { range.empty() }            ->bool;          };
-  ) template <typename T, typename = void> struct is_fragment_range : std::false_type { };
  class bytes_ostream {  public:   using size_type = bytes::size_type;    using value_type = bytes::value_type;    struct chunk {     std::unique_ptr<chunk> next;          size_type offset;     size_type size;     value_type data[0];        };  private:   std::unique_ptr<chunk> _begin;  public:   class fragment_iterator       : public std::iterator<std::input_iterator_tag, bytes_view> {     chunk *_current = nullptr;   public:          fragment_iterator(chunk *current) : _current(current) {}                                        bool operator!=(const fragment_iterator &other) const;   };    fragment_iterator begin() const { return {_begin.get()}; }    fragment_iterator end() const { return {nullptr}; }    boost::iterator_range<fragment_iterator> fragments() const {     return {begin(), end()};   }  };
     class abstract_type;
    using cql_protocol_version_type = uint8_t;
@@ -52,12 +46,6 @@ namespace logging {  using log_level = seastar::log_level;  using logger = seast
   enum class allow_prefixes {  no, yes };
    template <allow_prefixes AllowPrefixes = allow_prefixes::no> class compound_type final {  private:   const std::vector<data_type> _types;    const bool _byte_order_equal;    const bool _byte_order_comparable;    const bool _is_reversed;    compound_type(std::vector<data_type> types)       : _types(std::move(types)),         _byte_order_equal(             std::all_of(_types.begin(), _types.end(),                         [](auto t) { return t->is_byte_order_equal(); } )),         _byte_order_comparable(false),         _is_reversed(_types.size() == 1 && _types[0]->is_reversed()) {}  };
    class column_set {  };
-   enum class column_kind {    partition_key,   clustering_key,   static_column,   regular_column };
-   enum class cf_type : uint8_t {    standard,   super, };
-   struct speculative_retry {  };
-   class index_metadata final { };
-   class thrift_schema {  };
-   class column_mapping_entry {  public: };
    class raw_view_info final {  public: };
    class v3_columns {  public: public: };
    class schema final : public enable_lw_shared_from_this<schema> {    struct column {     bytes name;     data_type type;   };  public:   schema(std::optional<utils::UUID> id, std::string_view ks_name,          std::string_view cf_name, std::vector<column> partition_key,          std::vector<column> clustering_key,          std::vector<column> regular_columns,          std::vector<column> static_columns, data_type regular_column_name_type,          std::string_view comment = {} );    ~schema();  public: };
@@ -69,13 +57,6 @@ namespace logging {  using log_level = seastar::log_level;  using logger = seast
    using column_family = table;
    class partition_key_view;
    class clustering_key_prefix;
-   class clustering_key_prefix_view;
-   using clustering_key = clustering_key_prefix;
-   template <typename TopLevel, typename TopLevelView> class compound_wrapper {  };
-   template <typename TopLevel> class prefix_view_on_prefix_compound {  };
-   template <typename TopLevel, typename TopLevelView, typename FullTopLevel> class prefix_compound_wrapper     : public compound_wrapper<TopLevel, TopLevelView> {  };
-   class partition_key     : public compound_wrapper<partition_key, partition_key_view> {  };
-   class clustering_key_prefix     : public prefix_compound_wrapper<           clustering_key_prefix, clustering_key_prefix_view, clustering_key> {  };
    template <typename T> class range_bound {  };
    template <typename T> class wrapping_range {  };
    template <typename T> class nonwrapping_range {  };
