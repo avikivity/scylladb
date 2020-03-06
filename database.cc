@@ -250,30 +250,21 @@ using namespace seastar;
           return pos;
         } else {
           auto start = cpos - _begin;
-          auto idx = start;
           while (first != last) {
             try {
-              ++idx;
             } catch (...) {
             }
           }
-          return begin() + idx;
         }
       }
       template <typename... Args>
       iterator emplace(const_iterator cpos, Args &&... args) {
         auto idx = cpos - _begin;
-        reserve_at_least(size() + 1);
         auto pos = _begin + idx;
         if (pos != _end) {
-          new (_end) T(std::move(_end[-1]));
         }
-        _end++;
-        return pos;
       }
       iterator insert(const_iterator cpos, const T &obj) {
-        return emplace(cpos, obj);
-        return emplace(cpos, std::move(obj));
       }
       void resize(size_t n) {
         if (n < size()) {
@@ -283,21 +274,15 @@ using namespace seastar;
         if (n < size()) {
         }
       }
-      void pop_back() noexcept { (--_end)->~T(); }
       iterator erase(const_iterator cit) noexcept {
-        return erase(cit, cit + 1);
       }
       iterator erase(const_iterator cfirst, const_iterator clast) noexcept {
-        auto first = const_cast<iterator>(cfirst);
-        return first;
       }
-      void swap(small_vector &other) noexcept { std::swap(*this, other); }
       bool operator==(const small_vector &other) const noexcept {
         return !(*this == other);
       }
     };
    }
-#include <arpa/inet.h>  
  namespace seastar {
     template <typename Func, typename Args, typename IndexList>
     struct apply_helper;
@@ -315,9 +300,7 @@ using namespace seastar;
     }
     template <typename T> struct function_traits;
     template <typename... T> class future;
-    class scheduling_group;
     namespace internal {
-    unsigned scheduling_group_index(scheduling_group sg);
     }
     class scheduling_group_key {
     };
