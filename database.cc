@@ -339,12 +339,9 @@ class migrate_fn_type {
  };
  namespace dht {
  class token;
- enum class token_kind {   before_all_keys,   key,   after_all_keys, };
- class token {   static inline int64_t normalize(int64_t t) {     return t == std::numeric_limits<int64_t>::min()                ? std::numeric_limits<int64_t>::max()                : t;   } public:   using kind = token_kind;   kind _kind;   int64_t _data;   token() : _kind(kind::before_all_keys) {}   token(kind k, int64_t d) : _kind(std::move(k)), _data(normalize(d)) {}   token(kind k, const bytes &b) : _kind(std::move(k)) {     if (b.size() != sizeof(_data)) {       throw std::runtime_error(           fmt::format("Wrong token bytes size: expected {} but got {}",                       sizeof(_data), b.size()));     }     std::copy_n(b.begin(), sizeof(_data), reinterpret_cast<int8_t *>(&_data));     _data = net::ntoh(_data);   }                   };
  }
    namespace dht {
  class decorated_key;
- class ring_position;
  }
    template <typename EnumType, EnumType... Items> struct super_enum {
    using enum_type = EnumType;
