@@ -147,37 +147,35 @@ auto max_rows = std::numeric_limits< uint32_t >::max();
 class partition_slice {
 public:
   enum {
-    send_clustering_keysend_partition_key,
-    always_return_static_content,
-  };
+    send_clustering_keysend_partition_keyalways_return_static_content};
   using option_set = int;
   partition_slice(
-      clustering_row_ranges row_ranges, column_id_vector static_columns,
-      column_id_vector regular_columns, option_set options,
-      std::unique_ptr< specific_ranges > specific_ranges = nullptr,
+      clustering_row_ranges , column_id_vector ,
+      column_id_vector , option_set ,
+      std::unique_ptr< specific_ranges > = nullptr,
       cql_serialization_format = cql_serialization_format::internal(),
-      uint32_t partition_row_limit = max_rows);
+      uint32_t = max_rows);
 };
-} // namespace query
+} // query
 namespace db {
 using timeout_clock = lowres_clock;
 }
-GCC6_CONCEPT() class mutation final {
+GCC6_CONCEPT() class mutation {
   mutation() = default;
 
 public:
-  const int &decorated_key() const;
+  int decorated_key() ;
 };
 using mutation_opt = optimized_optional< mutation >;
 future< mutation_opt >
-read_mutation_from_flat_mutation_reader(int &reader,
-                                        db::timeout_clock::time_point timeout);
+read_mutation_from_flat_mutation_reader(int ,
+                                        db::timeout_clock::time_point );
 class locked_cell;
 class frozen_mutation;
 class table {
 public:
   future< std::vector< locked_cell > >
-  lock_counter_cells(const mutation &m, db::timeout_clock::time_point timeout);
+  lock_counter_cells(mutation m, db::timeout_clock::time_point timeout);
 };
 class database {
   future< mutation > do_apply_counter_update(
