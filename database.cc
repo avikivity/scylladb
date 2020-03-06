@@ -908,21 +908,11 @@ namespace seastar {
       promise_base_with_type(promise_base_with_type &&x) noexcept
           : promise_base(std::move(x)) {}
       promise_base_with_type(const promise_base_with_type &) = delete;
-      promise_base_with_type &operator=(promise_base_with_type &&x) noexcept {
-        this->~promise_base_with_type();
-        new (this) promise_base_with_type(std::move(x));
-        return *this;
-      }
       void operator=(const promise_base_with_type &) = delete;
       void set_urgent_state(future_state<T...> &&state) noexcept {
         if (_state) {
           *get_state() = std::move(state);
           make_ready<urgent::yes>();
-        }
-      }
-      template <typename... A> void set_value(A &&... a) {
-        if (auto *s = get_state()) {
-          s->set(std::forward<A>(a)...);
           make_ready<urgent::no>();
         }
       }
@@ -988,11 +978,6 @@ namespace seastar {
                                std::tuple<FuncArgs...> &&args) noexcept;
       template <typename Func, typename... FuncArgs>
       static inline type apply(Func &&func, FuncArgs &&... args) noexcept;
-      static inline type from_tuple(value_type &&value);
-      static inline type from_tuple(const value_type &value);
-      static inline type convert(Args &&... values) {
-        return make_ready_future<Args...>(std::move(values)...);
-      }
       static inline type convert(type &&value) { return std::move(value); }
       template <typename Arg> static type make_exception_future(Arg &&arg);
     };
@@ -1028,11 +1013,6 @@ namespace seastar {
       static constexpr bool copy_noexcept = future_state<T...>::copy_noexcept;
     private:
       future(future_for_get_promise_marker m) {}
-      future(promise<T...> *pr) noexcept
-          : future_base(pr, &_state), _state(std::move(pr->_local_state)) {}
-      template <typename... A>
-      future(ready_future_marker m, A &&... a)
-          : _state(m, std::forward<A>(a)...) {}
       future(exception_future_marker m, std::exception_ptr &&ex) noexcept
           : _state(m, std::move(ex)) {}
       future(exception_future_marker m, future_state_base &&state) noexcept
@@ -1107,11 +1087,6 @@ namespace seastar {
       }
       typename future_state<T...>::get0_return_type get0() {
         return future_state<T...>::get0(get());
-      }
-      void wait() noexcept {
-        if (!_state.available()) {
-          do_wait();
-        }
       }
     private:
       class thread_wake_task final : public continuation_base<T...> {
@@ -1188,11 +1163,6 @@ namespace seastar {
           futurize_t<FuncResult> then_wrapped(Func &&func) & noexcept {
         return then_wrapped_maybe_erase<false, FuncResult>(
             std::forward<Func>(func));
-      }
-      template <typename Func,
-                typename FuncResult = std::result_of_t<Func(future &&)>>
-          GCC6_CONCEPT(requires ::seastar::CanApply<Func, future &&>)
-          futurize_t<FuncResult> then_wrapped(Func &&func) && noexcept {
         return then_wrapped_maybe_erase<true, FuncResult>(
             std::forward<Func>(func));
       }
@@ -1228,11 +1198,6 @@ namespace seastar {
         return fut;
       }
       void forward_to(internal::promise_base_with_type<T...> &&pr) noexcept {
-        if (_state.available()) {
-          pr.set_urgent_state(std::move(_state));
-        } else {
-          *detach_promise() = std::move(pr);
-        }
       }
     public:
       void forward_to(promise<T...> &&pr) noexcept {
