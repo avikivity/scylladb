@@ -152,9 +152,7 @@ void consume_partitions(db::timeout_clock::time_point timeout) {
     });
   });
 }
-class mutation_source {};
-future< int > counter_write_query(schema_ptr, const mutation_source ,
-                                  const int);
+future< int > counter_write_query(schema_ptr, const int);
 class locked_cell {};
 future< mutation > database::do_apply_counter_update(
     mutation m, schema_ptr ,
@@ -165,7 +163,7 @@ future< mutation > database::do_apply_counter_update(
                            std::vector< locked_cell > ) mutable {
         return lock_counter_cells(m, timeout)
             .then([&](std::vector< locked_cell > ) {
-              return counter_write_query(schema_ptr(), mutation_source(),
+              return counter_write_query(schema_ptr(),
                                          m.decorated_key())
                   .then([m](auto ) {
                     return (m);
