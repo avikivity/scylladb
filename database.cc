@@ -276,11 +276,8 @@ namespace bi = boost::intrusive;
  std::ostream &operator<<(std::ostream &, mutation_fragment::kind);
  using mutation_fragment_opt = optimized_optional<mutation_fragment>;
  namespace streamed_mutation { class forwarding_tag; using forwarding = bool_class<forwarding_tag>; }
-  class range_tombstone_stream {   const schema &_schema;   position_in_partition::less_compare _cmp;   range_tombstone_list _list; private:   mutation_fragment_opt do_get_next(); public:   range_tombstone_stream(const schema &s) : _schema(s), _cmp(s), _list(s) {}   friend std::ostream &operator<<(std::ostream &out,                                   const range_tombstone_stream &); };
  GCC6_CONCEPT(template <typename F> concept bool StreamedMutationTranformer() {   return requires(F f, mutation_fragment mf, schema_ptr s) {     { f(std::move(mf)) }     ->mutation_fragment;     { f(s) }     ->schema_ptr;   }; }
 ) class mutation final {   mutation() = default;   friend class optimized_optional<mutation>; public:   const dht::decorated_key &decorated_key() const; public:   mutation sliced(const query::clustering_row_ranges &) const; private:   friend std::ostream &operator<<(std::ostream &os, const mutation &m); };
- struct mutation_equals_by_key {   bool operator()(const mutation &m1, const mutation &m2) const; };
- struct mutation_hash_by_key {   size_t operator()(const mutation &m) const; };
  using mutation_opt = optimized_optional<mutation>;
  class flat_mutation_reader;
  future<mutation_opt> read_mutation_from_flat_mutation_reader(flat_mutation_reader &reader,                                         db::timeout_clock::time_point timeout);
