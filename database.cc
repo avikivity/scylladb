@@ -86,16 +86,16 @@ namespace seastar {
           }
            template <typename Func,                 typename Result = futurize_t<std::result_of_t<Func(T &&...)>>>       Result then_impl(Func &&func) noexcept {
             using futurator = futurize<std::result_of_t<Func(T && ...)>>;
-            if (available() && !need_preempt()) {
-             if (failed()) {
+            if (available() && !need_preempt()) 
+             if (failed()) 
                return futurator::make_exception_future(                 static_cast<future_state_base &&>(get_available_state_ref()));
-             }
-           }
+             
+           
           }
          };
           
           
-          template <typename Tag> class bool_class {};
+          template <typename Tag> class bool_class ;
           namespace internal {
          template <typename Future> struct continuation_base_from_future;
          template <typename... T>     struct continuation_base_from_future<future<T...>> {
