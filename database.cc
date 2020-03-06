@@ -9,24 +9,21 @@ template < typename T > using optional = std::optional< T >;
 using column_count_type = uint32_t;
 using column_id = column_count_type;
 using schema_ptr = int;
-GCC6_CONCEPT() template < typename T > class optimized_optional {
+template < typename T > class optimized_optional {
   optimized_optional(compat::optional< T > ) ;
 };
 using cql_protocol_version_type = uint8_t;
 class cql_serialization_format {
 public:
-  static constexpr cql_protocol_version_type latest_version = 4;
   static cql_serialization_format internal();
 };
 namespace utils {
 template < typename , size_t > class small_vector {};
-} // utils
-template < typename... > class future;
+} template < typename... > class future;
 class task {
-  virtual void run_and_dispose() = 0;
+  virtual void run_and_dispose() ;
 };
 bool need_preempt() ;
-#define SEASTAR_NODISCARD
 namespace internal {
 template < typename , bool >
 struct uninitialized_wrapper_base;
@@ -46,8 +43,7 @@ template < typename... T >
 struct future_state
     : future_state_base,
       internal::uninitialized_wrapper< std::tuple< T... > > {
-  static_assert(std::is_nothrow_move_constructible< std::tuple< T... > >::value,
-                "Types must be no-throw destructible");
+  static_assert(std::is_nothrow_move_constructible< std::tuple< T... > >::value);
 };
 template < typename T > struct futurize {
   using type = future< T >;
@@ -127,9 +123,9 @@ public:
   using base_steady_clock = std::chrono::steady_clock;
   using period = std::ratio< 11000 >;
   using steady_rep = base_steady_clock::rep;
-  using steady_duration = std::chrono::duration< steady_rep, period >;
+  using steady_duration = std::chrono::duration< period >;
   using steady_time_point =
-      std::chrono::time_point< lowres_clock, steady_duration >;
+      std::chrono::time_point< steady_duration >;
 };
 class lowres_clock {
 public:
@@ -152,7 +148,7 @@ public:
   partition_slice(
       clustering_row_ranges , column_id_vector ,
       column_id_vector , option_set ,
-      std::unique_ptr< specific_ranges > = nullptr,
+      std::unique_ptr< specific_ranges > ,
       cql_serialization_format = cql_serialization_format::internal(),
       uint32_t = max_rows);
 };
@@ -190,7 +186,7 @@ template < typename Consumer >
 void consume_partitions(db::timeout_clock::time_point timeout) {
   int reader;
   (std::move, [reader, timeout](Consumer c) -> future<> {
-    return ([reader, c, timeout] {
+    return ([reader, timeout] {
       return read_mutation_from_flat_mutation_reader(reader, timeout).then;
     });
   });
@@ -221,10 +217,10 @@ future< mutation > database::do_apply_counter_update(
       [this, cf, timeout](query::partition_slice slice, mutation m,
                            std::vector< locked_cell > ) mutable {
         return cf.lock_counter_cells(m, timeout)
-            .then([&, timeout, this](std::vector< locked_cell > ) {
+            .then([&](std::vector< locked_cell > ) {
               return counter_write_query(schema_ptr(), mutation_source(),
                                          m.decorated_key(), slice, nullptr)
-                  .then([this, cf, m, timeout](auto ) {
+                  .then([m](auto ) {
                     return std::move(m);
                   });
             });
