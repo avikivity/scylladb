@@ -10,8 +10,7 @@ namespace seastar {
     using namespace seastar;
 #define GCC6_CONCEPT(x...)
     namespace seastar {
-           template <typename T> class lw_shared_ptr {
-     };
+           template <typename T> class lw_shared_ptr {};
            }
            using column_count_type = uint32_t;
            using column_id = column_count_type;
@@ -28,14 +27,12 @@ namespace seastar {
            class cql_serialization_format {
           cql_protocol_version_type _version;
         public:     static constexpr cql_protocol_version_type latest_version = 4;
-          explicit cql_serialization_format(cql_protocol_version_type version)         : _version(version) {
-    }
+          explicit cql_serialization_format(cql_protocol_version_type version)         : _version(version) {}
           static cql_serialization_format latest0 ;
           static cql_serialization_format internal() ;
          };
            namespace utils {
-          template <typename T, size_t N> class small_vector {
-         };
+          template <typename T, size_t N> class small_vector {};
          }
         namespace seastar {
           template <typename... T> class future;
@@ -48,11 +45,7 @@ namespace seastar {
 namespace seastar {
           namespace internal {
          template <typename T, bool is_trivial_class>     struct uninitialized_wrapper_base;
-         template <typename T> struct uninitialized_wrapper_base<T, false> {
-          union any {
-         }
-    _v;
-        };
+         template <typename T> struct uninitialized_wrapper_base<T, false> {};
          template <typename T>     struct uninitialized_wrapper_base<T, true> : private T {
         };
          template <typename T>     constexpr bool can_inherit = std::is_same<std::tuple<>, T>::value ||                                  (std::is_trivially_destructible<T>::value &&                                   std::is_trivially_constructible<T>::value &&                                   !std::is_final<T>::value);
@@ -104,10 +97,10 @@ namespace seastar {
          }
           template <typename... T>     class SEASTAR_NODISCARD future         : private internal::future_base,           internal::warn_variadic_future<0> {
            future_state<T...> _state;
-           [[gnu::always_inline]] future_state<T...> &&       get_available_state_ref() noexcept ;
+            future_state<T...> &&       get_available_state_ref() noexcept ;
          public:       using promise_type = promise<T...>;
-         public:       [[gnu::always_inline]] bool available() const noexcept ;
-           [[gnu::always_inline]] bool failed() const noexcept ;
+         public:        bool available() const noexcept ;
+            bool failed() const noexcept ;
            template <typename Func,                 typename Result = futurize_t<std::result_of_t<Func(T &&...)>>>       Result then(Func &&func) noexcept {
             return then_impl(std::move(func));
           }
