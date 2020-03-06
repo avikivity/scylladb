@@ -125,11 +125,11 @@ class database {
 };
 template < typename Consumer >
 void consume_partitions() {
-  ([](Consumer c) {
+  [](Consumer c) {
     return ({
       return read_mutation_from_flat_mutation_reader().then;
     });
-  });
+  };
 }
 future< int > counter_write_query(const int);
 class locked_cell {};
