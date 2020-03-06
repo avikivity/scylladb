@@ -89,13 +89,6 @@ namespace seastar { class logger; }
  struct ascii_native_type {   using primary_type = sstring;   primary_type string; };
  struct simple_date_native_type {   using primary_type = uint32_t;   primary_type days; };
  using data_type = shared_ptr<const abstract_type>;
- template <typename T> const T &value_cast(const data_value &value);
- ;
- class data_value {   void *_value;   data_type _type; private:   ; public:   ;   ;   const data_type &type() const ;   bool is_null() const;   size_t serialized_size() const;   void serialize(bytes::iterator &out) const;   bytes_opt serialize() const;   bytes serialize_nonnull() const;   friend bool operator==(const data_value &x, const data_value &y);   ;   friend class abstract_type;   ;   friend class empty_type_impl;   template <typename T> friend const T &value_cast(const data_value &);   ;   ; };
- template <typename T> bytes serialized(T v);
- class serialized_compare;
- class serialized_tri_compare;
- class user_type_impl;
  class abstract_type : public enable_shared_from_this<abstract_type> {   sstring _name;   std::optional<uint32_t> _value_length_if_fixed; public:   enum class kind : int8_t {     ascii,     boolean,     byte,     bytes,     counter,     date,     decimal,     double_kind,     duration,     empty,     float_kind,     inet,     int32,     list,     long_kind,     map,     reversed,     set,     short_kind,     simple_date,     time,     timestamp,     timeuuid,     tuple,     user,     utf8,     uuid,     varint,   }; private:   kind _kind; public:   kind get_kind() const;                                  public:                        bool is_reversed() const;   friend class list_type_impl; private:   mutable sstring _cql3_type_name; protected:   friend class tuple_type_impl;   friend class data_value;   friend class reversed_type_impl;   template <typename T> friend const T &value_cast(const data_value &value);   ; };
  static int tri_compare(data_type t, bytes_view e1, bytes_view e2);
  extern thread_local const shared_ptr<const abstract_type> bytes_type;
