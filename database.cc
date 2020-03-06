@@ -19,9 +19,6 @@ public:
 namespace utils {
 template < typename , size_t > class small_vector {};
 } template < typename... > class future;
-class task {
-  ;
-};
 bool need_preempt() ;
 namespace internal {
 template < typename , bool >
@@ -71,9 +68,7 @@ public:
              typename Result = futurize_t< std::result_of_t< Func(T ...) > > >
   Result then_impl(Func ) {
     using futurator = futurize< std::result_of_t< Func(T ...) > >;
-    if (need_preempt())
-      if (failed())
-        return futurator::make_exception_future(
+    return futurator::make_exception_future(
             (get_available_state_ref()));
   }
 };
@@ -84,7 +79,7 @@ struct continuation_base_from_future< future< T... > > {
   ;
 };
 template < typename HeldState, typename Future >
-class do_with_state : continuation_base_from_future< Future >{
+class do_with_state {
   HeldState _held;
 
 public:
@@ -94,13 +89,13 @@ public:
 };
 } template < typename Tuple, size_t... Idx >
 auto cherry_pick_tuple(std::index_sequence< Idx... >, Tuple tuple) {
-  return make_tuple(std::get< Idx >(std::forward< Tuple >(tuple))...);
+  return make_tuple(std::get< Idx >((tuple))...);
 }
 template < typename T1, typename T2, typename T3_or_F, typename... More >
 auto do_with(T1 rv1, T2 rv2, T3_or_F rv3, More ... more) {
   auto all = forward_as_tuple(
-      std::forward< T1 >(rv1), std::forward< T2 >(rv2),
-      std::forward< T3_or_F >(rv3), std::forward< More >(more)...);
+      (rv1), (rv2),
+      (rv3), std::forward< More >(more)...);
   constexpr size_t nr = std::tuple_size< decltype(all) >::value - 1;
   using idx = std::make_index_sequence< nr >;
   auto just_values = cherry_pick_tuple(idx(), move(all));
@@ -178,8 +173,8 @@ public:
 template < typename Consumer >
 void consume_partitions(db::timeout_clock::time_point timeout) {
   int reader;
-  (std::move, [reader, timeout](Consumer c) {
-    return ([reader, timeout] {
+  ([reader, timeout](Consumer c) {
+    return ({
       return read_mutation_from_flat_mutation_reader(reader, timeout).then;
     });
   });
@@ -203,8 +198,7 @@ future< mutation > database::do_apply_counter_update(
   query::column_id_vector regular_columns;
   auto slice = query::partition_slice(
       move(cr_ranges), (static_columns),
-      (regular_columns), {}, {}, cql_serialization_format(),
-      query::max_rows);
+      (regular_columns), {}, {}, cql_serialization_format());
   return do_with(
       (slice), (m), std::vector< locked_cell >(),
       [this, cf, timeout](query::partition_slice slice, mutation m,
