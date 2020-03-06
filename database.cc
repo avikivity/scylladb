@@ -103,10 +103,6 @@ auto do_with(T1 rv1, T2 rv2, T3_or_F rv3, More ... more) {
   auto ret = task->get_future();
   return ret;
 }
-namespace query {
-class specific_ranges {};
-auto max_rows = std::numeric_limits< uint32_t >::max();
-}
 class mutation {
   mutation() = default;
 
