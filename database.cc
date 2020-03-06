@@ -62,16 +62,16 @@ GCC6_CONCEPT() namespace internal {
   class future_base {};
 }
 template < typename... T >
-class SEASTAR_NODISCARD future : private internal::future_base {
+class future : internal::future_base {
   future_state< T... > _state;
-  future_state<> &&get_available_state_ref() noexcept;
+  future_state<> get_available_state_ref() ;
 
 public:
-  bool available() const noexcept;
-  bool failed() const noexcept;
+  bool available() ;
+  bool failed() ;
   template < typename Func,
-             typename Result = futurize_t< std::result_of_t< Func(T &&...) > > >
-  Result then(Func &&func) noexcept {
+             typename Result = futurize_t< std::result_of_t< Func(T ...) > > >
+  Result then(Func func) {
     return then_impl(std::move(func));
   }
   template < typename Func,
