@@ -115,7 +115,7 @@ public:
 };
 using mutation_opt = optimized_optional< mutation >;
 future< mutation_opt >
-read_mutation_from_flat_mutation_reader(int );
+read_mutation_from_flat_mutation_reader();
 class locked_cell;
   future< std::vector< locked_cell > >
   lock_counter_cells(mutation);
@@ -125,10 +125,9 @@ class database {
 };
 template < typename Consumer >
 void consume_partitions() {
-  int reader;
-  ([reader](Consumer c) {
+  ([](Consumer c) {
     return ({
-      return read_mutation_from_flat_mutation_reader(reader).then;
+      return read_mutation_from_flat_mutation_reader().then;
     });
   });
 }
