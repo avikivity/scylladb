@@ -1473,29 +1473,24 @@ namespace seastar {
       bool _expired = false;
     public:
       void arm(duration delta) { return arm(Clock::now() + delta); }
-      bool armed() const;
-      bool cancel();
-      time_point get_timeout();
+      
+      
+      
       friend class reactor;
       friend class timer_set<timer, &timer::_link>;
     };
     namespace internal {
-    template <typename Iterator, typename IteratorCategory>
-    size_t iterator_range_estimate_vector_capacity(Iterator begin, Iterator end,
-                                                   IteratorCategory category);
-    template <typename Iterator>
-    size_t
-    iterator_range_estimate_vector_capacity(Iterator begin, Iterator end,
-                                            std::forward_iterator_tag category);
+    ;
+    ;
     }
     class parallel_for_each_state final : private continuation_base<> {
       std::vector<future<>> _incomplete;
       promise<> _result;
       std::exception_ptr _ex;
     private:
-      void wait_for_one() noexcept;
+      
     public:
-      void add_future(future<> &&f);
+      
       future<> get_future();
     };
     struct stop_iteration_tag {};
@@ -1607,17 +1602,6 @@ namespace seastar {
       };
       friend class alien::message_queue;
       friend class pollable_fd;
-      friend class pollable_fd_state;
-      friend struct pollable_fd_state_deleter;
-      friend class posix_file_impl;
-      friend class blockdev_file_impl;
-      friend class readable_eventfd;
-      friend class timer<>;
-      friend class timer<lowres_clock>;
-      friend class timer<manual_clock>;
-      friend class smp;
-      friend class smp_message_queue;
-      friend class poller;
       friend class scheduling_group;
       metrics::metric_groups _metric_groups;
       ;
