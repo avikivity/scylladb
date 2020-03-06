@@ -16,8 +16,6 @@ template <typename T> using optional = std::optional<T>;
    }
 #include <algorithm>
 namespace seastar {
-   template <typename CharType> class temporary_buffer {
-  };
    template <typename char_type, typename Size, Size max_size, bool NulTerminate = true> class basic_sstring;
    using sstring = basic_sstring<char, uint32_t, 15>;
    template <typename char_type, typename Size, Size max_size, bool NulTerminate> class basic_sstring {
@@ -30,8 +28,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
     namespace seastar {
    using shared_ptr_counter_type = long;
    template <typename T> class lw_shared_ptr;
-   template <typename T> class enable_shared_from_this;
-   template <typename T, typename... A> lw_shared_ptr<T> make_lw_shared(A&&... a);
    struct lw_shared_ptr_counter_base {
      shared_ptr_counter_type _count = 0;
  };
@@ -190,7 +186,6 @@ namespace seastar {
 }
   namespace seastar {
   static constexpr size_t cache_line_size =     64;
-  namespace internal { namespace linux_abi { using aio_context_t = unsigned long; enum class iocb_cmd : uint16_t {     PREAD = 0,     PWRITE = 1,     FSYNC = 2,     FDSYNC = 3,     POLL = 5,     NOOP = 6,     PREADV = 7,     PWRITEV = 8, }; struct io_event {     uint64_t data;     uint64_t obj;     int64_t res;     int64_t res2; }; constexpr int IOCB_FLAG_RESFD = 1; struct iocb {         uint64_t   aio_data;            iocb_cmd   aio_lio_opcode;         int16_t   aio_reqprio;         uint32_t   aio_fildes;         uint64_t   aio_buf;         uint64_t   aio_nbytes;         int64_t   aio_offset;         uint64_t   aio_reserved2;         uint32_t   aio_flags;         uint32_t   aio_resfd; }; struct aio_sigset {     const sigset_t *sigmask;     size_t sigsetsize; }; }                  }
   }
    namespace seastar {
   class lowres_clock;
@@ -250,9 +245,7 @@ class reactor {
     };
     /**
      * If it returns FALSE then reactor's main loop is forbidden to block in the      * current iteration.      *      * @param fn a new "poller" function to register      */                                                                                         friend class alien::message_queue;     friend class pollable_fd;     friend class pollable_fd_state;     friend struct pollable_fd_state_deleter;     friend class posix_file_impl;     friend class blockdev_file_impl;     friend class readable_eventfd;     friend class timer<>;     friend class timer<lowres_clock>;     friend class timer<manual_clock>;     friend class smp;     friend class smp_message_queue;     friend class poller;     friend class scheduling_group;          friend int ::_Unwind_RaiseException(struct _Unwind_Exception *h);          metrics::metric_groups _metric_groups;                         ;     ;     template<typename SpecificValType, typename Mapper, typename Reducer, typename Initial>         GCC6_CONCEPT( requires requires(SpecificValType specific_val, Mapper mapper, Reducer reducer, Initial initial) {             {reducer(initial, mapper(specific_val))} -> Initial;         })     friend future<typename function_traits<Reducer>::return_type>     map_reduce_scheduling_group_specific(Mapper mapper, Reducer reducer, Initial initial_val, scheduling_group_key key);     template<typename SpecificValType, typename Reducer, typename Initial>     GCC6_CONCEPT( requires requires(SpecificValType specific_val, Reducer reducer, Initial initial) {         {reducer(initial, specific_val)} -> Initial;     })     friend future<typename function_traits<Reducer>::return_type>         reduce_scheduling_group_specific(Reducer reducer, Initial initial_val, scheduling_group_key key); public:                                                             };  }
-   using data_type = shared_ptr<const abstract_type>;
    class column_set { };
-   class schema final : public enable_lw_shared_from_this<schema> {    struct column {     bytes name;     data_type type;   };  public:   schema(std::optional<utils::UUID> id, std::string_view ks_name,          std::string_view cf_name, std::vector<column> partition_key,          std::vector<column> clustering_key,          std::vector<column> regular_columns,          std::vector<column> static_columns, data_type regular_column_name_type,          std::string_view comment = {} );  public: };
    struct blob_storage {  }
    __attribute__((packed));
    class table;
