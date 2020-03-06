@@ -370,21 +370,10 @@ class migrate_fn_type {
  private:   static constexpr int mask_digits = std::numeric_limits<mask_type>::digits;
    using mask_iterator = seastar::bitsets::set_iterator<mask_digits>;
    mask_type _mask;
-   constexpr enum_set(mask_type mask) : _mask(mask) {}
-   template <enum_type Elem> static constexpr unsigned shift_for() {     return Enum::template sequence_for<Elem>();   }
    static auto make_iterator(mask_iterator iter) {     return boost::make_transform_iterator(         std::move(iter),         [](typename Enum::sequence_type s) { return enum_type(s); });   }
  public:   using iterator =       std::invoke_result_t<decltype(&enum_set::make_iterator), mask_iterator>;
    constexpr enum_set() : _mask(0) {}
-   static constexpr enum_set from_mask(mask_type mask) {     const auto bit_range =         seastar::bitsets::for_each_set(std::bitset<mask_digits>(mask));     if (!std::all_of(bit_range.begin(), bit_range.end(),                      &Enum::is_valid_sequence)) {       throw bad_enum_set_mask();     }     return enum_set(mask);   };
-   struct prepared {     mask_type mask;   };
-   ;
-   static_assert(std::numeric_limits<mask_type>::max() >=                     ((size_t)1 << Enum::max_sequence),                 "mask type too small");
-   ;
-                  iterator end() const;
-   template <enum_type... items> struct frozen {     template <enum_type first> static constexpr mask_type make_mask();     static constexpr mask_type make_mask();     template <enum_type first, enum_type second, enum_type... rest>     static constexpr mask_type make_mask();     static constexpr mask_type mask = make_mask<items...>();     template <enum_type Elem> static constexpr bool contains();     static bool contains(enum_type e);     static bool contains(prepared e);     static constexpr enum_set<Enum> unfreeze();   };
-   template <enum_type... items> static constexpr enum_set<Enum> of() {     return frozen<items...>::unfreeze();   }
  };
-#include <random>
 #include <seastar/net/inet_address.hh>
 namespace gms {
  class inet_address { private:   net::inet_address _addr; public:   inet_address() = default;   inet_address(int32_t ip) : inet_address(uint32_t(ip)) {}   explicit inet_address(uint32_t ip) : _addr(net::ipv4_address(ip)) {}   inet_address(const net::inet_address &addr) : _addr(addr) {}   inet_address(const socket_address &sa) : inet_address(sa.addr()) {}   const net::inet_address &addr() const { return _addr; }   inet_address(const inet_address &) = default;   operator const seastar::net::inet_address &() const { return _addr; }   inet_address(const sstring &addr) {     if (addr == "localhost") {       _addr = net::ipv4_address("127.0.0.1");     } else {       _addr = net::inet_address(addr);     }   }   bytes_view bytes() const {     return bytes_view(reinterpret_cast<const int8_t *>(_addr.data()),                       _addr.size());   }   uint32_t raw_addr() const { return addr().as_ipv4_address().ip; }   sstring to_sstring() const { return format("{}", *this); }   friend inline bool operator==(const inet_address &x, const inet_address &y) {     return x._addr == y._addr;   }   friend inline bool operator!=(const inet_address &x, const inet_address &y) {     using namespace std::rel_ops;     return x._addr != y._addr;   }   friend inline bool operator<(const inet_address &x, const inet_address &y) {     return x.bytes() < y.bytes();   }   friend struct std::hash<inet_address>;   using opt_family = std::optional<net::inet_address::family>;   static future<inet_address> lookup(sstring, opt_family family = {},                                      opt_family preferred = {}); };
