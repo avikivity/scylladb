@@ -10,12 +10,12 @@
     
 #define GCC6_CONCEPT(x...)
     
-            class lw_shared_ptr {};
+            
            
            using column_count_type = uint32_t;
            using column_id = column_count_type;
-           class schema;
-           using schema_ptr = lw_shared_ptr;
+           
+           using schema_ptr = int;
            
           GCC6_CONCEPT() template<typename T> class optimized_optional {
           optimized_optional(compat::optional<T> &&obj) noexcept ;
@@ -46,7 +46,7 @@
           namespace internal {
          template <typename T, bool is_trivial_class>     struct uninitialized_wrapper_base;
          template <typename T> struct uninitialized_wrapper_base<T, false> {};
-         template <typename T>     struct uninitialized_wrapper_base<T, true> : private T {};
+         template <typename T>     struct uninitialized_wrapper_base<T, true>  {};
          template <typename T>     constexpr bool can_inherit = std::is_same<std::tuple<>, T>::value ||                                  (std::is_trivially_destructible<T>::value &&                                   std::is_trivially_constructible<T>::value &&                                   !std::is_final<T>::value);
          template <typename T>     struct uninitialized_wrapper         : public uninitialized_wrapper_base<T, can_inherit<T>> {};
          }
@@ -58,9 +58,9 @@
            
           namespace internal {
          
-              class promise_base_with_type  {};
+              
          }
-               class promise  {};
+               
           template <typename T> struct futurize {
            using type = future<T>;
            ;
@@ -74,12 +74,12 @@
           template <typename T> using futurize_t = typename futurize<T>::type;
           GCC6_CONCEPT()     namespace internal {
            class future_base {};
-            struct warn_variadic_future {};
+            
          }
           template <typename... T>     class SEASTAR_NODISCARD future         : private internal::future_base {
            future_state<T...> _state;
             future_state<> &&       get_available_state_ref() noexcept ;
-         public:       using promise_type = promise;
+         public:       using promise_type = int;
          public:        bool available() const noexcept ;
             bool failed() const noexcept ;
            template <typename Func,                 typename Result = futurize_t<std::result_of_t<Func(T &&...)>>>       Result then(Func &&func) noexcept {
@@ -96,7 +96,7 @@
          };
           
           
-           class bool_class ;
+           
           namespace internal {
          template <typename Future> struct continuation_base_from_future;
          template <typename... T>     struct continuation_base_from_future<future<T...>> {
@@ -125,8 +125,8 @@
            auto ret = task->get_future();
            return ret;
          }
-          struct stop_iteration_tag ;
-          using stop_iteration = bool_class;
+          
+          using stop_iteration = int;
           class lowres_clock;
           class lowres_clock_impl final {
          public:       using base_steady_clock = std::chrono::steady_clock;
@@ -139,11 +139,11 @@
          public:       using time_point = lowres_clock_impl::steady_time_point;
          };
       
-           struct blob_storage {}
+            int 
            __attribute__0;
            class table;
            using column_family = table;
-           class clustering_key_prefix;
+           
             class nonwrapping_range {};
            GCC6_CONCEPT() 
            namespace dht {
