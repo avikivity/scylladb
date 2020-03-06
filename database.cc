@@ -28,9 +28,6 @@ using column_count_type = uint32_t;
   using schema_ptr = seastar::lw_shared_ptr<const schema>;
   namespace api {
  using timestamp_type = int64_t;
- timestamp_type constexpr missing_timestamp =     std::numeric_limits<timestamp_type>::min();
- timestamp_type constexpr min_timestamp =     std::numeric_limits<timestamp_type>::min() + 1;
- timestamp_type constexpr max_timestamp =     std::numeric_limits<timestamp_type>::max();
  class timestamp_clock final {   using base = std::chrono::system_clock; public:   using rep = timestamp_type;   using duration = std::chrono::microseconds;   using period = typename duration::period;   using time_point = std::chrono::time_point<timestamp_clock, duration>;   static constexpr bool is_steady = base::is_steady; };
  }
    GCC6_CONCEPT(template <typename T> concept bool HasTriCompare =                  requires(const T &t) {
@@ -40,39 +37,12 @@ using column_count_type = uint32_t;
   &&                  std::is_same<std::result_of_t<decltype (&T::compare)(T, T)>,                               int>::value;
  ) template <typename T> class with_relational_operators {
  private:   template <typename U>   GCC6_CONCEPT(requires HasTriCompare<U>)   int do_compare(const U &t) const;
- public:   bool operator<(const T &t) const;
-   bool operator<=(const T &t) const;
-   bool operator>(const T &t) const;
-   bool operator>=(const T &t) const;
-   bool operator==(const T &t) const;
-   bool operator!=(const T &t) const;
  };
   struct tombstone final : public with_relational_operators<tombstone> {
    api::timestamp_type timestamp;
-   gc_clock::time_point deletion_time;
-   tombstone();
-   friend std::ostream &operator<<(std::ostream &out, const tombstone &t);
  };
 #include <seastar/util/optimized_optional.hh>
 template <typename CharT> class basic_mutable_view {
-   CharT *_begin = nullptr;
-   CharT *_end = nullptr;
- public:   using value_type = CharT;
-   using pointer = CharT *;
-   using iterator = CharT *;
-   using const_iterator = CharT *;
-   basic_mutable_view() = default;
-   template <typename U, U N>   basic_mutable_view(basic_sstring<CharT, U, N> &str)       : _begin(str.begin()), _end(str.end()) {}
-   basic_mutable_view(CharT *ptr, size_t length)       : _begin(ptr), _end(ptr + length) {}
-   operator std::basic_string_view<CharT>() const noexcept {     return std::basic_string_view<CharT>(begin(), size());   }
-   CharT &operator[](size_t idx) const { return _begin[idx]; }
-   iterator begin() const { return _begin; }
-   iterator end() const { return _end; }
-   CharT *data() const { return _begin; }
-   size_t size() const { return _end - _begin; }
-   bool empty() const { return _begin == _end; }
-   void remove_prefix(size_t n) { _begin += n; }
-   void remove_suffix(size_t n) { _end -= n; }
  };
   using bytes = basic_sstring<int8_t, uint32_t, 31, false>;
   using bytes_view = std::basic_string_view<int8_t>;
@@ -88,9 +58,6 @@ class UTFDataFormatException {
  *it++ = 'a';
  }
  ) inline void serialize_string(CharOutputIterator &out, const sstring &s) {
-   for (char c : s) {     if (c == '\0') {       throw UTFDataFormatException();     }   }
-   if (s.size() > std::numeric_limits<uint16_t>::max()) {     throw UTFDataFormatException();   }
-   serialize_int16(out, s.size());
    out = std::copy(s.begin(), s.end(), out);
  }
   template <typename CharOutputIterator> GCC6_CONCEPT(requires requires(CharOutputIterator it) {
@@ -157,12 +124,6 @@ class bytes_ostream {
    [[gnu::always_inline]] inline void write(bytes_view v) {     if (v.empty()) {       return;     }     auto this_size = std::min(v.size(), size_t(current_space_left()));     if (__builtin_expect(this_size, true)) {       memcpy(_current->data + _current->offset, v.begin(), this_size);       _current->offset += this_size;       _size += this_size;       v.remove_prefix(this_size);     }     while (!v.empty()) {       auto this_size = std::min(v.size(), size_t(max_chunk_size()));       std::copy_n(v.begin(), this_size, alloc_new(this_size));       v.remove_prefix(this_size);     }   }
    [[gnu::always_inline]] void write(const char *ptr, size_t size) {     write(bytes_view(reinterpret_cast<const signed char *>(ptr), size));   }
    bool is_linearized() const { return !_begin || !_begin->next; }
-   bytes_view view() const {     assert(is_linearized());     if (!_current) {       return bytes_view();     }     return bytes_view(_current->data, _size);   }
-   bytes_view linearize() {     if (is_linearized()) {       return view();     }     auto space = malloc(_size + sizeof(chunk));     if (!space) {       throw std::bad_alloc();     }     auto new_chunk = std::unique_ptr<chunk>(new (space) chunk());     new_chunk->offset = _size;     new_chunk->size = _size;     auto dst = new_chunk->data;     auto r = _begin.get();     while (r) {       auto next = r->next.get();       dst = std::copy_n(r->data, r->offset, dst);       r = next;     }     _current = new_chunk.get();     _begin = std::move(new_chunk);     return bytes_view(_current->data, _size);   }
-   size_type size() const { return _size; }
-   size_type size_bytes() const { return _size; }
-   bool empty() const { return _size == 0; }
-   void reserve(size_t size) {}
    void append(const bytes_ostream &o) {     for (auto &&bv : o.fragments()) {       write(bv);     }   }
    void remove_suffix(size_t n) {     _size -= n;     auto left = _size;     auto current = _begin.get();     while (current) {       if (current->offset >= left) {         current->offset = left;         _current = current;         current->next.reset();         return;       }       left -= current->offset;       current = current->next.get();     }   }
    fragment_iterator begin() const { return {_begin.get()}; }
