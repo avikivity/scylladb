@@ -13,9 +13,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {   return requires(H &
  template <typename H, typename T, typename... Args> GCC6_CONCEPT(requires Hasher<H>()) void feed_hash(H &h, const T &value, Args &&... args);
 #include <seastar/core/lowres_clock.hh>
 class gc_clock final { public:   using base = seastar::lowres_system_clock;   using rep = int64_t;   using period = std::ratio<1, 1>;   using duration = std::chrono::duration<rep, period>;   using time_point = std::chrono::time_point<gc_clock, duration>;   static constexpr auto is_steady = base::is_steady;   static time_point now(); };
- using expiry_opt = std::optional<gc_clock::time_point>;
- using ttl_opt = std::optional<gc_clock::duration>;
- static constexpr gc_clock::duration max_ttl =     gc_clock::duration{20 * 365 * 24 * 60 * 60};
  class db_clock final { public:   using base = std::chrono::system_clock;   using rep = int64_t;   using period = std::ratio<1, 1000>;   using duration = std::chrono::duration<rep, period>;   using time_point = std::chrono::time_point<db_clock, duration>;   static constexpr bool is_steady = base::is_steady; };
 #include <seastar/core/shared_ptr.hh>
 using column_count_type = uint32_t;
@@ -28,9 +25,6 @@ using column_count_type = uint32_t;
  &&                  std::is_same<std::result_of_t<decltype (&T::compare)(T, T)>,                               int>::value;
 ) template <typename T> class with_relational_operators { private:   template <typename U>   GCC6_CONCEPT(requires HasTriCompare<U>)   int do_compare(const U &t) const; public:   bool operator<(const T &t) const;   bool operator<=(const T &t) const;   bool operator>(const T &t) const;   bool operator>=(const T &t) const;   bool operator==(const T &t) const;   bool operator!=(const T &t) const; };
  struct tombstone final : public with_relational_operators<tombstone> {   api::timestamp_type timestamp;   gc_clock::time_point deletion_time;   tombstone();   friend std::ostream &operator<<(std::ostream &out, const tombstone &t); };
- template <> struct appending_hash<tombstone> {   template <typename Hasher>   void operator()(Hasher &h, const tombstone &t) const; };
- using can_gc_fn = std::function<bool(tombstone)>;
- static can_gc_fn always_gc = [](tombstone) { return true; };
 #include <seastar/util/optimized_optional.hh>
 template <typename CharT> class basic_mutable_view {   CharT *_begin = nullptr;   CharT *_end = nullptr; public:   using value_type = CharT;   using pointer = CharT *;   using iterator = CharT *;   using const_iterator = CharT *;   basic_mutable_view() = default;   template <typename U, U N>   basic_mutable_view(basic_sstring<CharT, U, N> &str)       : _begin(str.begin()), _end(str.end()) {}   basic_mutable_view(CharT *ptr, size_t length)       : _begin(ptr), _end(ptr + length) {}   operator std::basic_string_view<CharT>() const noexcept {     return std::basic_string_view<CharT>(begin(), size());   }   CharT &operator[](size_t idx) const { return _begin[idx]; }   iterator begin() const { return _begin; }   iterator end() const { return _end; }   CharT *data() const { return _begin; }   size_t size() const { return _end - _begin; }   bool empty() const { return _begin == _end; }   void remove_prefix(size_t n) { _begin += n; }   void remove_suffix(size_t n) { _end -= n; } };
  using bytes = basic_sstring<int8_t, uint32_t, 31, false>;
@@ -40,12 +34,6 @@ template <typename CharT> class basic_mutable_view {   CharT *_begin = nullptr; 
  using sstring_view = std::string_view;
  inline sstring_view to_sstring_view(bytes_view view) {   return {reinterpret_cast<const char *>(view.data()), view.size()}; }
  namespace std { template <> struct hash<bytes_view> {   size_t operator()(bytes_view v) const {     return hash<sstring_view>()(         {reinterpret_cast<const char *>(v.begin()), v.size()});   } }; }
-  bytes from_hex(sstring_view s);
- sstring to_hex(bytes_view b);
- sstring to_hex(const bytes &b);
- sstring to_hex(const bytes_opt &b);
- std::ostream &operator<<(std::ostream &os, const bytes &b);
- std::ostream &operator<<(std::ostream &os, const bytes_opt &b);
  namespace std { std::ostream &operator<<(std::ostream &os, const bytes_view &b); }
  template <> struct appending_hash<bytes> {   template <typename Hasher> void operator()(Hasher &h, const bytes &v) const; };
  template <> struct appending_hash<bytes_view> {   template <typename Hasher> void operator()(Hasher &h, bytes_view v) const; };
@@ -70,15 +58,9 @@ namespace logging { using log_level = seastar::log_level; using logger = seastar
   enum class mutable_view {   no,   yes, };
  GCC6_CONCEPT(     template <typename T> concept bool FragmentRange =         requires(T range) {           typename T::fragment_type;           requires std::is_same_v<typename T::fragment_type, bytes_view> ||               std::is_same_v<typename T::fragment_type, bytes_mutable_view>;           { *range.begin() }           ->typename T::fragment_type;           { *range.end() }           ->typename T::fragment_type;           { range.size_bytes() }           ->size_t;           { range.empty() }           ->bool;         };
 ) template <typename T, typename = void> struct is_fragment_range : std::false_type {};
- template <typename T> struct is_fragment_range<T, std::void_t<typename T::fragment_type>>     : std::true_type {};
- template <typename T> static constexpr bool is_fragment_range_v = is_fragment_range<T>::value;
- template <typename T> GCC6_CONCEPT(requires FragmentRange<T>) class fragment_range_view {   const T *_range; public:   using fragment_type = typename T::fragment_type;   using iterator = typename T::const_iterator;   using const_iterator = typename T::const_iterator; public:   explicit fragment_range_view(const T &range) : _range(&range) {}   const_iterator begin() const { return _range->begin(); }   const_iterator end() const { return _range->end(); }   size_t size_bytes() const { return _range->size_bytes(); }   bool empty() const { return _range->empty(); } };
 #include <seastar/core/iostream.hh>
 #include <seastar/core/simple-stream.hh>
 class bytes_ostream { public:   using size_type = bytes::size_type;   using value_type = bytes::value_type;   using fragment_type = bytes_view;   static constexpr size_type max_chunk_size() { return 128 * 1024; } private:   static_assert(sizeof(value_type) == 1,                 "value_type is assumed to be one byte long");   struct chunk {     std::unique_ptr<chunk> next;     ~chunk() {       auto p = std::move(next);       while (p) {         auto p_next = std::move(p->next);         p = std::move(p_next);       }     }     size_type offset;     size_type size;     value_type data[0];     void operator delete(void *ptr) { free(ptr); }   };   static constexpr size_type default_chunk_size{512}; private:   std::unique_ptr<chunk> _begin;   chunk *_current;   size_type _size;   size_type _initial_chunk_size = default_chunk_size; public:   class fragment_iterator       : public std::iterator<std::input_iterator_tag, bytes_view> {     chunk *_current = nullptr;   public:     fragment_iterator() = default;     fragment_iterator(chunk *current) : _current(current) {}     fragment_iterator(const fragment_iterator &) = default;     fragment_iterator &operator=(const fragment_iterator &) = default;     bytes_view operator*() const;     bytes_view operator->() const;     fragment_iterator &operator++();     fragment_iterator operator++(int);     bool operator==(const fragment_iterator &other) const;     bool operator!=(const fragment_iterator &other) const;   };   using const_iterator = fragment_iterator;   class output_iterator {   public:     using iterator_category = std::output_iterator_tag;     using difference_type = std::ptrdiff_t;     using value_type = bytes_ostream::value_type;     using pointer = bytes_ostream::value_type *;     using reference = bytes_ostream::value_type &;     friend class bytes_ostream;   private:     bytes_ostream *_ostream = nullptr;   private:     explicit output_iterator(bytes_ostream &os);   public:     reference operator*() const;     output_iterator &operator++();     output_iterator operator++(int);   }; private:   size_type current_space_left() const;   size_type next_alloc_size(size_t data_size) const;   [[gnu::always_inline]] value_type *alloc(size_type size) {     if (__builtin_expect(size <= current_space_left(), true)) {       auto ret = _current->data + _current->offset;       _current->offset += size;       _size += size;       return ret;     } else {       return alloc_new(size);     }   }   [[gnu::noinline]] value_type *alloc_new(size_type size) {     auto alloc_size = next_alloc_size(size);     auto space = malloc(alloc_size);     if (!space) {       throw std::bad_alloc();     }     auto new_chunk = std::unique_ptr<chunk>(new (space) chunk());     new_chunk->offset = size;     new_chunk->size = alloc_size - sizeof(chunk);     if (_current) {       _current->next = std::move(new_chunk);       _current = _current->next.get();     } else {       _begin = std::move(new_chunk);       _current = _begin.get();     }     _size += size;     return _current->data;   } public:   explicit bytes_ostream(size_t initial_chunk_size) noexcept       : _begin(), _current(nullptr), _size(0),         _initial_chunk_size(initial_chunk_size) {}   bytes_ostream() noexcept : bytes_ostream(default_chunk_size) {}   bytes_ostream(bytes_ostream &&o) noexcept       : _begin(std::move(o._begin)), _current(o._current), _size(o._size),         _initial_chunk_size(o._initial_chunk_size) {     o._current = nullptr;     o._size = 0;   }   bytes_ostream(const bytes_ostream &o)       : _begin(), _current(nullptr), _size(0),         _initial_chunk_size(o._initial_chunk_size) {     append(o);   }   bytes_ostream &operator=(const bytes_ostream &o) {     if (this != &o) {       auto x = bytes_ostream(o);       *this = std::move(x);     }     return *this;   }   bytes_ostream &operator=(bytes_ostream &&o) noexcept {     if (this != &o) {       this->~bytes_ostream();       new (this) bytes_ostream(std::move(o));     }     return *this;   }   template <typename T> struct place_holder {     value_type *ptr;     seastar::simple_output_stream get_stream() {       return seastar::simple_output_stream(reinterpret_cast<char *>(ptr),                                            sizeof(T));     }   };   template <typename T>   inline std::enable_if_t<std::is_fundamental<T>::value, place_holder<T>>   write_place_holder() {     return place_holder<T>{alloc(sizeof(T))};   }   [[gnu::always_inline]] value_type *write_place_holder(size_type size) {     return alloc(size);   }   [[gnu::always_inline]] inline void write(bytes_view v) {     if (v.empty()) {       return;     }     auto this_size = std::min(v.size(), size_t(current_space_left()));     if (__builtin_expect(this_size, true)) {       memcpy(_current->data + _current->offset, v.begin(), this_size);       _current->offset += this_size;       _size += this_size;       v.remove_prefix(this_size);     }     while (!v.empty()) {       auto this_size = std::min(v.size(), size_t(max_chunk_size()));       std::copy_n(v.begin(), this_size, alloc_new(this_size));       v.remove_prefix(this_size);     }   }   [[gnu::always_inline]] void write(const char *ptr, size_t size) {     write(bytes_view(reinterpret_cast<const signed char *>(ptr), size));   }   bool is_linearized() const { return !_begin || !_begin->next; }   bytes_view view() const {     assert(is_linearized());     if (!_current) {       return bytes_view();     }     return bytes_view(_current->data, _size);   }   bytes_view linearize() {     if (is_linearized()) {       return view();     }     auto space = malloc(_size + sizeof(chunk));     if (!space) {       throw std::bad_alloc();     }     auto new_chunk = std::unique_ptr<chunk>(new (space) chunk());     new_chunk->offset = _size;     new_chunk->size = _size;     auto dst = new_chunk->data;     auto r = _begin.get();     while (r) {       auto next = r->next.get();       dst = std::copy_n(r->data, r->offset, dst);       r = next;     }     _current = new_chunk.get();     _begin = std::move(new_chunk);     return bytes_view(_current->data, _size);   }   size_type size() const { return _size; }   size_type size_bytes() const { return _size; }   bool empty() const { return _size == 0; }   void reserve(size_t size) {}   void append(const bytes_ostream &o) {     for (auto &&bv : o.fragments()) {       write(bv);     }   }   void remove_suffix(size_t n) {     _size -= n;     auto left = _size;     auto current = _begin.get();     while (current) {       if (current->offset >= left) {         current->offset = left;         _current = current;         current->next.reset();         return;       }       left -= current->offset;       current = current->next.get();     }   }   fragment_iterator begin() const { return {_begin.get()}; }   fragment_iterator end() const { return {nullptr}; }   output_iterator write_begin() { return output_iterator(*this); }   boost::iterator_range<fragment_iterator> fragments() const {     return {begin(), end()};   }   struct position {     chunk *_chunk;     size_type _offset;   }; };
- class fragmented_temporary_buffer {   using vector_type = std::vector<seastar::temporary_buffer<char>>; public:   static constexpr size_t default_fragment_size = 128 * 1024;   class view;   class istream;   class reader;   using ostream = seastar::memory_output_stream<vector_type::iterator>; };
- namespace fragmented_temporary_buffer_concepts { GCC6_CONCEPT(template <typename T>              concept bool ExceptionThrower = requires(T obj, size_t n) {                obj.throw_out_of_range(n, n);              };) }
- class fragmented_temporary_buffer::reader {   std::vector<temporary_buffer<char>> _fragments;   size_t _left = 0; public: };
  namespace ser { template <typename FragmentIterator> class buffer_view { public:   using fragment_type = bytes_view;   class iterator {   public:     using iterator_category = std::input_iterator_tag;     using value_type = bytes_view;     using pointer = const bytes_view *;     using reference = const bytes_view &;     using difference_type = std::ptrdiff_t;   };   using const_iterator = iterator; }; }
   class abstract_type;
  class collection_type_impl;
@@ -100,33 +82,12 @@ class bytes_ostream { public:   using size_type = bytes::size_type;   using valu
 #include <seastar/net/ip.hh>
 #include <seastar/util/backtrace.hh>
 namespace seastar { class logger; }
- typedef std::function<bool(const std::system_error &)> system_error_lambda_t;
- bool check_exception(system_error_lambda_t f);
- bool is_system_error_errno(int err_no);
- bool is_timeout_exception(std::exception_ptr e);
- class storage_io_error : public std::exception { private:   std::error_code _code;   std::string _what; public:   storage_io_error(std::system_error &e) noexcept       : _code{e.code()}, _what{std::string("Storage I/O error: ") +                                std::to_string(e.code().value()) + ": " +                                e.what()} {}   virtual const char *what() const noexcept override ;   const std::error_code &code() const ; };
- class tuple_type_impl;
- class big_decimal;
- namespace cql3 { class cql3_type; class column_specification; }
-  enum class lexicographical_relation : int8_t {   before_all_prefixed,   before_all_strictly_prefixed,   after_all_prefixed };
  template <typename TypesIterator, typename InputIt1, typename InputIt2,           typename Compare> int prefix_equality_tri_compare(TypesIterator types, InputIt1 first1,                                 InputIt1 last1, InputIt2 first2, InputIt2 last2,                                 Compare comp);
  template <typename TypesIterator, typename InputIt1, typename InputIt2,           typename Equality> bool is_prefixed_by(TypesIterator types, InputIt1 first1, InputIt1 last1,                     InputIt2 first2, InputIt2 last2, Equality equality);
  struct runtime_exception : public std::exception { public:   runtime_exception(sstring why);   virtual const char *what() const noexcept override; };
- struct empty_t {};
- class empty_value_exception : public std::exception { public:   virtual const char *what() const noexcept override; };
- [[noreturn]] void on_types_internal_error(const sstring &reason);
- template <typename T> class emptyable {   static_assert(std::is_default_constructible<T>::value,                 "must be default constructible"); public:   ; };
- template <typename T> inline bool operator==(const emptyable<T> &me1, const emptyable<T> &me2);
- template <typename T> inline bool operator<(const emptyable<T> &me1, const emptyable<T> &me2);
- template <typename T> class has_empty {   template <typename X>   constexpr static auto check(const X *x)       -> std::enable_if_t<std::is_same<bool, decltype(x->empty())>::value,                           bool> {     return true;   }   template <typename X> constexpr static auto check(...) -> bool {     return false;   } public:   constexpr static bool value = check<T>(nullptr); };
- template <typename T> using maybe_empty = std::conditional_t<has_empty<T>::value, T, emptyable<T>>;
- class abstract_type;
  class data_value;
  struct ascii_native_type {   using primary_type = sstring;   primary_type string; };
  struct simple_date_native_type {   using primary_type = uint32_t;   primary_type days; };
- struct date_type_native_type {   using primary_type = db_clock::time_point;   primary_type tp; };
- struct time_native_type {   using primary_type = int64_t;   primary_type nanoseconds; };
- struct timeuuid_native_type {   using primary_type = utils::UUID;   primary_type uuid; };
  using data_type = shared_ptr<const abstract_type>;
  template <typename T> const T &value_cast(const data_value &value);
  ;
@@ -136,9 +97,6 @@ namespace seastar { class logger; }
  class serialized_tri_compare;
  class user_type_impl;
  class abstract_type : public enable_shared_from_this<abstract_type> {   sstring _name;   std::optional<uint32_t> _value_length_if_fixed; public:   enum class kind : int8_t {     ascii,     boolean,     byte,     bytes,     counter,     date,     decimal,     double_kind,     duration,     empty,     float_kind,     inet,     int32,     list,     long_kind,     map,     reversed,     set,     short_kind,     simple_date,     time,     timestamp,     timeuuid,     tuple,     user,     utf8,     uuid,     varint,   }; private:   kind _kind; public:   kind get_kind() const;                                  public:                        bool is_reversed() const;   friend class list_type_impl; private:   mutable sstring _cql3_type_name; protected:   friend class tuple_type_impl;   friend class data_value;   friend class reversed_type_impl;   template <typename T> friend const T &value_cast(const data_value &value);   ; };
- template <typename T> const T &value_cast(const data_value &value);
- ;
- template <typename NativeType, typename AbstractType = abstract_type> class concrete_type : public AbstractType { public:   using native_type = maybe_empty<NativeType>;   using AbstractType::AbstractType; public:   friend class abstract_type; };
  bool operator==(const data_value &x, const data_value &y);
  using bytes_view_opt = std::optional<bytes_view>;
  static bool optional_equal(data_type t, bytes_view_opt e1, bytes_view_opt e2);
@@ -148,15 +106,9 @@ namespace seastar { class logger; }
  extern thread_local const shared_ptr<const abstract_type> bytes_type;
  extern thread_local const shared_ptr<const abstract_type> utf8_type;
  extern thread_local const shared_ptr<const abstract_type> boolean_type;
- template <typename T> struct comparator { private:   std::function<int32_t(T &v1, T &v2)> _compare_fn; };
- class serialized_hash { private:   data_type _type; public: };
- class serialized_equal { private:   data_type _type; public: };
  template <typename Type> static typename Type::value_type deserialize_value(Type &t,                                                           bytes_view v) ;
  template <typename T> T read_simple(bytes_view &v) ;
  template <typename T> T read_simple_exactly(bytes_view v) ;
-;
- using user_type = shared_ptr<const user_type_impl>;
- using tuple_type = shared_ptr<const tuple_type_impl>;
 #include <boost/range/adaptor/transformed.hpp>
 namespace unimplemented { enum class cause {   API,   INDEXES,   LWT,   PAGING,   AUTH,   PERMISSIONS,   TRIGGERS,   COUNTERS,   METRICS,   MIGRATIONS,   GOSSIP,   TOKEN_RESTRICTION,   LEGACY_COMPOSITE_KEYS,   COLLECTION_RANGE_TOMBSTONES,   RANGE_DELETES,   THRIFT,   VALIDATION,   REVERSED,   COMPRESSION,   NONATOMIC,   CONSISTENCY,   HINT,   SUPER,   WRAP_AROUND,   STORAGE_SERVICE,   SCHEMA_CHANGE,   MIXED_CF,   SSTABLE_FORMAT_M, }; [[noreturn]] void fail(cause what); void warn(cause what); }
   namespace std { template <> struct hash<unimplemented::cause> : seastar::enum_hash<unimplemented::cause> {}; }
@@ -214,9 +166,6 @@ class migrate_fn_type {   std::any _migrators;   uint32_t _align = 0;   uint32_t
  template <typename T> standard_migrator<T> &get_standard_migrator();
  class allocation_strategy { protected:   size_t _preferred_max_contiguous_allocation =       std::numeric_limits<size_t>::max();   uint64_t _invalidate_counter = 1; public:   using migrate_fn = const migrate_fn_type *;   virtual ~allocation_strategy();   virtual void *alloc(migrate_fn, size_t size, size_t alignment) = 0;   virtual void free(void *object, size_t size) = 0;   virtual void free(void *object) = 0;   virtual size_t object_memory_size_in_allocator(const void *obj) const       noexcept = 0;   template <typename T, typename... Args> T *construct(Args &&... args);   template <typename T> void destroy(T *obj);   size_t preferred_max_contiguous_allocation() const;   uint64_t invalidate_counter() const;   void invalidate_references(); };
  class standard_allocation_strategy : public allocation_strategy { public:   virtual void *alloc(migrate_fn, size_t size, size_t alignment) override;   virtual void free(void *obj, size_t size) override;   virtual void free(void *obj) override;   virtual size_t object_memory_size_in_allocator(const void *obj) const       noexcept; };
- extern standard_allocation_strategy standard_allocation_strategy_instance;
- standard_allocation_strategy &standard_allocator();
- allocation_strategy *&current_allocation_strategy_ptr();
  allocation_strategy &current_allocator();
  template <typename T> auto current_deleter();
  template <typename T> struct alloc_strategy_deleter {   void operator()(T *ptr) const noexcept; };
@@ -226,15 +175,9 @@ class migrate_fn_type {   std::any _migrators;   uint32_t _align = 0;   uint32_t
  struct blob_storage {   struct [[gnu::packed]] ref_type {     blob_storage *ptr;     ref_type() {}     ref_type(blob_storage * ptr) : ptr(ptr) {}     operator blob_storage *() const { return ptr; }     blob_storage *operator->() const { return ptr; }     blob_storage &operator*() const { return *ptr; }   };   using size_type = uint32_t;   using char_type = bytes_view::value_type;   ref_type *backref;   size_type size;   size_type frag_size;   ref_type next;   char_type data[];   blob_storage(ref_type *backref, size_type size, size_type frag_size) noexcept       : backref(backref), size(size), frag_size(frag_size), next(nullptr) {     *backref = this;   } }
  __attribute__((packed));
  class managed_bytes {   static thread_local std::unordered_map<       const blob_storage *, std::unique_ptr<bytes_view::value_type[]>>       _lc_state;   struct linearization_context {     unsigned _nesting = 0;     std::unordered_map<const blob_storage *,                        std::unique_ptr<bytes_view::value_type[]>> *_state_ptr =         nullptr;   };   static thread_local linearization_context _linearization_context; public:   struct linearization_context_guard {}; private:   static constexpr size_t max_inline_size = 15;   struct small_blob {     bytes_view::value_type data[max_inline_size];     int8_t size;   };   union u {     blob_storage::ref_type ptr;     small_blob small;   } _u;   static_assert(sizeof(small_blob) > sizeof(blob_storage *),                 "inline size too small"); private:   bool external() const;   size_t max_seg(allocation_strategy &alctr) {     return alctr.preferred_max_contiguous_allocation() - sizeof(blob_storage);   }   void free_chain(blob_storage *p) noexcept;   const bytes_view::value_type *read_linearize() const;   bytes_view::value_type &value_at_index(blob_storage::size_type index);   const bytes_view::value_type *do_linearize() const; public:   using size_type = blob_storage::size_type;   struct initialized_later {};   managed_bytes &operator=(const managed_bytes &o);   bool operator==(const managed_bytes &o) const;   bool operator!=(const managed_bytes &o) const;   operator bytes_view() const { return {data(), size()}; }   bool is_fragmented() const { return external() && _u.ptr->next; }   operator bytes_mutable_view() {     assert(!is_fragmented());     return {data(), size()};   };   bytes_view::value_type &operator[](size_type index);   const bytes_view::value_type &operator[](size_type index) const;   size_type size() const;   const blob_storage::char_type *begin() const;   const blob_storage::char_type *end() const;   blob_storage::char_type *begin();   blob_storage::char_type *end();   bool empty() const;   blob_storage::char_type *data();   const blob_storage::char_type *data() const;   size_t external_memory_usage() const;   template <typename Func>   friend std::result_of_t<Func()> with_linearized_managed_bytes(Func &&func); };
- ;
- namespace std { template <> struct hash<managed_bytes> {   size_t operator()(const managed_bytes &v) const {     return hash<bytes_view>()(v);   } }; }
-  class database;
  class keyspace;
  class table;
  using column_family = table;
- class memtable_list;
- class mutation;
- class mutation_partition;
  class partition_key_view;
  class clustering_key_prefix;
  class clustering_key_prefix_view;
@@ -289,9 +232,6 @@ namespace gms { class inet_address { private:   net::inet_address _addr; public:
  class position_range { public: };
  class clustering_interval_set;
  namespace utils { template <typename T, typename Exception = std::runtime_error> GCC6_CONCEPT(requires FragmentRange<T>) class linearizing_input_stream {   using iterator = typename T::iterator;   using fragment_type = typename T::fragment_type; private:   iterator _it;   iterator _end;   fragment_type _current;   size_t _size;   std::list<bytes> _linearized_values; private:   size_t remove_current_prefix(size_t size);   void check_size(size_t size) const;   std::pair<bytes_view, bool> do_read(size_t size) {     check_size(size);     if (size <= _current.size()) {       bytes_view ret(_current.begin(), size);       remove_current_prefix(size);       return {ret, false};     }     auto out = _linearized_values.emplace_back(bytes::initialized_later{}, size)                    .begin();     while (size) {       out = std::copy_n(_current.begin(), std::min(size, _current.size()), out);       size -= remove_current_prefix(size);     }     return {_linearized_values.back(), true};   } public:   explicit linearizing_input_stream(const T &fr)       : _it(fr.begin()), _end(fr.end()), _current(*_it),         _size(fr.size_bytes()) {}   linearizing_input_stream(const linearizing_input_stream &) = delete;   size_t size() const { return _size; }   bool empty() const { return _size == 0; }   bytes_view read(size_t size) { return do_read(size).first; }   template <typename Type>   GCC6_CONCEPT(requires std::is_trivial_v<Type>)   Type read_trivial() {     auto [bv, linearized] = do_read(sizeof(Type));     auto ret =         net::ntoh(*reinterpret_cast<const net::packed<Type> *>(bv.begin()));     if (linearized) {       _linearized_values.pop_back();     }     return ret;   }   void skip(size_t size) {     check_size(size);     while (size) {       size -= remove_current_prefix(size);     }   } }; }
-  class abstract_type;
- class bytes_ostream;
- class compaction_garbage_collector;
  class row_tombstone;
  namespace std {}
  namespace query { enum class digest_algorithm : uint8_t {   none = 0,   MD5 = 1,   xxHash = 2, }; }
@@ -304,9 +244,6 @@ namespace bi = boost::intrusive;
  class range_tombstone_list final {   using range_tombstones_type = range_tombstone::container_type;   class insert_undo_op {     const range_tombstone &_new_rt;   public:     insert_undo_op(const range_tombstone &new_rt);     void undo(const schema &s, range_tombstone_list &rt_list) noexcept;   };   class erase_undo_op {     alloc_strategy_unique_ptr<range_tombstone> _rt;   public:     erase_undo_op(range_tombstone &rt) : _rt(&rt) {}     void undo(const schema &s, range_tombstone_list &rt_list) noexcept;   };   class update_undo_op {     range_tombstone _old_rt;     const range_tombstone &_new_rt;   public:     update_undo_op(range_tombstone &&old_rt, const range_tombstone &new_rt)         : _old_rt(std::move(old_rt)), _new_rt(new_rt) {}     void undo(const schema &s, range_tombstone_list &rt_list) noexcept;   };   class reverter {   private:     using op = std::variant<erase_undo_op, insert_undo_op, update_undo_op>;     std::vector<op> _ops;     const schema &_s;   protected:     range_tombstone_list &_dst;   public:     reverter(const schema &s, range_tombstone_list &dst) : _s(s), _dst(dst) {}     virtual ~reverter() { revert(); }     reverter(reverter &&) = default;     reverter &operator=(reverter &&) = default;     reverter(const reverter &) = delete;     reverter &operator=(reverter &) = delete;     virtual range_tombstones_type::iterator     insert(range_tombstones_type::iterator it, range_tombstone &new_rt);     virtual range_tombstones_type::iterator     erase(range_tombstones_type::iterator it);     virtual void update(range_tombstones_type::iterator it,                         range_tombstone &&new_rt);     void revert() noexcept;     void cancel() noexcept { _ops.clear(); }   };   class nop_reverter : public reverter {   public:     nop_reverter(const schema &s, range_tombstone_list &rt_list)         : reverter(s, rt_list) {}     virtual range_tombstones_type::iterator     insert(range_tombstones_type::iterator it,            range_tombstone &new_rt) override;     virtual range_tombstones_type::iterator     erase(range_tombstones_type::iterator it) override;     virtual void update(range_tombstones_type::iterator it,                         range_tombstone &&new_rt) override;   }; private:   range_tombstones_type _tombstones; public:   using iterator = range_tombstones_type::iterator;   using const_iterator = range_tombstones_type::const_iterator;   struct copy_comparator_only {};   range_tombstone_list(const schema &s)       : _tombstones(range_tombstone::compare(s)) {}   range_tombstone_list(const range_tombstone_list &x, copy_comparator_only)       : _tombstones(x._tombstones.key_comp()) {}   range_tombstone_list(const range_tombstone_list &);   range_tombstone_list &operator=(range_tombstone_list &) = delete; public:   ; private: };
  namespace query { class clustering_key_filter_ranges { public:   struct reversed {}; }; }
   template <typename T> class managed;
- template <typename T> struct managed_ref { managed<T> *_ptr; };
- template <typename T> class managed {   managed<T> **_backref;   T _value;   template <typename T_> friend struct managed_ref; public:   static_assert(std::is_nothrow_move_constructible<T>::value,                 "Throwing move constructor not supported"); };
- class mutation_fragment;
  class clustering_row;
  struct cell_hash {   using size_type = uint64_t;   static constexpr size_type no_hash = 0;   size_type hash = no_hash; };
  using cell_hash_opt = seastar::optimized_optional<cell_hash>;
@@ -346,9 +283,6 @@ namespace bi = boost::intrusive;
  struct mutation_hash_by_key {   size_t operator()(const mutation &m) const; };
  struct mutation_decorated_key_less_comparator {   bool operator()(const mutation &m1, const mutation &m2) const; };
  using mutation_opt = optimized_optional<mutation>;
- template <> struct appending_hash<mutation> {   template <typename Hasher>   void operator()(Hasher &h, const mutation &m) const; };
- void apply(mutation_opt &dst, mutation &&src);
- void apply(mutation_opt &dst, mutation_opt &&src);
  boost::iterator_range<std::vector<mutation>::const_iterator> slice(const std::vector<mutation> &partitions, const dht::partition_range &);
  class flat_mutation_reader;
  future<mutation_opt> read_mutation_from_flat_mutation_reader(flat_mutation_reader &reader,                                         db::timeout_clock::time_point timeout);
@@ -358,9 +292,6 @@ namespace bi = boost::intrusive;
  class frozen_mutation;
  class reconcilable_result;
  class table { public:   future<std::vector<locked_cell>>   lock_counter_cells(const mutation &m, db::timeout_clock::time_point timeout); };
- class user_types_metadata;
- class keyspace_metadata final {};
- class keyspace { public: };
  class database { private:   future<mutation>   do_apply_counter_update(column_family &cf, const frozen_mutation &fm,                           schema_ptr m_schema,                           db::timeout_clock::time_point timeout,                           tracing::trace_state_ptr trace_state); public: };
  namespace cql3 { class query_options; struct raw_value_view; namespace statements { class prepared_statement; } }
   namespace tracing { class trace_state_ptr final { public:   trace_state_ptr();   trace_state_ptr(nullptr_t); }; }
@@ -370,21 +301,12 @@ namespace bi = boost::intrusive;
 ) GCC6_CONCEPT(     template <typename T> concept bool FlattenedConsumer() {       return StreamedMutationConsumer<T>() &&              requires(T obj, const dht::decorated_key &dk) {         obj.consume_new_partition(dk);         obj.consume_end_of_partition();       };     }
  template <typename T>     concept bool FlattenedConsumerFilter =         requires(T filter, const dht::decorated_key &dk,                  const mutation_fragment &mf) {           { filter(dk) }           ->bool;           { filter(mf) }           ->bool;           { filter.on_end_of_stream() }           ->void;         };
 ) class flat_mutation_reader final { public:   class impl {}; private:   std::unique_ptr<impl> _impl;   flat_mutation_reader() = default;   explicit operator bool() const noexcept;   friend class optimized_optional<flat_mutation_reader>;   void do_upgrade_schema(const schema_ptr &); public:   class partition_range_forwarding_tag;   using partition_range_forwarding = bool_class<partition_range_forwarding_tag>;   flat_mutation_reader(std::unique_ptr<impl> impl) noexcept;   future<mutation_fragment_opt>   operator()(db::timeout_clock::time_point timeout);   void next_partition();   future<> fill_buffer(db::timeout_clock::time_point timeout);   future<> fast_forward_to(const dht::partition_range &pr,                            db::timeout_clock::time_point timeout);   future<> fast_forward_to(position_range cr,                            db::timeout_clock::time_point timeout);   bool is_end_of_stream() const;   bool is_buffer_empty() const;   bool is_buffer_full() const;   mutation_fragment pop_mutation_fragment();   void unpop_mutation_fragment(mutation_fragment mf);   const schema_ptr &schema() const;   void set_max_buffer_size(size_t size);   future<mutation_fragment *> peek(db::timeout_clock::time_point timeout);   const mutation_fragment &peek_buffer() const;   size_t buffer_size() const;   circular_buffer<mutation_fragment> detach_buffer();   void move_buffer_content_to(impl &other);   void upgrade_schema(const schema_ptr &s); };
- using flat_mutation_reader_opt = optimized_optional<flat_mutation_reader>;
- template <typename Impl, typename... Args> flat_mutation_reader make_flat_mutation_reader(Args &&... args) {   return flat_mutation_reader(       std::make_unique<Impl>(std::forward<Args>(args)...)); }
- template <typename T> GCC6_CONCEPT(requires StreamedMutationTranformer<T>()) flat_mutation_reader transform(flat_mutation_reader r, T t);
- flat_mutation_reader flat_mutation_reader_from_mutations(     std::vector<mutation> ms, const query::partition_slice &slice,     streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
- flat_mutation_reader flat_mutation_reader_from_mutations(     std::vector<mutation> ms, const dht::partition_range &pr,     const query::partition_slice &slice,     streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no);
- flat_mutation_reader make_flat_mutation_reader_from_fragments(     schema_ptr, std::deque<mutation_fragment>, const dht::partition_range &pr,     const query::partition_slice &slice);
  template <typename Consumer> inline future<> consume_partitions(flat_mutation_reader &reader,                                    Consumer consumer,                                    db::timeout_clock::time_point timeout) {   static_assert(       std::is_same<future<stop_iteration>,                    futurize_t<std::result_of_t<Consumer(mutation &&)>>>::value,       "bad Consumer signature");   using futurator = futurize<std::result_of_t<Consumer(mutation &&)>>;   return do_with(       std::move(consumer), [&reader, timeout](Consumer &c) -> future<> {         return repeat([&reader, &c, timeout]() {           return read_mutation_from_flat_mutation_reader(reader, timeout)               .then([&c](mutation_opt &&mo) -> future<stop_iteration> {                 if (!mo) {                   return make_ready_future<stop_iteration>(stop_iteration::yes);                 }                 return futurator::apply(c, std::move(*mo));               });         });       }); }
  flat_mutation_reader make_generating_reader(     schema_ptr s,     std::function<future<mutation_fragment_opt>()> get_next_fragment);
  flat_mutation_reader make_reversing_reader(flat_mutation_reader &original,                                            size_t max_memory_consumption);
  class mutation;
  namespace ser { class mutation_view; }
  class frozen_mutation final { private:   partition_key deserialize_key() const;   ser::mutation_view mutation_view() const; public:   frozen_mutation(const mutation &m);   explicit frozen_mutation(bytes_ostream &&b);   frozen_mutation(bytes_ostream &&b, partition_key key);   frozen_mutation(frozen_mutation &&m) = default;   mutation unfreeze(schema_ptr s) const;   struct printer; };
- struct frozen_mutation_and_schema {   frozen_mutation fm;   schema_ptr s; };
- class streamed_mutation_freezer;
- static constexpr size_t default_frozen_fragment_size = 128 * 1024;
  using frozen_mutation_consumer_fn =     std::function<future<stop_iteration>(frozen_mutation, bool)>;
  class frozen_mutation_fragment {};
  struct reader_resources {   int count = 0;   ssize_t memory = 0; };
