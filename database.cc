@@ -1,7 +1,7 @@
 #include <tuple>
 #include <optional>
 #include <type_traits>
-#include <algorithm>
+#include <vector>
 #include <memory>
 
 template < typename... > class future;
