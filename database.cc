@@ -1268,8 +1268,8 @@ public:
       : _code{e.code()}, _what{std::string("Storage I/O error: ") +
                                std::to_string(e.code().value()) + ": " +
                                e.what()} {}
-  virtual const char *what() const noexcept override { return _what.c_str(); }
-  const std::error_code &code() const { return _code; }
+  virtual const char *what() const noexcept override ;
+  const std::error_code &code() const ;
 };
 class tuple_type_impl;
 class big_decimal;
@@ -1360,7 +1360,7 @@ private:
 public:
   ;
   ;
-  const data_type &type() const { return _type; }
+  const data_type &type() const ;
   bool is_null() const;
   size_t serialized_size() const;
   void serialize(bytes::iterator &out) const;
@@ -1417,25 +1417,25 @@ private:
   kind _kind;
 public:
   kind get_kind() const;
-  virtual ~abstract_type();
-  bool less(bytes_view v1, bytes_view v2) const;
-  serialized_compare as_less_comparator() const;
-  serialized_tri_compare as_tri_comparator() const;
-  static data_type parse_type(const sstring &name);
-  size_t hash(bytes_view v) const;
-  bool equal(bytes_view v1, bytes_view v2) const;
-  int32_t compare(bytes_view v1, bytes_view v2) const;
-  data_value deserialize(bytes_view v) const;
-  data_value deserialize_value(bytes_view v) const;
-  void validate(bytes_view v, cql_serialization_format sf) const;
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 public:
-  bool is_collection() const;
-  bool is_map() const;
-  bool is_set() const;
-  bool is_list() const;
-  bool is_listlike() const;
-  bool is_multi_cell() const;
-  bool is_atomic() const;
+  
+  
+  
+  
+  
+  
+  
   bool is_reversed() const;
   friend class list_type_impl;
 private:
@@ -1487,29 +1487,10 @@ private:
 public:
 };
 template <typename Type>
-static inline typename Type::value_type deserialize_value(Type &t,
-                                                          bytes_view v) {
-  return t.deserialize_value(v);
-}
-template <typename T> T read_simple(bytes_view &v) {
-  if (v.size() < sizeof(T)) {
-    throw_with_backtrace<marshal_exception>(
-        format("read_simple - not enough bytes (expected {:d}, got {:d})",
-               sizeof(T), v.size()));
-  }
-  auto p = v.begin();
-  v.remove_prefix(sizeof(T));
-  return net::ntoh(*reinterpret_cast<const net::packed<T> *>(p));
-}
-template <typename T> T read_simple_exactly(bytes_view v) {
-  if (v.size() != sizeof(T)) {
-    throw_with_backtrace<marshal_exception>(
-        format("read_simple_exactly - size mismatch (expected {:d}, got {:d})",
-               sizeof(T), v.size()));
-  }
-  auto p = v.begin();
-  return net::ntoh(*reinterpret_cast<const net::packed<T> *>(p));
-};
+static typename Type::value_type deserialize_value(Type &t,
+                                                          bytes_view v) ;
+template <typename T> T read_simple(bytes_view &v) ;
+template <typename T> T read_simple_exactly(bytes_view v) ;;
 using user_type = shared_ptr<const user_type_impl>;
 using tuple_type = shared_ptr<const tuple_type_impl>;
 #include <boost/range/adaptor/transformed.hpp>
@@ -2719,8 +2700,8 @@ public:
     std::copy_n(b.begin(), sizeof(_data), reinterpret_cast<int8_t *>(&_data));
     _data = net::ntoh(_data);
   }
-  bool is_minimum() const { return _kind == kind::before_all_keys; }
-  bool is_maximum() const { return _kind == kind::after_all_keys; }
+  bool is_minimum() const ;
+  bool is_maximum() const ;
   size_t external_memory_usage() const;
   size_t memory_usage() const;
   bytes data() const;
@@ -2753,14 +2734,10 @@ public:
   bool less_compare(const schema &s, const ring_position &other) const;
   int tri_compare(const schema &s, const decorated_key &other) const;
   int tri_compare(const schema &s, const ring_position &other) const;
-  const dht::token &token() const { return _token; }
-  const partition_key &key() const { return _key; }
-  size_t external_memory_usage() const {
-    return _key.external_memory_usage() + _token.external_memory_usage();
-  }
-  size_t memory_usage() const {
-    return sizeof(decorated_key) + external_memory_usage();
-  }
+  const dht::token &token() const ;
+  const partition_key &key() const ;
+  size_t external_memory_usage() const ;
+  size_t memory_usage() const ;
 };
 class decorated_key_equals_comparator {
   const schema &_schema;
