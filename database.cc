@@ -12,26 +12,26 @@ GCC6_CONCEPT(     template<typename H>     concept bool Hasher() {         retur
 ) template<typename T, typename Enable = void> struct appending_hash;
  template<typename H, typename T, typename... Args> GCC6_CONCEPT(requires Hasher<H>()) void feed_hash(H& h, const T& value, Args&&... args);
 #include <seastar/core/lowres_clock.hh>
-class gc_clock final { public:     using base = seastar::lowres_system_clock;     using rep = int64_t;     using period = std::ratio<1, 1>;      using duration = std::chrono::duration<rep, period>;     using time_point = std::chrono::time_point<gc_clock, duration>;     static constexpr auto is_steady = base::is_steady;     static time_point now();     static int32_t as_int32(duration d);     static int32_t as_int32(time_point tp); };
+class gc_clock final { public:     using base = seastar::lowres_system_clock;     using rep = int64_t;     using period = std::ratio<1, 1>;      using duration = std::chrono::duration<rep, period>;     using time_point = std::chrono::time_point<gc_clock, duration>;     static constexpr auto is_steady = base::is_steady;     static time_point now();           };
  using expiry_opt = std::optional<gc_clock::time_point>;
  using ttl_opt = std::optional<gc_clock::duration>;
  static constexpr gc_clock::duration max_ttl = gc_clock::duration{20 * 365 * 24 * 60 * 60};
- std::ostream& operator<<(std::ostream& os, gc_clock::time_point tp);
- class db_clock final { public:     using base = std::chrono::system_clock;     using rep = int64_t;     using period = std::ratio<1, 1000>;      using duration = std::chrono::duration<rep, period>;     using time_point = std::chrono::time_point<db_clock, duration>;     static constexpr bool is_steady = base::is_steady;     static time_point now() {         return time_point();     } };
- gc_clock::time_point to_gc_clock(db_clock::time_point tp);
- std::ostream& operator<<(std::ostream&, db_clock::time_point);
+ 
+ class db_clock final { public:     using base = std::chrono::system_clock;     using rep = int64_t;     using period = std::ratio<1, 1000>;      using duration = std::chrono::duration<rep, period>;     using time_point = std::chrono::time_point<db_clock, duration>;     static constexpr bool is_steady = base::is_steady;      };
+ 
+ 
 #include <seastar/core/shared_ptr.hh>
 using column_count_type = uint32_t;
  using column_id = column_count_type;
  class schema;
  class schema_extension;
  using schema_ptr = seastar::lw_shared_ptr<const schema>;
- namespace api { using timestamp_type = int64_t; timestamp_type constexpr missing_timestamp = std::numeric_limits<timestamp_type>::min(); timestamp_type constexpr min_timestamp = std::numeric_limits<timestamp_type>::min() + 1; timestamp_type constexpr max_timestamp = std::numeric_limits<timestamp_type>::max(); class timestamp_clock final {     using base = std::chrono::system_clock; public:     using rep = timestamp_type;     using duration = std::chrono::microseconds;     using period = typename duration::period;     using time_point = std::chrono::time_point<timestamp_clock, duration>;     static constexpr bool is_steady = base::is_steady;     static time_point now(); }; timestamp_type new_timestamp(); }
-std::string format_timestamp(api::timestamp_type);
+ namespace api { using timestamp_type = int64_t; timestamp_type constexpr missing_timestamp = std::numeric_limits<timestamp_type>::min(); timestamp_type constexpr min_timestamp = std::numeric_limits<timestamp_type>::min() + 1; timestamp_type constexpr max_timestamp = std::numeric_limits<timestamp_type>::max(); class timestamp_clock final {     using base = std::chrono::system_clock; public:     using rep = timestamp_type;     using duration = std::chrono::microseconds;     using period = typename duration::period;     using time_point = std::chrono::time_point<timestamp_clock, duration>;     static constexpr bool is_steady = base::is_steady;      };  }
+
  GCC6_CONCEPT( template<typename T> concept bool HasTriCompare =     requires(const T& t) {         { t.compare(t) } -> int;     }
  && std::is_same<std::result_of_t<decltype(&T::compare)(T, T)>, int>::value;
   ) template<typename T> class with_relational_operators { private:     template<typename U>     GCC6_CONCEPT( requires HasTriCompare<U> )     int do_compare(const U& t) const; public:     bool operator<(const T& t) const ;     bool operator<=(const T& t) const;     bool operator>(const T& t) const;     bool operator>=(const T& t) const;     bool operator==(const T& t) const;     bool operator!=(const T& t) const; };
-struct tombstone final : public with_relational_operators<tombstone> {     api::timestamp_type timestamp;     gc_clock::time_point deletion_time;     tombstone(api::timestamp_type timestamp, gc_clock::time_point deletion_time);     tombstone();     int compare(const tombstone& t) const;     explicit operator bool() const;     void apply(const tombstone& t) noexcept;     void apply_reversibly(tombstone& t) noexcept;     void revert(tombstone& t) noexcept;     tombstone operator+(const tombstone& t);     friend std::ostream& operator<<(std::ostream& out, const tombstone& t); };
+struct tombstone final : public with_relational_operators<tombstone> {     api::timestamp_type timestamp;     gc_clock::time_point deletion_time;          tombstone();                                   friend std::ostream& operator<<(std::ostream& out, const tombstone& t); };
  template<> struct appending_hash<tombstone> {     template<typename Hasher>     void operator()(Hasher& h, const tombstone& t) const; };
  using can_gc_fn = std::function<bool(tombstone)>;
  static can_gc_fn always_gc = [] (tombstone) { return true; };
@@ -53,7 +53,7 @@ template<typename CharT> class basic_mutable_view {     CharT* _begin = nullptr;
  namespace std { std::ostream& operator<<(std::ostream& os, const bytes_view& b); }
  template<> struct appending_hash<bytes> {     template<typename Hasher>     void operator()(Hasher& h, const bytes& v) const; };
  template<> struct appending_hash<bytes_view> {     template<typename Hasher>     void operator()(Hasher& h, bytes_view v) const; };
- int32_t compare_unsigned(bytes_view v1, bytes_view v2);
+ 
 #include <seastar/net/byteorder.hh>
 class UTFDataFormatException { };
  class EOFException { };
@@ -62,23 +62,23 @@ class UTFDataFormatException { };
  static constexpr size_t serialize_int16_size = 2;
  static constexpr size_t serialize_int32_size = 4;
  static constexpr size_t serialize_int64_size = 8;
- namespace internal_impl { template <typename ExplicitIntegerType, typename CharOutputIterator, typename IntegerType> GCC6_CONCEPT(requires std::is_integral<ExplicitIntegerType>::value && std::is_integral<IntegerType>::value && requires (CharOutputIterator it) {     *it++ = 'a'; })  void serialize_int(CharOutputIterator& out, IntegerType val) ; }
- template <typename CharOutputIterator>  void serialize_int8(CharOutputIterator& out, uint8_t val) ;
- template <typename CharOutputIterator>  void serialize_int16(CharOutputIterator& out, uint16_t val) ;
- template <typename CharOutputIterator>  void serialize_int32(CharOutputIterator& out, uint32_t val) ;
- template <typename CharOutputIterator>  void serialize_int64(CharOutputIterator& out, uint64_t val) ;
- template <typename CharOutputIterator>  void serialize_bool(CharOutputIterator& out, bool val) ;
+ namespace internal_impl {    }
+  ;
+  ;
+  ;
+  ;
+  ;
  template <typename CharOutputIterator> GCC6_CONCEPT(requires requires (CharOutputIterator it) {     *it++ = 'a'; }
 ) inline void serialize_string(CharOutputIterator& out, const sstring& s) {     for (char c : s) {         if (c == '\0') {             throw UTFDataFormatException();         }     }     if (s.size() > std::numeric_limits<uint16_t>::max()) {         throw UTFDataFormatException();     }     serialize_int16(out, s.size());     out = std::copy(s.begin(), s.end(), out); }
  template <typename CharOutputIterator> GCC6_CONCEPT(requires requires (CharOutputIterator it) {     *it++ = 'a'; }
 ) inline void serialize_string(CharOutputIterator& out, const char* s) {     auto len = strlen(s);     if (len > std::numeric_limits<uint16_t>::max()) {         throw UTFDataFormatException();     }     serialize_int16(out, len);     out = std::copy_n(s, len, out); }
  inline size_t serialize_string_size(const sstring& s) {;     return serialize_int16_size + s.size(); }
  template<typename T, typename CharOutputIterator> static inline void write(CharOutputIterator& out, const T& val) {     auto v = net::ntoh(val);     out = std::copy_n(reinterpret_cast<char*>(&v), sizeof(v), out); }
- namespace utils { class UUID { private:     int64_t most_sig_bits;     int64_t least_sig_bits; public:     UUID() : most_sig_bits(0), least_sig_bits(0) {}     UUID(int64_t most_sig_bits, int64_t least_sig_bits)         : most_sig_bits(most_sig_bits), least_sig_bits(least_sig_bits) {}     explicit UUID(const sstring& uuid_string) : UUID(sstring_view(uuid_string)) { }     explicit UUID(const char * s) : UUID(sstring_view(s)) {}     explicit UUID(sstring_view uuid_string);     int64_t get_most_significant_bits() const {         return most_sig_bits;     }     int64_t get_least_significant_bits() const {         return least_sig_bits;     }     int version() const ;     bool is_timestamp() const ;     int64_t timestamp() const ;     sstring to_sstring() const ;     friend std::ostream& operator<<(std::ostream& out, const UUID& uuid);     bool operator==(const UUID& v) const ;     bool operator!=(const UUID& v) const ;     bool operator<(const UUID& v) const ;     bool operator>(const UUID& v) const ;     bool operator<=(const UUID& v) const ;     bool operator>=(const UUID& v) const ;     bytes serialize() const ;     static size_t serialized_size() noexcept ;     template <typename CharOutputIterator>     void serialize(CharOutputIterator& out) const ; }; UUID make_random_uuid(); }
+ namespace utils { class UUID { private:     int64_t most_sig_bits;     int64_t least_sig_bits; public:     UUID() : most_sig_bits(0), least_sig_bits(0) {}     UUID(int64_t most_sig_bits, int64_t least_sig_bits)         : most_sig_bits(most_sig_bits), least_sig_bits(least_sig_bits) {}     explicit UUID(const sstring& uuid_string) : UUID(sstring_view(uuid_string)) { }     explicit UUID(const char * s) : UUID(sstring_view(s)) {}     explicit UUID(sstring_view uuid_string);     int64_t get_most_significant_bits() const {         return most_sig_bits;     }     int64_t get_least_significant_bits() const {         return least_sig_bits;     }     int version() const ;                                                                  ; };  }
  template<> struct appending_hash<utils::UUID> {     template<typename Hasher>     void operator()(Hasher& h, const utils::UUID& id) const {         feed_hash(h, id.get_most_significant_bits());         feed_hash(h, id.get_least_significant_bits());     } };
  namespace std { template<> struct hash<utils::UUID> {     size_t operator()(const utils::UUID& id) const {         auto hilo = id.get_most_significant_bits()                 ^ id.get_least_significant_bits();         return size_t((hilo >> 32) ^ hilo);     } }; }
 #include <seastar/util/log.hh>
-namespace logging { using log_level = seastar::log_level; using logger = seastar::logger; using registry = seastar::logger_registry;  registry& logger_registry() noexcept ; using settings = seastar::logging_settings;  void apply_settings(const settings& s) ; using seastar::pretty_type_name; using seastar::level_name; }
+namespace logging { using log_level = seastar::log_level; using logger = seastar::logger; using registry = seastar::logger_registry;   using settings = seastar::logging_settings;   using seastar::pretty_type_name; using seastar::level_name; }
  namespace meta { template<typename... Ts> struct list { }; namespace internal { template<bool... Vs> constexpr ssize_t do_find_if_unpacked() {     ssize_t i = -1;     ssize_t j = 0;     (..., ((Vs && i == -1) ? i = j : j++));     return i; } template<ssize_t N> struct negative_to_empty : std::integral_constant<size_t, N> { }; template<> struct negative_to_empty<-1> { }; template<typename T> struct is_same_as {     template<typename U>     using type = std::is_same<T, U>; }; template<template<class> typename Predicate, typename... Ts> struct do_find_if : internal::negative_to_empty<internal::do_find_if_unpacked<Predicate<Ts>::value...>()> { }; template<template<class> typename Predicate, typename... Ts> struct do_find_if<Predicate, meta::list<Ts...>> : internal::negative_to_empty<internal::do_find_if_unpacked<Predicate<Ts>::value...>()> { }; } template<template<class> typename Predicate, typename... Ts> constexpr size_t find_if = internal::do_find_if<Predicate, Ts...>::value; template<typename T, typename... Ts> constexpr size_t find = find_if<internal::is_same_as<T>::template type, Ts...>; namespace internal { template<size_t N, typename... Ts> struct do_get_unpacked { }; template<size_t N, typename T, typename... Ts> struct do_get_unpacked<N, T, Ts...> : do_get_unpacked<N - 1, Ts...> { }; template<typename T, typename... Ts> struct do_get_unpacked<0, T, Ts...> {     using type = T; }; template<size_t N, typename... Ts> struct do_get : do_get_unpacked<N, Ts...> { }; template<size_t N, typename... Ts> struct do_get<N, meta::list<Ts...>> : do_get_unpacked<N, Ts...> { }; } template<size_t N, typename... Ts> using get = typename internal::do_get<N, Ts...>::type; namespace internal { template<size_t N, typename Result, typename... Ts> struct do_take_unpacked { }; template<typename... Ts> struct do_take_unpacked<0, list<Ts...>> {     using type = list<Ts...>; }; template<typename... Ts, typename U, typename... Us> struct do_take_unpacked<0, list<Ts...>, U, Us...> {     using type = list<Ts...>; }; template<size_t N, typename... Ts, typename U, typename... Us> struct do_take_unpacked<N, list<Ts...>, U, Us...> {     using type = typename do_take_unpacked<N - 1, list<Ts..., U>, Us...>::type; }; template<size_t N, typename Result, typename... Ts> struct do_take : do_take_unpacked<N, Result, Ts...> { }; template<size_t N, typename Result, typename... Ts> struct do_take<N, Result, meta::list<Ts...>> : do_take_unpacked<N, Result, Ts...> { }; } template<size_t N, typename... Ts> using take = typename internal::do_take<N, list<>, Ts...>::type; namespace internal { template<typename... Ts> struct do_for_each_unpacked {     template<typename Function>     static constexpr void run(Function&& fn) {         (..., fn(static_cast<Ts*>(nullptr)));     } }; template<typename... Ts> struct do_for_each : do_for_each_unpacked<Ts...> { }; template<typename... Ts> struct do_for_each<meta::list<Ts...>> : do_for_each_unpacked<Ts...> { }; } template<typename... Ts, typename Function> constexpr void for_each(Function&& fn) {     internal::do_for_each<Ts...>::run(std::forward<Function>(fn)); }; namespace internal { template<typename... Ts> struct get_size : std::integral_constant<size_t, sizeof...(Ts)> { }; template<typename... Ts> struct get_size<meta::list<Ts...>> : std::integral_constant<size_t, sizeof...(Ts)> { }; } template<typename... Ts> constexpr size_t size = internal::get_size<Ts...>::value; template<template <class> typename Predicate, typename... Ts> static constexpr bool all_of = std::conjunction_v<Predicate<Ts>...>; }
 enum class mutable_view { no, yes, };
  GCC6_CONCEPT( template<typename T> concept bool FragmentRange = requires (T range) {     typename T::fragment_type;     requires std::is_same_v<typename T::fragment_type, bytes_view>         || std::is_same_v<typename T::fragment_type, bytes_mutable_view>;     { *range.begin() } -> typename T::fragment_type;     { *range.end() } -> typename T::fragment_type;     { range.size_bytes() } -> size_t;     { range.empty() } -> bool;  };
@@ -710,7 +710,7 @@ class schema_extension {
 public:
     ;
 };
-class schema final : public enable_lw_shared_from_this<schema> {     friend class v3_columns; public:     struct dropped_column {         data_type type;         api::timestamp_type timestamp;              };     using extensions_map = std::map<sstring, ::shared_ptr<schema_extension>>; private:     struct raw_schema {                  utils::UUID _id;         sstring _ks_name;         sstring _cf_name;         std::vector<column_definition> _columns;         sstring _comment;         gc_clock::duration _default_time_to_live = gc_clock::duration::zero();         data_type _regular_column_name_type;         data_type _default_validation_class = bytes_type;         double _bloom_filter_fp_chance = 0.01;         extensions_map _extensions;         bool _is_dense = false;         bool _is_compound = true;         bool _is_counter = false;         cf_type _type = cf_type::standard;         int32_t _gc_grace_seconds = DEFAULT_GC_GRACE_SECONDS;         double _dc_local_read_repair_chance = 0.1;         double _read_repair_chance = 0.0;         double _crc_check_chance = 1;         int32_t _min_compaction_threshold = DEFAULT_MIN_COMPACTION_THRESHOLD;         int32_t _max_compaction_threshold = DEFAULT_MAX_COMPACTION_THRESHOLD;         int32_t _min_index_interval = DEFAULT_MIN_INDEX_INTERVAL;         int32_t _max_index_interval = 2048;         int32_t _memtable_flush_period = 0;         speculative_retry _speculative_retry = ::speculative_retry(speculative_retry::type::PERCENTILE, 0.99);         bool _compaction_enabled = true;         table_schema_version _version;         std::unordered_map<sstring, dropped_column> _dropped_columns;         std::map<bytes, data_type> _collections;         std::unordered_map<sstring, index_metadata> _indices_by_name;         bool _wait_for_sync = false;      };     raw_schema _raw;     thrift_schema _thrift;     v3_columns _v3_columns;     mutable schema_registry_entry* _registry_entry = nullptr;     std::unique_ptr<::view_info> _view_info;     const std::array<column_count_type, 3> _offsets;           std::unordered_map<bytes, const column_definition*> _columns_by_name;     lw_shared_ptr<compound_type<allow_prefixes::no>> _partition_key_type;     lw_shared_ptr<compound_type<allow_prefixes::yes>> _clustering_key_type;     column_mapping _column_mapping;     shared_ptr<query::partition_slice> _full_slice;     column_count_type _clustering_key_size;     column_count_type _regular_column_count;     column_count_type _static_column_count;          friend class db::extensions;     friend class schema_builder; public:     using row_column_ids_are_ordered_by_name = std::true_type;     typedef std::vector<column_definition> columns_type;     typedef typename columns_type::iterator iterator;     typedef typename columns_type::const_iterator const_iterator;     typedef boost::iterator_range<iterator> iterator_range_type;     typedef boost::iterator_range<const_iterator> const_iterator_range_type;     static constexpr int32_t NAME_LENGTH = 48;     struct column {         bytes name;         data_type type;     }; private:          void rebuild();     schema(const raw_schema&, std::optional<raw_view_info>); public:     schema(std::optional<utils::UUID> id,         std::string_view ks_name,         std::string_view cf_name,         std::vector<column> partition_key,         std::vector<column> clustering_key,         std::vector<column> regular_columns,         std::vector<column> static_columns,         data_type regular_column_name_type,         std::string_view comment = {});     schema(const schema&);     ~schema();     table_schema_version version() const ;     double bloom_filter_fp_chance() const ;     sstring thrift_key_validator() const;     const extensions_map& extensions() const ;     bool is_dense() const ;     bool is_compound() const ;     bool is_cql3_table() const ;     bool is_compact_table() const ;     bool is_static_compact_table() const ;                                                                                                                                                                                         bool has_static_columns() const;     column_count_type columns_count(column_kind kind) const;     column_count_type partition_key_size() const;     column_count_type clustering_key_size() const;                                        typedef boost::range::joined_range<const_iterator_range_type, const_iterator_range_type>         select_order_range;                    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const ;     const auto& dropped_columns() const ;     const auto& collections() const ;     gc_clock::duration default_time_to_live() const ;     data_type make_legacy_default_validator() const;     const sstring& ks_name() const ;     const sstring& cf_name() const ;     const lw_shared_ptr<compound_type<allow_prefixes::no>>& partition_key_type() const ;     const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_type() const ;     const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_prefix_type() const ;     const data_type& regular_column_name_type() const ;     const data_type& static_column_name_type() const ;     const std::unique_ptr<::view_info>& view_info() const ;     bool is_view() const ;     const query::partition_slice& full_slice() const ;     std::vector<sstring> index_names() const;     std::vector<index_metadata> indices() const;     const std::unordered_map<sstring, index_metadata>& all_indices() const;     bool has_index(const sstring& index_name) const;     std::optional<index_metadata> find_index_noname(const index_metadata& target) const;                         friend class schema_registry_entry;                     public:      };  using schema_ptr = lw_shared_ptr<const schema>; class view_ptr final {     schema_ptr _schema; public:                                    };   class schema_mismatch_error : public std::runtime_error { public:      };  namespace sstables { enum class sstable_version_types { ka, la, mc }; enum class sstable_format_types { big };     } template <typename CompoundType> class legacy_compound_view {     static_assert(!CompoundType::is_prefixable, "Legacy view not defined for prefixes");     CompoundType& _type;     bytes_view _packed; public:          class iterator : public std::iterator<std::input_iterator_tag, bytes::value_type> {         bool _singular;         int32_t _offset;         typename CompoundType::iterator _i;     public:         struct end_tag {};                                                           };     struct tri_comparator {         const CompoundType& _type;                       };                }; template <typename CompoundType> static bytes to_legacy(CompoundType& type, bytes_view packed) ; class composite_view; class composite final {     bytes _bytes;     bool _is_compound; public:     composite(bytes&& b, bool is_compound)      ;     explicit composite(bytes&& b)      ;     composite()      ;     using size_type = uint16_t;     using eoc_type = int8_t;     
+class schema final : public enable_lw_shared_from_this<schema> {     friend class v3_columns; public:     struct dropped_column {         data_type type;         api::timestamp_type timestamp;              };     using extensions_map = std::map<sstring, ::shared_ptr<schema_extension>>; private:     struct raw_schema {                  utils::UUID _id;         sstring _ks_name;         sstring _cf_name;         std::vector<column_definition> _columns;         sstring _comment;         gc_clock::duration _default_time_to_live = gc_clock::duration::zero();         data_type _regular_column_name_type;         data_type _default_validation_class = bytes_type;         double _bloom_filter_fp_chance = 0.01;         extensions_map _extensions;         bool _is_dense = false;         bool _is_compound = true;         bool _is_counter = false;         cf_type _type = cf_type::standard;         int32_t _gc_grace_seconds = DEFAULT_GC_GRACE_SECONDS;         double _dc_local_read_repair_chance = 0.1;         double _read_repair_chance = 0.0;         double _crc_check_chance = 1;         int32_t _min_compaction_threshold = DEFAULT_MIN_COMPACTION_THRESHOLD;         int32_t _max_compaction_threshold = DEFAULT_MAX_COMPACTION_THRESHOLD;         int32_t _min_index_interval = DEFAULT_MIN_INDEX_INTERVAL;         int32_t _max_index_interval = 2048;         int32_t _memtable_flush_period = 0;         speculative_retry _speculative_retry = ::speculative_retry(speculative_retry::type::PERCENTILE, 0.99);         bool _compaction_enabled = true;         table_schema_version _version;         std::unordered_map<sstring, dropped_column> _dropped_columns;         std::map<bytes, data_type> _collections;         std::unordered_map<sstring, index_metadata> _indices_by_name;         bool _wait_for_sync = false;      };     raw_schema _raw;     thrift_schema _thrift;     v3_columns _v3_columns;     mutable schema_registry_entry* _registry_entry = nullptr;     std::unique_ptr<::view_info> _view_info;     const std::array<column_count_type, 3> _offsets;           std::unordered_map<bytes, const column_definition*> _columns_by_name;     lw_shared_ptr<compound_type<allow_prefixes::no>> _partition_key_type;     lw_shared_ptr<compound_type<allow_prefixes::yes>> _clustering_key_type;     column_mapping _column_mapping;     shared_ptr<query::partition_slice> _full_slice;     column_count_type _clustering_key_size;     column_count_type _regular_column_count;     column_count_type _static_column_count;          friend class db::extensions;     friend class schema_builder; public:     using row_column_ids_are_ordered_by_name = std::true_type;     typedef std::vector<column_definition> columns_type;     typedef typename columns_type::iterator iterator;     typedef typename columns_type::const_iterator const_iterator;     typedef boost::iterator_range<iterator> iterator_range_type;     typedef boost::iterator_range<const_iterator> const_iterator_range_type;     static constexpr int32_t NAME_LENGTH = 48;     struct column {         bytes name;         data_type type;     }; private:          void rebuild();     schema(const raw_schema&, std::optional<raw_view_info>); public:     schema(std::optional<utils::UUID> id,         std::string_view ks_name,         std::string_view cf_name,         std::vector<column> partition_key,         std::vector<column> clustering_key,         std::vector<column> regular_columns,         std::vector<column> static_columns,         data_type regular_column_name_type,         std::string_view comment = {});     schema(const schema&);     ~schema();     table_schema_version version() const ;     double bloom_filter_fp_chance() const ;     sstring thrift_key_validator() const;     const extensions_map& extensions() const ;     bool is_dense() const ;     bool is_compound() const ;     bool is_cql3_table() const ;     bool is_compact_table() const ;     bool is_static_compact_table() const ;                                                                                                                                                                                         bool has_static_columns() const;     column_count_type columns_count(column_kind kind) const;     column_count_type partition_key_size() const;     column_count_type clustering_key_size() const;                                        typedef boost::range::joined_range<const_iterator_range_type, const_iterator_range_type>         select_order_range;                    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const ;     const auto& dropped_columns() const ;     const auto& collections() const ;     gc_clock::duration default_time_to_live() const ;     data_type make_legacy_default_validator() const;     const sstring& ks_name() const ;     const sstring& cf_name() const ;     const lw_shared_ptr<compound_type<allow_prefixes::no>>& partition_key_type() const ;     const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_type() const ;     const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_prefix_type() const ;     const data_type& regular_column_name_type() const ;     const data_type& static_column_name_type() const ;     const std::unique_ptr<::view_info>& view_info() const ;     bool is_view() const ;     const query::partition_slice& full_slice() const ;     std::vector<sstring> index_names() const;     std::vector<index_metadata> indices() const;     const std::unordered_map<sstring, index_metadata>& all_indices() const;                                   friend class schema_registry_entry;                     public:      };  using schema_ptr = lw_shared_ptr<const schema>; class view_ptr final {     schema_ptr _schema; public:                                    };   class schema_mismatch_error : public std::runtime_error { public:      };  namespace sstables { enum class sstable_version_types { ka, la, mc }; enum class sstable_format_types { big };     } template <typename CompoundType> class legacy_compound_view {     static_assert(!CompoundType::is_prefixable, "Legacy view not defined for prefixes");     CompoundType& _type;     bytes_view _packed; public:          class iterator : public std::iterator<std::input_iterator_tag, bytes::value_type> {         bool _singular;         int32_t _offset;         typename CompoundType::iterator _i;     public:         struct end_tag {};                                                           };     struct tri_comparator {         const CompoundType& _type;                       };                };  ; class composite_view; class composite final {     bytes _bytes;     bool _is_compound; public:                    using size_type = uint16_t;     using eoc_type = int8_t;     
     enum class eoc : eoc_type {
         start = -1,
         none = 0,
@@ -846,15 +846,15 @@ public:
         bool operator!=(const iterator& i) const { return _v.begin() != i._v.begin(); }
         bool operator==(const iterator& i) const { return _v.begin() == i._v.begin(); }
     };
-    iterator begin() const ;
-    iterator end() const ;
-    boost::iterator_range<iterator> components() const & ;
-    auto values() const & ;
-    std::vector<component> components() const && ;
-    std::vector<bytes> values() const && ;
-    const bytes& get_bytes() const ;
-    bytes release_bytes() && ;
-    size_t size() const ;
+    
+    
+    
+    
+    
+    
+    
+    
+    
     bool empty() const ;
     static bool is_static(bytes_view bytes, bool is_compound) ;
     bool is_static() const ;
@@ -1195,12 +1195,12 @@ template <typename TopLevel, typename PrefixTopLevel>
 class prefix_view_on_full_compound {
 public:
     using iterator = typename compound_type<allow_prefixes::no>::iterator;
-    prefix_view_on_full_compound(const schema& s, bytes_view b, unsigned prefix_len);
-    iterator begin() const;
-    iterator end() const;
+    
+    
+    
     struct less_compare_with_prefix {
-        less_compare_with_prefix(const schema& s);
-        bool operator()(const prefix_view_on_full_compound& k1, const PrefixTopLevel& k2) const;
+        
+        
     };
 };
 template <typename TopLevel>
@@ -1231,27 +1231,27 @@ template <typename TopLevel, typename TopLevelView, typename FullTopLevel>
 class prefix_compound_wrapper : public compound_wrapper<TopLevel, TopLevelView> {
     using base = compound_wrapper<TopLevel, TopLevelView>;
 protected:
-    prefix_compound_wrapper(managed_bytes&& b) : base(std::move(b)) {}
+    
 public:
     using prefix_view_type = prefix_view_on_prefix_compound<TopLevel>;
-    prefix_view_type prefix_view(const schema& s, unsigned prefix_len) const;
-    bool is_full(const schema& s) const;
-    FullTopLevel to_full(const schema& s) const;
-    bool is_prefixed_by(const schema& s, const TopLevel& prefix) const;
+    
+    
+    
+    
     struct prefix_equality_less_compare {
-        prefix_equality_less_compare(const schema& s);
-        bool operator()(const TopLevel& k1, const TopLevel& k2) const;
+        
+        
     };
     struct prefix_equal_tri_compare {
-        prefix_equal_tri_compare(const schema& s);
-        int operator()(const TopLevel& k1, const TopLevel& k2) const;
+        
+        
     };
 };
 class partition_key_view : public compound_view_wrapper<partition_key_view> {
 public:
     using c_type = compound_type<allow_prefixes::no>;
 private:
-    partition_key_view(bytes_view v);
+    
 public:
     using compound = lw_shared_ptr<c_type>;
 };
@@ -2563,18 +2563,13 @@ private:
     void update_current_tombstone();
     void drop_unneeded_tombstones(const clustering_key_prefix& ck, int w = 0);
 public:
-    range_tombstone_accumulator(const schema& s, bool reversed)  ;
-    void set_partition_tombstone(tombstone t) ;
-    tombstone get_partition_tombstone() const ;
-    tombstone current_tombstone() const ;
-    tombstone tombstone_for_row(const clustering_key_prefix& ck) ;
-    const std::deque<range_tombstone>& range_tombstones_for_row(const clustering_key_prefix& ck) {
-        drop_unneeded_tombstones(ck);
-        return _range_tombstones;
-    }
-    std::deque<range_tombstone> range_tombstones() && {
-        return std::move(_range_tombstones);
-    }
+    
+    
+    
+    
+    
+    
+    
 };
 class row_marker;
 class row_tombstone;
@@ -2610,27 +2605,23 @@ concept bool MutationViewVisitor = requires (T& visitor, tombstone t, atomic_cel
 )
 class mutation_partition_view_virtual_visitor {
 public:
-    virtual void accept_partition_tombstone(tombstone t) = 0;
-    virtual void accept_static_cell(column_id, atomic_cell ac) = 0;
-    virtual void accept_static_cell(column_id, collection_mutation_view cmv) = 0;
-    virtual void accept_row_tombstone(range_tombstone rt) = 0;
-    virtual void accept_row(position_in_partition_view pipv, row_tombstone rt, row_marker rm, is_dummy, is_continuous) = 0;
-    virtual void accept_row_cell(column_id, atomic_cell ac) = 0;
-    virtual void accept_row_cell(column_id, collection_mutation_view cmv) = 0;
+    
+    
+    
+    
+    
+    
+    
 };
 class mutation_partition_view {
     utils::input_stream _in;
 private:
-    mutation_partition_view(utils::input_stream v)
-        : _in(v)
-    { }
+    
     template<typename Visitor>
     GCC6_CONCEPT(requires MutationViewVisitor<Visitor>)
     void do_accept(const column_mapping&, Visitor& visitor) const;
 public:
-    static mutation_partition_view from_stream(utils::input_stream v) {
-        return { v };
-    }
+    static mutation_partition_view from_stream(utils::input_stream v) ;
     static mutation_partition_view from_view(ser::mutation_partition_view v);
     void accept(const schema& schema, partition_builder& visitor) const;
 };
@@ -2669,34 +2660,10 @@ public:
     void push_back(T&& value) ;
     template<typename... Args>
     T& emplace_back(Args&&... args) ;
-    void pop_back() {
-        _data[_size - 1].~T();
-        _size--;
-    }
-    void resize(size_type new_size) {
-        maybe_grow(new_size);
-        while (_size > new_size) {
-            pop_back();
-        }
-        while (_size < new_size) {
-            emplace_back();
-        }
-    }
-    void resize(size_type new_size, const T& value) {
-        maybe_grow(new_size);
-        while (_size > new_size) {
-            pop_back();
-        }
-        while (_size < new_size) {
-            push_back(value);
-        }
-    }
-    size_t used_space_external_memory_usage() const {
-        if (is_external()) {
-            return sizeof(external) + _size * sizeof(T);
-        }
-        return 0;
-    }
+    void pop_back() ;
+    void resize(size_type new_size) ;
+    void resize(size_type new_size, const T& value) ;
+    size_t used_space_external_memory_usage() const ;
 };
 class is_preemptible_tag;
 using is_preemptible = bool_class<is_preemptible_tag>;
@@ -2705,8 +2672,7 @@ class range_tombstone_list final {
     class insert_undo_op {
         const range_tombstone& _new_rt;
     public:
-        insert_undo_op(const range_tombstone& new_rt)
-                : _new_rt(new_rt) { }
+        insert_undo_op(const range_tombstone& new_rt)  ;
         void undo(const schema& s, range_tombstone_list& rt_list) noexcept;
     };
     class erase_undo_op {
@@ -2772,27 +2738,25 @@ public:
     { }
     range_tombstone_list(const range_tombstone_list&);
     range_tombstone_list& operator=(range_tombstone_list&) = delete;
-    void apply(const schema& s, const bound_view& start_bound, const bound_view& end_bound, tombstone tomb) ;
-    void apply(const schema& s, const range_tombstone& rt) ;
-    void apply(const schema& s, range_tombstone&& rt) ;
-    void apply(const schema& s, clustering_key_prefix start, bound_kind start_kind,
-               clustering_key_prefix end, bound_kind end_kind, tombstone tomb) ;
-    void apply_monotonically(const schema& s, const range_tombstone& rt);
-    void apply_monotonically(const schema& s, const range_tombstone_list& list);
-    stop_iteration apply_monotonically(const schema& s, range_tombstone_list&& list, is_preemptible = is_preemptible::no);
+    
+    
+    
+    
+    
+    
+    
 public:
-    tombstone search_tombstone_covering(const schema& s, const clustering_key_prefix& key) const;
-    boost::iterator_range<const_iterator> slice(const schema& s, const query::clustering_range&) const;
-    boost::iterator_range<const_iterator> slice(const schema& s, position_in_partition_view start, position_in_partition_view end) const;
-    iterator erase(const_iterator, const_iterator);
-    void trim(const schema& s, const query::clustering_row_ranges&);
-    range_tombstone_list difference(const schema& s, const range_tombstone_list& rt_list) const;
-    template <typename Pred>
-    void erase_where(Pred filter) ;
-    void clear() ;
-    stop_iteration clear_gently() noexcept;
-    void apply(const schema& s, const range_tombstone_list& rt_list);
-    reverter apply_reversibly(const schema& s, range_tombstone_list& rt_list);
+    
+    
+    
+    
+    
+    
+     ;
+    
+    
+    
+    
 private:
 };
 namespace query {
@@ -2841,66 +2805,46 @@ public:
     static constexpr size_t internal_count = 5;
 private:
 public:
-    bool empty() const;
+    
 private:
     ;
 private:
-    template<typename Func>
-    auto with_both_ranges(const row& other, Func&& func) const;
-    void vector_to_set();
-    template<typename Func>
-    void consume_with(Func&&);
+    ;
+    
+    ;
 public:
-    template<typename Func>
-    void for_each_cell(Func&& func);
-    template<typename Func>
-    void for_each_cell(Func&& func) const;
-    template<typename Func>
-    void for_each_cell_until(Func&& func) const;
-    void apply(const column_definition& column, const atomic_cell_or_collection& cell, cell_hash_opt hash = cell_hash_opt());
-    void apply(const column_definition& column, atomic_cell_or_collection&& cell, cell_hash_opt hash = cell_hash_opt());
-    void apply_monotonically(const column_definition& column, atomic_cell_or_collection&& cell, cell_hash_opt hash = cell_hash_opt());
-    void append_cell(column_id id, atomic_cell_or_collection cell);
-    void apply(const schema&, column_kind, const row& src);
-    void apply(const schema&, column_kind, row&& src);
-    void apply_monotonically(const schema&, column_kind, row&& src);
-    bool compact_and_expire(
-            const schema& s,
-            column_kind kind,
-            row_tombstone tomb,
-            gc_clock::time_point query_time,
-            can_gc_fn&,
-            gc_clock::time_point gc_before,
-            const row_marker& marker,
-            compaction_garbage_collector* collector = nullptr);
-    bool compact_and_expire(
-            const schema& s,
-            column_kind kind,
-            row_tombstone tomb,
-            gc_clock::time_point query_time,
-            can_gc_fn&,
-            gc_clock::time_point gc_before,
-            compaction_garbage_collector* collector = nullptr);
-    row difference(const schema&, column_kind, const row& other) const;
+    ;
+    ;
+    ;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     bool equal(column_kind kind, const schema& this_schema, const row& other, const schema& other_schema) const;
-    size_t external_memory_usage(const schema&, column_kind) const;
-    cell_hash_opt cell_hash_for(column_id id) const;
-    void prepare_hash(const schema& s, column_kind kind) const;
-    void clear_hash() const;
-    bool is_live(const schema&, column_kind kind, tombstone tomb = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const;
+    
+    
+    
+    
+    
     class printer {
     public:
-        printer(const schema& s, column_kind k, const row& r);
-        printer(const printer&) = delete;
-        printer(printer&&) = delete;
-        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+        
+        
+        
+        
     };
-    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    
 };
 class lazy_row {
 public:
-    lazy_row() = default;
-    explicit lazy_row(row&& r);
+    
+    
     ;
     ;
     ;
@@ -2909,7 +2853,7 @@ public:
     };
 };
 class row_marker;
-int compare_row_marker_for_merge(const row_marker& left, const row_marker& right) noexcept;
+
 class row_marker {
     static constexpr gc_clock::duration no_ttl { 0 };
     static constexpr gc_clock::duration dead { -1 };
@@ -2921,43 +2865,15 @@ public:
     bool is_missing() const {
         return _timestamp == api::missing_timestamp;
     }
-    bool is_live() const {
-        return !is_missing() && _ttl != dead;
-    }
-    gc_clock::duration ttl() const {
-        return _ttl;
-    }
-    gc_clock::time_point expiry() const {
-        return _expiry;
-    }
-    gc_clock::time_point deletion_time() const {
-        return _ttl == dead ? _expiry : _expiry - _ttl;
-    }
-    api::timestamp_type timestamp() const {
-        return _timestamp;
-    }
-    void apply(const row_marker& rm) {
-        if (compare_row_marker_for_merge(*this, rm) < 0) {
-            *this = rm;
-        }
-    }
-    bool compact_and_expire(tombstone tomb, gc_clock::time_point now,
-            can_gc_fn& can_gc, gc_clock::time_point gc_before, compaction_garbage_collector* collector = nullptr);
-    bool operator==(const row_marker& other) const {
-        if (_timestamp != other._timestamp) {
-            return false;
-        }
-        if (is_missing()) {
-            return true;
-        }
-        if (_ttl != other._ttl) {
-            return false;
-        }
-        return _ttl == no_ttl || _expiry == other._expiry;
-    }
-    bool operator!=(const row_marker& other) const {
-        return !(*this == other);
-    }
+    
+    
+    
+    
+    
+    
+    
+    bool operator==(const row_marker& other) const ;
+    
     template<typename Hasher>
     void feed_hash(Hasher& h) const {
         ::feed_hash(h, _timestamp);
@@ -3076,25 +2992,13 @@ public:
     explicit static_row(row&& r) : _cells(std::move(r)) { }
     row& cells() { return _cells; }
     const row& cells() const { return _cells; }
-    bool empty() const {
-        return _cells.empty();
-    }
-    bool is_live(const schema& s, gc_clock::time_point now = gc_clock::time_point::min()) const {
-        return _cells.is_live(s, column_kind::static_column, tombstone(), now);
-    }
-    void apply(const schema& s, const row& r) {
-        _cells.apply(s, column_kind::static_column, r);
-    }
-    void apply(const schema& s, static_row&& sr) {
-        _cells.apply(s, column_kind::static_column, std::move(sr._cells));
-    }
-    void set_cell(const column_definition& def, atomic_cell_or_collection&& value) {
-        _cells.apply(def, std::move(value));
-    }
+    bool empty() const ;
+    bool is_live(const schema& s, gc_clock::time_point now = gc_clock::time_point::min()) const ;
+    void apply(const schema& s, const row& r) ;
+    void apply(const schema& s, static_row&& sr) ;
+    void set_cell(const column_definition& def, atomic_cell_or_collection&& value) ;
     position_in_partition_view position() const;
-    size_t external_memory_usage(const schema& s) const {
-        return _cells.external_memory_usage(s, column_kind::static_column);
-    }
+    size_t external_memory_usage(const schema& s) const ;
     size_t memory_usage(const schema& s) const {
         return sizeof(static_row) + external_memory_usage(s);
     }
