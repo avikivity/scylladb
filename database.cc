@@ -95,7 +95,7 @@ template < typename T1, typename T2, typename T3_or_F, typename... More >
 auto do_with(T1 rv1, T2 rv2, T3_or_F rv3, More ... more) {
   auto all = forward_as_tuple(
       (rv1), (rv2),
-      (rv3), std::forward< More >(more)...);
+      (rv3), (more)...);
   constexpr size_t nr = std::tuple_size< decltype(all) >::value - 1;
   using idx = std::make_index_sequence< nr >;
   auto just_values = cherry_pick_tuple(idx(), move(all));
