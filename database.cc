@@ -111,8 +111,8 @@ auto do_with(T1 rv1, T2 rv2, T3_or_F rv3, More ... more) {
       std::forward< T3_or_F >(rv3), std::forward< More >(more)...);
   constexpr size_t nr = std::tuple_size< decltype(all) >::value - 1;
   using idx = std::make_index_sequence< nr >;
-  auto &&just_values = cherry_pick_tuple(idx(), std::move(all));
-  auto &&just_func = std::move(std::get< nr >(std::move(all)));
+  auto just_values = cherry_pick_tuple(idx(), std::move(all));
+  auto just_func = std::move(std::get< nr >(std::move(all)));
   using value_tuple = std::remove_reference_t< decltype(just_values) >;
   using ret_type = decltype(apply(just_func, just_values));
   auto task =
@@ -122,16 +122,16 @@ auto do_with(T1 rv1, T2 rv2, T3_or_F rv3, More ... more) {
   return ret;
 }
 class lowres_clock;
-class lowres_clock_impl final {
+class lowres_clock_impl {
 public:
   using base_steady_clock = std::chrono::steady_clock;
-  using period = std::ratio< 1, 1000 >;
+  using period = std::ratio< 11000 >;
   using steady_rep = base_steady_clock::rep;
   using steady_duration = std::chrono::duration< steady_rep, period >;
   using steady_time_point =
       std::chrono::time_point< lowres_clock, steady_duration >;
 };
-class lowres_clock final {
+class lowres_clock {
 public:
   using time_point = lowres_clock_impl::steady_time_point;
 };
@@ -143,12 +143,11 @@ using column_id_vector = utils::small_vector< column_id, 8 >;
 using clustering_range = int;
 typedef std::vector< clustering_range > clustering_row_ranges;
 class specific_ranges {};
-constexpr auto max_rows = std::numeric_limits< uint32_t >::max();
+auto max_rows = std::numeric_limits< uint32_t >::max();
 class partition_slice {
 public:
-  enum class option {
-    send_clustering_key,
-    send_partition_key,
+  enum {
+    send_clustering_keysend_partition_key,
     always_return_static_content,
   };
   using option_set = int;
