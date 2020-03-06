@@ -7,7 +7,7 @@ namespace seastar {
 namespace compat {
 template <typename T> using optional = std::optional<T>;
 }
-} // namespace seastar
+} 
 #include <algorithm>
 namespace seastar {
 template <typename char_type, typename Size, Size max_size,
@@ -16,7 +16,7 @@ class basic_sstring;
 using sstring = basic_sstring<char, uint32_t, 15>;
 template <typename char_type, typename Size, Size max_size, bool NulTerminate>
 class basic_sstring {};
-} // namespace seastar
+} 
 using namespace seastar;
 #define GCC6_CONCEPT(x...)
 GCC6_CONCEPT(template <typename H> concept bool Hasher() {
@@ -64,7 +64,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
     using cql_protocol_version_type = uint8_t;
     class cql_serialization_format {
     cql_protocol_version_type _version;
-
   public:
     static constexpr cql_protocol_version_type latest_version = 4;
     explicit cql_serialization_format(cql_protocol_version_type version)
@@ -1499,7 +1498,6 @@ namespace seastar {
       void add_future(future<> &&f);
       future<> get_future();
     };
-
     struct stop_iteration_tag {};
     using stop_iteration = bool_class<stop_iteration_tag>;
  }
@@ -1596,7 +1594,6 @@ namespace seastar {
     namespace alien {
     class message_queue;
     }
-
 }
 namespace std {
     template <> struct hash<::sockaddr_in> {};
