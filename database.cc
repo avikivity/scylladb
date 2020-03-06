@@ -780,11 +780,6 @@ namespace seastar {
           x.uninitialized_get().~tuple();
         }
       }
-      __attribute__((always_inline)) ~future_state() noexcept {
-        if (_u.has_result()) {
-          this->uninitialized_get().~tuple();
-        }
-      }
       future_state &operator=(future_state &&x) noexcept {
         this->~future_state();
         new (this) future_state(std::move(x));
@@ -793,11 +788,6 @@ namespace seastar {
       template <typename... A>
       future_state(ready_future_marker, A &&... a)
           : future_state_base(state::result) {
-        this->uninitialized_set(std::tuple<T...>(std::forward<A>(a)...));
-      }
-      template <typename... A> void set(A &&... a) {
-        assert(_u.st == state::future);
-        new (this) future_state(ready_future_marker(), std::forward<A>(a)...);
       }
       future_state(exception_future_marker m, std::exception_ptr &&ex)
           : future_state_base(std::move(ex)) {}
@@ -813,21 +803,11 @@ namespace seastar {
         return std::move(this->uninitialized_get());
       }
       template <typename U = std::tuple<T...>>
-      const std::enable_if_t<std::is_copy_constructible<U>::value, U> &
-      get_value() const &noexcept(copy_noexcept) {
-        assert(_u.st == state::result);
-        return this->uninitialized_get();
-      }
       std::tuple<T...> &&take() && {
         assert(available());
         if (_u.st >= state::exception_min) {
           std::rethrow_exception(std::move(*this).get_exception());
         }
-        _u.st = state::result_unavailable;
-        return std::move(this->uninitialized_get());
-      }
-      std::tuple<T...> &&get() && {
-        assert(available());
         if (_u.st >= state::exception_min) {
           std::rethrow_exception(std::move(*this).get_exception());
         }
