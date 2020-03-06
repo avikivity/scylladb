@@ -3732,7 +3732,6 @@ private:
 
     template <size_t N>
     static void trivial_direct_move(noncopyable_function_base* from, noncopyable_function_base* to) {
-        // Avoid including <algorithm> just for this
         for (unsigned i = 0; i != N; ++i) {
             to->_storage.direct[i] = from->_storage.direct[i];
         }
@@ -9981,8 +9980,6 @@ static constexpr size_t cache_line_size =
 // store, and so is more efficient for simple stored items.
 
 #include <type_traits>
-#include <cstddef>
-#include <iterator>
 #include <utility>
 
 
@@ -10328,25 +10325,19 @@ circular_buffer_fixed_capacity<T, Capacity>::clear() {
 
 }
 
-#include <memory>
-#include <type_traits>
+
 #include <sys/epoll.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unordered_map>
-#include <netinet/ip.h>
-#include <cstring>
 #include <cassert>
-#include <stdexcept>
 #include <unistd.h>
 #include <vector>
 #include <queue>
-#include <algorithm>
 #include <thread>
 #include <system_error>
 #include <chrono>
 #include <ratio>
-#include <atomic>
 #include <stack>
 #include <boost/next_prior.hpp>
 #include <boost/lockfree/spsc_queue.hpp>
@@ -10355,7 +10346,6 @@ circular_buffer_fixed_capacity<T, Capacity>::clear() {
 #include <boost/thread/barrier.hpp>
 #include <boost/container/static_vector.hpp>
 #include <set>
-#include <chrono>
 
 namespace seastar {
 
@@ -10384,7 +10374,6 @@ struct reactor_config {
 #include <sys/time.h>
 #include <sys/uio.h>
 #include <signal.h>
-#include <cstdint>
 
 namespace seastar {
 
@@ -10601,36 +10590,19 @@ void set_abort_on_ebadf(bool do_abort);
 bool is_abort_on_ebadf_enabled();
 
 }
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <assert.h>
 #include <utility>
-#include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
-#include <sys/socket.h>
-#include <sys/epoll.h>
 #include <sys/mman.h>
-#include <signal.h>
-#include <system_error>
-#include <boost/optional.hpp>
 #include <pthread.h>
-#include <signal.h>
-#include <memory>
-#include <chrono>
-#include <sys/uio.h>
 
 #include <iosfwd>
 #include <array>
-#include <sys/socket.h>
 #include <sys/un.h>
-#include <netinet/ip.h>
 
-#include <iosfwd>
-#include <sys/types.h>
-#include <sys/un.h>
 #include <string>
 
 namespace seastar {
@@ -10681,7 +10653,6 @@ struct unix_domain_addr {
 std::ostream& operator<<(std::ostream&, const unix_domain_addr&);
 
 } // namespace seastar
-#include <cassert>
 
 namespace seastar {
 
@@ -11275,10 +11246,7 @@ void pin_this_thread(unsigned cpu_id) {
 
 }
 
-#include <memory>
 #include <vector>
-#include <cstring>
-#include <sys/types.h>
 
 namespace seastar {
 
@@ -11643,7 +11611,6 @@ public:
 
 }
 
-#include <type_traits>
 #include <utility>
 
 namespace seastar {
@@ -11733,8 +11700,6 @@ inline constexpr unsigned log2floor(T n) {
 }
 
 }
-#include <memory>
-#include <algorithm>
 
 namespace seastar {
 
@@ -12200,9 +12165,7 @@ circular_buffer<T, Alloc>::erase(iterator first, iterator last) {
 }
 
 }
-#include <exception>
 #include <functional>
-#include <cassert>
 
 namespace seastar {
 
@@ -12367,7 +12330,6 @@ stream<T...>::produce(T... data) {
 }
 }
 
-#include <cstdint>
 #include <cstdlib>
 
 namespace seastar {
@@ -12399,8 +12361,6 @@ T* align_down(T* v, size_t align) {
 }
 
 }
-#include <queue>
-#include <chrono>
 #include <unordered_set>
 
 namespace seastar {
@@ -12568,11 +12528,8 @@ public:
 /// @}
 
 }
-#include <system_error>
 #include <sys/statvfs.h>
-#include <sys/ioctl.h>
 #include <linux/fs.h>
-#include <sys/uio.h>
 #include <unistd.h>
 
 namespace seastar {
@@ -13079,8 +13036,6 @@ private:
 
 }
 
-#include <memory>
-#include <algorithm>
 
 namespace seastar {
 
@@ -13678,17 +13633,8 @@ chunked_fifo<T, items_per_chunk>::cend() const {
 }
 
 }
-#include <stdexcept>
-#include <exception>
-#include <stdexcept>
-#include <exception>
-#include <memory>
 
 
-#include <cstdint>
-
-#include <atomic>
-#include <chrono>
 
 namespace seastar {
 
@@ -14502,9 +14448,6 @@ using named_semaphore = basic_semaphore<named_semaphore_exception_factory>;
 /// @}
 
 }
-#include <type_traits>
-#include <functional>
-#include <cstddef>
 
 namespace seastar {
 
@@ -14521,10 +14464,7 @@ public:
 }
 
 
-#include <cstdlib>
-#include <string>
 #include <vector>
-#include <set>
 #include <sched.h>
 #include <boost/any.hpp>
 #include <unordered_map>
@@ -14591,7 +14531,6 @@ void validate(boost::any& v,
 
 }
 #include <new>
-#include <functional>
 #include <vector>
 
 namespace seastar {
@@ -14852,7 +14791,6 @@ public:
 
 }
 }
-#include <chrono>
 #include <time.h>
 
 namespace seastar {
@@ -15035,9 +14973,6 @@ public:
 }
 
 #include <unordered_map>
-#include <exception>
-#include <iosfwd>
-#include <atomic>
 #include <mutex>
 #include <boost/lexical_cast.hpp>
 
@@ -15353,7 +15288,6 @@ std::ostream& operator<<(std::ostream&, const std::system_error&);
 }
 
 /// @}
-#include <chrono>
 
 namespace seastar {
 
@@ -15377,7 +15311,6 @@ public:
 extern template class timer<manual_clock>;
 
 }
-#include <memory>
 #include <vector>
 
 
@@ -15528,8 +15461,6 @@ public:
 }
 
 
-#include <functional>
-#include <boost/lexical_cast.hpp>
 #include <map>
 #include <vector>
 
@@ -16145,12 +16076,7 @@ impl::metric_definition_impl make_total_operations(metric_name_type name,
 /*! @} */
 }
 }
-#include <boost/lockfree/spsc_queue.hpp>
-#include <boost/thread/barrier.hpp>
-#include <boost/range/irange.hpp>
-#include <boost/program_options.hpp>
 #include <deque>
-#include <thread>
 
 /// \file
 
@@ -16541,8 +16467,6 @@ public:
 }
 
 
-#include <exception>
-
 namespace seastar {
 
 class kernel_completion {
@@ -16552,8 +16476,6 @@ public:
     virtual void complete_with(ssize_t res) = 0;
 };
 }
-#include <sys/types.h>
-#include <sys/socket.h>
 
 namespace seastar {
 namespace internal {
@@ -17687,7 +17609,6 @@ extern logger seastar_logger;
 
 }
 
-#include <queue>
 
 namespace seastar {
 
@@ -17994,9 +17915,6 @@ toeplitz_hash(rss_key_type key, const T& data)
 }
 
 }
-#include <array>
-#include <assert.h>
-#include <algorithm>
 
 namespace seastar {
 
@@ -18606,8 +18524,6 @@ arp_for<L3>::handle_request(arp_hdr* ah) {
 
 }
 
-#include <cstdint>
-#include <cstddef>
 #include <arpa/inet.h>
 
 namespace seastar {
@@ -18659,7 +18575,6 @@ struct checksummer {
 }
 
 
-#include <map>
 #include <iostream>
 
 namespace seastar {
@@ -18795,7 +18710,6 @@ public:
 }
 
 #include <unordered_map>
-#include <assert.h>
 
 namespace seastar {
 
