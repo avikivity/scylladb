@@ -607,8 +607,6 @@ namespace seastar {
     };
     template <typename T>
     struct uninitialized_wrapper_base<T, true> : private T {
-      void uninitialized_set(T &&v);
-      T &uninitialized_get();
       const T &uninitialized_get() const;
     };
     template <typename T>
@@ -629,8 +627,6 @@ namespace seastar {
           std::is_trivially_destructible<T>::value;
     };
     template <bool... v> struct all_true : std::false_type {};
-    template <> struct all_true<> : std::true_type {};
-    template <bool... v> struct all_true<true, v...> : public all_true<v...> {};
     }
     struct future_state_base {
       static_assert(
@@ -639,20 +635,12 @@ namespace seastar {
       static_assert(
           std::is_nothrow_move_constructible<std::exception_ptr>::value,
           "std::exception_ptr's move constructor must not throw");
-      static_assert(sizeof(std::exception_ptr) == sizeof(void *),
-                    "exception_ptr not a pointer");
       enum class state : uintptr_t {
         invalid = 0,
-        future = 1,
-        result_unavailable = 2,
         result = 3,
         exception_min = 4,
       };
       union any {
-        any();
-        any(state s);
-        void set_exception(std::exception_ptr &&e);
-        any(std::exception_ptr &&e);
         ~any();
         std::exception_ptr take_exception();
         any(any &&x);
@@ -661,8 +649,6 @@ namespace seastar {
         std::exception_ptr ex;
       } _u;
       future_state_base() noexcept;
-      future_state_base(state st) noexcept : _u(st) {}
-      future_state_base(std::exception_ptr &&ex) noexcept : _u(std::move(ex)) {}
       future_state_base(future_state_base &&x) noexcept : _u(std::move(x._u)) {}
     protected:
       ~future_state_base() noexcept {
@@ -677,10 +663,6 @@ namespace seastar {
       }
       bool failed() const noexcept;
       void set_to_broken_promise() noexcept;
-      void ignore() noexcept;
-      static future_state_base current_exception();
-      template <typename... U>
-      friend future<U...> internal::current_exception_as_future() noexcept;
     };
     struct ready_future_marker {};
     struct exception_future_marker {};
