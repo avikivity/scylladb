@@ -118,22 +118,14 @@ namespace unimplemented { enum class cause {   API,   INDEXES,   LWT,   PAGING, 
 #include <boost/dynamic_bitset.hpp>
 #include <boost/range/join.hpp>
 namespace dht { class i_partitioner; }
- using column_count_type = uint32_t;
- using column_id = column_count_type;
  enum class ordinal_column_id : column_count_type {};
  class column_set { public:   using bitset = boost::dynamic_bitset<uint64_t>;   using size_type = bitset::size_type;   static_assert(       static_cast<column_count_type>(boost::dynamic_bitset<uint64_t>::npos) ==       ~static_cast<column_count_type>(0));   static constexpr ordinal_column_id npos =       static_cast<ordinal_column_id>(bitset::npos); private:   bitset _mask; };
  using table_schema_version = utils::UUID;
- class schema;
  class schema_registry_entry;
- class schema_builder;
- namespace cell_comparator {}
  namespace db { class extensions; }
  enum class column_kind {   partition_key,   clustering_key,   static_column,   regular_column };
- enum class column_view_virtual { no, yes };
  enum class cf_type : uint8_t {   standard,   super, };
  struct speculative_retry {   enum class type { NONE, CUSTOM, PERCENTILE, ALWAYS }; private:   type _t;   double _v; public:   speculative_retry(type t, double v); };
- typedef std::unordered_map<sstring, sstring> index_options_map;
- enum class index_metadata_kind {   keys,   custom,   composites, };
  class index_metadata final {};
  class thrift_schema {   bool _compound = true;   bool _is_dynamic = false; public:   friend class schema; };
  static constexpr int DEFAULT_MIN_COMPACTION_THRESHOLD = 4;
