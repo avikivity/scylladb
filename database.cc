@@ -3703,8 +3703,6 @@ struct used_size {
 }
 }
 
-#include <type_traits>
-#include <functional>
 
 namespace seastar {
 
@@ -5704,8 +5702,6 @@ void set_callback(future<T...>& fut, U* callback) noexcept {
 
 }
 #include <fcntl.h>
-#include <sys/stat.h>
-#include <type_traits>
 
 namespace seastar {
 
@@ -5818,7 +5814,6 @@ inline constexpr file_permissions operator&(file_permissions a, file_permissions
 
 } // namespace seastar
 
-#include <ostream>
 
 namespace seastar {
 
@@ -6245,11 +6240,6 @@ const uint16_t ip_packet_len_max = 65535;
 }
 
 }
-#include <vector>
-#include <cassert>
-#include <algorithm>
-#include <iosfwd>
-#include <functional>
 
 namespace seastar {
 
@@ -6840,8 +6830,6 @@ packet packet::share(size_t offset, size_t len) {
 }
 
 }
-#include <memory>
-#include <vector>
 
 namespace seastar {
 
@@ -7227,7 +7215,6 @@ future<> copy(input_stream<CharType>&, output_stream<CharType>&);
 }
 
 
-#include <utility>
 #include <memory>
 #include <tuple>
 
