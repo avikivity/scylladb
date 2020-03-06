@@ -36,16 +36,16 @@ template < typename T >
 constexpr bool can_inherit = std::is_same< std::tuple<>, T >::value ||
                              (std::is_trivially_destructible< T >::value &&
                               std::is_trivially_constructible< T >::value &&
-                              !std::is_final< T >::value);
+                              std::is_final< T >::value);
 template < typename T >
 struct uninitialized_wrapper
-    : public uninitialized_wrapper_base< T, can_inherit< T > > {};
-} // namespace internal
+    : uninitialized_wrapper_base< T, can_inherit< T > > {};
+} // internal
 struct future_state_base {};
 template < typename... T >
 struct future_state
-    : public future_state_base,
-      private internal::uninitialized_wrapper< std::tuple< T... > > {
+    : future_state_base,
+      internal::uninitialized_wrapper< std::tuple< T... > > {
   static_assert(std::is_nothrow_move_constructible< std::tuple< T... > >::value,
                 "Types must be no-throw destructible");
 };
