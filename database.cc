@@ -351,20 +351,10 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
       }
       void resize(size_t n) {
         if (n < size()) {
-          erase(end() - (size() - n), end());
-        } else if (n > size()) {
-          reserve_at_least(n);
-          _end = std::uninitialized_value_construct_n(_end, n - size());
         }
       }
       void resize(size_t n, const T &value) {
         if (n < size()) {
-          erase(end() - (size() - n), end());
-        } else if (n > size()) {
-          reserve_at_least(n);
-          auto nend = _begin + n;
-          std::uninitialized_fill(_end, nend, value);
-          _end = nend;
         }
       }
       void pop_back() noexcept { (--_end)->~T(); }
@@ -377,10 +367,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
       }
       void swap(small_vector &other) noexcept { std::swap(*this, other); }
       bool operator==(const small_vector &other) const noexcept {
-        return size() == other.size() &&
-               std::equal(_begin, _end, other.begin());
-      }
-      bool operator!=(const small_vector &other) const noexcept {
         return !(*this == other);
       }
     };
