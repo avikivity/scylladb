@@ -404,59 +404,31 @@ namespace gms {
  using records_bulk = std::deque<lw_shared_ptr<one_session_records>>;
  struct backend_session_state_base {   virtual ~backend_session_state_base(){}; };
  struct i_tracing_backend_helper {   using wall_clock = std::chrono::system_clock; protected:   tracing &_local_tracing; public:   i_tracing_backend_helper(tracing &tr) : _local_tracing(tr) {}   virtual ~i_tracing_backend_helper() {}   virtual future<> start() = 0;   virtual future<> stop() = 0;   virtual void write_records_bulk(records_bulk &bulk) = 0;   virtual std::unique_ptr<backend_session_state_base>   allocate_session_state() const = 0; private:   friend class tracing; };
- struct event_record {   sstring message;   elapsed_clock::duration elapsed;   i_tracing_backend_helper::wall_clock::time_point event_time_point;   event_record(       sstring message_, elapsed_clock::duration elapsed_,       i_tracing_backend_helper::wall_clock::time_point event_time_point_)       : message(std::move(message_)), elapsed(elapsed_),         event_time_point(event_time_point_) {} };
- struct session_record {   gms::inet_address client;   std::map<sstring, sstring> parameters;   std::set<sstring> tables;   sstring username;   sstring request;   size_t request_size = 0;   size_t response_size = 0;   std::chrono::system_clock::time_point started_at;   trace_type command = trace_type::NONE;   elapsed_clock::duration elapsed;   std::chrono::seconds slow_query_record_ttl; private:   bool _consumed = false; public:   session_record() : username("<unauthenticated request>"), elapsed(-1) {} };
- class one_session_records { private:   shared_ptr<tracing> _local_tracing_ptr; public:   utils::UUID session_id;   session_record session_rec;   std::chrono::seconds ttl;   std::deque<event_record> events_recs;   std::unique_ptr<backend_session_state_base> backend_state_ptr;   bool do_log_slow_query = false;   uint64_t *budget_ptr;   span_id parent_id;   span_id my_span_id; private:   bool _is_pending_for_write = false; };
- class tracing : public seastar::async_sharded_service<tracing> { public:   static const gc_clock::duration write_period;   static constexpr int max_pending_sessions = 1000;   static constexpr int exp_trace_events_per_session = 10;   static constexpr int max_pending_trace_records =       max_pending_sessions * exp_trace_events_per_session;   static constexpr int write_event_sessions_threshold = 100;   static constexpr int write_event_records_threshold =       write_event_sessions_threshold * exp_trace_events_per_session;   static constexpr int log_warning_period = 10000;   static const std::chrono::microseconds default_slow_query_duraion_threshold;   static const std::chrono::seconds default_slow_query_record_ttl;   struct stats {     uint64_t dropped_sessions = 0;     uint64_t dropped_records = 0;     uint64_t trace_records_count = 0;     uint64_t trace_errors = 0;   } stats; private:   uint64_t _active_sessions = 0;   uint64_t _cached_records = 0;   uint64_t _flushing_records = 0;   uint64_t _pending_for_write_records_count = 0;   records_bulk _pending_for_write_records_bulk;   timer<lowres_clock> _write_timer;   bool _down = true;   bool _slow_query_logging_enabled = false;   std::unique_ptr<i_tracing_backend_helper> _tracing_backend_helper_ptr;   sstring _thread_name;   const backend_registry &_backend_registry;   sstring _tracing_backend_helper_class_name;   seastar::metrics::metric_groups _metrics;   double _trace_probability = 0.0;   uint64_t _normalized_trace_probability = 0;   std::ranlux48_base _gen;   std::chrono::microseconds _slow_query_duration_threshold;   std::chrono::seconds _slow_query_record_ttl; public:   i_tracing_backend_helper &backend_helper();   const sstring &get_thread_name() const;   static seastar::sharded<tracing> &tracing_instance();   static tracing &get_local_tracing_instance();   bool started() const;   static future<> create_tracing(const backend_registry &br,                                  sstring tracing_backend_helper_class_name);   static future<> start_tracing();   tracing(const backend_registry &br,           sstring tracing_backend_helper_class_name);   future<> start();   bool slow_query_tracing_enabled() const;   void set_slow_query_threshold(std::chrono::microseconds new_threshold);   std::chrono::microseconds slow_query_threshold() const;   void set_slow_query_record_ttl(std::chrono::seconds new_ttl);   std::chrono::seconds slow_query_record_ttl() const; private:   void write_timer_callback();   bool may_create_new_session(       const std::optional<utils::UUID> &session_id = std::nullopt); };
  }
-   class position_in_partition_view;
   namespace query {
  using column_id_vector = utils::small_vector<column_id, 8>;
- template <typename T> using range = wrapping_range<T>;
- using ring_position = dht::ring_position;
  using clustering_range = nonwrapping_range<clustering_key_prefix>;
- extern const dht::partition_range full_partition_range;
- extern const clustering_range full_clustering_range;
  typedef std::vector<clustering_range> clustering_row_ranges;
- void trim_clustering_row_ranges_to(const schema &s,                                    clustering_row_ranges &ranges,                                    position_in_partition_view pos,                                    bool reversed = false);
- void trim_clustering_row_ranges_to(const schema &s,                                    clustering_row_ranges &ranges,                                    const clustering_key &key,                                    bool reversed = false);
  class specific_ranges {};
  constexpr auto max_rows = std::numeric_limits<uint32_t>::max();
  class partition_slice { public:   enum class option {     send_clustering_key,     send_partition_key,     send_timestamp,     send_expiry,     reversed,     distinct,     collections_as_maps,     send_ttl,     allow_short_read,     with_digest,     bypass_cache,     always_return_static_content,   };   using option_set = enum_set<super_enum<       option, option::send_clustering_key, option::send_partition_key,       option::send_timestamp, option::send_expiry, option::reversed,       option::distinct, option::collections_as_maps, option::send_ttl,       option::allow_short_read, option::with_digest, option::bypass_cache,       option::always_return_static_content>>; public:   partition_slice(       clustering_row_ranges row_ranges, column_id_vector static_columns,       column_id_vector regular_columns, option_set options,       std::unique_ptr<specific_ranges> specific_ranges = nullptr,       cql_serialization_format = cql_serialization_format::internal(),       uint32_t partition_row_limit = max_rows);   partition_slice(clustering_row_ranges ranges, const schema &schema,                   const column_set &mask, option_set options);   partition_slice(const partition_slice &); };
- constexpr auto max_partitions = std::numeric_limits<uint32_t>::max();
  }
   class position_in_partition_view {
-   friend class position_in_partition;
- public: private: public:   struct partition_start_tag_t {};
-   class printer {   public:   };
  };
-#include <boost/intrusive/set.hpp>
-namespace bi = boost::intrusive;
   class range_tombstone final {
  };
   class row {
-   class cell_entry {     friend class row;   public:     struct compare {};   };
- private: public: private:   ;
  };
-  class row_marker;
   class rows_entry {
-   friend class cache_tracker;
-   friend class size_calculator;
  };
   namespace db {
  using timeout_clock = seastar::lowres_clock;
  }
    class clustering_row {
- public:   clustering_row(const schema &s, const clustering_row &other);
-   class printer {   public:   };
  };
   class static_row {
-   row _cells;
- public:   static_row() = default;
  };
   class partition_start final {
-   dht::decorated_key _key;
-   tombstone _partition_tombstone;
  public: };
   class partition_end final {
  public: };
@@ -464,10 +436,6 @@ namespace bi = boost::intrusive;
                 return requires(T t, static_row sr, clustering_row cr,                                range_tombstone rt, partition_start ph,                                partition_end pe) {                  { t.consume(std::move(sr)) }                  ->ReturnType;                  { t.consume(std::move(cr)) }                  ->ReturnType;                  { t.consume(std::move(rt)) }                  ->ReturnType;                  { t.consume(std::move(ph)) }                  ->ReturnType;                  { t.consume(std::move(pe)) }                  ->ReturnType;                };
               }
  ) class mutation_fragment {
-   bool equal(const schema &s, const mutation_fragment &other) const;
-   bool mergeable_with(const mutation_fragment &mf) const;
-   class printer {     const schema &_schema;     const mutation_fragment &_mutation_fragment;   public:     printer(const schema &s, const mutation_fragment &mf);     printer(const printer &) = delete;     printer(printer &&) = delete;     friend std::ostream &operator<<(std::ostream &os, const printer &p);   };
-   friend std::ostream &operator<<(std::ostream &os, const printer &p);
  };
   namespace streamed_mutation {
  }
