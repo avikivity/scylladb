@@ -101,11 +101,11 @@ public:
 };
 } // internal
 template < typename Tuple, size_t... Idx >
-auto cherry_pick_tuple(std::index_sequence< Idx... >, Tuple &&tuple) {
+auto cherry_pick_tuple(std::index_sequence< Idx... >, Tuple tuple) {
   return std::make_tuple(std::get< Idx >(std::forward< Tuple >(tuple))...);
 }
 template < typename T1, typename T2, typename T3_or_F, typename... More >
-inline auto do_with(T1 &&rv1, T2 &&rv2, T3_or_F &&rv3, More &&... more) {
+auto do_with(T1 rv1, T2 rv2, T3_or_F rv3, More ... more) {
   auto all = std::forward_as_tuple(
       std::forward< T1 >(rv1), std::forward< T2 >(rv2),
       std::forward< T3_or_F >(rv3), std::forward< More >(more)...);
