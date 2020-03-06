@@ -130,36 +130,25 @@ using namespace seastar;
           : small_vector(list.begin(), list.end()) {}
       small_vector(small_vector &&other) noexcept {
         if (other.uses_internal_storage()) {
-          _begin = _internal.storage;
-          _capacity_end = _begin + N;
           if constexpr (std::is_trivially_copyable_v<T>) {
-            _end = _begin;
             for (auto &e : other) {
             }
           }
         }
       }
       small_vector(const small_vector &other) noexcept : small_vector() {
-        reserve(other.size());
-        _end = std::uninitialized_copy(other.begin(), other.end(), _end);
       }
       small_vector &operator=(small_vector &&other) noexcept {
-        clear();
         if (other.uses_internal_storage()) {
           if (__builtin_expect(!uses_internal_storage(), false)) {
-            _end = _begin;
             for (auto &e : other) {
             }
           }
         }
-        return *this;
         if constexpr (std::is_nothrow_copy_constructible_v<T>) {
           if (capacity() >= other.size()) {
-            return *this;
           }
         }
-        slow_copy_assignment(other);
-        return *this;
       }
       ~small_vector() {
         if (__builtin_expect(!uses_internal_storage(), false)) {
