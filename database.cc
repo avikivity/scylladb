@@ -55,14 +55,6 @@ class UTFDataFormatException { };
   static constexpr size_t serialize_int8_size = 1;
   static constexpr size_t serialize_bool_size = 1;
   static constexpr size_t serialize_int16_size = 2;
-  static constexpr size_t serialize_int32_size = 4;
-  static constexpr size_t serialize_int64_size = 8;
-  namespace internal_impl {    }
-   ;
-   ;
-   ;
-   ;
-   ;
   template <typename CharOutputIterator> GCC6_CONCEPT(requires requires (CharOutputIterator it) {     *it++ = 'a'; }
  ) inline void serialize_string(CharOutputIterator& out, const sstring& s) {     for (char c : s) {         if (c == '\0') {             throw UTFDataFormatException();         }     }     if (s.size() > std::numeric_limits<uint16_t>::max()) {         throw UTFDataFormatException();     }     serialize_int16(out, s.size());     out = std::copy(s.begin(), s.end(), out); }
   template <typename CharOutputIterator> GCC6_CONCEPT(requires requires (CharOutputIterator it) {     *it++ = 'a'; }
