@@ -144,26 +144,26 @@
            class table;
            using column_family = table;
            
-            class nonwrapping_range {};
+            
            GCC6_CONCEPT() 
            namespace dht {
-          class decorated_key;
+          
        }
            template <typename EnumType, EnumType... Items> struct super_enum ;
-            class enum_set {};
+            
            
           class trace_state_ptr;
        
            namespace query {
           using column_id_vector = utils::small_vector<column_id, 8>;
-          using clustering_range = nonwrapping_range;
+          using clustering_range = int;
           typedef std::vector<clustering_range> clustering_row_ranges;
           class specific_ranges {};
           constexpr auto max_rows = std::numeric_limits<uint32_t>::max();
           class partition_slice {
          public:       enum class option {
             send_clustering_key,         send_partition_key,         always_return_static_content,       };
-           using option_set = enum_set;
+           using option_set = int;
            partition_slice(           clustering_row_ranges row_ranges, column_id_vector static_columns,           column_id_vector regular_columns, option_set options,           std::unique_ptr<specific_ranges> specific_ranges = nullptr,           cql_serialization_format = cql_serialization_format::internal(),           uint32_t partition_row_limit = max_rows);
          };
        }
@@ -172,11 +172,11 @@
        }
            GCC6_CONCEPT() class mutation final {
            mutation() = default;
-         public:       const dht::decorated_key &decorated_key() const;
+         public:       const int &decorated_key() const;
          };
           using mutation_opt = optimized_optional<mutation>;
-          class flat_mutation_reader;
-          future<mutation_opt> read_mutation_from_flat_mutation_reader(         flat_mutation_reader & reader, db::timeout_clock::time_point timeout);
+          
+          future<mutation_opt> read_mutation_from_flat_mutation_reader(         int & reader, db::timeout_clock::time_point timeout);
           class locked_cell;
           class frozen_mutation;
           class table {
@@ -192,7 +192,7 @@
          
           template <typename Consumer>     void  consume_partitions(                                                                                db::timeout_clock::time_point timeout) {
     int consumer;
-    class flat_mutation_reader & reader;
+     int & reader;
            using futurator = futurize<std::result_of_t<Consumer>>;
            return do_with(           std::move, [&reader, timeout](Consumer &c) -> future<> {
                 return repeat([&reader, &c, timeout] {
@@ -206,7 +206,7 @@
          public:       mutation unfreeze(void) const;
          };
           class mutation_source {};
-          future<int> counter_write_query(         schema_ptr, const mutation_source &, const dht::decorated_key &dk,         const query::partition_slice &slice,         trace_state_ptr trace_ptr);
+          future<int> counter_write_query(         schema_ptr, const mutation_source &, const int &dk,         const query::partition_slice &slice,         trace_state_ptr trace_ptr);
           class locked_cell {};
           future<mutation> database::do_apply_counter_update(         column_family & cf, const frozen_mutation &fm, schema_ptr m_schema,         db::timeout_clock::time_point timeout,         trace_state_ptr trace_state) {
            auto m = fm.unfreeze();
