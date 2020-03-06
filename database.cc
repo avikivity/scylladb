@@ -385,25 +385,13 @@ class migrate_fn_type {
    template <enum_type... items> static constexpr enum_set<Enum> of() {     return frozen<items...>::unfreeze();   }
  };
 #include <random>
-#include <seastar/core/sharded.hh>
 #include <seastar/net/inet_address.hh>
 namespace gms {
  class inet_address { private:   net::inet_address _addr; public:   inet_address() = default;   inet_address(int32_t ip) : inet_address(uint32_t(ip)) {}   explicit inet_address(uint32_t ip) : _addr(net::ipv4_address(ip)) {}   inet_address(const net::inet_address &addr) : _addr(addr) {}   inet_address(const socket_address &sa) : inet_address(sa.addr()) {}   const net::inet_address &addr() const { return _addr; }   inet_address(const inet_address &) = default;   operator const seastar::net::inet_address &() const { return _addr; }   inet_address(const sstring &addr) {     if (addr == "localhost") {       _addr = net::ipv4_address("127.0.0.1");     } else {       _addr = net::inet_address(addr);     }   }   bytes_view bytes() const {     return bytes_view(reinterpret_cast<const int8_t *>(_addr.data()),                       _addr.size());   }   uint32_t raw_addr() const { return addr().as_ipv4_address().ip; }   sstring to_sstring() const { return format("{}", *this); }   friend inline bool operator==(const inet_address &x, const inet_address &y) {     return x._addr == y._addr;   }   friend inline bool operator!=(const inet_address &x, const inet_address &y) {     using namespace std::rel_ops;     return x._addr != y._addr;   }   friend inline bool operator<(const inet_address &x, const inet_address &y) {     return x.bytes() < y.bytes();   }   friend struct std::hash<inet_address>;   using opt_family = std::optional<net::inet_address::family>;   static future<inet_address> lookup(sstring, opt_family family = {},                                      opt_family preferred = {}); };
  std::ostream &operator<<(std::ostream &os, const inet_address &x);
  }
    namespace tracing {
- using elapsed_clock = std::chrono::steady_clock;
- extern logging::logger tracing_logger;
  class trace_state_ptr;
- class tracing;
- class backend_registry;
- enum class trace_type : uint8_t {   NONE,   QUERY,   REPAIR, };
- extern std::vector<sstring> trace_type_names;
- class span_id { private:   uint64_t _id = illegal_id; public:   static constexpr uint64_t illegal_id = 0; public: };
- struct one_session_records;
- using records_bulk = std::deque<lw_shared_ptr<one_session_records>>;
- struct backend_session_state_base {   virtual ~backend_session_state_base(){}; };
- struct i_tracing_backend_helper {   using wall_clock = std::chrono::system_clock; protected:   tracing &_local_tracing; public:   i_tracing_backend_helper(tracing &tr) : _local_tracing(tr) {}   virtual ~i_tracing_backend_helper() {}   virtual future<> start() = 0;   virtual future<> stop() = 0;   virtual void write_records_bulk(records_bulk &bulk) = 0;   virtual std::unique_ptr<backend_session_state_base>   allocate_session_state() const = 0; private:   friend class tracing; };
  }
   namespace query {
  using column_id_vector = utils::small_vector<column_id, 8>;
