@@ -55,12 +55,12 @@
            static_assert(std::is_nothrow_move_constructible<std::tuple<T...>>::value,                     "Types must be no-throw destructible");
            std::tuple<> &&get_value() && noexcept ;
          };
-           class continuation_base : public task {};
+           
           namespace internal {
-         class promise_base {};
-         template <typename... T>     class promise_base_with_type : protected internal::promise_base {};
+         
+              class promise_base_with_type  {};
          }
-          template <typename... T>     class promise  {};
+               class promise  {};
           template <typename T> struct futurize {
            using type = future<T>;
            ;
@@ -74,12 +74,12 @@
           template <typename T> using futurize_t = typename futurize<T>::type;
           GCC6_CONCEPT()     namespace internal {
            class future_base {};
-           template <int IsVariadic> struct warn_variadic_future {};
+            struct warn_variadic_future {};
          }
           template <typename... T>     class SEASTAR_NODISCARD future         : private internal::future_base {
            future_state<T...> _state;
             future_state<> &&       get_available_state_ref() noexcept ;
-         public:       using promise_type = promise<>;
+         public:       using promise_type = promise;
          public:        bool available() const noexcept ;
             bool failed() const noexcept ;
            template <typename Func,                 typename Result = futurize_t<std::result_of_t<Func(T &&...)>>>       Result then(Func &&func) noexcept {
@@ -96,11 +96,11 @@
          };
           
           
-          template <typename Tag> class bool_class ;
+           class bool_class ;
           namespace internal {
          template <typename Future> struct continuation_base_from_future;
          template <typename... T>     struct continuation_base_from_future<future<T...>> {
-          using type = continuation_base;
+          using type = task;
         };
          template <typename HeldState, typename Future>     class do_with_state final         : public continuation_base_from_future<Future>::type {
           HeldState _held;
@@ -126,7 +126,7 @@
            return ret;
          }
           struct stop_iteration_tag ;
-          using stop_iteration = bool_class<stop_iteration_tag>;
+          using stop_iteration = bool_class;
           class lowres_clock;
           class lowres_clock_impl final {
          public:       using base_steady_clock = std::chrono::steady_clock;
@@ -144,26 +144,26 @@
            class table;
            using column_family = table;
            class clustering_key_prefix;
-           template <typename T> class nonwrapping_range {};
+            class nonwrapping_range {};
            GCC6_CONCEPT() 
            namespace dht {
           class decorated_key;
        }
            template <typename EnumType, EnumType... Items> struct super_enum ;
-           template <typename Enum> class enum_set {};
+            class enum_set {};
            
           class trace_state_ptr;
        
            namespace query {
           using column_id_vector = utils::small_vector<column_id, 8>;
-          using clustering_range = nonwrapping_range<int>;
+          using clustering_range = nonwrapping_range;
           typedef std::vector<clustering_range> clustering_row_ranges;
           class specific_ranges {};
           constexpr auto max_rows = std::numeric_limits<uint32_t>::max();
           class partition_slice {
          public:       enum class option {
             send_clustering_key,         send_partition_key,         always_return_static_content,       };
-           using option_set = enum_set<super_enum<           option, option::send_clustering_key, option::send_partition_key,           option::always_return_static_content>>;
+           using option_set = enum_set;
            partition_slice(           clustering_row_ranges row_ranges, column_id_vector static_columns,           column_id_vector regular_columns, option_set options,           std::unique_ptr<specific_ranges> specific_ranges = nullptr,           cql_serialization_format = cql_serialization_format::internal(),           uint32_t partition_row_limit = max_rows);
          };
        }
