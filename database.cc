@@ -171,11 +171,6 @@ namespace seastar {
 class description {
 enum class data_type : uint8_t {
 };
-struct metric_value {
-};
-using metric_function = std::function<metric_value()>;
-struct metric_type {
-};
 
 }
  ;
