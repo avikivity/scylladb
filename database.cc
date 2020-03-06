@@ -481,16 +481,14 @@ T read_simple_exactly(bytes_view v) {
     auto p = v.begin();
     return net::ntoh(*reinterpret_cast<const net::packed<T>*>(p));
 }
-bytes_view
-read_simple_bytes(bytes_view& v, size_t n);
-template<typename T>
-std::optional<T> read_simple_opt(bytes_view& v);
-sstring read_simple_short_string(bytes_view& v);
-size_t collection_size_len(cql_serialization_format sf);
-size_t collection_value_len(cql_serialization_format sf);
-void write_collection_size(bytes::iterator& out, int size, cql_serialization_format sf);
-void write_collection_value(bytes::iterator& out, cql_serialization_format sf, bytes_view val_bytes);
-void write_collection_value(bytes::iterator& out, cql_serialization_format sf, data_type type, const data_value& value);
+
+;
+
+
+
+
+
+
 using user_type = shared_ptr<const user_type_impl>;
 using tuple_type = shared_ptr<const tuple_type_impl>;
 #include <boost/range/adaptor/transformed.hpp>
