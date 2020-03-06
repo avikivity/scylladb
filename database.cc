@@ -418,7 +418,6 @@ public:
 } // namespace utils
 #include <seastar/net/ip.hh>
 using data_type = shared_ptr<const abstract_type>;
-#include <boost/range/adaptor/transformed.hpp>
 class column_set {};
 class schema final : public enable_lw_shared_from_this<schema> {
   struct column {
