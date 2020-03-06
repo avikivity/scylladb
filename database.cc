@@ -196,61 +196,25 @@ public:
     using native_type = maybe_empty<NativeType>;
     using AbstractType::AbstractType;
 public:
-    const native_type& from_value(const void* v) const {
-        return *reinterpret_cast<const native_type*>(v);
-    }
-    const native_type& from_value(const data_value& v) const {
-        return this->from_value(AbstractType::get_value_ptr(v));
-    }
+    const native_type& from_value(const void* v) const ;
+    const native_type& from_value(const data_value& v) const ;
     friend class abstract_type;
 };
 bool operator==(const data_value& x, const data_value& y);
 using bytes_view_opt = std::optional<bytes_view>;
-static inline
-bool optional_less_compare(data_type t, bytes_view_opt e1, bytes_view_opt e2) {
-    if (bool(e1) != bool(e2)) {
-        return bool(e2);
-    }
-    if (!e1) {
-        return false;
-    }
-    return t->less(*e1, *e2);
-}
-static inline
-bool optional_equal(data_type t, bytes_view_opt e1, bytes_view_opt e2) {
-    if (bool(e1) != bool(e2)) {
-        return false;
-    }
-    if (!e1) {
-        return true;
-    }
-    return t->equal(*e1, *e2);
-}
-static inline
-bool less_compare(data_type t, bytes_view e1, bytes_view e2) {
-    return t->less(e1, e2);
-}
-static inline
-int tri_compare(data_type t, bytes_view e1, bytes_view e2) {
-    try {
-        return t->compare(e1, e2);
-    } catch (const marshal_exception& e) {
-        on_types_internal_error(e.what());
-    }
-}
-inline
+static
+bool optional_less_compare(data_type t, bytes_view_opt e1, bytes_view_opt e2) ;
+static
+bool optional_equal(data_type t, bytes_view_opt e1, bytes_view_opt e2) ;
+static
+bool less_compare(data_type t, bytes_view e1, bytes_view e2) ;
+static
+int tri_compare(data_type t, bytes_view e1, bytes_view e2) ;
+
 int
-tri_compare_opt(data_type t, bytes_view_opt v1, bytes_view_opt v2) {
-    if (!v1 || !v2) {
-        return int(bool(v1)) - int(bool(v2));
-    } else {
-        return tri_compare(std::move(t), *v1, *v2);
-    }
-}
-static inline
-bool equal(data_type t, bytes_view e1, bytes_view e2) {
-    return t->equal(e1, e2);
-}
+tri_compare_opt(data_type t, bytes_view_opt v1, bytes_view_opt v2) ;
+static
+bool equal(data_type t, bytes_view e1, bytes_view e2) ;
 class row_tombstone;
 class collection_type_impl;
 using collection_type = shared_ptr<const collection_type_impl>;
@@ -258,7 +222,7 @@ template <typename... T>
 struct simple_tuple_hash;
 template <>
 struct simple_tuple_hash<> {
-    size_t operator()() const { return 0; }
+    size_t operator()() const ;
 };
 template <typename Arg0, typename... Args >
 struct simple_tuple_hash<std::vector<Arg0>, Args...> {
@@ -275,20 +239,14 @@ struct simple_tuple_hash<std::vector<Arg0>, Args...> {
 };
 template <typename Arg0, typename... Args>
 struct simple_tuple_hash<Arg0, Args...> {
-    size_t operator()(const Arg0& arg0, const Args&... args) const {
-        size_t h0 = std::hash<Arg0>()(arg0);
-        size_t h1 = simple_tuple_hash<Args...>()(args...);
-        return h0 ^ ((h1 << 7) | (h1 >> (std::numeric_limits<size_t>::digits - 7)));
-    }
+    size_t operator()(const Arg0& arg0, const Args&... args) const ;
 };
 template <typename InternedType, typename... BaseTypes>
 class type_interning_helper {
     using key_type = std::tuple<BaseTypes...>;
     using value_type = shared_ptr<const InternedType>;
     struct hash_type {
-        size_t operator()(const key_type& k) const {
-            return apply(simple_tuple_hash<BaseTypes...>(), k);
-        }
+        size_t operator()(const key_type& k) const ;
     };
     using map_type = std::unordered_map<key_type, value_type, hash_type>;
     static thread_local map_type _instances;
@@ -971,9 +929,7 @@ public:
         new (static_cast<T*>(dst)) T(std::move(*src_t));
         src_t->~T();
     }
-    virtual size_t size(const void* obj) const override {
-        return size_for_allocation_strategy(*static_cast<const T*>(obj));
-    }
+    virtual size_t size(const void* obj) const override ;
 };
 template <typename T>
 standard_migrator<T>& get_standard_migrator()
@@ -1001,60 +957,34 @@ class standard_allocation_strategy : public allocation_strategy {
 public:
     virtual void* alloc(migrate_fn, size_t size, size_t alignment) override ;
     virtual void free(void* obj, size_t size) override ;
-    virtual void free(void* obj) override {
-        ::free(obj);
-    }
-    virtual size_t object_memory_size_in_allocator(const void* obj) const noexcept {
-        return ::malloc_usable_size(const_cast<void *>(obj));
-    }
+    virtual void free(void* obj) override ;
+    virtual size_t object_memory_size_in_allocator(const void* obj) const noexcept ;
 };
 extern standard_allocation_strategy standard_allocation_strategy_instance;
-inline
-standard_allocation_strategy& standard_allocator() {
-    return standard_allocation_strategy_instance;
-}
-inline
-allocation_strategy*& current_allocation_strategy_ptr() {
-    static thread_local allocation_strategy* current = &standard_allocation_strategy_instance;
-    return current;
-}
-inline
-allocation_strategy& current_allocator() {
-    return *current_allocation_strategy_ptr();
-}
+
+standard_allocation_strategy& standard_allocator() ;
+
+allocation_strategy*& current_allocation_strategy_ptr() ;
+
+allocation_strategy& current_allocator() ;
 template<typename T>
-inline
-auto current_deleter() {
-    auto& alloc = current_allocator();
-    return [&alloc] (T* obj) {
-        alloc.destroy(obj);
-    };
-}
+
+auto current_deleter() ;
 template<typename T>
 struct alloc_strategy_deleter {
-    void operator()(T* ptr) const noexcept {
-        current_allocator().destroy(ptr);
-    }
+    void operator()(T* ptr) const noexcept ;
 };
 template<typename T>
 using alloc_strategy_unique_ptr = std::unique_ptr<T, alloc_strategy_deleter<T>>;
 class allocator_lock {
     allocation_strategy* _prev;
 public:
-    allocator_lock(allocation_strategy& alloc) {
-        _prev = current_allocation_strategy_ptr();
-        current_allocation_strategy_ptr() = &alloc;
-    }
-    ~allocator_lock() {
-        current_allocation_strategy_ptr() = _prev;
-    }
+    allocator_lock(allocation_strategy& alloc) ;
+    ~allocator_lock() ;
 };
 template<typename Func>
-inline
-decltype(auto) with_allocator(allocation_strategy& alloc, Func&& func) {
-    allocator_lock l(alloc);
-    return func();
-}
+
+decltype(auto) with_allocator(allocation_strategy& alloc, Func&& func) ;
 struct blob_storage {
     struct [[gnu::packed]] ref_type {
         blob_storage* ptr;
@@ -1139,38 +1069,9 @@ private:
     size_t max_seg(allocation_strategy& alctr) {
         return alctr.preferred_max_contiguous_allocation() - sizeof(blob_storage);
     }
-    void free_chain(blob_storage* p) noexcept {
-        if (p->next && _linearization_context._nesting) {
-            _linearization_context.forget(p);
-        }
-        auto& alctr = current_allocator();
-        while (p) {
-            auto n = p->next;
-            alctr.destroy(p);
-            p = n;
-        }
-    }
-    const bytes_view::value_type* read_linearize() const {
-        seastar::memory::on_alloc_point();
-        if (!external()) {
-            return _u.small.data;
-        } else  if (!_u.ptr->next) {
-            return _u.ptr->data;
-        } else {
-            return do_linearize();
-        }
-    }
-    bytes_view::value_type& value_at_index(blob_storage::size_type index) {
-        if (!external()) {
-            return _u.small.data[index];
-        }
-        blob_storage* a = _u.ptr;
-        while (index >= a->frag_size) {
-            index -= a->frag_size;
-            a = a->next;
-        }
-        return a->data[index];
-    }
+    void free_chain(blob_storage* p) noexcept ;
+    const bytes_view::value_type* read_linearize() const ;
+    bytes_view::value_type& value_at_index(blob_storage::size_type index) ;
     const bytes_view::value_type* do_linearize() const;
 public:
     using size_type = blob_storage::size_type;
@@ -1193,48 +1094,19 @@ public:
     size_type size() const ;
     const blob_storage::char_type* begin() const ;
     const blob_storage::char_type* end() const ;
-    blob_storage::char_type* begin() {
-        return data();
-    }
-    blob_storage::char_type* end() {
-        return data() + size();
-    }
-    bool empty() const {
-        return _u.small.size == 0;
-    }
-    blob_storage::char_type* data() {
-        if (external()) {
-            assert(!_u.ptr->next);  
-            return _u.ptr->data;
-        } else {
-            return _u.small.data;
-        }
-    }
-    const blob_storage::char_type* data() const {
-        return read_linearize();
-    }
-    size_t external_memory_usage() const {
-        if (external()) {
-            size_t mem = 0;
-            blob_storage* blob = _u.ptr;
-            while (blob) {
-                mem += blob->frag_size + sizeof(blob_storage);
-                blob = blob->next;
-            }
-            return mem;
-        }
-        return 0;
-    }
+    blob_storage::char_type* begin() ;
+    blob_storage::char_type* end() ;
+    bool empty() const ;
+    blob_storage::char_type* data() ;
+    const blob_storage::char_type* data() const ;
+    size_t external_memory_usage() const ;
     template <typename Func>
     friend std::result_of_t<Func()> with_linearized_managed_bytes(Func&& func);
 };
 template <typename Func>
-inline
+
 std::result_of_t<Func()>
-with_linearized_managed_bytes(Func&& func) {
-    managed_bytes::linearization_context_guard g;
-    return func();
-}
+with_linearized_managed_bytes(Func&& func) ;
 namespace std {
 template <>
 struct hash<managed_bytes> {
@@ -1267,9 +1139,7 @@ class compound_view_wrapper {
 protected:
     bytes_view _bytes;
 protected:
-    static inline const auto& get_compound_type(const schema& s) {
-        return TopLevelView::get_compound_type(s);
-    }
+    static const auto& get_compound_type(const schema& s) ;
 public:
     struct less_compare {
         typename TopLevelView::compound _t;
