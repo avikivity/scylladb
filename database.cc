@@ -2350,13 +2350,7 @@ namespace thread_impl {
 inline thread_context* get() {
     return g_current_context->thread;
 }
-inline bool should_yield() {
-    if (need_preempt()) {
-        return true;
-    } else {
-        return false;
-    }
-}
+ bool should_yield() ;
 scheduling_group sched_group(const thread_context*);
 void yield();
 void switch_in(thread_context* to);
@@ -2387,20 +2381,12 @@ private:
     };
     using move_type = void (*)(noncopyable_function_base* from, noncopyable_function_base* to);
     using destroy_type = void (*)(noncopyable_function_base* func);
-    static void empty_move(noncopyable_function_base* from, noncopyable_function_base* to) {}
-    static void empty_destroy(noncopyable_function_base* func) {}
-    static void indirect_move(noncopyable_function_base* from, noncopyable_function_base* to) {
-        using void_ptr = void*;
-        new (&to->_storage.indirect) void_ptr(from->_storage.indirect);
-    }
+    static void empty_move(noncopyable_function_base* from, noncopyable_function_base* to) ;
+    static void empty_destroy(noncopyable_function_base* func) ;
+    static void indirect_move(noncopyable_function_base* from, noncopyable_function_base* to) ;
     template <size_t N>
-    static void trivial_direct_move(noncopyable_function_base* from, noncopyable_function_base* to) {
-        for (unsigned i = 0; i != N; ++i) {
-            to->_storage.direct[i] = from->_storage.direct[i];
-        }
-    }
-    static void trivial_direct_destroy(noncopyable_function_base* func) {
-    }
+    static void trivial_direct_move(noncopyable_function_base* from, noncopyable_function_base* to) ;
+    static void trivial_direct_destroy(noncopyable_function_base* func) ;
 private:
     storage _storage;
     template <typename Signature>
@@ -2418,9 +2404,7 @@ class noncopyable_function<Ret (Args...)> : private internal::noncopyable_functi
 private:
     const vtable* _vtable;
 private:
-    static Ret empty_call(const noncopyable_function* func, Args... args) {
-        throw std::bad_function_call();
-    }
+    static Ret empty_call(const noncopyable_function* func, Args... args) ;
     static constexpr vtable _s_empty_vtable = {empty_call, empty_move, empty_destroy};
     template <typename Func>
     struct direct_vtable_for {
@@ -2675,42 +2659,14 @@ protected:
 public:
     bool valid() const noexcept { return _u.st != state::invalid; }
     bool available() const noexcept { return _u.st == state::result || _u.st >= state::exception_min; }
-    bool failed() const noexcept { return __builtin_expect(_u.st >= state::exception_min, false); }
+    bool failed() const noexcept ;
     void set_to_broken_promise() noexcept;
-    void ignore() noexcept {
-        switch (_u.st) {
-        case state::invalid:
-        case state::future:
-            assert(0 && "invalid state for ignore");
-        case state::result_unavailable:
-        case state::result:
-            _u.st = state::result_unavailable;
-            break;
-        default:
-            _u.take_exception();
-        }
-    }
-    void set_exception(std::exception_ptr&& ex) noexcept {
-        assert(_u.st == state::future);
-        _u.set_exception(std::move(ex));
-    }
-    future_state_base& operator=(future_state_base&& x) noexcept {
-        this->~future_state_base();
-        new (this) future_state_base(std::move(x));
-        return *this;
-    }
-    void set_exception(future_state_base&& state) noexcept {
-        assert(_u.st == state::future);
-        *this = std::move(state);
-    }
-    std::exception_ptr get_exception() && noexcept {
-        assert(_u.st >= state::exception_min);
-        return _u.take_exception();
-    }
-    const std::exception_ptr& get_exception() const& noexcept {
-        assert(_u.st >= state::exception_min);
-        return _u.ex;
-    }
+    void ignore() noexcept ;
+    void set_exception(std::exception_ptr&& ex) noexcept ;
+    future_state_base& operator=(future_state_base&& x) noexcept ;
+    void set_exception(future_state_base&& state) noexcept ;
+    std::exception_ptr get_exception() && noexcept ;
+    const std::exception_ptr& get_exception() const& noexcept ;
     static future_state_base current_exception();
     template <typename... U>
     friend future<U...> internal::current_exception_as_future() noexcept;
@@ -2852,23 +2808,10 @@ protected:
     template<urgent Urgent>
     void make_ready() noexcept;
     template<typename T>
-    void set_exception_impl(T&& val) noexcept {
-        if (_state) {
-            _state->set_exception(std::move(val));
-            make_ready<urgent::no>();
-        } else {
-            report_failed_future(val);
-        }
-    }
-    void set_exception(future_state_base&& state) noexcept {
-        set_exception_impl(std::move(state));
-    }
-    void set_exception(std::exception_ptr&& ex) noexcept {
-        set_exception_impl(std::move(ex));
-    }
-    void set_exception(const std::exception_ptr& ex) noexcept {
-        set_exception(std::exception_ptr(ex));
-    }
+    void set_exception_impl(T&& val) noexcept ;
+    void set_exception(future_state_base&& state) noexcept ;
+    void set_exception(std::exception_ptr&& ex) noexcept ;
+    void set_exception(const std::exception_ptr& ex) noexcept ;
     template<typename Exception>
     std::enable_if_t<!std::is_same<std::remove_reference_t<Exception>, std::exception_ptr>::value, void> set_exception(Exception&& e) noexcept {
         set_exception(make_exception_ptr(std::forward<Exception>(e)));
@@ -2879,13 +2822,11 @@ protected:
 template <typename... T>
 class promise_base_with_type : protected internal::promise_base {
 protected:
-    future_state<T...>* get_state() {
-        return static_cast<future_state<T...>*>(_state);
-    }
+    future_state<T...>* get_state() ;
     static constexpr bool copy_noexcept = future_state<T...>::copy_noexcept;
 public:
-    promise_base_with_type(future_state_base* state) noexcept : promise_base(state) { }
-    promise_base_with_type(future<T...>* future) noexcept : promise_base(future, &future->_state) { }
+    promise_base_with_type(future_state_base* state)  ;
+    promise_base_with_type(future<T...>* future)  ;
     promise_base_with_type(promise_base_with_type&& x) noexcept : promise_base(std::move(x)) { }
     promise_base_with_type(const promise_base_with_type&) = delete;
     promise_base_with_type& operator=(promise_base_with_type&& x) noexcept {
@@ -2927,26 +2868,16 @@ template <typename... T>
 class promise : private internal::promise_base_with_type<T...> {
     future_state<T...> _local_state;
 public:
-    promise() noexcept : internal::promise_base_with_type<T...>(&_local_state) {}
+    promise()  ;
     promise(promise&& x) noexcept;
     promise(const promise&) = delete;
-    promise& operator=(promise&& x) noexcept {
-        this->~promise();
-        new (this) promise(std::move(x));
-        return *this;
-    }
+    promise& operator=(promise&& x) noexcept ;
     void operator=(const promise&) = delete;
     future<T...> get_future() noexcept;
     template <typename... A>
-    void set_value(A&&... a) {
-        internal::promise_base_with_type<T...>::set_value(std::forward<A>(a)...);
-    }
-    void set_exception(std::exception_ptr&& ex) noexcept {
-        internal::promise_base::set_exception(std::move(ex));
-    }
-    void set_exception(const std::exception_ptr& ex) noexcept {
-        internal::promise_base::set_exception(ex);
-    }
+    void set_value(A&&... a) ;
+    void set_exception(std::exception_ptr&& ex) noexcept ;
+    void set_exception(const std::exception_ptr& ex) noexcept ;
     template<typename Exception>
     std::enable_if_t<!std::is_same<std::remove_reference_t<Exception>, std::exception_ptr>::value, void> set_exception(Exception&& e) noexcept {
         internal::promise_base::set_exception(std::forward<Exception>(e));
@@ -2970,8 +2901,8 @@ struct futurize {
     static inline type apply(Func&& func, std::tuple<FuncArgs...>&& args) noexcept;
     template<typename Func, typename... FuncArgs>
     static inline type apply(Func&& func, FuncArgs&&... args) noexcept;
-    static inline type convert(T&& value) { return make_ready_future<T>(std::move(value)); }
-    static inline type convert(type&& value) { return std::move(value); }
+    static type convert(T&& value) ;
+    static type convert(type&& value) ;
     static type from_tuple(value_type&& value);
     static type from_tuple(const value_type& value);
     template <typename Arg>
@@ -3465,53 +3396,17 @@ typename futurize<future<Args...>>::type futurize<future<Args...>>::apply(Func&&
         return internal::current_exception_as_future<Args...>();
     }
 }
-template<typename... Args>
-template<typename Func, typename... FuncArgs>
-typename futurize<future<Args...>>::type futurize<future<Args...>>::apply(Func&& func, FuncArgs&&... args) noexcept {
-    try {
-        return func(std::forward<FuncArgs>(args)...);
-    } catch (...) {
-        return internal::current_exception_as_future<Args...>();
-    }
-}
-template <typename T>
-template <typename Arg>
-inline
-future<T>
-futurize<T>::make_exception_future(Arg&& arg) {
-    using ::seastar::make_exception_future;
-    using ::seastar::internal::make_exception_future;
-    return make_exception_future<T>(std::forward<Arg>(arg));
-}
-template <typename... T>
-template <typename Arg>
-inline
-future<T...>
-futurize<future<T...>>::make_exception_future(Arg&& arg) {
-    using ::seastar::make_exception_future;
-    using ::seastar::internal::make_exception_future;
-    return make_exception_future<T...>(std::forward<Arg>(arg));
-}
-template <typename Arg>
-inline
-future<>
-futurize<void>::make_exception_future(Arg&& arg) {
-    using ::seastar::make_exception_future;
-    using ::seastar::internal::make_exception_future;
-    return make_exception_future<>(std::forward<Arg>(arg));
-}
+
+
+
+
 template <typename T>
 inline
 future<T>
 futurize<T>::from_tuple(std::tuple<T>&& value) {
     return make_ready_future<T>(std::move(value));
 }
-template <typename T>
-inline
-future<T>
-futurize<T>::from_tuple(const std::tuple<T>& value) {
-    return make_ready_future<T>(value);
-}
+
 inline
 future<>
 futurize<void>::from_tuple(std::tuple<>&& value) {
@@ -3558,18 +3453,10 @@ enum class open_flags {
     exclusive = O_EXCL,
     dsync = O_DSYNC,
 };
-inline open_flags operator|(open_flags a, open_flags b) {
-    return open_flags(std::underlying_type_t<open_flags>(a) | std::underlying_type_t<open_flags>(b));
-}
-inline void operator|=(open_flags& a, open_flags b) {
-    a = (a | b);
-}
-inline open_flags operator&(open_flags a, open_flags b) {
-    return open_flags(std::underlying_type_t<open_flags>(a) & std::underlying_type_t<open_flags>(b));
-}
-inline void operator&=(open_flags& a, open_flags b) {
-    a = (a & b);
-}
+ open_flags operator|(open_flags a, open_flags b) ;
+ void operator|=(open_flags& a, open_flags b) ;
+ open_flags operator&(open_flags a, open_flags b) ;
+ void operator&=(open_flags& a, open_flags b) ;
 enum class directory_entry_type {
     unknown,
     block_device,
@@ -3597,12 +3484,8 @@ enum class access_flags {
     execute = X_OK,
     lookup = execute,
 };
-inline access_flags operator|(access_flags a, access_flags b) {
-    return access_flags(std::underlying_type_t<access_flags>(a) | std::underlying_type_t<access_flags>(b));
-}
-inline access_flags operator&(access_flags a, access_flags b) {
-    return access_flags(std::underlying_type_t<access_flags>(a) & std::underlying_type_t<access_flags>(b));
-}
+ access_flags operator|(access_flags a, access_flags b) ;
+ access_flags operator&(access_flags a, access_flags b) ;
 enum class file_permissions {
     user_read = S_IRUSR,        
     user_write = S_IWUSR,       
@@ -3620,12 +3503,8 @@ enum class file_permissions {
     default_file_permissions = user_read | user_write | group_read | group_write | others_read | others_write, 
     default_dir_permissions = all_permissions, 
 };
-inline constexpr file_permissions operator|(file_permissions a, file_permissions b) {
-    return file_permissions(std::underlying_type_t<file_permissions>(a) | std::underlying_type_t<file_permissions>(b));
-}
-inline constexpr file_permissions operator&(file_permissions a, file_permissions b) {
-    return file_permissions(std::underlying_type_t<file_permissions>(a) & std::underlying_type_t<file_permissions>(b));
-}
+ constexpr file_permissions operator|(file_permissions a, file_permissions b) ;
+ constexpr file_permissions operator&(file_permissions a, file_permissions b) ;
 } 
 namespace seastar {
 template<typename Tag>
@@ -3634,7 +3513,7 @@ class bool_class {
 public:
     static const bool_class yes;
     static const bool_class no;
-    constexpr bool_class() noexcept : _value(false) { }
+    constexpr bool_class()  ;
     constexpr explicit bool_class(bool v) noexcept : _value(v) { }
     explicit operator bool() const noexcept { return _value; }
     friend bool_class operator||(bool_class x, bool_class y) noexcept {
@@ -3759,39 +3638,13 @@ class packet final {
         impl(size_t nr_frags = default_nr_frags);
         impl(const impl&) = delete;
         impl(fragment frag, size_t nr_frags = default_nr_frags);
-        pseudo_vector fragments() { return { _frags, _nr_frags }; }
-        static std::unique_ptr<impl> allocate(size_t nr_frags) {
-            nr_frags = std::max(nr_frags, default_nr_frags);
-            return std::unique_ptr<impl>(new (nr_frags) impl(nr_frags));
-        }
-        static std::unique_ptr<impl> copy(impl* old, size_t nr) {
-            auto n = allocate(nr);
-            n->_deleter = std::move(old->_deleter);
-            n->_len = old->_len;
-            n->_nr_frags = old->_nr_frags;
-            n->_headroom = old->_headroom;
-            n->_offload_info = old->_offload_info;
-            n->_rss_hash = old->_rss_hash;
-            std::copy(old->_frags, old->_frags + old->_nr_frags, n->_frags);
-            old->copy_internal_fragment_to(n.get());
-            return n;
-        }
-        static std::unique_ptr<impl> copy(impl* old) {
-            return copy(old, old->_nr_frags);
-        }
-        static std::unique_ptr<impl> allocate_if_needed(std::unique_ptr<impl> old, size_t extra_frags) {
-            if (old->_allocated_frags >= old->_nr_frags + extra_frags) {
-                return old;
-            }
-            return copy(old.get(), std::max<size_t>(old->_nr_frags + extra_frags, 2 * old->_nr_frags));
-        }
-        void* operator new(size_t size, size_t nr_frags = default_nr_frags) {
-            assert(nr_frags == uint16_t(nr_frags));
-            return ::operator new(size + nr_frags * sizeof(fragment));
-        }
-        void operator delete(void* ptr, size_t nr_frags) {
-            return ::operator delete(ptr);
-        }
+        pseudo_vector fragments() ;
+        static std::unique_ptr<impl> allocate(size_t nr_frags) ;
+        static std::unique_ptr<impl> copy(impl* old, size_t nr) ;
+        static std::unique_ptr<impl> copy(impl* old) ;
+        static std::unique_ptr<impl> allocate_if_needed(std::unique_ptr<impl> old, size_t extra_frags) ;
+        void* operator new(size_t size, size_t nr_frags = default_nr_frags) ;
+        void operator delete(void* ptr, size_t nr_frags) ;
         void operator delete(void* ptr) {
             return ::operator delete(ptr);
         }
@@ -4071,13 +3924,13 @@ private:
     size_t available() const { return _buf.size(); }
 protected:
     void reset() { _buf = {}; }
-    data_source* fd() { return &_fd; }
+    data_source* fd() ;
 public:
     using consumption_result_type = consumption_result<CharType>;
     using unconsumed_remainder = compat::optional<tmp_buf>;
     using char_type = CharType;
     input_stream() = default;
-    explicit input_stream(data_source fd) : _fd(std::move(fd)), _buf(0) {}
+    explicit input_stream(data_source fd)  ;
     input_stream(input_stream&&) = default;
     input_stream& operator=(input_stream&&) = default;
     future<temporary_buffer<CharType>> read_exactly(size_t n);
@@ -4087,12 +3940,10 @@ public:
     template <typename Consumer>
     GCC6_CONCEPT(requires InputStreamConsumer<Consumer, CharType> || ObsoleteInputStreamConsumer<Consumer, CharType>)
     future<> consume(Consumer& c);
-    bool eof() const { return _eof; }
+    bool eof() const ;
     future<tmp_buf> read();
     future<tmp_buf> read_up_to(size_t n);
-    future<> close() {
-        return _fd.close();
-    }
+    future<> close() ;
     future<> skip(uint64_t n);
     data_source detach() &&;
 private:
@@ -4114,8 +3965,8 @@ class output_stream final {
     bool _flushing = false;
     std::exception_ptr _ex;
 private:
-    size_t available() const { return _end - _begin; }
-    size_t possibly_available() const { return _size - _begin; }
+    size_t available() const ;
+    size_t possibly_available() const ;
     future<> split_and_put(temporary_buffer<CharType> buf);
     future<> put(temporary_buffer<CharType> buf);
     void poll_flush();
@@ -4126,8 +3977,7 @@ private:
 public:
     using char_type = CharType;
     output_stream() = default;
-    output_stream(data_sink fd, size_t size, bool trim_to_size = false, bool batch_flushes = false)
-        : _fd(std::move(fd)), _size(size), _trim_to_size(trim_to_size), _batch_flushes(batch_flushes) {}
+    output_stream(data_sink fd, size_t size, bool trim_to_size = false, bool batch_flushes = false)  ;
     output_stream(output_stream&&) = default;
     output_stream& operator=(output_stream&&) = default;
     ~output_stream() { assert(!_in_batch && "Was this stream properly closed?"); }
