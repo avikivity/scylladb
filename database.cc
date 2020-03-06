@@ -75,8 +75,7 @@ namespace seastar {
           GCC6_CONCEPT(template  concept bool Future =                      is_future::value;
      )     namespace internal {
            class future_base {};
-           template <bool IsVariadic> struct warn_variadic_future {
-          };
+           template <bool IsVariadic> struct warn_variadic_future {};
          }
           template <typename... T>     class SEASTAR_NODISCARD future         : private internal::future_base,           internal::warn_variadic_future<0> {
            future_state<T...> _state;
@@ -98,8 +97,7 @@ namespace seastar {
          };
           
           
-          template <typename Tag> class bool_class {
-         };
+          template <typename Tag> class bool_class {};
           namespace internal {
          template <typename Future> struct continuation_base_from_future;
          template <typename... T>     struct continuation_base_from_future<future<T...>> {
@@ -108,8 +106,7 @@ namespace seastar {
          template <typename HeldState, typename Future>     class do_with_state final         : public continuation_base_from_future<Future>::type {
           HeldState _held;
           typename Future::promise_type _pr;
-        public:       explicit do_with_state(HeldState &&held) : _held(std::move(held)) {
-  }
+        public:       explicit do_with_state(HeldState &&held) : _held(std::move(held)) {}
           virtual void run_and_dispose() noexcept override ;
           Future get_future() ;
         };
@@ -143,17 +140,14 @@ namespace seastar {
          public:       using time_point = lowres_clock_impl::steady_time_point;
          };
       }
-           struct blob_storage {
-       }
+           struct blob_storage {}
            __attribute__0;
            class table;
            using column_family = table;
            class clustering_key_prefix;
-           template <typename T> class nonwrapping_range {
-      };
+           template <typename T> class nonwrapping_range {};
            GCC6_CONCEPT(template               concept bool Range =                  std::is_same::value ||                  std::is_same::value;
-          ) namespace std {
-      }
+          ) namespace std {}
            namespace dht {
           class decorated_key;
        }
