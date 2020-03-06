@@ -205,8 +205,8 @@ future< mutation > database::do_apply_counter_update(
   query::clustering_row_ranges cr_ranges;
   query::column_id_vector regular_columns;
   auto slice = query::partition_slice(
-      std::move(cr_ranges), std::move(static_columns),
-      std::move(regular_columns), {}, {}, cql_serialization_format::internal(),
+      move(cr_ranges), std::move(static_columns),
+      std::move(regular_columns), {}, {}, cql_serialization_format(),
       query::max_rows);
   return do_with(
       std::move(slice), std::move(m), std::vector< locked_cell >(),
