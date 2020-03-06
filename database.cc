@@ -7294,9 +7294,7 @@ struct hash<::sockaddr_in> {
 }
 bool operator==(const ::sockaddr_in a, const ::sockaddr_in b);
 namespace seastar {
-void register_network_stack(sstring name, boost::program_options::options_description opts,
-    noncopyable_function<future<std::unique_ptr<network_stack>>(boost::program_options::variables_map opts)> create,
-    bool make_default = false);
+
 class thread_pool;
 class smp;
 class reactor_backend_selector;
@@ -7355,17 +7353,11 @@ public:
         class deregistration_task;
         registration_task* _registration_task = nullptr;
     public:
-        template <typename Func> 
-        static poller simple(Func&& poll) {
-            return poller(make_pollfn(std::forward<Func>(poll)));
-        }
-        poller(std::unique_ptr<pollfn> fn)
-                : _pollfn(std::move(fn)) {
-            do_register();
-        }
-        ~poller();
-        poller(poller&& x);
-        poller& operator=(poller&& x);
+        
+        
+        
+        
+        
         void do_register() noexcept;
         friend class reactor;
     };
@@ -7429,7 +7421,7 @@ private:
     uint64_t _cxx_exceptions = 0;
     uint64_t _abandoned_failed_futures = 0;
     struct task_queue {
-        explicit task_queue(unsigned id, sstring name, float shares);
+        
         int64_t _vruntime = 0;
         float _shares;
         int64_t _reciprocal_shares_times_2_power_32;
@@ -7446,12 +7438,12 @@ private:
          * to the appropriate type that is actually pointed to.
          */
         std::vector<void*> _scheduling_group_specific_vals;
-        int64_t to_vruntime(sched_clock::duration runtime) const;
-        void set_shares(float shares);
+        
+        
         struct indirect_compare;
         sched_clock::duration _time_spent_on_task_quota_violations = {};
         seastar::metrics::metric_groups _metrics;
-        void rename(sstring new_name);
+        
     private:
         void register_stats();
     };
@@ -7575,27 +7567,27 @@ public:
     explicit reactor(unsigned id, reactor_backend_selector rbs, reactor_config cfg);
     reactor(const reactor&) = delete;
     ~reactor();
-    void operator=(const reactor&) = delete;
-    sched_clock::duration uptime() ;
-    io_queue& get_io_queue(dev_t devid = 0) ;
-    io_priority_class register_one_priority_class(sstring name, uint32_t shares);
-    future<> update_shares_for_class(io_priority_class pc, uint32_t shares);
-    static future<> rename_priority_class(io_priority_class pc, sstring new_name);
-    void configure(boost::program_options::variables_map config);
-    server_socket listen(socket_address sa, listen_options opts = {});
-    future<connected_socket> connect(socket_address sa);
-    future<connected_socket> connect(socket_address, socket_address, transport proto = transport::TCP);
-    pollable_fd posix_listen(socket_address sa, listen_options opts = {});
-    bool posix_reuseport_available() const ;
-    lw_shared_ptr<pollable_fd> make_pollable_fd(socket_address sa, int proto);
-    future<> posix_connect(lw_shared_ptr<pollable_fd> pfd, socket_address sa, socket_address local);
-    future<> write_all(pollable_fd_state& fd, const void* buffer, size_t size);
-    future<file> open_file_dma(sstring name, open_flags flags, file_open_options options = {});
-    future<file> open_directory(sstring name);
-    future<> make_directory(sstring name, file_permissions permissions = file_permissions::default_dir_permissions);
-    future<> touch_directory(sstring name, file_permissions permissions = file_permissions::default_dir_permissions);
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     future<compat::optional<directory_entry_type>>  file_type(sstring name, follow_symlink = follow_symlink::yes);
-    future<stat_data> file_stat(sstring pathname, follow_symlink);
+    
     future<uint64_t> file_size(sstring pathname);
     future<bool> file_accessible(sstring pathname, access_flags flags);
     future<bool> file_exists(sstring pathname) ;
