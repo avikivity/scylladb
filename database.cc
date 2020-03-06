@@ -10,7 +10,7 @@ using column_count_type = uint32_t;
 using column_id = column_count_type;
 using schema_ptr = int;
 GCC6_CONCEPT() template < typename T > class optimized_optional {
-  optimized_optional(compat::optional< T > &&obj) noexcept;
+  optimized_optional(compat::optional< T > ) ;
 };
 using cql_protocol_version_type = uint8_t;
 class cql_serialization_format {
@@ -19,16 +19,16 @@ public:
   static cql_serialization_format internal();
 };
 namespace utils {
-template < typename T, size_t N > class small_vector {};
-} // namespace utils
-template < typename... T > class future;
+template < typename , size_t > class small_vector {};
+} // utils
+template < typename... > class future;
 class task {
-  virtual void run_and_dispose() noexcept = 0;
+  virtual void run_and_dispose() = 0;
 };
-bool need_preempt() noexcept;
+bool need_preempt() ;
 #define SEASTAR_NODISCARD
 namespace internal {
-template < typename T, bool is_trivial_class >
+template < typename , bool >
 struct uninitialized_wrapper_base;
 template < typename T > struct uninitialized_wrapper_base< T, false > {};
 template < typename T > struct uninitialized_wrapper_base< T, true > {};
