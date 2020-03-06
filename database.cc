@@ -11,7 +11,7 @@ using schema_ptr = int;
 template < typename T > class optimized_optional {
   optimized_optional(compat::optional< T > ) ;
 };
-;
+
 class cql_serialization_format {
 public:
   ;
@@ -19,7 +19,7 @@ public:
 namespace utils {
 template < typename , size_t > class small_vector {};
 } template < typename... > class future;
-bool need_preempt() ;
+bool need_preempt ;
 namespace internal {
 template < typename , bool >
 struct uninitialized_wrapper_base;
@@ -27,9 +27,9 @@ template < typename T > struct uninitialized_wrapper_base< T, false > {};
 template < typename T > struct uninitialized_wrapper_base< T, true > {};
 template < typename T >
 constexpr bool can_inherit = std::is_same< std::tuple<>, T >::value ||
-                             (std::is_trivially_destructible< T >::value &&
+                             std::is_trivially_destructible< T >::value &&
                               std::is_trivially_constructible< T >::value &&
-                              std::is_final< T >::value);
+                              std::is_final< T >::value;
 template < typename T >
 struct uninitialized_wrapper
     : uninitialized_wrapper_base< T, can_inherit< T > > {};
@@ -58,11 +58,11 @@ class future {
   future_state<> get_available_state_ref() ;
 
 public:
-  bool failed() ;
+  bool failed ;
   template < typename Func,
              typename Result = futurize_t< std::result_of_t< Func(T ...) > > >
   Result then(Func func) {
-    return then_impl((func));
+    return then_impl(func);
   }
   template < typename Func,
              typename Result = futurize_t< std::result_of_t< Func(T ...) > > >
@@ -111,7 +111,7 @@ auto do_with(T1 rv1, T2 rv2, T3_or_F rv3, More ... more) {
 class lowres_clock_impl {
 public:
   using base_steady_clock = std::chrono::steady_clock;
-  using period = std::ratio< 11000 >;
+  using period = std::ratio< 0 >;
   ;
   using steady_duration = std::chrono::duration< period >;
   using steady_time_point =
