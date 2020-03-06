@@ -6365,9 +6365,7 @@ inline constexpr unsigned log2ceil(T n) {
     return std::numeric_limits<T>::digits - count_leading_zeros(n - 1);
 }
 template<typename T>
-inline constexpr unsigned log2floor(T n) {
-    return std::numeric_limits<T>::digits - count_leading_zeros(n) - 1;
-}
+ constexpr unsigned log2floor(T n) ;
 }
 namespace seastar {
 template <typename T, typename Alloc = std::allocator<T>>
@@ -6425,46 +6423,18 @@ private:
     template<typename CB, typename ValueType>
     struct cbiterator : std::iterator<std::random_access_iterator_tag, ValueType> {
         typedef std::iterator<std::random_access_iterator_tag, ValueType> super_t;
-        ValueType& operator*() const { return cb->_impl.storage[cb->mask(idx)]; }
-        ValueType* operator->() const { return &cb->_impl.storage[cb->mask(idx)]; }
-        cbiterator<CB, ValueType>& operator++() {
-            idx++;
-            return *this;
-        }
-        cbiterator<CB, ValueType> operator++(int unused) {
-            auto v = *this;
-            idx++;
-            return v;
-        }
-        cbiterator<CB, ValueType>& operator--() {
-            idx--;
-            return *this;
-        }
-        cbiterator<CB, ValueType> operator--(int unused) {
-            auto v = *this;
-            idx--;
-            return v;
-        }
-        cbiterator<CB, ValueType> operator+(typename super_t::difference_type n) const {
-            return cbiterator<CB, ValueType>(cb, idx + n);
-        }
-        cbiterator<CB, ValueType> operator-(typename super_t::difference_type n) const {
-            return cbiterator<CB, ValueType>(cb, idx - n);
-        }
-        cbiterator<CB, ValueType>& operator+=(typename super_t::difference_type n) {
-            idx += n;
-            return *this;
-        }
-        cbiterator<CB, ValueType>& operator-=(typename super_t::difference_type n) {
-            idx -= n;
-            return *this;
-        }
-        bool operator==(const cbiterator<CB, ValueType>& rhs) const {
-            return idx == rhs.idx;
-        }
-        bool operator!=(const cbiterator<CB, ValueType>& rhs) const {
-            return idx != rhs.idx;
-        }
+        ValueType& operator*() const ;
+        ValueType* operator->() const ;
+        cbiterator<CB, ValueType>& operator++() ;
+        cbiterator<CB, ValueType> operator++(int unused) ;
+        cbiterator<CB, ValueType>& operator--() ;
+        cbiterator<CB, ValueType> operator--(int unused) ;
+        cbiterator<CB, ValueType> operator+(typename super_t::difference_type n) const ;
+        cbiterator<CB, ValueType> operator-(typename super_t::difference_type n) const ;
+        cbiterator<CB, ValueType>& operator+=(typename super_t::difference_type n) ;
+        cbiterator<CB, ValueType>& operator-=(typename super_t::difference_type n) ;
+        bool operator==(const cbiterator<CB, ValueType>& rhs) const ;
+        bool operator!=(const cbiterator<CB, ValueType>& rhs) const ;
         bool operator<(const cbiterator<CB, ValueType>& rhs) const {
             return idx < rhs.idx;
         }
@@ -6876,64 +6846,26 @@ public:
     uint64_t disk_write_dma_alignment() const {
         return _file_impl->_disk_write_dma_alignment;
     }
-    uint64_t memory_dma_alignment() const {
-        return _file_impl->_memory_dma_alignment;
-    }
+    uint64_t memory_dma_alignment() const ;
     template <typename CharType>
     future<size_t>
-    dma_read(uint64_t aligned_pos, CharType* aligned_buffer, size_t aligned_len, const io_priority_class& pc = default_priority_class()) {
-        return _file_impl->read_dma(aligned_pos, aligned_buffer, aligned_len, pc);
-    }
+    dma_read(uint64_t aligned_pos, CharType* aligned_buffer, size_t aligned_len, const io_priority_class& pc = default_priority_class()) ;
     template <typename CharType>
-    future<temporary_buffer<CharType>> dma_read(uint64_t pos, size_t len, const io_priority_class& pc = default_priority_class()) {
-        return dma_read_bulk<CharType>(pos, len, pc).then(
-                [len] (temporary_buffer<CharType> buf) {
-            if (len < buf.size()) {
-                buf.trim(len);
-            }
-            return SEASTAR_COPY_ELISION(buf);
-        });
-    }
+    future<temporary_buffer<CharType>> dma_read(uint64_t pos, size_t len, const io_priority_class& pc = default_priority_class()) ;
     class eof_error : public std::exception {};
     template <typename CharType>
     future<temporary_buffer<CharType>>
-    dma_read_exactly(uint64_t pos, size_t len, const io_priority_class& pc = default_priority_class()) {
-        return dma_read<CharType>(pos, len, pc).then(
-                [pos, len] (auto buf) {
-            if (buf.size() < len) {
-                throw eof_error();
-            }
-            return SEASTAR_COPY_ELISION(buf);
-        });
-    }
-    future<size_t> dma_read(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc = default_priority_class()) {
-        return _file_impl->read_dma(pos, std::move(iov), pc);
-    }
+    dma_read_exactly(uint64_t pos, size_t len, const io_priority_class& pc = default_priority_class()) ;
+    future<size_t> dma_read(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc = default_priority_class()) ;
     template <typename CharType>
-    future<size_t> dma_write(uint64_t pos, const CharType* buffer, size_t len, const io_priority_class& pc = default_priority_class()) {
-        return _file_impl->write_dma(pos, buffer, len, pc);
-    }
-    future<size_t> dma_write(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc = default_priority_class()) {
-        return _file_impl->write_dma(pos, std::move(iov), pc);
-    }
-    future<> flush() {
-        return _file_impl->flush();
-    }
-    future<struct stat> stat() {
-        return _file_impl->stat();
-    }
-    future<> truncate(uint64_t length) {
-        return _file_impl->truncate(length);
-    }
-    future<> allocate(uint64_t position, uint64_t length) {
-        return _file_impl->allocate(position, length);
-    }
-    future<> discard(uint64_t offset, uint64_t length) {
-        return _file_impl->discard(offset, length);
-    }
-    future<uint64_t> size() const {
-        return _file_impl->size();
-    }
+    future<size_t> dma_write(uint64_t pos, const CharType* buffer, size_t len, const io_priority_class& pc = default_priority_class()) ;
+    future<size_t> dma_write(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc = default_priority_class()) ;
+    future<> flush() ;
+    future<struct stat> stat() ;
+    future<> truncate(uint64_t length) ;
+    future<> allocate(uint64_t position, uint64_t length) ;
+    future<> discard(uint64_t offset, uint64_t length) ;
+    future<uint64_t> size() const ;
     future<> close() {
         return _file_impl->close();
     }
@@ -7021,8 +6953,8 @@ class chunked_fifo {
     static_assert((items_per_chunk & (items_per_chunk - 1)) == 0,
             "chunked_fifo chunk size must be power of two");
     union maybe_item {
-        maybe_item() noexcept {}
-        ~maybe_item() {}
+        maybe_item() noexcept ;
+        ~maybe_item() ;
         T data;
     };
     struct chunk {
@@ -7112,88 +7044,17 @@ private:
     void undo_room_back();
     static inline size_t mask(size_t idx) noexcept;
 };
-template <typename T, size_t items_per_chunk>
-template <typename U>
-inline
-chunked_fifo<T, items_per_chunk>::basic_iterator<U>::basic_iterator(chunk* c) : _chunk(c), _item_index(_chunk ? _chunk->begin : 0) {
-}
-template <typename T, size_t items_per_chunk>
-template <typename U>
-inline
-chunked_fifo<T, items_per_chunk>::basic_iterator<U>::basic_iterator(chunk* c, size_t item_index) : _chunk(c), _item_index(item_index) {
-}
-template <typename T, size_t items_per_chunk>
-template <typename U>
-inline bool
-chunked_fifo<T, items_per_chunk>::basic_iterator<U>::operator==(const basic_iterator& o) const {
-    return _chunk == o._chunk && _item_index == o._item_index;
-}
-template <typename T, size_t items_per_chunk>
-template <typename U>
-inline bool
-chunked_fifo<T, items_per_chunk>::basic_iterator<U>::operator!=(const basic_iterator& o) const {
-    return !(*this == o);
-}
-template <typename T, size_t items_per_chunk>
-template <typename U>
-inline typename chunked_fifo<T, items_per_chunk>::template basic_iterator<U>::pointer
-chunked_fifo<T, items_per_chunk>::basic_iterator<U>::operator->() const {
-    return &_chunk->items[chunked_fifo::mask(_item_index)].data;
-}
-template <typename T, size_t items_per_chunk>
-template <typename U>
-inline typename chunked_fifo<T, items_per_chunk>::template basic_iterator<U>::reference
-chunked_fifo<T, items_per_chunk>::basic_iterator<U>::operator*() const {
-    return _chunk->items[chunked_fifo::mask(_item_index)].data;
-}
-template <typename T, size_t items_per_chunk>
-template <typename U>
-inline typename chunked_fifo<T, items_per_chunk>::template basic_iterator<U>
-chunked_fifo<T, items_per_chunk>::basic_iterator<U>::operator++(int) {
-    auto it = *this;
-    ++(*this);
-    return it;
-}
-template <typename T, size_t items_per_chunk>
-template <typename U>
-typename chunked_fifo<T, items_per_chunk>::template basic_iterator<U>&
-chunked_fifo<T, items_per_chunk>::basic_iterator<U>::operator++() {
-    ++_item_index;
-    if (_item_index == _chunk->end) {
-        _chunk = _chunk->next;
-        _item_index = _chunk ? _chunk->begin : 0;
-    }
-    return *this;
-}
-template <typename T, size_t items_per_chunk>
-inline
-chunked_fifo<T, items_per_chunk>::const_iterator::const_iterator(chunked_fifo<T, items_per_chunk>::iterator o)
-    : basic_iterator<const T>(o._chunk, o._item_index) {
-}
-template <typename T, size_t items_per_chunk>
-inline
-chunked_fifo<T, items_per_chunk>::chunked_fifo(chunked_fifo&& x) noexcept
-        : _front_chunk(x._front_chunk)
-        , _back_chunk(x._back_chunk)
-        , _nchunks(x._nchunks)
-        , _free_chunks(x._free_chunks)
-        , _nfree_chunks(x._nfree_chunks) {
-    x._front_chunk = nullptr;
-    x._back_chunk = nullptr;
-    x._nchunks = 0;
-    x._free_chunks = nullptr;
-    x._nfree_chunks = 0;
-}
-template <typename T, size_t items_per_chunk>
-inline
-chunked_fifo<T, items_per_chunk>&
-chunked_fifo<T, items_per_chunk>::operator=(chunked_fifo&& x) noexcept {
-    if (&x != this) {
-        this->~chunked_fifo();
-        new (this) chunked_fifo(std::move(x));
-    }
-    return *this;
-}
+
+
+
+
+
+
+
+
+
+
+
 template <typename T, size_t items_per_chunk>
 inline size_t
 chunked_fifo<T, items_per_chunk>::mask(size_t idx) noexcept {
