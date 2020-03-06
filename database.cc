@@ -202,30 +202,16 @@ class bytes_ostream {
    standard,   super, };
   struct speculative_retry {
    enum class type { NONE, CUSTOM, PERCENTILE, ALWAYS };
- private:   type _t;
-   double _v;
- public:   speculative_retry(type t, double v);
  };
   class index_metadata final {
 };
   class thrift_schema {
-   bool _compound = true;
-   bool _is_dynamic = false;
- public:   friend class schema;
  };
-  static constexpr int DEFAULT_MIN_COMPACTION_THRESHOLD = 4;
-  static constexpr int DEFAULT_MAX_COMPACTION_THRESHOLD = 32;
-  static constexpr int DEFAULT_MIN_INDEX_INTERVAL = 128;
-  static constexpr int DEFAULT_GC_GRACE_SECONDS = 864000;
   class column_mapping_entry {
  public: };
   class raw_view_info final {
-   sstring _where_clause;
  public: };
-  class view_info;
   class v3_columns {
-   bool _is_dense = false;
-   bool _is_compound = false;
  public: public: };
   class schema final : public enable_lw_shared_from_this<schema> {
    struct column {     bytes name;     data_type type;   };
