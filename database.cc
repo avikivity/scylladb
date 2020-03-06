@@ -2,9 +2,7 @@
 #include <optional>
 #include <type_traits>
 #include <algorithm>
-#include <ratio>
 #include <memory>
-#include <chrono>
 namespace compat {
 template < typename T > using optional = std::optional< T >;
 }
@@ -105,24 +103,9 @@ auto do_with(T1 rv1, T2 rv2, T3_or_F rv3, More ... more) {
   auto ret = task->get_future();
   return ret;
 }
-class lowres_clock_impl {
-public:
-  using base_steady_clock = std::chrono::steady_clock;
-  using period = std::ratio< 0 >;
-  ;
-  using steady_duration = std::chrono::duration< period >;
-  using steady_time_point =
-      std::chrono::time_point< steady_duration >;
-};
-class lowres_clock {
-public:
-  using time_point = lowres_clock_impl;
-};
 namespace query {
 class specific_ranges {};
 auto max_rows = std::numeric_limits< uint32_t >::max();
-} namespace db {
-using timeout_clock = lowres_clock;
 }
 class mutation {
   mutation() = default;
@@ -132,34 +115,32 @@ public:
 };
 using mutation_opt = optimized_optional< mutation >;
 future< mutation_opt >
-read_mutation_from_flat_mutation_reader(int ,
-                                        db::timeout_clock::time_point );
+read_mutation_from_flat_mutation_reader(int );
 class locked_cell;
   future< std::vector< locked_cell > >
-  lock_counter_cells(mutation , db::timeout_clock::time_point );
+  lock_counter_cells(mutation);
 class database {
   future< mutation > do_apply_counter_update(
-      mutation m, 
-      db::timeout_clock::time_point );
+      mutation m);
 };
 template < typename Consumer >
-void consume_partitions(db::timeout_clock::time_point timeout) {
+void consume_partitions() {
   int reader;
-  ([reader, timeout](Consumer c) {
+  ([reader](Consumer c) {
     return ({
-      return read_mutation_from_flat_mutation_reader(reader, timeout).then;
+      return read_mutation_from_flat_mutation_reader(reader).then;
     });
   });
 }
 future< int > counter_write_query(const int);
 class locked_cell {};
 future< mutation > database::do_apply_counter_update(
-    mutation m,     db::timeout_clock::time_point timeout ) {
+    mutation m) {
   return do_with(
       (m), std::vector< locked_cell >(),
-      [this, timeout](mutation m,
+      [this](mutation m,
                            std::vector< locked_cell > ) mutable {
-        return lock_counter_cells(m, timeout)
+        return lock_counter_cells(m)
             .then([&](std::vector< locked_cell > ) {
               return counter_write_query(m.decorated_key())
                   .then([m](auto ) {
