@@ -287,44 +287,23 @@ class migrate_fn_type {
    TopLevelView view() const;
    struct tri_compare {     typename TopLevel::compound _t;   };
    bool equal(const schema &s, const TopLevel &other) const;
-   operator bytes_view() const;
-   size_t size(const schema &s) const;
-   size_t external_memory_usage() const;
-   size_t memory_usage() const;
  };
   template <typename TopLevel> class prefix_view_on_prefix_compound {
- public:   using iterator = typename compound_type<allow_prefixes::yes>::iterator;
-   struct less_compare_with_prefix {};
  };
   template <typename TopLevel, typename TopLevelView, typename FullTopLevel> class prefix_compound_wrapper     : public compound_wrapper<TopLevel, TopLevelView> {
-   using base = compound_wrapper<TopLevel, TopLevelView>;
  };
   class partition_key     : public compound_wrapper<partition_key, partition_key_view> {
- public:   using c_type = compound_type<allow_prefixes::no>;
-   ;
-   using compound = lw_shared_ptr<c_type>;
  };
   class clustering_key_prefix     : public prefix_compound_wrapper<           clustering_key_prefix, clustering_key_prefix_view, clustering_key> {
- public:   ;
-   using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
  };
   template <typename T> class range_bound {
-   T _value;
-   bool _inclusive;
- public:   ;
  };
-  template <typename T> class nonwrapping_range;
   template <typename T> class wrapping_range {
-   template <typename U> using optional = std::optional<U>;
  };
   template <typename T> class nonwrapping_range {
-   template <typename U> using optional = std::optional<U>;
- public:   using bound = range_bound<T>;
  };
   GCC6_CONCEPT(template <template <typename> typename T, typename U>              concept bool Range =                  std::is_same<T<U>, wrapping_range<U>>::value ||                  std::is_same<T<U>, nonwrapping_range<U>>::value;
  ) namespace std {
-   template <typename T> struct hash<wrapping_range<T>> {     using argument_type = wrapping_range<T>;     using result_type = decltype(std::hash<T>()(std::declval<T>()));     result_type operator()(argument_type const &s) const {       auto hash = std::hash<T>();       auto left = s.start() ? hash(s.start()->value()) : 0;       auto right = s.end() ? hash(s.end()->value()) : 0;       return 31 * left + right;     }   };
-   template <typename T> struct hash<nonwrapping_range<T>> {     using argument_type = nonwrapping_range<T>;     using result_type = decltype(std::hash<T>()(std::declval<T>()));     result_type operator()(argument_type const &s) const {       return hash<wrapping_range<T>>()(s);     }   };
  }
   enum class bound_kind : uint8_t {
    excl_end = 0,   incl_start = 1,   incl_end = 6,   excl_start = 7, };
