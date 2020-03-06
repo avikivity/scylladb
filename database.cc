@@ -28,8 +28,6 @@ using column_count_type = uint32_t;
   }
    ) inline void serialize_string(CharOutputIterator &out, const char *s) {
     auto len = strlen(s);
-    if (len > std::numeric_limits<uint16_t>::max()) {     throw UTFDataFormatException();   }
-    serialize_int16(out, len);
     out = std::copy_n(s, len, out);
   }
     namespace utils {
@@ -76,18 +74,8 @@ using column_count_type = uint32_t;
   class decorated_key;
   }
      template <typename EnumType, EnumType... Items> struct super_enum {
-    using enum_type = EnumType;
-    using sequence_type = typename std::underlying_type<enum_type>::type;
   };
     template <typename Enum> class enum_set {
-  public:   using mask_type = size_t;
-    using enum_type = typename Enum::enum_type;
-  private:   static constexpr int mask_digits = std::numeric_limits<mask_type>::digits;
-    using mask_iterator = seastar::bitsets::set_iterator<mask_digits>;
-    mask_type _mask;
-    static auto make_iterator(mask_iterator iter) {     return boost::make_transform_iterator(         std::move(iter),         [](typename Enum::sequence_type s) { return enum_type(s); });   }
-  public:   using iterator =       std::invoke_result_t<decltype(&enum_set::make_iterator), mask_iterator>;
-    constexpr enum_set() : _mask(0) {}
   };
      namespace tracing {
   class trace_state_ptr;
