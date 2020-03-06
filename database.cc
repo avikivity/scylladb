@@ -9794,9 +9794,7 @@ public:
     void proxy_send(packet p) {
         _proxy_packetq.push_back(std::move(p));
     }
-    void register_packet_provider(packet_provider_type func) {
-        _pkt_providers.push_back(std::move(func));
-    }
+    void register_packet_provider(packet_provider_type func) ;
     bool poll_tx();
     friend class device;
 };
@@ -9805,39 +9803,23 @@ protected:
     std::unique_ptr<qp*[]> _queues;
     size_t _rss_table_bits = 0;
 public:
-    device() {
-        _queues = std::make_unique<qp*[]>(smp::count);
-    }
-    virtual ~device() {};
-    qp& queue_for_cpu(unsigned cpu) { return *_queues[cpu]; }
-    qp& local_queue() { return queue_for_cpu(engine().cpu_id()); }
-    void l2receive(packet p) {
-        (void)_queues[engine().cpu_id()]->_rx_stream.produce(std::move(p));
-    }
+    device() ;
+    virtual ~device() ;;
+    qp& queue_for_cpu(unsigned cpu) ;
+    qp& local_queue() ;
+    void l2receive(packet p) ;
     future<> receive(std::function<future<> (packet)> next_packet);
     virtual ethernet_address hw_address() = 0;
     virtual net::hw_features hw_features() = 0;
-    virtual rss_key_type rss_key() const { return default_rsskey_40bytes; }
-    virtual uint16_t hw_queues_count() { return 1; }
-    virtual future<> link_ready() { return make_ready_future<>(); }
+    virtual rss_key_type rss_key() const ;
+    virtual uint16_t hw_queues_count() ;
+    virtual future<> link_ready() ;
     virtual std::unique_ptr<qp> init_local_queue(boost::program_options::variables_map opts, uint16_t qid) = 0;
-    virtual unsigned hash2qid(uint32_t hash) {
-        return hash % hw_queues_count();
-    }
+    virtual unsigned hash2qid(uint32_t hash) ;
     void set_local_queue(std::unique_ptr<qp> dev);
     template <typename Func>
-    unsigned forward_dst(unsigned src_cpuid, Func&& hashfn) {
-        auto& qp = queue_for_cpu(src_cpuid);
-        if (!qp._sw_reta) {
-            return src_cpuid;
-        }
-        auto hash = hashfn() >> _rss_table_bits;
-        auto& reta = *qp._sw_reta;
-        return reta[hash % reta.size()];
-    }
-    virtual unsigned hash2cpu(uint32_t hash) {
-        return forward_dst(hash2qid(hash), [hash] { return hash; });
-    }
+    unsigned forward_dst(unsigned src_cpuid, Func&& hashfn) ;
+    virtual unsigned hash2cpu(uint32_t hash) ;
 };
 }
 }
@@ -9855,7 +9837,7 @@ public:
     arp_for_protocol(arp& a, uint16_t proto_num);
     virtual ~arp_for_protocol();
     virtual future<> received(packet p) = 0;
-    virtual bool forward(forward_hash& out_hash_data, packet& p, size_t off) { return false; }
+    virtual bool forward(forward_hash& out_hash_data, packet& p, size_t off) ;
 };
 class arp {
     interface* _netif;
