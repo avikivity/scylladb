@@ -403,18 +403,6 @@ class migrate_fn_type {
    struct initialized_later {};
    managed_bytes &operator=(const managed_bytes &o);
    bool operator==(const managed_bytes &o) const;
-   bool operator!=(const managed_bytes &o) const;
-   operator bytes_view() const { return {data(), size()}; }
-   bool is_fragmented() const { return external() && _u.ptr->next; }
-   operator bytes_mutable_view() {     assert(!is_fragmented());     return {data(), size()};   };
-   bytes_view::value_type &operator[](size_type index);
-   const bytes_view::value_type &operator[](size_type index) const;
-   size_type size() const;
-   const blob_storage::char_type *begin() const;
-   const blob_storage::char_type *end() const;
-   blob_storage::char_type *begin();
-   blob_storage::char_type *end();
-   bool empty() const;
    blob_storage::char_type *data();
    const blob_storage::char_type *data() const;
    size_t external_memory_usage() const;
@@ -433,9 +421,6 @@ class migrate_fn_type {
    template <typename T>   static TopLevel from_singular(const schema &s, const T &v);
    TopLevelView view() const;
    struct tri_compare {     typename TopLevel::compound _t;   };
-   struct less_compare {     typename TopLevel::compound _t;     bool operator()(const TopLevel &k1, const TopLevelView &k2) const;   };
-   struct hashing {     hashing(const schema &s);     size_t operator()(const TopLevel &o) const;     size_t operator()(const TopLevelView &o) const;   };
-   struct equality {     equality(const schema &s);     bool operator()(const TopLevel &o1, const TopLevel &o2) const;     bool operator()(const TopLevelView &o1, const TopLevel &o2) const;     bool operator()(const TopLevel &o1, const TopLevelView &o2) const;   };
    bool equal(const schema &s, const TopLevel &other) const;
    operator bytes_view() const;
    size_t size(const schema &s) const;
@@ -448,9 +433,6 @@ class migrate_fn_type {
  };
   template <typename TopLevel, typename TopLevelView, typename FullTopLevel> class prefix_compound_wrapper     : public compound_wrapper<TopLevel, TopLevelView> {
    using base = compound_wrapper<TopLevel, TopLevelView>;
- protected: public:   using prefix_view_type = prefix_view_on_prefix_compound<TopLevel>;
-   struct prefix_equality_less_compare {};
-   struct prefix_equal_tri_compare {};
  };
   class partition_key     : public compound_wrapper<partition_key, partition_key_view> {
  public:   using c_type = compound_type<allow_prefixes::no>;
@@ -469,9 +451,6 @@ class migrate_fn_type {
   template <typename T> class nonwrapping_range;
   template <typename T> class wrapping_range {
    template <typename U> using optional = std::optional<U>;
-   ;
-   ;
- private:   friend class nonwrapping_range<T>;
  };
   template <typename T> class nonwrapping_range {
    template <typename U> using optional = std::optional<U>;
@@ -502,9 +481,6 @@ class migrate_fn_type {
  class decorated_key;
  class ring_position;
  using partition_range = nonwrapping_range<ring_position>;
- using token_range = nonwrapping_range<token>;
- using partition_range_vector = std::vector<partition_range>;
- using token_range_vector = std::vector<token_range>;
  class decorated_key { public:   dht::token _token;   partition_key _key;   struct less_comparator {     schema_ptr s;                       };   bool equal(const schema &s, const decorated_key &other) const;   bool less_compare(const schema &s, const decorated_key &other) const;   bool less_compare(const schema &s, const ring_position &other) const;   int tri_compare(const schema &s, const decorated_key &other) const;   int tri_compare(const schema &s, const ring_position &other) const;   const dht::token &token() const ;   const partition_key &key() const ;   size_t external_memory_usage() const ;   size_t memory_usage() const ; };
  class decorated_key_equals_comparator {   const schema &_schema; public:   explicit decorated_key_equals_comparator(const schema &schema)       : _schema(schema) {} };
  using decorated_key_opt = std::optional<decorated_key>;
