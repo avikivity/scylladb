@@ -37,8 +37,7 @@ constexpr bool can_inherit = std::is_same< std::tuple<>, T >::value ||
 template < typename T >
 struct uninitialized_wrapper
     : uninitialized_wrapper_base< T, can_inherit< T > > {};
-} // internal
-struct future_state_base {};
+} struct future_state_base {};
 template < typename... T >
 struct future_state
     : future_state_base,
@@ -54,7 +53,7 @@ template < typename... Args > struct futurize< future< Args... > > {
   template < typename Arg > static type make_exception_future(Arg );
 };
 template < typename T > using futurize_t = typename futurize< T >::type;
-GCC6_CONCEPT() namespace internal {
+namespace internal {
   class future_base {};
 }
 template < typename... T >
@@ -87,49 +86,47 @@ struct continuation_base_from_future< future< T... > > {
   using type = task;
 };
 template < typename HeldState, typename Future >
-class do_with_state : continuation_base_from_future< Future >::type {
+class do_with_state : continuation_base_from_future< Future >{
   HeldState _held;
 
 public:
-  do_with_state(HeldState held) : _held(std::move(held)) {}
+  do_with_state(HeldState held) : _held(move(held)) {}
   void run_and_dispose() ;
   Future get_future();
 };
-} // internal
-template < typename Tuple, size_t... Idx >
+} template < typename Tuple, size_t... Idx >
 auto cherry_pick_tuple(std::index_sequence< Idx... >, Tuple tuple) {
-  return std::make_tuple(std::get< Idx >(std::forward< Tuple >(tuple))...);
+  return make_tuple(std::get< Idx >(std::forward< Tuple >(tuple))...);
 }
 template < typename T1, typename T2, typename T3_or_F, typename... More >
 auto do_with(T1 rv1, T2 rv2, T3_or_F rv3, More ... more) {
-  auto all = std::forward_as_tuple(
+  auto all = forward_as_tuple(
       std::forward< T1 >(rv1), std::forward< T2 >(rv2),
       std::forward< T3_or_F >(rv3), std::forward< More >(more)...);
   constexpr size_t nr = std::tuple_size< decltype(all) >::value - 1;
   using idx = std::make_index_sequence< nr >;
-  auto just_values = cherry_pick_tuple(idx(), std::move(all));
-  auto just_func = std::move(std::get< nr >(std::move(all)));
+  auto just_values = cherry_pick_tuple(idx(), move(all));
+  auto just_func = std::move(std::get< nr >(move(all)));
   using value_tuple = std::remove_reference_t< decltype(just_values) >;
   using ret_type = decltype(apply(just_func, just_values));
   auto task =
       std::make_unique< internal::do_with_state< value_tuple, ret_type > >(
-          std::move(just_values));
+          move(just_values));
   auto ret = task->get_future();
   return ret;
 }
-class lowres_clock;
 class lowres_clock_impl {
 public:
   using base_steady_clock = std::chrono::steady_clock;
   using period = std::ratio< 11000 >;
-  using steady_rep = base_steady_clock::rep;
+  using steady_rep = base_steady_clock;
   using steady_duration = std::chrono::duration< period >;
   using steady_time_point =
       std::chrono::time_point< steady_duration >;
 };
 class lowres_clock {
 public:
-  using time_point = lowres_clock_impl::steady_time_point;
+  using time_point = lowres_clock_impl;
 };
 class table;
 using column_family = table;
@@ -149,14 +146,13 @@ public:
       clustering_row_ranges , column_id_vector ,
       column_id_vector , option_set ,
       std::unique_ptr< specific_ranges > ,
-      cql_serialization_format = cql_serialization_format::internal(),
+      cql_serialization_format = cql_serialization_format(),
       uint32_t = max_rows);
 };
-} // query
-namespace db {
+} namespace db {
 using timeout_clock = lowres_clock;
 }
-GCC6_CONCEPT() class mutation {
+class mutation {
   mutation() = default;
 
 public:
