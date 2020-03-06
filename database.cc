@@ -542,7 +542,6 @@ make_object_deleter(deleter d, T&& obj) {
 
 #endif
 #include <algorithm>
-#include <cstddef>
 
 namespace seastar {
 
@@ -1497,11 +1496,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
 })
 template <typename T, typename Enable = void>
 struct appending_hash;
-#include <utility>
-#include <type_traits>
-#include <functional>
-#include <ostream>
-#include <memory> // for std::unique_ptr
 
 namespace seastar {
 
@@ -1512,7 +1506,6 @@ template<typename T>
 struct is_smart_ptr<std::unique_ptr<T>> : std::true_type {};
 
 }
-#include <memory>
 
 namespace seastar {
 
@@ -2419,7 +2412,6 @@ private:
 };
 
 #include <experimental/type_traits>
-#include <iostream>
 
 namespace seastar {
 
@@ -2883,15 +2875,7 @@ public:
   }
 };
 } // namespace utils
-#include <boost/asio/ip/address_v4.hpp>
-#include <arpa/inet.h>
-#include <unordered_map>
-#include <cstdint>
-#include <array>
-#include <map>
 #include <list>
-#include <chrono>
-#include <array>
 
 namespace seastar {
 
@@ -2919,8 +2903,6 @@ public:
 
 }
 #include <arpa/inet.h>  // for ntohs() and friends
-#include <iosfwd>
-#include <utility>
 
 namespace seastar {
 
