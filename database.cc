@@ -36,22 +36,14 @@ template <typename CharT> class basic_mutable_view {   CharT *_begin = nullptr; 
  namespace std { template <> struct hash<bytes_view> {   size_t operator()(bytes_view v) const {     return hash<sstring_view>()(         {reinterpret_cast<const char *>(v.begin()), v.size()});   } }; }
  namespace std { std::ostream &operator<<(std::ostream &os, const bytes_view &b); }
  template <> struct appending_hash<bytes> {   template <typename Hasher> void operator()(Hasher &h, const bytes &v) const; };
- template <> struct appending_hash<bytes_view> {   template <typename Hasher> void operator()(Hasher &h, bytes_view v) const; };
 #include <seastar/net/byteorder.hh>
 class UTFDataFormatException {};
- class EOFException {};
- static constexpr size_t serialize_int8_size = 1;
- static constexpr size_t serialize_bool_size = 1;
- static constexpr size_t serialize_int16_size = 2;
  template <typename CharOutputIterator> GCC6_CONCEPT(requires requires(CharOutputIterator it) { *it++ = 'a'; }
 ) inline void serialize_string(CharOutputIterator &out, const sstring &s) {   for (char c : s) {     if (c == '\0') {       throw UTFDataFormatException();     }   }   if (s.size() > std::numeric_limits<uint16_t>::max()) {     throw UTFDataFormatException();   }   serialize_int16(out, s.size());   out = std::copy(s.begin(), s.end(), out); }
  template <typename CharOutputIterator> GCC6_CONCEPT(requires requires(CharOutputIterator it) { *it++ = 'a'; }
 ) inline void serialize_string(CharOutputIterator &out, const char *s) {   auto len = strlen(s);   if (len > std::numeric_limits<uint16_t>::max()) {     throw UTFDataFormatException();   }   serialize_int16(out, len);   out = std::copy_n(s, len, out); }
- inline size_t serialize_string_size(const sstring &s) {   ;   return serialize_int16_size + s.size(); }
  template <typename T, typename CharOutputIterator> static inline void write(CharOutputIterator &out, const T &val) {   auto v = net::ntoh(val);   out = std::copy_n(reinterpret_cast<char *>(&v), sizeof(v), out); }
  namespace utils { class UUID { private:   int64_t most_sig_bits;   int64_t least_sig_bits; public:   UUID() : most_sig_bits(0), least_sig_bits(0) {}   UUID(int64_t most_sig_bits, int64_t least_sig_bits)       : most_sig_bits(most_sig_bits), least_sig_bits(least_sig_bits) {}   explicit UUID(const sstring &uuid_string) : UUID(sstring_view(uuid_string)) {}   explicit UUID(const char *s) : UUID(sstring_view(s)) {}   explicit UUID(sstring_view uuid_string);   int64_t get_most_significant_bits() const { return most_sig_bits; }   int64_t get_least_significant_bits() const { return least_sig_bits; }   int version() const;   ; }; }
-  template <> struct appending_hash<utils::UUID> {   template <typename Hasher>   void operator()(Hasher &h, const utils::UUID &id) const {     feed_hash(h, id.get_most_significant_bits());     feed_hash(h, id.get_least_significant_bits());   } };
- namespace std { template <> struct hash<utils::UUID> {   size_t operator()(const utils::UUID &id) const {     auto hilo =         id.get_most_significant_bits() ^ id.get_least_significant_bits();     return size_t((hilo >> 32) ^ hilo);   } }; }
 #include <seastar/util/log.hh>
 namespace logging { using log_level = seastar::log_level; using logger = seastar::logger; using registry = seastar::logger_registry; using settings = seastar::logging_settings; using seastar::level_name; using seastar::pretty_type_name; }
  GCC6_CONCEPT(     template <typename T> concept bool FragmentRange =         requires(T range) {           typename T::fragment_type;           requires std::is_same_v<typename T::fragment_type, bytes_view> ||               std::is_same_v<typename T::fragment_type, bytes_mutable_view>;           { *range.begin() }           ->typename T::fragment_type;           { *range.end() }           ->typename T::fragment_type;           { range.size_bytes() }           ->size_t;           { range.empty() }           ->bool;         };
