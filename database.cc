@@ -66,15 +66,12 @@ namespace seastar {
             state st;
           }
      _u;
-         public:       bool available() const noexcept {
-            return _u.st == state::result || _u.st >= state::exception_min;
-          }
+         public:       bool available() const noexcept ;
            bool failed() const noexcept;
     };
           template <typename... T>     struct future_state         : public future_state_base,           private internal::uninitialized_wrapper<std::tuple<T...>> {
            static_assert(std::is_nothrow_move_constructible<std::tuple<T...>>::value,                     "Types must be no-throw destructible");
-           std::tuple<T...> &&get_value() && noexcept {
-          }
+           std::tuple<T...> &&get_value() && noexcept ;
          };
           template <typename... T> class continuation_base : public task {
          };
@@ -108,16 +105,10 @@ namespace seastar {
          }
           template <typename... T>     class SEASTAR_NODISCARD future         : private internal::future_base,           internal::warn_variadic_future<(sizeof...(T) > 1)> {
            future_state<T...> _state;
-           [[gnu::always_inline]] future_state<T...> &&       get_available_state_ref() noexcept {
-            return std::move(_state);
-          }
+           [[gnu::always_inline]] future_state<T...> &&       get_available_state_ref() noexcept ;
          public:       using promise_type = promise<T...>;
-         public:       [[gnu::always_inline]] bool available() const noexcept {
-            return _state.available();
-          }
-           [[gnu::always_inline]] bool failed() const noexcept {
-            return _state.failed();
-          }
+         public:       [[gnu::always_inline]] bool available() const noexcept ;
+           [[gnu::always_inline]] bool failed() const noexcept ;
            template <typename Func,                 typename Result = futurize_t<std::result_of_t<Func(T &&...)>>>       Result then(Func &&func) noexcept {
             return then_impl(std::move(func));
           }
@@ -144,11 +135,8 @@ namespace seastar {
           typename Future::promise_type _pr;
         public:       explicit do_with_state(HeldState &&held) : _held(std::move(held)) {
   }
-          virtual void run_and_dispose() noexcept override {
-         }
-          Future get_future() {
-   return _pr.get_future();
-   }
+          virtual void run_and_dispose() noexcept override ;
+          Future get_future() ;
         };
          }
           template <typename Tuple, size_t... Idx>     inline auto cherry_pick_tuple(std::index_sequence<Idx...>, Tuple && tuple) {
