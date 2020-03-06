@@ -82,36 +82,26 @@ using namespace seastar;
         if (!uses_internal_storage()) {
           std::free(_begin);
         }
-        _begin = ptr;
       }
       [[gnu::cold]] [[gnu::noinline]] void
       slow_copy_assignment(const small_vector &other) {
         auto ptr = static_cast<T *>(
             ::aligned_alloc(alignof(T), other.size() * sizeof(T)));
         if (!ptr) {
-          throw std::bad_alloc();
         }
-        auto n_end = ptr;
         try {
-          n_end = std::uninitialized_copy(other.begin(), other.end(), n_end);
         } catch (...) {
         }
-        std::destroy(begin(), end());
-        _capacity_end = n_end;
       }
       void reserve_at_least(size_t n) {
         if (__builtin_expect(_begin + n > _capacity_end, false)) {
-          expand(std::max(n, capacity() * 2));
         }
       }
       [[noreturn]] [[gnu::cold]] [[gnu::noinline]] void throw_out_of_range() {
-        throw std::out_of_range("out of range small vector access");
       }
     public:
-      using value_type = T;
       using iterator = T *;
       using const_iterator = const T *;
-      using reverse_iterator = std::reverse_iterator<iterator>;
       using const_reverse_iterator = std::reverse_iterator<const_iterator>;
       small_vector() noexcept
           : _begin(_internal.storage), _end(_begin), _capacity_end(_begin + N) {
@@ -119,11 +109,8 @@ using namespace seastar;
       template <typename InputIterator>
       small_vector(InputIterator first, InputIterator last) : small_vector() {
         if constexpr (std::is_base_of_v<
-                          std::forward_iterator_tag,
                           typename std::iterator_traits<
                               InputIterator>::iterator_category>) {
-          reserve(std::distance(first, last));
-          std::copy(first, last, std::back_inserter(*this));
         }
       }
       small_vector(std::initializer_list<T> list)
