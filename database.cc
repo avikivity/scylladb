@@ -16,9 +16,6 @@ class gc_clock final {
    using rep = int64_t;
    using period = std::ratio<1, 1>;
    using duration = std::chrono::duration<rep, period>;
-   using time_point = std::chrono::time_point<gc_clock, duration>;
-   static constexpr auto is_steady = base::is_steady;
-   static time_point now();
  };
 #include <seastar/core/shared_ptr.hh>
 using column_count_type = uint32_t;
@@ -508,33 +505,21 @@ namespace bi = boost::intrusive;
    void upgrade_schema(const schema_ptr &s);
  };
   template <typename Consumer> inline future<> consume_partitions(flat_mutation_reader &reader,                                    Consumer consumer,                                    db::timeout_clock::time_point timeout) {
-   static_assert(       std::is_same<future<stop_iteration>,                    futurize_t<std::result_of_t<Consumer(mutation &&)>>>::value,       "bad Consumer signature");
    using futurator = futurize<std::result_of_t<Consumer(mutation &&)>>;
    return do_with(       std::move(consumer), [&reader, timeout](Consumer &c) -> future<> {         return repeat([&reader, &c, timeout]() {           return read_mutation_from_flat_mutation_reader(reader, timeout)               .then([&c](mutation_opt &&mo) -> future<stop_iteration> {                 if (!mo) {                   return make_ready_future<stop_iteration>(stop_iteration::yes);                 }                 return futurator::apply(c, std::move(*mo));               });         });       }
 );
  }
   namespace ser {
- class mutation_view;
  }
   class frozen_mutation final {
- private:   partition_key deserialize_key() const;
-   ser::mutation_view mutation_view() const;
  public:   frozen_mutation(const mutation &m);
    mutation unfreeze(schema_ptr s) const;
-   struct printer;
  };
   struct reader_resources {
-   int count = 0;
-   ssize_t memory = 0;
  };
-  class reader_concurrency_semaphore;
   class reader_permit {
-   void release();
  };
-  reader_permit no_reader_permit();
   class mutation_source {
-   using partition_range = const dht::partition_range &;
-   using io_priority = const io_priority_class &;
  };
   future<mutation_opt> counter_write_query(schema_ptr, const mutation_source &,                                          const dht::decorated_key &dk,                                          const query::partition_slice &slice,                                          tracing::trace_state_ptr trace_ptr);
   class locked_cell {
