@@ -37,26 +37,18 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
  template <class T> struct lw_shared_ptr_accessors_no_esft;
  }
    template <typename T> class enable_lw_shared_from_this : private lw_shared_ptr_counter_base {
-     using ctor = T;
-     template <typename X, class Y>     friend struct internal::lw_shared_ptr_accessors;
  };
    template <typename T> struct shared_ptr_no_esft : private lw_shared_ptr_counter_base {
-     template <typename X>     friend class lw_shared_ptr;
  };
    template <typename T> struct lw_shared_ptr_deleter;
      namespace internal {
- template <typename T> struct lw_shared_ptr_accessors_esft {     using concrete_type = std::remove_const_t<T>;     static T* to_value(lw_shared_ptr_counter_base* counter) {         return static_cast<T*>(counter);     }     static void dispose(lw_shared_ptr_counter_base* counter) ;     static void dispose(T* value_ptr) ;      };
- template <typename T> struct lw_shared_ptr_accessors_no_esft {     using concrete_type = shared_ptr_no_esft<T>;                     };
- template <typename T, typename U = void> struct lw_shared_ptr_accessors : std::conditional_t<          std::is_base_of<enable_lw_shared_from_this<T>, T>::value,          lw_shared_ptr_accessors_esft<T>,          lw_shared_ptr_accessors_no_esft<T>> { };
  template <typename... T> using void_t = void;
  template <typename T> struct lw_shared_ptr_accessors<T, void_t<decltype(lw_shared_ptr_deleter<T>{}
 )>> {     using concrete_type = T;                };
  }
    template <typename T> class lw_shared_ptr {
-     using accessors = internal::lw_shared_ptr_accessors<std::remove_const_t<T>>;
  };
    template <typename T> class shared_ptr {
-     template <typename U>     friend class shared_ptr;
  };
    }
     using column_count_type = uint32_t;
@@ -65,27 +57,18 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
     using schema_ptr = seastar::lw_shared_ptr<const schema>;
   namespace seastar {
   GCC6_CONCEPT( template<typename T> concept bool OptimizableOptional() {
-     return stdx::is_default_constructible_v<T>         && stdx::is_nothrow_move_assignable_v<T>         && requires(const T& obj) {             { bool(obj) } noexcept;         };
- }
   ) template<typename T> class optimized_optional {
      T _object;
- public:     optimized_optional() = default;
-     optimized_optional(T&& obj) noexcept : _object(std::move(obj)) { }
      optimized_optional(compat::optional<T>&& obj) noexcept {         if (obj) {             _object = std::move(*obj);         }     }
      explicit operator bool() const noexcept ;
-     T* operator->() noexcept ;
-     const T* operator->() const noexcept { return &_object; }
      T& operator*() noexcept { return _object; }
  };
   }
-    using bytes = basic_sstring<int8_t, uint32_t, 31, false>;
     template <typename CharOutputIterator> GCC6_CONCEPT(requires requires(CharOutputIterator it) {
   ) inline void serialize_string(CharOutputIterator &out, const char *s) {
   }
    namespace utils {
-  class UUID { private:   int64_t most_sig_bits;   int64_t least_sig_bits; public:   ; };
   }
-    class abstract_type;
    using cql_protocol_version_type = uint8_t;
    class cql_serialization_format {
     cql_protocol_version_type _version;
