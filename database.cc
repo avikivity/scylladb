@@ -260,18 +260,13 @@ class migrate_fn_type {
    size_type frag_size;
    ref_type next;
    char_type data[];
-   blob_storage(ref_type *backref, size_type size, size_type frag_size) noexcept       : backref(backref), size(size), frag_size(frag_size), next(nullptr) {     *backref = this;   }
  }
   __attribute__((packed));
   class managed_bytes {
-   static thread_local std::unordered_map<       const blob_storage *, std::unique_ptr<bytes_view::value_type[]>>       _lc_state;
  private:   static constexpr size_t max_inline_size = 15;
    struct small_blob {     bytes_view::value_type data[max_inline_size];     int8_t size;   };
    union u {     blob_storage::ref_type ptr;     small_blob small;   }
  _u;
-   static_assert(sizeof(small_blob) > sizeof(blob_storage *),                 "inline size too small");
- private:   bool external() const;
-   template <typename Func>   friend std::result_of_t<Func()> with_linearized_managed_bytes(Func &&func);
  };
   class table;
   using column_family = table;
@@ -280,13 +275,6 @@ class migrate_fn_type {
   class clustering_key_prefix_view;
   using clustering_key = clustering_key_prefix;
   template <typename TopLevel, typename TopLevelView> class compound_wrapper {
- protected:   managed_bytes _bytes;
- protected: public:   struct with_schema_wrapper {     const schema &s;     const TopLevel &key;   };
-   ;
-   template <typename T>   static TopLevel from_singular(const schema &s, const T &v);
-   TopLevelView view() const;
-   struct tri_compare {     typename TopLevel::compound _t;   };
-   bool equal(const schema &s, const TopLevel &other) const;
  };
   template <typename TopLevel> class prefix_view_on_prefix_compound {
  };
