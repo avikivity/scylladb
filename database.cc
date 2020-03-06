@@ -1943,9 +1943,9 @@ template <typename T>
 struct unaligned {
     T raw;
     unaligned() = default;
-    unaligned(T x) : raw(x) {}
-    unaligned& operator=(const T& x) { raw = x; return *this; }
-    operator T() const { return raw; }
+    unaligned(T x)  ;
+    unaligned& operator=(const T& x) ;
+    operator T() const ;
 } __attribute__((packed));
 template <typename T, typename F>
  auto unaligned_cast(F* p) ;
@@ -2030,16 +2030,12 @@ namespace seastar {
  int16_t be_to_cpu(int16_t x) ;
  int32_t cpu_to_be(int32_t x) ;
  int32_t be_to_cpu(int32_t x) ;
-inline int64_t cpu_to_be(int64_t x) { return htobe64(x); }
-inline int64_t be_to_cpu(int64_t x) { return be64toh(x); }
+ int64_t cpu_to_be(int64_t x) ;
+ int64_t be_to_cpu(int64_t x) ;
 template <typename T>
-inline T cpu_to_le(const unaligned<T>& v) {
-    return cpu_to_le(T(v));
-}
+ T cpu_to_le(const unaligned<T>& v) ;
 template <typename T>
-inline T le_to_cpu(const unaligned<T>& v) {
-    return le_to_cpu(T(v));
-}
+ T le_to_cpu(const unaligned<T>& v) ;
 template <typename T>
 inline
 T
@@ -2220,13 +2216,11 @@ public:
     constexpr scheduling_group() noexcept : _id(0) {} 
     bool active() const;
     const sstring& name() const;
-    bool operator==(scheduling_group x) const { return _id == x._id; }
-    bool operator!=(scheduling_group x) const { return _id != x._id; }
-    bool is_main() const { return _id == 0; }
+    bool operator==(scheduling_group x) const ;
+    bool operator!=(scheduling_group x) const ;
+    bool is_main() const ;
     template<typename T>
-    T& get_specific(scheduling_group_key key) {
-        return scheduling_group_get_specific<T>(*this, key);
-    }
+    T& get_specific(scheduling_group_key key) ;
     void set_shares(float shares);
     friend future<scheduling_group> create_scheduling_group(sstring name, float shares);
     friend future<> destroy_scheduling_group(scheduling_group sg);
@@ -2248,22 +2242,15 @@ public:
         reduce_scheduling_group_specific(Reducer reducer, Initial initial_val, scheduling_group_key key);
 };
 namespace internal {
-inline
+
 unsigned
-scheduling_group_index(scheduling_group sg) {
-    return sg._id;
-}
-inline
+scheduling_group_index(scheduling_group sg) ;
+
 scheduling_group
-scheduling_group_from_index(unsigned index) {
-    return scheduling_group(index);
-}
-inline
+scheduling_group_from_index(unsigned index) ;
+
 scheduling_group*
-current_scheduling_group_ptr() {
-    static thread_local scheduling_group sg;
-    return &sg;
-}
+current_scheduling_group_ptr() ;
 }
 inline
 scheduling_group
