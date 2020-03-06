@@ -52,14 +52,14 @@ namespace seastar {
           struct future_state_base {};
           template <typename... T>     struct future_state         : public future_state_base,           private internal::uninitialized_wrapper<std::tuple<T...>> {
            static_assert(std::is_nothrow_move_constructible<std::tuple<T...>>::value,                     "Types must be no-throw destructible");
-           std::tuple<T...> &&get_value() && noexcept ;
+           std::tuple<> &&get_value() && noexcept ;
          };
           template <typename... T> class continuation_base : public task {};
           namespace internal {
          class promise_base {};
          template <typename... T>     class promise_base_with_type : protected internal::promise_base {};
          }
-          template <typename... T>     class promise : private internal::promise_base_with_type<T...> {};
+          template <typename... T>     class promise : private internal::promise_base_with_type<> {};
           template <typename T> struct futurize {
            using type = future<T>;
            template <typename Func, typename... FuncArgs>       static inline type apply() noexcept;
@@ -77,8 +77,8 @@ namespace seastar {
          }
           template <typename... T>     class SEASTAR_NODISCARD future         : private internal::future_base,           internal::warn_variadic_future<0> {
            future_state<T...> _state;
-            future_state<T...> &&       get_available_state_ref() noexcept ;
-         public:       using promise_type = promise<T...>;
+            future_state<> &&       get_available_state_ref() noexcept ;
+         public:       using promise_type = promise<>;
          public:        bool available() const noexcept ;
             bool failed() const noexcept ;
            template <typename Func,                 typename Result = futurize_t<std::result_of_t<Func(T &&...)>>>       Result then(Func &&func) noexcept {
@@ -99,7 +99,7 @@ namespace seastar {
           namespace internal {
          template <typename Future> struct continuation_base_from_future;
          template <typename... T>     struct continuation_base_from_future<future<T...>> {
-          using type = continuation_base<T...>;
+          using type = continuation_base<>;
         };
          template <typename HeldState, typename Future>     class do_with_state final         : public continuation_base_from_future<Future>::type {
           HeldState _held;
