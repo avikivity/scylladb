@@ -44,7 +44,7 @@ namespace seastar {
          };
           bool need_preempt() noexcept;
          }
-#define SEASTAR_NODISCARD [[nodiscard]]
+#define SEASTAR_NODISCARD 
 namespace seastar {
           namespace internal {
          template <typename T, bool is_trivial_class>     struct uninitialized_wrapper_base;
@@ -95,7 +95,7 @@ namespace seastar {
            template <typename Arg> static type make_exception_future(Arg &&arg);
          };
           template <typename T> using futurize_t = typename futurize<T>::type;
-          GCC6_CONCEPT(template <typename T> concept bool Future =                      is_future<T>::value;
+          GCC6_CONCEPT(template  concept bool Future =                      is_future::value;
      )     namespace internal {
            class future_base {
           };
@@ -175,7 +175,7 @@ namespace seastar {
            class clustering_key_prefix;
            template <typename T> class nonwrapping_range {
       };
-           GCC6_CONCEPT(template <template <typename> typename T, typename U>              concept bool Range =                  std::is_same<T<U>, wrapping_range<U>>::value ||                  std::is_same<T<U>, nonwrapping_range<U>>::value;
+           GCC6_CONCEPT(template               concept bool Range =                  std::is_same::value ||                  std::is_same::value;
           ) namespace std {
       }
            namespace dht {
@@ -204,7 +204,7 @@ namespace seastar {
            namespace db {
           using timeout_clock = seastar::lowres_clock;
        }
-           GCC6_CONCEPT(template <typename T, typename ReturnType>              concept bool MutationFragmentConsumer0 {
+           GCC6_CONCEPT(template               concept bool MutationFragmentConsumer0 {
        ) class mutation final {
            mutation() = default;
          public:       const dht::decorated_key &decorated_key() const;
