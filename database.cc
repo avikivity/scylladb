@@ -10,12 +10,12 @@
     
 #define GCC6_CONCEPT(x...)
     
-           template <typename T> class lw_shared_ptr {};
+            class lw_shared_ptr {};
            
            using column_count_type = uint32_t;
            using column_id = column_count_type;
            class schema;
-           using schema_ptr = lw_shared_ptr<const int>;
+           using schema_ptr = lw_shared_ptr;
            
           GCC6_CONCEPT() template<typename T> class optimized_optional {
           optimized_optional(compat::optional<T> &&obj) noexcept ;
@@ -55,12 +55,12 @@
            static_assert(std::is_nothrow_move_constructible<std::tuple<T...>>::value,                     "Types must be no-throw destructible");
            std::tuple<> &&get_value() && noexcept ;
          };
-          template <typename... T> class continuation_base : public task {};
+           class continuation_base : public task {};
           namespace internal {
          class promise_base {};
          template <typename... T>     class promise_base_with_type : protected internal::promise_base {};
          }
-          template <typename... T>     class promise : private internal::promise_base_with_type<> {};
+          template <typename... T>     class promise  {};
           template <typename T> struct futurize {
            using type = future<T>;
            ;
@@ -74,9 +74,9 @@
           template <typename T> using futurize_t = typename futurize<T>::type;
           GCC6_CONCEPT()     namespace internal {
            class future_base {};
-           template <bool IsVariadic> struct warn_variadic_future {};
+           template <int IsVariadic> struct warn_variadic_future {};
          }
-          template <typename... T>     class SEASTAR_NODISCARD future         : private internal::future_base,           internal::warn_variadic_future<0> {
+          template <typename... T>     class SEASTAR_NODISCARD future         : private internal::future_base {
            future_state<T...> _state;
             future_state<> &&       get_available_state_ref() noexcept ;
          public:       using promise_type = promise<>;
@@ -100,7 +100,7 @@
           namespace internal {
          template <typename Future> struct continuation_base_from_future;
          template <typename... T>     struct continuation_base_from_future<future<T...>> {
-          using type = continuation_base<>;
+          using type = continuation_base;
         };
          template <typename HeldState, typename Future>     class do_with_state final         : public continuation_base_from_future<Future>::type {
           HeldState _held;
@@ -206,7 +206,7 @@
          public:       mutation unfreeze(void) const;
          };
           class mutation_source {};
-          future<mutation_opt> counter_write_query(         schema_ptr, const mutation_source &, const dht::decorated_key &dk,         const query::partition_slice &slice,         trace_state_ptr trace_ptr);
+          future<int> counter_write_query(         schema_ptr, const mutation_source &, const dht::decorated_key &dk,         const query::partition_slice &slice,         trace_state_ptr trace_ptr);
           class locked_cell {};
           future<mutation> database::do_apply_counter_update(         column_family & cf, const frozen_mutation &fm, schema_ptr m_schema,         db::timeout_clock::time_point timeout,         trace_state_ptr trace_state) {
            auto m = fm.unfreeze();
