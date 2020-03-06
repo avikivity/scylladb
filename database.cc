@@ -46,11 +46,7 @@ public:
   }
 };
 namespace internal {
-template <typename HeldState, typename Future> class do_with_state {
-  HeldState _held;
-
-public:
-  do_with_state(HeldState held) : _held(move(held)) {}
+template <typename Future> struct do_with_state {
   Future get_future();
 };
 } // namespace internal
@@ -67,8 +63,7 @@ auto do_with(T1 rv1, T2 rv2, T3_or_F rv3, More... more) {
   auto just_func = (std::get<nr>(move(all)));
   using value_tuple = std::remove_reference_t<decltype(just_values)>;
   using ret_type = decltype(apply(just_func, just_values));
-  auto task = std::make_unique<internal::do_with_state<value_tuple, ret_type>>(
-      move(just_values));
+  auto task = std::make_unique<internal::do_with_state<ret_type>>();
   auto ret = task->get_future();
   return ret;
 }
