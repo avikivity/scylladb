@@ -180,28 +180,16 @@ class bytes_ostream {
  public:   static constexpr bool is_prefixable = AllowPrefixes == allow_prefixes::yes;
    using prefix_type = compound_type<allow_prefixes::yes>;
    using value_type = std::vector<bytes>;
-   using size_type = uint16_t;
    compound_type(std::vector<data_type> types)       : _types(std::move(types)),         _byte_order_equal(             std::all_of(_types.begin(), _types.end(),                         [](auto t) { return t->is_byte_order_equal(); }
 )),         _byte_order_comparable(false),         _is_reversed(_types.size() == 1 && _types[0]->is_reversed()) {}
-   compound_type(compound_type &&) = default;
-   class iterator       : public std::iterator<std::input_iterator_tag, const bytes_view> {   private:     bytes_view _v;     bytes_view _current;   private:     void read_current() {       size_type len;       {         if (_v.empty()) {           _v = bytes_view(nullptr, 0);           return;         }         len = read_simple<size_type>(_v);         if (_v.size() < len) {           throw_with_backtrace<marshal_exception>(               format("compound_type iterator - not enough bytes, expected "                      "{:d}, got {:d}",                      len, _v.size()));         }       }       _current = bytes_view(_v.begin(), len);       _v.remove_prefix(len);     }   public:     struct end_iterator_tag {};     iterator operator++(int) {       iterator i(*this);       ++(*this);       return i;     }     const value_type &operator*() const { return _current; }     const value_type *operator->() const { return &_current; }     bool operator!=(const iterator &i) const;     bool operator==(const iterator &i) const;   };
-   static iterator begin(const bytes_view &v);
-   static iterator end(const bytes_view &v);
-   static boost::iterator_range<iterator> components(const bytes_view &v);
  };
-#include <boost/dynamic_bitset.hpp>
   class column_set {
- public:   using bitset = boost::dynamic_bitset<uint64_t>;
-   using size_type = bitset::size_type;
  };
-  using table_schema_version = utils::UUID;
-  class schema_registry_entry;
   enum class column_kind {
    partition_key,   clustering_key,   static_column,   regular_column };
   enum class cf_type : uint8_t {
    standard,   super, };
   struct speculative_retry {
-   enum class type { NONE, CUSTOM, PERCENTILE, ALWAYS };
  };
   class index_metadata final {
 };
