@@ -3994,57 +3994,31 @@ public:
     scattered_message(const scattered_message&) = delete;
     void append_static(const char_type* buf, size_t size) ;
     template <size_t N>
-    void append_static(const char_type(&s)[N]) {
-        append_static(s, N - 1);
-    }
-    void append_static(const char_type* s) {
-        append_static(s, strlen(s));
-    }
+    void append_static(const char_type(&s)[N]) ;
+    void append_static(const char_type* s) ;
     template <typename size_type, size_type max_size>
-    void append_static(const basic_sstring<char_type, size_type, max_size>& s) {
-        append_static(s.begin(), s.size());
-    }
-    void append_static(const compat::string_view& s) {
-        append_static(s.data(), s.size());
-    }
+    void append_static(const basic_sstring<char_type, size_type, max_size>& s) ;
+    void append_static(const compat::string_view& s) ;
     template <typename size_type, size_type max_size>
-    void append(basic_sstring<char_type, size_type, max_size> s) {
-        if (s.size()) {
-            _p = packet(std::move(_p), std::move(s).release());
-        }
-    }
+    void append(basic_sstring<char_type, size_type, max_size> s) ;
     template <typename size_type, size_type max_size, typename Callback>
-    void append(const basic_sstring<char_type, size_type, max_size>& s, Callback callback) {
-        if (s.size()) {
-            _p = packet(std::move(_p), fragment{s.begin(), s.size()}, make_deleter(std::move(callback)));
-        }
-    }
-    void reserve(int n_frags) {
-        _p.reserve(n_frags);
-    }
-    packet release() && {
-        return std::move(_p);
-    }
+    void append(const basic_sstring<char_type, size_type, max_size>& s, Callback callback) ;
+    void reserve(int n_frags) ;
+    packet release() && ;
     template <typename Callback>
-    void on_delete(Callback callback) {
-        _p = packet(std::move(_p), make_deleter(std::move(callback)));
-    }
-    operator bool() const {
-        return _p.len();
-    }
-    size_t size() {
-        return _p.len();
-    }
+    void on_delete(Callback callback) ;
+    operator bool() const ;
+    size_t size() ;
 };
 }
 namespace seastar {
 namespace net { class packet; }
 class data_source_impl {
 public:
-    virtual ~data_source_impl() {}
+    virtual ~data_source_impl() ;
     virtual future<temporary_buffer<char>> get() = 0;
     virtual future<temporary_buffer<char>> skip(uint64_t n);
-    virtual future<> close() { return make_ready_future<>(); }
+    virtual future<> close() ;
 };
 class data_source {
     std::unique_ptr<data_source_impl> _dsi;
@@ -4351,62 +4325,31 @@ size_t count_trailing_zeros<unsigned long>(unsigned long value)
     return __builtin_ctzl(value);
 }
 template<>
-inline
 size_t count_trailing_zeros<long>(long value)
-{
-    return __builtin_ctzl((unsigned long)value);
-}
+;
 template<size_t N>
-static inline size_t get_first_set(const std::bitset<N>& bitset)
-{
-    static_assert(N <= ulong_bits, "bitset too large");
-    return count_trailing_zeros(bitset.to_ulong());
-}
+static size_t get_first_set(const std::bitset<N>& bitset)
+;
 template<size_t N>
-static inline size_t get_last_set(const std::bitset<N>& bitset)
-{
-    static_assert(N <= ulong_bits, "bitset too large");
-    return ulong_bits - 1 - count_leading_zeros(bitset.to_ulong());
-}
+static size_t get_last_set(const std::bitset<N>& bitset)
+;
 template<size_t N>
 class set_iterator : public std::iterator<std::input_iterator_tag, int>
 {
 private:
     void advance()
-    {
-        if (_bitset.none()) {
-            _index = -1;
-        } else {
-            auto shift = get_first_set(_bitset) + 1;
-            _index += shift;
-            _bitset >>= shift;
-        }
-    }
+    ;
 public:
-    set_iterator(std::bitset<N> bitset, int offset = 0)
-        : _bitset(bitset)
-        , _index(offset - 1)
-    {
-        static_assert(N <= ulong_bits, "This implementation is inefficient for large bitsets");
-        _bitset >>= offset;
-        advance();
-    }
+    set_iterator(std::bitset<N> bitset, int offset = 0) 
+    ;
     void operator++()
-    {
-        advance();
-    }
+    ;
     int operator*() const
-    {
-        return _index;
-    }
+    ;
     bool operator==(const set_iterator& other) const
-    {
-        return _index == other._index;
-    }
+    ;
     bool operator!=(const set_iterator& other) const
-    {
-        return !(*this == other);
-    }
+    ;
 private:
     std::bitset<N> _bitset;
     int _index;
@@ -4417,13 +4360,10 @@ class set_range
 public:
     using iterator = set_iterator<N>;
     using value_type = int;
-    set_range(std::bitset<N> bitset, int offset = 0)
-        : _bitset(bitset)
-        , _offset(offset)
-    {
-    }
-    iterator begin() const { return iterator(_bitset, _offset); }
-    iterator end() const { return iterator(0); }
+    set_range(std::bitset<N> bitset, int offset = 0) 
+    ;
+    iterator begin() const ;
+    iterator end() const ;
 private:
     std::bitset<N> _bitset;
     int _offset;
@@ -4453,9 +4393,7 @@ private:
     std::bitset<n_buckets> _non_empty_buckets;
 private:
     static timestamp_t get_timestamp(time_point _time_point)
-    {
-        return _time_point.time_since_epoch().count();
-    }
+    ;
     static timestamp_t get_timestamp(Timer& timer)
     {
         return get_timestamp(timer.get_timeout());
@@ -5082,70 +5020,29 @@ public:
         : _begin(std::move(begin)), _end(std::move(end)), _action(std::move(action)) {
         internal::set_callback(first_unavailable, this);
     }
-    virtual void run_and_dispose() noexcept override {
-        std::unique_ptr<do_for_each_state> zis(this);
-        if (_state.failed()) {
-            _pr.set_urgent_state(std::move(_state));
-            return;
-        }
-        while (_begin != _end) {
-            auto f = futurize<void>::apply(_action, *_begin++);
-            if (f.failed()) {
-                f.forward_to(std::move(_pr));
-                return;
-            }
-            if (!f.available() || need_preempt()) {
-                _state = {};
-                internal::set_callback(f, this);
-                zis.release();
-                return;
-            }
-        }
-        _pr.set_value();
-    }
-    future<> get_future() {
-        return _pr.get_future();
-    }
+    virtual void run_and_dispose() noexcept override ;
+    future<> get_future() ;
 };
 }
 template<typename Iterator, typename AsyncAction>
 GCC6_CONCEPT( requires requires (Iterator i, AsyncAction aa) {
     { futurize_apply(aa, *i) } -> future<>;
 } )
-inline
-future<> do_for_each(Iterator begin, Iterator end, AsyncAction action) {
-    while (begin != end) {
-        auto f = futurize<void>::apply(action, *begin++);
-        if (f.failed()) {
-            return f;
-        }
-        if (!f.available() || need_preempt()) {
-            auto* s = new internal::do_for_each_state<Iterator, AsyncAction>{
-                std::move(begin), std::move(end), std::move(action), std::move(f)};
-            return s->get_future();
-        }
-    }
-    return make_ready_future<>();
-}
+
+future<> do_for_each(Iterator begin, Iterator end, AsyncAction action) ;
 template<typename Container, typename AsyncAction>
 GCC6_CONCEPT( requires requires (Container c, AsyncAction aa) {
     { futurize_apply(aa, *c.begin()) } -> future<>;
 } )
-inline
-future<> do_for_each(Container& c, AsyncAction action) {
-    return do_for_each(std::begin(c), std::end(c), std::move(action));
-}
+
+future<> do_for_each(Container& c, AsyncAction action) ;
 namespace internal {
 template<typename... Futures>
 struct identity_futures_tuple {
     using future_type = future<std::tuple<Futures...>>;
     using promise_type = typename future_type::promise_type;
-    static void set_promise(promise_type& p, std::tuple<Futures...> futures) {
-        p.set_value(std::move(futures));
-    }
-    static future_type make_ready_future(std::tuple<Futures...> futures) {
-        return futurize<future_type>::from_tuple(std::move(futures));
-    }
+    static void set_promise(promise_type& p, std::tuple<Futures...> futures) ;
+    static future_type make_ready_future(std::tuple<Futures...> futures) ;
 };
 template <typename Future>
 struct continuation_base_for_future;
@@ -5166,48 +5063,19 @@ class when_all_state_base {
     const when_all_process_element* _processors;
     void* _continuation;
 public:
-    virtual ~when_all_state_base() {}
-    when_all_state_base(size_t nr_remain, const when_all_process_element* processors, void* continuation)
-            : _nr_remain(nr_remain), _processors(processors), _continuation(continuation) {
-    }
-    void complete_one() {
-        --_nr_remain;
-        while (_nr_remain) {
-            bool ready = process_one(_nr_remain - 1);
-            if (!ready) {
-                return;
-            }
-            --_nr_remain;
-        }
-        if (!_nr_remain) {
-            delete this;
-        }
-    }
-    void do_wait_all() {
-        ++_nr_remain; 
-        complete_one();
-    }
-    bool process_one(size_t idx) {
-        auto p = _processors[idx];
-        return p.func(p.future, _continuation, this);
-    }
+    virtual ~when_all_state_base() ;
+    when_all_state_base(size_t nr_remain, const when_all_process_element* processors, void* continuation)  ;
+    void complete_one() ;
+    void do_wait_all() ;
+    bool process_one(size_t idx) ;
 };
 template <typename Future>
 class when_all_state_component final : public continuation_base_for_future_t<Future> {
     when_all_state_base* _base;
     Future* _final_resting_place;
 public:
-    static bool process_element_func(void* future, void* continuation, when_all_state_base* wasb) {
-        auto f = reinterpret_cast<Future*>(future);
-        if (f->available()) {
-            return true;
-        } else {
-            auto c = new (continuation) when_all_state_component(wasb, f);
-            set_callback(*f, c);
-            return false;
-        }
-    }
-    when_all_state_component(when_all_state_base *base, Future* future) : _base(base), _final_resting_place(future) {}
+    static bool process_element_func(void* future, void* continuation, when_all_state_base* wasb) ;
+    when_all_state_component(when_all_state_base *base, Future* future)  ;
     virtual void run_and_dispose() noexcept override {
         using futurator = futurize<Future>;
         if (__builtin_expect(this->_state.failed(), false)) {
@@ -6052,9 +5920,7 @@ struct ipv4_addr {
     bool is_ip_unspecified() const {
         return ip == 0;
     }
-    bool is_port_unspecified() const {
-        return port == 0;
-    }
+    bool is_port_unspecified() const ;
 };
 struct ipv6_addr {
     using ipv6_bytes = std::array<uint8_t, 16>;
@@ -6100,9 +5966,9 @@ struct hash<seastar::transport> {
 };
 }
 namespace seastar {
-inline void throw_system_error_on(bool condition, const char* what_arg = "");
+ void throw_system_error_on(bool condition, const char* what_arg = "");
 template <typename T>
-inline void throw_kernel_error(T r);
+ void throw_kernel_error(T r);
 struct mmap_deleter {
     size_t _size;
     void operator()(void* ptr) const;
@@ -6215,83 +6081,36 @@ public:
         struct stack_size { size_t size = 0; };
         attr() = default;
         template <typename... A>
-        attr(A... a) {
-            set(std::forward<A>(a)...);
-        }
-        void set() {}
+        attr(A... a) ;
+        void set() ;
         template <typename A, typename... Rest>
-        void set(A a, Rest... rest) {
-            set(std::forward<A>(a));
-            set(std::forward<Rest>(rest)...);
-        }
-        void set(stack_size ss) { _stack_size = ss; }
+        void set(A a, Rest... rest) ;
+        void set(stack_size ss) ;
     private:
         stack_size _stack_size;
         friend class posix_thread;
     };
 };
-inline
-void throw_system_error_on(bool condition, const char* what_arg) {
-    if (condition) {
-        if ((errno == EBADF || errno == ENOTSOCK) && is_abort_on_ebadf_enabled()) {
-            abort();
-        }
-        throw std::system_error(errno, std::system_category(), what_arg);
-    }
-}
+
+void throw_system_error_on(bool condition, const char* what_arg) ;
 template <typename T>
-inline
-void throw_kernel_error(T r) {
-    static_assert(std::is_signed<T>::value, "kernel error variables must be signed");
-    if (r < 0) {
-        auto ec = -r;
-        if ((ec == EBADF || ec == ENOTSOCK) && is_abort_on_ebadf_enabled()) {
-            abort();
-        }
-        throw std::system_error(-r, std::system_category());
-    }
-}
+
+void throw_kernel_error(T r) ;
 template <typename T>
-inline
-void throw_pthread_error(T r) {
-    if (r != 0) {
-        throw std::system_error(r, std::system_category());
-    }
-}
-inline
-sigset_t make_sigset_mask(int signo) {
-    sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set, signo);
-    return set;
-}
-inline
-sigset_t make_full_sigset_mask() {
-    sigset_t set;
-    sigfillset(&set);
-    return set;
-}
-inline
-sigset_t make_empty_sigset_mask() {
-    sigset_t set;
-    sigemptyset(&set);
-    return set;
-}
-inline
-void pin_this_thread(unsigned cpu_id) {
-    cpu_set_t cs;
-    CPU_ZERO(&cs);
-    CPU_SET(cpu_id, &cs);
-    auto r = pthread_setaffinity_np(pthread_self(), sizeof(cs), &cs);
-    assert(r == 0);
-    (void)r;
-}
+
+void throw_pthread_error(T r) ;
+
+sigset_t make_sigset_mask(int signo) ;
+
+sigset_t make_full_sigset_mask() ;
+
+sigset_t make_empty_sigset_mask() ;
+
+void pin_this_thread(unsigned cpu_id) ;
 }
 namespace seastar {
-inline
-bool is_ip_unspecified(const ipv4_addr& addr) {
-    return addr.is_ip_unspecified();
-}
+
+bool is_ip_unspecified(const ipv4_addr& addr) ;
 inline
 bool is_port_unspecified(const ipv4_addr& addr) {
     return addr.is_port_unspecified();
