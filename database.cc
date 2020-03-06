@@ -3,8 +3,6 @@
 #ifdef SEASTAR_USE_STD_OPTIONAL_VARIANT_STRINGVIEW
 #include <optional>
 #include <variant>
-#endif
-#if __cplusplus >= 201703L && __has_include(<filesystem>)
 #include <filesystem>
 #include <memory_resource>
 namespace seastar {
@@ -23,12 +21,6 @@ namespace filesystem = std::filesystem; using string_view = basic_string_view<ch
 namespace seastar {
  class deleter final { public:     struct impl;     struct raw_object_tag {}; private:     impl* _impl = nullptr; public:     deleter() = default;     deleter(const deleter&) = delete;     deleter(deleter&& x)  ;     explicit deleter(impl* i)  ;     deleter(raw_object_tag tag, void* object)  ;     ~deleter();     deleter& operator=(deleter&& x) noexcept;     deleter& operator=(deleter&) = delete;     deleter share();     explicit operator bool() const ;     void reset(impl* i) ;     void append(deleter d); private:     static bool is_raw_object(impl* i) {         auto x = reinterpret_cast<uintptr_t>(i);         return x & 1;     }     bool is_raw_object() const {         return is_raw_object(_impl);     }     static void* to_raw_object(impl* i) {         auto x = reinterpret_cast<uintptr_t>(i);         return reinterpret_cast<void*>(x & ~uintptr_t(1));     }     void* to_raw_object() const {         return to_raw_object(_impl);     }     impl* from_raw_object(void* object) {         auto x = reinterpret_cast<uintptr_t>(object);         return reinterpret_cast<impl*>(x | 1);     } };
  struct deleter::impl {     unsigned refs = 1;     deleter next;     impl(deleter next) : next(std::move(next)) {}     virtual ~impl() {} };
- inline deleter::~deleter() {     if (is_raw_object()) {         std::free(to_raw_object());         return;     }     if (_impl && --_impl->refs == 0) {         delete _impl;     } }
- inline deleter& deleter::operator=(deleter&& x) noexcept {     if (this != &x) {         this->~deleter();         new (this) deleter(std::move(x));     }     return *this; }
- template <typename Deleter> struct lambda_deleter_impl final : deleter::impl {     Deleter del;     lambda_deleter_impl(deleter next, Deleter&& del)         : impl(std::move(next)), del(std::move(del)) {}     virtual ~lambda_deleter_impl() override { del(); } };
- template <typename Object> struct object_deleter_impl final : deleter::impl {     Object obj;     object_deleter_impl(deleter next, Object&& obj)         : impl(std::move(next)), obj(std::move(obj)) {} };
- template <typename Object> inline object_deleter_impl<Object>* make_object_deleter_impl(deleter next, Object obj) {     return new object_deleter_impl<Object>(std::move(next), std::move(obj)); }
- template <typename Object> deleter make_deleter(deleter next, Object o) {     return deleter(new lambda_deleter_impl<Object>(std::move(next), std::move(o))); }
  }
 #include <algorithm>
 namespace seastar {
@@ -394,8 +386,6 @@ class reactor {
  using timeout_clock = seastar::lowres_clock;
  }
   GCC6_CONCEPT(template <typename T, typename ReturnType>              concept bool MutationFragmentConsumer() {
-   return requires(F f, mutation_fragment mf, schema_ptr s) {     { f(std::move(mf)) }     ->mutation_fragment;     { f(s) }     ->schema_ptr;   };
- }
  ) class mutation final {
    mutation() = default;
  public:   const dht::decorated_key &decorated_key() const;
