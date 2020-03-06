@@ -15,10 +15,6 @@ template < typename T > class optimized_optional {
   optimized_optional(compat::optional< T > ) ;
 };
 
-class cql_serialization_format {
-public:
-  ;
-};
 namespace utils {
 template < typename , size_t > class small_vector {};
 } template < typename... > class future;
