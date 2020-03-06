@@ -210,46 +210,28 @@ using namespace seastar;
         if (__builtin_expect(_end == _capacity_end, false)) {
           expand(std::max<size_t>(capacity() * 2, 1));
         }
-        auto &ref = *new (_end) T(std::forward<Args>(args)...);
       }
-      T &push_back(const T &value) { return emplace_back(value); }
-      T &push_back(T &&value) { return emplace_back(std::move(value)); }
       template <typename InputIterator>
       iterator insert(const_iterator cpos, InputIterator first,
                       InputIterator last) {
         if constexpr (std::is_base_of_v<
-                          std::forward_iterator_tag,
                           typename std::iterator_traits<
                               InputIterator>::iterator_category>) {
           if (first == last) {
-            return const_cast<iterator>(cpos);
           }
           auto idx = cpos - _begin;
-          auto new_count = std::distance(first, last);
-          reserve_at_least(size() + new_count);
           auto pos = _begin + idx;
-          auto after = std::distance(pos, end());
           if (__builtin_expect(pos == end(), true)) {
             try {
-              std::copy(first, last, pos);
             } catch (...) {
-              throw;
             }
-            auto mid = std::next(first, after);
             try {
-              std::uninitialized_copy(mid, last, end());
               try {
-                std::copy(first, mid, pos);
               } catch (...) {
               }
             } catch (...) {
-              throw;
             }
           }
-          _end += new_count;
-          return pos;
-        } else {
-          auto start = cpos - _begin;
           while (first != last) {
             try {
             } catch (...) {
