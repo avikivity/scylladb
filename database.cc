@@ -226,40 +226,17 @@ class bytes_ostream {
   class v3_columns {
    bool _is_dense = false;
    bool _is_compound = false;
-   std::vector<column_definition> _columns;
-   std::unordered_map<bytes, const column_definition *> _columns_by_name;
  public: public: };
   class schema final : public enable_lw_shared_from_this<schema> {
-   friend class v3_columns;
- public:   struct dropped_column {     data_type type;     api::timestamp_type timestamp;   };
-   using extensions_map = std::map<sstring, ::shared_ptr<schema_extension>>;
- private:   struct raw_schema {     utils::UUID _id;     sstring _ks_name;     sstring _cf_name;     std::vector<column_definition> _columns;     sstring _comment;     gc_clock::duration _default_time_to_live = gc_clock::duration::zero();     data_type _regular_column_name_type;     data_type _default_validation_class = bytes_type;     double _bloom_filter_fp_chance = 0.01;     extensions_map _extensions;     bool _is_dense = false;     bool _is_compound = true;     bool _is_counter = false;     cf_type _type = cf_type::standard;     int32_t _gc_grace_seconds = DEFAULT_GC_GRACE_SECONDS;     double _dc_local_read_repair_chance = 0.1;     double _read_repair_chance = 0.0;     double _crc_check_chance = 1;     int32_t _min_compaction_threshold = DEFAULT_MIN_COMPACTION_THRESHOLD;     int32_t _max_compaction_threshold = DEFAULT_MAX_COMPACTION_THRESHOLD;     int32_t _min_index_interval = DEFAULT_MIN_INDEX_INTERVAL;     int32_t _max_index_interval = 2048;     int32_t _memtable_flush_period = 0;     speculative_retry _speculative_retry =         ::speculative_retry(speculative_retry::type::PERCENTILE, 0.99);     bool _compaction_enabled = true;     table_schema_version _version;     std::unordered_map<sstring, dropped_column> _dropped_columns;     std::map<bytes, data_type> _collections;     std::unordered_map<sstring, index_metadata> _indices_by_name;     bool _wait_for_sync = false;   };
-   raw_schema _raw;
    struct column {     bytes name;     data_type type;   };
- private:   void rebuild();
-   schema(const raw_schema &, std::optional<raw_view_info>);
  public:   schema(std::optional<utils::UUID> id, std::string_view ks_name,          std::string_view cf_name, std::vector<column> partition_key,          std::vector<column> clustering_key,          std::vector<column> regular_columns,          std::vector<column> static_columns, data_type regular_column_name_type,          std::string_view comment = {}
 );
-   schema(const schema &);
    ~schema();
-   bool is_static_compact_table() const;
-   bool has_static_columns() const;
-   friend class schema_registry_entry;
  public: };
-#include <any>
 class migrate_fn_type {
-   std::any _migrators;
-   uint32_t _align = 0;
  };
   struct blob_storage {
    struct [[gnu::packed]] ref_type {     blob_storage *ptr;     ref_type() {}     ref_type(blob_storage * ptr) : ptr(ptr) {}     operator blob_storage *() const { return ptr; }     blob_storage *operator->() const { return ptr; }     blob_storage &operator*() const { return *ptr; }   };
-   using size_type = uint32_t;
-   using char_type = bytes_view::value_type;
-   ref_type *backref;
-   size_type size;
-   size_type frag_size;
-   ref_type next;
-   char_type data[];
  }
   __attribute__((packed));
   class managed_bytes {
