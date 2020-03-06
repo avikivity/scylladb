@@ -197,17 +197,17 @@ void consume_partitions(db::timeout_clock::time_point timeout) {
 }
 class frozen_mutation {
 public:
-  mutation unfreeze(void) const;
+  mutation unfreeze() const;
 };
 class mutation_source {};
-future< int > counter_write_query(schema_ptr, const mutation_source &,
-                                  const int &dk,
-                                  const query::partition_slice &slice,
-                                  trace_state_ptr trace_ptr);
+future< int > counter_write_query(schema_ptr, const mutation_source ,
+                                  const int ,
+                                  const query::partition_slice ,
+                                  trace_state_ptr );
 class locked_cell {};
 future< mutation > database::do_apply_counter_update(
-    column_family &cf, const frozen_mutation &fm, schema_ptr m_schema,
-    db::timeout_clock::time_point timeout, trace_state_ptr trace_state) {
+    column_family &cf, const frozen_mutation &fm, schema_ptr ,
+    db::timeout_clock::time_point timeout, trace_state_ptr ) {
   auto m = fm.unfreeze();
   query::column_id_vector static_columns;
   query::clustering_row_ranges cr_ranges;
@@ -218,10 +218,10 @@ future< mutation > database::do_apply_counter_update(
       query::max_rows);
   return do_with(
       std::move(slice), std::move(m), std::vector< locked_cell >(),
-      [this, &cf, timeout](const query::partition_slice &slice, mutation &m,
-                           std::vector< locked_cell > &locks) mutable {
+      [this, cf, timeout](query::partition_slice slice, mutation m,
+                           std::vector< locked_cell > ) mutable {
         return cf.lock_counter_cells(m, timeout)
-            .then([&, timeout, this](std::vector< locked_cell > lcs) mutable {
+            .then([&, timeout, this](std::vector< locked_cell > ) mutable {
               return counter_write_query(schema_ptr(), mutation_source(),
                                          m.decorated_key(), slice, nullptr)
                   .then([this, &cf, &m, timeout](auto mopt) {
