@@ -20,10 +20,8 @@ namespace seastar {
            namespace seastar {
           GCC6_CONCEPT( template<typename T> concept bool OptimizableOptional() {
          ) template<typename T> class optimized_optional {
-          optimized_optional(compat::optional<T> &&obj) noexcept {
-         }
-          T &operator*() noexcept {
-    }
+          optimized_optional(compat::optional<T> &&obj) noexcept ;
+          T &operator*() noexcept ;
         };
          }
            using cql_protocol_version_type = uint8_t;
@@ -32,13 +30,8 @@ namespace seastar {
         public:     static constexpr cql_protocol_version_type latest_version = 4;
           explicit cql_serialization_format(cql_protocol_version_type version)         : _version(version) {
     }
-          static cql_serialization_format latest() {
-           return cql_serialization_format{
-   latest_version};
-         }
-          static cql_serialization_format internal() {
-     return latest();
-     }
+          static cql_serialization_format latest() ;
+          static cql_serialization_format internal() ;
          };
            namespace utils {
           template <typename T, size_t N> class small_vector {
@@ -173,8 +166,7 @@ namespace seastar {
            auto ret = task->get_future();
            return ret;
          }
-          struct stop_iteration_tag {
-    };
+          struct stop_iteration_tag ;
           using stop_iteration = bool_class<stop_iteration_tag>;
           class lowres_clock;
           class lowres_clock_impl final {
@@ -202,8 +194,7 @@ namespace seastar {
            namespace dht {
           class decorated_key;
        }
-           template <typename EnumType, EnumType... Items> struct super_enum {
-      };
+           template <typename EnumType, EnumType... Items> struct super_enum ;
            template <typename Enum> class enum_set {
       };
            namespace tracing {
