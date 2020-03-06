@@ -67,12 +67,11 @@ namespace seastar {
          };
           template <typename... Args> struct futurize<future<Args...>> {
            using type = future<Args...>;
-           template <typename Func, typename... FuncArgs>       static inline type apply(Func &&func,                                std::tuple<FuncArgs...> &&args) noexcept;
+           template <typename Func, typename... FuncArgs>       static inline type apply() noexcept;
            template <typename Arg> static type make_exception_future(Arg &&arg);
          };
           template <typename T> using futurize_t = typename futurize<T>::type;
-          GCC6_CONCEPT(template  concept bool Future =                      is_future::value;
-     )     namespace internal {
+          GCC6_CONCEPT()     namespace internal {
            class future_base {};
            template <bool IsVariadic> struct warn_variadic_future {};
          }
@@ -145,8 +144,7 @@ namespace seastar {
            using column_family = table;
            class clustering_key_prefix;
            template <typename T> class nonwrapping_range {};
-           GCC6_CONCEPT(template               concept bool Range =                  std::is_same::value ||                  std::is_same::value;
-          ) namespace std {}
+           GCC6_CONCEPT() namespace std {}
            namespace dht {
           class decorated_key;
        }
@@ -171,8 +169,7 @@ namespace seastar {
            namespace db {
           using timeout_clock = seastar::lowres_clock;
        }
-           GCC6_CONCEPT(template               concept bool MutationFragmentConsumer0 {
-       ) class mutation final {
+           GCC6_CONCEPT() class mutation final {
            mutation() = default;
          public:       const dht::decorated_key &decorated_key() const;
          };
