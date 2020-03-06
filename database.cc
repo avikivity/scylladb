@@ -7215,8 +7215,6 @@ future<> copy(input_stream<CharType>&, output_stream<CharType>&);
 }
 
 
-#include <memory>
-#include <tuple>
 
 namespace seastar {
 
@@ -7352,12 +7350,6 @@ do_with(T1&& rv1, T2&& rv2, T3_or_F&& rv3, More&&... more) {
 /// @}
 
 }
-#include <chrono>
-#include <atomic>
-#include <functional>
-#include <chrono>
-#include <limits>
-#include <bitset>
 #include <array>
 #include <boost/intrusive/list.hpp>
 
