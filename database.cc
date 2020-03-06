@@ -1430,85 +1430,56 @@ template <typename T>
 bool
 operator!=(std::nullptr_t, const shared_ptr<T>& y) ;
 template <typename T, typename U>
-inline
+
 bool
-operator<(const shared_ptr<T>& x, const shared_ptr<U>& y) {
-    return x.get() < y.get();
-}
+operator<(const shared_ptr<T>& x, const shared_ptr<U>& y) ;
 template <typename T>
-inline
+
 bool
-operator<(const shared_ptr<T>& x, std::nullptr_t) {
-    return x.get() < nullptr;
-}
+operator<(const shared_ptr<T>& x, std::nullptr_t) ;
 template <typename T>
-inline
+
 bool
-operator<(std::nullptr_t, const shared_ptr<T>& y) {
-    return nullptr < y.get();
-}
+operator<(std::nullptr_t, const shared_ptr<T>& y) ;
 template <typename T, typename U>
-inline
+
 bool
-operator<=(const shared_ptr<T>& x, const shared_ptr<U>& y) {
-    return x.get() <= y.get();
-}
+operator<=(const shared_ptr<T>& x, const shared_ptr<U>& y) ;
 template <typename T>
-inline
+
 bool
-operator<=(const shared_ptr<T>& x, std::nullptr_t) {
-    return x.get() <= nullptr;
-}
+operator<=(const shared_ptr<T>& x, std::nullptr_t) ;
 template <typename T>
-inline
+
 bool
-operator<=(std::nullptr_t, const shared_ptr<T>& y) {
-    return nullptr <= y.get();
-}
+operator<=(std::nullptr_t, const shared_ptr<T>& y) ;
 template <typename T, typename U>
-inline
+
 bool
-operator>(const shared_ptr<T>& x, const shared_ptr<U>& y) {
-    return x.get() > y.get();
-}
+operator>(const shared_ptr<T>& x, const shared_ptr<U>& y) ;
 template <typename T>
-inline
+
 bool
-operator>(const shared_ptr<T>& x, std::nullptr_t) {
-    return x.get() > nullptr;
-}
+operator>(const shared_ptr<T>& x, std::nullptr_t) ;
 template <typename T>
-inline
+
 bool
-operator>(std::nullptr_t, const shared_ptr<T>& y) {
-    return nullptr > y.get();
-}
+operator>(std::nullptr_t, const shared_ptr<T>& y) ;
 template <typename T, typename U>
-inline
+
 bool
-operator>=(const shared_ptr<T>& x, const shared_ptr<U>& y) {
-    return x.get() >= y.get();
-}
+operator>=(const shared_ptr<T>& x, const shared_ptr<U>& y) ;
 template <typename T>
-inline
+
 bool
-operator>=(const shared_ptr<T>& x, std::nullptr_t) {
-    return x.get() >= nullptr;
-}
+operator>=(const shared_ptr<T>& x, std::nullptr_t) ;
 template <typename T>
-inline
+
 bool
-operator>=(std::nullptr_t, const shared_ptr<T>& y) {
-    return nullptr >= y.get();
-}
+operator>=(std::nullptr_t, const shared_ptr<T>& y) ;
 template <typename T>
-static inline
-std::ostream& operator<<(std::ostream& out, const shared_ptr<T>& p) {
-    if (!p) {
-        return out << "null";
-    }
-    return out << *p;
-}
+static
+std::ostream& operator<<(std::ostream& out, const shared_ptr<T>& p) ;
 template<typename T>
 using shared_ptr_equal_by_value = indirect_equal_to<shared_ptr<T>>;
 template<typename T>
@@ -2031,31 +2002,23 @@ struct unaligned {
     operator T() const { return raw; }
 } __attribute__((packed));
 template <typename T, typename F>
-inline auto unaligned_cast(F* p) {
-    return reinterpret_cast<unaligned<std::remove_pointer_t<T>>*>(p);
-}
+ auto unaligned_cast(F* p) ;
 template <typename T, typename F>
-inline auto unaligned_cast(const F* p) {
-    return reinterpret_cast<const unaligned<std::remove_pointer_t<T>>*>(p);
-}
+ auto unaligned_cast(const F* p) ;
 }
 namespace seastar {
-inline uint64_t ntohq(uint64_t v) {
-    return __builtin_bswap64(v);
-}
-inline uint64_t htonq(uint64_t v) {
-    return ntohq(v);
-}
+ uint64_t ntohq(uint64_t v) ;
+ uint64_t htonq(uint64_t v) ;
 namespace net {
-inline void ntoh() {}
-inline void hton() {}
-inline uint8_t ntoh(uint8_t x) { return x; }
-inline uint8_t hton(uint8_t x) { return x; }
-inline uint16_t ntoh(uint16_t x) { return ntohs(x); }
-inline uint16_t hton(uint16_t x) { return htons(x); }
-inline uint32_t ntoh(uint32_t x) { return ntohl(x); }
-inline uint32_t hton(uint32_t x) { return htonl(x); }
-inline uint64_t ntoh(uint64_t x) { return ntohq(x); }
+ void ntoh() ;
+ void hton() ;
+ uint8_t ntoh(uint8_t x) ;
+ uint8_t hton(uint8_t x) ;
+ uint16_t ntoh(uint16_t x) ;
+ uint16_t hton(uint16_t x) ;
+ uint32_t ntoh(uint32_t x) ;
+ uint32_t hton(uint32_t x) ;
+ uint64_t ntoh(uint64_t x) ;
  uint64_t hton(uint64_t x) ;
  int8_t ntoh(int8_t x) ;
  int8_t hton(int8_t x) ;
@@ -2602,19 +2565,9 @@ public:
     noncopyable_function(noncopyable_function&& x) noexcept : _vtable(std::exchange(x._vtable, &_s_empty_vtable)) {
         _vtable->move(&x, this);
     }
-    noncopyable_function& operator=(noncopyable_function&& x) noexcept {
-        if (this != &x) {
-            this->~noncopyable_function();
-            new (this) noncopyable_function(std::move(x));
-        }
-        return *this;
-    }
-    Ret operator()(Args... args) const {
-        return _vtable->call(this, std::forward<Args>(args)...);
-    }
-    explicit operator bool() const {
-        return _vtable != &_s_empty_vtable;
-    }
+    noncopyable_function& operator=(noncopyable_function&& x) noexcept ;
+    Ret operator()(Args... args) const ;
+    explicit operator bool() const ;
 };
 template <typename Ret, typename... Args>
 constexpr typename noncopyable_function<Ret (Args...)>::vtable noncopyable_function<Ret (Args...)>::_s_empty_vtable;
@@ -2639,41 +2592,21 @@ class alloc_failure_injector {
 private:
     void fail();
 public:
-    void on_alloc_point() {
-        if (_suppressed) {
-            return;
-        }
-        if (_alloc_count >= _fail_at) {
-            fail();
-        }
-        ++_alloc_count;
-    }
-    uint64_t alloc_count() const {
-        return _alloc_count;
-    }
-    void fail_after(uint64_t count) {
-        _fail_at = _alloc_count + count;
-        _failed = false;
-    }
-    void cancel() {
-        _fail_at = std::numeric_limits<uint64_t>::max();
-    }
-    bool failed() const {
-        return _failed;
-    }
+    void on_alloc_point() ;
+    uint64_t alloc_count() const ;
+    void fail_after(uint64_t count) ;
+    void cancel() ;
+    bool failed() const ;
     void run_with_callback(noncopyable_function<void()> callback, noncopyable_function<void()> to_run);
 };
 extern thread_local alloc_failure_injector the_alloc_failure_injector;
-inline
-alloc_failure_injector& local_failure_injector() {
-    return the_alloc_failure_injector;
-}
+
+alloc_failure_injector& local_failure_injector() ;
 struct disable_failure_guard {
-    ~disable_failure_guard() {}
+    ~disable_failure_guard() ;
 };
-inline
-void on_alloc_point() {
-}
+
+void on_alloc_point() ;
 }
 }
     #define SEASTAR_NODISCARD [[nodiscard]]
@@ -2690,13 +2623,9 @@ future<T...> make_ready_future(A&&... value);
 template <typename... T>
 future<T...> make_exception_future(std::exception_ptr&& value) noexcept;
 template <typename... T>
-future<T...> make_exception_future(const std::exception_ptr& ex) noexcept {
-    return make_exception_future<T...>(std::exception_ptr(ex));
-}
+future<T...> make_exception_future(const std::exception_ptr& ex) noexcept ;
 template <typename... T>
-future<T...> make_exception_future(std::exception_ptr& ex) noexcept {
-    return make_exception_future<T...>(static_cast<const std::exception_ptr&>(ex));
-}
+future<T...> make_exception_future(std::exception_ptr& ex) noexcept ;
 void engine_exit(std::exception_ptr eptr = {});
 void report_failed_future(const std::exception_ptr& ex) noexcept;
 void report_failed_future(const future_state_base& state) noexcept;
@@ -2713,43 +2642,31 @@ future<> current_exception_as_future() noexcept;
 template <typename... T>
 struct get0_return_type {
     using type = void;
-    static type get0(std::tuple<T...> v) { }
+    static type get0(std::tuple<T...> v) ;
 };
 template <typename T0, typename... T>
 struct get0_return_type<T0, T...> {
     using type = T0;
-    static type get0(std::tuple<T0, T...> v) { return std::get<0>(std::move(v)); }
+    static type get0(std::tuple<T0, T...> v) ;
 };
 template <typename T, bool is_trivial_class>
 struct uninitialized_wrapper_base;
 template <typename T>
 struct uninitialized_wrapper_base<T, false> {
     union any {
-        any() {}
-        ~any() {}
+        any() ;
+        ~any() ;
         T value;
     } _v;
 public:
-    void uninitialized_set(T&& v) {
-        new (&_v.value) T(std::move(v));
-    }
-    T& uninitialized_get() {
-        return _v.value;
-    }
-    const T& uninitialized_get() const {
-        return _v.value;
-    }
+    void uninitialized_set(T&& v) ;
+    T& uninitialized_get() ;
+    const T& uninitialized_get() const ;
 };
 template <typename T> struct uninitialized_wrapper_base<T, true> : private T {
-    void uninitialized_set(T&& v) {
-        new (this) T(std::move(v));
-    }
-    T& uninitialized_get() {
-        return *this;
-    }
-    const T& uninitialized_get() const {
-        return *this;
-    }
+    void uninitialized_set(T&& v) ;
+    T& uninitialized_get() ;
+    const T& uninitialized_get() const ;
 };
 template <typename T>
 constexpr bool can_inherit =
@@ -2785,12 +2702,9 @@ struct future_state_base {
          exception_min = 4,  
     };
     union any {
-        any() { st = state::future; }
-        any(state s) { st = s; }
-        void set_exception(std::exception_ptr&& e) {
-            new (&ex) std::exception_ptr(std::move(e));
-            assert(st >= state::exception_min);
-        }
+        any() ;
+        any(state s) ;
+        void set_exception(std::exception_ptr&& e) ;
         any(std::exception_ptr&& e) {
             set_exception(std::move(e));
         }
@@ -3183,32 +3097,15 @@ class future_base {
 protected:
     promise_base* _promise;
     future_base() noexcept : _promise(nullptr) {}
-    future_base(promise_base* promise, future_state_base* state) noexcept : _promise(promise) {
-        _promise->_future = this;
-        _promise->_state = state;
-    }
-    future_base(future_base&& x, future_state_base* state) noexcept : _promise(x._promise) {
-        if (auto* p = _promise) {
-            x.detach_promise();
-            p->_future = this;
-            p->_state = state;
-        }
-    }
-    ~future_base() noexcept {
-        if (_promise) {
-            detach_promise();
-        }
-    }
-    promise_base* detach_promise() noexcept {
-        _promise->_state = nullptr;
-        _promise->_future = nullptr;
-        return std::exchange(_promise, nullptr);
-    }
+    future_base(promise_base* promise, future_state_base* state)  ;
+    future_base(future_base&& x, future_state_base* state)  ;
+    ~future_base() noexcept ;
+    promise_base* detach_promise() noexcept ;
     friend class promise_base;
 };
 template <bool IsVariadic>
 struct warn_variadic_future {
-    void check_deprecation() {}
+    void check_deprecation() ;
 };
 template <>
 struct warn_variadic_future<true> {
@@ -3538,51 +3435,24 @@ private:
     template <typename... U, typename V>
     friend void internal::set_callback(future<U...>&, V*) noexcept;
 };
-inline internal::promise_base::promise_base(future_base* future, future_state_base* state) noexcept
-    : _future(future), _state(state) {
-    _future->_promise = this;
-}
-template <typename... T>
-inline
-future<T...>
-promise<T...>::get_future() noexcept {
-    assert(!this->_future && this->_state && !this->_task);
-    return future<T...>(this);
-}
-template <typename... T>
-inline
-promise<T...>::promise(promise&& x) noexcept : internal::promise_base_with_type<T...>(std::move(x)) {
-    if (this->_state == &x._local_state) {
-        this->_state = &_local_state;
-        _local_state = std::move(x._local_state);
-    }
-}
+
+
+
 template <typename... T, typename... A>
-inline
-future<T...> make_ready_future(A&&... value) {
-    return future<T...>(ready_future_marker(), std::forward<A>(value)...);
-}
+
+future<T...> make_ready_future(A&&... value) ;
 template <typename... T>
-inline
-future<T...> make_exception_future(std::exception_ptr&& ex) noexcept {
-    return future<T...>(exception_future_marker(), std::move(ex));
-}
+
+future<T...> make_exception_future(std::exception_ptr&& ex) noexcept ;
 template <typename... T>
-inline
-future<T...> internal::make_exception_future(future_state_base&& state) noexcept {
-    return future<T...>(exception_future_marker(), std::move(state));
-}
+
+future<T...> internal::make_exception_future(future_state_base&& state) noexcept ;
 template <typename... T>
-future<T...> internal::current_exception_as_future() noexcept {
-    return internal::make_exception_future<T...>(future_state_base::current_exception());
-}
+future<T...> internal::current_exception_as_future() noexcept ;
 void log_exception_trace() noexcept;
 template <typename... T, typename Exception>
-inline
-future<T...> make_exception_future(Exception&& ex) noexcept {
-    log_exception_trace();
-    return make_exception_future<T...>(std::make_exception_ptr(std::forward<Exception>(ex)));
-}
+
+future<T...> make_exception_future(Exception&& ex) noexcept ;
 template<typename T>
 template<typename Func, typename... FuncArgs>
 typename futurize<T>::type futurize<T>::apply(Func&& func, std::tuple<FuncArgs...>&& args) noexcept {
