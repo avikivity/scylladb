@@ -469,20 +469,14 @@ namespace bi = boost::intrusive;
    class printer {     const schema &_schema;     const mutation_fragment &_mutation_fragment;   public:     printer(const schema &s, const mutation_fragment &mf);     printer(const printer &) = delete;     printer(printer &&) = delete;     friend std::ostream &operator<<(std::ostream &os, const printer &p);   };
    friend std::ostream &operator<<(std::ostream &os, const printer &p);
  };
-  using mutation_fragment_opt = optimized_optional<mutation_fragment>;
   namespace streamed_mutation {
- class forwarding_tag;
- using forwarding = bool_class<forwarding_tag>;
  }
   GCC6_CONCEPT(template <typename F> concept bool StreamedMutationTranformer() {
    return requires(F f, mutation_fragment mf, schema_ptr s) {     { f(std::move(mf)) }     ->mutation_fragment;     { f(s) }     ->schema_ptr;   };
  }
  ) class mutation final {
    mutation() = default;
-   friend class optimized_optional<mutation>;
  public:   const dht::decorated_key &decorated_key() const;
- public:   mutation sliced(const query::clustering_row_ranges &) const;
- private:   friend std::ostream &operator<<(std::ostream &os, const mutation &m);
  };
   using mutation_opt = optimized_optional<mutation>;
   class flat_mutation_reader;
@@ -502,7 +496,6 @@ namespace bi = boost::intrusive;
                 return requires(Consumer c, mutation_fragment mf) {                  { c(std::move(mf)) }                  ->stop_iteration;                };
               }
  ) class flat_mutation_reader final {
-   void upgrade_schema(const schema_ptr &s);
  };
   template <typename Consumer> inline future<> consume_partitions(flat_mutation_reader &reader,                                    Consumer consumer,                                    db::timeout_clock::time_point timeout) {
    using futurator = futurize<std::result_of_t<Consumer(mutation &&)>>;
