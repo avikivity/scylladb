@@ -223,8 +223,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
       const_iterator begin() const noexcept { return _begin; }
       const_iterator cbegin() const noexcept { return _begin; }
       iterator end() noexcept { return _end; }
-      const_iterator end() const noexcept { return _end; }
-      const_iterator cend() const noexcept { return _end; }
       reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
       const_reverse_iterator rbegin() const noexcept {
         return const_reverse_iterator(end());
@@ -235,16 +233,10 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
       reverse_iterator rend() noexcept { return reverse_iterator(begin()); }
       const_reverse_iterator rend() const noexcept {
         return const_reverse_iterator(begin());
-      }
-      const_reverse_iterator crend() const noexcept {
         return const_reverse_iterator(begin());
       }
       T *data() noexcept { return _begin; }
       const T *data() const noexcept { return _begin; }
-      T &front() noexcept { return *begin(); }
-      const T &front() const noexcept { return *begin(); }
-      T &back() noexcept { return end()[-1]; }
-      const T &back() const noexcept { return end()[-1]; }
       T &operator[](size_t idx) noexcept { return data()[idx]; }
       const T &operator[](size_t idx) const noexcept { return data()[idx]; }
       T &at(size_t idx) {
@@ -267,8 +259,6 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
           expand(std::max<size_t>(capacity() * 2, 1));
         }
         auto &ref = *new (_end) T(std::forward<Args>(args)...);
-        ++_end;
-        return ref;
       }
       T &push_back(const T &value) { return emplace_back(value); }
       T &push_back(T &&value) { return emplace_back(std::move(value)); }
@@ -291,24 +281,16 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
             try {
               std::copy(first, last, pos);
             } catch (...) {
-              std::move(pos + new_count, end() + new_count, pos);
-              std::destroy(end(), end() + new_count);
               throw;
             }
-          } else {
-            std::uninitialized_move(pos, end(), pos + new_count);
             auto mid = std::next(first, after);
             try {
               std::uninitialized_copy(mid, last, end());
               try {
                 std::copy(first, mid, pos);
               } catch (...) {
-                std::destroy(end(), pos + new_count);
-                throw;
               }
             } catch (...) {
-              std::move(pos + new_count, end() + new_count, pos);
-              std::destroy(pos + new_count, end() + new_count);
               throw;
             }
           }
@@ -319,12 +301,8 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
           auto idx = start;
           while (first != last) {
             try {
-              insert(begin() + idx, *first);
-              ++first;
               ++idx;
             } catch (...) {
-              erase(begin() + start, begin() + idx);
-              throw;
             }
           }
           return begin() + idx;
@@ -337,16 +315,12 @@ GCC6_CONCEPT(template <typename H> concept bool Hasher() {
         auto pos = _begin + idx;
         if (pos != _end) {
           new (_end) T(std::move(_end[-1]));
-          std::move_backward(pos, _end - 1, _end);
-          throw;
         }
         _end++;
         return pos;
       }
       iterator insert(const_iterator cpos, const T &obj) {
         return emplace(cpos, obj);
-      }
-      iterator insert(const_iterator cpos, T &&obj) {
         return emplace(cpos, std::move(obj));
       }
       void resize(size_t n) {
