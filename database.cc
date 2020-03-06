@@ -816,36 +816,6 @@ namespace bi = boost::intrusive;
  private:   struct data {     data() {}     ~data() {}     std::optional<size_t> _size_in_bytes;     union {       static_row _static_row;       clustering_row _clustering_row;       range_tombstone _range_tombstone;       partition_start _partition_start;       partition_end _partition_end;     };   };
  private:   kind _kind;
    std::unique_ptr<data> _data;
-   mutation_fragment() = default;
-   explicit operator bool() const noexcept { return bool(_data); }
-   void destroy_data() noexcept;
-   friend class optimized_optional<mutation_fragment>;
-   friend class position_in_partition;
- public:   struct clustering_row_tag_t {};
-   template <typename... Args>   mutation_fragment(clustering_row_tag_t, Args &&... args)       : _kind(kind::clustering_row), _data(std::make_unique<data>()) {     new (&_data->_clustering_row) clustering_row(std::forward<Args>(args)...);   }
-   mutation_fragment(static_row &&r);
-   mutation_fragment(clustering_row &&r);
-   mutation_fragment(range_tombstone &&r);
-   mutation_fragment(partition_start &&r);
-   mutation_fragment(partition_end &&r);
-   mutation_fragment(const schema &s, const mutation_fragment &o)       : _kind(o._kind), _data(std::make_unique<data>()) {     switch (_kind) {     case kind::static_row:       new (&_data->_static_row) static_row(s, o._data->_static_row);       break;     case kind::clustering_row:       new (&_data->_clustering_row) clustering_row(s, o._data->_clustering_row);       break;     case kind::range_tombstone:       new (&_data->_range_tombstone) range_tombstone(o._data->_range_tombstone);       break;     case kind::partition_start:       new (&_data->_partition_start) partition_start(o._data->_partition_start);       break;     case kind::partition_end:       new (&_data->_partition_end) partition_end(o._data->_partition_end);       break;     }   }
-   mutation_fragment(mutation_fragment &&other) = default;
-   mutation_fragment &operator=(mutation_fragment &&other) noexcept {     if (this != &other) {       this->~mutation_fragment();       new (this) mutation_fragment(std::move(other));     }     return *this;   }
-   [[gnu::always_inline]] ~mutation_fragment() {     if (_data) {       destroy_data();     }   }
-   position_in_partition_view position() const;
-   position_range range() const;
-   bool relevant_for_range(const schema &s,                           position_in_partition_view pos) const;
-   bool relevant_for_range_assuming_after(const schema &s,                                          position_in_partition_view pos) const;
-   bool has_key() const { return is_clustering_row() || is_range_tombstone(); }
-   const clustering_key_prefix &key() const;
-   kind mutation_fragment_kind() const { return _kind; }
-   bool is_static_row() const { return _kind == kind::static_row; }
-   bool is_clustering_row() const { return _kind == kind::clustering_row; }
-   bool is_range_tombstone() const { return _kind == kind::range_tombstone; }
-   bool is_partition_start() const { return _kind == kind::partition_start; }
-   bool is_end_of_partition() const { return _kind == kind::partition_end; }
-   static_row &as_mutable_static_row() {     _data->_size_in_bytes = std::nullopt;     return _data->_static_row;   }
-   clustering_row &as_mutable_clustering_row() {     _data->_size_in_bytes = std::nullopt;     return _data->_clustering_row;   }
    range_tombstone &as_mutable_range_tombstone() {     _data->_size_in_bytes = std::nullopt;     return _data->_range_tombstone;   }
    partition_start &as_mutable_partition_start() {     _data->_size_in_bytes = std::nullopt;     return _data->_partition_start;   }
    partition_end &as_mutable_end_of_partition();
