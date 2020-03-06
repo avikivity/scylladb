@@ -3,9 +3,6 @@
 #include <type_traits>
 #include <algorithm>
 #include <memory>
-namespace compat {
-template < typename T > using optional = std::optional< T >;
-}
 
 template < typename... > class future;
 namespace internal {
