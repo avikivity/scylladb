@@ -175,27 +175,27 @@ class frozen_mutation;
 class table {
 public:
   future< std::vector< locked_cell > >
-  lock_counter_cells(mutation m, db::timeout_clock::time_point timeout);
+  lock_counter_cells(mutation , db::timeout_clock::time_point );
 };
 class database {
   future< mutation > do_apply_counter_update(
-      column_family &cf, const frozen_mutation &fm, schema_ptr m_schema,
-      db::timeout_clock::time_point timeout, trace_state_ptr trace_state);
+      column_family &, const frozen_mutation &, schema_ptr ,
+      db::timeout_clock::time_point , trace_state_ptr );
 };
-class trace_state_ptr final {
+class trace_state_ptr {
 public:
   trace_state_ptr(nullptr_t);
 };
 template < typename Consumer >
 void consume_partitions(db::timeout_clock::time_point timeout) {
-  int &reader;
-  return do_with(std::move, [&reader, timeout](Consumer &c) -> future<> {
-    return repeat([&reader, &c, timeout] {
+  int reader;
+  (std::move, [reader, timeout](Consumer c) -> future<> {
+    return ([reader, c, timeout] {
       return read_mutation_from_flat_mutation_reader(reader, timeout).then;
     });
   });
 }
-class frozen_mutation final {
+class frozen_mutation {
 public:
   mutation unfreeze(void) const;
 };
