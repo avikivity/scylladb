@@ -250,21 +250,12 @@ class bytes_ostream {
    static boost::iterator_range<iterator> components(const bytes_view &v);
  };
 #include <boost/dynamic_bitset.hpp>
-#include <boost/range/join.hpp>
- enum class ordinal_column_id : column_count_type {
-};
   class column_set {
  public:   using bitset = boost::dynamic_bitset<uint64_t>;
    using size_type = bitset::size_type;
-   static_assert(       static_cast<column_count_type>(boost::dynamic_bitset<uint64_t>::npos) ==       ~static_cast<column_count_type>(0));
-   static constexpr ordinal_column_id npos =       static_cast<ordinal_column_id>(bitset::npos);
- private:   bitset _mask;
  };
   using table_schema_version = utils::UUID;
   class schema_registry_entry;
-  namespace db {
- class extensions;
- }
   enum class column_kind {
    partition_key,   clustering_key,   static_column,   regular_column };
   enum class cf_type : uint8_t {
@@ -289,9 +280,6 @@ class bytes_ostream {
   class column_mapping_entry {
  public: };
   class raw_view_info final {
-   utils::UUID _base_id;
-   sstring _base_name;
-   bool _include_all_columns;
    sstring _where_clause;
  public: };
   class view_info;
@@ -301,24 +289,12 @@ class bytes_ostream {
    std::vector<column_definition> _columns;
    std::unordered_map<bytes, const column_definition *> _columns_by_name;
  public: public: };
-  namespace query {
- class partition_slice;
- }
   class schema final : public enable_lw_shared_from_this<schema> {
    friend class v3_columns;
  public:   struct dropped_column {     data_type type;     api::timestamp_type timestamp;   };
    using extensions_map = std::map<sstring, ::shared_ptr<schema_extension>>;
  private:   struct raw_schema {     utils::UUID _id;     sstring _ks_name;     sstring _cf_name;     std::vector<column_definition> _columns;     sstring _comment;     gc_clock::duration _default_time_to_live = gc_clock::duration::zero();     data_type _regular_column_name_type;     data_type _default_validation_class = bytes_type;     double _bloom_filter_fp_chance = 0.01;     extensions_map _extensions;     bool _is_dense = false;     bool _is_compound = true;     bool _is_counter = false;     cf_type _type = cf_type::standard;     int32_t _gc_grace_seconds = DEFAULT_GC_GRACE_SECONDS;     double _dc_local_read_repair_chance = 0.1;     double _read_repair_chance = 0.0;     double _crc_check_chance = 1;     int32_t _min_compaction_threshold = DEFAULT_MIN_COMPACTION_THRESHOLD;     int32_t _max_compaction_threshold = DEFAULT_MAX_COMPACTION_THRESHOLD;     int32_t _min_index_interval = DEFAULT_MIN_INDEX_INTERVAL;     int32_t _max_index_interval = 2048;     int32_t _memtable_flush_period = 0;     speculative_retry _speculative_retry =         ::speculative_retry(speculative_retry::type::PERCENTILE, 0.99);     bool _compaction_enabled = true;     table_schema_version _version;     std::unordered_map<sstring, dropped_column> _dropped_columns;     std::map<bytes, data_type> _collections;     std::unordered_map<sstring, index_metadata> _indices_by_name;     bool _wait_for_sync = false;   };
    raw_schema _raw;
-   thrift_schema _thrift;
-   v3_columns _v3_columns;
-   mutable schema_registry_entry *_registry_entry = nullptr;
-   std::unique_ptr<::view_info> _view_info;
-   const std::array<column_count_type, 3> _offsets;
-   column_count_type _static_column_count;
-   friend class db::extensions;
-   friend class schema_builder;
- public:   using row_column_ids_are_ordered_by_name = std::true_type;
    struct column {     bytes name;     data_type type;   };
  private:   void rebuild();
    schema(const raw_schema &, std::optional<raw_view_info>);
