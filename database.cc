@@ -3029,8 +3029,6 @@ T hton(const T& x) {
 }
 
 }
-#include <algorithm>
-#include <endian.h>
 
 namespace seastar {
 
@@ -3151,9 +3149,6 @@ produce_be(char*& p, T datum) {
 ///          continuations, also known as fibers
 ///   - \ref thread-module Support for traditional threaded execution
 
-#include <tuple>
-#include <utility>
-#include <cstddef>
 
 namespace seastar {
 
@@ -3189,10 +3184,8 @@ auto apply(Func&& func, const std::tuple<T...>& args) {
 }
 
 }
-#include <memory>
 
 #include <typeindex>
-#include <tuple>
 
 namespace seastar {
 
@@ -3639,7 +3632,6 @@ inline bool need_preempt() noexcept {
 }
 #include <setjmp.h>
 #include <ucontext.h>
-#include <chrono>
 
 namespace seastar {
 /// Clock used for scheduling threads
@@ -3696,8 +3688,6 @@ void init();
 /// \endcond
 
 
-#include <stdexcept>
-#include <atomic>
 #include <memory>
 #include <type_traits>
 #include <assert.h>
