@@ -1,31 +1,14 @@
 #include <atomic>
-#include <stdint.h>
-#include <algorithm>
-#include <string>
-#include <vector>
-#include <unordered_map>
 #include <cstring>
-#include <stdexcept>
-#include <initializer_list>
-#include <istream>
-#include <ostream>
-#include <functional>
-#include <cstdio>
-#include <type_traits>
 #ifdef SEASTAR_USE_STD_OPTIONAL_VARIANT_STRINGVIEW
 #include <optional>
-#include <string_view>
 #include <variant>
 #else
-#include <experimental/optional>
-#include <experimental/string_view>
-#include <boost/variant.hpp>
 #endif
 
 #if __cplusplus >= 201703L && __has_include(<filesystem>)
 #include <filesystem>
 #else
-#include <experimental/filesystem>
 #endif
 
 
@@ -59,7 +42,6 @@ memory_resource* pmr_get_default_resource() {
 
 #define SEASTAR_HAS_POLYMORPHIC_ALLOCATOR
 
-#include <experimental/memory_resource>
 
 namespace seastar {
 
@@ -292,10 +274,6 @@ using string_view = basic_string_view<char>;
 #else
 #define SEASTAR_COPY_ELISION(x) std::move(x)
 #endif
-#include <memory>
-#include <cstdlib>
-#include <assert.h>
-#include <type_traits>
 
 namespace seastar {
 
@@ -563,7 +541,6 @@ make_object_deleter(deleter d, T&& obj) {
 #define alignof sizeof
 
 #endif
-#include <malloc.h>
 #include <algorithm>
 #include <cstddef>
 
