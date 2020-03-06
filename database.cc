@@ -703,18 +703,6 @@ namespace bi = boost::intrusive;
                 return requires(Consumer c, mutation_fragment mf) {                  { c(std::move(mf)) }                  ->stop_iteration;                };
               }
  ) class flat_mutation_reader final {
- public:   class impl {};
- private:   std::unique_ptr<impl> _impl;
-   flat_mutation_reader() = default;
-   explicit operator bool() const noexcept;
-   friend class optimized_optional<flat_mutation_reader>;
-   void do_upgrade_schema(const schema_ptr &);
- public:   class partition_range_forwarding_tag;
-   using partition_range_forwarding = bool_class<partition_range_forwarding_tag>;
-   flat_mutation_reader(std::unique_ptr<impl> impl) noexcept;
-   future<mutation_fragment_opt>   operator()(db::timeout_clock::time_point timeout);
-   void next_partition();
-   void move_buffer_content_to(impl &other);
    void upgrade_schema(const schema_ptr &s);
  };
   template <typename Consumer> inline future<> consume_partitions(flat_mutation_reader &reader,                                    Consumer consumer,                                    db::timeout_clock::time_point timeout) {
@@ -730,9 +718,6 @@ namespace bi = boost::intrusive;
  private:   partition_key deserialize_key() const;
    ser::mutation_view mutation_view() const;
  public:   frozen_mutation(const mutation &m);
-   explicit frozen_mutation(bytes_ostream &&b);
-   frozen_mutation(bytes_ostream &&b, partition_key key);
-   frozen_mutation(frozen_mutation &&m) = default;
    mutation unfreeze(schema_ptr s) const;
    struct printer;
  };
@@ -742,21 +727,9 @@ namespace bi = boost::intrusive;
  };
   class reader_concurrency_semaphore;
   class reader_permit {
-   struct impl {     reader_concurrency_semaphore &semaphore;     reader_resources base_cost;   };
-   friend reader_permit no_reader_permit();
- public:   class memory_units {     reader_concurrency_semaphore *_semaphore = nullptr;     size_t _memory = 0;     friend class reader_permit;   private:   public:     operator size_t() const { return _memory; }   };
- private:   lw_shared_ptr<impl> _impl;
- private:   reader_permit() = default;
- public:   reader_permit(reader_concurrency_semaphore &semaphore,                 reader_resources base_cost);
-   bool operator==(const reader_permit &o) const { return _impl == o._impl; }
-   operator bool() const { return bool(_impl); }
-   memory_units get_memory_units(size_t memory = 0);
    void release();
  };
   reader_permit no_reader_permit();
-  namespace mutation_reader {
- using forwarding = flat_mutation_reader::partition_range_forwarding;
- }
   class mutation_source {
    using partition_range = const dht::partition_range &;
    using io_priority = const io_priority_class &;
