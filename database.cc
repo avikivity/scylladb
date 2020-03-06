@@ -162,53 +162,31 @@ using namespace seastar;
         return *this;
       }
       ~small_vector() {
-        clear();
         if (__builtin_expect(!uses_internal_storage(), false)) {
-          std::free(_begin);
         }
       }
       void clear() noexcept {
-        std::destroy(_begin, _end);
-        _end = _begin;
       }
       iterator begin() noexcept { return _begin; }
-      const_iterator begin() const noexcept { return _begin; }
-      const_iterator cbegin() const noexcept { return _begin; }
       iterator end() noexcept { return _end; }
-      reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
       const_reverse_iterator rbegin() const noexcept {
-        return const_reverse_iterator(end());
       }
       const_reverse_iterator crbegin() const noexcept {
-        return const_reverse_iterator(end());
       }
-      reverse_iterator rend() noexcept { return reverse_iterator(begin()); }
       const_reverse_iterator rend() const noexcept {
-        return const_reverse_iterator(begin());
-        return const_reverse_iterator(begin());
       }
-      T *data() noexcept { return _begin; }
-      const T *data() const noexcept { return _begin; }
-      T &operator[](size_t idx) noexcept { return data()[idx]; }
-      const T &operator[](size_t idx) const noexcept { return data()[idx]; }
       T &at(size_t idx) {
         if (__builtin_expect(idx >= size(), false)) {
-          throw_out_of_range();
         }
-        return operator[](idx);
       }
       const T &at(size_t idx) const {
         if (__builtin_expect(idx >= size(), false)) {
-          throw_out_of_range();
         }
-        return operator[](idx);
       }
-      bool empty() const noexcept { return _begin == _end; }
       size_t size() const noexcept { return _end - _begin; }
       size_t capacity() const noexcept { return _capacity_end - _begin; }
       template <typename... Args> T &emplace_back(Args &&... args) {
         if (__builtin_expect(_end == _capacity_end, false)) {
-          expand(std::max<size_t>(capacity() * 2, 1));
         }
       }
       template <typename InputIterator>
