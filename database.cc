@@ -8655,8 +8655,8 @@ class smp_message_queue {
     };
     union tx_side {
         tx_side() {}
-        ~tx_side() {}
-        void init() { new (&a) aa; }
+        ~tx_side() ;
+        void init() ;
         struct aa {
             std::deque<work_item*> pending_fifo;
         } a;
@@ -8713,7 +8713,7 @@ public:
     static void cleanup_cpu();
     static void arrive_at_event_loop_end();
     static void join_all();
-    static bool main_thread() { return std::this_thread::get_id() == _tmain; }
+    static bool main_thread() ;
     template <typename Func>
     static futurize_t<std::result_of_t<Func()>> submit_to(unsigned t, smp_submit_to_options options, Func&& func) {
         using ret_type = std::result_of_t<Func()>;
@@ -8741,9 +8741,7 @@ public:
     }
     static bool poll_queues();
     static bool pure_poll_queues();
-    static boost::integer_range<unsigned> all_cpus() {
-        return boost::irange(0u, count);
-    }
+    static boost::integer_range<unsigned> all_cpus() ;
     template<typename Func>
     static future<> invoke_on_all(smp_submit_to_options options, Func&& func) ;
     template<typename Func>
@@ -8912,67 +8910,33 @@ public:
     using speculation = pollable_fd_state::speculation;
     pollable_fd(file_desc fd, speculation speculate = speculation());
 public:
-    future<size_t> read_some(char* buffer, size_t size) {
-        return _s->read_some(buffer, size);
-    }
-    future<size_t> read_some(uint8_t* buffer, size_t size) {
-        return _s->read_some(buffer, size);
-    }
-    future<size_t> read_some(const std::vector<iovec>& iov) {
-        return _s->read_some(iov);
-    }
-    future<temporary_buffer<char>> read_some(internal::buffer_allocator* ba) {
-        return _s->read_some(ba);
-    }
-    future<> write_all(const char* buffer, size_t size) {
-        return _s->write_all(buffer, size);
-    }
-    future<> write_all(const uint8_t* buffer, size_t size) {
-        return _s->write_all(buffer, size);
-    }
-    future<size_t> write_some(net::packet& p) {
-        return _s->write_some(p);
-    }
-    future<> write_all(net::packet& p) {
-        return _s->write_all(p);
-    }
-    future<> readable() {
-        return _s->readable();
-    }
-    future<> writeable() {
-        return _s->writeable();
-    }
-    future<> readable_or_writeable() {
-        return _s->readable_or_writeable();
-    }
-    void abort_reader() {
-        return _s->abort_reader();
-    }
-    void abort_writer() {
-        return _s->abort_writer();
-    }
+    future<size_t> read_some(char* buffer, size_t size) ;
+    future<size_t> read_some(uint8_t* buffer, size_t size) ;
+    future<size_t> read_some(const std::vector<iovec>& iov) ;
+    future<temporary_buffer<char>> read_some(internal::buffer_allocator* ba) ;
+    future<> write_all(const char* buffer, size_t size) ;
+    future<> write_all(const uint8_t* buffer, size_t size) ;
+    future<size_t> write_some(net::packet& p) ;
+    future<> write_all(net::packet& p) ;
+    future<> readable() ;
+    future<> writeable() ;
+    future<> readable_or_writeable() ;
+    void abort_reader() ;
+    void abort_writer() ;
     future<std::tuple<pollable_fd, socket_address>> accept() {
         return _s->accept();
     }
-    future<> connect(socket_address& sa) {
-        return _s->connect(sa);
-    }
-    future<size_t> sendmsg(struct msghdr *msg) {
-        return _s->sendmsg(msg);
-    }
-    future<size_t> recvmsg(struct msghdr *msg) {
-        return _s->recvmsg(msg);
-    }
-    future<size_t> sendto(socket_address addr, const void* buf, size_t len) {
-        return _s->sendto(addr, buf, len);
-    }
-    file_desc& get_file_desc() const { return _s->fd; }
+    future<> connect(socket_address& sa) ;
+    future<size_t> sendmsg(struct msghdr *msg) ;
+    future<size_t> recvmsg(struct msghdr *msg) ;
+    future<size_t> sendto(socket_address addr, const void* buf, size_t len) ;
+    file_desc& get_file_desc() const ;
     void shutdown(int how);
-    void close() { _s.reset(); }
+    void close() ;
 protected:
-    int get_fd() const { return _s->fd.get(); }
-    void maybe_no_more_recv() { return _s->maybe_no_more_recv(); }
-    void maybe_no_more_send() { return _s->maybe_no_more_send(); }
+    int get_fd() const ;
+    void maybe_no_more_recv() ;
+    void maybe_no_more_send() ;
     friend class reactor;
     friend class readable_eventfd;
     friend class writeable_eventfd;
@@ -9302,15 +9266,8 @@ private:
     future<> init_new_scheduling_group_key(scheduling_group_key key, scheduling_group_key_config cfg);
     future<> destroy_scheduling_group(scheduling_group sg);
     [[noreturn]] void no_such_scheduling_group(scheduling_group sg);
-    void* get_scheduling_group_specific_value(scheduling_group sg, scheduling_group_key key) {
-        if (!_task_queues[sg._id]) {
-            no_such_scheduling_group(sg);
-        }
-        return _task_queues[sg._id]->_scheduling_group_specific_vals[key.id()];
-    }
-    void* get_scheduling_group_specific_value(scheduling_group_key key) {
-        return get_scheduling_group_specific_value(*internal::current_scheduling_group_ptr(), key);
-    }
+    void* get_scheduling_group_specific_value(scheduling_group sg, scheduling_group_key key) ;
+    void* get_scheduling_group_specific_value(scheduling_group_key key) ;
     uint64_t tasks_processed() const;
     uint64_t min_vruntime() const;
     void request_preemption();
@@ -9336,17 +9293,8 @@ public:
     reactor(const reactor&) = delete;
     ~reactor();
     void operator=(const reactor&) = delete;
-    sched_clock::duration uptime() {
-        return sched_clock::now() - _start_time;
-    }
-    io_queue& get_io_queue(dev_t devid = 0) {
-        auto queue = _io_queues.find(devid);
-        if (queue == _io_queues.end()) {
-            return *_io_queues[0];
-        } else {
-            return *(queue->second);
-        }
-    }
+    sched_clock::duration uptime() ;
+    io_queue& get_io_queue(dev_t devid = 0) ;
     io_priority_class register_one_priority_class(sstring name, uint32_t shares);
     future<> update_shares_for_class(io_priority_class pc, uint32_t shares);
     static future<> rename_priority_class(io_priority_class pc, sstring new_name);
@@ -9355,7 +9303,7 @@ public:
     future<connected_socket> connect(socket_address sa);
     future<connected_socket> connect(socket_address, socket_address, transport proto = transport::TCP);
     pollable_fd posix_listen(socket_address sa, listen_options opts = {});
-    bool posix_reuseport_available() const { return _reuseport; }
+    bool posix_reuseport_available() const ;
     lw_shared_ptr<pollable_fd> make_pollable_fd(socket_address sa, int proto);
     future<> posix_connect(lw_shared_ptr<pollable_fd> pfd, socket_address sa, socket_address local);
     future<> write_all(pollable_fd_state& fd, const void* buffer, size_t size);
@@ -9367,9 +9315,7 @@ public:
     future<stat_data> file_stat(sstring pathname, follow_symlink);
     future<uint64_t> file_size(sstring pathname);
     future<bool> file_accessible(sstring pathname, access_flags flags);
-    future<bool> file_exists(sstring pathname) {
-        return file_accessible(pathname, access_flags::exists);
-    }
+    future<bool> file_exists(sstring pathname) ;
     future<fs_type> file_system_at(sstring pathname);
     future<struct statvfs> statvfs(sstring pathname);
     future<> remove_file(sstring pathname);
@@ -9385,42 +9331,17 @@ public:
             const io_priority_class& priority_class,
             size_t len,
             internal::io_request req);
-    inline void handle_io_result(ssize_t res) {
-        if (res < 0) {
-            ++_io_stats.aio_errors;
-            throw_kernel_error(res);
-        }
-    }
+     void handle_io_result(ssize_t res) ;
     int run();
     void exit(int ret);
-    future<> when_started() { return _start_promise.get_future(); }
+    future<> when_started() ;
     template <typename Rep, typename Period>
-    future<> wait_for_stop(std::chrono::duration<Rep, Period> timeout) {
-        return _stop_requested.wait(timeout, [this] { return _stopping; });
-    }
+    future<> wait_for_stop(std::chrono::duration<Rep, Period> timeout) ;
     void at_exit(noncopyable_function<future<> ()> func);
     template <typename Func>
-    void at_destroy(Func&& func) {
-        _at_destroy_tasks->_q.push_back(make_task(default_scheduling_group(), std::forward<Func>(func)));
-    }
-    void add_task(task* t) noexcept {
-        auto sg = t->group();
-        auto* q = _task_queues[sg._id].get();
-        bool was_empty = q->_q.empty();
-        q->_q.push_back(std::move(t));
-        if (was_empty) {
-            activate(*q);
-        }
-    }
-    void add_urgent_task(task* t) noexcept {
-        auto sg = t->group();
-        auto* q = _task_queues[sg._id].get();
-        bool was_empty = q->_q.empty();
-        q->_q.push_front(std::move(t));
-        if (was_empty) {
-            activate(*q);
-        }
-    }
+    void at_destroy(Func&& func) ;
+    void add_task(task* t) noexcept ;
+    void add_urgent_task(task* t) noexcept ;
     void set_idle_cpu_handler(idle_cpu_handler&& handler) ;
     void force_poll();
     void add_high_priority_task(task*) noexcept;
@@ -9556,23 +9477,7 @@ public:
 
 
 
-template <typename T>
-inline
-future<> queue<T>::push_eventually(T&& data) {
-    if (_ex) {
-        return make_exception_future<>(_ex);
-    }
-    if (full()) {
-        return not_full().then([this, data = std::move(data)] () mutable {
-            _q.push(std::move(data));
-            notify_not_empty();
-        });
-    } else {
-        _q.push(std::move(data));
-        notify_not_empty();
-        return make_ready_future<>();
-    }
-}
+
 template <typename T>
 template <typename Func>
 inline
