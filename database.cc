@@ -6,9 +6,6 @@
 namespace compat {
 template < typename T > using optional = std::optional< T >;
 }
-template < typename T > class optimized_optional {
-  optimized_optional(compat::optional< T > ) ;
-};
 
 template < typename... > class future;
 namespace internal {
@@ -105,7 +102,7 @@ class mutation {
 public:
   int decorated_key() ;
 };
-using mutation_opt = optimized_optional< mutation >;
+using mutation_opt = std::optional< mutation >;
 future< mutation_opt >
 read_mutation_from_flat_mutation_reader();
 class locked_cell;
