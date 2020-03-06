@@ -15,7 +15,7 @@
            using column_count_type = uint32_t;
            using column_id = column_count_type;
            class schema;
-           using schema_ptr = lw_shared_ptr<const schema>;
+           using schema_ptr = lw_shared_ptr<const int>;
            
           GCC6_CONCEPT() template<typename T> class optimized_optional {
           optimized_optional(compat::optional<T> &&obj) noexcept ;
@@ -27,7 +27,7 @@
           cql_protocol_version_type _version;
         public:     static constexpr cql_protocol_version_type latest_version = 4;
           int cql_serialization_format_version;
-explicit cql_serialization_format(void)         : _version() {}
+
           static cql_serialization_format latest0 ;
           static cql_serialization_format internal() ;
          };
@@ -63,12 +63,12 @@ explicit cql_serialization_format(void)         : _version() {}
           template <typename... T>     class promise : private internal::promise_base_with_type<> {};
           template <typename T> struct futurize {
            using type = future<T>;
-           template <typename Func, typename... FuncArgs>       void  apply() noexcept;
+           ;
            template <typename Arg> static type make_exception_future(Arg &&arg);
          };
           template <typename... Args> struct futurize<future<Args...>> {
            using type = future<Args...>;
-           template <typename Func, typename... FuncArgs>       void  apply() noexcept;
+           ;
            template <typename Arg> static type make_exception_future(Arg &&arg);
          };
           template <typename T> using futurize_t = typename futurize<T>::type;
@@ -156,7 +156,7 @@ explicit cql_serialization_format(void)         : _version() {}
        
            namespace query {
           using column_id_vector = utils::small_vector<column_id, 8>;
-          using clustering_range = nonwrapping_range<clustering_key_prefix>;
+          using clustering_range = nonwrapping_range<int>;
           typedef std::vector<clustering_range> clustering_row_ranges;
           class specific_ranges {};
           constexpr auto max_rows = std::numeric_limits<uint32_t>::max();
@@ -191,7 +191,7 @@ explicit cql_serialization_format(void)         : _version() {}
         };
          
           template <typename Consumer>     void  consume_partitions(                                                                                db::timeout_clock::time_point timeout) {
-    Consumer consumer;
+    int consumer;
     class flat_mutation_reader & reader;
            using futurator = futurize<std::result_of_t<Consumer>>;
            return do_with(           std::move, [&reader, timeout](Consumer &c) -> future<> {
