@@ -84,7 +84,6 @@ namespace gms {  class inet_address { private:   net::inet_address _addr; public
    class partition_end final {  public: };
    GCC6_CONCEPT(template <typename T, typename ReturnType>              concept bool MutationFragmentConsumer() {                 return requires(T t, static_row sr, clustering_row cr,                                range_tombstone rt, partition_start ph,                                partition_end pe) {                  { t.consume(std::move(sr)) }                  ->ReturnType;                  { t.consume(std::move(cr)) }                  ->ReturnType;                  { t.consume(std::move(rt)) }                  ->ReturnType;                  { t.consume(std::move(ph)) }                  ->ReturnType;                  { t.consume(std::move(pe)) }                  ->ReturnType;                };               }
   ) class mutation_fragment {  };
-   namespace streamed_mutation {  }
    GCC6_CONCEPT(template <typename F> concept bool StreamedMutationTranformer() {    return requires(F f, mutation_fragment mf, schema_ptr s) {     { f(std::move(mf)) }     ->mutation_fragment;     { f(s) }     ->schema_ptr;   };  }
   ) class mutation final {    mutation() = default;  public:   const dht::decorated_key &decorated_key() const;  };
    using mutation_opt = optimized_optional<mutation>;
@@ -98,10 +97,7 @@ namespace gms {  class inet_address { private:   net::inet_address _addr; public
    GCC6_CONCEPT(template <typename Consumer>              concept bool FlatMutationReaderConsumer() {                 return requires(Consumer c, mutation_fragment mf) {                  { c(std::move(mf)) }                  ->stop_iteration;                };               }
   ) class flat_mutation_reader final {  };
    template <typename Consumer> inline future<> consume_partitions(flat_mutation_reader &reader,                                    Consumer consumer,                                    db::timeout_clock::time_point timeout) {    using futurator = futurize<std::result_of_t<Consumer(mutation &&)>>;    return do_with(       std::move(consumer), [&reader, timeout](Consumer &c) -> future<> {         return repeat([&reader, &c, timeout]() {           return read_mutation_from_flat_mutation_reader(reader, timeout)               .then([&c](mutation_opt &&mo) -> future<stop_iteration> {                 if (!mo) {                   return make_ready_future<stop_iteration>(stop_iteration::yes);                 }                 return futurator::apply(c, std::move(*mo));               });         });       } );  }
-   namespace ser {  }
    class frozen_mutation final {  public:   frozen_mutation(const mutation &m);    mutation unfreeze(schema_ptr s) const;  };
-   struct reader_resources {  };
-   class reader_permit {  };
    class mutation_source {  };
    future<mutation_opt> counter_write_query(schema_ptr, const mutation_source &,                                          const dht::decorated_key &dk,                                          const query::partition_slice &slice,                                          tracing::trace_state_ptr trace_ptr);
    class locked_cell { };
