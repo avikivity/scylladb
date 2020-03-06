@@ -9980,7 +9980,6 @@ static constexpr size_t cache_line_size =
 // store, and so is more efficient for simple stored items.
 
 #include <type_traits>
-#include <utility>
 
 
 /// \file
@@ -10332,7 +10331,6 @@ circular_buffer_fixed_capacity<T, Capacity>::clear() {
 #include <unordered_map>
 #include <cassert>
 #include <unistd.h>
-#include <vector>
 #include <queue>
 #include <thread>
 #include <system_error>
@@ -10591,8 +10589,6 @@ bool is_abort_on_ebadf_enabled();
 
 }
 #include <sys/stat.h>
-#include <unistd.h>
-#include <utility>
 #include <sys/ioctl.h>
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
@@ -11246,8 +11242,6 @@ void pin_this_thread(unsigned cpu_id) {
 
 }
 
-#include <vector>
-
 namespace seastar {
 
 inline
@@ -11610,8 +11604,6 @@ public:
 };
 
 }
-
-#include <utility>
 
 namespace seastar {
 
@@ -12530,7 +12522,6 @@ public:
 }
 #include <sys/statvfs.h>
 #include <linux/fs.h>
-#include <unistd.h>
 
 namespace seastar {
 
@@ -14464,10 +14455,8 @@ public:
 }
 
 
-#include <vector>
 #include <sched.h>
 #include <boost/any.hpp>
-#include <unordered_map>
 
 namespace seastar {
 
@@ -14531,7 +14520,6 @@ void validate(boost::any& v,
 
 }
 #include <new>
-#include <vector>
 
 namespace seastar {
 
@@ -14972,7 +14960,6 @@ public:
 
 }
 
-#include <unordered_map>
 #include <mutex>
 #include <boost/lexical_cast.hpp>
 
@@ -15311,7 +15298,6 @@ public:
 extern template class timer<manual_clock>;
 
 }
-#include <vector>
 
 
 /*!
@@ -15462,7 +15448,6 @@ public:
 
 
 #include <map>
-#include <vector>
 
 namespace seastar {
 namespace metrics {
@@ -16714,8 +16699,6 @@ public:
 };
 }
 }
-#include <vector>
-#include <tuple>
 #include <boost/intrusive_ptr.hpp>
 
 namespace seastar {
@@ -17861,8 +17844,6 @@ future<> queue<T>::not_full() {
 
 }
 
-#include <vector>
-
 namespace seastar {
 
 using rss_key_type = compat::basic_string_view<uint8_t>;
@@ -17984,7 +17965,6 @@ ethernet_address parse_ethernet_address(std::string addr);
 }
 
 }
-#include <unordered_map>
 
 namespace seastar {
 
@@ -18254,7 +18234,6 @@ public:
 }
 
 }
-#include <unordered_map>
 
 namespace seastar {
 
@@ -18709,7 +18688,6 @@ public:
 
 }
 
-#include <unordered_map>
 
 namespace seastar {
 
