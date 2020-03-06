@@ -757,69 +757,6 @@ public:
     using work_waiting_on_reactor = const noncopyable_function<bool()>&;
     using idle_cpu_handler = noncopyable_function<idle_cpu_handler_result(work_waiting_on_reactor)>;
     struct io_stats {
-        uint64_t aio_reads = 0;
-        uint64_t aio_read_bytes = 0;
-        uint64_t aio_writes = 0;
-        uint64_t aio_write_bytes = 0;
-        uint64_t aio_errors = 0;
-        uint64_t fstream_reads = 0;
-        uint64_t fstream_read_bytes = 0;
-        uint64_t fstream_reads_blocked = 0;
-        uint64_t fstream_read_bytes_blocked = 0;
-        uint64_t fstream_read_aheads_discarded = 0;
-        uint64_t fstream_read_ahead_discarded_bytes = 0;
-    };
-private:
-    reactor_config _cfg;
-    file_desc _notify_eventfd;
-    file_desc _task_quota_timer;
-    std::unique_ptr<reactor_backend> _backend;
-    sigset_t _active_sigmask; 
-    std::vector<pollfn*> _pollers;
-    static constexpr unsigned max_aio_per_queue = 128;
-    static constexpr unsigned max_queues = 8;
-    static constexpr unsigned max_aio = max_aio_per_queue * max_queues;
-    friend disk_config_params;
-    std::vector<std::unique_ptr<io_queue>> my_io_queues;
-    std::unordered_map<dev_t, io_queue*> _io_queues;
-    friend io_queue;
-    std::vector<noncopyable_function<future<> ()>> _exit_funcs;
-    unsigned _id = 0;
-    bool _stopping = false;
-    bool _stopped = false;
-    bool _finished_running_tasks = false;
-    condition_variable _stop_requested;
-    bool _handle_sigint = true;
-    compat::optional<future<std::unique_ptr<network_stack>>> _network_stack_ready;
-    int _return = 0;
-    promise<> _start_promise;
-    semaphore _cpu_started;
-    internal::preemption_monitor _preemption_monitor{};
-    uint64_t _global_tasks_processed = 0;
-    uint64_t _polls = 0;
-    std::unique_ptr<internal::cpu_stall_detector> _cpu_stall_detector;
-    unsigned _max_task_backlog = 1000;
-    timer_set<timer<>, &timer<>::_link> _timers;
-    timer_set<timer<>, &timer<>::_link>::timer_list_t _expired_timers;
-    timer_set<timer<lowres_clock>, &timer<lowres_clock>::_link> _lowres_timers;
-    timer_set<timer<lowres_clock>, &timer<lowres_clock>::_link>::timer_list_t _expired_lowres_timers;
-    timer_set<timer<manual_clock>, &timer<manual_clock>::_link> _manual_timers;
-    timer_set<timer<manual_clock>, &timer<manual_clock>::_link>::timer_list_t _expired_manual_timers;
-    io_stats _io_stats;
-    uint64_t _fsyncs = 0;
-    uint64_t _cxx_exceptions = 0;
-    uint64_t _abandoned_failed_futures = 0;
-    struct task_queue {
-        int64_t _vruntime = 0;
-        float _shares;
-        int64_t _reciprocal_shares_times_2_power_32;
-        bool _current = false;
-        bool _active = false;
-        uint8_t _id;
-        sched_clock::duration _runtime = {};
-        uint64_t _tasks_processed = 0;
-        circular_buffer<task*> _q;
-        sstring _name;
         /**
          * This array holds pointers to the scheduling group specific
          * data. The pointer is not use as is but is cast to a reference
