@@ -6,15 +6,11 @@
 namespace compat {
 template < typename T > using optional = std::optional< T >;
 }
-using column_count_type = uint32_t;
-using column_id = column_count_type;
 template < typename T > class optimized_optional {
   optimized_optional(compat::optional< T > ) ;
 };
 
-namespace utils {
-} template < typename... > class future;
-bool need_preempt ;
+template < typename... > class future;
 namespace internal {
 template < typename , bool >
 struct uninitialized_wrapper_base;
