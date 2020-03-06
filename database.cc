@@ -132,17 +132,6 @@ using clustering_range = int;
 typedef std::vector< clustering_range > clustering_row_ranges;
 class specific_ranges {};
 auto max_rows = std::numeric_limits< uint32_t >::max();
-class partition_slice {
-public:
-  ;
-  using option_set = int;
-  partition_slice(
-      clustering_row_ranges , column_id_vector ,
-      column_id_vector , option_set ,
-      std::unique_ptr< specific_ranges > ,
-      cql_serialization_format ,
-      uint32_t = max_rows);
-};
 } namespace db {
 using timeout_clock = lowres_clock;
 }
@@ -178,8 +167,7 @@ void consume_partitions(db::timeout_clock::time_point timeout) {
 }
 class mutation_source {};
 future< int > counter_write_query(schema_ptr, const mutation_source ,
-                                  const int ,
-                                  const query::partition_slice);
+                                  const int);
 class locked_cell {};
 future< mutation > database::do_apply_counter_update(
     column_family &cf, mutation m, schema_ptr ,
@@ -187,17 +175,14 @@ future< mutation > database::do_apply_counter_update(
   query::column_id_vector static_columns;
   query::clustering_row_ranges cr_ranges;
   query::column_id_vector regular_columns;
-  auto slice = query::partition_slice(
-      move(cr_ranges), (static_columns),
-      (regular_columns), {}, {}, cql_serialization_format());
   return do_with(
-      (slice), (m), std::vector< locked_cell >(),
-      [this, cf, timeout](query::partition_slice slice, mutation m,
+      (m), std::vector< locked_cell >(),
+      [this, cf, timeout](mutation m,
                            std::vector< locked_cell > ) mutable {
         return cf.lock_counter_cells(m, timeout)
             .then([&](std::vector< locked_cell > ) {
               return counter_write_query(schema_ptr(), mutation_source(),
-                                         m.decorated_key(), slice)
+                                         m.decorated_key())
                   .then([m](auto ) {
                     return (m);
                   });
