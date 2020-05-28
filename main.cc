@@ -79,6 +79,8 @@
 #include "cdc/cdc_extension.hh"
 #include "alternator/tags_extension.hh"
 
+void relocate_program_text_to_huge_pages();
+
 namespace fs = std::filesystem;
 
 seastar::metrics::metric_groups app_metrics;
@@ -419,6 +421,7 @@ int main(int ac, char** av) {
         std::cerr << "Could not make scylla dumpable\n";
         exit(1);
     }
+    relocate_program_text_to_huge_pages();
 
   try {
     // early check to avoid triggering

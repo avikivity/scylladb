@@ -30,6 +30,9 @@
 #include "schema_builder.hh"
 #include "release.hh"
 
+void relocate_program_text_to_huge_pages();
+
+
 static const sstring table_name = "cf";
 
 static bytes make_key(uint64_t sequence) {
@@ -248,6 +251,7 @@ void write_json_result(std::string result_file, const test_config& cfg, double m
 }
 
 int main(int argc, char** argv) {
+    relocate_program_text_to_huge_pages();
     namespace bpo = boost::program_options;
     app_template app;
     app.add_options()

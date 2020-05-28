@@ -144,7 +144,7 @@ def flag_supported(flag, compiler):
 
 def linker_flags(compiler):
     src_main = 'int main(int argc, char **argv) { return 0; }'
-    link_flags = ['-fuse-ld=lld']
+    link_flags = ['-fuse-ld=bfd']
     if try_compile_and_link(source=src_main, flags=link_flags, compiler=compiler):
         print('Note: using the lld linker')
         return ' '.join(link_flags)
@@ -252,7 +252,7 @@ modes = {
     },
     'release': {
         'cxxflags': '',
-        'cxx_ld_flags': '-O3 -Wstack-usage=%s' % (1024*13),
+        'cxx_ld_flags': '-Wl,-zmax-page-size=2097152 -O3 -Wstack-usage=%s' % (1024*13),
     },
     'dev': {
         'cxxflags': '-DSEASTAR_ENABLE_ALLOC_FAILURE_INJECTION -DSCYLLA_ENABLE_ERROR_INJECTION',
@@ -517,6 +517,7 @@ scylla_core = (['database.cc',
                 'utils/limiting_data_source.cc',
                 'utils/updateable_value.cc',
                 'utils/directories.cc',
+                'utils/hugepage-text.cc',
                 'mutation_partition.cc',
                 'mutation_partition_view.cc',
                 'mutation_partition_serializer.cc',
