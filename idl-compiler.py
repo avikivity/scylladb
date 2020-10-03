@@ -206,6 +206,7 @@ def handle_enum(enum, hout, cout, namespaces, parent_template_param=[]):
     fprintln(cout, Template("""
 $template
 template <typename Output>
+inline
 void serializer<$name>::write(Output& buf, const $name& v) {
   serialize(buf, static_cast<$type>(v));
 }
@@ -931,6 +932,7 @@ def handle_class(cls, hout, cout, namespaces=[], parent_template_param=[]):
     fprintln(cout, Template("""
 $template
 template <typename Output>
+inline
 void serializer<$name>::write(Output& buf, const $name& obj) {""").substitute({'func': SERIALIZER, 'name': full_name, 'template': template}))
     if not is_final:
         fprintln(cout, Template("""  $set_size(buf, obj);""").substitute({'func': SERIALIZER, 'set_size': SETSIZE, 'name': name, 'sizetype': SIZETYPE}))
@@ -944,6 +946,7 @@ void serializer<$name>::write(Output& buf, const $name& obj) {""").substitute({'
     fprintln(cout, Template("""
 $template
 template <typename Input>
+inline
 $name$temp_param serializer<$name$temp_param>::read(Input& buf) {
  return seastar::with_serialized_stream(buf, [] (auto& buf) {""").substitute({'func': DESERIALIZER, 'name': name, 'template': template, 'temp_param': template_class_param}))
     if not cls["members"]:
@@ -980,6 +983,7 @@ $name$temp_param serializer<$name$temp_param>::read(Input& buf) {
     fprintln(cout, Template("""
 $template
 template <typename Input>
+inline
 void serializer<$name$temp_param>::skip(Input& buf) {
  seastar::with_serialized_stream(buf, [] (auto& buf) {""").substitute({'func': DESERIALIZER, 'name': name, 'template': template, 'temp_param': template_class_param}))
     if not is_final:
