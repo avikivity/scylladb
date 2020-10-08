@@ -60,11 +60,23 @@
 #include "database.hh"
 #include <boost/algorithm/cxx11/any_of.hpp>
 
+logging::logger cql_log("cql3");
+
 namespace cql3 {
 
 namespace statements {
 
 thread_local const shared_ptr<select_statement::parameters> select_statement::_default_parameters = ::make_shared<select_statement::parameters>();
+
+static thread_local unsigned ctr;
+
+
+static void report_unpaged_query(const schema& s) {
+    if (ctr++ % 1024 != 0) {
+	return;
+    }
+    cql_log.warn("unpaged query for table {}.{}", s.ks_name(), s.cf_name());
+}
 
 select_statement::parameters::parameters()
     : _is_distinct{false}
@@ -313,6 +325,9 @@ select_statement::do_execute(service::storage_proxy& proxy,
     int32_t page_size = options.get_page_size();
 
     _stats.unpaged_select_queries += page_size <= 0;
+    if (page_size <= 0) {
+	report_unpaged_query(*_schema);
+    }
 
     // An aggregation query will never be paged for the user, but we always page it internally to avoid OOM.
     // If we user provided a page_size we'll use that to page internally (because why not), otherwise we use our default
@@ -861,6 +876,9 @@ indexed_table_select_statement::do_execute(service::storage_proxy& proxy,
     assert(_restrictions->uses_secondary_indexing());
 
     _stats.unpaged_select_queries += options.get_page_size() <= 0;
+    if (options.get_page_size() <= 0) {
+	report_unpaged_query(*_schema);
+    }
 
     // Secondary index search has two steps: 1. use the index table to find a
     // list of primary keys matching the query. 2. read the rows matching
