@@ -114,7 +114,6 @@ docker_common_args=(
        "${group_args[@]}" \
        --cap-add SYS_PTRACE \
        -v "$PWD:$PWD:z" \
-       -v "$toplevel:$toplevel:z" \
        -v /tmp:/tmp:z \
        -v "$MAVEN_LOCAL_REPO:$MAVEN_LOCAL_REPO:z" \
        -v /etc/passwd:/etc/passwd:ro \
