@@ -30,6 +30,7 @@
 #include <seastar/core/sstring.hh>
 #include <seastar/core/shared_ptr.hh>
 #include "utils/UUID.hh"
+#include "utils/managed_bytes.hh"
 #include <seastar/net/byteorder.hh>
 #include "db_clock.hh"
 #include "bytes.hh"
@@ -121,6 +122,15 @@ bool lexicographical_compare(TypesIterator types, InputIt1 first1, InputIt1 last
 // than zero when the first value is respectively smaller, equal or greater
 // than the second value.
 template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Compare>
+requires requires (TypesIterator types, InputIt1 i1, InputIt2 i2, Compare cmp) {
+    { *types };
+    { types++ };
+    { *i1 };
+    { i1++ };
+    { *i2 };
+    { i2++ };
+    { cmp(*types, *i1, *i2) } -> std::same_as<int>;
+}
 int lexicographical_tri_compare(TypesIterator types_first, TypesIterator types_last,
         InputIt1 first1, InputIt1 last1,
         InputIt2 first2, InputIt2 last2,
@@ -501,15 +511,20 @@ public:
     serialized_compare as_less_comparator() const ;
     serialized_tri_compare as_tri_comparator() const ;
     static data_type parse_type(const sstring& name);
+    size_t hash(managed_bytes_view v) const;
     size_t hash(bytes_view v) const;
     bool equal(bytes_view v1, bytes_view v2) const;
     int32_t compare(bytes_view v1, bytes_view v2) const;
+    int32_t compare(managed_bytes_view v1, managed_bytes_view v2) const;
+    data_value deserialize(managed_bytes_view v) const;
     data_value deserialize(bytes_view v) const;
+    data_value deserialize_value(managed_bytes_view v) const;
     data_value deserialize_value(bytes_view v) const {
         return deserialize(v);
     };
     void validate(const fragmented_temporary_buffer::view& view, cql_serialization_format sf) const;
     void validate(bytes_view view, cql_serialization_format sf) const;
+    void validate(managed_bytes_view view, cql_serialization_format sf) const;
     bool is_compatible_with(const abstract_type& previous) const;
     /*
      * Types which are wrappers over other types return the inner type.
@@ -699,7 +714,7 @@ bool less_compare(data_type t, bytes_view e1, bytes_view e2) {
 }
 
 static inline
-int tri_compare(data_type t, bytes_view e1, bytes_view e2) {
+int tri_compare(data_type t, managed_bytes_view e1, managed_bytes_view e2) {
     return t->compare(e1, e2);
 }
 
@@ -1119,12 +1134,28 @@ T read_simple(bytes_view& v) {
 }
 
 template<typename T>
+T read_simple(managed_bytes_view& v) {
+    if (v.size() < sizeof(T)) {
+        throw_with_backtrace<marshal_exception>(format("read_simple - not enough bytes (expected {:d}, got {:d})", sizeof(T), v.size()));
+    }
+    return T();
+}
+
+template<typename T>
 T read_simple_exactly(bytes_view v) {
     if (v.size() != sizeof(T)) {
         throw_with_backtrace<marshal_exception>(format("read_simple_exactly - size mismatch (expected {:d}, got {:d})", sizeof(T), v.size()));
     }
     auto p = v.begin();
     return net::ntoh(*reinterpret_cast<const net::packed<T>*>(p));
+}
+
+template<typename T>
+T read_simple_exactly(managed_bytes_view v) {
+    if (v.size() != sizeof(T)) {
+        throw_with_backtrace<marshal_exception>(format("read_simple_exactly - size mismatch (expected {:d}, got {:d})", sizeof(T), v.size()));
+    }
+    return T();
 }
 
 inline
@@ -1136,6 +1167,15 @@ read_simple_bytes(bytes_view& v, size_t n) {
     bytes_view ret(v.begin(), n);
     v.remove_prefix(n);
     return ret;
+}
+
+inline
+managed_bytes_view
+read_simple_bytes(managed_bytes_view& v, size_t n) {
+    if (v.size() < n) {
+        throw_with_backtrace<marshal_exception>(format("read_simple_bytes - not enough bytes (requested {:d}, got {:d})", n, v.size()));
+    }
+    return managed_bytes_view();
 }
 
 template<typename T>

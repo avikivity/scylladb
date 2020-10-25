@@ -55,7 +55,7 @@
 template <typename TopLevelView>
 class compound_view_wrapper {
 protected:
-    bytes_view _bytes;
+    managed_bytes_view _bytes;
 protected:
     compound_view_wrapper(bytes_view v)
         : _bytes(v)
@@ -69,7 +69,7 @@ public:
         return get_compound_type(s)->deserialize_value(_bytes);
     }
 
-    bytes_view representation() const {
+    managed_bytes_view representation() const {
         return _bytes;
     }
 
@@ -241,7 +241,7 @@ public:
 
     std::vector<bytes> explode() const {
         std::vector<bytes> result;
-        for (bytes_view c : components()) {
+        for (managed_bytes_view c : components()) {
             result.emplace_back(to_bytes(c));
         }
         return result;
@@ -279,7 +279,7 @@ public:
         typename TopLevel::compound _t;
         hashing(const schema& s) : _t(get_compound_type(s)) {}
         size_t operator()(const TopLevel& o) const {
-            return _t->hash(o);
+            return _t->hash(o.representation());
         }
         size_t operator()(const TopLevelView& o) const {
             return _t->hash(o.representation());
@@ -308,9 +308,13 @@ public:
         return get_compound_type(s)->equal(representation(), other.representation());
     }
 
-    operator bytes_view() const {
+    [[deprecated]]
+    operator bytes_view() const;
+    #if 0
+     {
         return _bytes;
     }
+    #endif
 
     const managed_bytes& representation() const {
         return _bytes;
@@ -350,7 +354,7 @@ public:
         return components();
     }
 
-    bytes_view get_component(const schema& s, size_t idx) const {
+    managed_bytes_view get_component(const schema& s, size_t idx) const {
         auto it = begin(s);
         std::advance(it, idx);
         return *it;
@@ -596,8 +600,8 @@ public:
 
         bool operator()(const TopLevel& k1, const TopLevel& k2) const {
             return prefix_equality_tri_compare(prefix_type->types().begin(),
-                prefix_type->begin(k1), prefix_type->end(k1),
-                prefix_type->begin(k2), prefix_type->end(k2),
+                prefix_type->begin(k1.representation()), prefix_type->end(k1.representation()),
+                prefix_type->begin(k2.representation()), prefix_type->end(k2.representation()),
                 tri_compare) < 0;
         }
     };
@@ -612,8 +616,8 @@ public:
 
         int operator()(const TopLevel& k1, const TopLevel& k2) const {
             return prefix_equality_tri_compare(prefix_type->types().begin(),
-                prefix_type->begin(k1), prefix_type->end(k1),
-                prefix_type->begin(k2), prefix_type->end(k2),
+                prefix_type->begin(k1.representation()), prefix_type->end(k1.representation()),
+                prefix_type->begin(k2.representation()), prefix_type->end(k2.representation()),
                 tri_compare);
         }
     };
@@ -623,6 +627,7 @@ class partition_key_view : public compound_view_wrapper<partition_key_view> {
 public:
     using c_type = compound_type<allow_prefixes::no>;
 private:
+    partition_key_view(managed_bytes_view v);
     partition_key_view(bytes_view v)
         : compound_view_wrapper<partition_key_view>(v)
     { }
@@ -630,6 +635,11 @@ public:
     using compound = lw_shared_ptr<c_type>;
 
     static partition_key_view from_bytes(bytes_view v) {
+        return { v };
+    }
+
+    static partition_key_view from_bytes(const managed_bytes& v);
+    static partition_key_view from_bytes(managed_bytes_view v) {
         return { v };
     }
 
@@ -697,6 +707,8 @@ public:
 
     using compound = lw_shared_ptr<c_type>;
 
+    static partition_key from_bytes(managed_bytes_view b);
+    static partition_key from_bytes(managed_bytes&& b);
     static partition_key from_bytes(bytes_view b) {
         return partition_key(managed_bytes(b));
     }
@@ -755,6 +767,8 @@ class clustering_key_prefix_view : public prefix_compound_view_wrapper<clusterin
         : prefix_compound_view_wrapper<clustering_key_prefix_view, clustering_key>(v)
     { }
 public:
+    static clustering_key_prefix_view from_bytes(const managed_bytes& v);
+    static clustering_key_prefix_view from_bytes(managed_bytes_view v);
     static clustering_key_prefix_view from_bytes(bytes_view v) {
         return { v };
     }
@@ -797,6 +811,9 @@ public:
 
     using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
 
+    static clustering_key_prefix from_bytes(const managed_bytes& b);
+    static clustering_key_prefix from_bytes(managed_bytes&& b);
+    static clustering_key_prefix from_bytes(managed_bytes_view b);
     static clustering_key_prefix from_bytes(bytes_view b) {
         return clustering_key_prefix(managed_bytes(b));
     }
@@ -835,7 +852,7 @@ template<>
 struct appending_hash<partition_key_view> {
     template<typename Hasher>
     void operator()(Hasher& h, const partition_key_view& pk, const schema& s) const {
-        for (bytes_view v : pk.components(s)) {
+        for (managed_bytes_view v : pk.components(s)) {
             ::feed_hash(h, v);
         }
     }
@@ -853,7 +870,7 @@ template<>
 struct appending_hash<clustering_key_prefix_view> {
     template<typename Hasher>
     void operator()(Hasher& h, const clustering_key_prefix_view& ck, const schema& s) const {
-        for (bytes_view v : ck.components(s)) {
+        for (managed_bytes_view v : ck.components(s)) {
             ::feed_hash(h, v);
         }
     }

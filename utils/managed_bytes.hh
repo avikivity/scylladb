@@ -74,6 +74,8 @@ struct blob_storage {
     }
 } __attribute__((packed));
 
+class managed_bytes_view;
+
 // A managed version of "bytes" (can be used with LSA).
 class managed_bytes {
     static thread_local std::unordered_map<const blob_storage*, std::unique_ptr<bytes_view::value_type[]>> _lc_state;
@@ -147,6 +149,10 @@ private:
             return do_linearize();
         }
     }
+    bytes_view::value_type* read_linearize() {
+        return const_cast<bytes_view::value_type*>(const_cast<const managed_bytes*>(this)->read_linearize());
+    }
+
     bytes_view::value_type& value_at_index(blob_storage::size_type index) {
         if (!external()) {
             return _u.small.data[index];
@@ -158,6 +164,7 @@ private:
         }
         return a->data[index];
     }
+    std::unique_ptr<bytes_view::value_type[]> do_linearize_pure() const;
     const bytes_view::value_type* do_linearize() const;
 public:
     using size_type = blob_storage::size_type;
@@ -201,6 +208,8 @@ public:
         }
     }
 
+    managed_bytes(managed_bytes_view);
+
     managed_bytes(bytes_view v) : managed_bytes(initialized_later(), v.size()) {
         if (!external()) {
             // Workaround for https://github.com/scylladb/scylla/issues/4086
@@ -231,8 +240,8 @@ public:
     }
 
     managed_bytes(const managed_bytes& o) : managed_bytes(initialized_later(), o.size()) {
-        if (!external()) {
-            memcpy(data(), o.data(), size());
+        if (!o.external()) {
+            _u.small = o._u.small;
             return;
         }
         auto s = size();
@@ -298,7 +307,7 @@ public:
             return false;
         }
         if (!external()) {
-            return bytes_view(*this) == bytes_view(o);
+            return std::equal(_u.small.data, _u.small.data + _u.small.size, o._u.small.data);
         } else {
             auto a = _u.ptr;
             auto a_data = a->data;
@@ -336,17 +345,21 @@ public:
         return !(*this == o);
     }
 
+    //operator managed_bytes_view() const;
+
+    [[deprecated]]
     operator bytes_view() const {
-        return { data(), size() };
+        return { read_linearize(), size() };
     }
 
     bool is_fragmented() const {
         return external() && _u.ptr->next;
     }
 
+    [[deprecated]]
     operator bytes_mutable_view() {
         assert(!is_fragmented());
-        return { data(), size() };
+        return { read_linearize(), size() };
     };
 
     bytes_view::value_type& operator[](size_type index) {
@@ -366,26 +379,31 @@ public:
         }
     }
 
+    [[deprecated]]
     const blob_storage::char_type* begin() const {
-        return data();
+        return read_linearize();
     }
 
+    [[deprecated]]
     const blob_storage::char_type* end() const {
-        return data() + size();
+        return read_linearize() + size();
     }
 
+    [[deprecated]]
     blob_storage::char_type* begin() {
-        return data();
+        return read_linearize();
     }
 
+    [[deprecated]]
     blob_storage::char_type* end() {
-        return data() + size();
+        return read_linearize() + size();
     }
 
     bool empty() const {
         return _u.small.size == 0;
     }
 
+    [[deprecated]]
     blob_storage::char_type* data() {
         if (external()) {
             assert(!_u.ptr->next);  // must be linearized
@@ -395,6 +413,7 @@ public:
         }
     }
 
+    [[deprecated]]
     const blob_storage::char_type* data() const {
         return read_linearize();
     }
@@ -413,9 +432,49 @@ public:
         return 0;
     }
 
-    template <typename Func>
+    template <std::invocable<bytes_view> Func>
+    std::invoke_result_t<Func, bytes_view> with_linearized(Func&& func) const {
+        const bytes_view::value_type* start = nullptr;
+        size_t size = 0;
+        if (!external()) {
+            start = _u.small.data;
+            size = _u.small.size;
+        } else if (!_u.ptr->next) {
+            start = _u.ptr->data;
+            size = _u.ptr->size;
+        }
+        if (start) {
+            return func(bytes_view(start, size));
+        } else {
+            auto data = do_linearize_pure();
+            return func(bytes_view(data.get(), _u.ptr->size));
+        }
+    }
+
+    template <std::invocable<> Func>
     friend std::result_of_t<Func()> with_linearized_managed_bytes(Func&& func);
 };
+
+class managed_bytes_view {
+public:
+    managed_bytes_view();
+    managed_bytes_view(const managed_bytes&);
+    managed_bytes_view(bytes_view);
+    size_t size() const;
+    bool empty() const;
+    bytes_view::value_type operator[](size_t idx) const;
+    void remove_prefix(size_t prefix_len);
+    managed_bytes_view substr(size_t offset, size_t len);
+    bytes to_bytes() const;
+    
+    template <std::invocable<bytes_view> Func>
+    std::invoke_result_t<Func, bytes_view> with_linearized(Func&& func) const {
+        return func(bytes_view());
+    }
+};
+
+bytes to_bytes(managed_bytes_view v);
+int compare_unsigned(const managed_bytes_view v1, const managed_bytes_view v2);
 
 // Run func() while ensuring that reads of managed_bytes objects are
 // temporarlily linearized
@@ -432,7 +491,8 @@ namespace std {
 template <>
 struct hash<managed_bytes> {
     size_t operator()(const managed_bytes& v) const {
-        return hash<bytes_view>()(v);
+        return 3; // FIXME!
+        //return hash<bytes_view>()(v);
     }
 };
 
@@ -444,3 +504,13 @@ size_t
 size_for_allocation_strategy(const blob_storage& bs) {
     return sizeof(bs) + bs.frag_size;
 }
+
+template<>
+struct appending_hash<managed_bytes_view> {
+    template<typename Hasher>
+    void operator()(Hasher& h, managed_bytes_view v) const {
+        feed_hash(h, v.size());
+        //h.update(reinterpret_cast<const char*>(v.begin()), v.size() * sizeof(bytes_view::value_type));
+    }
+};
+
