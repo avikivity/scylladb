@@ -308,13 +308,10 @@ public:
         return get_compound_type(s)->equal(representation(), other.representation());
     }
 
-    [[deprecated]]
-    operator bytes_view() const;
-    #if 0
-     {
+    operator managed_bytes_view() const
+    {
         return _bytes;
     }
-    #endif
 
     const managed_bytes& representation() const {
         return _bytes;
