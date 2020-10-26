@@ -172,9 +172,9 @@ BOOST_AUTO_TEST_CASE(test_component_iterator_post_incrementation) {
     auto packed = t.serialize_value(to_bytes_vec({"el1", "el2", "el3"}));
     auto i = t.begin(packed);
     auto end = t.end(packed);
-    BOOST_REQUIRE_EQUAL(to_bytes("el1"), *i++);
-    BOOST_REQUIRE_EQUAL(to_bytes("el2"), *i++);
-    BOOST_REQUIRE_EQUAL(to_bytes("el3"), *i++);
+    BOOST_REQUIRE_EQUAL(to_managed_bytes("el1"), *i++);
+    BOOST_REQUIRE_EQUAL(to_managed_bytes("el2"), *i++);
+    BOOST_REQUIRE_EQUAL(to_managed_bytes("el3"), *i++);
     BOOST_REQUIRE(i == end);
 }
 
@@ -241,7 +241,7 @@ BOOST_AUTO_TEST_CASE(test_conversion_to_legacy_form_same_token_two_components) {
 BOOST_AUTO_TEST_CASE(test_legacy_ordering_of_singular) {
     compound_type<allow_prefixes::no> t({bytes_type});
 
-    auto make = [&t] (sstring value) -> bytes {
+    auto make = [&t] (sstring value) -> managed_bytes {
         return t.serialize_single(to_managed_bytes(value));
     };
 
@@ -257,8 +257,8 @@ BOOST_AUTO_TEST_CASE(test_legacy_ordering_of_singular) {
 BOOST_AUTO_TEST_CASE(test_legacy_ordering_of_composites) {
     compound_type<allow_prefixes::no> t({bytes_type, bytes_type});
 
-    auto make = [&t] (sstring v1, sstring v2) -> bytes {
-        return t.serialize_value(std::vector<bytes>{to_bytes(v1), to_bytes(v2)});
+    auto make = [&t] (sstring v1, sstring v2) -> managed_bytes {
+        return t.serialize_value(std::vector<managed_bytes>{to_managed_bytes(v1), to_managed_bytes(v2)});
     };
 
     legacy_compound_view<decltype(t)>::tri_comparator cmp(t);
