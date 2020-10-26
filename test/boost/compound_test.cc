@@ -242,7 +242,7 @@ BOOST_AUTO_TEST_CASE(test_legacy_ordering_of_singular) {
     compound_type<allow_prefixes::no> t({bytes_type});
 
     auto make = [&t] (sstring value) -> bytes {
-        return t.serialize_single(to_bytes(value));
+        return t.serialize_single(to_managed_bytes(value));
     };
 
     legacy_compound_view<decltype(t)>::tri_comparator cmp(t);
