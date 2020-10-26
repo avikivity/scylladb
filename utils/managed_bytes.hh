@@ -348,20 +348,9 @@ public:
 
     //operator managed_bytes_view() const;
 
-    [[deprecated]]
-    operator bytes_view() const {
-        return { read_linearize(), size() };
-    }
-
     bool is_fragmented() const {
         return external() && _u.ptr->next;
     }
-
-    [[deprecated]]
-    operator bytes_mutable_view() {
-        assert(!is_fragmented());
-        return { read_linearize(), size() };
-    };
 
     bytes_view::value_type& operator[](size_type index) {
         return value_at_index(index);
@@ -380,43 +369,8 @@ public:
         }
     }
 
-    [[deprecated]]
-    const blob_storage::char_type* begin() const {
-        return read_linearize();
-    }
-
-    [[deprecated]]
-    const blob_storage::char_type* end() const {
-        return read_linearize() + size();
-    }
-
-    [[deprecated]]
-    blob_storage::char_type* begin() {
-        return read_linearize();
-    }
-
-    [[deprecated]]
-    blob_storage::char_type* end() {
-        return read_linearize() + size();
-    }
-
     bool empty() const {
         return _u.small.size == 0;
-    }
-
-    [[deprecated]]
-    blob_storage::char_type* data() {
-        if (external()) {
-            assert(!_u.ptr->next);  // must be linearized
-            return _u.ptr->data;
-        } else {
-            return _u.small.data;
-        }
-    }
-
-    [[deprecated]]
-    const blob_storage::char_type* data() const {
-        return read_linearize();
     }
 
     // Returns the amount of external memory used.
