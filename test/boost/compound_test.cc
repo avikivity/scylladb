@@ -28,10 +28,10 @@
 #include "schema_builder.hh"
 #include "dht/murmur3_partitioner.hh"
 
-static std::vector<bytes> to_bytes_vec(std::vector<sstring> values) {
-    std::vector<bytes> result;
+static std::vector<managed_bytes> to_bytes_vec(std::vector<sstring> values) {
+    std::vector<managed_bytes> result;
     for (auto&& v : values) {
-        result.emplace_back(to_bytes(v));
+        result.emplace_back(to_managed_bytes(v));
     }
     return result;
 }
@@ -39,7 +39,7 @@ static std::vector<bytes> to_bytes_vec(std::vector<sstring> values) {
 template <typename Compound>
 static
 range_assert<typename Compound::iterator>
-assert_that_components(Compound& t, bytes packed) {
+assert_that_components(Compound& t, managed_bytes packed) {
     return assert_that_range(t.begin(packed), t.end(packed));
 }
 
@@ -375,7 +375,7 @@ BOOST_AUTO_TEST_CASE(test_full_compound_validity) {
     const auto c = compound_type<allow_prefixes::no>({byte_type, utf8_type});
 
     auto validate = [&] (bytes b) {
-        c.validate(b);
+        c.validate(managed_bytes_view(b));
     };
 
     BOOST_REQUIRE_NO_THROW(validate({'\x00', '\x01', 0, '\x00', '\x02', 'a', 'b'})); // full
@@ -390,7 +390,7 @@ BOOST_AUTO_TEST_CASE(test_prefix_compound_validity) {
     const auto c = compound_type<allow_prefixes::yes>({byte_type, utf8_type});
 
     auto validate = [&] (bytes b) {
-        c.validate(b);
+        c.validate(managed_bytes_view(b));
     };
 
     BOOST_REQUIRE_NO_THROW(validate({'\x00', '\x01', 0, '\x00', '\x02', 'a', 'b'})); // full
