@@ -1945,6 +1945,8 @@ table::query(schema_ptr s,
         query::result_memory_limiter& memory_limiter,
         db::timeout_clock::time_point timeout,
         query::querier_cache_context cache_ctx) {
+    //fmt::print("1: {} {} {}\n", (void*)this, (void*)&cache_ctx, cache_ctx);
+#if 0
     _async_gate.enter();
     auto leave = defer([&] { _async_gate.leave(); });
     utils::latency_counter lc;
@@ -1955,21 +1957,25 @@ table::query(schema_ptr s,
             _stats.estimated_read.add(lc.latency());
         }
     });
+#endif
     const auto short_read_allwoed = query::short_read(cmd.slice.options.contains<query::partition_slice::option::allow_short_read>());
-    query::result_memory_accounter accounter = co_await (opts.request == query::result_request::only_digest
-             ? memory_limiter.new_digest_read(*cmd.max_result_size, short_read_allwoed) : memory_limiter.new_data_read(*cmd.max_result_size, short_read_allwoed));
-    {
+    //fmt::print("2: {} {} {}\n", (void*)this, (void*)&cache_ctx, cache_ctx);
+    auto f = opts.request == query::result_request::only_digest
+             ? memory_limiter.new_digest_read(*cmd.max_result_size, short_read_allwoed) : memory_limiter.new_data_read(*cmd.max_result_size, short_read_allwoed);
+    query::result_memory_accounter accounter = co_await std::move(f);
+    //fmt::print("3: {} {} {}\n", (void*)this, (void*)&cache_ctx, cache_ctx);
         auto qs_ptr = std::make_unique<query_state>(std::move(s), cmd, opts, partition_ranges, std::move(accounter));
         auto& qs = *qs_ptr;
         while (!qs.done()) {
             auto&& range = *qs.current_partition_range++;
+            //fmt::print("4: {} {} {}\n", (void*)this, (void*)&cache_ctx, cache_ctx);
             co_await data_query(qs.schema, as_mutation_source(), range, qs.cmd.slice, qs.remaining_rows(),
                               qs.remaining_partitions(), qs.cmd.timestamp, qs.builder, timeout, class_config, trace_state, cache_ctx);
+            //fmt::print("5: {} {} {}\n", (void*)this, (void*)&cache_ctx, cache_ctx);
         }
             co_return
                     make_lw_shared<query::result>(qs.builder.build());
             // "leave" is destroyed here
-    }
 }
 
 mutation_source

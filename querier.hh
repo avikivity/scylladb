@@ -28,6 +28,8 @@
 
 #include <variant>
 
+#include <iosfwd>
+
 namespace query {
 
 template <typename Consumer>
@@ -523,6 +525,9 @@ public:
             const dht::partition_range_vector& ranges,
             const query::partition_slice& slice,
             tracing::trace_state_ptr trace_state);
+    friend std::ostream& operator<<(std::ostream& os, const querier_cache_context& ctx);
 };
+
+std::ostream& operator<<(std::ostream& os, const querier_cache_context& ctx);
 
 } // namespace query

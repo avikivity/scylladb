@@ -461,4 +461,10 @@ std::optional<shard_mutation_querier> querier_cache_context::lookup_shard_mutati
     return std::nullopt;
 }
 
+std::ostream& operator<<(std::ostream& os, const querier_cache_context& ctx) {
+    fmt::print(os, "querier_cache_context({}, {})", ctx._key, bool(ctx._is_first_page));
+    return os;
+}
+
+
 } // namespace query
