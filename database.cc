@@ -1282,13 +1282,19 @@ void database::register_connection_drop_notifier(netw::messaging_service& ms) {
 query_class_config database::make_query_class_config() {
     // Everything running in the statement group is considered a user query
     if (current_scheduling_group() == _dbcfg.statement_scheduling_group) {
-        return query_class_config{_read_concurrency_sem, _cfg.max_memory_for_unlimited_query()};
+        return query_class_config{_read_concurrency_sem, _cfg.max_memory_for_unlimited_query(),
+            tombstone_thresholds{
+                .tombstone_warn_threshold = _cfg.tombstone_warn_threshold(),
+                .tombstone_fail_threshold = _cfg.tombstone_failure_threshold(),
+            }};
     // Reads done on behalf of view update generation run in the streaming group
     } else if (current_scheduling_group() == _dbcfg.streaming_scheduling_group) {
-        return query_class_config{_streaming_concurrency_sem, std::numeric_limits<uint64_t>::max()};
+        return query_class_config{_streaming_concurrency_sem, std::numeric_limits<uint64_t>::max(),
+            tombstone_thresholds{}};
     // Everything else is considered a system query
     } else {
-        return query_class_config{_system_read_concurrency_sem, std::numeric_limits<uint64_t>::max()};
+        return query_class_config{_system_read_concurrency_sem, std::numeric_limits<uint64_t>::max(),
+            tombstone_thresholds{}};
     }
 }
 

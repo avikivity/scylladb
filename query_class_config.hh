@@ -22,10 +22,12 @@
 #pragma once
 
 #include <cinttypes>
+#include "tombstone_thresholds.hh"
 
 class reader_concurrency_semaphore;
 
 struct query_class_config {
     reader_concurrency_semaphore& semaphore;
     uint64_t max_memory_for_unlimited_query;
+    ::tombstone_thresholds tombstone_thresholds;
 };

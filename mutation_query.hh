@@ -136,7 +136,7 @@ class reconcilable_result_builder {
 public:
     reconcilable_result_builder(const schema& s, const query::partition_slice& slice,
                                 query::result_memory_accounter&& accounter,
-                                reconcilable_result_builder_config cfg = {})
+                                reconcilable_result_builder_config cfg)
         : _schema(s), _slice(slice)
         , _memory_accounter(std::move(accounter))
         , _short_read_allowed(slice.options.contains<query::partition_slice::option::allow_short_read>())

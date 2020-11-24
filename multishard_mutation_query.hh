@@ -28,6 +28,10 @@
 
 #include <seastar/core/distributed.hh>
 
+struct multishard_mutation_query_config {
+    ::tombstone_thresholds tombstone_thresholds;
+};
+
 /// Run the mutation query on all shards.
 ///
 /// Under the hood it uses a multishard_combining_reader for reading the
@@ -68,4 +72,5 @@ future<std::tuple<foreign_ptr<lw_shared_ptr<reconcilable_result>>, cache_tempera
         const dht::partition_range_vector& ranges,
         tracing::trace_state_ptr trace_state,
         uint64_t max_size,
-        db::timeout_clock::time_point timeout);
+        db::timeout_clock::time_point timeout,
+        multishard_mutation_query_config cfg);
