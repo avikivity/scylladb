@@ -292,6 +292,9 @@ private:
                 break;
             }
             _reader->push_mutation_fragment(std::move(*mfo));
+            if (need_preempt()) {
+                break;
+            }
         }
         return proceed::no;
     }
@@ -308,6 +311,9 @@ private:
                 _reader->push_mutation_fragment(std::move(*_ready));
                 _ready = {};
                 return proceed(!_reader->is_buffer_full());
+            }
+            if (need_preempt()) {
+                return proceed::no;
             }
         }
         return proceed::no;
@@ -983,7 +989,7 @@ class mp_row_consumer_m : public consumer_m {
             return proceed::no;
         }
 
-        return proceed(!_reader->is_buffer_full());
+        return proceed(!_reader->is_buffer_full() && !need_preempt());
     }
 
     inline void reset_for_new_partition() {
@@ -1337,7 +1343,7 @@ public:
             [] (const temporary_buffer<char>& b) { return to_bytes_view(b); }));
         if (kind == bound_kind::incl_start || kind == bound_kind::excl_start) {
             consume_range_tombstone_start(std::move(ck), kind, std::move(tomb));
-            return proceed(!_reader->is_buffer_full());
+            return proceed(!_reader->is_buffer_full() && !need_preempt());
         } else { // *_end kind
             return consume_range_tombstone_end(std::move(ck), kind, std::move(tomb));
         }
@@ -1402,7 +1408,7 @@ public:
             _reader->push_mutation_fragment(mutation_fragment(*_schema, permit(), *std::exchange(_in_progress_row, {})));
         }
 
-        return proceed(!_reader->is_buffer_full());
+        return proceed(!_reader->is_buffer_full() && !need_preempt());
     }
 
     virtual void on_end_of_stream() override {
@@ -1448,7 +1454,7 @@ public:
         _reader->_partition_finished = true;
         _reader->_before_partition = true;
         _reader->push_mutation_fragment(mutation_fragment(*_schema, permit(), partition_end()));
-        return proceed::yes;
+        return proceed(!need_preempt());
     }
 
     virtual void reset(sstables::indexable_element el) override {
