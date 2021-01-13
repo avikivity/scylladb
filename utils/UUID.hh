@@ -145,6 +145,8 @@ public:
 
 UUID make_random_uuid();
 
+std::ostream& operator<<(std::ostream& out, const UUID& uuid);
+
 }
 
 template<>
