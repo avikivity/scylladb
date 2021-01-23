@@ -75,15 +75,23 @@ public:
 
     }
 
-    // This matches Java's UUID.toString() actual implementation. Note that
-    // that method's documentation suggest something completely different!
-    sstring to_sstring() const {
-        return format("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+    // fmt compatible formatter; using Java UUID.toString format.
+    template <typename OutputIterator>
+    OutputIterator format_to(OutputIterator it) const {
+        return fmt::format_to(it, "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
                 ((uint64_t)most_sig_bits >> 32),
                 ((uint64_t)most_sig_bits >> 16 & 0xffff),
                 ((uint64_t)most_sig_bits & 0xffff),
                 ((uint64_t)least_sig_bits >> 48 & 0xffff),
                 ((uint64_t)least_sig_bits & 0xffffffffffffLL));
+    }
+
+    // This matches Java's UUID.toString() actual implementation. Note that
+    // that method's documentation suggest something completely different!
+    sstring to_sstring() const {
+        sstring ret(sstring::initialized_later(), 8+4+4+4+12 + 4);
+        format_to(ret.data());
+        return ret;
     }
 
     friend std::ostream& operator<<(std::ostream& out, const UUID& uuid);
@@ -157,4 +165,26 @@ struct hash<utils::UUID> {
         return size_t((hilo >> 32) ^ hilo);
     }
 };
+}
+
+namespace fmt {
+
+// Custom formatter for fmt library
+template <>
+struct formatter<utils::UUID> {
+    constexpr auto parse(format_parse_context& ctx) {
+        auto it = ctx.begin();
+        auto end = ctx.end();
+        if (it != end && *it != '}') {
+            throw format_error("UUID does not have special formatting directives");
+        }
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const utils::UUID& uuid, FormatContext& ctx) {
+        return uuid.format_to(ctx.out());
+    }
+};
+
 }
