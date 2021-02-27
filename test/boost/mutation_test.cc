@@ -1981,7 +1981,7 @@ SEASTAR_THREAD_TEST_CASE(test_cell_equals) {
 }
 
 // Global to avoid elimination by the compiler; see below for use
-data_type force_type_thread_local_init_evaluation [[gnu::used]];
+thread_local data_type force_type_thread_local_init_evaluation [[gnu::used]];
 
 SEASTAR_THREAD_TEST_CASE(test_cell_external_memory_usage) {
     measuring_allocator alloc;
