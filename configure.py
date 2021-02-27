@@ -479,7 +479,7 @@ add_tristate(arg_parser, name='dist', dest='enable_dist',
                         help='scylla-tools-java, scylla-jmx and packages')
 arg_parser.add_argument('--cflags', action='store', dest='user_cflags', default='',
                         help='Extra flags for the C++ compiler')
-arg_parser.add_argument('--special-inline-threshold', dest='special_inline_threshold', default=2500, type=int)
+arg_parser.add_argument('--special-inline-threshold', dest='special_inline_threshold', default=691, type=int)
 arg_parser.add_argument('--ldflags', action='store', dest='user_ldflags', default='',
                         help='Extra flags for the linker')
 arg_parser.add_argument('--target', action='store', dest='target', default=default_target_arch(),
