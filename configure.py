@@ -479,6 +479,7 @@ add_tristate(arg_parser, name='dist', dest='enable_dist',
                         help='scylla-tools-java, scylla-jmx and packages')
 arg_parser.add_argument('--cflags', action='store', dest='user_cflags', default='',
                         help='Extra flags for the C++ compiler')
+arg_parser.add_argument('--special-inline-threshold', dest='special_inline_threshold', default=2500, type=int)
 arg_parser.add_argument('--ldflags', action='store', dest='user_ldflags', default='',
                         help='Extra flags for the linker')
 arg_parser.add_argument('--target', action='store', dest='target', default=default_target_arch(),
@@ -1163,7 +1164,6 @@ warnings = ' '.join(warnings + ['-Wno-error=deprecated-declarations'])
 
 optimization_flags = [
     '--param inline-unit-growth=300', # gcc
-    '-mllvm -inline-threshold=2500',  # clang
 ]
 optimization_flags = [o
                       for o in optimization_flags
@@ -1291,6 +1291,7 @@ file = open(f'{outdir}/SCYLLA-PRODUCT-FILE', 'r')
 scylla_product = file.read().strip()
 
 extra_cxxflags["release.cc"] = "-DSCYLLA_VERSION=\"\\\"" + scylla_version + "\\\"\" -DSCYLLA_RELEASE=\"\\\"" + scylla_release + "\\\"\""
+extra_cxxflags["service/storage_proxy.cc"] = f"-mllvm -inline-threshold={args.special_inline_threshold}"
 
 for m in ['debug', 'release', 'sanitize']:
     modes[m]['cxxflags'] += ' ' + dbgflag
