@@ -2373,6 +2373,10 @@ allocating_section::guard::~guard() {
     shard_segment_pool.set_emergency_reserve_max(_prev);
 }
 
+allocating_section::allocating_section(sstring descriptive_name) noexcept
+        : _descriptive_name(std::move(descriptive_name)) {
+}
+
 void allocating_section::maybe_decay_reserve() {
     // The decay rate is inversely proportional to the reserve
     // (every (s_segments_per_decay/_lsa_reserve) allocations).
@@ -2446,6 +2450,11 @@ void allocating_section::set_std_reserve(size_t reserve) {
     _std_reserve = reserve;
 }
 
+void allocating_section::do_warn(std::chrono::nanoseconds stall, std::string what) {
+    llogger.warn("allocating_section {}: {}us stall, std reserve {} lsa reserve {}: {}",
+            _descriptive_name, stall / 1us, _std_reserve, _lsa_reserve, what);
+}
+
 void region_group::on_request_expiry::operator()(std::unique_ptr<allocating_function>& func) noexcept {
     func->fail(std::make_exception_ptr(blocked_requests_timed_out_error{_name}));
 }
@@ -2467,6 +2476,8 @@ uint64_t memory_compacted() {
 occupancy_stats lsa_global_occupancy_stats() {
     return occupancy_stats(shard_segment_pool.total_free_memory(), shard_segment_pool.total_memory_in_use());
 }
+
+
 
 }
 

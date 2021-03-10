@@ -1368,7 +1368,7 @@ SEASTAR_THREAD_TEST_CASE(test_decay_reserves) {
     logalloc::region region;
     std::list<managed_bytes> lru;
     unsigned reclaims = 0;
-    logalloc::allocating_section alloc_section;
+    logalloc::allocating_section alloc_section("test");
     auto small_thing = bytes(10'000, int8_t(0));
     auto large_thing = bytes(100'000'000, int8_t(0));
 
@@ -1396,7 +1396,7 @@ SEASTAR_THREAD_TEST_CASE(test_decay_reserves) {
             with_allocator(region.allocator(), [&] {
                 lru.push_front(managed_bytes(small_thing));
             });
-        });
+        }, "test");
     }
 
     reclaims = 0;
@@ -1409,7 +1409,7 @@ SEASTAR_THREAD_TEST_CASE(test_decay_reserves) {
             auto large_chunk = managed_bytes(large_thing);
             (void)large_chunk; // keep compiler quiet
         });
-    });
+    }, "test");
 
     // sanity check, we must have reclaimed at least that much
     BOOST_REQUIRE(reclaims >= large_thing.size() / small_thing.size());
@@ -1419,7 +1419,7 @@ SEASTAR_THREAD_TEST_CASE(test_decay_reserves) {
     for (int i = 0; i < 1'000'000; ++i) {
         alloc_section(region, [&] {
             // nothing
-        });
+        }, "test");
     }
 
     reclaims = 0;
@@ -1450,7 +1450,7 @@ SEASTAR_THREAD_TEST_CASE(test_decay_reserves) {
             with_allocator(region.allocator(), [&] {
                 lru.push_front(managed_bytes(small_thing));
             });
-        });
+        }, "test");
     }
 
     auto expected_reserve_size = 128 * 1024 * 10;

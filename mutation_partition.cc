@@ -2478,7 +2478,7 @@ stop_iteration mutation_cleaner_impl::merge_some(partition_snapshot& snp) noexce
             try {
                 return _worker_state->alloc_section(region, [&] {
                     return snp.merge_partition_versions(_app_stats);
-                });
+                }, "mutation_cleaner something something");
             } catch (...) {
                 // Merging failed, give up as there is no guarantee of forward progress.
                 return stop_iteration::yes;

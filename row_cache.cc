@@ -372,7 +372,7 @@ private:
                 if (phase == _cache.phase_of(_read_context->range().start()->value())) {
                     _cache._read_section(_cache._tracker.region(), [this] {
                         _cache.find_or_create_missing(_read_context->key());
-                    });
+                    }, "single_partition_populating_reader find_or_create_missing");
                 } else {
                     _cache._tracker.on_mispopulate();
                 }
@@ -381,7 +381,7 @@ private:
                 _reader = _cache._read_section(_cache._tracker.region(), [&] {
                     cache_entry& e = _cache.find_or_create_incomplete(mfopt->as_partition_start(), phase);
                     return e.read(_cache, *_read_context, phase);
-                });
+                }, "single_partition_populating_reader find_or_create_incomplete");
             } else {
                 _cache._tracker.on_mispopulate();
                 _reader = read_directly_from_underlying(*_read_context);
@@ -514,7 +514,7 @@ public:
                     return _cache._read_section(_cache._tracker.region(), [&] {
                         this->handle_end_of_stream();
                         return make_ready_future<read_result>(read_result(std::nullopt, std::nullopt));
-                    });
+                    }, "range_populating_reader end of stream");
                 }
                 _cache.on_partition_miss();
                 const partition_start& ps = mfopt->as_partition_start();
@@ -526,7 +526,7 @@ public:
                         _last_key = row_cache::previous_entry_pointer(key);
                         return make_ready_future<read_result>(
                                 read_result(e.read(_cache, _read_context, _reader.creation_phase()), std::nullopt));
-                    });
+                    }, "range_populating_reader move_to_next_partition");
                 } else {
                     _cache._tracker.on_mispopulate();
                     _last_key = row_cache::previous_entry_pointer(key);
@@ -618,7 +618,7 @@ private:
                     return std::nullopt;
                 }
             }
-        });
+        }, "scanning_and_populating_reader do_read_from_primary");
     }
 
     future<flat_mutation_reader_opt> read_from_primary(db::timeout_clock::time_point timeout) {
@@ -740,7 +740,7 @@ row_cache::make_reader(schema_ptr s,
                 on_partition_miss();
                 return make_flat_mutation_reader<single_partition_populating_reader>(*this, std::move(ctx));
             }
-        });
+        }, "row_cache::make_reader");
 
         if (fwd == streamed_mutation::forwarding::yes) {
             return make_forwardable(std::move(mr));
@@ -857,7 +857,7 @@ void row_cache::populate(const mutation& m, const previous_entry_pointer* previo
     }, [&] (auto i) {
         throw std::runtime_error(format("cache already contains entry for {}", m.key()));
     });
-  });
+  }, "row_cache populate");
 }
 
 cache_entry& row_cache::lookup(const dht::decorated_key& key) {
@@ -959,7 +959,7 @@ future<> row_cache::do_update(external_updater eu, memtable& m, Updater updater)
                                     partitions_type::bound_hint hint;
                                     auto cache_i = _partitions.lower_bound(mem_e.key(), cmp, hint);
                                     update = updater(_update_section, cache_i, mem_e, is_present, real_dirty_acc, hint);
-                                });
+                                }, "row_cache do_update seeking lower bound");
                             }
                             // We use cooperative deferring instead of futures so that
                             // this layer has a chance to restore invariants before deferring,
@@ -974,7 +974,7 @@ future<> row_cache::do_update(external_updater eu, memtable& m, Updater updater)
                                 i.erase_and_dispose(dht::raw_token_less_comparator{}, [&] (memtable_entry* e) noexcept {
                                     m.evict_entry(*e, _tracker.memtable_cleaner());
                                 });
-                            });
+                            }, "row_cache::do_update evicting");
                             ++partition_count;
                           }
                           STAP_PROBE(scylla, row_cache_update_partition_end);
@@ -985,7 +985,7 @@ future<> row_cache::do_update(external_updater eu, memtable& m, Updater updater)
                             } else {
                                 _update_section(_tracker.region(), [&] {
                                     _prev_snapshot_pos = m.partitions.begin()->key();
-                                });
+                                }, "row_cache do_update saving position");
                             }
                         });
                         STAP_PROBE1(scylla, row_cache_update_one_batch_end, partition_count);
@@ -1065,7 +1065,7 @@ void row_cache::touch(const dht::decorated_key& dk) {
             }
         }
     }
- });
+ }, "row_cache::touch");
 }
 
 void row_cache::unlink_from_lru(const dht::decorated_key& dk) {
@@ -1078,7 +1078,7 @@ void row_cache::unlink_from_lru(const dht::decorated_key& dk) {
                 }
             }
         }
-    });
+    }, "row_cache unlink_from_lru");
 }
 
 void row_cache::invalidate_locked(const dht::decorated_key& dk) {
@@ -1141,7 +1141,7 @@ future<> row_cache::invalidate(external_updater eu, dht::partition_range_vector&
                             _tracker.clear_continuity(*it);
                             return stop_iteration(it == end);
                         });
-                    });
+                    }, "row_cache::invalidate");
                     if (done == stop_iteration::yes) {
                         break;
                     }
@@ -1166,6 +1166,9 @@ row_cache::row_cache(schema_ptr s, snapshot_source src, cache_tracker& tracker, 
     , _partitions(dht::raw_token_less_comparator{})
     , _underlying(src())
     , _snapshot_source(std::move(src))
+    , _update_section(format("row_cache update_section for {}:{}", _schema->ks_name(), _schema->cf_name()))
+    , _populate_section(format("row_cache populate_section for {}:{}", _schema->ks_name(), _schema->cf_name()))
+    , _read_section(format("row_cache read_section for {}:{}", _schema->ks_name(), _schema->cf_name()))
 {
     with_allocator(_tracker.allocator(), [this, cont] {
         cache_entry entry(cache_entry::dummy_entry_tag{});
@@ -1274,7 +1277,7 @@ void row_cache::upgrade_entry(cache_entry& e) {
 std::ostream& operator<<(std::ostream& out, row_cache& rc) {
     rc._read_section(rc._tracker.region(), [&] {
         out << "{row_cache: " << ::join(", ", rc._partitions.begin(), rc._partitions.end()) << "}";
-    });
+    }, "row_cache print operator");
     return out;
 }
 

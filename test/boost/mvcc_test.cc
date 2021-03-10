@@ -197,10 +197,10 @@ public:
     real_dirty_memory_accounter& accounter() { return *_acc; }
 
     mutation_partition squashed(partition_snapshot_ptr& snp) {
-        logalloc::allocating_section as;
+        logalloc::allocating_section as("test");
         return as(region(), [&] {
             return snp->squashed();
-        });
+        }, "test");
     }
 
     // Merges other into this
@@ -239,27 +239,27 @@ public:
     mvcc_partition& operator+=(mvcc_partition&&);
 
     mutation_partition squashed() {
-        logalloc::allocating_section as;
+        logalloc::allocating_section as("test");
         return as(region(), [&] {
             return _e.squashed(*_s);
-        });
+        }, "test");
     }
 
     void upgrade(schema_ptr new_schema) {
-        logalloc::allocating_section as;
+        logalloc::allocating_section as("test");
         with_allocator(region().allocator(), [&] {
             as(region(), [&] {
                 _e.upgrade(_s, new_schema, _container.cleaner(), _container.tracker());
                 _s = new_schema;
-            });
+            }, "test");
         });
     }
 
     partition_snapshot_ptr read() {
-        logalloc::allocating_section as;
+        logalloc::allocating_section as("test");
         return as(region(), [&] {
             return _e.read(region(), _container.cleaner(), schema(), _container.tracker(), _container.phase());
-        });
+        }, "tesT");
     }
 
     void evict() {
@@ -271,7 +271,7 @@ public:
 
 void mvcc_partition::apply_to_evictable(partition_entry&& src, schema_ptr src_schema) {
     with_allocator(region().allocator(), [&] {
-        logalloc::allocating_section as;
+        logalloc::allocating_section as("test");
         mutation_cleaner src_cleaner(region(), no_cache_tracker, app_stats_for_tests);
         auto c = as(region(), [&] {
             if (_s != src_schema) {
@@ -279,7 +279,7 @@ void mvcc_partition::apply_to_evictable(partition_entry&& src, schema_ptr src_sc
             }
             return _e.apply_to_incomplete(*schema(), std::move(src), src_cleaner, as, region(),
                 *_container.tracker(), _container.next_phase(), _container.accounter());
-        });
+        }, "tesT");
         repeat([&] {
             return c.run();
         }).get();
@@ -304,30 +304,30 @@ void mvcc_partition::apply(const mutation_partition& mp, schema_ptr mp_s) {
         if (_evictable) {
             apply_to_evictable(partition_entry(mutation_partition(*mp_s, mp)), mp_s);
         } else {
-            logalloc::allocating_section as;
+            logalloc::allocating_section as("test");
             as(region(), [&] {
                 mutation_application_stats app_stats;
                 _e.apply(*_s, mp, *mp_s, app_stats);
-            });
+            }, "test");
         }
     });
 }
 
 mvcc_partition mvcc_container::make_evictable(const mutation_partition& mp) {
     return with_allocator(region().allocator(), [&] {
-        logalloc::allocating_section as;
+        logalloc::allocating_section as("test");
         return as(region(), [&] {
             return mvcc_partition(_schema, partition_entry::make_evictable(*_schema, mp), *this, true);
-        });
+        }, "test");
     });
 }
 
 mvcc_partition mvcc_container::make_not_evictable(const mutation_partition& mp) {
     return with_allocator(region().allocator(), [&] {
-        logalloc::allocating_section as;
+        logalloc::allocating_section as("test");
         return as(region(), [&] {
             return mvcc_partition(_schema, partition_entry(mutation_partition(*_schema, mp)), *this, false);
-        });
+        }, "test");
     });
 }
 

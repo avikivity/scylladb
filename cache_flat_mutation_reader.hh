@@ -188,7 +188,7 @@ future<> cache_flat_mutation_reader::process_static_row(db::timeout_clock::time_
         _read_context->cache().on_row_hit();
         static_row sr = _lsa_manager.run_in_read_section([this] {
             return _snp->static_row(_read_context->digest_requested());
-        });
+        }, "cache_flat_mutation_reader processing static row");
         if (!sr.empty()) {
             push_mutation_fragment(mutation_fragment(*_schema, _permit, std::move(sr)));
         }
@@ -225,7 +225,7 @@ future<> cache_flat_mutation_reader::fill_buffer(db::timeout_clock::time_point t
             _state = state::reading_from_cache;
             _lsa_manager.run_in_read_section([this] {
                 move_to_range(_ck_ranges_curr);
-            });
+            }, "cache_flat_mutation_reader after_static_row");
             return fill_buffer(timeout);
         };
         if (_schema->has_static_columns()) {
@@ -305,7 +305,7 @@ future<> cache_flat_mutation_reader::do_fill_buffer(db::timeout_clock::time_poin
             }
         }
         return make_ready_future<>();
-    });
+    }, "cache_flat_mutation_reader do_fill_buffer");
 }
 
 inline
@@ -389,7 +389,7 @@ future<> cache_flat_mutation_reader::read_from_underlying(db::timeout_clock::tim
                         _snp->region().allocator().invalidate_references(); // Invalidates _next_row
                     }
                 }
-            });
+            }, "cache_flat_mutation_reader read_from_underlying");
             return make_ready_future<>();
         }, timeout);
 }
@@ -487,7 +487,7 @@ void cache_flat_mutation_reader::maybe_add_to_cache(const clustering_row& cr) {
             _last_row = partition_snapshot_row_weakref(*_snp, it, true);
         });
         _population_range_starts_before_all_rows = false;
-    });
+    }, "cache_flat_mutation_reader maybe_add_to_cache");
 }
 
 inline
@@ -704,7 +704,7 @@ void cache_flat_mutation_reader::maybe_add_to_cache(const range_tombstone& rt) {
         clogger.trace("csm {}: maybe_add_to_cache({})", fmt::ptr(this), rt);
         _lsa_manager.run_in_update_section_with_allocator([&] {
             _snp->version()->partition().row_tombstones().apply_monotonically(*_schema, rt);
-        });
+        }, "cache_flat_mutation_reader maybe_add_to_cache range_tombstone");
     } else {
         _read_context->cache().on_mispopulate();
     }
@@ -720,7 +720,7 @@ void cache_flat_mutation_reader::maybe_add_to_cache(const static_row& sr) {
                 sr.cells().prepare_hash(*_schema, column_kind::static_column);
             }
             _snp->version()->partition().static_row().apply(*_schema, column_kind::static_column, sr.cells());
-        });
+        }, "cache_flat_mutation_reader maybe_add_to_cache static_row");
     } else {
         _read_context->cache().on_mispopulate();
     }

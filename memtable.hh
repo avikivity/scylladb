@@ -120,8 +120,8 @@ private:
     mutation_cleaner _cleaner;
     memtable_list *_memtable_list;
     schema_ptr _schema;
-    logalloc::allocating_section _read_section;
-    logalloc::allocating_section _allocating_section;
+    logalloc::allocating_section _read_section{format("memtable read section for {}:{}", _schema->ks_name(), _schema->cf_name())};
+    logalloc::allocating_section _allocating_section{format("memtable allocating section for {}:{}", _schema->ks_name(), _schema->cf_name())};
     partitions_type partitions;
     size_t nr_partitions = 0;
     db::replay_position _replay_position;

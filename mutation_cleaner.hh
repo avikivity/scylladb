@@ -34,7 +34,7 @@ class mutation_cleaner_impl final {
     struct worker {
         condition_variable cv;
         snapshot_list snapshots;
-        logalloc::allocating_section alloc_section;
+        logalloc::allocating_section alloc_section{"mutation_cleaner worker"};
         bool done = false; // true means the worker was abandoned and cannot access the mutation_cleaner_impl instance.
     };
 private:

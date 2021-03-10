@@ -583,27 +583,27 @@ class lsa_manager {
 public:
     lsa_manager(row_cache &cache) : _cache(cache) {}
 
-    template<typename Func>
-    decltype(auto) run_in_read_section(const Func &func) {
+    template<typename Func, typename Printable>
+    decltype(auto) run_in_read_section(const Func &func, const Printable& p) {
         return _cache._read_section(_cache._tracker.region(), [&func]() {
             return func();
-        });
+        }, p);
     }
 
-    template<typename Func>
-    decltype(auto) run_in_update_section(const Func &func) {
+    template<typename Func, typename Printable>
+    decltype(auto) run_in_update_section(const Func &func, const Printable& p) {
         return _cache._update_section(_cache._tracker.region(), [&func]() {
             return func();
-        });
+        }, p);
     }
 
-    template<typename Func>
-    void run_in_update_section_with_allocator(Func &&func) {
+    template<typename Func, typename Printable>
+    void run_in_update_section_with_allocator(Func &&func, const Printable& p) {
         return _cache._update_section(_cache._tracker.region(), [this, &func]() {
             return with_allocator(_cache._tracker.region().allocator(), [this, &func]() mutable {
                 return func();
             });
-        });
+        }, p);
     }
 
     logalloc::region &region() { return _cache._tracker.region(); }

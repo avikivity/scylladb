@@ -196,7 +196,7 @@ public:
         return rc._read_section(rc._tracker.region(), [&] {
             cache_entry& e = rc.lookup(dk);
             return e.partition().read(rc._tracker.region(), rc._tracker.cleaner(), e.schema(), &rc._tracker);
-        });
+        }, "test");
     }
 };
 

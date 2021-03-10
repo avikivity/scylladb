@@ -441,7 +441,7 @@ public:
                             advance_iterator();
                             return std::pair(std::move(key), std::move(snp));
                         }
-                    });
+                    }, "memtable scanning_reader fill_buffer snapshot");
                     if (key_and_snp) {
                         update_last(key_and_snp->first);
                         auto cr = query::clustering_key_filter_ranges::get_ranges(*schema(), _slice, key_and_snp->first.key());
@@ -590,7 +590,7 @@ private:
                 return std::pair(std::move(dk), std::move(snp));
             }
             return { };
-        });
+        }, "creating snapshot");
         if (key_and_snp) {
             _flushed_memory.update_bytes_read(component_size);
             update_last(key_and_snp->first);
@@ -660,7 +660,7 @@ memtable::make_flat_reader(schema_ptr s,
             } else {
                 return { };
             }
-        });
+        }, "memtable make_flat_reader snapshot");
         if (!snp) {
             return make_empty_flat_reader(std::move(s), std::move(permit));
         }
@@ -720,7 +720,7 @@ memtable::apply(const mutation& m, db::rp_handle&& h) {
             auto& p = find_or_create_partition(m.decorated_key());
             _stats_collector.update(*m.schema(), m.partition());
             p.apply(*_schema, m.partition(), *m.schema(), _table_stats.memtable_app_stats);
-        });
+        }, value_of([&] { return format("memtable apply, mem usage {}", m.partition().external_memory_usage(*m.schema())); }));
     });
     update(std::move(h));
 }
@@ -735,7 +735,7 @@ memtable::apply(const frozen_mutation& m, const schema_ptr& m_schema, db::rp_han
             m.partition().accept(*m_schema, pb);
             _stats_collector.update(*m_schema, mp);
             p.apply(*_schema, std::move(mp), *m_schema, _table_stats.memtable_app_stats);
-        });
+        }, value_of([&] () { return format("memtable::apply, mem usage {}", m.representation().size()); }));
     });
     update(std::move(h));
 }

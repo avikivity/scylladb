@@ -480,7 +480,7 @@ coroutine partition_entry::apply_to_incomplete(const schema& s,
                 }
             } while (!preemptible || !need_preempt());
             return stop_iteration::no;
-        });
+        }, "partition_entry apply_to_incomplete");
     });
 }
 

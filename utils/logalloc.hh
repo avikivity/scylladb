@@ -697,6 +697,7 @@ class allocating_section {
     size_t _minimum_lsa_emergency_reserve = 0;
     int64_t _remaining_std_bytes_until_decay = s_bytes_per_decay;
     int _remaining_lsa_segments_until_decay = s_segments_per_decay;
+    sstring _descriptive_name;
 private:
     struct guard {
         size_t _prev;
@@ -706,7 +707,9 @@ private:
     void reserve();
     void maybe_decay_reserve();
     void on_alloc_failure(logalloc::region&);
+    void do_warn(std::chrono::nanoseconds stall, std::string what);
 public:
+    explicit allocating_section(sstring descriptive_name) noexcept;
 
     void set_lsa_reserve(size_t);
     void set_std_reserve(size_t);
@@ -773,8 +776,19 @@ public:
     //
     // Throws std::bad_alloc when reserves can't be increased to a sufficient level.
     //
-    template<typename Func>
-    decltype(auto) operator()(logalloc::region& r, Func&& func) {
+    template<typename Func, typename Printable>
+    requires requires (std::ostream& os, const Printable& p) { { os << p }; }
+    decltype(auto) operator()(logalloc::region& r, Func&& func, const Printable& what) {
+        using namespace std::chrono_literals;
+        using clock = std::chrono::steady_clock;
+        auto t_begin = clock::now();
+        auto check_stall = defer([&] {
+            auto t_end = clock::now();
+            auto delta = t_end - t_begin;
+            if (delta >= 3ms) {
+                do_warn(delta, format("{}", what));
+            }
+        });
         return with_reserve([this, &r, &func] {
             return with_reclaiming_disabled(r, func);
         });
