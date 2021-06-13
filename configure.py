@@ -528,6 +528,7 @@ scylla_tests = set([
     'test/perf/perf_row_cache_reads',
     'test/perf/perf_simple_query',
     'test/perf/perf_sstable',
+    'test/perf/perf_vector_vs_hash',
     'test/unit/lsa_async_eviction_test',
     'test/unit/lsa_sync_eviction_test',
     'test/unit/row_cache_alloc_stress_test',
@@ -1230,6 +1231,7 @@ deps['test/boost/log_heap_test'] = ['test/boost/log_heap_test.cc']
 deps['test/boost/estimated_histogram_test'] = ['test/boost/estimated_histogram_test.cc']
 deps['test/boost/anchorless_list_test'] = ['test/boost/anchorless_list_test.cc']
 deps['test/perf/perf_fast_forward'] += ['release.cc', 'test/perf/linux-perf-event.cc']
+deps['test/perf/perf_vector_vs_hash'] += []
 deps['test/perf/perf_simple_query'] += ['release.cc', 'test/perf/perf.cc', 'test/perf/linux-perf-event.cc', 'test/lib/alternator_test_env.cc'] + alternator
 deps['test/perf/perf_row_cache_reads'] += ['test/perf/perf.cc', 'test/perf/linux-perf-event.cc']
 deps['test/perf/perf_row_cache_update'] += ['test/perf/perf.cc', 'test/perf/linux-perf-event.cc']
