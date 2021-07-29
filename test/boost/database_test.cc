@@ -145,15 +145,26 @@ SEASTAR_TEST_CASE(test_querying_with_limits) {
     });
 }
 
+static
+future<> maybe_drop_table_and_wait(cql_test_env& e, schema_ptr s) {
+    auto delay = 0ms;
+    try {
+       // loop is existed by exception
+        while (true) {
+            e.local_db().find_column_family(s->ks_name(), s->cf_name());
+            co_await e.migration_manager().local().announce_column_family_drop(s->ks_name(), s->cf_name());
+            co_await sleep(delay);
+            delay = std::max(delay + 1ms, 10ms);
+        }
+    } catch (const no_such_column_family&) {
+        // expected
+    }
+}
+
 SEASTAR_THREAD_TEST_CASE(test_database_with_data_in_sstables_is_a_mutation_source) {
     do_with_cql_env_thread([] (cql_test_env& e) {
         run_mutation_source_tests([&] (schema_ptr s, const std::vector<mutation>& partitions) -> mutation_source {
-            try {
-                e.local_db().find_column_family(s->ks_name(), s->cf_name());
-                e.migration_manager().local().announce_column_family_drop(s->ks_name(), s->cf_name()).get();
-            } catch (const no_such_column_family&) {
-                // expected
-            }
+            maybe_drop_table_and_wait(e, s).get();
             e.migration_manager().local().announce_new_column_family(s).get();
             column_family& cf = e.local_db().find_column_family(s);
             for (auto&& m : partitions) {
