@@ -87,6 +87,7 @@ class generation_service;
 
 namespace db {
 class system_distributed_keyspace;
+class system_keyspace;
 namespace view {
 class view_update_generator;
 }
@@ -165,6 +166,7 @@ private:
     abort_source& _abort_source;
     gms::feature_service& _feature_service;
     distributed<database>& _db;
+    db::system_keyspace& _system_keyspace;
     gms::gossiper& _gossiper;
     // Container for all Raft instances running on this shard.
     raft_group_registry& _raft_gr;
@@ -207,6 +209,7 @@ private:
     future<> node_ops_abort_thread();
 public:
     storage_service(abort_source& as, distributed<database>& db,
+        db::system_keyspace& system_keyspace,
         gms::gossiper& gossiper,
         sharded<db::system_distributed_keyspace>&,
         sharded<db::view::view_update_generator>&,

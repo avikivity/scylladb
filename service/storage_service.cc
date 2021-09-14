@@ -105,7 +105,7 @@ namespace service {
 static logging::logger slogger("storage_service");
 
 storage_service::storage_service(abort_source& abort_source,
-    distributed<database>& db, gms::gossiper& gossiper,
+    distributed<database>& db, db::system_keyspace& system_keyspace, gms::gossiper& gossiper,
     sharded<db::system_distributed_keyspace>& sys_dist_ks,
     sharded<db::view::view_update_generator>& view_update_generator,
     gms::feature_service& feature_service,
@@ -121,6 +121,7 @@ storage_service::storage_service(abort_source& abort_source,
         : _abort_source(abort_source)
         , _feature_service(feature_service)
         , _db(db)
+        , _system_keyspace(system_keyspace)
         , _gossiper(gossiper)
         , _raft_gr(raft_gr)
         , _messaging(ms)
@@ -246,7 +247,7 @@ bool storage_service::is_first_node() {
 }
 
 bool storage_service::should_bootstrap() {
-    return !db::system_keyspace::bootstrap_complete() && !is_first_node();
+    return !_system_keyspace.bootstrap_complete() && !is_first_node();
 }
 
 void storage_service::install_schema_version_change_listener() {
@@ -270,10 +271,10 @@ void storage_service::prepare_to_join(
         std::unordered_map<gms::inet_address, sstring> loaded_peer_features,
         bind_messaging_port do_bind) {
     std::map<gms::application_state, gms::versioned_value> app_states;
-    if (db::system_keyspace::was_decommissioned()) {
+    if (_system_keyspace.was_decommissioned()) {
         if (_db.local().get_config().override_decommission()) {
             slogger.warn("This node was decommissioned, but overriding by operator request.");
-            db::system_keyspace::set_bootstrap_state(db::system_keyspace::bootstrap_state::COMPLETED).get();
+            _system_keyspace.set_bootstrap_state(db::system_keyspace::bootstrap_state::COMPLETED).get();
         } else {
             auto msg = sstring("This node was decommissioned and will not rejoin the ring unless override_decommission=true has been set,"
                                "or all existing data is removed and the node is bootstrapped again");
@@ -289,7 +290,7 @@ void storage_service::prepare_to_join(
     auto tmlock = std::make_unique<token_metadata_lock>(get_token_metadata_lock().get0());
     auto tmptr = get_mutable_token_metadata_ptr().get0();
     if (_db.local().is_replacing()) {
-        if (db::system_keyspace::bootstrap_complete()) {
+        if (_system_keyspace.bootstrap_complete()) {
             throw std::runtime_error("Cannot replace address with a node that is already bootstrapped");
         }
         _bootstrap_tokens = prepare_replacement_info(initial_contact_nodes, loaded_peer_features, do_bind).get0();
@@ -316,8 +317,8 @@ void storage_service::prepare_to_join(
     }
 
     // If this is a restarting node, we should update tokens before gossip starts
-    auto my_tokens = db::system_keyspace::get_saved_tokens().get0();
-    bool restarting_normal_node = db::system_keyspace::bootstrap_complete() && !_db.local().is_replacing() && !my_tokens.empty();
+    auto my_tokens = _system_keyspace.get_saved_tokens().get0();
+    bool restarting_normal_node = _system_keyspace.bootstrap_complete() && !_db.local().is_replacing() && !my_tokens.empty();
     if (restarting_normal_node) {
         slogger.info("Restarting a node in NORMAL status");
         // This node must know about its chosen tokens before other nodes do
@@ -325,7 +326,7 @@ void storage_service::prepare_to_join(
         // Therefore we update _token_metadata now, before gossip starts.
         tmptr->update_normal_tokens(my_tokens, get_broadcast_address()).get();
 
-        _cdc_gen_id = db::system_keyspace::get_cdc_generation_id().get0();
+        _cdc_gen_id = _system_keyspace.get_cdc_generation_id().get0();
         if (!_cdc_gen_id) {
             // We could not have completed joining if we didn't generate and persist a CDC streams timestamp,
             // unless we are restarting after upgrading from non-CDC supported version.
@@ -341,7 +342,7 @@ void storage_service::prepare_to_join(
     // for bootstrap to get the load info it needs.
     // (we won't be part of the storage ring though until we add a counterId to our state, below.)
     // Seed the host ID-to-endpoint map with our own ID.
-    auto local_host_id = db::system_keyspace::get_local_host_id().get0();
+    auto local_host_id = _system_keyspace.get_local_host_id().get0();
     _db.invoke_on_all([local_host_id] (auto& db) {
         db.set_local_id(local_host_id);
     }).get();
@@ -388,7 +389,7 @@ void storage_service::prepare_to_join(
 
     slogger.info("Starting up server gossip");
 
-    auto generation_number = db::system_keyspace::increment_and_get_generation().get0();
+    auto generation_number = _system_keyspace.increment_and_get_generation().get0();
     auto advertise = gms::advertise_myself(!replacing_a_node_with_same_ip);
     _gossiper.start_gossiping(generation_number, app_states, gms::bind_messaging_port(bool(do_bind)), advertise).get();
 
@@ -447,11 +448,11 @@ void storage_service::join_token_ring(int delay) {
     // to get schema info from gossip which defeats the purpose.  See CASSANDRA-4427 for the gory details.
     std::unordered_set<inet_address> current;
     if (should_bootstrap()) {
-        bool resume_bootstrap = db::system_keyspace::bootstrap_in_progress();
+        bool resume_bootstrap = _system_keyspace.bootstrap_in_progress();
         if (resume_bootstrap) {
             slogger.warn("Detected previous bootstrap failure; retrying");
         } else {
-            db::system_keyspace::set_bootstrap_state(db::system_keyspace::bootstrap_state::IN_PROGRESS).get();
+            _system_keyspace.set_bootstrap_state(db::system_keyspace::bootstrap_state::IN_PROGRESS).get();
         }
         set_mode(mode::JOINING, "waiting for ring information", true);
         // first sleep the delay to make sure we see *at least* one other node
@@ -503,7 +504,7 @@ void storage_service::join_token_ring(int delay) {
             }
             set_mode(mode::JOINING, "getting bootstrap token", true);
             if (resume_bootstrap) {
-                _bootstrap_tokens = db::system_keyspace::get_saved_tokens().get0();
+                _bootstrap_tokens = _system_keyspace.get_saved_tokens().get0();
                 if (!_bootstrap_tokens.empty()) {
                     slogger.info("Using previously saved tokens = {}", _bootstrap_tokens);
                 } else {
@@ -543,12 +544,12 @@ void storage_service::join_token_ring(int delay) {
         }
         maybe_start_sys_dist_ks();
         mark_existing_views_as_built();
-        db::system_keyspace::update_tokens(_bootstrap_tokens).get();
+        _system_keyspace.update_tokens(_bootstrap_tokens).get();
         bootstrap(); // blocks until finished
     } else {
         maybe_start_sys_dist_ks();
         size_t num_tokens = _db.local().get_config().num_tokens();
-        _bootstrap_tokens = db::system_keyspace::get_saved_tokens().get0();
+        _bootstrap_tokens = _system_keyspace.get_saved_tokens().get0();
         if (_bootstrap_tokens.empty()) {
             auto initial_tokens = _db.local().get_initial_tokens();
             if (initial_tokens.size() < 1) {
@@ -565,7 +566,7 @@ void storage_service::join_token_ring(int delay) {
                 }
                 slogger.info("Saved tokens not found. Using configuration value: {}", _bootstrap_tokens);
             }
-            db::system_keyspace::update_tokens(_bootstrap_tokens).get();
+            _system_keyspace.update_tokens(_bootstrap_tokens).get();
         } else {
             if (_bootstrap_tokens.size() != num_tokens) {
                 throw std::runtime_error(format("Cannot change the number of tokens from {:d} to {:d}", _bootstrap_tokens.size(), num_tokens));
@@ -583,13 +584,13 @@ void storage_service::join_token_ring(int delay) {
         return tmptr->update_normal_tokens(_bootstrap_tokens, get_broadcast_address());
     }).get();
 
-    if (!db::system_keyspace::bootstrap_complete()) {
+    if (!_system_keyspace.bootstrap_complete()) {
         // If we're not bootstrapping then we shouldn't have chosen a CDC streams timestamp yet.
         assert(should_bootstrap() || !_cdc_gen_id);
 
         // Don't try rewriting CDC stream description tables.
         // See cdc.md design notes, `Streams description table V1 and rewriting` section, for explanation.
-        db::system_keyspace::cdc_set_rewritten(std::nullopt).get();
+        _system_keyspace.cdc_set_rewritten(std::nullopt).get();
     }
 
     if (!_cdc_gen_id) {
@@ -607,7 +608,7 @@ void storage_service::join_token_ring(int delay) {
         // Finally, if we're the first node, we'll create the first generation.
 
         if (!_db.local().is_replacing()
-                && (!db::system_keyspace::bootstrap_complete()
+                && (!_system_keyspace.bootstrap_complete()
                     || cdc::should_propose_first_generation(get_broadcast_address(), _gossiper))) {
             try {
                 _cdc_gen_id = cdc::make_new_cdc_generation(_db.local().get_config(),
@@ -625,12 +626,12 @@ void storage_service::join_token_ring(int delay) {
 
     // Persist the CDC streams timestamp before we persist bootstrap_state = COMPLETED.
     if (_cdc_gen_id) {
-        db::system_keyspace::update_cdc_generation_id(*_cdc_gen_id).get();
+        _system_keyspace.update_cdc_generation_id(*_cdc_gen_id).get();
     }
     // If we crash now, we will choose a new CDC streams timestamp anyway (because we will also choose a new set of tokens).
     // But if we crash after setting bootstrap_state = COMPLETED, we will keep using the persisted CDC streams timestamp after restarting.
 
-    db::system_keyspace::set_bootstrap_state(db::system_keyspace::bootstrap_state::COMPLETED).get();
+    _system_keyspace.set_bootstrap_state(db::system_keyspace::bootstrap_state::COMPLETED).get();
     // At this point our local tokens and CDC streams timestamp are chosen (_bootstrap_tokens, _cdc_gen_id) and will not be changed.
 
     // start participating in the ring.
@@ -657,7 +658,7 @@ void storage_service::mark_existing_views_as_built() {
     _db.invoke_on(0, [this] (database& db) {
         return do_with(db.get_views(), [this] (std::vector<view_ptr>& views) {
             return parallel_for_each(views, [this] (view_ptr& view) {
-                return db::system_keyspace::mark_view_as_built(view->ks_name(), view->cf_name()).then([this, view] {
+                return _system_keyspace.mark_view_as_built(view->ks_name(), view->cf_name()).then([this, view] {
                     return _sys_dist_ks.local().finish_view_build(view->ks_name(), view->cf_name());
                 });
             });
@@ -733,7 +734,7 @@ void storage_service::bootstrap() {
         auto replace_addr = _db.local().get_replace_address();
         if (replace_addr) {
             slogger.debug("Removing replaced endpoint {} from system.peers", *replace_addr);
-            db::system_keyspace::remove_endpoint(*replace_addr).get();
+            _system_keyspace.remove_endpoint(*replace_addr).get();
         }
     }
 
@@ -992,7 +993,7 @@ void storage_service::handle_state_normal(inet_address endpoint) {
     slogger.debug("handle_state_normal: endpoint={} owned_tokens = {}", endpoint, owned_tokens);
     if (!owned_tokens.empty() && !endpoints_to_remove.count(endpoint)) {
         update_peer_info(endpoint);
-        db::system_keyspace::update_tokens(endpoint, owned_tokens).then_wrapped([endpoint] (auto&& f) {
+        _system_keyspace.update_tokens(endpoint, owned_tokens).then_wrapped([endpoint] (auto&& f) {
             try {
                 f.get();
             } catch (...) {
@@ -1259,8 +1260,8 @@ void storage_service::on_restart(gms::inet_address endpoint, gms::endpoint_state
 
 // Runs inside seastar::async context
 template <typename T>
-static void update_table(gms::inet_address endpoint, sstring col, T value) {
-    db::system_keyspace::update_peer_info(endpoint, col, value).then_wrapped([col, endpoint] (auto&& f) {
+static void update_table(db::system_keyspace& system_keyspace, gms::inet_address endpoint, sstring col, T value) {
+    system_keyspace.update_peer_info(endpoint, col, value).then_wrapped([col, endpoint] (auto&& f) {
         try {
             f.get();
         } catch (...) {
@@ -1274,11 +1275,11 @@ static void update_table(gms::inet_address endpoint, sstring col, T value) {
 void storage_service::do_update_system_peers_table(gms::inet_address endpoint, const application_state& state, const versioned_value& value) {
     slogger.debug("Update system.peers table: endpoint={}, app_state={}, versioned_value={}", endpoint, state, value);
     if (state == application_state::RELEASE_VERSION) {
-        update_table(endpoint, "release_version", value.value);
+        update_table(_system_keyspace, endpoint, "release_version", value.value);
     } else if (state == application_state::DC) {
-        update_table(endpoint, "data_center", value.value);
+        update_table(_system_keyspace, endpoint, "data_center", value.value);
     } else if (state == application_state::RACK) {
-        update_table(endpoint, "rack", value.value);
+        update_table(_system_keyspace, endpoint, "rack", value.value);
     } else if (state == application_state::RPC_ADDRESS) {
         auto col = sstring("rpc_address");
         inet_address ep;
@@ -1288,13 +1289,13 @@ void storage_service::do_update_system_peers_table(gms::inet_address endpoint, c
             slogger.error("fail to update {} for {}: invalid rcpaddr {}", col, endpoint, value.value);
             return;
         }
-        update_table(endpoint, col, ep.addr());
+        update_table(_system_keyspace, endpoint, col, ep.addr());
     } else if (state == application_state::SCHEMA) {
-        update_table(endpoint, "schema_version", utils::UUID(value.value));
+        update_table(_system_keyspace, endpoint, "schema_version", utils::UUID(value.value));
     } else if (state == application_state::HOST_ID) {
-        update_table(endpoint, "host_id", utils::UUID(value.value));
+        update_table(_system_keyspace, endpoint, "host_id", utils::UUID(value.value));
     } else if (state == application_state::SUPPORTED_FEATURES) {
-        update_table(endpoint, "supported_features", value.value);
+        update_table(_system_keyspace, endpoint, "supported_features", value.value);
     }
 }
 
@@ -1385,8 +1386,8 @@ future<> storage_service::init_server(bind_messaging_port do_bind) {
         std::unordered_set<inet_address> loaded_endpoints;
         if (_db.local().get_config().load_ring_state()) {
             slogger.info("Loading persisted ring state");
-            auto loaded_tokens = db::system_keyspace::load_tokens().get0();
-            auto loaded_host_ids = db::system_keyspace::load_host_ids().get0();
+            auto loaded_tokens = _system_keyspace.load_tokens().get0();
+            auto loaded_host_ids = _system_keyspace.load_host_ids().get0();
 
             for (auto& x : loaded_tokens) {
                 slogger.debug("Loaded tokens: endpoint={}, tokens={}", x.first, x.second);
@@ -1403,7 +1404,7 @@ future<> storage_service::init_server(bind_messaging_port do_bind) {
                 auto tokens = x.second;
                 if (ep == get_broadcast_address()) {
                     // entry has been mistakenly added, delete it
-                    db::system_keyspace::remove_endpoint(ep).get();
+                    _system_keyspace.remove_endpoint(ep).get();
                 } else {
                     tmptr->update_normal_tokens(tokens, ep).get();
                     if (loaded_host_ids.contains(ep)) {
@@ -1424,7 +1425,7 @@ future<> storage_service::init_server(bind_messaging_port do_bind) {
         auto initial_contact_nodes = loaded_endpoints.empty() ?
             std::unordered_set<gms::inet_address>(seeds.begin(), seeds.end()) :
             loaded_endpoints;
-        auto loaded_peer_features = db::system_keyspace::load_peer_features().get0();
+        auto loaded_peer_features = _system_keyspace.load_peer_features().get0();
         slogger.info("initial_contact_nodes={}, loaded_endpoints={}, loaded_peer_features={}",
                 initial_contact_nodes, loaded_endpoints, loaded_peer_features.size());
         for (auto& x : loaded_peer_features) {
@@ -1546,7 +1547,7 @@ future<> storage_service::check_for_endpoint_collision(std::unordered_set<gms::i
 // Runs inside seastar::async context
 void storage_service::remove_endpoint(inet_address endpoint) {
     _gossiper.remove_endpoint(endpoint);
-    db::system_keyspace::remove_endpoint(endpoint).then_wrapped([endpoint] (auto&& f) {
+    _system_keyspace.remove_endpoint(endpoint).then_wrapped([endpoint] (auto&& f) {
         try {
             f.get();
         } catch (...) {
@@ -1598,7 +1599,7 @@ storage_service::prepare_replacement_info(std::unordered_set<gms::inet_address> 
 
         // use the replacee's host Id as our own so we receive hints, etc
         auto host_id = _gossiper.get_host_id(replace_address);
-        return db::system_keyspace::set_local_host_id(host_id).discard_result().then([this, ret = std::move(ret)] () mutable {
+        return _system_keyspace.set_local_host_id(host_id).discard_result().then([this, ret = std::move(ret)] () mutable {
             return _gossiper.reset_endpoint_state_map().then([ret = std::move(ret)] () mutable { // clean up since we have what we need
                 return make_ready_future<replacement_info>(std::move(ret));
             });
@@ -1806,12 +1807,12 @@ future<> storage_service::start_gossiping(bind_messaging_port do_bind) {
         return seastar::async([&ss, do_bind] {
             if (!ss._initialized) {
                 slogger.warn("Starting gossip by operator request");
-                auto cdc_gen_ts = db::system_keyspace::get_cdc_generation_id().get0();
+                auto cdc_gen_ts = ss._system_keyspace.get_cdc_generation_id().get0();
                 if (!cdc_gen_ts) {
                     cdc_log.warn("CDC generation timestamp missing when starting gossip");
                 }
                 set_gossip_tokens(ss._gossiper,
-                        db::system_keyspace::get_local_tokens().get0(),
+                        ss._system_keyspace.get_local_tokens().get0(),
                         cdc_gen_ts);
                 ss._gossiper.force_newer_generation();
                 ss._gossiper.start_gossiping(utils::get_generation_number(), gms::bind_messaging_port(bool(do_bind))).then([&ss] {
@@ -2013,7 +2014,7 @@ future<> storage_service::decommission() {
             slogger.info("DECOMMISSIONING: stop batchlog_manager done");
 
             // StageManager.shutdownNow();
-            db::system_keyspace::set_bootstrap_state(db::system_keyspace::bootstrap_state::DECOMMISSIONED).get();
+            ss._system_keyspace.set_bootstrap_state(db::system_keyspace::bootstrap_state::DECOMMISSIONED).get();
             slogger.info("DECOMMISSIONING: set_bootstrap_state done");
             ss.set_mode(mode::DECOMMISSIONED, true);
             slogger.info("DECOMMISSIONING: done");
@@ -3056,7 +3057,7 @@ future<> storage_service::confirm_replication(inet_address node) {
 
 // Runs inside seastar::async context
 void storage_service::leave_ring() {
-    db::system_keyspace::set_bootstrap_state(db::system_keyspace::bootstrap_state::NEEDS_BOOTSTRAP).get();
+    _system_keyspace.set_bootstrap_state(db::system_keyspace::bootstrap_state::NEEDS_BOOTSTRAP).get();
     mutate_token_metadata([this] (mutable_token_metadata_ptr tmptr) {
         auto endpoint = get_broadcast_address();
         tmptr->remove_endpoint(endpoint);
@@ -3065,7 +3066,7 @@ void storage_service::leave_ring() {
 
     auto expire_time = _gossiper.compute_expire_time().time_since_epoch().count();
     _gossiper.add_local_application_state(gms::application_state::STATUS,
-            versioned_value::left(db::system_keyspace::get_local_tokens().get0(), expire_time)).get();
+            versioned_value::left(_system_keyspace.get_local_tokens().get0(), expire_time)).get();
     auto delay = std::max(get_ring_delay(), gms::gossiper::INTERVAL);
     slogger.info("Announcing that I have left the ring for {}ms", delay.count());
     sleep_abortable(delay, _abort_source).get();
@@ -3099,7 +3100,7 @@ storage_service::stream_ranges(std::unordered_map<sstring, std::unordered_multim
 }
 
 future<> storage_service::start_leaving() {
-    return _gossiper.add_local_application_state(application_state::STATUS, versioned_value::leaving(db::system_keyspace::get_local_tokens().get0())).then([this] {
+    return _gossiper.add_local_application_state(application_state::STATUS, versioned_value::leaving(_system_keyspace.get_local_tokens().get0())).then([this] {
         return mutate_token_metadata([this] (mutable_token_metadata_ptr tmptr) {
             auto endpoint = get_broadcast_address();
             tmptr->add_leaving_endpoint(endpoint);
