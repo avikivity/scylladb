@@ -22,6 +22,7 @@
 #pragma once
 
 #include <utility>
+#include "utils/fmt-compat.hh"
 
 namespace thrift {
 
@@ -29,7 +30,7 @@ template <typename Ex, typename... Args>
 Ex
 make_exception(const char* fmt, Args&&... args) {
     Ex ex;
-    ex.why = fmt::format(fmt, std::forward<Args>(args)...);
+    ex.why = fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...);
     return ex;
 }
 
