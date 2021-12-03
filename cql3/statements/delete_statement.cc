@@ -101,7 +101,7 @@ delete_statement::prepare_internal(database& db, schema_ptr schema, prepare_cont
             throw exceptions::invalid_request_exception(format("Invalid identifier {} for deletion (should not be a PRIMARY KEY part)", def->name_as_text()));
         }
 
-        auto&& op = deletion->prepare(db, schema->ks_name(), *def);
+        auto&& op = deletion->prepare(db, schema->ks_name(), *schema, *def);
         op->fill_prepare_context(ctx);
         stmt->add_operation(op);
     }

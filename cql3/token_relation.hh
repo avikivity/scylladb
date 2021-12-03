@@ -126,6 +126,7 @@ protected:
                                    const expr::expression& raw,
                                    database& db,
                                    const sstring& keyspace,
+                                   const schema& schema,
                                    prepare_context& ctx) const override;
 };
 

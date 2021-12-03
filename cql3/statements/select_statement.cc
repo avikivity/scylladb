@@ -1486,7 +1486,8 @@ select_statement::prepare_limit(database& db, prepare_context& ctx, const std::o
         return std::nullopt;
     }
 
-    expr::expression prep_limit = prepare_expression(*limit, db, keyspace(), limit_receiver());
+    // LIMIT cannot reference the table, so pass null schema
+    expr::expression prep_limit = prepare_expression(*limit, db, keyspace(), /* schema */ nullptr, limit_receiver());
     expr::fill_prepare_context(prep_limit, ctx);
     return prep_limit;
 }

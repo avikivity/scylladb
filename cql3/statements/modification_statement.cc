@@ -535,7 +535,7 @@ modification_statement::prepare_conditions(database& db, const schema& schema, p
                     throw exceptions::invalid_request_exception(format("Unknown identifier {}", *id));
                 }
 
-                auto condition = entry.second->prepare(db, keyspace(), *def);
+                auto condition = entry.second->prepare(db, keyspace(), schema, *def);
                 condition->collect_marker_specificaton(ctx);
 
                 if (def->is_primary_key()) {

@@ -252,6 +252,7 @@ protected:
                                            const expr::expression& raw,
                                            database& db,
                                            const sstring& keyspace,
+                                           const schema& schema,
                                            prepare_context& ctx) const = 0;
 
     /**
@@ -268,11 +269,12 @@ protected:
                                                  const std::vector<expr::expression>& raws,
                                                  database& db,
                                                  const sstring& keyspace,
+                                                 const schema& schema,
                                                  prepare_context& ctx) const {
         std::vector<expr::expression> expressions;
         expressions.reserve(raws.size());
         for (const auto& r : raws) {
-            expressions.emplace_back(to_expression(receivers, r, db, keyspace, ctx));
+            expressions.emplace_back(to_expression(receivers, r, db, keyspace, schema, ctx));
         }
         return expressions;
     }

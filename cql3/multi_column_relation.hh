@@ -156,7 +156,7 @@ protected:
         std::transform(rs.begin(), rs.end(), col_specs.begin(), [] (auto cs) {
             return cs->column_specification;
         });
-        auto e = to_expression(col_specs, get_value(), db, schema->ks_name(), ctx);
+        auto e = to_expression(col_specs, get_value(), db, schema->ks_name(), *schema, ctx);
         return ::make_shared<restrictions::multi_column_restriction::EQ>(schema, rs, std::move(e));
     }
 
@@ -168,13 +168,13 @@ protected:
             return cs->column_specification;
         });
         if (_in_marker) {
-            auto e = to_expression(col_specs, get_value(), db, schema->ks_name(), ctx);
+            auto e = to_expression(col_specs, get_value(), db, schema->ks_name(), *schema, ctx);
             auto bound_value_marker = expr::as<expr::bind_variable>(e);
             return ::make_shared<restrictions::multi_column_restriction::IN_with_marker>(schema, rs, std::move(bound_value_marker));
         } else {
             std::vector<expr::expression> raws(_in_values.size());
             std::copy(_in_values.begin(), _in_values.end(), raws.begin());
-            auto es = to_expressions(col_specs, raws, db, schema->ks_name(), ctx);
+            auto es = to_expressions(col_specs, raws, db, schema->ks_name(), *schema, ctx);
             // Convert a single-item IN restriction to an EQ restriction
             if (es.size() == 1) {
                 return ::make_shared<restrictions::multi_column_restriction::EQ>(schema, rs, std::move(es[0]));
@@ -191,7 +191,7 @@ protected:
         std::transform(rs.begin(), rs.end(), col_specs.begin(), [] (auto cs) {
             return cs->column_specification;
         });
-        auto e = to_expression(col_specs, get_value(), db, schema->ks_name(), ctx);
+        auto e = to_expression(col_specs, get_value(), db, schema->ks_name(), *schema, ctx);
         return ::make_shared<restrictions::multi_column_restriction::slice>(schema, rs, bound, inclusive, std::move(e), _mode);
     }
 
@@ -214,8 +214,8 @@ protected:
 
     virtual expr::expression to_expression(const std::vector<lw_shared_ptr<column_specification>>& receivers,
                                            const expr::expression& raw, database& db, const sstring& keyspace,
-                                           prepare_context& ctx) const override {
-        auto e = prepare_expression_multi_column(raw, db, keyspace, receivers);
+                                           const schema& schema, prepare_context& ctx) const override {
+        auto e = prepare_expression_multi_column(raw, db, keyspace, &schema, receivers);
         expr::fill_prepare_context(e, ctx);
         return e;
     }
