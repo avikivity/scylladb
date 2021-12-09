@@ -469,7 +469,7 @@ static future<> scan_table_ranges(
             if (!cell) {
                 continue;
             }
-            auto v = meta[*expiration_column]->type->deserialize(*cell);
+            auto v = meta[*expiration_column]->require_type()->deserialize(*cell);
             bool expired = false;
             // FIXME: don't recalculate "now" all the time
             auto now = gc_clock::now();

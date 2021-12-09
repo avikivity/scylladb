@@ -1914,7 +1914,7 @@ void cql_server::response::write(const cql3::metadata& m, bool no_metadata) {
             write_string(name->cf_name);
         }
         write_string(name->name->text());
-        type_codec::encode(*this, name->type);
+        type_codec::encode(*this, name->require_type());
     }
 }
 
@@ -1947,7 +1947,7 @@ void cql_server::response::write(const cql3::prepared_metadata& m, uint8_t versi
             write_string(name->cf_name);
         }
         write_string(name->name->text());
-        type_codec::encode(*this, name->type);
+        type_codec::encode(*this, name->require_type());
     }
 }
 

@@ -251,7 +251,7 @@ functions::get(database& db,
         if (!receiver) {
             throw exceptions::invalid_request_exception("fromJson() can only be called if receiver type is known");
         }
-        return make_from_json_function(db, keyspace, receiver->type);
+        return make_from_json_function(db, keyspace, receiver->require_type());
     }
 
     if (name.has_keyspace()
@@ -401,7 +401,7 @@ functions::validate_types(database& db,
         if (!is_assignable(provided->test_assignment(db, keyspace, *expected))) {
             throw exceptions::invalid_request_exception(
                     format("Type error: {} cannot be passed as argument {:d} of function {} of type {}",
-                            provided, i, fun->name(), expected->type->as_cql3_type()));
+                            provided, i, fun->name(), expected->require_type()->as_cql3_type()));
         }
     }
 }

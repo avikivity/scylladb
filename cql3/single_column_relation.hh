@@ -207,7 +207,7 @@ private:
     std::vector<lw_shared_ptr<column_specification>> to_receivers(const schema& schema, const column_definition& column_def) const;
 
     static lw_shared_ptr<column_specification> make_collection_receiver(lw_shared_ptr<column_specification> receiver, bool for_key) {
-        return static_cast<const collection_type_impl*>(receiver->type.get())->make_collection_receiver(*receiver, for_key);
+        return static_cast<const collection_type_impl*>(receiver->require_type().get())->make_collection_receiver(*receiver, for_key);
     }
 
     bool is_legal_relation_for_non_frozen_collection() const {

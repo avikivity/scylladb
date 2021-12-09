@@ -93,7 +93,7 @@ public:
                 const cql3::column_specification& col = *meta[i];
                 const bytes_opt& cell = in_row[i];
                 if (cell.has_value()) {
-                    out_row[col.name->text()] = fmt::format("{}", to_json_string(*col.type, cell));
+                    out_row[col.name->text()] = fmt::format("{}", to_json_string(*col.require_type(), cell));
                 }
             }
             output_rows.append(out_row);

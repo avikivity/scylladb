@@ -39,7 +39,7 @@ namespace cql3::expr {
 static
 lw_shared_ptr<column_specification>
 usertype_field_spec_of(const column_specification& column, size_t field) {
-    auto&& ut = static_pointer_cast<const user_type_impl>(column.type);
+    auto&& ut = static_pointer_cast<const user_type_impl>(column.require_type());
     auto&& name = ut->field_name(field);
     auto&& sname = sstring(reinterpret_cast<const char*>(name.data()), name.size());
     return make_lw_shared<column_specification>(
@@ -52,11 +52,11 @@ usertype_field_spec_of(const column_specification& column, size_t field) {
 static
 void
 usertype_constructor_validate_assignable_to(const usertype_constructor& u, database& db, const sstring& keyspace, const column_specification& receiver) {
-    if (!receiver.type->is_user_type()) {
-        throw exceptions::invalid_request_exception(format("Invalid user type literal for {} of type {}", receiver.name, receiver.type->as_cql3_type()));
+    if (!receiver.require_type()->is_user_type()) {
+        throw exceptions::invalid_request_exception(format("Invalid user type literal for {} of type {}", receiver.name, receiver.require_type()->as_cql3_type()));
     }
 
-    auto ut = static_pointer_cast<const user_type_impl>(receiver.type);
+    auto ut = static_pointer_cast<const user_type_impl>(receiver.require_type());
     for (size_t i = 0; i < ut->size(); i++) {
         column_identifier field(to_bytes(ut->field_name(i)), utf8_type);
         if (!u.elements.contains(field)) {
@@ -65,7 +65,7 @@ usertype_constructor_validate_assignable_to(const usertype_constructor& u, datab
         const expression& value = u.elements.at(field);
         auto&& field_spec = usertype_field_spec_of(receiver, i);
         if (!assignment_testable::is_assignable(test_assignment(value, db, keyspace, *field_spec))) {
-            throw exceptions::invalid_request_exception(format("Invalid user type literal for {}: field {} is not of type {}", receiver.name, field, field_spec->type->as_cql3_type()));
+            throw exceptions::invalid_request_exception(format("Invalid user type literal for {}: field {} is not of type {}", receiver.name, field, field_spec->require_type()->as_cql3_type()));
         }
     }
 }
@@ -85,7 +85,7 @@ static
 expression
 usertype_constructor_prepare_expression(const usertype_constructor& u, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
     usertype_constructor_validate_assignable_to(u, db, keyspace, *receiver);
-    auto&& ut = static_pointer_cast<const user_type_impl>(receiver->type);
+    auto&& ut = static_pointer_cast<const user_type_impl>(receiver->require_type());
     bool all_terminal = true;
 
     usertype_constructor::elements_map_type prepared_elements;
@@ -137,7 +137,7 @@ lw_shared_ptr<column_specification>
 map_key_spec_of(const column_specification& column) {
     return make_lw_shared<column_specification>(column.ks_name, column.cf_name,
                 ::make_shared<column_identifier>(format("key({})", *column.name), true),
-                dynamic_cast<const map_type_impl&>(column.type->without_reversed()).get_keys_type());
+                dynamic_cast<const map_type_impl&>(column.require_type()->without_reversed()).get_keys_type());
 }
 
 static
@@ -145,14 +145,14 @@ lw_shared_ptr<column_specification>
 map_value_spec_of(const column_specification& column) {
     return make_lw_shared<column_specification>(column.ks_name, column.cf_name,
                 ::make_shared<column_identifier>(format("value({})", *column.name), true),
-                 dynamic_cast<const map_type_impl&>(column.type->without_reversed()).get_values_type());
+                 dynamic_cast<const map_type_impl&>(column.require_type()->without_reversed()).get_values_type());
 }
 
 static
 void
 map_validate_assignable_to(const collection_constructor& c, database& db, const sstring& keyspace, const column_specification& receiver) {
-    if (!receiver.type->without_reversed().is_map()) {
-        throw exceptions::invalid_request_exception(format("Invalid map literal for {} of type {}", *receiver.name, receiver.type->as_cql3_type()));
+    if (!receiver.require_type()->without_reversed().is_map()) {
+        throw exceptions::invalid_request_exception(format("Invalid map literal for {} of type {}", *receiver.name, receiver.require_type()->as_cql3_type()));
     }
     auto&& key_spec = map_key_spec_of(receiver);
     auto&& value_spec = map_value_spec_of(receiver);
@@ -162,10 +162,10 @@ map_validate_assignable_to(const collection_constructor& c, database& db, const 
             on_internal_error(expr_logger, "map element is not a tuple of arity 2");
         }
         if (!is_assignable(test_assignment(entry_tuple.elements[0], db, keyspace, *key_spec))) {
-            throw exceptions::invalid_request_exception(format("Invalid map literal for {}: key {} is not of type {}", *receiver.name, entry_tuple.elements[0], key_spec->type->as_cql3_type()));
+            throw exceptions::invalid_request_exception(format("Invalid map literal for {}: key {} is not of type {}", *receiver.name, entry_tuple.elements[0], key_spec->require_type()->as_cql3_type()));
         }
         if (!is_assignable(test_assignment(entry_tuple.elements[1], db, keyspace, *value_spec))) {
-            throw exceptions::invalid_request_exception(format("Invalid map literal for {}: value {} is not of type {}", *receiver.name, entry_tuple.elements[1], value_spec->type->as_cql3_type()));
+            throw exceptions::invalid_request_exception(format("Invalid map literal for {}: value {} is not of type {}", *receiver.name, entry_tuple.elements[1], value_spec->require_type()->as_cql3_type()));
         }
     }
 }
@@ -173,7 +173,7 @@ map_validate_assignable_to(const collection_constructor& c, database& db, const 
 static
 assignment_testable::test_result
 map_test_assignment(const collection_constructor& c, database& db, const sstring& keyspace, const column_specification& receiver) {
-    if (!dynamic_pointer_cast<const map_type_impl>(receiver.type)) {
+    if (!dynamic_pointer_cast<const map_type_impl>(receiver.require_type())) {
         return assignment_testable::test_result::NOT_ASSIGNABLE;
     }
     // If there is no elements, we can't say it's an exact match (an empty map if fundamentally polymorphic).
@@ -235,7 +235,7 @@ map_prepare_expression(const collection_constructor& c, database& db, const sstr
     collection_constructor map_value {
         .style = collection_constructor::style_type::map,
         .elements = std::move(values),
-        .type = receiver->type
+        .type = receiver->require_type()
     };
     if (all_terminal) {
         return evaluate(map_value, query_options::DEFAULT);
@@ -249,26 +249,26 @@ lw_shared_ptr<column_specification>
 set_value_spec_of(const column_specification& column) {
     return make_lw_shared<column_specification>(column.ks_name, column.cf_name,
             ::make_shared<column_identifier>(format("value({})", *column.name), true),
-            dynamic_cast<const set_type_impl&>(column.type->without_reversed()).get_elements_type());
+            dynamic_cast<const set_type_impl&>(column.require_type()->without_reversed()).get_elements_type());
 }
 
 static
 void
 set_validate_assignable_to(const collection_constructor& c, database& db, const sstring& keyspace, const column_specification& receiver) {
-    if (!receiver.type->without_reversed().is_set()) {
+    if (!receiver.require_type()->without_reversed().is_set()) {
         // We've parsed empty maps as a set literal to break the ambiguity so
         // handle that case now
-        if (dynamic_pointer_cast<const map_type_impl>(receiver.type) && c.elements.empty()) {
+        if (dynamic_pointer_cast<const map_type_impl>(receiver.require_type()) && c.elements.empty()) {
             return;
         }
 
-        throw exceptions::invalid_request_exception(format("Invalid set literal for {} of type {}", receiver.name, receiver.type->as_cql3_type()));
+        throw exceptions::invalid_request_exception(format("Invalid set literal for {} of type {}", receiver.name, receiver.require_type()->as_cql3_type()));
     }
 
     auto&& value_spec = set_value_spec_of(receiver);
     for (auto& e: c.elements) {
         if (!is_assignable(test_assignment(e, db, keyspace, *value_spec))) {
-            throw exceptions::invalid_request_exception(format("Invalid set literal for {}: value {} is not of type {}", *receiver.name, e, value_spec->type->as_cql3_type()));
+            throw exceptions::invalid_request_exception(format("Invalid set literal for {}: value {} is not of type {}", *receiver.name, e, value_spec->require_type()->as_cql3_type()));
         }
     }
 }
@@ -276,9 +276,9 @@ set_validate_assignable_to(const collection_constructor& c, database& db, const 
 static
 assignment_testable::test_result
 set_test_assignment(const collection_constructor& c, database& db, const sstring& keyspace, const column_specification& receiver) {
-    if (!receiver.type->without_reversed().is_set()) {
+    if (!receiver.require_type()->without_reversed().is_set()) {
         // We've parsed empty maps as a set literal to break the ambiguity so handle that case now
-        if (dynamic_pointer_cast<const map_type_impl>(receiver.type) && c.elements.empty()) {
+        if (dynamic_pointer_cast<const map_type_impl>(receiver.require_type()) && c.elements.empty()) {
             return assignment_testable::test_result::WEAKLY_ASSIGNABLE;
         }
 
@@ -305,17 +305,17 @@ set_prepare_expression(const collection_constructor& c, database& db, const sstr
         // other words a non-frozen collection only exists if it has elements.  Return nullptr right
         // away to simplify predicate evaluation.  See also
         // https://issues.apache.org/jira/browse/CASSANDRA-5141
-        if (receiver->type->is_multi_cell()) {
-            return constant::make_null(receiver->type);
+        if (receiver->require_type()->is_multi_cell()) {
+            return constant::make_null(receiver->require_type());
         }
         // We've parsed empty maps as a set literal to break the ambiguity so
         // handle that case now. This branch works for frozen sets/maps only.
-        const map_type_impl* maybe_map_type = dynamic_cast<const map_type_impl*>(receiver->type.get());
+        const map_type_impl* maybe_map_type = dynamic_cast<const map_type_impl*>(receiver->require_type().get());
         if (maybe_map_type != nullptr) {
             collection_constructor map_value {
                 .style = collection_constructor::style_type::map,
                 .elements = {},
-                .type = receiver->type
+                .type = receiver->require_type()
             };
             return expr::evaluate(map_value, query_options::DEFAULT);
         }
@@ -343,7 +343,7 @@ set_prepare_expression(const collection_constructor& c, database& db, const sstr
     collection_constructor value {
         .style = collection_constructor::style_type::set,
         .elements = std::move(values),
-        .type = receiver->type
+        .type = receiver->require_type()
     };
     
     if (all_terminal) {
@@ -358,21 +358,21 @@ lw_shared_ptr<column_specification>
 list_value_spec_of(const column_specification& column) {
     return make_lw_shared<column_specification>(column.ks_name, column.cf_name,
             ::make_shared<column_identifier>(format("value({})", *column.name), true),
-                dynamic_cast<const list_type_impl&>(column.type->without_reversed()).get_elements_type());
+                dynamic_cast<const list_type_impl&>(column.require_type()->without_reversed()).get_elements_type());
 }
 
 static
 void
 list_validate_assignable_to(const collection_constructor& c, database& db, const sstring keyspace, const column_specification& receiver) {
-    if (!receiver.type->without_reversed().is_list()) {
+    if (!receiver.require_type()->without_reversed().is_list()) {
         throw exceptions::invalid_request_exception(format("Invalid list literal for {} of type {}",
-                *receiver.name, receiver.type->as_cql3_type()));
+                *receiver.name, receiver.require_type()->as_cql3_type()));
     }
     auto&& value_spec = list_value_spec_of(receiver);
     for (auto& e : c.elements) {
         if (!is_assignable(test_assignment(e, db, keyspace, *value_spec))) {
             throw exceptions::invalid_request_exception(format("Invalid list literal for {}: value {} is not of type {}",
-                    *receiver.name, e, value_spec->type->as_cql3_type()));
+                    *receiver.name, e, value_spec->require_type()->as_cql3_type()));
         }
     }
 }
@@ -380,7 +380,7 @@ list_validate_assignable_to(const collection_constructor& c, database& db, const
 static
 assignment_testable::test_result
 list_test_assignment(const collection_constructor& c, database& db, const sstring& keyspace, const column_specification& receiver) {
-    if (!dynamic_pointer_cast<const list_type_impl>(receiver.type)) {
+    if (!dynamic_pointer_cast<const list_type_impl>(receiver.require_type())) {
         return assignment_testable::test_result::NOT_ASSIGNABLE;
     }
 
@@ -403,8 +403,8 @@ list_prepare_expression(const collection_constructor& c, database& db, const sst
     // other words a non-frozen collection only exists if it has elements. Return nullptr right
     // away to simplify predicate evaluation. See also
     // https://issues.apache.org/jira/browse/CASSANDRA-5141
-    if (receiver->type->is_multi_cell() &&  c.elements.empty()) {
-        return constant::make_null(receiver->type);
+    if (receiver->require_type()->is_multi_cell() &&  c.elements.empty()) {
+        return constant::make_null(receiver->require_type());
     }
 
     auto&& value_spec = list_value_spec_of(*receiver);
@@ -425,7 +425,7 @@ list_prepare_expression(const collection_constructor& c, database& db, const sst
     collection_constructor value {
         .style = collection_constructor::style_type::list,
         .elements = std::move(values),
-        .type = receiver->type
+        .type = receiver->require_type()
     };
     if (all_terminal) {
         return evaluate(value, query_options::DEFAULT);
@@ -441,15 +441,15 @@ component_spec_of(const column_specification& column, size_t component) {
             column.ks_name,
             column.cf_name,
             ::make_shared<column_identifier>(format("{}[{:d}]", column.name, component), true),
-            static_pointer_cast<const tuple_type_impl>(column.type->underlying_type())->type(component));
+            static_pointer_cast<const tuple_type_impl>(column.require_type()->underlying_type())->type(component));
 }
 
 static
 void
 tuple_constructor_validate_assignable_to(const tuple_constructor& tc, database& db, const sstring& keyspace, const column_specification& receiver) {
-    auto tt = dynamic_pointer_cast<const tuple_type_impl>(receiver.type->underlying_type());
+    auto tt = dynamic_pointer_cast<const tuple_type_impl>(receiver.require_type()->underlying_type());
     if (!tt) {
-        throw exceptions::invalid_request_exception(format("Invalid tuple type literal for {} of type {}", receiver.name, receiver.type->as_cql3_type()));
+        throw exceptions::invalid_request_exception(format("Invalid tuple type literal for {} of type {}", receiver.name, receiver.require_type()->as_cql3_type()));
     }
     for (size_t i = 0; i < tc.elements.size(); ++i) {
         if (i >= tt->size()) {
@@ -460,7 +460,7 @@ tuple_constructor_validate_assignable_to(const tuple_constructor& tc, database& 
         auto&& value = tc.elements[i];
         auto&& spec = component_spec_of(receiver, i);
         if (!assignment_testable::is_assignable(test_assignment(value, db, keyspace, *spec))) {
-            throw exceptions::invalid_request_exception(format("Invalid tuple literal for {}: component {:d} is not of type {}", receiver.name, i, spec->type->as_cql3_type()));
+            throw exceptions::invalid_request_exception(format("Invalid tuple literal for {}: component {:d} is not of type {}", receiver.name, i, spec->require_type()->as_cql3_type()));
         }
     }
 }
@@ -491,7 +491,7 @@ tuple_constructor_prepare_nontuple(const tuple_constructor& tc, database& db, co
     }
     tuple_constructor value {
         .elements  = std::move(values),
-        .type = static_pointer_cast<const tuple_type_impl>(receiver->type)
+        .type = static_pointer_cast<const tuple_type_impl>(receiver->require_type())
     };
     if (all_terminal) {
         return evaluate(value, query_options::DEFAULT);
@@ -516,7 +516,7 @@ tuple_constructor_prepare_tuple(const tuple_constructor& tc, database& db, const
             all_terminal = false;
         }
         values.push_back(std::move(elem));
-        types.push_back(receivers[i]->type);
+        types.push_back(receivers[i]->require_type());
     }
     tuple_constructor value {
         .elements = std::move(values),
@@ -568,7 +568,7 @@ static
 assignment_testable::test_result
 untyped_constant_test_assignment(const untyped_constant& uc, database& db, const sstring& keyspace, const column_specification& receiver)
 {
-    auto receiver_type = receiver.type->as_cql3_type();
+    auto receiver_type = receiver.require_type()->as_cql3_type();
     if (receiver_type.is_collection() || receiver_type.is_user_type()) {
         return assignment_testable::test_result::NOT_ASSIGNABLE;
     }
@@ -644,10 +644,10 @@ untyped_constant_prepare_expression(const untyped_constant& uc, database& db, co
 {
     if (!is_assignable(untyped_constant_test_assignment(uc, db, keyspace, *receiver))) {
         throw exceptions::invalid_request_exception(format("Invalid {} constant ({}) for \"{}\" of type {}",
-            uc.partial_type, uc.raw_text, *receiver->name, receiver->type->as_cql3_type().to_string()));
+            uc.partial_type, uc.raw_text, *receiver->name, receiver->require_type()->as_cql3_type().to_string()));
     }
-    raw_value raw_val = cql3::raw_value::make_value(untyped_constant_parsed_value(uc, receiver->type));
-    return constant(std::move(raw_val), receiver->type);
+    raw_value raw_val = cql3::raw_value::make_value(untyped_constant_parsed_value(uc, receiver->require_type()));
+    return constant(std::move(raw_val), receiver->require_type());
 }
 
 static
@@ -671,7 +671,7 @@ static
 lw_shared_ptr<column_specification>
 bind_variable_scalar_in_make_receiver(const column_specification& receiver) {
     auto in_name = ::make_shared<column_identifier>(sstring("in(") + receiver.name->to_string() + sstring(")"), true);
-    return make_lw_shared<column_specification>(receiver.ks_name, receiver.cf_name, in_name, list_type_impl::get_instance(receiver.type, false));
+    return make_lw_shared<column_specification>(receiver.ks_name, receiver.cf_name, in_name, list_type_impl::get_instance(receiver.require_type(), false));
 }
 
 static
@@ -695,7 +695,7 @@ bind_variable_tuple_make_receiver(const std::vector<lw_shared_ptr<column_specifi
         if (receiver != receivers.back()) {
             in_name += ",";
         }
-        types.push_back(receiver->type);
+        types.push_back(receiver->require_type());
     }
     in_name += ")";
 
@@ -726,11 +726,11 @@ bind_variable_tuple_in_make_receiver(const std::vector<lw_shared_ptr<column_spec
             in_name += ",";
         }
 
-        if (receiver->type->is_collection() && receiver->type->is_multi_cell()) {
+        if (receiver->require_type()->is_collection() && receiver->require_type()->is_multi_cell()) {
             throw exceptions::invalid_request_exception("Non-frozen collection columns do not support IN relations");
         }
 
-        types.emplace_back(receiver->type);
+        types.emplace_back(receiver->require_type());
     }
     in_name += ")";
 
@@ -754,7 +754,7 @@ assignment_testable::test_result
 null_test_assignment(database& db,
         const sstring& keyspace,
         const column_specification& receiver) {
-    return receiver.type->is_counter()
+    return receiver.require_type()->is_counter()
         ? assignment_testable::test_result::NOT_ASSIGNABLE
         : assignment_testable::test_result::WEAKLY_ASSIGNABLE;
 }
@@ -765,7 +765,7 @@ null_prepare_expression(database& db, const sstring& keyspace, const schema* sch
     if (!is_assignable(null_test_assignment(db, keyspace, *receiver))) {
         throw exceptions::invalid_request_exception("Invalid null value for counter increment/decrement");
     }
-    return constant::make_null(receiver->type);
+    return constant::make_null(receiver->require_type());
 }
 
 static
@@ -790,7 +790,7 @@ cast_test_assignment(const cast& c, database& db, const sstring& keyspace, const
         auto&& casted_type = type->prepare(db, keyspace).get_type();
         if (receiver.type == casted_type) {
             return assignment_testable::test_result::EXACT_MATCH;
-        } else if (receiver.type->is_value_compatible_with(*casted_type)) {
+        } else if (receiver.require_type()->is_value_compatible_with(*casted_type)) {
             return assignment_testable::test_result::WEAKLY_ASSIGNABLE;
         } else {
             return assignment_testable::test_result::NOT_ASSIGNABLE;
@@ -808,7 +808,7 @@ cast_prepare_expression(const cast& c, database& db, const sstring& keyspace, co
         throw exceptions::invalid_request_exception(format("Cannot cast value {} to type {}", c.arg, type));
     }
     if (!is_assignable(cast_test_assignment(c, db, keyspace, *receiver))) {
-        throw exceptions::invalid_request_exception(format("Cannot assign value {} to {} of type {}", c, receiver->name, receiver->type->as_cql3_type()));
+        throw exceptions::invalid_request_exception(format("Cannot assign value {} to {} of type {}", c, receiver->name, receiver->require_type()->as_cql3_type()));
     }
     return prepare_expression(c.arg, db, keyspace, schema, receiver);
 }
@@ -838,10 +838,10 @@ prepare_function_call(const expr::function_call& fc, database& db, const sstring
 
     // Functions.get() will complain if no function "name" type check with the provided arguments.
     // We still have to validate that the return type matches however
-    if (!receiver->type->is_value_compatible_with(*scalar_fun->return_type())) {
+    if (!receiver->require_type()->is_value_compatible_with(*scalar_fun->return_type())) {
         throw exceptions::invalid_request_exception(format("Type error: cannot assign result of function {} (type {}) to {} (type {})",
                                                     fun->name(), fun->return_type()->as_cql3_type(),
-                                                    receiver->name, receiver->type->as_cql3_type()));
+                                                    receiver->name, receiver->require_type()->as_cql3_type()));
     }
 
     if (scalar_fun->arg_types().size() != fc.args.size()) {
@@ -893,7 +893,7 @@ test_assignment_function_call(const cql3::expr::function_call& fc, database& db,
         }, fc.func);
         if (fun && receiver.type == fun->return_type()) {
             return assignment_testable::test_result::EXACT_MATCH;
-        } else if (!fun || receiver.type->is_value_compatible_with(*fun->return_type())) {
+        } else if (!fun || receiver.require_type()->is_value_compatible_with(*fun->return_type())) {
             return assignment_testable::test_result::WEAKLY_ASSIGNABLE;
         } else {
             return assignment_testable::test_result::NOT_ASSIGNABLE;

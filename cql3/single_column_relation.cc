@@ -150,34 +150,34 @@ single_column_relation::to_receivers(const schema& schema, const column_definiti
         throw exceptions::invalid_request_exception(format("Predicates on the non-primary-key column ({}) of a COMPACT table are not yet supported", column_def.name_as_text()));
     }
 
-    if (is_contains() && !receiver->type->is_collection()) {
+    if (is_contains() && !receiver->require_type()->is_collection()) {
         throw exceptions::invalid_request_exception(format("Cannot use CONTAINS on non-collection column \"{}\"", receiver->name));
     }
 
     if (is_contains_key()) {
-        if (!dynamic_cast<const map_type_impl*>(receiver->type.get())) {
+        if (!dynamic_cast<const map_type_impl*>(receiver->require_type().get())) {
             throw exceptions::invalid_request_exception(format("Cannot use CONTAINS KEY on non-map column {}", receiver->name));
         }
     }
 
     if (_map_key) {
-        check_false(dynamic_cast<const list_type_impl*>(receiver->type.get()), "Indexes on list entries ({}[index] = value) are not currently supported.", receiver->name);
-        check_true(dynamic_cast<const map_type_impl*>(receiver->type.get()), "Column {} cannot be used as a map", receiver->name);
-        check_true(receiver->type->is_multi_cell(), "Map-entry equality predicates on frozen map column {} are not supported", receiver->name);
+        check_false(dynamic_cast<const list_type_impl*>(receiver->require_type().get()), "Indexes on list entries ({}[index] = value) are not currently supported.", receiver->name);
+        check_true(dynamic_cast<const map_type_impl*>(receiver->require_type().get()), "Column {} cannot be used as a map", receiver->name);
+        check_true(receiver->require_type()->is_multi_cell(), "Map-entry equality predicates on frozen map column {} are not supported", receiver->name);
         check_true(is_EQ(), "Only EQ relations are supported on map entries");
     }
 
-    if (receiver->type->is_collection()) {
+    if (receiver->require_type()->is_collection()) {
         // We don't support relations against entire collections (unless they're frozen), like "numbers = {1, 2, 3}"
-        check_false(receiver->type->is_multi_cell() && !is_legal_relation_for_non_frozen_collection(),
+        check_false(receiver->require_type()->is_multi_cell() && !is_legal_relation_for_non_frozen_collection(),
                    "Collection column '{}' ({}) cannot be restricted by a '{}' relation",
                    receiver->name,
-                   receiver->type->as_cql3_type(),
+                   receiver->require_type()->as_cql3_type(),
                    get_operator());
 
         if (is_contains_key() || is_contains()) {
             receiver = make_collection_receiver(receiver, is_contains_key());
-        } else if (receiver->type->is_multi_cell() && _map_key && is_EQ()) {
+        } else if (receiver->require_type()->is_multi_cell() && _map_key && is_EQ()) {
             return {
                 make_collection_receiver(receiver, true),
                 make_collection_receiver(receiver, false),

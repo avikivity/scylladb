@@ -1059,7 +1059,7 @@ public:
             std::vector<std::string> variable_types;
             std::vector<std::string> variable_names;
             for (auto csp : names) {
-                variable_types.emplace_back(csp->type->name());
+                variable_types.emplace_back(csp->require_type()->name());
                 variable_names.emplace_back(csp->name->to_string());
             }
             _result.__set_variable_types(std::move(variable_types));
@@ -1168,7 +1168,7 @@ private:
         for (auto&& c : rs.get_metadata().get_names()) {
             auto&& name = c->name->to_string();
             name_types.emplace(name, utf8);
-            value_types.emplace(name, c->type->name());
+            value_types.emplace(name, c->require_type()->name());
         }
         mtd.__set_name_types(name_types);
         mtd.__set_value_types(value_types);

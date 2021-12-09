@@ -41,20 +41,29 @@
 
 #pragma once
 
+#include <optional>
+
 #include "types.hh"
 
 namespace cql3 {
 
 class column_identifier;
 
+// Tag type for column_specification constructor
+class column_specification_no_type_t {
+};
+
+inline column_specification_no_type_t column_specification_no_type;
+
 class column_specification final {
 public:
     const sstring ks_name;
     const sstring cf_name;
     const ::shared_ptr<column_identifier> name;
-    const data_type type;
+    const std::optional<data_type> type;
 
-    column_specification(std::string_view ks_name_, std::string_view cf_name_, ::shared_ptr<column_identifier> name_, data_type type_);
+    column_specification(std::string_view ks_name_, std::string_view cf_name_, ::shared_ptr<column_identifier> name_, std::optional<data_type> type_);
+    column_specification(std::string_view ks_name_, std::string_view cf_name_, ::shared_ptr<column_identifier> name_, column_specification_no_type_t);
 
     /**
      * Returns a new <code>ColumnSpecification</code> for the same column but with the specified alias.
@@ -67,6 +76,8 @@ public:
     }
 
     static bool all_in_same_table(const std::vector<lw_shared_ptr<column_specification>>& names);
+
+    const data_type& require_type() const;
 };
 
 }

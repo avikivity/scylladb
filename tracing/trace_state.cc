@@ -239,11 +239,11 @@ void trace_state::build_parameters_map_for_one_prepared(const prepared_checked_w
 
         auto& names = names_opt.value();
         for (; i < values.size(); ++i) {
-            params_map.emplace(format("{}[{:d}]({})", param_name_prefix, i, names[i]), raw_value_to_sstring(values[i], prepared_ptr ? prepared_ptr->bound_names[i]->type : nullptr));
+            params_map.emplace(format("{}[{:d}]({})", param_name_prefix, i, names[i]), raw_value_to_sstring(values[i], prepared_ptr ? prepared_ptr->bound_names[i]->require_type() : nullptr));
         }
     } else {
         for (; i < values.size(); ++i) {
-            params_map.emplace(format("{}[{:d}]", param_name_prefix, i), raw_value_to_sstring(values[i], prepared_ptr ? prepared_ptr->bound_names[i]->type : nullptr));
+            params_map.emplace(format("{}[{:d}]", param_name_prefix, i), raw_value_to_sstring(values[i], prepared_ptr ? prepared_ptr->bound_names[i]->require_type() : nullptr));
         }
     }
 }

@@ -105,7 +105,7 @@ rows_assertions::with_column_types(std::initializer_list<data_type> column_types
         const auto& expected_type = *expected_it++;
         const auto& actual_spec = *actual_it++;
         if (expected_type != actual_spec->type) {
-            fail(format("Column {:d}: expected type {}, got {}", i, expected_type->name(), actual_spec->type->name()));
+            fail(format("Column {:d}: expected type {}, got {}", i, expected_type->name(), actual_spec->require_type()->name()));
         }
     }
     return {*this};

@@ -39,17 +39,39 @@
  * along with Scylla.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <seastar/core/on_internal_error.hh>
+#include "log.hh"
 #include "cql3/column_specification.hh"
 
 namespace cql3 {
 
-column_specification::column_specification(std::string_view ks_name_, std::string_view cf_name_, ::shared_ptr<column_identifier> name_, data_type type_)
+namespace expr {
+
+extern logger expr_logger;
+
+}
+
+column_specification::column_specification(std::string_view ks_name_, std::string_view cf_name_, ::shared_ptr<column_identifier> name_, std::optional<data_type> type_)
         : ks_name(ks_name_)
         , cf_name(cf_name_)
         , name(name_)
         , type(type_)
     { }
 
+column_specification::column_specification(std::string_view ks_name_, std::string_view cf_name_, ::shared_ptr<column_identifier> name_, column_specification_no_type_t)
+        : ks_name(ks_name_)
+        , cf_name(cf_name_)
+        , name(name_)
+        , type(std::nullopt)
+    { }
+
+const data_type&
+column_specification::require_type() const {
+    if (!type) {
+        on_internal_error(expr::expr_logger, "column_specification::type is unexpectedly nullopt");
+    }
+    return *type;
+}
 
 bool column_specification::all_in_same_table(const std::vector<lw_shared_ptr<column_specification>>& names)
 {

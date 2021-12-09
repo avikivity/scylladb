@@ -671,7 +671,7 @@ query_options query_processor::make_internal_options(
         } else if (v.is_null()) {
             bound_values.push_back(cql3::raw_value::make_null());
         } else {
-            bound_values.push_back(cql3::raw_value::make_value(n->type->decompose(v)));
+            bound_values.push_back(cql3::raw_value::make_value(n->require_type()->decompose(v)));
         }
     }
     if (page_size > 0) {

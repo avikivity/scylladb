@@ -1540,14 +1540,14 @@ constant evaluate(const bind_variable& bind_var, const query_options& options) {
     cql3::raw_value_view value = options.get_value_at(bind_var.bind_index);
 
     if (value.is_null()) {
-        return constant::make_null(bind_var.receiver->type);
+        return constant::make_null(bind_var.receiver->require_type());
     }
 
     if (value.is_unset_value()) {
-        return constant::make_unset_value(bind_var.receiver->type);
+        return constant::make_unset_value(bind_var.receiver->require_type());
     }
 
-    const abstract_type& value_type = bind_var.receiver->type->without_reversed();
+    const abstract_type& value_type = bind_var.receiver->require_type()->without_reversed();
     try {
         value.validate(value_type, options.get_cql_serialization_format());
     } catch (const marshal_exception& e) {
@@ -1560,10 +1560,10 @@ constant evaluate(const bind_variable& bind_var, const query_options& options) {
             return reserialize_value(value_bytes, value_type, options.get_cql_serialization_format());
         });
 
-        return constant(raw_value::make_value(std::move(new_value)), bind_var.receiver->type);
+        return constant(raw_value::make_value(std::move(new_value)), bind_var.receiver->require_type());
     }
 
-    return constant(raw_value::make_value(value), bind_var.receiver->type);
+    return constant(raw_value::make_value(value), bind_var.receiver->require_type());
 }
 
 constant evaluate(const tuple_constructor& tuple, const query_options& options) {
