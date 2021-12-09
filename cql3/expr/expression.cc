@@ -68,6 +68,24 @@ expression::operator=(const expression& o) {
     return *this;
 }
 
+bool
+expression::has_type() const {
+    return bool(_v->type_opt);
+}
+
+data_type
+expression::type() const {
+    if (!has_type()) {
+        throw std::runtime_error(fmt::format("expression {} has no type", *this));
+    }
+    return *_v->type_opt;
+}
+
+void
+expression::set_type(data_type type) {
+    _v->type_opt = std::move(type);
+}
+
 binary_operator::binary_operator(expression lhs, oper_t op, expression rhs, comparison_order order)
             : lhs(std::move(lhs))
             , op(op)

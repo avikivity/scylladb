@@ -178,6 +178,10 @@ public:
 
     template <ExpressionElement E>
     friend const E* as_if(const expression* e);
+
+    bool has_type() const;
+    data_type type() const; // throws if !has_type()
+    void set_type(data_type new_type);
 };
 
 // An expression that doesn't contain subexpressions
@@ -372,6 +376,7 @@ struct expression::impl final {
             bind_variable, untyped_constant, constant, tuple_constructor, collection_constructor,
             usertype_constructor>;
     variant_type v;
+    std::optional<data_type> type_opt;
     impl(variant_type v) : v(std::move(v)) {}
 };
 
