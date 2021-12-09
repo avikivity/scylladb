@@ -36,6 +36,9 @@
 
 namespace cql3::expr {
 
+static std::optional<expression> try_prepare_expression(const expression& expr, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver);
+static std::optional<expression> try_prepare_expression_multi_column(const expression& expr, database& db, const sstring& keyspace, const schema* schema, const std::vector<lw_shared_ptr<column_specification>>& receivers);
+
 static
 lw_shared_ptr<column_specification>
 usertype_field_spec_of(const column_specification& column, size_t field) {
@@ -82,7 +85,7 @@ usertype_constructor_test_assignment(const usertype_constructor& u, database& db
 }
 
 static
-expression
+std::optional<expression>
 usertype_constructor_prepare_expression(const usertype_constructor& u, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
     usertype_constructor_validate_assignable_to(u, db, keyspace, *receiver);
     auto&& ut = static_pointer_cast<const user_type_impl>(receiver->require_type());
@@ -100,7 +103,11 @@ usertype_constructor_prepare_expression(const usertype_constructor& u, database&
             raw = iraw->second;
             ++found_values;
         }
-        expression value = prepare_expression(raw, db, keyspace, schema, usertype_field_spec_of(*receiver, i));
+        auto value_opt = try_prepare_expression(raw, db, keyspace, schema, usertype_field_spec_of(*receiver, i));
+        if (!value_opt) {
+            return std::nullopt;
+        }
+        auto& value = *value_opt;
 
         if (!is<constant>(value)) {
             all_terminal = false;
@@ -200,7 +207,7 @@ map_test_assignment(const collection_constructor& c, database& db, const sstring
 }
 
 static
-expression
+std::optional<expression>
 map_prepare_expression(const collection_constructor& c, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
     map_validate_assignable_to(c, db, keyspace, *receiver);
 
@@ -214,8 +221,15 @@ map_prepare_expression(const collection_constructor& c, database& db, const sstr
         if (entry_tuple.elements.size() != 2) {
             on_internal_error(expr_logger, "map element is not a tuple of arity 2");
         }
-        expression k = prepare_expression(entry_tuple.elements[0], db, keyspace, schema, key_spec);
-        expression v = prepare_expression(entry_tuple.elements[1], db, keyspace, schema, value_spec);
+        auto k_opt = try_prepare_expression(entry_tuple.elements[0], db, keyspace, schema, key_spec);
+        auto v_opt = try_prepare_expression(entry_tuple.elements[1], db, keyspace, schema, value_spec);
+
+        if (!k_opt || !v_opt) {
+            return std::nullopt;
+        }
+
+        auto& k = *k_opt;
+        auto& v = *v_opt;
 
         if (contains_bind_marker(k) || contains_bind_marker(k)) {
             throw exceptions::invalid_request_exception(format("Invalid map literal for {}: bind variables are not supported inside collection literals", *receiver->name));
@@ -295,7 +309,7 @@ set_test_assignment(const collection_constructor& c, database& db, const sstring
 }
 
 static
-expression
+std::optional<expression>
 set_prepare_expression(const collection_constructor& c, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
     set_validate_assignable_to(c, db, keyspace, *receiver);
 
@@ -327,7 +341,11 @@ set_prepare_expression(const collection_constructor& c, database& db, const sstr
     bool all_terminal = true;
     for (auto& e : c.elements)
     {
-        expression elem = prepare_expression(e, db, keyspace, schema, value_spec);
+        auto elem_opt = try_prepare_expression(e, db, keyspace, schema, value_spec);
+        if (!elem_opt) {
+            return std::nullopt;
+        }
+        auto& elem = *elem_opt;
 
         if (contains_bind_marker(elem)) {
             throw exceptions::invalid_request_exception(format("Invalid set literal for {}: bind variables are not supported inside collection literals", *receiver->name));
@@ -395,7 +413,7 @@ list_test_assignment(const collection_constructor& c, database& db, const sstrin
 
 
 static
-expression
+std::optional<expression>
 list_prepare_expression(const collection_constructor& c, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
     list_validate_assignable_to(c, db, keyspace, *receiver);
 
@@ -412,7 +430,11 @@ list_prepare_expression(const collection_constructor& c, database& db, const sst
     values.reserve(c.elements.size());
     bool all_terminal = true;
     for (auto& e : c.elements) {
-        expression elem = prepare_expression(e, db, keyspace, schema, value_spec);
+        auto elem_opt = try_prepare_expression(e, db, keyspace, schema, value_spec);
+        if (!elem_opt) {
+            return std::nullopt;
+        }
+        auto& elem = *elem_opt;
 
         if (contains_bind_marker(elem)) {
             throw exceptions::invalid_request_exception(format("Invalid list literal for {}: bind variables are not supported inside collection literals", *receiver->name));
@@ -477,13 +499,17 @@ tuple_constructor_test_assignment(const tuple_constructor& tc, database& db, con
 }
 
 static
-expression
+std::optional<expression>
 tuple_constructor_prepare_nontuple(const tuple_constructor& tc, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
     tuple_constructor_validate_assignable_to(tc, db, keyspace, *receiver);
     std::vector<expression> values;
     bool all_terminal = true;
     for (size_t i = 0; i < tc.elements.size(); ++i) {
-        expression value = prepare_expression(tc.elements[i], db, keyspace, schema, component_spec_of(*receiver, i));
+        auto value_opt = try_prepare_expression(tc.elements[i], db, keyspace, schema, component_spec_of(*receiver, i));
+        if (!value_opt) {
+            return std::nullopt;
+        }
+        auto& value = *value_opt;
         if (!is<constant>(value)) {
             all_terminal = false;
         }
@@ -501,7 +527,7 @@ tuple_constructor_prepare_nontuple(const tuple_constructor& tc, database& db, co
 }
 
 static
-expression
+std::optional<expression>
 tuple_constructor_prepare_tuple(const tuple_constructor& tc, database& db, const sstring& keyspace, const schema* schema, const std::vector<lw_shared_ptr<column_specification>>& receivers) {
     if (tc.elements.size() != receivers.size()) {
         throw exceptions::invalid_request_exception(format("Expected {:d} elements in value tuple, but got {:d}: {}", receivers.size(), tc.elements.size(), tc));
@@ -511,7 +537,11 @@ tuple_constructor_prepare_tuple(const tuple_constructor& tc, database& db, const
     std::vector<data_type> types;
     bool all_terminal = true;
     for (size_t i = 0; i < tc.elements.size(); ++i) {
-        expression elem = prepare_expression(tc.elements[i], db, keyspace, schema, receivers[i]);
+        auto elem_opt = try_prepare_expression(tc.elements[i], db, keyspace, schema, receivers[i]);
+        if (!elem_opt) {
+            return std::nullopt;
+        }
+        auto& elem = *elem_opt;
         if (!is<constant>(elem)) {
             all_terminal = false;
         }
@@ -639,7 +669,7 @@ untyped_constant_test_assignment(const untyped_constant& uc, database& db, const
 }
 
 static
-constant
+std::optional<expression>
 untyped_constant_prepare_expression(const untyped_constant& uc, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver)
 {
     if (!is_assignable(untyped_constant_test_assignment(uc, db, keyspace, *receiver))) {
@@ -657,7 +687,7 @@ bind_variable_test_assignment(const bind_variable& bv, database& db, const sstri
 }
 
 static
-bind_variable
+std::optional<expression>
 bind_variable_scalar_prepare_expression(const bind_variable& bv, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver)
 {   
     return bind_variable {
@@ -675,7 +705,7 @@ bind_variable_scalar_in_make_receiver(const column_specification& receiver) {
 }
 
 static
-bind_variable
+std::optional<expression>
 bind_variable_scalar_in_prepare_expression(const bind_variable& bv, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
     return bind_variable {
         .shape = bind_variable::shape_type::scalar,
@@ -705,7 +735,7 @@ bind_variable_tuple_make_receiver(const std::vector<lw_shared_ptr<column_specifi
 }
 
 static
-bind_variable
+std::optional<expression>
 bind_variable_tuple_prepare_expression(const bind_variable& bv, database& db, const sstring& keyspace, const schema* schema, const std::vector<lw_shared_ptr<column_specification>>& receivers) {
     return bind_variable {
         .shape = bind_variable::shape_type::tuple,
@@ -740,7 +770,7 @@ bind_variable_tuple_in_make_receiver(const std::vector<lw_shared_ptr<column_spec
 }
 
 static
-bind_variable
+std::optional<expression>
 bind_variable_tuple_in_prepare_expression(const bind_variable& bv, database& db, const sstring& keyspace, const schema* schema, const std::vector<lw_shared_ptr<column_specification>>& receivers) {
     return bind_variable {
         .shape = bind_variable::shape_type::tuple_in,
@@ -760,7 +790,7 @@ null_test_assignment(database& db,
 }
 
 static
-constant
+std::optional<expression>
 null_prepare_expression(database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
     if (!is_assignable(null_test_assignment(db, keyspace, *receiver))) {
         throw exceptions::invalid_request_exception("Invalid null value for counter increment/decrement");
@@ -801,7 +831,7 @@ cast_test_assignment(const cast& c, database& db, const sstring& keyspace, const
 }
 
 static
-expression
+std::optional<expression>
 cast_prepare_expression(const cast& c, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
     auto type = std::get<shared_ptr<cql3_type::raw>>(c.type);
     if (!is_assignable(test_assignment(c.arg, db, keyspace, *casted_spec_of(c, db, keyspace, *receiver)))) {
@@ -810,10 +840,10 @@ cast_prepare_expression(const cast& c, database& db, const sstring& keyspace, co
     if (!is_assignable(cast_test_assignment(c, db, keyspace, *receiver))) {
         throw exceptions::invalid_request_exception(format("Cannot assign value {} to {} of type {}", c, receiver->name, receiver->require_type()->as_cql3_type()));
     }
-    return prepare_expression(c.arg, db, keyspace, schema, receiver);
+    return try_prepare_expression(c.arg, db, keyspace, schema, receiver);
 }
 
-expr::expression
+std::optional<expression>
 prepare_function_call(const expr::function_call& fc, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
     auto&& fun = std::visit(overloaded_functor{
         [] (const shared_ptr<functions::function>& func) {
@@ -853,8 +883,12 @@ prepare_function_call(const expr::function_call& fc, database& db, const sstring
     parameters.reserve(fc.args.size());
     bool all_terminal = true;
     for (size_t i = 0; i < fc.args.size(); ++i) {
-        expr::expression e = prepare_expression(fc.args[i], db, keyspace, schema,
+        auto e_opt = try_prepare_expression(fc.args[i], db, keyspace, schema,
                                                 functions::functions::make_arg_spec(receiver->ks_name, receiver->cf_name, *scalar_fun, i));
+        if (!e_opt) {
+            return std::nullopt;
+        }
+        auto& e = *e_opt;
         if (!expr::is<expr::constant>(e)) {
             all_terminal = false;
         }
@@ -903,43 +937,43 @@ test_assignment_function_call(const cql3::expr::function_call& fc, database& db,
     }
 }
 
-expression
-prepare_expression(const expression& expr, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
+std::optional<expression>
+static try_prepare_expression(const expression& expr, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
     return expr::visit(overloaded_functor{
-        [] (const constant&) -> expression {
+        [] (const constant&) -> std::optional<expression> {
             on_internal_error(expr_logger, "Can't prepare constant_value, it should not appear in parser output");
         },
-        [&] (const binary_operator&) -> expression {
+        [&] (const binary_operator&) -> std::optional<expression> {
             on_internal_error(expr_logger, "binary_operators are not yet reachable via prepare_expression()");
         },
-        [&] (const conjunction&) -> expression {
+        [&] (const conjunction&) -> std::optional<expression> {
             on_internal_error(expr_logger, "conjunctions are not yet reachable via prepare_expression()");
         },
-        [&] (const column_value&) -> expression {
+        [&] (const column_value&) -> std::optional<expression> {
             on_internal_error(expr_logger, "column_values are not yet reachable via prepare_expression()");
         },
-        [&] (const token&) -> expression {
+        [&] (const token&) -> std::optional<expression> {
             on_internal_error(expr_logger, "tokens are not yet reachable via prepare_expression()");
         },
-        [&] (const unresolved_identifier&) -> expression {
+        [&] (const unresolved_identifier&) -> std::optional<expression> {
             on_internal_error(expr_logger, "unresolved_identifiers are not yet reachable via prepare_expression()");
         },
-        [&] (const column_mutation_attribute&) -> expression {
+        [&] (const column_mutation_attribute&) -> std::optional<expression> {
             on_internal_error(expr_logger, "column_mutation_attributes are not yet reachable via prepare_expression()");
         },
-        [&] (const function_call& fc) -> expression {
+        [&] (const function_call& fc) -> std::optional<expression> {
             return prepare_function_call(fc, db, keyspace, schema, std::move(receiver));
         },
-        [&] (const cast& c) -> expression {
+        [&] (const cast& c) -> std::optional<expression> {
             return cast_prepare_expression(c, db, keyspace, schema, receiver);
         },
-        [&] (const field_selection&) -> expression {
+        [&] (const field_selection&) -> std::optional<expression> {
             on_internal_error(expr_logger, "field_selections are not yet reachable via prepare_expression()");
         },
-        [&] (const null&) -> expression {
+        [&] (const null&) -> std::optional<expression> {
             return null_prepare_expression(db, keyspace, schema, receiver);
         },
-        [&] (const bind_variable& bv) -> expression {
+        [&] (const bind_variable& bv) -> std::optional<expression> {
             switch (bv.shape) {
             case expr::bind_variable::shape_type::scalar:  return bind_variable_scalar_prepare_expression(bv, db, keyspace, schema, receiver);
             case expr::bind_variable::shape_type::scalar_in: return bind_variable_scalar_in_prepare_expression(bv, db, keyspace, schema, receiver);
@@ -948,13 +982,13 @@ prepare_expression(const expression& expr, database& db, const sstring& keyspace
             }
             on_internal_error(expr_logger, "unexpected shape in bind_variable");
         },
-        [&] (const untyped_constant& uc) -> expression {
+        [&] (const untyped_constant& uc) -> std::optional<expression> {
             return untyped_constant_prepare_expression(uc, db, keyspace, schema, receiver);
         },
-        [&] (const tuple_constructor& tc) -> expression {
+        [&] (const tuple_constructor& tc) -> std::optional<expression> {
             return tuple_constructor_prepare_nontuple(tc, db, keyspace, schema, receiver);
         },
-        [&] (const collection_constructor& c) -> expression {
+        [&] (const collection_constructor& c) -> std::optional<expression> {
             switch (c.style) {
             case collection_constructor::style_type::list: return list_prepare_expression(c, db, keyspace, schema, receiver);
             case collection_constructor::style_type::set: return set_prepare_expression(c, db, keyspace, schema, receiver);
@@ -962,16 +996,25 @@ prepare_expression(const expression& expr, database& db, const sstring& keyspace
             }
             on_internal_error(expr_logger, fmt::format("unexpected collection_constructor style {}", static_cast<unsigned>(c.style)));
         },
-        [&] (const usertype_constructor& uc) -> expression {
+        [&] (const usertype_constructor& uc) -> std::optional<expression> {
             return usertype_constructor_prepare_expression(uc, db, keyspace, schema, receiver);
         },
     }, expr);
 }
 
 expression
-prepare_expression_multi_column(const expression& expr, database& db, const sstring& keyspace, const schema* schema, const std::vector<lw_shared_ptr<column_specification>>& receivers) {
+prepare_expression(const expression& expr, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
+    auto e_opt = try_prepare_expression(expr, db, keyspace, schema, std::move(receiver));
+    if (!e_opt) {
+        on_internal_error(expr_logger, "failed to prepare expression");
+    }
+    return std::move(*e_opt);
+}
+
+std::optional<expression>
+static try_prepare_expression_multi_column(const expression& expr, database& db, const sstring& keyspace, const schema* schema, const std::vector<lw_shared_ptr<column_specification>>& receivers) {
     return expr::visit(overloaded_functor{
-        [&] (const bind_variable& bv) -> expression {
+        [&] (const bind_variable& bv) -> std::optional<expression> {
             switch (bv.shape) {
             case expr::bind_variable::shape_type::scalar: on_internal_error(expr_logger, "prepare_expression_multi_column(bind_variable(scalar))");
             case expr::bind_variable::shape_type::scalar_in: on_internal_error(expr_logger, "prepare_expression_multi_column(bind_variable(scalar_in))");
@@ -980,13 +1023,22 @@ prepare_expression_multi_column(const expression& expr, database& db, const sstr
             }
             on_internal_error(expr_logger, "unexpected shape in bind_variable");
         },
-        [&] (const tuple_constructor& tc) -> expression {
+        [&] (const tuple_constructor& tc) -> std::optional<expression> {
             return tuple_constructor_prepare_tuple(tc, db, keyspace, schema, receivers);
         },
-        [] (const auto& default_case) -> expression {
+        [] (const auto& default_case) -> std::optional<expression> {
             on_internal_error(expr_logger, fmt::format("prepare_expression_multi_column({})", typeid(default_case).name()));
         },
     }, expr);
+}
+
+expression
+prepare_expression_multi_column(const expression& expr, database& db, const sstring& keyspace, const schema* schema, const std::vector<lw_shared_ptr<column_specification>>& receivers) {
+    auto e_opt = try_prepare_expression_multi_column(expr, db, keyspace, schema, receivers);
+    if (!e_opt) {
+        on_internal_error(expr_logger, "failed to prepare expression");
+    }
+    return std::move(*e_opt);
 }
 
 assignment_testable::test_result
