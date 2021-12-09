@@ -188,4 +188,15 @@ single_column_relation::to_receivers(const schema& schema, const column_definiti
     return {std::move(receiver)};
 }
 
+static lw_shared_ptr<column_specification> make_ambiguous_collection_receiver(lw_shared_ptr<column_specification> receiver, bool for_key) {
+    // The not-yet-legal expression
+    //     ? IN func_returning_collection(collection, ?)
+    // won't have a known collection type, so propagate the ambiguity about the type
+    auto& name = *receiver->name;
+    auto prefix = for_key ? "key" : "value";
+    auto new_name = make_lw_shared<column_identifier>(fmt::format("{} of {}", prefix, name.text), true);
+    return make_lw_shared<column_specification>(receiver->ks_name, receiver->cf_name, std::move(new_name),
+            column_specification_no_type);
+}
+
 }

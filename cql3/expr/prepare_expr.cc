@@ -42,24 +42,36 @@ static std::optional<expression> try_prepare_expression_multi_column(const expre
 static
 lw_shared_ptr<column_specification>
 usertype_field_spec_of(const column_specification& column, size_t field) {
-    auto&& ut = static_pointer_cast<const user_type_impl>(column.require_type());
-    auto&& name = ut->field_name(field);
+    // Be prepared for ambiguous column.type. Possible case:
+    //   "?.field < my_usertype_column.field"
+    auto&& ut = column.type ? std::optional(static_pointer_cast<const user_type_impl>(*column.type)) : std::nullopt;
+    auto&& name = ut ? (*ut)->field_name(field) : "unknown field";
     auto&& sname = sstring(reinterpret_cast<const char*>(name.data()), name.size());
     return make_lw_shared<column_specification>(
                                    column.ks_name,
                                    column.cf_name,
                                    ::make_shared<column_identifier>(column.name->to_string() + "." + sname, true),
-                                   ut->field_type(field));
+                                   ut ? (*ut)->field_type(field) : std::nullopt);
 }
 
 static
 void
 usertype_constructor_validate_assignable_to(const usertype_constructor& u, database& db, const sstring& keyspace, const column_specification& receiver) {
-    if (!receiver.require_type()->is_user_type()) {
-        throw exceptions::invalid_request_exception(format("Invalid user type literal for {} of type {}", receiver.name, receiver.require_type()->as_cql3_type()));
+    auto type_opt = receiver.type;
+
+    if (!type_opt) {
+        // Presumably we got something like "?.field = my_usertype_column.field". Assume
+        // assignment works, caller must verify once types are known
+        return;
     }
 
-    auto ut = static_pointer_cast<const user_type_impl>(receiver.require_type());
+    auto& type = *type_opt;
+
+    if (!type->is_user_type()) {
+        throw exceptions::invalid_request_exception(format("Invalid user type literal for {} of type {}", receiver.name, type->as_cql3_type()));
+    }
+
+    auto ut = static_pointer_cast<const user_type_impl>(type);
     for (size_t i = 0; i < ut->size(); i++) {
         column_identifier field(to_bytes(ut->field_name(i)), utf8_type);
         if (!u.elements.contains(field)) {
@@ -87,6 +99,12 @@ usertype_constructor_test_assignment(const usertype_constructor& u, database& db
 static
 std::optional<expression>
 usertype_constructor_prepare_expression(const usertype_constructor& u, database& db, const sstring& keyspace, const schema* schema, lw_shared_ptr<column_specification> receiver) {
+    if (!receiver->type) {
+        // We won't be able to infer the type of the user type from the type of the elements,
+        // so just give up. Caller must determine the type some other way and retry.
+        return std::nullopt;
+    }
+
     usertype_constructor_validate_assignable_to(u, db, keyspace, *receiver);
     auto&& ut = static_pointer_cast<const user_type_impl>(receiver->require_type());
     bool all_terminal = true;

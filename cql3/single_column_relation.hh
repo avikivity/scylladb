@@ -207,8 +207,14 @@ private:
     std::vector<lw_shared_ptr<column_specification>> to_receivers(const schema& schema, const column_definition& column_def) const;
 
     static lw_shared_ptr<column_specification> make_collection_receiver(lw_shared_ptr<column_specification> receiver, bool for_key) {
-        return static_cast<const collection_type_impl*>(receiver->require_type().get())->make_collection_receiver(*receiver, for_key);
+        auto& receiver_type_opt = receiver->type;
+        if (!receiver_type_opt) {
+            return make_ambiguous_collection_receiver(receiver, for_key);
+        }
+        return static_cast<const collection_type_impl*>((*receiver_type_opt).get())->make_collection_receiver(*receiver, for_key);
     }
+
+    static lw_shared_ptr<column_specification> make_ambiguous_collection_receiver(lw_shared_ptr<column_specification> receiver, bool for_key);
 
     bool is_legal_relation_for_non_frozen_collection() const {
         return is_contains_key() || is_contains() || is_map_entry_equality();

@@ -1540,7 +1540,9 @@ constant evaluate(const bind_variable& bind_var, const query_options& options) {
     cql3::raw_value_view value = options.get_value_at(bind_var.bind_index);
 
     if (value.is_null()) {
-        return constant::make_null(bind_var.receiver->require_type());
+        auto& type_opt = bind_var.receiver->type;
+        on_internal_error(expr_logger, "attempt to evaluate NULL with ambiguous type");
+        return constant::make_null(*type_opt);
     }
 
     if (value.is_unset_value()) {

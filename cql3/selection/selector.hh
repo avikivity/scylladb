@@ -108,7 +108,21 @@ public:
     virtual void reset() = 0;
 
     virtual assignment_testable::test_result test_assignment(database& db, const sstring& keyspace, const column_specification& receiver) const override {
-        auto t1 = receiver.require_type()->underlying_type();
+        auto t1_opt = receiver.type;
+        if (!t1_opt) {
+            // We don't yet know the receiver's type. Assume it will match once known;
+            // caller must repeat the test once they know they type.
+            //
+            // Example where this can happen (not permitted by grammar today):
+            //     SELECT func(some_column, ?) FROM tab
+            // When selecting the overload set of func, we don't yet know the type
+            // of the second formal parameter (there could be several overloads).
+            // Once we've narrowed down the overload set using the first parameter,
+            // We'll either repeat the check with the known type, or fail the function
+            // call if the overload set doesn't narrow to one call.
+            return test_result::EXACT_MATCH;
+        }
+        auto t1 = (*t1_opt)->underlying_type();
         auto t2 = get_type()->underlying_type();
         // We want columns of `counter_type' to be served by underlying type's overloads
         // (here: `counter_cell_view::total_value_type()') with an `EXACT_MATCH'.
