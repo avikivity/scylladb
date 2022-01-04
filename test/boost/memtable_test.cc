@@ -42,6 +42,7 @@
 #include "test/lib/random_utils.hh"
 #include "test/lib/log.hh"
 #include "test/lib/reader_concurrency_semaphore.hh"
+#include "utils/error_injection.hh"
 
 static api::timestamp_type next_timestamp() {
     static thread_local api::timestamp_type next_timestamp = 1;
@@ -771,3 +772,66 @@ SEASTAR_TEST_CASE(sstable_compaction_does_not_resurrect_data) {
             });
     }, db_config);
 }
+
+SEASTAR_TEST_CASE(failed_flush_prevents_writes) {
+    return do_with_cql_env_thread([](cql_test_env& env) {
+        database& db = env.local_db();
+        service::migration_manager& mm = env.migration_manager().local();
+
+        const sstring ks_name = "ks";
+        const sstring table_name = "table_name";
+
+        schema_ptr s = schema_builder(ks_name, table_name)
+            .with_column(to_bytes("pk"), int32_type, column_kind::partition_key)
+            .with_column(to_bytes("ck"), int32_type, column_kind::clustering_key)
+            .with_column(to_bytes("id"), int32_type)
+            .build();
+        mm.announce_new_column_family(s).get();
+
+        table& t = db.find_column_family(ks_name, table_name);
+        dht::decorated_key pk = dht::decorate_key(*s, partition_key::from_single_value(*s, serialized(0)));
+        memtable& m = t.active_memtable();
+        dirty_memory_manager& dmm = m.get_dirty_memory_manager();
+
+        // Insert something so that we have data in memtable to flush
+        mutation m_insert = mutation(s, pk);
+        clustering_key ck = clustering_key::from_single_value(*s, serialized(0));
+        m_insert.set_clustered_cell(ck, to_bytes("id"), data_value(0), api::new_timestamp());
+        t.apply(m_insert);
+
+        utils::get_local_injector().enable("table_seal_active_memtable_pre_flush");
+
+        // Trigger flush
+        dmm.notify_soft_pressure();
+
+        // Setting up a mechanism inside of flush would be too intrusive, as in normal operation
+        // it's intended to just run in the background and we don't need a completion notification.
+        // Just poll instead.
+        auto poll_wait_until = [](std::function<bool()>&& predicate, std::chrono::seconds wait_time = 2s, std::chrono::milliseconds poll_interval = 10ms) {
+            using namespace std::chrono_literals;
+            auto time_elapsed = 0ms;
+            while (time_elapsed < wait_time && !predicate()) {
+                seastar::sleep(poll_interval).get();
+                time_elapsed += poll_interval;
+            }
+            if (!predicate()) {
+                BOOST_FAIL("Timed out");
+            }
+        };
+        poll_wait_until([&db]() { return db.cf_stats()->failed_memtables_flushes_count != 0; });
+
+        // The flush failed, make sure there is still data in memtable.
+        BOOST_ASSERT(!t.active_memtable().empty());
+        utils::get_local_injector().disable("table_seal_active_memtable_pre_flush");
+
+        // Release pressure, so that we can trigger flush again
+        dmm.notify_soft_relief();
+
+        // Trigger pressure, the error above is no longer being injected, so flush
+        // should be triggerred and succeed
+        dmm.notify_soft_pressure();
+
+        poll_wait_until([&t]() { return t.active_memtable().empty(); });
+    });
+}
+
