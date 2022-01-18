@@ -121,6 +121,9 @@ read_monitor_generator& default_read_monitor_generator() {
 future<file> sstable::open_sstable_component_file_non_checked(std::string_view name, open_flags flags, file_open_options options,
         bool check_integrity) noexcept {
     switch (_storage_options.type) {
+        case storage_options::storage_type::LOCAL_SHARED:
+            sstlog.debug("Handling shared file: {}", name);
+            [[fallthrough]];
         case storage_options::storage_type::NATIVE: {
             sstlog.debug("Opening regular file: {}", name);
             if (flags != open_flags::ro && check_integrity) {
@@ -139,6 +142,16 @@ future<file> sstable::open_sstable_component_file_non_checked(std::string_view n
             return client->open(format("/{}/{}", _storage_options.bucket, name));
             // FIXME: add integrity checking as well        
         }
+    }
+}
+
+const sstring& sstable::get_dir() const {
+    switch (_storage_options.type) {
+    case storage_options::storage_type::LOCAL_SHARED:
+        sstlog.debug("Using bucket {} as dir for a shared file", _storage_options.bucket);
+        return _storage_options.bucket;
+    default:
+        return _dir;
     }
 }
 
@@ -1430,7 +1443,7 @@ future<> sstable::create_data() noexcept {
         _open_mode.emplace(oflags);
     });
 
-    if (_storage_options.type == storage_options::storage_type::S3) {
+    if (_storage_options.is_shared()) {
         co_await _manager.add_shared_sstable_owner(*this);
     }
     co_return;
@@ -2868,7 +2881,7 @@ delete_sstables(std::vector<sstring> tocs) {
 
 future<>
 sstable::unlink() noexcept {
-    if (_storage_options.type == storage_options::storage_type::S3) {
+    if (_storage_options.is_shared()) {
         auto owners_left = co_await _manager.remove_shared_sstable_owner(*this);
         if (owners_left) {
             sstlog.info("Found owners for S3-backed sstable {}, so still not unlinking it", get_filename());

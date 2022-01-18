@@ -534,7 +534,7 @@ future<> distributed_loader::handle_sstables_pending_delete(sstring pending_dele
 }
 
 future<> distributed_loader::populate_column_family(distributed<database>& db, sstring sstdir, sstring ks, sstring cf) {
-    if (db.local().find_keyspace(ks).metadata()->get_storage_options().type == storage_options::storage_type::S3) {
+    if (db.local().find_keyspace(ks).metadata()->get_storage_options().is_shared()) {
         auto table_id = db.local().find_uuid(ks, cf);
         auto sstable_names = co_await db.local().get_user_sstables_manager().shared_sstables_owned_by(table_id);
         co_await process_sstable_names(db, ks, cf, boost::copy_range<std::unordered_set<sstring>>(sstable_names));

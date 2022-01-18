@@ -1301,7 +1301,7 @@ future<> repair_service::bootstrap_with_repair(locator::token_metadata_ptr tmptr
         size_t nr_ranges_total = 0;
 
         auto streaming_alternative = [] (keyspace& ks) {
-            return ks.metadata()->get_storage_options().type == storage_options::storage_type::S3;
+            return ks.metadata()->get_storage_options().is_shared();
         };
 
         for (auto& keyspace_name : keyspaces) {

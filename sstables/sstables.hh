@@ -406,12 +406,10 @@ public:
         return dirpath.filename().string() == pending_delete_dir_basename().c_str();
     }
 
-    const sstring& get_dir() const {
-        return _dir;
-    }
+    const sstring& get_dir() const;
 
     const sstring get_temp_dir() const {
-        return temp_sst_dir(_dir, _generation);
+        return temp_sst_dir(get_dir(), _generation);
     }
 
     bool requires_view_building() const;

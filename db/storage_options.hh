@@ -27,7 +27,7 @@
 
 struct storage_options {
     enum class storage_type {
-        NATIVE, S3,
+        NATIVE, S3, LOCAL_SHARED,
     };
 
     storage_type type = storage_type::NATIVE;
@@ -36,6 +36,7 @@ struct storage_options {
     sstring endpoint;
     storage_options() = default;
 
+    bool is_shared() const;
     std::map<sstring, sstring> to_map() const;
 
     static storage_type parse_type(std::string_view str);

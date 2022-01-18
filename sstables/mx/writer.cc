@@ -887,6 +887,8 @@ void writer::init_file_writers() {
 
     data_sink out = [&] {
         switch (_sst._storage_options.type) {
+            case storage_options::storage_type::LOCAL_SHARED:
+                [[fallthrough]];
             case storage_options::storage_type::NATIVE: {
                 return make_file_data_sink(std::move(_sst._data_file), options).get0();
             }
@@ -910,6 +912,8 @@ void writer::init_file_writers() {
 
     data_sink index_out = [&] {
         switch (_sst._storage_options.type) {
+            case storage_options::storage_type::LOCAL_SHARED:
+                [[fallthrough]];
             case storage_options::storage_type::NATIVE: {
                 return make_file_data_sink(std::move(_sst._index_file), options).get0();
             }

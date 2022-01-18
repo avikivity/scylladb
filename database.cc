@@ -1255,6 +1255,9 @@ storage_options::storage_type storage_options::parse_type(std::string_view str) 
     if (str == "S3") {
         return storage_type::S3;
     }
+    if (str == "LOCAL_SHARED") {
+        return storage_type::LOCAL_SHARED;
+    }
     throw std::runtime_error(format("Unknown storage type: {}", str));
 }
 
@@ -1262,7 +1265,12 @@ sstring storage_options::print_type(storage_type type) {
     switch (type) {
         case storage_type::NATIVE: return "NATIVE";
         case storage_type::S3: return "S3";
+        case storage_type::LOCAL_SHARED: return "LOCAL_SHARED";
     }
+}
+
+bool storage_options::is_shared() const {
+    return type != storage_type::NATIVE;
 }
 
 std::map<sstring, sstring> storage_options::to_map() const {
