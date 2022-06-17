@@ -1669,6 +1669,7 @@ abseil_pkgs = [
 pkgs += abseil_pkgs
 
 args.user_cflags += " " + pkg_config('jsoncpp', '--cflags')
+args.user_cflags += ' -I/usr/include/antlr4-runtime'
 libs = ' '.join([maybe_static(args.staticyamlcpp, '-lyaml-cpp'), '-latomic', '-llz4', '-lz', '-lsnappy', pkg_config('jsoncpp', '--libs'),
                  ' -lstdc++fs', ' -lcrypt', ' -lcryptopp', ' -lpthread',
                  # Must link with static version of libzstd, since

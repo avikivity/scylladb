@@ -73,13 +73,13 @@ options {
  * parser, and once for the lexer.
  */
 @parser::context {
-    void displayRecognitionError(ANTLR_UINT8** token_names, ExceptionBaseType* ex) {
-        throw expressions_syntax_error("syntax error");
+    void displayRecognitionError(uint8_t** token_names, antlr4::RuntimeException* ex) {
+        throw alternator::expressions_syntax_error("syntax error");
     }
 }
 @lexer::context {
-    void displayRecognitionError(ANTLR_UINT8** token_names, ExceptionBaseType* ex) {
-        throw expressions_syntax_error("syntax error");
+    void displayRecognitionError(uint8_t** token_names, antlr4::RuntimeException* ex) {
+        throw alternator::expressions_syntax_error("syntax error");
     }
 }
 

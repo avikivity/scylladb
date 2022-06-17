@@ -454,10 +454,10 @@ orderByClause[raw::select_statement::parameters::orderings_type& orderings]
     : c=cident (K_ASC | K_DESC { ordering = raw::select_statement::ordering::descending; })? { orderings.emplace_back(c, ordering); }
     ;
 
-jsonValue returns [expression value]
+jsonValue returns [expression v]
     :
-    | s=STRING_LITERAL { $value = untyped_constant{untyped_constant::string, $s.text}; }
-    | m=marker         { $value = std::move(m); }
+    | s=STRING_LITERAL { $v = untyped_constant{untyped_constant::string, $s.text}; }
+    | m=marker         { $v = std::move(m); }
     ;
 
 /**
@@ -1492,7 +1492,7 @@ idxName[cql3::index_name& name]
     | QMARK {add_recognition_error("Bind variables cannot be used for index names");}
     ;
 
-constant returns [untyped_constant constant]
+constant returns [untyped_constant c]
     @init{std::string sign;}
     : t=STRING_LITERAL {
                     // This is a workaround for antlr3 not distinguishing between
@@ -1502,15 +1502,15 @@ constant returns [untyped_constant constant]
                     if (text.size() == 1 && text[0] == '\xFF') {
                         text = {};
                     }
-                    $constant = untyped_constant{untyped_constant::string, std::move(text)};
+                    $c = untyped_constant{untyped_constant::string, std::move(text)};
                 }
-    | t=INTEGER        { $constant = untyped_constant{untyped_constant::integer, $t.text}; }
-    | t=FLOAT          { $constant = untyped_constant{untyped_constant::floating_point, $t.text}; }
-    | t=BOOLEAN        { $constant = untyped_constant{untyped_constant::boolean, $t.text}; }
-    | t=DURATION       { $constant = untyped_constant{untyped_constant::duration, $t.text}; }
-    | t=UUID           { $constant = untyped_constant{untyped_constant::uuid, $t.text}; }
-    | t=HEXNUMBER      { $constant = untyped_constant{untyped_constant::hex, $t.text}; }
-    | { sign=""; } ('-' {sign = "-"; } )? t=(K_NAN | K_INFINITY) { $constant = untyped_constant{untyped_constant::floating_point, sign + $t.text}; }
+    | t=INTEGER        { $c = untyped_constant{untyped_constant::integer, $t.text}; }
+    | t=FLOAT          { $c = untyped_constant{untyped_constant::floating_point, $t.text}; }
+    | t=BOOLEAN        { $c = untyped_constant{untyped_constant::boolean, $t.text}; }
+    | t=DURATION       { $c = untyped_constant{untyped_constant::duration, $t.text}; }
+    | t=UUID           { $c = untyped_constant{untyped_constant::uuid, $t.text}; }
+    | t=HEXNUMBER      { $c = untyped_constant{untyped_constant::hex, $t.text}; }
+    | { sign=""; } ('-' {sign = "-"; } )? t=(K_NAN | K_INFINITY) { $c = untyped_constant{untyped_constant::floating_point, sign + $t.text}; }
     ;
 
 mapLiteral returns [collection_constructor map]
@@ -1521,25 +1521,25 @@ mapLiteral returns [collection_constructor map]
       '}' { $map = collection_constructor{collection_constructor::style_type::map, std::move(m)}; }
     ;
 
-setOrMapLiteral[expression t] returns [collection_constructor value]
+setOrMapLiteral[expression t] returns [collection_constructor vv]
 	@init{ std::vector<expression> e; }
     : ':' v=term { e.push_back(tuple_constructor{{std::move(t), std::move(v)}}); }
           ( ',' kn=term ':' vn=term { e.push_back(tuple_constructor{{std::move(kn), std::move(vn)}}); } )*
-      { $value = collection_constructor{collection_constructor::style_type::map, std::move(e)}; }
+      { $vv = collection_constructor{collection_constructor::style_type::map, std::move(e)}; }
     | { e.push_back(std::move(t)); }
           ( ',' tn=term { e.push_back(std::move(tn)); } )*
-      { $value = collection_constructor{collection_constructor::style_type::set, std::move(e)}; }
+      { $vv = collection_constructor{collection_constructor::style_type::set, std::move(e)}; }
     ;
 
-collectionLiteral returns [expression value]
+collectionLiteral returns [expression vv]
 	@init{ std::vector<expression> l; }
     : '['
           ( t1=term { l.push_back(std::move(t1)); } ( ',' tn=term { l.push_back(std::move(tn)); } )* )?
-      ']' { $value = collection_constructor{collection_constructor::style_type::list, std::move(l)}; }
-    | '{' t=term v=setOrMapLiteral[t] { $value = std::move(v); } '}'
+      ']' { $vv = collection_constructor{collection_constructor::style_type::list, std::move(l)}; }
+    | '{' t=term v=setOrMapLiteral[t] { $vv = std::move(v); } '}'
     // Note that we have an ambiguity between maps and set for "{}". So we force it to a set literal,
     // and deal with it later based on the type of the column (SetLiteral.java).
-    | '{' '}' { $value = collection_constructor{collection_constructor::style_type::set, {}}; }
+    | '{' '}' { $vv = collection_constructor{collection_constructor::style_type::set, {}}; }
     ;
 
 usertypeLiteral returns [expression ut]
@@ -1555,24 +1555,24 @@ tupleLiteral returns [expression tt]
     : '(' t1=term { l.push_back(std::move(t1)); } ( ',' tn=term { l.push_back(std::move(tn)); } )* ')'
     ;
 
-value returns [expression value]
-    : c=constant           { $value = std::move(c); }
-    | l=collectionLiteral  { $value = std::move(l); }
-    | u=usertypeLiteral    { $value = std::move(u); }
-    | t=tupleLiteral       { $value = std::move(t); }
-    | K_NULL               { $value = make_untyped_null(); }
-    | e=marker             { $value = std::move(e); }
+value returns [expression v]
+    : c=constant           { $v = std::move(c); }
+    | l=collectionLiteral  { $v = std::move(l); }
+    | u=usertypeLiteral    { $v = std::move(u); }
+    | t=tupleLiteral       { $v = std::move(t); }
+    | K_NULL               { $v = make_untyped_null(); }
+    | e=marker             { $v = std::move(e); }
     ;
 
-marker returns [expression value]
-    : ':' id=ident         { $value = new_bind_variables(id); }
-    | QMARK                { $value = new_bind_variables(shared_ptr<cql3::column_identifier>{}); }
+marker returns [expression v]
+    : ':' id=ident         { $v = new_bind_variables(id); }
+    | QMARK                { $v = new_bind_variables(shared_ptr<cql3::column_identifier>{}); }
     ;
 
-intValue returns [expression value]
+intValue returns [expression v]
     :
-    | t=INTEGER     { $value = untyped_constant{untyped_constant::integer, $t.text}; }
-    | e=marker      { $value = std::move(e); }
+    | t=INTEGER     { $v = untyped_constant{untyped_constant::integer, $t.text}; }
+    | e=marker      { $v = std::move(e); }
     ;
 
 functionName returns [cql3::functions::function_name s]
@@ -2247,11 +2247,6 @@ fragment Y: ('y'|'Y');
 fragment Z: ('z'|'Z');
 
 STRING_LITERAL
-    @init{
-        std::string txt; // temporary to build pg-style-string
-    }
-    @after{ 
-    }
     :
       /* pg-style string literal */
       (
@@ -2262,9 +2257,43 @@ STRING_LITERAL
           ('$' ~('$')))
         )*
         '$' '$'
+      )
         {
             auto txt = getText();
-            setText(txt.substring(2, txt.size() - 4));
+            txt = txt.substring(2, txt.size() - 4);
+            // This is an ugly hack that allows returning empty string literals.
+            // If setText() was called with an empty string antlr3 would decide
+            // that setText() was never called and just return the unmodified
+            // token value. To prevent that we call setText() with non-empty string
+            // that is not valid utf8 which will be later changed to an empty
+            // string once it leaves antlr3 code.
+            if (txt.empty()) {
+                txt.push_back(-1);
+            }
+            setText(std::move(txt));
+        }
+      |
+      /* conventional quoted string literal */
+      (
+        '\'' (~('\'') | '\'' '\'')* '\''
+        {
+            auto txt = getText();
+            txt = txt.substring(1, txt.size() - 2);
+            std::string newtxt;
+            
+            newtxt.reserve(txt.size());
+            bool skip = false;
+            for (auto c : txt) {
+                if (skip) {
+                    skip = false;
+                    continue;
+                }
+                newtxt.push_back(c);
+                if (c == '\'') {
+                    skip = true;
+                }
+            }
+            txt = std::move(newtxt);
 
             // This is an ugly hack that allows returning empty string literals.
             // If setText() was called with an empty string antlr3 would decide
@@ -2275,20 +2304,32 @@ STRING_LITERAL
             if (txt.empty()) {
                 txt.push_back(-1);
             }
-            setText(txt);
+            setText(std::move(txt));
         }
-      )
-      |
-      /* conventional quoted string literal */
-      (
-        '\'' (c=~('\'') { txt.push_back(c);} | '\'' '\'' { txt.push_back('\''); })* '\''
       )
     ;
 
 QUOTED_NAME
-    @init{ std::string b; }
-    @after{ setText(b); }
-    : '\"' (c=~('\"') { b.push_back(c); } | '\"' '\"' { b.push_back('\"'); })+ '\"'
+    : '"' (~('"') | '"' '"')+ '"'
+        {
+            auto txt = getText();
+            txt = txt.substring(1, txt.size() - 2);
+            std::string newtxt;
+            
+            newtxt.reserve(txt.size());
+            bool skip = false;
+            for (auto c : txt) {
+                if (skip) {
+                    skip = false;
+                    continue;
+                }
+                newtxt.push_back(c);
+                if (c == '"') {
+                    skip = true;
+                }
+            }
+            setText(std::move(newtxt));
+        }
     ;
 
 fragment DIGIT
@@ -2369,13 +2410,13 @@ UUID
     ;
 
 WS
-    : (' ' | '\t' | '\n' | '\r')+ { $channel = HIDDEN; }
+    : (' ' | '\t' | '\n' | '\r')+ -> channel(HIDDEN)
     ;
 
 COMMENT
-    : ('--' | '//') .* ('\n'|'\r') { $channel = HIDDEN; }
+    : ('--' | '//') .* ('\n'|'\r') -> channel(HIDDEN)
     ;
 
 MULTILINE_COMMENT
-    : '/*' .* '*/' { $channel = HIDDEN; }
+    : '/*' .* '*/' -> channel(HIDDEN)
     ;
