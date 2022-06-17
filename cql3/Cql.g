@@ -135,8 +135,6 @@ struct uninitialized {
     listener_type* listener;
 
     std::vector<::shared_ptr<cql3::column_identifier>> _bind_variables;
-    // index into _bind_variables
-    std::unordered_map<cql3::column_identifier, size_t> _named_bind_variables_indexes;
     std::vector<std::unique_ptr<TokenType>> _missing_tokens;
 
     // Can't use static variable, since it needs to be defined out-of-line
@@ -156,14 +154,8 @@ struct uninitialized {
 
     bind_variable new_bind_variables(shared_ptr<cql3::column_identifier> name)
     {
-        if (name && _named_bind_variables_indexes.contains(*name)) {
-            return bind_variable{_named_bind_variables_indexes[*name]};
-        }
         auto marker = bind_variable{_bind_variables.size()};
         _bind_variables.push_back(name);
-        if (name) {
-            _named_bind_variables_indexes[*name] = marker.bind_index;
-        }
         return marker;
     }
 
@@ -2259,27 +2251,32 @@ STRING_LITERAL
         std::string txt; // temporary to build pg-style-string
     }
     @after{ 
-        // This is an ugly hack that allows returning empty string literals.
-        // If setText() was called with an empty string antlr3 would decide
-        // that setText() was never called and just return the unmodified
-        // token value. To prevent that we call setText() with non-empty string
-        // that is not valid utf8 which will be later changed to an empty
-        // string once it leaves antlr3 code.
-        if (txt.empty()) {
-            txt.push_back(-1);
-        }
-        setText(txt);
     }
     :
       /* pg-style string literal */
       (
         '$' '$'
         (
-          (c=~('$') { txt.push_back(c); })
+          (~('$')
           |
-          ('$' (c=~('$') { txt.push_back('$'); txt.push_back(c); }))
+          ('$' ~('$')))
         )*
         '$' '$'
+        {
+            auto txt = getText();
+            setText(txt.substring(2, txt.size() - 4));
+
+            // This is an ugly hack that allows returning empty string literals.
+            // If setText() was called with an empty string antlr3 would decide
+            // that setText() was never called and just return the unmodified
+            // token value. To prevent that we call setText() with non-empty string
+            // that is not valid utf8 which will be later changed to an empty
+            // string once it leaves antlr3 code.
+            if (txt.empty()) {
+                txt.push_back(-1);
+            }
+            setText(txt);
+        }
       )
       |
       /* conventional quoted string literal */

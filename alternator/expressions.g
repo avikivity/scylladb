@@ -241,8 +241,8 @@ boolean_expression_1 returns [parsed::condition_expression e]:
 	;
 boolean_expression_2 returns [parsed::condition_expression e]:
 	  p=primitive_condition        { $e.set_primitive(std::move($p.c)); }
-	| NOT b=boolean_expression_2   { $e = std::move($b.e); $e.apply_not(); }
-	| '(' b=boolean_expression ')' { $e = std::move($b.e); }
+	| NOT b1=boolean_expression_2   { $e = std::move($b1.e); $e.apply_not(); }
+	| '(' b2=boolean_expression ')' { $e = std::move($b2.e); }
     ;
 
 condition_expression returns [parsed::condition_expression e]:

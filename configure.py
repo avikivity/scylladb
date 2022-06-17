@@ -241,7 +241,7 @@ def default_target_arch():
         return ''
 
 
-class Antlr3Grammar(Source):
+class Antlr4Grammar(Source):
     def __init__(self, source):
         Source.__init__(self, source, '.hpp', '.cpp')
 
@@ -616,8 +616,8 @@ arg_parser.add_argument('--enable-alloc-failure-injector', dest='alloc_failure_i
                         help='enable allocation failure injection')
 arg_parser.add_argument('--enable-seastar-debug-allocations', dest='seastar_debug_allocations', action='store_true', default=False,
                         help='enable seastar debug allocations')
-arg_parser.add_argument('--with-antlr3', dest='antlr3_exec', action='store', default=None,
-                        help='path to antlr3 executable')
+arg_parser.add_argument('--with-antlr4', dest='antlr4_exec', action='store', default=None,
+                        help='path to antlr4 executable')
 arg_parser.add_argument('--with-ragel', dest='ragel_exec', action='store', default='ragel',
         help='path to ragel executable')
 add_tristate(arg_parser, name='stack-guards', dest='stack_guards', help='Use stack guards')
@@ -1027,7 +1027,7 @@ scylla_core = (['message/messaging_service.cc',
                 'service/broadcast_tables/experimental/lang.cc',
                 'tasks/task_manager.cc',
                 'rust/wasmtime_bindings/src/lib.rs',
-                ] + [Antlr3Grammar('cql3/Cql.g')] + [Thrift('interface/cassandra.thrift', 'Cassandra')] \
+                ] + [Antlr4Grammar('cql3/Cql.g')] + [Thrift('interface/cassandra.thrift', 'Cassandra')] \
                   + scylla_raft_core
                )
 
@@ -1082,7 +1082,7 @@ alternator = [
        'alternator/stats.cc',
        'alternator/serialization.cc',
        'alternator/expressions.cc',
-       Antlr3Grammar('alternator/expressions.g'),
+       Antlr4Grammar('alternator/expressions.g'),
        'alternator/conditions.cc',
        'alternator/auth.cc',
        'alternator/streams.cc',
@@ -1707,10 +1707,10 @@ else:
 
 os.makedirs(outdir, exist_ok=True)
 
-if args.antlr3_exec:
-    antlr3_exec = args.antlr3_exec
+if args.antlr4_exec:
+    antlr4_exec = args.antlr4_exec
 else:
-    antlr3_exec = "antlr3"
+    antlr4_exec = "antlr4"
 
 if args.ragel_exec:
     ragel_exec = args.ragel_exec
@@ -1810,12 +1810,12 @@ with open(buildfile, 'w') as f:
                 command = thrift -gen cpp:cob_style -out $builddir/{mode}/gen $in
                 description = THRIFT $in
                 restat = 1
-            rule antlr3.{mode}
+            rule antlr4.{mode}
                 # We replace many local `ExceptionBaseType* ex` variables with a single function-scope one.
                 # Because we add such a variable to every function, and because `ExceptionBaseType` is not a global
                 # name, we also add a global typedef to avoid compilation errors.
                 command = sed -e '/^#if 0/,/^#endif/d' $in > $builddir/{mode}/gen/$in $
-                     && {antlr3_exec} $builddir/{mode}/gen/$in $
+                     && {antlr4_exec} $builddir/{mode}/gen/$in $
                      && sed -i -e '/^.*On :.*$$/d' $builddir/{mode}/gen/${{stem}}Lexer.hpp $
                      && sed -i -e '/^.*On :.*$$/d' $builddir/{mode}/gen/${{stem}}Lexer.cpp $
                      && sed -i -e '/^.*On :.*$$/d' $builddir/{mode}/gen/${{stem}}Parser.hpp $
@@ -1826,7 +1826,7 @@ with open(buildfile, 'w') as f:
                             s/ExceptionBaseType\* ex = new/ex = new/; $
                             s/exceptions::syntax_exception e/exceptions::syntax_exception\& e/' $
                         $builddir/{mode}/gen/${{stem}}Parser.cpp
-                description = ANTLR3 $in
+                description = ANTLR4 $in
             rule checkhh.{mode}
               command = $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags $cxxflags_{mode} $obj_cxxflags --include $in -c -o $out $builddir/{mode}/gen/empty.cc
               description = CHECKHH $in
@@ -1839,7 +1839,7 @@ with open(buildfile, 'w') as f:
               command = CARGO_BUILD_DEP_INFO_BASEDIR='.' cargo build --locked --manifest-path=rust/Cargo.toml --target-dir=$builddir/{mode} --profile=rust-{mode} $
                         && touch $out
               description = RUST_LIB $out
-            ''').format(mode=mode, antlr3_exec=antlr3_exec, fmt_lib=fmt_lib, test_repeat=test_repeat, test_timeout=test_timeout, **modeval))
+            ''').format(mode=mode, antlr4_exec=antlr4_exec, fmt_lib=fmt_lib, test_repeat=test_repeat, test_timeout=test_timeout, **modeval))
         f.write(
             'build {mode}-build: phony {artifacts}\n'.format(
                 mode=mode,
@@ -1854,7 +1854,7 @@ with open(buildfile, 'w') as f:
         serializers = {}
         thrifts = set()
         ragels = {}
-        antlr3_grammars = set()
+        antlr4_grammars = set()
         rust_headers = {}
         seastar_dep = '$builddir/{}/seastar/libseastar.a'.format(mode)
         seastar_testing_dep = '$builddir/{}/seastar/libseastar_testing.a'.format(mode)
@@ -1872,7 +1872,7 @@ with open(buildfile, 'w') as f:
                 if isinstance(dep, Thrift):
                     has_thrift = True
                     objs += dep.objects('$builddir/' + mode + '/gen')
-                if isinstance(dep, Antlr3Grammar):
+                if isinstance(dep, Antlr4Grammar):
                     objs += dep.objects('$builddir/' + mode + '/gen')
                 if isinstance(dep, Json2Code):
                     objs += dep.objects('$builddir/' + mode + '/gen')
@@ -1923,7 +1923,7 @@ with open(buildfile, 'w') as f:
                 elif src.endswith('.thrift'):
                     thrifts.add(src)
                 elif src.endswith('.g'):
-                    antlr3_grammars.add(src)
+                    antlr4_grammars.add(src)
                 elif src.endswith('.rs'):
                     idx = src.rindex('/src/')
                     hh = '$builddir/' + mode + '/gen/' + src[:idx] + '.hh'
@@ -1960,7 +1960,7 @@ with open(buildfile, 'w') as f:
         gen_headers = []
         for th in thrifts:
             gen_headers += th.headers('$builddir/{}/gen'.format(mode))
-        for g in antlr3_grammars:
+        for g in antlr4_grammars:
             gen_headers += g.headers('$builddir/{}/gen'.format(mode))
         for g in swaggers:
             gen_headers += g.headers('$builddir/{}/gen'.format(mode))
@@ -2004,9 +2004,9 @@ with open(buildfile, 'w') as f:
             for cc in thrift.sources('$builddir/{}/gen'.format(mode)):
                 obj = cc.replace('.cpp', '.o')
                 f.write('build {}: cxx.{} {}\n'.format(obj, mode, cc))
-        for grammar in antlr3_grammars:
+        for grammar in antlr4_grammars:
             outs = ' '.join(grammar.generated('$builddir/{}/gen'.format(mode)))
-            f.write('build {}: antlr3.{} {}\n  stem = {}\n'.format(outs, mode, grammar.source,
+            f.write('build {}: antlr4.{} {}\n  stem = {}\n'.format(outs, mode, grammar.source,
                                                                    grammar.source.rsplit('.', 1)[0]))
             for cc in grammar.sources('$builddir/{}/gen'.format(mode)):
                 obj = cc.replace('.cpp', '.o')
