@@ -398,10 +398,7 @@ private:
             netw::messaging_service::msg_addr src_addr, rpc::opt_time_point t,
             auto schema_version, auto in, inet_address_vector_replica_set forward, gms::inet_address reply_to,
             unsigned shard, storage_proxy::response_id_type response_id, std::optional<tracing::trace_info> trace_info,
-            auto&& apply_fn1, auto&& forward_fn1) {
-        auto apply_fn = std::move(apply_fn1);
-        auto forward_fn = std::move(forward_fn1);
-
+            auto apply_fn, auto forward_fn) {
         tracing::trace_state_ptr trace_state_ptr;
 
         if (trace_info) {
