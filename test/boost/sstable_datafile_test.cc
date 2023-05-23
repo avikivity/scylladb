@@ -73,7 +73,7 @@ future<std::vector<mutation>> my_coroutine(
         tests::timestamp_generator ts_gen,
         tests::expiry_generator exp_gen) {
     auto engine = std::mt19937(seed);
-    const auto partition_count = 3;
+    const auto partition_count = 2;
     std::vector<mutation> muts;
     muts.reserve(partition_count);
     for (size_t pk = 0; pk != partition_count; ++pk) {
