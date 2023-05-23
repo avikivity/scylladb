@@ -39,7 +39,6 @@ future<std::vector<mutation>> my_coroutine(
     auto engine = std::mt19937(seed);
     const auto partition_count = 2;
     std::vector<mutation> muts;
-    muts.reserve(partition_count);
     for (size_t pk = 0; pk != partition_count; ++pk) {
         auto mut = random_schema.new_mutation(pk);
 
