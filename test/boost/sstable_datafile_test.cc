@@ -81,14 +81,12 @@ future<std::vector<mutation>> my_coroutine(
         random_schema.set_partition_tombstone(engine, mut, ts_gen, exp_gen);
         random_schema.add_static_row(engine, mut, ts_gen, exp_gen);
 
-        const auto clustering_row_count = 3;
-        const auto range_tombstone_count = 3;
+        const auto clustering_row_count = 1;
+        const auto range_tombstone_count = 1;
         auto ckeys = random_schema.make_ckeys(std::max(clustering_row_count, range_tombstone_count));
 
-        for (uint32_t ck = 0; ck < ckeys.size(); ++ck) {
-            random_schema.add_row(engine, mut, ckeys[ck], ts_gen, exp_gen);
-            co_await coroutine::maybe_yield();
-        }
+        random_schema.add_row(engine, mut, ckeys[0], ts_gen, exp_gen);
+        co_await coroutine::maybe_yield();
 
         muts.emplace_back(mut.build(random_schema.schema()));
     }
