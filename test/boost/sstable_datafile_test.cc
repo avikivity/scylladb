@@ -80,7 +80,6 @@ void tests::random_schema::add_row(std::mt19937& engine, data_model::mutation_de
     const auto& cdef = _schema->regular_columns()[0];
     {
         auto value = gen.generate_value(engine, *cdef.type);
-        decorate_with_timestamps(*_schema, engine, ts_gen, exp_gen, value);
         md.add_clustered_cell(ckey, cdef.name_as_text(), std::move(value));
     }
 }
