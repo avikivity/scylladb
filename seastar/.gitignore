@@ -1,0 +1,15 @@
+.cooking_memory
+.cproject
+.project
+.settings
+build
+build.ninja
+cscope.*
+__pycache__/
+cmake/Cooking.cmake
+tags
+.idea/
+.vscode/
+compile_commands.json
+.clangd
+.cache

@@ -1,6 +1,6 @@
-[submodule "seastar"]
-	path = seastar
-	url = ../seastar
+[submodule "dpdk"]
+	path = seastar/dpdk
+	url = ../dpdk
 	ignore = dirty
 [submodule "swagger-ui"]
 	path = swagger-ui
