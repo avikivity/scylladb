@@ -36,7 +36,7 @@ struct maybe_yield_awaiter final : task {
     task* main_coroutine_task;
 
     bool await_ready() const {
-        return !need_preempt();
+        return false;
     }
 
     template <typename T>
