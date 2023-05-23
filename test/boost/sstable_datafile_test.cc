@@ -31,11 +31,13 @@ void tests::random_schema::add_row(std::mt19937& engine, data_model::mutation_de
     }
 }
 
+static auto ts_gen = tests::default_timestamp_generator();
+static auto exp_gen = tests::no_expiry_expiry_generator();
+
+
 future<std::vector<mutation>> my_coroutine(
         uint32_t seed,
-        tests::random_schema& random_schema,
-        tests::timestamp_generator ts_gen,
-        tests::expiry_generator exp_gen) {
+        tests::random_schema& random_schema) {
     auto engine = std::mt19937(seed);
     const auto partition_count = 2;
     std::vector<mutation> muts;
@@ -65,8 +67,6 @@ SEASTAR_TEST_CASE(test_validate_checksums) {
         static auto random_schema = tests::random_schema{tests::random::get_int<uint32_t>(), *random_spec};
 
         return my_coroutine(7,
-            random_schema,
-            tests::default_timestamp_generator(),
-            tests::no_expiry_expiry_generator()
+            random_schema
         ).discard_result();
 }
