@@ -73,7 +73,6 @@ future<std::vector<mutation>> my_coroutine(
         tests::timestamp_generator ts_gen,
         tests::expiry_generator exp_gen) {
     auto engine = std::mt19937(seed);
-    const auto schema_has_clustering_columns = random_schema.schema()->clustering_key_size() > 0;
     const auto partition_count = 3;
     std::vector<mutation> muts;
     muts.reserve(partition_count);
@@ -81,11 +80,6 @@ future<std::vector<mutation>> my_coroutine(
         auto mut = random_schema.new_mutation(pk);
         random_schema.set_partition_tombstone(engine, mut, ts_gen, exp_gen);
         random_schema.add_static_row(engine, mut, ts_gen, exp_gen);
-
-        if (!schema_has_clustering_columns) {
-            muts.emplace_back(mut.build(random_schema.schema()));
-            continue;
-        }
 
         const auto clustering_row_count = 3;
         const auto range_tombstone_count = 3;
