@@ -56,7 +56,6 @@
 #include <boost/range/algorithm.hpp>
 #include <boost/icl/interval_map.hpp>
 #include "test/lib/test_services.hh"
-#include "test/lib/cql_test_env.hh"
 #include "test/lib/reader_concurrency_semaphore.hh"
 #include "test/lib/sstable_utils.hh"
 #include "test/lib/random_utils.hh"
@@ -110,7 +109,7 @@ future<std::vector<mutation>> my_coroutine(
 
 
 SEASTAR_TEST_CASE(test_validate_checksums) {
-    return test_env::do_with_async([&] (test_env& env) {
+    return async([&] () {
         auto random_spec = tests::make_random_schema_specification(
                 get_name(),
                 std::uniform_int_distribution<size_t>(1, 4),
