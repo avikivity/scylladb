@@ -298,7 +298,7 @@ modes = {
         'cxxflags': '-ffunction-sections -fdata-sections  -DDEBUG -DSANITIZE -DDEBUG_LSA_SANITIZER -DSCYLLA_ENABLE_ERROR_INJECTION',
         'cxx_ld_flags': '-Wl,--gc-sections',
         'stack-usage-threshold': 1024*13,
-        'optimization-level': '2',
+        'optimization-level': '1',
         'per_src_extra_cxxflags': {},
         'cmake_build_type': 'RelWithDebInfo',
         'can_have_debug_info': True,
@@ -1427,8 +1427,6 @@ for mode in modes:
     modes[mode]['cxxflags'] += f' -O{modes[mode]["optimization-level"]}'
 
 optimization_flags = [
-    '--param inline-unit-growth=300', # gcc
-    f'-mllvm -inline-threshold={get_clang_inline_threshold()}',  # clang
     # clang generates 16-byte loads that break store-to-load forwarding
     # gcc also has some trouble: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103554
     '-fno-slp-vectorize',
