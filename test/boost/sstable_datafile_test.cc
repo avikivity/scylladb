@@ -35,7 +35,7 @@ static auto ts_gen = tests::default_timestamp_generator();
 static auto exp_gen = tests::no_expiry_expiry_generator();
 
 
-future<std::vector<mutation>> my_coroutine(
+future<> my_coroutine(
         uint32_t seed,
         tests::random_schema& random_schema) {
     auto engine = std::mt19937(seed);
@@ -53,7 +53,6 @@ future<std::vector<mutation>> my_coroutine(
 
         muts.emplace_back(mut.build(random_schema.schema()));
     }
-    co_return std::move(muts);
 }
 
 
@@ -68,5 +67,5 @@ SEASTAR_TEST_CASE(test_validate_checksums) {
 
         return my_coroutine(7,
             random_schema
-        ).discard_result();
+        );
 }
