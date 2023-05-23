@@ -295,10 +295,10 @@ modes = {
         'description': 'a mode with no optimizations, with sanitizers, and with additional debug checks enabled, used for testing',
     },
     'release': {
-        'cxxflags': '-ffunction-sections -fdata-sections ',
+        'cxxflags': '-ffunction-sections -fdata-sections  -DDEBUG -DSANITIZE -DDEBUG_LSA_SANITIZER -DSCYLLA_ENABLE_ERROR_INJECTION',
         'cxx_ld_flags': '-Wl,--gc-sections',
         'stack-usage-threshold': 1024*13,
-        'optimization-level': '3',
+        'optimization-level': '2',
         'per_src_extra_cxxflags': {},
         'cmake_build_type': 'RelWithDebInfo',
         'can_have_debug_info': True,

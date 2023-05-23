@@ -6,7 +6,7 @@
 
 #include "util.hh"
 
-#ifdef DEBUG
+#ifdef DEBUGXX
 
 #include <ucontext.h>
 
@@ -31,7 +31,7 @@ static void do_with_parser_impl_impl(const sstring_view& cql, noncopyable_functi
     f(parser);
 }
 
-#ifndef DEBUG
+#ifndef DEBUGXX
 
 void do_with_parser_impl(const sstring_view& cql, noncopyable_function<void (cql3_parser::CqlParser& parser)> f) {
     return do_with_parser_impl_impl(cql, std::move(f));
