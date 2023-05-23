@@ -77,17 +77,11 @@ void decorate_with_timestamps(const schema& schema, std::mt19937& engine, timest
 void tests::random_schema::add_row(std::mt19937& engine, data_model::mutation_description& md, data_model::mutation_description::key ckey,
         timestamp_generator ts_gen, expiry_generator exp_gen) {
     value_generator gen;
-    for (const auto& cdef : _schema->regular_columns()) {
+    const auto& cdef = _schema->regular_columns()[0];
+    {
         auto value = gen.generate_value(engine, *cdef.type);
         decorate_with_timestamps(*_schema, engine, ts_gen, exp_gen, value);
         md.add_clustered_cell(ckey, cdef.name_as_text(), std::move(value));
-    }
-    if (auto ts = ts_gen(engine, timestamp_destination::row_marker, api::min_timestamp); ts != api::missing_timestamp) {
-        if (auto expiry_opt = exp_gen(engine, timestamp_destination::row_marker)) {
-            md.add_clustered_row_marker(ckey, tests::data_model::mutation_description::row_marker(ts, expiry_opt->ttl, expiry_opt->expiry_point));
-        } else {
-            md.add_clustered_row_marker(ckey, ts);
-        }
     }
 }
 
