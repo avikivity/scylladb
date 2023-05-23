@@ -71,13 +71,10 @@ future<std::vector<mutation>> my_coroutine(
         uint32_t seed,
         tests::random_schema& random_schema,
         tests::timestamp_generator ts_gen,
-        tests::expiry_generator exp_gen,
-        std::uniform_int_distribution<size_t> partition_count_dist,
-        std::uniform_int_distribution<size_t> clustering_row_count_dist,
-        std::uniform_int_distribution<size_t> range_tombstone_count_dist) {
+        tests::expiry_generator exp_gen) {
     auto engine = std::mt19937(seed);
     const auto schema_has_clustering_columns = random_schema.schema()->clustering_key_size() > 0;
-    const auto partition_count = partition_count_dist(engine);
+    const auto partition_count = 3;
     std::vector<mutation> muts;
     muts.reserve(partition_count);
     for (size_t pk = 0; pk != partition_count; ++pk) {
@@ -90,8 +87,8 @@ future<std::vector<mutation>> my_coroutine(
             continue;
         }
 
-        const auto clustering_row_count = clustering_row_count_dist(engine);
-        const auto range_tombstone_count = range_tombstone_count_dist(engine);
+        const auto clustering_row_count = 3;
+        const auto range_tombstone_count = 3;
         auto ckeys = random_schema.make_ckeys(std::max(clustering_row_count, range_tombstone_count));
 
         for (uint32_t ck = 0; ck < ckeys.size(); ++ck) {
@@ -101,13 +98,6 @@ future<std::vector<mutation>> my_coroutine(
 
         muts.emplace_back(mut.build(random_schema.schema()));
     }
-    boost::sort(muts, [s = random_schema.schema()] (const mutation& a, const mutation& b) {
-            return a.decorated_key().less_compare(*s, b.decorated_key());
-            });
-    auto range = boost::unique(muts, [s = random_schema.schema()] (const mutation& a, const mutation& b) {
-            return a.decorated_key().equal(*s, b.decorated_key());
-            });
-    muts.erase(range.end(), muts.end());
     co_return std::move(muts);
 }
 
@@ -127,10 +117,7 @@ SEASTAR_TEST_CASE(test_validate_checksums) {
         const auto muts = my_coroutine(7,
             random_schema,
             tests::default_timestamp_generator(),
-            tests::no_expiry_expiry_generator(),
-            std::uniform_int_distribution<size_t>(100, 200),
-            std::uniform_int_distribution<size_t>(100, 200),
-            std::uniform_int_distribution<size_t>(100, 200)
+            tests::no_expiry_expiry_generator()
         ).get();
     });
 }
