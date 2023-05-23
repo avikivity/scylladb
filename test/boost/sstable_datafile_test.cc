@@ -78,8 +78,6 @@ future<std::vector<mutation>> my_coroutine(
     muts.reserve(partition_count);
     for (size_t pk = 0; pk != partition_count; ++pk) {
         auto mut = random_schema.new_mutation(pk);
-        random_schema.set_partition_tombstone(engine, mut, ts_gen, exp_gen);
-        random_schema.add_static_row(engine, mut, ts_gen, exp_gen);
 
         const auto clustering_row_count = 1;
         const auto range_tombstone_count = 1;
