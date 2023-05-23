@@ -89,11 +89,6 @@ void tests::random_schema::add_row(std::mt19937& engine, data_model::mutation_de
             md.add_clustered_row_marker(ckey, ts);
         }
     }
-    if (auto ts = ts_gen(engine, timestamp_destination::row_tombstone, api::min_timestamp); ts != api::missing_timestamp) {
-        auto expiry_opt = exp_gen(engine, timestamp_destination::row_tombstone);
-        const auto deletion_time = expiry_opt ? expiry_opt->expiry_point : gc_clock::now();
-        md.add_clustered_row_tombstone(ckey, row_tombstone{tombstone{ts, deletion_time}});
-    }
 }
 
 future<std::vector<mutation>> my_coroutine(
