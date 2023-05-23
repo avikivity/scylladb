@@ -118,8 +118,6 @@ SEASTAR_TEST_CASE(test_validate_checksums) {
                 std::uniform_int_distribution<size_t>(2, 8));
         auto random_schema = tests::random_schema{tests::random::get_int<uint32_t>(), *random_spec};
 
-        testlog.info("Random schema:\n{}", random_schema.cql());
-
         const auto muts = my_coroutine(7,
             random_schema,
             tests::default_timestamp_generator(),
