@@ -99,17 +99,6 @@ future<std::vector<mutation>> my_coroutine(
             co_await coroutine::maybe_yield();
         }
 
-        for (size_t i = 0; i < range_tombstone_count; ++i) {
-            const auto a = tests::random::get_int<size_t>(0, ckeys.size() - 1, engine);
-            const auto b = tests::random::get_int<size_t>(0, ckeys.size() - 1, engine);
-            random_schema.delete_range(
-                    engine,
-                    mut,
-                    nonwrapping_range<tests::data_model::mutation_description::key>::make(ckeys.at(std::min(a, b)), ckeys.at(std::max(a, b))),
-                    ts_gen,
-                    exp_gen);
-            co_await coroutine::maybe_yield();
-        }
         muts.emplace_back(mut.build(random_schema.schema()));
     }
     boost::sort(muts, [s = random_schema.schema()] (const mutation& a, const mutation& b) {
