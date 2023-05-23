@@ -57,19 +57,17 @@ future<std::vector<mutation>> my_coroutine(
 
 
 SEASTAR_TEST_CASE(test_validate_checksums) {
-    return async([&] () {
-        auto random_spec = tests::make_random_schema_specification(
+        static auto random_spec = tests::make_random_schema_specification(
                 get_name(),
                 std::uniform_int_distribution<size_t>(1, 4),
                 std::uniform_int_distribution<size_t>(2, 4),
                 std::uniform_int_distribution<size_t>(2, 8),
                 std::uniform_int_distribution<size_t>(2, 8));
-        auto random_schema = tests::random_schema{tests::random::get_int<uint32_t>(), *random_spec};
+        static auto random_schema = tests::random_schema{tests::random::get_int<uint32_t>(), *random_spec};
 
-        const auto muts = my_coroutine(7,
+        return my_coroutine(7,
             random_schema,
             tests::default_timestamp_generator(),
             tests::no_expiry_expiry_generator()
-        ).get();
-    });
+        ).discard_result();
 }
