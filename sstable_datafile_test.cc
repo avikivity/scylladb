@@ -7,8 +7,6 @@
  */
 
 #include "test/lib/scylla_test_case.hh"
-#include <seastar/testing/thread_test_case.hh>
-#include "schema/schema.hh"
 
 #include "test/lib/random_utils.hh"
 #include "test/lib/random_schema.hh"
@@ -77,8 +75,6 @@ SEASTAR_TEST_CASE(test_validate_checksums) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "atomic_cell.hh"
-#include "atomic_cell_or_collection.hh"
 #include "counters.hh"
 #include "types/types.hh"
 
