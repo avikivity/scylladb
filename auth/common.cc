@@ -49,31 +49,7 @@ static future<> create_metadata_table_if_missing_impl(
         cql3::query_processor& qp,
         std::string_view cql,
         ::service::migration_manager& mm) {
-    assert(this_shard_id() == 0); // once_among_shards makes sure a function is executed on shard 0 only
-
-    auto db = qp.db();
-    auto parsed_statement = cql3::query_processor::parse_statement(cql);
-    auto& parsed_cf_statement = static_cast<cql3::statements::raw::cf_statement&>(*parsed_statement);
-
-    parsed_cf_statement.prepare_keyspace(meta::AUTH_KS);
-
-    auto statement = static_pointer_cast<cql3::statements::create_table_statement>(
-            parsed_cf_statement.prepare(db, qp.get_cql_stats())->statement);
-
-    const auto schema = statement->get_cf_meta_data(qp.db());
-    const auto uuid = generate_legacy_id(schema->ks_name(), schema->cf_name());
-
-    schema_builder b(schema);
-    b.set_uuid(uuid);
-    schema_ptr table = b.build();
-
-    if (!db.has_schema(table->ks_name(), table->cf_name())) {
-        auto group0_guard = co_await mm.start_group0_operation();
-        auto ts = group0_guard.write_timestamp();
-        try {
-            co_return co_await mm.announce(co_await mm.prepare_new_column_family_announcement(table, ts), std::move(group0_guard));
-        } catch (exceptions::already_exists_exception&) {}
-    }
+    return make_ready_future<>();
 }
 
 future<> create_metadata_table_if_missing(

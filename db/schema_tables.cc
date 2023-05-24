@@ -3281,7 +3281,7 @@ static index_metadata create_index_from_index_row(const query::result_set_row& r
         options.emplace(value_cast<sstring>(entry.first), value_cast<sstring>(entry.second));
     }
     index_metadata_kind kind = deserialize_index_kind(row.get_nonnull<sstring>("kind"));
-    sstring target_string = options.at(cql3::statements::index_target::target_option_name);
+    sstring target_string;
     const index_metadata::is_local_index is_local(secondary_index::target_parser::is_local(target_string));
     return index_metadata{index_name, options, kind, is_local};
 }

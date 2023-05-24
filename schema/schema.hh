@@ -1011,6 +1011,7 @@ bool operator==(const schema&, const schema&);
 class view_ptr final {
     schema_ptr _schema;
 public:
+    view_ptr() = default;
     explicit view_ptr(schema_ptr schema) noexcept : _schema(schema) {
         if (schema) {
             assert(_schema->is_view());
