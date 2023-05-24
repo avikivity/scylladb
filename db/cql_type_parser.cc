@@ -18,10 +18,7 @@
 #include "data_dictionary/user_types_metadata.hh"
 
 static ::shared_ptr<cql3::cql3_type::raw> parse_raw(const sstring& str) {
-    return cql3::util::do_with_parser(str,
-        [] (cql3_parser::CqlParser& parser) {
-            return parser.comparator_type(true);
-        });
+    return nullptr;
 }
 
 data_type db::cql_type_parser::parse(const sstring& keyspace, const sstring& str, const data_dictionary::user_types_metadata& utm) {

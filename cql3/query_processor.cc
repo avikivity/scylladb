@@ -623,11 +623,7 @@ query_processor::parse_statement(const sstring_view& query) {
                 }
             });
         }
-        auto statement = util::do_with_parser(query,  std::mem_fn(&cql3_parser::CqlParser::query));
-        if (!statement) {
-            throw exceptions::syntax_exception("Parsing failed");
-        }
-        return statement;
+        return std::unique_ptr<raw::parsed_statement>();
     } catch (const exceptions::recognition_exception& e) {
         throw exceptions::syntax_exception(format("Invalid or malformed CQL query string: {}", e.what()));
     } catch (const exceptions::cassandra_exception& e) {
@@ -641,11 +637,7 @@ query_processor::parse_statement(const sstring_view& query) {
 std::vector<std::unique_ptr<raw::parsed_statement>>
 query_processor::parse_statements(std::string_view queries) {
     try {
-        auto statements = util::do_with_parser(queries, std::mem_fn(&cql3_parser::CqlParser::queries));
-        if (statements.empty()) {
-            throw exceptions::syntax_exception("Parsing failed");
-        }
-        return statements;
+        return std::vector<std::unique_ptr<raw::parsed_statement>>();
     } catch (const exceptions::recognition_exception& e) {
         throw exceptions::syntax_exception(format("Invalid or malformed CQL query string: {}", e.what()));
     } catch (const exceptions::cassandra_exception& e) {

@@ -454,7 +454,6 @@ sstring maybe_quote(const sstring& identifier) {
         // many keywords but allow keywords listed as "unreserved keywords".
         // So we can use any of them, for example cident.
         try {
-            cql3::util::do_with_parser(identifier, std::mem_fn(&cql3_parser::CqlParser::cident));
             return identifier;
         } catch(exceptions::syntax_exception&) {
             // This alphanumeric string is not a valid identifier, so fall
