@@ -2,8 +2,6 @@
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
 
 
-#include "absl-flat_hash_map.hh"
-#include <algorithm>
 #include <array>
 #include "array-search.hh"
 #include "ascii.hh"
@@ -2262,13 +2260,7 @@ mutation_partition::mutation_partition(const schema& s, const mutation_partition
         , _static_row_continuous(x._static_row_continuous)
         , _rows()
         , _row_tombstones(x._row_tombstones)
-#ifdef SEASTAR_DEBUG
-        , _schema_version(s.version())
-#endif
 {
-#ifdef SEASTAR_DEBUG
-    assert(x._schema_version == _schema_version);
-#endif
     auto cloner = [&s] (const rows_entry* x) -> rows_entry* {
         return current_allocator().construct<rows_entry>(s, *x);
     };
@@ -2282,13 +2274,7 @@ mutation_partition::mutation_partition(const mutation_partition& x, const schema
         , _static_row_continuous(x._static_row_continuous)
         , _rows()
         , _row_tombstones(x._row_tombstones, range_tombstone_list::copy_comparator_only())
-#ifdef SEASTAR_DEBUG
-        , _schema_version(schema.version())
-#endif
 {
-#ifdef SEASTAR_DEBUG
-    assert(x._schema_version == _schema_version);
-#endif
     try {
         for(auto&& r : ck_ranges) {
             for (const rows_entry& e : x.range(schema, r)) {
@@ -2312,13 +2298,7 @@ mutation_partition::mutation_partition(mutation_partition&& x, const schema& sch
     , _static_row_continuous(x._static_row_continuous)
     , _rows(std::move(x._rows))
     , _row_tombstones(schema)
-#ifdef SEASTAR_DEBUG
-    , _schema_version(schema.version())
-#endif
 {
-#ifdef SEASTAR_DEBUG
-    assert(x._schema_version == _schema_version);
-#endif
     {
         auto deleter = current_deleter<rows_entry>();
         auto it = _rows.begin();
@@ -2417,10 +2397,6 @@ mutation_partition::apply(const schema& s, const mutation_fragment& mf) {
 
 stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation_partition&& p, cache_tracker* tracker,
         mutation_application_stats& app_stats, is_preemptible preemptible, apply_resume& res) {
-#ifdef SEASTAR_DEBUG
-    assert(s.version() == _schema_version);
-    assert(p._schema_version == _schema_version);
-#endif
     _tombstone.apply(p._tombstone);
     _static_row.apply_monotonically(s, column_kind::static_column, std::move(p._static_row));
     _static_row_continuous |= p._static_row_continuous;
@@ -3319,10 +3295,6 @@ bool mutation_partition::equal(const schema& s, const mutation_partition& p) con
 }
 
 bool mutation_partition::equal(const schema& this_schema, const mutation_partition& p, const schema& p_schema) const {
-#ifdef SEASTAR_DEBUG
-    assert(_schema_version == this_schema.version());
-    assert(p._schema_version == p_schema.version());
-#endif
     if (_tombstone != p._tombstone) {
         return false;
     }
@@ -4408,9 +4380,6 @@ mutation_partition::mutation_partition(mutation_partition::incomplete_tag, const
     , _static_row_continuous(!s.has_static_columns())
     , _rows()
     , _row_tombstones(s)
-#ifdef SEASTAR_DEBUG
-    , _schema_version(s.version())
-#endif
 {
     auto e = alloc_strategy_unique_ptr<rows_entry>(
             current_allocator().construct<rows_entry>(s, rows_entry::last_dummy_tag(), is_continuous::no));
@@ -4737,13 +4706,7 @@ mutation_partition_v2::mutation_partition_v2(const schema& s, const mutation_par
         , _static_row(s, column_kind::static_column, x._static_row)
         , _static_row_continuous(x._static_row_continuous)
         , _rows()
-#ifdef SEASTAR_DEBUG
-        , _schema_version(s.version())
-#endif
 {
-#ifdef SEASTAR_DEBUG
-    assert(x._schema_version == _schema_version);
-#endif
     auto cloner = [&s] (const rows_entry* x) -> rows_entry* {
         return current_allocator().construct<rows_entry>(s, *x);
     };
@@ -4755,9 +4718,6 @@ mutation_partition_v2::mutation_partition_v2(const schema& s, mutation_partition
     , _static_row(std::move(x.static_row()))
     , _static_row_continuous(x.static_row_continuous())
     , _rows(std::move(x.mutable_clustered_rows()))
-#ifdef SEASTAR_DEBUG
-    , _schema_version(s.version())
-#endif
 {
     auto&& tombstones = x.mutable_row_tombstones();
     if (!tombstones.empty()) {
@@ -4822,10 +4782,6 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
 
 stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutation_partition_v2&& p, cache_tracker* tracker,
         mutation_application_stats& app_stats, preemption_check need_preempt, apply_resume& res, is_evictable evictable) {
-#ifdef SEASTAR_DEBUG
-    assert(s.version() == _schema_version);
-    assert(p._schema_version == _schema_version);
-#endif
     _tombstone.apply(p._tombstone);
     _static_row.apply_monotonically(s, column_kind::static_column, std::move(p._static_row));
     _static_row_continuous |= p._static_row_continuous;
@@ -5556,10 +5512,6 @@ bool mutation_partition_v2::equal(const schema& s, const mutation_partition_v2& 
 }
 
 bool mutation_partition_v2::equal(const schema& this_schema, const mutation_partition_v2& p, const schema& p_schema) const {
-#ifdef SEASTAR_DEBUG
-    assert(_schema_version == this_schema.version());
-    assert(p._schema_version == p_schema.version());
-#endif
     if (_tombstone != p._tombstone) {
         return false;
     }
@@ -5673,9 +5625,6 @@ mutation_partition_v2::mutation_partition_v2(mutation_partition_v2::incomplete_t
     : _tombstone(t)
     , _static_row_continuous(!s.has_static_columns())
     , _rows()
-#ifdef SEASTAR_DEBUG
-    , _schema_version(s.version())
-#endif
 {
     auto e = alloc_strategy_unique_ptr<rows_entry>(
             current_allocator().construct<rows_entry>(s, rows_entry::last_dummy_tag(), is_continuous::no));
@@ -10797,7 +10746,6 @@ bool base64_begins_with(std::string_view base, std::string_view operand) {
 
 using namespace std::chrono_literals;
 
-#ifdef SEASTAR_ASAN_ENABLED
 // For each aligned 8 byte segment, the algorithm used by address
 // sanitizer can represent any addressable prefix followd by a
 // poisoned suffix. The details are at:
@@ -10829,13 +10777,6 @@ void poison(const T* addr, size_t size) {
 void unpoison(const char *addr, size_t size) {
     ASAN_UNPOISON_MEMORY_REGION(addr, size);
 }
-#else
-template<typename T>
-[[nodiscard]] static T align_up_for_asan(T val) { return val; }
-template<typename T>
-void poison(const T* addr, size_t size) { }
-void unpoison(const char *addr, size_t size) { }
-#endif
 
 namespace bi = boost::intrusive;
 
@@ -10847,8 +10788,6 @@ class migrators_base {
 protected:
     std::vector<const migrate_fn_type*> _migrators;
 };
-
-#ifdef DEBUG_LSA_SANITIZER
 
 class migrators : public migrators_base, public enable_lw_shared_from_this<migrators> {
 private:
@@ -10902,32 +10841,6 @@ public:
 
 logging::logger migrators::_logger("lsa-migrator-sanitizer");
 
-#else
-
-class migrators : public migrators_base, public enable_lw_shared_from_this<migrators> {
-    std::vector<uint32_t> _unused_ids;
-
-public:
-    uint32_t add(const migrate_fn_type* m) {
-        if (!_unused_ids.empty()) {
-            uint32_t idx = _unused_ids.back();
-            _unused_ids.pop_back();
-            _migrators[idx] = m;
-            return idx;
-        }
-        _migrators.push_back(m);
-        return _migrators.size() - 1;
-    }
-    void remove(uint32_t idx) {
-        _unused_ids.push_back(idx);
-    }
-    const migrate_fn_type*& operator[](uint32_t idx) {
-        return _migrators[idx];
-    }
-};
-
-#endif
-
 static
 migrators&
 static_migrators() noexcept {
@@ -10961,8 +10874,6 @@ migrate_fn_type::unregister_migrator(uint32_t index) {
 }
 
 namespace logalloc {
-
-#ifdef DEBUG_LSA_SANITIZER
 
 class region_sanitizer {
     struct allocation {
@@ -11084,19 +10995,6 @@ public:
 
 logging::logger region_sanitizer::logger("lsa-sanitizer");
 
-#else
-
-struct region_sanitizer {
-    region_sanitizer(const bool&) { }
-    void on_region_destruction() noexcept { }
-    void on_allocation(const void*, size_t) noexcept { }
-    void on_free(const void* ptr, size_t size) noexcept { }
-    void on_migrate(const void*, size_t, const void*) noexcept { }
-    void merge(region_sanitizer&) noexcept { }
-};
-
-#endif
-
 struct segment;
 
 static logging::logger llogger("lsa");
@@ -11123,11 +11021,7 @@ class background_reclaimer {
     static constexpr size_t free_memory_threshold = 60'000'000;
 private:
     bool have_work() const {
-#ifndef SEASTAR_DEFAULT_ALLOCATOR
         return memory::free_memory() < free_memory_threshold;
-#else
-        return false;
-#endif
     }
     void main_loop_wake() {
         llogger.debug("background_reclaimer::main_loop_wake: waking {}", bool(_main_loop_wait));
@@ -11603,109 +11497,7 @@ public:
         return _backend->can_allocate_more_segments(non_lsa_reserve);
     }
 };
-#ifndef SEASTAR_DEFAULT_ALLOCATOR
 using segment_store = contiguous_memory_segment_store;
-#else
-class segment_store {
-    std::unique_ptr<contiguous_memory_segment_store> _delegate_store;
-    std::vector<segment*> _segments;
-    std::unordered_map<segment*, size_t> _segment_indexes;
-    static constexpr size_t _std_memory_available = size_t(1) << 30; // emulate 1GB per shard
-    std::vector<segment*>::iterator find_empty() noexcept {
-        return std::find(_segments.begin(), _segments.end(), nullptr);
-    }
-    std::vector<segment*>::const_iterator find_empty() const noexcept {
-        return std::find(_segments.cbegin(), _segments.cend(), nullptr);
-    }
-    void free_segments() noexcept {
-        for (segment *seg : _segments) {
-            if (seg) {
-                seg->~segment();
-                free(seg);
-            }
-        }
-    }
-
-public:
-    size_t non_lsa_reserve = 0;
-    segment_store() : _segments(max_segments()) {
-        _segment_indexes.reserve(max_segments());
-    }
-    void use_standard_allocator_segment_pool_backend(size_t available_memory) {
-        _delegate_store = std::make_unique<contiguous_memory_segment_store>(contiguous_memory_segment_store::with_standard_memory_backend{}, available_memory);
-        free_segments();
-        _segment_indexes = {};
-        llogger.debug("using the standard allocator segment pool backend with {} available memory", available_memory);
-    }
-    const segment* segment_from_idx(size_t idx) const noexcept {
-        if (_delegate_store) {
-            return _delegate_store->segment_from_idx(idx);
-        }
-        assert(idx < _segments.size());
-        return _segments[idx];
-    }
-    segment* segment_from_idx(size_t idx) noexcept {
-        if (_delegate_store) {
-            return _delegate_store->segment_from_idx(idx);
-        }
-        assert(idx < _segments.size());
-        return _segments[idx];
-    }
-    size_t idx_from_segment(const segment* seg) const noexcept {
-        if (_delegate_store) {
-            return _delegate_store->idx_from_segment(seg);
-        }
-        auto i = _segment_indexes.find(const_cast<segment*>(seg));
-        if (i == _segment_indexes.end()) {
-            return segment_npos;
-        }
-        return i->second;
-    }
-    std::pair<segment*, size_t> allocate_segment() noexcept {
-        if (_delegate_store) {
-            return _delegate_store->allocate_segment();
-        }
-        auto p = aligned_alloc(segment::size, segment::size);
-        if (!p) {
-            return {nullptr, 0};
-        }
-        auto seg = new (p) segment;
-        poison(seg, sizeof(segment));
-        auto i = find_empty();
-        assert(i != _segments.end());
-        *i = seg;
-        size_t ret = i - _segments.begin();
-        _segment_indexes[seg] = ret;
-        return {seg, ret};
-    }
-    void free_segment(segment *seg) noexcept {
-        if (_delegate_store) {
-            return _delegate_store->free_segment(seg);
-        }
-        seg->~segment();
-        ::free(seg);
-        size_t i = idx_from_segment(seg);
-        _segment_indexes.erase(seg);
-        _segments[i] = nullptr;
-    }
-    ~segment_store() {
-        free_segments();
-    }
-    size_t max_segments() const noexcept {
-        if (_delegate_store) {
-            return _delegate_store->max_segments();
-        }
-        return _std_memory_available / segment::size;
-    }
-    bool can_allocate_more_segments() const noexcept {
-        if (_delegate_store) {
-            return _delegate_store->can_allocate_more_segments();
-        }
-        auto i = find_empty();
-        return i != _segments.end();
-    }
-};
-#endif
 
 // Segment pool implementation for the seastar allocator.
 // Stores segment descriptors in a vector which is indexed using most significant
@@ -13207,12 +12999,8 @@ occupancy_stats tracker::impl::occupancy() const noexcept {
 }
 
 size_t tracker::impl::non_lsa_used_space() const noexcept {
-#ifdef SEASTAR_DEFAULT_ALLOCATOR
-    return 0;
-#else
     auto free_space_in_lsa = _segment_pool->free_segments() * segment_size;
     return memory::stats().allocated_memory() - region_occupancy().total_space() - free_space_in_lsa;
-#endif
 }
 
 void tracker::impl::reclaim_all_free_segments()
@@ -14081,9 +13869,6 @@ future<> directories::verify_owner_and_mode(fs::path path) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#ifdef SANITIZE
-#endif
-
 
 namespace rjson {
 
@@ -14257,11 +14042,9 @@ protected:
 void* internal::throwing_allocator::Malloc(size_t size) {
     // For bypassing the address sanitizer failure in debug mode - allocating
     // too much memory results in an abort
-    #ifdef SANITIZE
     if (size > memory::stats().total_memory()) {
         throw rjson::error(format("Failed to allocate {} bytes", size));
     }
-    #endif
     void* ret = base::Malloc(size);
     if (size > 0 && !ret) {
         throw rjson::error(format("Failed to allocate {} bytes", size));
@@ -14272,11 +14055,9 @@ void* internal::throwing_allocator::Malloc(size_t size) {
 void* internal::throwing_allocator::Realloc(void* orig_ptr, size_t orig_size, size_t new_size) {
     // For bypassing the address sanitizer failure in debug mode - allocating
     // too much memory results in an abort
-    #ifdef SANITIZE
     if (new_size > memory::stats().total_memory()) {
         throw rjson::error(format("Failed to allocate {} bytes", new_size));
     }
-    #endif
     void* ret = base::Realloc(orig_ptr, orig_size, new_size);
     if (new_size > 0 && !ret) {
         throw rjson::error(format("Failed to reallocate {} bytes to {} bytes from {}", orig_size, new_size, orig_ptr));
@@ -15605,20 +15386,12 @@ UUID::UUID(sstring_view uuid) {
  */
 
 
-#ifdef __clang__
-
 // Clang or boost have a problem navigating the enable_if maze
 // that is cpp_int's constructor. It ends up treating the
 // string_view as binary and "0" ends up 48.
 
 // Work around by casting to string.
 using string_view_workaround = std::string;
-
-#else
-
-using string_view_workaround = std::string_view;
-
-#endif
 
 uint64_t from_varint_to_integer(const utils::multiprecision_int& varint) {
     // The behavior CQL expects on overflow is for values to wrap
@@ -20210,8 +19983,6 @@ bool is_timeout_exception(std::exception_ptr e) {
     return false;
 }
 
-#if defined(OPTIMIZED_EXCEPTION_HANDLING_AVAILABLE)
-
 
 void* utils::internal::try_catch_dynamic(std::exception_ptr& eptr, const std::type_info* catch_type) noexcept {
     // In both libstdc++ and libc++, exception_ptr has just one field
@@ -20228,7 +19999,6 @@ void* utils::internal::try_catch_dynamic(std::exception_ptr& eptr, const std::ty
     return nullptr;
 }
 
-#endif // __GLIBCXX__
 /*
  * Copyright (C) 2017-present ScyllaDB
  *
@@ -24480,210 +24250,7 @@ validate_partial_naive(const uint8_t *data, size_t len) {
 
 } // namespace utils
 
-#if defined(__aarch64__)
-
-namespace utils {
-
-namespace utf8 {
-
-// Map high nibble of "First Byte" to legal character length minus 1
-// 0x00 ~ 0xBF --> 0
-// 0xC0 ~ 0xDF --> 1
-// 0xE0 ~ 0xEF --> 2
-// 0xF0 ~ 0xFF --> 3
-alignas(16) static const uint8_t s_first_len_tbl[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3,
-};
-
-// Map "First Byte" to 8-th item of range table (0xC2 ~ 0xF4)
-alignas(16) static const uint8_t s_first_range_tbl[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8,
-};
-
-// Range table, map range index to min and max values
-// Index 0    : 00 ~ 7F (First Byte, ascii)
-// Index 1,2,3: 80 ~ BF (Second, Third, Fourth Byte)
-// Index 4    : A0 ~ BF (Second Byte after E0)
-// Index 5    : 80 ~ 9F (Second Byte after ED)
-// Index 6    : 90 ~ BF (Second Byte after F0)
-// Index 7    : 80 ~ 8F (Second Byte after F4)
-// Index 8    : C2 ~ F4 (First Byte, non ascii)
-// Index 9~15 : illegal: u >= 255 && u <= 0
-alignas(16) static const uint8_t s_range_min_tbl[] = {
-    0x00, 0x80, 0x80, 0x80, 0xA0, 0x80, 0x90, 0x80,
-    0xC2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-};
-alignas(16) static const uint8_t s_range_max_tbl[] = {
-    0x7F, 0xBF, 0xBF, 0xBF, 0xBF, 0x9F, 0xBF, 0x8F,
-    0xF4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
-
-// This table is for fast handling four special First Bytes(E0,ED,F0,F4), after
-// which the Second Byte are not 80~BF. It contains "range index adjustment".
-// - The idea is to minus byte with E0, use the result(0~31) as the index to
-//   lookup the "range index adjustment". Then add the adjustment to original
-//   range index to get the correct range.
-// - Range index adjustment
-//   +------------+---------------+------------------+----------------+
-//   | First Byte | original range| range adjustment | adjusted range |
-//   +------------+---------------+------------------+----------------+
-//   | E0         | 2             | 2                | 4              |
-//   +------------+---------------+------------------+----------------+
-//   | ED         | 2             | 3                | 5              |
-//   +------------+---------------+------------------+----------------+
-//   | F0         | 3             | 3                | 6              |
-//   +------------+---------------+------------------+----------------+
-//   | F4         | 4             | 4                | 8              |
-//   +------------+---------------+------------------+----------------+
-// - Below is a uint8x16x2 table, data is interleaved in NEON register. So I'm
-//   putting it vertically. 1st column is for E0~EF, 2nd column for F0~FF.
-alignas(16) static const uint8_t s_range_adjust_tbl[] = {
-    /* index -> 0~15  16~31 <- index */
-    /*  E0 -> */ 2,     3, /* <- F0  */
-                 0,     0,
-                 0,     0,
-                 0,     0,
-                 0,     4, /* <- F4  */
-                 0,     0,
-                 0,     0,
-                 0,     0,
-                 0,     0,
-                 0,     0,
-                 0,     0,
-                 0,     0,
-                 0,     0,
-    /*  ED -> */ 3,     0,
-                 0,     0,
-                 0,     0,
-};
-
-// 2x ~ 4x faster than naive method
-partial_validation_results
-internal::validate_partial(const uint8_t *data, size_t len) {
-    if (len >= 16) {
-        uint8x16_t prev_input = vdupq_n_u8(0);
-        uint8x16_t prev_first_len = vdupq_n_u8(0);
-
-        // Cached tables
-        const uint8x16_t first_len_tbl = vld1q_u8(s_first_len_tbl);
-        const uint8x16_t first_range_tbl = vld1q_u8(s_first_range_tbl);
-        const uint8x16_t range_min_tbl = vld1q_u8(s_range_min_tbl);
-        const uint8x16_t range_max_tbl = vld1q_u8(s_range_max_tbl);
-        const uint8x16x2_t range_adjust_tbl = vld2q_u8(s_range_adjust_tbl);
-
-        // Cached values
-        const uint8x16_t const_1 = vdupq_n_u8(1);
-        const uint8x16_t const_2 = vdupq_n_u8(2);
-        const uint8x16_t const_e0 = vdupq_n_u8(0xE0);
-
-        uint8x16_t error = vdupq_n_u8(0);
-
-        while (len >= 16) {
-            const uint8x16_t input = vld1q_u8(data);
-
-            // high_nibbles = input >> 4
-            const uint8x16_t high_nibbles = vshrq_n_u8(input, 4);
-
-            // first_len = legal character length minus 1
-            // 0 for 00~7F, 1 for C0~DF, 2 for E0~EF, 3 for F0~FF
-            // first_len = first_len_tbl[high_nibbles]
-            const uint8x16_t first_len =
-                vqtbl1q_u8(first_len_tbl, high_nibbles);
-
-            // First Byte: set range index to 8 for bytes within 0xC0 ~ 0xFF
-            // range = first_range_tbl[high_nibbles]
-            uint8x16_t range = vqtbl1q_u8(first_range_tbl, high_nibbles);
-
-            // Second Byte: set range index to first_len
-            // 0 for 00~7F, 1 for C0~DF, 2 for E0~EF, 3 for F0~FF
-            // range |= (first_len, prev_first_len) << 1 byte
-            range =
-                vorrq_u8(range, vextq_u8(prev_first_len, first_len, 15));
-
-            // Third Byte: set range index to saturate_sub(first_len, 1)
-            // 0 for 00~7F, 0 for C0~DF, 1 for E0~EF, 2 for F0~FF
-            uint8x16_t tmp1, tmp2;
-            // tmp1 = saturate_sub(first_len, 1)
-            tmp1 = vqsubq_u8(first_len, const_1);
-            // tmp2 = saturate_sub(prev_first_len, 1)
-            tmp2 = vqsubq_u8(prev_first_len, const_1);
-            // range |= (tmp1, tmp2) << 2 bytes
-            range = vorrq_u8(range, vextq_u8(tmp2, tmp1, 14));
-
-            // Fourth Byte: set range index to saturate_sub(first_len, 2)
-            // 0 for 00~7F, 0 for C0~DF, 0 for E0~EF, 1 for F0~FF
-            // tmp1 = saturate_sub(first_len, 2)
-            tmp1 = vqsubq_u8(first_len, const_2);
-            // tmp2 = saturate_sub(prev_first_len, 2)
-            tmp2 = vqsubq_u8(prev_first_len, const_2);
-            // range |= (tmp1, tmp2) << 3 bytes
-            range = vorrq_u8(range, vextq_u8(tmp2, tmp1, 13));
-
-            // Now we have below range indices caluclated
-            // Correct cases:
-            // - 8 for C0~FF
-            // - 3 for 1st byte after F0~FF
-            // - 2 for 1st byte after E0~EF or 2nd byte after F0~FF
-            // - 1 for 1st byte after C0~DF or 2nd byte after E0~EF or
-            //         3rd byte after F0~FF
-            // - 0 for others
-            // Error cases:
-            //   9,10,11 if non ascii First Byte overlaps
-            //   E.g., F1 80 C2 90 --> 8 3 10 2, where 10 indicates error
-
-            // Adjust Second Byte range for special First Bytes(E0,ED,F0,F4)
-            // See s_range_adjust_tbl[] definition for details
-            // Overlaps lead to index 9~15, which are illegal in range table
-            uint8x16_t shift1 = vextq_u8(prev_input, input, 15);
-            uint8x16_t pos = vsubq_u8(shift1, const_e0);
-            range = vaddq_u8(range, vqtbl2q_u8(range_adjust_tbl, pos));
-
-            // Load min and max values per calculated range index
-            uint8x16_t minv = vqtbl1q_u8(range_min_tbl, range);
-            uint8x16_t maxv = vqtbl1q_u8(range_max_tbl, range);
-
-            // Check value range
-            error = vorrq_u8(error, vcltq_u8(input, minv));
-            error = vorrq_u8(error, vcgtq_u8(input, maxv));
-
-            prev_input = input;
-            prev_first_len = first_len;
-
-            data += 16;
-            len -= 16;
-        }
-
-        // Delay error check till loop ends
-        if (vmaxvq_u8(error)) {
-            return partial_validation_results{.error = true};
-        }
-
-        // Find previous token (not 80~BF)
-        uint32_t token4;
-        vst1q_lane_u32(&token4, vreinterpretq_u32_u8(prev_input), 3);
-
-        const int8_t *token = (const int8_t *)&token4;
-        int lookahead = 0;
-        if (token[3] > (int8_t)0xBF) {
-            lookahead = 1;
-        } else if (token[2] > (int8_t)0xBF) {
-            lookahead = 2;
-        } else if (token[1] > (int8_t)0xBF) {
-            lookahead = 3;
-        }
-        data -= lookahead;
-        len += lookahead;
-    }
-
-    // Continue with remaining bytes with naive method
-    return validate_partial_naive(data, len);
-}
-
-} // namespace utf8
-
-} // namespace utils
-
-#elif defined(__x86_64__)
+#if   defined(__x86_64__)
 
 namespace utils {
 
