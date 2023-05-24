@@ -570,26 +570,11 @@ scylla_tests_dependencies = scylla_core + idls + scylla_tests_generic_dependenci
 
 scylla_raft_dependencies = scylla_raft_core + ['utils/uuid.cc', 'utils/error_injection.cc']
 
-scylla_tools = ['tools/scylla-types.cc', 'tools/scylla-sstable.cc', 'tools/schema_loader.cc', 'tools/utils.cc', 'tools/lua_sstable_consumer.cc']
-scylla_perfs = ['test/perf/perf_fast_forward.cc',
-                'test/perf/perf_row_cache_update.cc',
-                'test/perf/perf_simple_query.cc',
-                'test/perf/perf_sstable.cc',
-                'test/perf/perf_tablets.cc',
-                'test/perf/perf.cc',
-                'test/lib/alternator_test_env.cc',
-                'test/lib/cql_test_env.cc',
-                'test/lib/log.cc',
-                'test/lib/test_services.cc',
-                'test/lib/test_utils.cc',
-                'test/lib/tmpdir.cc',
-                'test/lib/key_utils.cc',
-                'test/lib/random_schema.cc',
-                'test/lib/data_model.cc',
-                'seastar/tests/perf/linux_perf_event.cc']
+scylla_tools = []
+scylla_perfs = []
 
 deps = {
-    'scylla': idls + ['main.cc'] + scylla_core + api + scylla_tools + scylla_perfs,
+    
 }
 
 pure_boost_tests = set([
