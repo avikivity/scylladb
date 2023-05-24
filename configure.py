@@ -345,7 +345,7 @@ modes = {
 }
 
 scylla_tests = set([
-    'test/boost/sstable_datafile_test',
+    'sstable_datafile_test',
 ])
 
 perf_tests = set([
