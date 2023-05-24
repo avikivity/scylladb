@@ -28,8 +28,6 @@ namespace tracing {
 
 using elapsed_clock = std::chrono::steady_clock;
 
-extern logging::logger tracing_logger;
-
 class trace_state_ptr;
 class tracing;
 
@@ -453,24 +451,6 @@ public:
         _flushing_records -= nr;
     }
 
-    /**
-     * Create a new primary tracing session.
-     *
-     * @param type a tracing session type
-     * @param props trace session properties set
-     *
-     * @return tracing state handle
-     */
-    trace_state_ptr create_session(trace_type type, trace_state_props_set props) noexcept;
-
-    /**
-     * Create a new secondary tracing session.
-     *
-     * @param secondary_session_info tracing session info
-     *
-     * @return tracing state handle
-     */
-    trace_state_ptr create_session(const trace_info& secondary_session_info) noexcept;
 
     void write_maybe() {
         if (_pending_for_write_records_count >= write_event_records_threshold || _pending_for_write_records_bulk.size() >= write_event_sessions_threshold) {

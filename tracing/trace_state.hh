@@ -34,8 +34,6 @@ class prepared_statement;
 
 namespace tracing {
 
-extern logging::logger trace_state_logger;
-
 using prepared_checked_weak_ptr = seastar::checked_ptr<seastar::weak_ptr<cql3::statements::prepared_statement>>;
 
 class trace_state final {
@@ -75,7 +73,7 @@ private:
 
     struct params_values;
     struct params_values_deleter {
-        void operator()(params_values* pv);
+        void operator()(params_values* pv) {}
     };
 
     class params_ptr {
@@ -134,10 +132,9 @@ public:
             _supplied_start_ts_us = info.start_ts_us;
         }
 
-        trace_state_logger.trace("{}: props {}, slow query threshold {}us, slow query ttl {}s", session_id(), _state_props.mask(), info.slow_query_threshold_us, info.slow_query_ttl_sec);
     }
 
-    ~trace_state();
+    ~trace_state() {}
 
     const utils::UUID& session_id() const {
         return _records->session_id;
@@ -541,10 +538,6 @@ inline void trace_state::trace_internal(sstring message) {
     // In any case, this should be rare, therefore we don't try to optimize this
     // flow.
     if (!_local_tracing_ptr->have_records_budget()) {
-        tracing_logger.trace("{}: Maximum number of traces is reached. Some traces are going to be dropped", session_id());
-        if ((++_local_tracing_ptr->stats.dropped_records) % tracing::log_warning_period == 1) {
-            tracing_logger.warn("Maximum records limit is hit {} times", _local_tracing_ptr->stats.dropped_records);
-        }
 
         return;
     }
@@ -779,23 +772,7 @@ public:
 
     // May be invoked across shards.
     trace_state_ptr get() const {
-        // optimize the "tracing not enabled" case
-        if (!_ptr) {
-            return nullptr;
-        }
-
-        if (_cpu_of_origin != this_shard_id()) {
-            auto opt_trace_info = make_trace_info(_ptr);
-            if (opt_trace_info) {
-                trace_state_ptr new_trace_state = tracing::get_local_tracing_instance().create_session(*opt_trace_info);
-                begin(new_trace_state);
-                return new_trace_state;
-            } else {
-                return nullptr;
-            }
-        }
-
-        return _ptr;
+        return nullptr;
     }
 
     // May be invoked across shards.

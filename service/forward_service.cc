@@ -395,10 +395,6 @@ future<query::forward_result> forward_service::execute_on_this_shard(
     std::optional<tracing::trace_info> tr_info
 ) {
     tracing::trace_state_ptr tr_state;
-    if (tr_info) {
-        tr_state = tracing::tracing::get_local_tracing_instance().create_session(*tr_info);
-        tracing::begin(tr_state);
-    }
 
     tracing::trace(tr_state, "Executing forward_request");
     _stats.requests_executed += 1;

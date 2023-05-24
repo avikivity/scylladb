@@ -375,11 +375,6 @@ private:
         auto src_addr = netw::messaging_service::get_source(cinfo);
 
         tracing::trace_state_ptr trace_state_ptr;
-        if (trace_info) {
-            trace_state_ptr = tracing::tracing::get_local_tracing_instance().create_session(*trace_info);
-            tracing::begin(trace_state_ptr);
-            tracing::trace(trace_state_ptr, "Message received from /{}", src_addr.addr);
-        }
 
         std::vector<frozen_mutation_and_schema> mutations;
         auto timeout = *t;
@@ -404,13 +399,6 @@ private:
         auto forward_fn = std::move(forward_fn1);
 
         tracing::trace_state_ptr trace_state_ptr;
-
-        if (trace_info) {
-            tracing::trace_info& tr_info = *trace_info;
-            trace_state_ptr = tracing::tracing::get_local_tracing_instance().create_session(tr_info);
-            tracing::begin(trace_state_ptr);
-            tracing::trace(trace_state_ptr, "Message received from /{}", src_addr.addr);
-        }
 
         auto trace_done = defer([&] {
             tracing::trace(trace_state_ptr, "Mutation handling is done");
@@ -580,11 +568,6 @@ private:
             rpc::optional<query::digest_algorithm> oda, rpc::optional<db::per_partition_rate_limit::info> rate_limit_info_opt) {
         tracing::trace_state_ptr trace_state_ptr;
         auto src_addr = netw::messaging_service::get_source(cinfo);
-        if (cmd1.trace_info) {
-            trace_state_ptr = tracing::tracing::get_local_tracing_instance().create_session(*cmd1.trace_info);
-            tracing::begin(trace_state_ptr);
-            tracing::trace(trace_state_ptr, "read_data: message received from /{}", src_addr.addr);
-        }
         auto da = oda.value_or(query::digest_algorithm::MD5);
         auto rate_limit_info = rate_limit_info_opt.value_or(std::monostate());
         if (!cmd1.max_result_size) {
@@ -617,11 +600,6 @@ private:
             query::read_command cmd1, ::compat::wrapping_partition_range pr) {
         tracing::trace_state_ptr trace_state_ptr;
         auto src_addr = netw::messaging_service::get_source(cinfo);
-        if (cmd1.trace_info) {
-            trace_state_ptr = tracing::tracing::get_local_tracing_instance().create_session(*cmd1.trace_info);
-            tracing::begin(trace_state_ptr);
-            tracing::trace(trace_state_ptr, "read_mutation_data: message received from /{}", src_addr.addr);
-        }
         if (!cmd1.max_result_size) {
             cmd1.max_result_size.emplace(cinfo.retrieve_auxiliary<uint64_t>("max_result_size"));
         }
@@ -645,11 +623,6 @@ private:
             rpc::optional<query::digest_algorithm> oda, rpc::optional<db::per_partition_rate_limit::info> rate_limit_info_opt) {
         tracing::trace_state_ptr trace_state_ptr;
         auto src_addr = netw::messaging_service::get_source(cinfo);
-        if (cmd1.trace_info) {
-            trace_state_ptr = tracing::tracing::get_local_tracing_instance().create_session(*cmd1.trace_info);
-            tracing::begin(trace_state_ptr);
-            tracing::trace(trace_state_ptr, "read_digest: message received from /{}", src_addr.addr);
-        }
         auto da = oda.value_or(query::digest_algorithm::MD5);
         auto rate_limit_info = rate_limit_info_opt.value_or(std::monostate());
         if (!cmd1.max_result_size) {
@@ -699,11 +672,6 @@ private:
         auto src_addr = netw::messaging_service::get_source(cinfo);
         auto src_ip = src_addr.addr;
         tracing::trace_state_ptr tr_state;
-        if (trace_info) {
-            tr_state = tracing::tracing::get_local_tracing_instance().create_session(*trace_info);
-            tracing::begin(tr_state);
-            tracing::trace(tr_state, "paxos_prepare: message received from /{} ballot {}", src_ip, ballot);
-        }
         if (!cmd.max_result_size) {
             cmd.max_result_size.emplace(cinfo.retrieve_auxiliary<uint64_t>("max_result_size"));
         }
@@ -732,12 +700,6 @@ private:
         auto src_addr = netw::messaging_service::get_source(cinfo);
         auto src_ip = src_addr.addr;
         tracing::trace_state_ptr tr_state;
-        if (trace_info) {
-            tr_state = tracing::tracing::get_local_tracing_instance().create_session(*trace_info);
-            tracing::begin(tr_state);
-            tracing::trace(tr_state, "paxos_accept: message received from /{} ballot {}", src_ip, proposal);
-        }
-
         auto f = get_schema_for_read(proposal.update.schema_version(), src_addr, *timeout).then([&sp = _sp, tr_state = std::move(tr_state),
                                                               proposal = std::move(proposal), timeout] (schema_ptr schema) mutable {
             dht::token token = proposal.update.decorated_key(*schema).token();
@@ -767,11 +729,6 @@ private:
         auto src_addr = netw::messaging_service::get_source(cinfo);
         auto src_ip = src_addr.addr;
         tracing::trace_state_ptr tr_state;
-        if (trace_info) {
-            tr_state = tracing::tracing::get_local_tracing_instance().create_session(*trace_info);
-            tracing::begin(tr_state);
-            tracing::trace(tr_state, "paxos_prune: message received from /{} ballot {}", src_ip, ballot);
-        }
 
         if (pruning >= pruning_limit) {
             _sp.get_stats().cas_replica_dropped_prune++;

@@ -20,6 +20,6 @@ namespace tracing {
 // To identify messages for this particular file, `trace_prefix` is prepended to every such message.
 
 // Note: calling dup() on the wrapper returns a handle to the underlying file.
-seastar::file make_traced_file(seastar::file f, trace_state_ptr trace_state, seastar::sstring trace_prefix);
+inline seastar::file make_traced_file(seastar::file f, trace_state_ptr trace_state, seastar::sstring trace_prefix) { return f; }
 
 } // namespace tracing
