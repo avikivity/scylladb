@@ -1,7 +1,4 @@
-
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-
-
 #include <array>
 #include "array-search.hh"
 #include "ascii.hh"
@@ -358,26 +355,10 @@
 #include <x86intrin.h>
 #include <yaml-cpp/yaml.h>
 #include <zlib.h>
-
-
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
-
 namespace tests {
-
 void decorate_with_timestamps(const schema& schema, std::mt19937& engine, timestamp_generator& ts_gen, expiry_generator exp_gen,
         data_model::mutation_description::value& value);
-
 }
-
 void tests::random_schema::add_row(std::mt19937& engine, data_model::mutation_description& md, data_model::mutation_description::key ckey,
         timestamp_generator ts_gen, expiry_generator exp_gen) {
     value_generator gen;
@@ -387,11 +368,8 @@ void tests::random_schema::add_row(std::mt19937& engine, data_model::mutation_de
         md.add_clustered_cell(ckey, cdef.name_as_text(), std::move(value));
     }
 }
-
 static auto ts_gen = tests::default_timestamp_generator();
 static auto exp_gen = tests::no_expiry_expiry_generator();
-
-
 future<> my_coroutine(
         uint32_t seed,
         tests::random_schema& random_schema) {
@@ -400,19 +378,14 @@ future<> my_coroutine(
     std::vector<mutation> muts;
     for (size_t pk = 0; pk != partition_count; ++pk) {
         auto mut = random_schema.new_mutation(pk);
-
         const auto clustering_row_count = 1;
         const auto range_tombstone_count = 1;
         auto ckeys = random_schema.make_ckeys(std::max(clustering_row_count, range_tombstone_count));
-
         random_schema.add_row(engine, mut, ckeys[0], ts_gen, exp_gen);
         co_await coroutine::maybe_yield();
-
         muts.emplace_back(mut.build(random_schema.schema()));
     }
 }
-
-
 SEASTAR_TEST_CASE(test_validate_checksums) {
         static auto random_spec = tests::make_random_schema_specification(
                 get_name(),
@@ -421,75 +394,53 @@ SEASTAR_TEST_CASE(test_validate_checksums) {
                 std::uniform_int_distribution<size_t>(2, 8),
                 std::uniform_int_distribution<size_t>(2, 8));
         static auto random_schema = tests::random_schema{tests::random::get_int<uint32_t>(), *random_spec};
-
         return my_coroutine(7,
             random_schema
         );
 }
-/*
- * Copyright (C) 2018-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 atomic_cell atomic_cell::make_dead(api::timestamp_type timestamp, gc_clock::time_point deletion_time) {
     return atomic_cell_type::make_dead(timestamp, deletion_time);
 }
-
 atomic_cell atomic_cell::make_live(const abstract_type& type, api::timestamp_type timestamp, bytes_view value, atomic_cell::collection_member cm) {
     return atomic_cell_type::make_live(timestamp, single_fragment_range(value));
 }
-
 atomic_cell atomic_cell::make_live(const abstract_type& type, api::timestamp_type timestamp, managed_bytes_view value, atomic_cell::collection_member cm) {
     return atomic_cell_type::make_live(timestamp, fragment_range(value));
 }
-
 atomic_cell atomic_cell::make_live(const abstract_type& type, api::timestamp_type timestamp, ser::buffer_view<bytes_ostream::fragment_iterator> value, atomic_cell::collection_member cm) {
     return atomic_cell_type::make_live(timestamp, value);
 }
-
 atomic_cell atomic_cell::make_live(const abstract_type& type, api::timestamp_type timestamp, const fragmented_temporary_buffer::view& value, collection_member cm)
 {
     return atomic_cell_type::make_live(timestamp, value);
 }
-
 atomic_cell atomic_cell::make_live(const abstract_type& type, api::timestamp_type timestamp, bytes_view value,
                              gc_clock::time_point expiry, gc_clock::duration ttl, atomic_cell::collection_member cm) {
     return atomic_cell_type::make_live(timestamp, single_fragment_range(value), expiry, ttl);
 }
-
 atomic_cell atomic_cell::make_live(const abstract_type& type, api::timestamp_type timestamp, managed_bytes_view value,
                              gc_clock::time_point expiry, gc_clock::duration ttl, atomic_cell::collection_member cm) {
     return atomic_cell_type::make_live(timestamp, fragment_range(value), expiry, ttl);
 }
-
 atomic_cell atomic_cell::make_live(const abstract_type& type, api::timestamp_type timestamp, ser::buffer_view<bytes_ostream::fragment_iterator> value,
                              gc_clock::time_point expiry, gc_clock::duration ttl, atomic_cell::collection_member cm) {
     return atomic_cell_type::make_live(timestamp, value, expiry, ttl);
 }
-
 atomic_cell atomic_cell::make_live(const abstract_type& type, api::timestamp_type timestamp, const fragmented_temporary_buffer::view& value,
                                    gc_clock::time_point expiry, gc_clock::duration ttl, collection_member cm)
 {
     return atomic_cell_type::make_live(timestamp, value, expiry, ttl);
 }
-
 atomic_cell atomic_cell::make_live_counter_update(api::timestamp_type timestamp, int64_t value) {
     return atomic_cell_type::make_live_counter_update(timestamp, value);
 }
-
 atomic_cell atomic_cell::make_live_uninitialized(const abstract_type& type, api::timestamp_type timestamp, size_t size) {
     return atomic_cell_type::make_live_uninitialized(timestamp, size);
 }
-
 atomic_cell::atomic_cell(const abstract_type& type, atomic_cell_view other)
     : _data(other._view) {
     set_view(_data);
 }
-
 // Based on:
 //  - org.apache.cassandra.db.AbstractCell#reconcile()
 //  - org.apache.cassandra.db.BufferExpiringCell#reconcile()
@@ -522,7 +473,6 @@ compare_atomic_cell_for_merge(atomic_cell_view left, atomic_cell_view right) {
         }
     } else {
         // Both are deleted
-
         // Origin compares big-endian serialized deletion time. That's because it
         // delegates to AbstractCell.reconcile() which compares values after
         // comparing timestamps, which in case of deleted cells will hold
@@ -532,25 +482,21 @@ compare_atomic_cell_for_merge(atomic_cell_view left, atomic_cell_view right) {
     }
     return std::strong_ordering::equal;
 }
-
 atomic_cell_or_collection atomic_cell_or_collection::copy(const abstract_type& type) const {
     if (_data.empty()) {
         return atomic_cell_or_collection();
     }
     return atomic_cell_or_collection(managed_bytes(_data));
 }
-
 atomic_cell_or_collection::atomic_cell_or_collection(const abstract_type& type, atomic_cell_view acv)
     : _data(acv._view)
 {
 }
-
 bool atomic_cell_or_collection::equals(const abstract_type& type, const atomic_cell_or_collection& other) const
 {
     if (_data.empty() || other._data.empty()) {
         return _data.empty() && other._data.empty();
     }
-
     if (type.is_atomic()) {
         auto a = atomic_cell_view::from_bytes(type, _data);
         auto b = atomic_cell_view::from_bytes(type, other._data);
@@ -582,12 +528,10 @@ bool atomic_cell_or_collection::equals(const abstract_type& type, const atomic_c
         return as_collection_mutation().data == other.as_collection_mutation().data;
     }
 }
-
 size_t atomic_cell_or_collection::external_memory_usage(const abstract_type& t) const
 {
     return _data.external_memory_usage();
 }
-
 std::ostream&
 operator<<(std::ostream& os, const atomic_cell_view& acv) {
     if (acv.is_live()) {
@@ -604,12 +548,10 @@ operator<<(std::ostream& os, const atomic_cell_view& acv) {
     }
     return os;
 }
-
 std::ostream&
 operator<<(std::ostream& os, const atomic_cell& ac) {
     return os << atomic_cell_view(ac);
 }
-
 std::ostream&
 operator<<(std::ostream& os, const atomic_cell_view::printer& acvp) {
     auto& type = acvp._type;
@@ -637,12 +579,10 @@ operator<<(std::ostream& os, const atomic_cell_view::printer& acvp) {
     }
     return os;
 }
-
 std::ostream&
 operator<<(std::ostream& os, const atomic_cell::printer& acp) {
     return operator<<(os, static_cast<const atomic_cell_view::printer&>(acp));
 }
-
 std::ostream& operator<<(std::ostream& os, const atomic_cell_or_collection::printer& p) {
     if (p._cell._data.empty()) {
         return os << "{ null atomic_cell_or_collection }";
@@ -657,23 +597,12 @@ std::ostream& operator<<(std::ostream& os, const atomic_cell_or_collection::prin
     }
     return os << " }";
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 canonical_mutation::canonical_mutation(bytes_ostream data)
         : _data(std::move(data))
 { }
-
 canonical_mutation::canonical_mutation(const mutation& m)
 {
     mutation_partition_serializer part_ser(*m.schema(), m.partition());
-
     ser::writer_of_canonical_mutation<bytes_ostream> wr(_data);
     std::move(wr).write_table_id(m.schema()->id())
                  .write_schema_version(m.schema()->version())
@@ -683,28 +612,22 @@ canonical_mutation::canonical_mutation(const mutation& m)
                      part_ser.write(std::move(wr));
                  }).end_canonical_mutation();
 }
-
 table_id canonical_mutation::column_family_id() const {
     auto in = ser::as_input_stream(_data);
     auto mv = ser::deserialize(in, boost::type<ser::canonical_mutation_view>());
     return mv.table_id();
 }
-
 mutation canonical_mutation::to_mutation(schema_ptr s) const {
     auto in = ser::as_input_stream(_data);
     auto mv = ser::deserialize(in, boost::type<ser::canonical_mutation_view>());
-
     auto cf_id = mv.table_id();
     if (s->id() != cf_id) {
         throw std::runtime_error(format("Attempted to deserialize canonical_mutation of table {} with schema of table {} ({}.{})",
                                         cf_id, s->id(), s->ks_name(), s->cf_name()));
     }
-
     auto version = mv.schema_version();
     auto pk = mv.key();
-
     mutation m(std::move(s), std::move(pk));
-
     if (version == m.schema()->version()) {
         auto partition_view = mutation_partition_view::from_view(mv.partition());
         mutation_application_stats app_stats;
@@ -717,13 +640,11 @@ mutation canonical_mutation::to_mutation(schema_ptr s) const {
     }
     return m;
 }
-
 static sstring bytes_to_text(bytes_view bv) {
     sstring ret = uninitialized_string(bv.size());
     std::copy_n(reinterpret_cast<const char*>(bv.data()), bv.size(), ret.data());
     return ret;
 }
-
 std::ostream& operator<<(std::ostream& os, const canonical_mutation& cm) {
     auto in = ser::as_input_stream(cm._data);
     auto mv = ser::deserialize(in, boost::type<ser::canonical_mutation_view>());
@@ -796,72 +717,51 @@ std::ostream& operator<<(std::ostream& os, const canonical_mutation& cm) {
     fmt::print(os, "}}");
     return os;
 }
-
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 //
 // Representation layout:
 //
 // <mutation> ::= <column-family-id> <schema-version> <partition-key> <partition>
 //
-
 using namespace db;
-
 ser::mutation_view frozen_mutation::mutation_view() const {
     auto in = ser::as_input_stream(_bytes);
     return ser::deserialize(in, boost::type<ser::mutation_view>());
 }
-
 table_id
 frozen_mutation::column_family_id() const {
     return mutation_view().table_id();
 }
-
 table_schema_version
 frozen_mutation::schema_version() const {
     return mutation_view().schema_version();
 }
-
 partition_key_view
 frozen_mutation::key() const {
     return _pk;
 }
-
 dht::decorated_key
 frozen_mutation::decorated_key(const schema& s) const {
     return dht::decorate_key(s, key());
 }
-
 partition_key frozen_mutation::deserialize_key() const {
     return mutation_view().key();
 }
-
 frozen_mutation::frozen_mutation(bytes_ostream&& b)
     : _bytes(std::move(b))
     , _pk(deserialize_key())
 {
     _bytes.reduce_chunk_count();
 }
-
 frozen_mutation::frozen_mutation(bytes_ostream&& b, partition_key pk)
     : _bytes(std::move(b))
     , _pk(std::move(pk))
 {
     _bytes.reduce_chunk_count();
 }
-
 frozen_mutation::frozen_mutation(const mutation& m)
     : _pk(m.key())
 {
     mutation_partition_serializer part_ser(*m.schema(), m.partition());
-
     ser::writer_of_mutation<bytes_ostream> wom(_bytes);
     std::move(wom).write_table_id(m.schema()->id())
                   .write_schema_version(m.schema()->version())
@@ -871,7 +771,6 @@ frozen_mutation::frozen_mutation(const mutation& m)
                   }).end_mutation();
     _bytes.reduce_chunk_count();
 }
-
 mutation
 frozen_mutation::unfreeze(schema_ptr schema) const {
     check_schema_version(schema_version(), *schema);
@@ -885,7 +784,6 @@ frozen_mutation::unfreeze(schema_ptr schema) const {
     }
     return m;
 }
-
 future<mutation>
 frozen_mutation::unfreeze_gently(schema_ptr schema) const {
     check_schema_version(schema_version(), *schema);
@@ -899,7 +797,6 @@ frozen_mutation::unfreeze_gently(schema_ptr schema) const {
     }
     co_return m;
 }
-
 mutation frozen_mutation::unfreeze_upgrading(schema_ptr schema, const column_mapping& cm) const {
     mutation m(schema, key());
     converting_mutation_partition_applier v(cm, *schema, m.partition());
@@ -911,45 +808,36 @@ mutation frozen_mutation::unfreeze_upgrading(schema_ptr schema, const column_map
     }
     return m;
 }
-
 frozen_mutation freeze(const mutation& m) {
     return frozen_mutation{ m };
 }
-
 std::vector<frozen_mutation> freeze(const std::vector<mutation>& muts) {
     return boost::copy_range<std::vector<frozen_mutation>>(muts | boost::adaptors::transformed([] (const mutation& m) {
         return freeze(m);
     }));
 }
-
 std::vector<mutation> unfreeze(const std::vector<frozen_mutation>& muts) {
     return boost::copy_range<std::vector<mutation>>(muts | boost::adaptors::transformed([] (const frozen_mutation& fm) {
         return fm.unfreeze(local_schema_registry().get(fm.schema_version()));
     }));
 }
-
 mutation_partition_view frozen_mutation::partition() const {
     return mutation_partition_view::from_view(mutation_view().partition());
 }
-
 std::ostream& operator<<(std::ostream& out, const frozen_mutation::printer& pr) {
     return out << pr.self.unfreeze(pr.schema);
 }
-
 frozen_mutation::printer frozen_mutation::pretty_printer(schema_ptr s) const {
     return { *this, std::move(s) };
 }
-
 stop_iteration streamed_mutation_freezer::consume(tombstone pt) {
     _partition_tombstone = pt;
     return stop_iteration::no;
 }
-
 stop_iteration streamed_mutation_freezer::consume(static_row&& sr) {
     _sr = std::move(sr);
     return stop_iteration::no;
 }
-
 stop_iteration streamed_mutation_freezer::consume(clustering_row&& cr) {
     if (_reversed) {
         _crs.emplace_front(std::move(cr));
@@ -958,12 +846,10 @@ stop_iteration streamed_mutation_freezer::consume(clustering_row&& cr) {
     }
     return stop_iteration::no;
 }
-
 stop_iteration streamed_mutation_freezer::consume(range_tombstone&& rt) {
     _rts.apply(_schema, std::move(rt));
     return stop_iteration::no;
 }
-
 frozen_mutation streamed_mutation_freezer::consume_end_of_stream() {
     bytes_ostream out;
     ser::writer_of_mutation<bytes_ostream> wom(out);
@@ -977,22 +863,17 @@ frozen_mutation streamed_mutation_freezer::consume_end_of_stream() {
                   }).end_mutation();
     return frozen_mutation(std::move(out), std::move(_key));
 }
-
 class fragmenting_mutation_freezer {
     const schema& _schema;
     std::optional<partition_key> _key;
-
     tombstone _partition_tombstone;
     std::optional<static_row> _sr;
     std::deque<clustering_row> _crs;
     range_tombstone_list _rts;
-
     frozen_mutation_consumer_fn _consumer;
-
     bool _fragmented = false;
     size_t _dirty_size = 0;
     size_t _fragment_size;
-
     range_tombstone_change _current_rtc;
 private:
     future<stop_iteration> flush() {
@@ -1006,14 +887,12 @@ private:
                                                        std::move(_sr), std::move(_rts),
                                                        std::move(_crs), std::move(wr));
                       }).end_mutation();
-
         _sr = { };
         _rts.clear();
         _crs.clear();
         _dirty_size = 0;
         return _consumer(frozen_mutation(std::move(out), *_key), _fragmented);
     }
-
     future<stop_iteration> maybe_flush() {
         if (_dirty_size >= _fragment_size) {
             _fragmented = true;
@@ -1024,7 +903,6 @@ private:
 public:
     fragmenting_mutation_freezer(const schema& s, frozen_mutation_consumer_fn c, size_t fragment_size)
         : _schema(s), _rts(s), _consumer(c), _fragment_size(fragment_size), _current_rtc(position_in_partition::before_all_clustered_rows(), {}) { }
-
     future<stop_iteration> consume(partition_start&& ps) {
         _key = std::move(ps.key().key());
         _fragmented = false;
@@ -1032,19 +910,16 @@ public:
         _partition_tombstone = ps.partition_tombstone();
         return make_ready_future<stop_iteration>(stop_iteration::no);
     }
-
     future<stop_iteration> consume(static_row&& sr) {
         _sr = std::move(sr);
         _dirty_size += _sr->memory_usage(_schema);
         return maybe_flush();
     }
-
     future<stop_iteration> consume(clustering_row&& cr) {
         _dirty_size += cr.memory_usage(_schema);
         _crs.emplace_back(std::move(cr));
         return maybe_flush();
     }
-
     future<stop_iteration> consume(range_tombstone_change&& rtc) {
         auto ret = make_ready_future<stop_iteration>(stop_iteration::no);
         if (_current_rtc.tombstone()) {
@@ -1056,7 +931,6 @@ public:
         _current_rtc = std::move(rtc);
         return ret;
     }
-
     future<stop_iteration> consume(partition_end&&) {
         if (_dirty_size) {
             return flush();
@@ -1064,7 +938,6 @@ public:
         return make_ready_future<stop_iteration>(stop_iteration::no);
     }
 };
-
 future<> fragment_and_freeze(flat_mutation_reader_v2 mr, frozen_mutation_consumer_fn c, size_t fragment_size)
 {
     std::exception_ptr ex;
@@ -1075,50 +948,34 @@ future<> fragment_and_freeze(flat_mutation_reader_v2 mr, frozen_mutation_consume
     } catch (...) {
         ex = std::current_exception();
     }
-
     co_await mr.close();
-
     if (ex) {
         std::rethrow_exception(std::move(ex));
     }
 }
-/*
- * Copyright (C) 2014-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 mutation::data::data(dht::decorated_key&& key, schema_ptr&& schema)
     : _schema(std::move(schema))
     , _dk(std::move(key))
     , _p(_schema)
 { }
-
 mutation::data::data(partition_key&& key_, schema_ptr&& schema)
     : _schema(std::move(schema))
     , _dk(dht::decorate_key(*_schema, std::move(key_)))
     , _p(_schema)
 { }
-
 mutation::data::data(schema_ptr&& schema, dht::decorated_key&& key, const mutation_partition& mp)
     : _schema(schema)
     , _dk(std::move(key))
     , _p(*schema, mp)
 { }
-
 mutation::data::data(schema_ptr&& schema, dht::decorated_key&& key, mutation_partition&& mp)
     : _schema(std::move(schema))
     , _dk(std::move(key))
     , _p(std::move(mp))
 { }
-
 void mutation::set_static_cell(const column_definition& def, atomic_cell_or_collection&& value) {
     partition().static_row().apply(def, std::move(value));
 }
-
 void mutation::set_static_cell(const bytes& name, const data_value& value, api::timestamp_type timestamp, ttl_opt ttl) {
     auto column_def = schema()->get_column_definition(name);
     if (!column_def) {
@@ -1129,7 +986,6 @@ void mutation::set_static_cell(const bytes& name, const data_value& value, api::
     }
     partition().static_row().apply(*column_def, atomic_cell::make_live(*column_def->type, timestamp, column_def->type->decompose(value), ttl));
 }
-
 void mutation::set_clustered_cell(const clustering_key& key, const bytes& name, const data_value& value,
         api::timestamp_type timestamp, ttl_opt ttl) {
     auto column_def = schema()->get_column_definition(name);
@@ -1138,12 +994,10 @@ void mutation::set_clustered_cell(const clustering_key& key, const bytes& name, 
     }
     return set_clustered_cell(key, *column_def, atomic_cell::make_live(*column_def->type, timestamp, column_def->type->decompose(value), ttl));
 }
-
 void mutation::set_clustered_cell(const clustering_key& key, const column_definition& def, atomic_cell_or_collection&& value) {
     auto& row = partition().clustered_row(*schema(), key).cells();
     row.apply(def, std::move(value));
 }
-
 void mutation::set_cell(const clustering_key_prefix& prefix, const bytes& name, const data_value& value,
         api::timestamp_type timestamp, ttl_opt ttl) {
     auto column_def = schema()->get_column_definition(name);
@@ -1152,7 +1006,6 @@ void mutation::set_cell(const clustering_key_prefix& prefix, const bytes& name, 
     }
     return set_cell(prefix, *column_def, atomic_cell::make_live(*column_def->type, timestamp, column_def->type->decompose(value), ttl));
 }
-
 void mutation::set_cell(const clustering_key_prefix& prefix, const column_definition& def, atomic_cell_or_collection&& value) {
     if (def.is_static()) {
         set_static_cell(def, std::move(value));
@@ -1162,22 +1015,18 @@ void mutation::set_cell(const clustering_key_prefix& prefix, const column_defini
         throw std::runtime_error("attemting to store into a key cell");
     }
 }
-
 bool mutation::operator==(const mutation& m) const {
     return decorated_key().equal(*schema(), m.decorated_key())
            && partition().equal(*schema(), m.partition(), *m.schema());
 }
-
 uint64_t
 mutation::live_row_count(gc_clock::time_point query_time) const {
     return partition().live_row_count(*schema(), query_time);
 }
-
 bool
 mutation_decorated_key_less_comparator::operator()(const mutation& m1, const mutation& m2) const {
     return m1.decorated_key().less_compare(*m1.schema(), m2.decorated_key());
 }
-
 boost::iterator_range<std::vector<mutation>::const_iterator>
 slice(const std::vector<mutation>& partitions, const dht::partition_range& r) {
     struct cmp {
@@ -1188,7 +1037,6 @@ slice(const std::vector<mutation>& partitions, const dht::partition_range& r) {
             return m.decorated_key().tri_compare(*m.schema(), pos) < 0;
         };
     };
-
     return boost::make_iterator_range(
         r.start()
             ? (r.start()->is_inclusive()
@@ -1201,7 +1049,6 @@ slice(const std::vector<mutation>& partitions, const dht::partition_range& r) {
               : std::lower_bound(partitions.begin(), partitions.end(), r.end()->value(), cmp()))
             : partitions.cend());
 }
-
 void
 mutation::upgrade(const schema_ptr& new_schema) {
     if (_ptr->_schema != new_schema) {
@@ -1210,110 +1057,81 @@ mutation::upgrade(const schema_ptr& new_schema) {
         _ptr->_schema = std::move(s);
     }
 }
-
 void mutation::apply(mutation&& m) {
     mutation_application_stats app_stats;
     partition().apply(*schema(), std::move(m.partition()), *m.schema(), app_stats);
 }
-
 void mutation::apply(const mutation& m) {
     mutation_application_stats app_stats;
     partition().apply(*schema(), m.partition(), *m.schema(), app_stats);
 }
-
 void mutation::apply(const mutation_fragment& mf) {
     partition().apply(*schema(), mf);
 }
-
 mutation& mutation::operator=(const mutation& m) {
     return *this = mutation(m);
 }
-
 mutation mutation::operator+(const mutation& other) const {
     auto m = *this;
     m.apply(other);
     return m;
 }
-
 mutation& mutation::operator+=(const mutation& other) {
     apply(other);
     return *this;
 }
-
 mutation& mutation::operator+=(mutation&& other) {
     apply(std::move(other));
     return *this;
 }
-
 mutation mutation::sliced(const query::clustering_row_ranges& ranges) const {
     return mutation(schema(), decorated_key(), partition().sliced(*schema(), ranges));
 }
-
 mutation mutation::compacted() const {
     auto m = *this;
     m.partition().compact_for_compaction(*schema(), always_gc, m.decorated_key(), gc_clock::time_point::min(), tombstone_gc_state(nullptr));
     return m;
 }
-
 mutation reverse(mutation mut) {
     auto reverse_schema = mut.schema()->make_reversed();
     mutation_rebuilder_v2 reverse_rebuilder(reverse_schema);
     return *std::move(mut).consume(reverse_rebuilder, consume_in_reverse::yes).result;
 }
-
 std::ostream& operator<<(std::ostream& os, const mutation& m) {
     const ::schema& s = *m.schema();
     const auto& dk = m.decorated_key();
-
     fmt::print(os, "{{table: '{}.{}', key: {{", s.ks_name(), s.cf_name());
-
     auto type_iterator = dk._key.get_compound_type(s)->types().begin();
     auto column_iterator = s.partition_key_columns().begin();
-
     for (auto&& e : dk._key.components(s)) {
         os << "'" << column_iterator->name_as_text() << "': " << (*type_iterator)->to_string(to_bytes(e)) << ", ";
         ++type_iterator;
         ++column_iterator;
     }
-
     fmt::print(os, "token: {}}}, ", dk._token);
     os << mutation_partition::printer(s, m.partition()) << "\n}";
     return os;
 }
-/*
- * Copyright (C) 2016-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 std::ostream&
 operator<<(std::ostream& os, const clustering_row::printer& p) {
     auto& row = p._clustering_row;
     return os << "{clustering_row: ck " << row._ck << " dr "
               << deletable_row::printer(p._schema, row._row) << "}";
 }
-
 std::ostream&
 operator<<(std::ostream& os, const static_row::printer& p) {
     return os << "{static_row: "<< row::printer(p._schema, column_kind::static_column, p._static_row._cells) << "}";
 }
-
 std::ostream&
 operator<<(std::ostream& os, const partition_start& ph) {
     fmt::print(os, "{{partition_start: pk {} partition_tombstone {}}}",
                ph._key, ph._partition_tombstone);
     return os;
 }
-
 std::ostream&
 operator<<(std::ostream& os, const partition_end& eop) {
     return os << "{partition_end}";
 }
-
 partition_region parse_partition_region(std::string_view s) {
     if (s == "partition_start") {
         return partition_region::partition_start;
@@ -1327,56 +1145,47 @@ partition_region parse_partition_region(std::string_view s) {
         throw std::runtime_error(fmt::format("Invalid value for partition_region: {}", s));
     }
 }
-
 std::ostream& operator<<(std::ostream& out, position_in_partition_view pos) {
     fmt::print(out, "{}", pos);
     return out;
 }
-
 std::ostream& operator<<(std::ostream& out, const position_in_partition& pos) {
     fmt::print(out, "{}", pos);
     return out;
 }
-
 std::ostream& operator<<(std::ostream& out, const position_range& range) {
     return out << "{" << range.start() << ", " << range.end() << "}";
 }
-
 mutation_fragment::mutation_fragment(const schema& s, reader_permit permit, static_row&& r)
     : _kind(kind::static_row), _data(std::make_unique<data>(std::move(permit)))
 {
     new (&_data->_static_row) static_row(std::move(r));
     reset_memory(s);
 }
-
 mutation_fragment::mutation_fragment(const schema& s, reader_permit permit, clustering_row&& r)
     : _kind(kind::clustering_row), _data(std::make_unique<data>(std::move(permit)))
 {
     new (&_data->_clustering_row) clustering_row(std::move(r));
     reset_memory(s);
 }
-
 mutation_fragment::mutation_fragment(const schema& s, reader_permit permit, range_tombstone&& r)
     : _kind(kind::range_tombstone), _data(std::make_unique<data>(std::move(permit)))
 {
     new (&_data->_range_tombstone) range_tombstone(std::move(r));
     reset_memory(s);
 }
-
 mutation_fragment::mutation_fragment(const schema& s, reader_permit permit, partition_start&& r)
         : _kind(kind::partition_start), _data(std::make_unique<data>(std::move(permit)))
 {
     new (&_data->_partition_start) partition_start(std::move(r));
     reset_memory(s);
 }
-
 mutation_fragment::mutation_fragment(const schema& s, reader_permit permit, partition_end&& r)
         : _kind(kind::partition_end), _data(std::make_unique<data>(std::move(permit)))
 {
     new (&_data->_partition_end) partition_end(std::move(r));
     reset_memory(s);
 }
-
 void mutation_fragment::reset_memory(const schema& s, std::optional<reader_resources> res) {
     try {
         _data->_memory.reset_to(res ? *res : reader_resources::with_memory(calculate_memory_usage(s)));
@@ -1385,7 +1194,6 @@ void mutation_fragment::reset_memory(const schema& s, std::optional<reader_resou
         throw;
     }
 }
-
 void mutation_fragment::destroy_data() noexcept
 {
     switch (_kind) {
@@ -1406,42 +1214,36 @@ void mutation_fragment::destroy_data() noexcept
         break;
     }
 }
-
 mutation_fragment_v2::mutation_fragment_v2(const schema& s, reader_permit permit, static_row&& r)
     : _kind(kind::static_row), _data(std::make_unique<data>(std::move(permit)))
 {
     new (&_data->_static_row) static_row(std::move(r));
     reset_memory(s);
 }
-
 mutation_fragment_v2::mutation_fragment_v2(const schema& s, reader_permit permit, clustering_row&& r)
     : _kind(kind::clustering_row), _data(std::make_unique<data>(std::move(permit)))
 {
     new (&_data->_clustering_row) clustering_row(std::move(r));
     reset_memory(s);
 }
-
 mutation_fragment_v2::mutation_fragment_v2(const schema& s, reader_permit permit, range_tombstone_change&& r)
     : _kind(kind::range_tombstone_change), _data(std::make_unique<data>(std::move(permit)))
 {
     new (&_data->_range_tombstone_chg) range_tombstone_change(std::move(r));
     reset_memory(s);
 }
-
 mutation_fragment_v2::mutation_fragment_v2(const schema& s, reader_permit permit, partition_start&& r)
         : _kind(kind::partition_start), _data(std::make_unique<data>(std::move(permit)))
 {
     new (&_data->_partition_start) partition_start(std::move(r));
     reset_memory(s);
 }
-
 mutation_fragment_v2::mutation_fragment_v2(const schema& s, reader_permit permit, partition_end&& r)
         : _kind(kind::partition_end), _data(std::make_unique<data>(std::move(permit)))
 {
     new (&_data->_partition_end) partition_end(std::move(r));
     reset_memory(s);
 }
-
 void mutation_fragment_v2::destroy_data() noexcept
 {
     switch (_kind) {
@@ -1462,7 +1264,6 @@ void mutation_fragment_v2::destroy_data() noexcept
         break;
     }
 }
-
 void mutation_fragment_v2::reset_memory(const schema& s, std::optional<reader_resources> res) {
     try {
         _data->_memory.reset_to(res ? *res : reader_resources::with_memory(calculate_memory_usage(s)));
@@ -1471,9 +1272,7 @@ void mutation_fragment_v2::reset_memory(const schema& s, std::optional<reader_re
         throw;
     }
 }
-
 namespace {
-
 struct get_key_visitor {
     const clustering_key_prefix& operator()(const clustering_row& cr) { return cr.key(); }
     const clustering_key_prefix& operator()(const range_tombstone& rt) { return rt.start; }
@@ -1481,15 +1280,12 @@ struct get_key_visitor {
     template <typename T>
     const clustering_key_prefix& operator()(const T&) { abort(); }
 };
-
 }
-
 const clustering_key_prefix& mutation_fragment::key() const
 {
     assert(has_key());
     return visit(get_key_visitor());
 }
-
 void mutation_fragment::apply(const schema& s, mutation_fragment&& mf)
 {
     assert(mergeable_with(mf));
@@ -1515,12 +1311,10 @@ void mutation_fragment::apply(const schema& s, mutation_fragment&& mf)
     mf._data.reset();
     reset_memory(s);
 }
-
 position_in_partition_view mutation_fragment::position() const
 {
     return visit([] (auto& mf) -> position_in_partition_view { return mf.position(); });
 }
-
 position_range mutation_fragment::range(const schema& s) const {
     switch (_kind) {
     case kind::static_row:
@@ -1537,7 +1331,6 @@ position_range mutation_fragment::range(const schema& s) const {
     }
     abort();
 }
-
 std::ostream& operator<<(std::ostream& os, mutation_fragment::kind k)
 {
     switch (k) {
@@ -1549,7 +1342,6 @@ std::ostream& operator<<(std::ostream& os, mutation_fragment::kind k)
     }
     abort();
 }
-
 std::ostream& operator<<(std::ostream& os, const mutation_fragment::printer& p) {
     auto& mf = p._mutation_fragment;
     os << "{mutation_fragment: " << mf._kind << " " << mf.position() << " ";
@@ -1561,13 +1353,11 @@ std::ostream& operator<<(std::ostream& os, const mutation_fragment::printer& p) 
     os << "}";
     return os;
 }
-
 const clustering_key_prefix& mutation_fragment_v2::key() const
 {
     assert(has_key());
     return visit(get_key_visitor());
 }
-
 void mutation_fragment_v2::apply(const schema& s, mutation_fragment_v2&& mf)
 {
     assert(mergeable_with(mf));
@@ -1593,12 +1383,10 @@ void mutation_fragment_v2::apply(const schema& s, mutation_fragment_v2&& mf)
     mf._data.reset();
     reset_memory(s);
 }
-
 position_in_partition_view mutation_fragment_v2::position() const
 {
     return visit([] (auto& mf) -> position_in_partition_view { return mf.position(); });
 }
-
 std::ostream& operator<<(std::ostream& os, mutation_fragment_v2::kind k)
 {
     switch (k) {
@@ -1610,7 +1398,6 @@ std::ostream& operator<<(std::ostream& os, mutation_fragment_v2::kind k)
     }
     abort();
 }
-
 std::ostream& operator<<(std::ostream& os, const mutation_fragment_v2::printer& p) {
     auto& mf = p._mutation_fragment;
     os << "{mutation_fragment: " << mf._kind << " " << mf.position() << " ";
@@ -1622,12 +1409,10 @@ std::ostream& operator<<(std::ostream& os, const mutation_fragment_v2::printer& 
     os << "}";
     return os;
 }
-
 mutation_fragment_opt range_tombstone_stream::do_get_next()
 {
     return mutation_fragment(_schema, _permit, _list.pop(_list.begin()));
 }
-
 mutation_fragment_opt range_tombstone_stream::get_next(const rows_entry& re)
 {
     if (!_list.empty()) {
@@ -1635,7 +1420,6 @@ mutation_fragment_opt range_tombstone_stream::get_next(const rows_entry& re)
     }
     return { };
 }
-
 mutation_fragment_opt range_tombstone_stream::get_next(const mutation_fragment& mf)
 {
     if (!_list.empty()) {
@@ -1643,7 +1427,6 @@ mutation_fragment_opt range_tombstone_stream::get_next(const mutation_fragment& 
     }
     return { };
 }
-
 mutation_fragment_opt range_tombstone_stream::get_next(position_in_partition_view upper_bound)
 {
     if (!_list.empty()) {
@@ -1651,7 +1434,6 @@ mutation_fragment_opt range_tombstone_stream::get_next(position_in_partition_vie
     }
     return { };
 }
-
 mutation_fragment_opt range_tombstone_stream::get_next()
 {
     if (!_list.empty()) {
@@ -1659,26 +1441,21 @@ mutation_fragment_opt range_tombstone_stream::get_next()
     }
     return { };
 }
-
 const range_tombstone& range_tombstone_stream::peek_next() const
 {
     return _list.begin()->tombstone();
 }
-
 void range_tombstone_stream::forward_to(position_in_partition_view pos) {
     _list.erase_where([this, &pos] (const range_tombstone& rt) {
         return !_cmp(pos, rt.end_position());
     });
 }
-
 void range_tombstone_stream::reset() {
     _list.clear();
 }
-
 bool range_tombstone_stream::empty() const {
     return _list.empty();
 }
-
 position_range position_range::from_range(const query::clustering_range& range) {
     auto bv_range = bound_view::from_range(range);
     return {
@@ -1686,15 +1463,12 @@ position_range position_range::from_range(const query::clustering_range& range) 
         position_in_partition(position_in_partition::range_tag_t(), bv_range.second)
     };
 }
-
 position_range::position_range(const query::clustering_range& range)
     : position_range(from_range(range))
 { }
-
 position_range::position_range(query::clustering_range&& range)
     : position_range(range) // FIXME: optimize
 { }
-
 bool mutation_fragment::relevant_for_range(const schema& s, position_in_partition_view pos) const {
     position_in_partition::less_compare cmp(s);
     if (!cmp(position(), pos)) {
@@ -1702,13 +1476,11 @@ bool mutation_fragment::relevant_for_range(const schema& s, position_in_partitio
     }
     return relevant_for_range_assuming_after(s, pos);
 }
-
 bool mutation_fragment::relevant_for_range_assuming_after(const schema& s, position_in_partition_view pos) const {
     position_in_partition::less_compare cmp(s);
     // Range tombstones overlapping with the new range are let in
     return is_range_tombstone() && cmp(pos, as_range_tombstone().end_position());
 }
-
 bool mutation_fragment_v2::relevant_for_range(const schema& s, position_in_partition_view pos) const {
     position_in_partition::less_compare less(s);
     if (!less(position(), pos)) {
@@ -1716,17 +1488,14 @@ bool mutation_fragment_v2::relevant_for_range(const schema& s, position_in_parti
     }
     return false;
 }
-
 std::ostream& operator<<(std::ostream& out, const range_tombstone_stream& rtl) {
     fmt::print(out, "{}", rtl._list);
     return out;
 }
-
 std::ostream& operator<<(std::ostream& out, const clustering_interval_set& set) {
     fmt::print(out, "{{{}}}", fmt::join(set, ",\n  "));
     return out;
 }
-
 template<typename Hasher>
 void appending_hash<mutation_fragment>::operator()(Hasher& h, const mutation_fragment& mf, const schema& s) const {
     auto hash_cell = [&] (const column_definition& col, const atomic_cell_or_collection& cell) {
@@ -1734,7 +1503,6 @@ void appending_hash<mutation_fragment>::operator()(Hasher& h, const mutation_fra
         feed_hash(h, col.id);
         feed_hash(h, cell, col);
     };
-
     mf.visit(seastar::make_visitor(
         [&] (const clustering_row& cr) {
             feed_hash(h, cr.key(), s);
@@ -1769,23 +1537,11 @@ void appending_hash<mutation_fragment>::operator()(Hasher& h, const mutation_fra
         }
     ));
 }
-
 // Instantiation for repair/row_level.cc
 template void appending_hash<mutation_fragment>::operator()<xx_hasher>(xx_hasher& h, const mutation_fragment& cells, const schema& s) const;
-/*
- * Copyright (C) 2023-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 logging::logger validator_log("mutation_fragment_stream_validator");
-
 invalid_mutation_fragment_stream::invalid_mutation_fragment_stream(std::runtime_error e) : std::runtime_error(std::move(e)) {
 }
-
 static mutation_fragment_v2::kind to_mutation_fragment_kind_v2(mutation_fragment::kind k) {
     switch (k) {
         case mutation_fragment::kind::partition_start:
@@ -1801,14 +1557,12 @@ static mutation_fragment_v2::kind to_mutation_fragment_kind_v2(mutation_fragment
     }
     std::abort();
 }
-
 mutation_fragment_stream_validator::mutation_fragment_stream_validator(const ::schema& s)
     : _schema(s)
     , _prev_kind(mutation_fragment_v2::kind::partition_end)
     , _prev_pos(position_in_partition::end_of_partition_tag_t{})
     , _prev_partition_key(dht::minimum_token(), partition_key::make_empty()) {
 }
-
 static sstring
 format_partition_key(const schema& s, const dht::decorated_key& pkey, const char* prefix = "") {
     if (pkey.key().is_empty()) {
@@ -1816,7 +1570,6 @@ format_partition_key(const schema& s, const dht::decorated_key& pkey, const char
     }
     return format("{}{} ({})", prefix, pkey.key().with_schema(s), pkey);
 }
-
 static mutation_fragment_stream_validator::validation_result
 ooo_key_result(const schema& s, dht::token t, const partition_key* pkey, dht::decorated_key prev_key) {
     return mutation_fragment_stream_validator::validation_result::invalid(format("out-of-order {} {}, previous {} was {}",
@@ -1825,7 +1578,6 @@ ooo_key_result(const schema& s, dht::token t, const partition_key* pkey, dht::de
             prev_key.key().is_empty() ? "token" : "partition key",
             prev_key.key().is_empty() ? format("{}", prev_key.token()) : format_partition_key(s, prev_key)));
 }
-
 mutation_fragment_stream_validator::validation_result
 mutation_fragment_stream_validator::validate(dht::token t, const partition_key* pkey) {
     if (_prev_partition_key.token() > t) {
@@ -1848,17 +1600,14 @@ mutation_fragment_stream_validator::validate(dht::token t, const partition_key* 
     }
     return validation_result::valid();
 }
-
 mutation_fragment_stream_validator::validation_result
 mutation_fragment_stream_validator::operator()(const dht::decorated_key& dk) {
     return validate(dk.token(), &dk.key());
 }
-
 mutation_fragment_stream_validator::validation_result
 mutation_fragment_stream_validator::operator()(dht::token t) {
     return validate(t, nullptr);
 }
-
 mutation_fragment_stream_validator::validation_result
 mutation_fragment_stream_validator::validate(mutation_fragment_v2::kind kind, std::optional<position_in_partition_view> pos,
     std::optional<tombstone> new_current_tombstone) {
@@ -1867,9 +1616,7 @@ mutation_fragment_stream_validator::validate(mutation_fragment_v2::kind kind, st
         return validation_result::invalid(format("invalid partition-end, partition {} has an active range tombstone {}",
                     format_partition_key(_schema, _prev_partition_key), _current_tombstone));
     }
-
     auto valid = true;
-
     // Check fragment kind order
     switch (_prev_kind) {
         case mutation_fragment_v2::kind::partition_start:
@@ -1891,7 +1638,6 @@ mutation_fragment_stream_validator::validate(mutation_fragment_v2::kind kind, st
                 format_partition_key(_schema, _prev_partition_key, " in partition "),
                 _prev_kind));
     }
-
     if (pos && _prev_kind != mutation_fragment_v2::kind::partition_end) {
         auto cmp = position_in_partition::tri_compare(_schema);
         auto res = cmp(_prev_pos, *pos);
@@ -1909,7 +1655,6 @@ mutation_fragment_stream_validator::validate(mutation_fragment_v2::kind kind, st
                     _prev_kind));
         }
     }
-
     _prev_kind = kind;
     if (pos) {
         _prev_pos = *pos;
@@ -1938,7 +1683,6 @@ mutation_fragment_stream_validator::validate(mutation_fragment_v2::kind kind, st
     }
     return validation_result::valid();
 }
-
 mutation_fragment_stream_validator::validation_result
 mutation_fragment_stream_validator::operator()(mutation_fragment_v2::kind kind, position_in_partition_view pos,
         std::optional<tombstone> new_current_tombstone) {
@@ -1948,7 +1692,6 @@ mutation_fragment_stream_validator::validation_result
 mutation_fragment_stream_validator::operator()(mutation_fragment::kind kind, position_in_partition_view pos) {
     return validate(to_mutation_fragment_kind_v2(kind), pos, {});
 }
-
 mutation_fragment_stream_validator::validation_result
 mutation_fragment_stream_validator::operator()(const mutation_fragment_v2& mf) {
     return validate(mf.mutation_fragment_kind(), mf.position(),
@@ -1958,7 +1701,6 @@ mutation_fragment_stream_validator::validation_result
 mutation_fragment_stream_validator::operator()(const mutation_fragment& mf) {
     return validate(to_mutation_fragment_kind_v2(mf.mutation_fragment_kind()), mf.position(), {});
 }
-
 mutation_fragment_stream_validator::validation_result
 mutation_fragment_stream_validator::operator()(mutation_fragment_v2::kind kind, std::optional<tombstone> new_current_tombstone) {
     return validate(kind, {}, new_current_tombstone);
@@ -1967,7 +1709,6 @@ mutation_fragment_stream_validator::validation_result
 mutation_fragment_stream_validator::operator()(mutation_fragment::kind kind) {
     return validate(to_mutation_fragment_kind_v2(kind), {}, {});
 }
-
 mutation_fragment_stream_validator::validation_result
 mutation_fragment_stream_validator::on_end_of_stream() {
     if (_prev_kind == mutation_fragment_v2::kind::partition_end) {
@@ -1977,14 +1718,12 @@ mutation_fragment_stream_validator::on_end_of_stream() {
             format_partition_key(_schema, _prev_partition_key, " "),
             _prev_kind));
 }
-
 void mutation_fragment_stream_validator::reset(dht::decorated_key dk) {
     _prev_partition_key = std::move(dk);
     _prev_pos = position_in_partition::for_partition_start();
     _prev_kind = mutation_fragment_v2::kind::partition_start;
     _current_tombstone = {};
 }
-
 void mutation_fragment_stream_validator::reset(mutation_fragment_v2::kind kind, position_in_partition_view pos, std::optional<tombstone> new_current_tombstone) {
     _prev_pos = pos;
     _prev_kind = kind;
@@ -1998,9 +1737,7 @@ void mutation_fragment_stream_validator::reset(const mutation_fragment_v2& mf) {
 void mutation_fragment_stream_validator::reset(const mutation_fragment& mf) {
     reset(to_mutation_fragment_kind_v2(mf.mutation_fragment_kind()), mf.position(), std::nullopt);
 }
-
 namespace {
-
 [[noreturn]] void on_validation_error(seastar::logger& l, const mutation_fragment_stream_validating_filter& zis, mutation_fragment_stream_validator::validation_result res) {
     try {
         on_internal_error(l, format("[validator {} for {}] {}", fmt::ptr(&zis), zis.full_name(), res.what()));
@@ -2008,9 +1745,7 @@ namespace {
         throw invalid_mutation_fragment_stream(e);
     }
 }
-
 }
-
 bool mutation_fragment_stream_validating_filter::operator()(const dht::decorated_key& dk) {
     if (_validation_level < mutation_fragment_stream_validation_level::token) {
         return true;
@@ -2027,12 +1762,10 @@ bool mutation_fragment_stream_validating_filter::operator()(const dht::decorated
         return true;
     }
 }
-
 sstring mutation_fragment_stream_validating_filter::full_name() const {
     const auto& s = _validator.schema();
     return format("{} ({}.{} {})", _name_view, s.ks_name(), s.cf_name(), s.id());
 }
-
 mutation_fragment_stream_validating_filter::mutation_fragment_stream_validating_filter(const char* name_literal, sstring name_value, const schema& s,
         mutation_fragment_stream_validation_level level)
     : _validator(s)
@@ -2066,40 +1799,31 @@ mutation_fragment_stream_validating_filter::mutation_fragment_stream_validating_
         validator_log.debug("[validator {} for {}] Will validate {} monotonicity.", static_cast<void*>(this), full_name(), what);
     }
 }
-
 mutation_fragment_stream_validating_filter::mutation_fragment_stream_validating_filter(sstring name, const schema& s,
         mutation_fragment_stream_validation_level level)
     : mutation_fragment_stream_validating_filter(nullptr, std::move(name), s, level)
 { }
-
 mutation_fragment_stream_validating_filter::mutation_fragment_stream_validating_filter(const char* name, const schema& s,
         mutation_fragment_stream_validation_level level)
     : mutation_fragment_stream_validating_filter(name, {}, s, level)
 { }
-
 bool mutation_fragment_stream_validating_filter::operator()(mutation_fragment_v2::kind kind, position_in_partition_view pos,
         std::optional<tombstone> new_current_tombstone) {
     std::optional<mutation_fragment_stream_validator::validation_result> res;
-
     validator_log.debug("[validator {}] {}:{} new_current_tombstone: {}", static_cast<void*>(this), kind, pos, new_current_tombstone);
-
     if (_validation_level >= mutation_fragment_stream_validation_level::clustering_key) {
         res = _validator(kind, pos, new_current_tombstone);
     } else {
         res = _validator(kind, new_current_tombstone);
     }
-
     if (__builtin_expect(!res->is_valid(), false)) {
         on_validation_error(validator_log, *this, *res);
     }
-
     return true;
 }
-
 bool mutation_fragment_stream_validating_filter::operator()(mutation_fragment::kind kind, position_in_partition_view pos) {
     return (*this)(to_mutation_fragment_kind_v2(kind), pos, {});
 }
-
 bool mutation_fragment_stream_validating_filter::operator()(const mutation_fragment_v2& mv) {
     return (*this)(mv.mutation_fragment_kind(), mv.position(),
             mv.is_range_tombstone_change() ? std::optional(mv.as_range_tombstone_change().tombstone()) : std::nullopt);
@@ -2107,7 +1831,6 @@ bool mutation_fragment_stream_validating_filter::operator()(const mutation_fragm
 bool mutation_fragment_stream_validating_filter::operator()(const mutation_fragment& mv) {
     return (*this)(to_mutation_fragment_kind_v2(mv.mutation_fragment_kind()), mv.position(), {});
 }
-
 void mutation_fragment_stream_validating_filter::reset(mutation_fragment_v2::kind kind, position_in_partition_view pos,
         std::optional<tombstone> new_current_tombstone) {
     validator_log.debug("[validator {}] reset to {} @ {}{}", static_cast<const void*>(this), kind, pos, value_of([t = new_current_tombstone] () -> sstring {
@@ -2127,11 +1850,9 @@ void mutation_fragment_stream_validating_filter::reset(const mutation_fragment_v
     }));
     _validator.reset(mf);
 }
-
 bool mutation_fragment_stream_validating_filter::on_end_of_partition() {
     return (*this)(mutation_fragment::kind::partition_end, position_in_partition_view(position_in_partition_view::end_of_partition_tag_t()));
 }
-
 void mutation_fragment_stream_validating_filter::on_end_of_stream() {
     if (_validation_level < mutation_fragment_stream_validation_level::partition_region) {
         return;
@@ -2141,34 +1862,19 @@ void mutation_fragment_stream_validating_filter::on_end_of_stream() {
         on_validation_error(validator_log, *this, res);
     }
 }
-
-/*
- * Copyright (C) 2014-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 logging::logger mplog("mutation_partition");
-
 template<bool reversed>
 struct reversal_traits;
-
 template<>
 struct reversal_traits<false> {
     template <typename Container>
     static auto begin(Container& c) {
         return c.begin();
     }
-
     template <typename Container>
     static auto end(Container& c) {
         return c.end();
     }
-
     template <typename Container, typename Disposer>
     static typename Container::iterator erase_and_dispose(Container& c,
         typename Container::iterator begin,
@@ -2177,7 +1883,6 @@ struct reversal_traits<false> {
     {
         return c.erase_and_dispose(begin, end, std::move(disposer));
     }
-
     template<typename Container, typename Disposer>
     static typename Container::iterator erase_dispose_and_update_end(Container& c,
          typename Container::iterator it, Disposer&& disposer,
@@ -2185,32 +1890,27 @@ struct reversal_traits<false> {
     {
         return c.erase_and_dispose(it, std::forward<Disposer>(disposer));
     }
-
     template <typename Container>
     static boost::iterator_range<typename Container::iterator> maybe_reverse(
         Container& c, boost::iterator_range<typename Container::iterator> r)
     {
         return r;
     }
-
     template <typename Container>
     static typename Container::iterator maybe_reverse(Container&, typename Container::iterator r) {
         return r;
     }
 };
-
 template<>
 struct reversal_traits<true> {
     template <typename Container>
     static auto begin(Container& c) {
         return c.rbegin();
     }
-
     template <typename Container>
     static auto end(Container& c) {
         return c.rend();
     }
-
     template <typename Container, typename Disposer>
     static typename Container::reverse_iterator erase_and_dispose(Container& c,
         typename Container::reverse_iterator begin,
@@ -2221,7 +1921,6 @@ struct reversal_traits<true> {
             c.erase_and_dispose(end.base(), begin.base(), disposer)
         );
     }
-
     // Erases element pointed to by it and makes sure than iterator end is not
     // invalidated.
     template<typename Container, typename Disposer>
@@ -2239,7 +1938,6 @@ struct reversal_traits<true> {
         }
         return ret;
     }
-
     template <typename Container>
     static boost::iterator_range<typename Container::reverse_iterator> maybe_reverse(
         Container& c, boost::iterator_range<typename Container::iterator> r)
@@ -2247,13 +1945,11 @@ struct reversal_traits<true> {
         using reverse_iterator = typename Container::reverse_iterator;
         return boost::make_iterator_range(reverse_iterator(r.end()), reverse_iterator(r.begin()));
     }
-
     template <typename Container>
     static typename Container::reverse_iterator maybe_reverse(Container&, typename Container::iterator r) {
         return typename Container::reverse_iterator(r);
     }
 };
-
 mutation_partition::mutation_partition(const schema& s, const mutation_partition& x)
         : _tombstone(x._tombstone)
         , _static_row(s, column_kind::static_column, x._static_row)
@@ -2266,7 +1962,6 @@ mutation_partition::mutation_partition(const schema& s, const mutation_partition
     };
     _rows.clone_from(x._rows, cloner, current_deleter<rows_entry>());
 }
-
 mutation_partition::mutation_partition(const mutation_partition& x, const schema& schema,
         query::clustering_key_filter_ranges ck_ranges)
         : _tombstone(x._tombstone)
@@ -2290,7 +1985,6 @@ mutation_partition::mutation_partition(const mutation_partition& x, const schema
         throw;
     }
 }
-
 mutation_partition::mutation_partition(mutation_partition&& x, const schema& schema,
     query::clustering_key_filter_ranges ck_ranges)
     : _tombstone(x._tombstone)
@@ -2320,11 +2014,9 @@ mutation_partition::mutation_partition(mutation_partition&& x, const schema& sch
         }
     }
 }
-
 mutation_partition::~mutation_partition() {
     _rows.clear_and_dispose(current_deleter<rows_entry>());
 }
-
 mutation_partition&
 mutation_partition::operator=(mutation_partition&& x) noexcept {
     if (this != &x) {
@@ -2333,7 +2025,6 @@ mutation_partition::operator=(mutation_partition&& x) noexcept {
     }
     return *this;
 }
-
 void mutation_partition::ensure_last_dummy(const schema& s) {
     check_schema(s);
     if (_rows.empty() || !_rows.rbegin()->is_last_dummy()) {
@@ -2342,68 +2033,54 @@ void mutation_partition::ensure_last_dummy(const schema& s) {
         _rows.insert_before(_rows.end(), std::move(e));
     }
 }
-
 void mutation_partition::apply(const schema& s, const mutation_partition& p, const schema& p_schema,
         mutation_application_stats& app_stats) {
     apply_weak(s, p, p_schema, app_stats);
 }
-
 void mutation_partition::apply(const schema& s, mutation_partition&& p,
         mutation_application_stats& app_stats) {
     apply_weak(s, std::move(p), app_stats);
 }
-
 void mutation_partition::apply(const schema& s, mutation_partition_view p, const schema& p_schema,
         mutation_application_stats& app_stats) {
     apply_weak(s, p, p_schema, app_stats);
 }
-
 struct mutation_fragment_applier {
     const schema& _s;
     mutation_partition& _mp;
-
     void operator()(tombstone t) {
         _mp.apply(t);
     }
-
     void operator()(range_tombstone rt) {
         _mp.apply_row_tombstone(_s, std::move(rt));
     }
-
     void operator()(const static_row& sr) {
         _mp.static_row().apply(_s, column_kind::static_column, sr.cells());
     }
-
     void operator()(partition_start ps) {
         _mp.apply(ps.partition_tombstone());
     }
-
     void operator()(partition_end ps) {
     }
-
     void operator()(const clustering_row& cr) {
         auto temp = clustering_row(_s, cr);
         auto& dr = _mp.clustered_row(_s, std::move(temp.key()));
         dr.apply(_s, std::move(temp).as_deletable_row());
     }
 };
-
 void
 mutation_partition::apply(const schema& s, const mutation_fragment& mf) {
     check_schema(s);
     mutation_fragment_applier applier{s, *this};
     mf.visit(applier);
 }
-
 stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation_partition&& p, cache_tracker* tracker,
         mutation_application_stats& app_stats, is_preemptible preemptible, apply_resume& res) {
     _tombstone.apply(p._tombstone);
     _static_row.apply_monotonically(s, column_kind::static_column, std::move(p._static_row));
     _static_row_continuous |= p._static_row_continuous;
-
     rows_entry::tri_compare cmp(s);
     auto del = current_deleter<rows_entry>();
-
     // Compacts rows in [i, end) with the tombstone.
     // Erases entries which are left empty by compaction.
     // Does not affect continuity.
@@ -2413,22 +2090,18 @@ stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation
             // necessary for correctness.
             return stop_iteration::yes;
         }
-
         while (i != end) {
             rows_entry& e = *i;
             can_gc_fn never_gc = [](tombstone) { return false; };
-
             ++app_stats.rows_compacted_with_tombstones;
             bool all_dead = e.dummy() || !e.row().compact_and_expire(s,
                                                                      tomb,
                                                                      gc_clock::time_point::min(),  // no TTL expiration
                                                                      never_gc,                     // no GC
                                                                      gc_clock::time_point::min()); // no GC
-
             auto next_i = std::next(i);
             bool inside_continuous_range = !tracker ||
                     (e.continuous() && (next_i != _rows.end() && next_i->continuous()));
-
             if (all_dead && e.row().empty() && inside_continuous_range) {
                 ++app_stats.rows_dropped_by_tombstones;
                 i = _rows.erase(i);
@@ -2439,7 +2112,6 @@ stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation
             } else {
                 i = next_i;
             }
-
             if (need_preempt() && i != end) {
                 res = apply_resume(stage, i->position());
                 return stop_iteration::no;
@@ -2447,7 +2119,6 @@ stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation
         }
         return stop_iteration::yes;
     };
-
     if (res._stage <= apply_resume::stage::range_tombstone_compaction) {
         bool filtering_tombstones = res._stage == apply_resume::stage::range_tombstone_compaction;
         for (const range_tombstone_entry& rt : p._row_tombstones) {
@@ -2466,21 +2137,17 @@ stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation
                 break;
             }
             auto end = _rows.lower_bound(rt.end_position(), cmp);
-
             auto tomb = _tombstone;
             tomb.apply(rt.tombstone().tomb);
-
             if (apply_tombstone_to_rows(apply_resume::stage::range_tombstone_compaction, tomb, i, end) == stop_iteration::no) {
                 return stop_iteration::no;
             }
         }
     }
-
     if (_row_tombstones.apply_monotonically(s, std::move(p._row_tombstones), preemptible) == stop_iteration::no) {
         res = apply_resume::merging_range_tombstones();
         return stop_iteration::no;
     }
-
     if (p._tombstone) {
         // p._tombstone is already applied to _tombstone
         rows_type::iterator i;
@@ -2496,15 +2163,12 @@ stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation
         // TODO: Drop redundant range tombstones
         p._tombstone = {};
     }
-
     res = apply_resume::merging_rows();
-
     auto p_i = p._rows.begin();
     auto i = _rows.begin();
     while (p_i != p._rows.end()) {
       try {
         rows_entry& src_e = *p_i;
-
         bool miss = true;
         if (i != _rows.end()) {
             auto x = cmp(*i, src_e);
@@ -2521,7 +2185,6 @@ stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation
             if (i != _rows.end() && i->continuous()) {
                 // When falling into a continuous range, preserve continuity.
                 src_e.set_continuous(true);
-
                 if (src_e.dummy()) {
                     p_i = p._rows.erase(p_i);
                     if (tracker) {
@@ -2579,7 +2242,6 @@ stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation
     }
     return stop_iteration::yes;
 }
-
 stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation_partition&& p, const schema& p_schema,
         mutation_application_stats& app_stats, is_preemptible preemptible, apply_resume& res) {
     if (s.version() == p_schema.version()) {
@@ -2590,19 +2252,16 @@ stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation
         return apply_monotonically(s, std::move(p2), no_cache_tracker, app_stats, is_preemptible::no, res); // FIXME: make preemptible
     }
 }
-
 stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation_partition&& p, cache_tracker *tracker,
                                                        mutation_application_stats& app_stats) {
     apply_resume res;
     return apply_monotonically(s, std::move(p), tracker, app_stats, is_preemptible::no, res);
 }
-
 stop_iteration mutation_partition::apply_monotonically(const schema& s, mutation_partition&& p, const schema& p_schema,
                                                        mutation_application_stats& app_stats) {
     apply_resume res;
     return apply_monotonically(s, std::move(p), p_schema, app_stats, is_preemptible::no, res);
 }
-
 void
 mutation_partition::apply_weak(const schema& s, mutation_partition_view p,
         const schema& p_schema, mutation_application_stats& app_stats) {
@@ -2612,17 +2271,14 @@ mutation_partition::apply_weak(const schema& s, mutation_partition_view p,
     p.accept(p_schema, b);
     apply_monotonically(s, std::move(p2), p_schema, app_stats);
 }
-
 void mutation_partition::apply_weak(const schema& s, const mutation_partition& p,
         const schema& p_schema, mutation_application_stats& app_stats) {
     // FIXME: Optimize
     apply_monotonically(s, mutation_partition(s, p), p_schema, app_stats);
 }
-
 void mutation_partition::apply_weak(const schema& s, mutation_partition&& p, mutation_application_stats& app_stats) {
     apply_monotonically(s, std::move(p), no_cache_tracker, app_stats);
 }
-
 tombstone
 mutation_partition::range_tombstone_for_row(const schema& schema, const clustering_key& key) const {
     check_schema(schema);
@@ -2633,20 +2289,16 @@ mutation_partition::range_tombstone_for_row(const schema& schema, const clusteri
     }
     return t;
 }
-
 row_tombstone
 mutation_partition::tombstone_for_row(const schema& schema, const clustering_key& key) const {
     check_schema(schema);
     row_tombstone t = row_tombstone(range_tombstone_for_row(schema, key));
-
     auto j = _rows.find(key, rows_entry::tri_compare(schema));
     if (j != _rows.end()) {
         t.apply(j->row().deleted_at(), j->row().marker());
     }
-
     return t;
 }
-
 row_tombstone
 mutation_partition::tombstone_for_row(const schema& schema, const rows_entry& e) const {
     check_schema(schema);
@@ -2654,7 +2306,6 @@ mutation_partition::tombstone_for_row(const schema& schema, const rows_entry& e)
     t.apply(range_tombstone_for_row(schema, e.key()));
     return t;
 }
-
 void
 mutation_partition::apply_row_tombstone(const schema& schema, clustering_key_prefix prefix, tombstone t) {
     check_schema(schema);
@@ -2662,13 +2313,11 @@ mutation_partition::apply_row_tombstone(const schema& schema, clustering_key_pre
     auto start = prefix;
     _row_tombstones.apply(schema, {std::move(start), std::move(prefix), std::move(t)});
 }
-
 void
 mutation_partition::apply_row_tombstone(const schema& schema, range_tombstone rt) {
     check_schema(schema);
     _row_tombstones.apply(schema, std::move(rt));
 }
-
 void
 mutation_partition::apply_delete(const schema& schema, const clustering_key_prefix& prefix, tombstone t) {
     check_schema(schema);
@@ -2680,7 +2329,6 @@ mutation_partition::apply_delete(const schema& schema, const clustering_key_pref
         apply_row_tombstone(schema, prefix, t);
     }
 }
-
 void
 mutation_partition::apply_delete(const schema& schema, range_tombstone rt) {
     check_schema(schema);
@@ -2690,7 +2338,6 @@ mutation_partition::apply_delete(const schema& schema, range_tombstone rt) {
     }
     apply_row_tombstone(schema, std::move(rt));
 }
-
 void
 mutation_partition::apply_delete(const schema& schema, clustering_key&& prefix, tombstone t) {
     check_schema(schema);
@@ -2702,7 +2349,6 @@ mutation_partition::apply_delete(const schema& schema, clustering_key&& prefix, 
         apply_row_tombstone(schema, std::move(prefix), t);
     }
 }
-
 void
 mutation_partition::apply_delete(const schema& schema, clustering_key_prefix_view prefix, tombstone t) {
     check_schema(schema);
@@ -2714,7 +2360,6 @@ mutation_partition::apply_delete(const schema& schema, clustering_key_prefix_vie
         apply_row_tombstone(schema, prefix, t);
     }
 }
-
 void
 mutation_partition::apply_insert(const schema& s, clustering_key_view key, api::timestamp_type created_at) {
     clustered_row(s, key).apply(row_marker(created_at));
@@ -2728,14 +2373,12 @@ void mutation_partition::insert_row(const schema& s, const clustering_key& key, 
         current_allocator().construct<rows_entry>(key, std::move(row)));
     _rows.insert_before_hint(_rows.end(), std::move(e), rows_entry::tri_compare(s));
 }
-
 void mutation_partition::insert_row(const schema& s, const clustering_key& key, const deletable_row& row) {
     check_schema(s);
     auto e = alloc_strategy_unique_ptr<rows_entry>(
         current_allocator().construct<rows_entry>(s, key, row));
     _rows.insert_before_hint(_rows.end(), std::move(e), rows_entry::tri_compare(s));
 }
-
 const row*
 mutation_partition::find_row(const schema& s, const clustering_key& key) const {
     check_schema(s);
@@ -2745,7 +2388,6 @@ mutation_partition::find_row(const schema& s, const clustering_key& key) const {
     }
     return &i->row().cells();
 }
-
 deletable_row&
 mutation_partition::clustered_row(const schema& s, clustering_key&& key) {
     check_schema(s);
@@ -2757,7 +2399,6 @@ mutation_partition::clustered_row(const schema& s, clustering_key&& key) {
     }
     return i->row();
 }
-
 deletable_row&
 mutation_partition::clustered_row(const schema& s, const clustering_key& key) {
     check_schema(s);
@@ -2769,7 +2410,6 @@ mutation_partition::clustered_row(const schema& s, const clustering_key& key) {
     }
     return i->row();
 }
-
 deletable_row&
 mutation_partition::clustered_row(const schema& s, clustering_key_view key) {
     check_schema(s);
@@ -2781,7 +2421,6 @@ mutation_partition::clustered_row(const schema& s, clustering_key_view key) {
     }
     return i->row();
 }
-
 rows_entry&
 mutation_partition::clustered_rows_entry(const schema& s, position_in_partition_view pos, is_dummy dummy, is_continuous continuous) {
     check_schema(s);
@@ -2793,12 +2432,10 @@ mutation_partition::clustered_rows_entry(const schema& s, position_in_partition_
     }
     return *i;
 }
-
 deletable_row&
 mutation_partition::clustered_row(const schema& s, position_in_partition_view pos, is_dummy dummy, is_continuous continuous) {
     return clustered_rows_entry(s, pos, dummy, continuous).row();
 }
-
 deletable_row&
 mutation_partition::append_clustered_row(const schema& s, position_in_partition_view pos, is_dummy dummy, is_continuous continuous) {
     check_schema(s);
@@ -2810,10 +2447,8 @@ mutation_partition::append_clustered_row(const schema& s, position_in_partition_
     }
     auto e = alloc_strategy_unique_ptr<rows_entry>(current_allocator().construct<rows_entry>(s, pos, dummy, continuous));
     i = _rows.insert_before_hint(i, std::move(e), cmp).first;
-
     return i->row();
 }
-
 mutation_partition::rows_type::const_iterator
 mutation_partition::lower_bound(const schema& schema, const query::clustering_range& r) const {
     check_schema(schema);
@@ -2822,7 +2457,6 @@ mutation_partition::lower_bound(const schema& schema, const query::clustering_ra
     }
     return _rows.lower_bound(position_in_partition_view::for_range_start(r), rows_entry::tri_compare(schema));
 }
-
 mutation_partition::rows_type::const_iterator
 mutation_partition::upper_bound(const schema& schema, const query::clustering_range& r) const {
     check_schema(schema);
@@ -2831,28 +2465,23 @@ mutation_partition::upper_bound(const schema& schema, const query::clustering_ra
     }
     return _rows.lower_bound(position_in_partition_view::for_range_end(r), rows_entry::tri_compare(schema));
 }
-
 boost::iterator_range<mutation_partition::rows_type::const_iterator>
 mutation_partition::range(const schema& schema, const query::clustering_range& r) const {
     check_schema(schema);
     return boost::make_iterator_range(lower_bound(schema, r), upper_bound(schema, r));
 }
-
 boost::iterator_range<mutation_partition::rows_type::iterator>
 mutation_partition::range(const schema& schema, const query::clustering_range& r) {
     return unconst(_rows, static_cast<const mutation_partition*>(this)->range(schema, r));
 }
-
 mutation_partition::rows_type::iterator
 mutation_partition::lower_bound(const schema& schema, const query::clustering_range& r) {
     return unconst(_rows, static_cast<const mutation_partition*>(this)->lower_bound(schema, r));
 }
-
 mutation_partition::rows_type::iterator
 mutation_partition::upper_bound(const schema& schema, const query::clustering_range& r) {
     return unconst(_rows, static_cast<const mutation_partition*>(this)->upper_bound(schema, r));
 }
-
 template<typename Func>
 void mutation_partition::for_each_row(const schema& schema, const query::clustering_range& row_range, bool reversed, Func&& func) const
 {
@@ -2872,7 +2501,6 @@ void mutation_partition::for_each_row(const schema& schema, const query::cluster
         }
     }
 }
-
 template<typename RowWriter>
 void write_cell(RowWriter& w, const query::partition_slice& slice, ::atomic_cell_view c) {
     assert(c.is_live());
@@ -2899,21 +2527,18 @@ void write_cell(RowWriter& w, const query::partition_slice& slice, ::atomic_cell
         }
     }().end_qr_cell();
 }
-
 template<typename RowWriter>
 void write_cell(RowWriter& w, const query::partition_slice& slice, data_type type, collection_mutation_view v) {
     if (type->is_collection() && slice.options.contains<query::partition_slice::option::collections_as_maps>()) {
         auto& ctype = static_cast<const collection_type_impl&>(*type);
         type = map_type_impl::get_instance(ctype.name_comparator(), ctype.value_comparator(), true);
     }
-
     w.add().write().skip_timestamp()
         .skip_expiry()
         .write_fragmented_value(serialize_for_cql(*type, std::move(v)))
         .skip_ttl()
         .end_qr_cell();
 }
-
 template<typename RowWriter>
 void write_counter_cell(RowWriter& w, const query::partition_slice& slice, ::atomic_cell_view c) {
     assert(c.is_live());
@@ -2930,7 +2555,6 @@ void write_counter_cell(RowWriter& w, const query::partition_slice& slice, ::ato
             .skip_ttl()
             .end_qr_cell();
 }
-
 template<typename Hasher>
 void appending_hash<row>::operator()(Hasher& h, const row& cells, const schema& s, column_kind kind, const query::column_id_vector& columns, max_timestamp& max_ts) const {
     for (auto id : columns) {
@@ -2972,7 +2596,6 @@ void appending_hash<row>::operator()(Hasher& h, const row& cells, const schema& 
 }
 // Instantiation for mutation_test.cc
 template void appending_hash<row>::operator()<xx_hasher>(xx_hasher& h, const row& cells, const schema& s, column_kind kind, const query::column_id_vector& columns, max_timestamp& max_ts) const;
-
 template<>
 void appending_hash<row>::operator()<legacy_xx_hasher_without_null_digest>(legacy_xx_hasher_without_null_digest& h, const row& cells, const schema& s, column_kind kind, const query::column_id_vector& columns, max_timestamp& max_ts) const {
     for (auto id : columns) {
@@ -3003,12 +2626,10 @@ void appending_hash<row>::operator()<legacy_xx_hasher_without_null_digest>(legac
         }
     }
 }
-
 cell_hash_opt row::cell_hash_for(column_id id) const {
     const cell_and_hash* cah = _cells.get(id);
     return cah != nullptr ? cah->hash : cell_hash_opt();
 }
-
 void row::prepare_hash(const schema& s, column_kind kind) const {
     // const to avoid removing const qualifiers on the read path
     for_each_cell([&s, kind] (column_id id, const cell_and_hash& c_a_h) {
@@ -3019,13 +2640,11 @@ void row::prepare_hash(const schema& s, column_kind kind) const {
         }
     });
 }
-
 void row::clear_hash() const {
     for_each_cell([] (column_id, const cell_and_hash& c_a_h) {
         c_a_h.hash = { };
     });
 }
-
 template<typename RowWriter>
 static void get_compacted_row_slice(const schema& s,
     const query::partition_slice& slice,
@@ -3060,7 +2679,6 @@ static void get_compacted_row_slice(const schema& s,
         }
     }
 }
-
 bool has_any_live_data(const schema& s, column_kind kind, const row& cells, tombstone tomb, gc_clock::time_point now) {
     bool any_live = false;
     cells.for_each_cell_until([&] (column_id id, const atomic_cell_or_collection& cell_or_collection) {
@@ -3082,24 +2700,20 @@ bool has_any_live_data(const schema& s, column_kind kind, const row& cells, tomb
     });
     return any_live;
 }
-
 std::ostream&
 operator<<(std::ostream& os, const std::pair<column_id, const atomic_cell_or_collection::printer&>& c) {
     fmt::print(os, "{{column: {} {}}}", c.first, c.second);
     return os;
 }
-
 // Transforms given range of printable into a range of strings where each element
 // in the original range is prefxied with given string.
 template<typename RangeOfPrintable>
 static auto prefixed(const sstring& prefix, const RangeOfPrintable& r) {
     return r | boost::adaptors::transformed([&] (auto&& e) { return format("{}{}", prefix, e); });
 }
-
 std::ostream&
 operator<<(std::ostream& os, const row::printer& p) {
     auto& cells = p._row._cells;
-
     os << "{{row:";
     cells.walk([&] (column_id id, const cell_and_hash& cah) {
         auto& cdef = p._schema.column_at(p._kind, id);
@@ -3108,7 +2722,6 @@ operator<<(std::ostream& os, const row::printer& p) {
     });
     return os << "}}";
 }
-
 std::ostream&
 operator<<(std::ostream& os, const row_marker& rm) {
     if (rm.is_missing()) {
@@ -3121,7 +2734,6 @@ operator<<(std::ostream& os, const row_marker& rm) {
     }
     return os;
 }
-
 std::ostream&
 operator<<(std::ostream& os, const deletable_row::printer& p) {
     auto& dr = p._deletable_row;
@@ -3134,7 +2746,6 @@ operator<<(std::ostream& os, const deletable_row::printer& p) {
     }
     return os << row::printer(p._schema, column_kind::regular_column, dr._cells) << "}";
 }
-
 std::ostream&
 operator<<(std::ostream& os, const rows_entry::printer& p) {
     auto& re = p._rows_entry;
@@ -3143,11 +2754,9 @@ operator<<(std::ostream& os, const rows_entry::printer& p) {
                   deletable_row::printer(p._schema, re._row));
     return os;
 }
-
 std::ostream&
 operator<<(std::ostream& os, const mutation_partition::printer& p) {
     const auto indent = "  ";
-
     auto& mp = p._mutation_partition;
     os << "mutation_partition: {\n";
     if (mp._tombstone) {
@@ -3156,7 +2765,6 @@ operator<<(std::ostream& os, const mutation_partition::printer& p) {
     if (!mp._row_tombstones.empty()) {
         fmt::print(os, "{}range_tombstones: {{{}}},\n", indent, fmt::join(prefixed("\n    ", mp._row_tombstones), ","));
     }
-
     if (!mp.static_row().empty()) {
         os << indent << "static_row: {\n";
         const auto& srow = mp.static_row().get();
@@ -3167,12 +2775,9 @@ operator<<(std::ostream& os, const mutation_partition::printer& p) {
         }); 
         os << indent << "},\n";
     }
-
     os << indent << "rows: [\n";
-
     for (const auto& re : mp.clustered_rows()) {
         os << indent << indent << "{\n";
-
         const auto& row = re.row();
         os << indent << indent << indent << "cont: " << re.continuous() << ",\n";
         os << indent << indent << indent << "dummy: " << re.dummy() << ",\n";
@@ -3182,44 +2787,33 @@ operator<<(std::ostream& os, const mutation_partition::printer& p) {
         if (row.deleted_at()) {
             os << indent << indent << indent << "tombstone: " << row.deleted_at() << ",\n";
         }
-
         position_in_partition pip(re.position());
         if (pip.get_clustering_key_prefix()) {
             os << indent << indent << indent << "position: {\n";
-
             auto ck = *pip.get_clustering_key_prefix();
             auto type_iterator = ck.get_compound_type(p._schema)->types().begin();
             auto column_iterator = p._schema.clustering_key_columns().begin();
-
             os << indent << indent << indent << indent << "bound_weight: " << int32_t(pip.get_bound_weight()) << ",\n";
-
             for (auto&& e : ck.components(p._schema)) {
                 os << indent << indent << indent << indent << "'" << column_iterator->name_as_text() 
                    << "': " << (*type_iterator)->to_string(to_bytes(e)) << ",\n";
                 ++type_iterator;
                 ++column_iterator;
             }
-
             os << indent << indent << indent << "},\n";
         }
-
         row.cells().for_each_cell([&] (column_id& c_id, const atomic_cell_or_collection& cell) {
             auto& column_def = p._schema.column_at(column_kind::regular_column, c_id);
             os << indent << indent << indent <<  "'" << column_def.name_as_text() 
                << "': " << atomic_cell_or_collection::printer(column_def, cell) << ",\n";
         });
-
         os << indent << indent << "},\n";
     }
-
     os << indent << "]\n}";
-
     return os;
 }
-
 constexpr gc_clock::duration row_marker::no_ttl;
 constexpr gc_clock::duration row_marker::dead;
-
 int compare_row_marker_for_merge(const row_marker& left, const row_marker& right) noexcept {
     if (left.timestamp() != right.timestamp()) {
         return left.timestamp() > right.timestamp() ? 1 : -1;
@@ -3248,7 +2842,6 @@ int compare_row_marker_for_merge(const row_marker& left, const row_marker& right
     }
     return 0;
 }
-
 bool
 deletable_row::equal(column_kind kind, const schema& s, const deletable_row& other, const schema& other_schema) const {
     if (_deleted_at != other._deleted_at || _marker != other._marker) {
@@ -3256,32 +2849,26 @@ deletable_row::equal(column_kind kind, const schema& s, const deletable_row& oth
     }
     return _cells.equal(kind, s, other._cells, other_schema);
 }
-
 void deletable_row::apply(const schema& s, const deletable_row& src) {
     apply_monotonically(s, src);
 }
-
 void deletable_row::apply(const schema& s, deletable_row&& src) {
     apply_monotonically(s, std::move(src));
 }
-
 void deletable_row::apply_monotonically(const schema& s, const deletable_row& src) {
     _cells.apply(s, column_kind::regular_column, src._cells);
     _marker.apply(src._marker);
     _deleted_at.apply(src._deleted_at, _marker);
 }
-
 void deletable_row::apply_monotonically(const schema& s, deletable_row&& src) {
     _cells.apply(s, column_kind::regular_column, std::move(src._cells));
     _marker.apply(src._marker);
     _deleted_at.apply(src._deleted_at, _marker);
 }
-
 bool
 rows_entry::equal(const schema& s, const rows_entry& other) const {
     return equal(s, other, s);
 }
-
 bool
 rows_entry::equal(const schema& s, const rows_entry& other, const schema& other_schema) const {
     position_in_partition::equal_compare eq(s);
@@ -3289,16 +2876,13 @@ rows_entry::equal(const schema& s, const rows_entry& other, const schema& other_
            && _range_tombstone == other._range_tombstone
            && row().equal(column_kind::regular_column, s, other.row(), other_schema);
 }
-
 bool mutation_partition::equal(const schema& s, const mutation_partition& p) const {
     return equal(s, p, s);
 }
-
 bool mutation_partition::equal(const schema& this_schema, const mutation_partition& p, const schema& p_schema) const {
     if (_tombstone != p._tombstone) {
         return false;
     }
-
     if (!boost::equal(non_dummy_rows(), p.non_dummy_rows(),
         [&] (const rows_entry& e1, const rows_entry& e2) {
             return e1.equal(this_schema, e2, p_schema);
@@ -3306,28 +2890,23 @@ bool mutation_partition::equal(const schema& this_schema, const mutation_partiti
     )) {
         return false;
     }
-
     if (!std::equal(_row_tombstones.begin(), _row_tombstones.end(),
         p._row_tombstones.begin(), p._row_tombstones.end(),
         [&] (const auto& rt1, const auto& rt2) { return rt1.tombstone().equal(this_schema, rt2.tombstone()); }
     )) {
         return false;
     }
-
     return _static_row.equal(column_kind::static_column, this_schema, p._static_row, p_schema);
 }
-
 bool mutation_partition::equal_continuity(const schema& s, const mutation_partition& p) const {
     return _static_row_continuous == p._static_row_continuous
         && get_continuity(s).equals(s, p.get_continuity(s));
 }
-
 mutation_partition mutation_partition::sliced(const schema& s, const query::clustering_row_ranges& ranges) const {
     auto p = mutation_partition(*this, s, ranges);
     p._row_tombstones.trim(s, ranges);
     return p;
 }
-
 static
 void
 apply_monotonically(const column_definition& def, cell_and_hash& dst,
@@ -3346,18 +2925,15 @@ apply_monotonically(const column_definition& def, cell_and_hash& dst,
         dst.hash = { };
     }
 }
-
 void
 row::apply(const column_definition& column, const atomic_cell_or_collection& value, cell_hash_opt hash) {
     auto tmp = value.copy(*column.type);
     apply_monotonically(column, std::move(tmp), std::move(hash));
 }
-
 void
 row::apply(const column_definition& column, atomic_cell_or_collection&& value, cell_hash_opt hash) {
     apply_monotonically(column, std::move(value), std::move(hash));
 }
-
 template<typename Func>
 void row::consume_with(Func&& func) {
     _cells.weed([func, this] (column_id id, cell_and_hash& cah) {
@@ -3366,16 +2942,13 @@ void row::consume_with(Func&& func) {
         return true;
     });
 }
-
 void
 row::apply_monotonically(const column_definition& column, atomic_cell_or_collection&& value, cell_hash_opt hash) {
     static_assert(std::is_nothrow_move_constructible<atomic_cell_or_collection>::value
                   && std::is_nothrow_move_assignable<atomic_cell_or_collection>::value,
                   "noexcept required for atomicity");
-
     // our mutations are not yet immutable
     auto id = column.id;
-
     cell_and_hash* cah = _cells.get(id);
     if (cah == nullptr) {
         // FIXME -- add .locate method to radix_tree to find or allocate a spot
@@ -3385,31 +2958,26 @@ row::apply_monotonically(const column_definition& column, atomic_cell_or_collect
         ::apply_monotonically(column, *cah, value, std::move(hash));
     }
 }
-
 void
 row::append_cell(column_id id, atomic_cell_or_collection value) {
     _cells.emplace(id, std::move(value), cell_hash_opt());
     _size++;
 }
-
 const cell_and_hash*
 row::find_cell_and_hash(column_id id) const {
     return _cells.get(id);
 }
-
 const atomic_cell_or_collection*
 row::find_cell(column_id id) const {
     auto c_a_h = find_cell_and_hash(id);
     return c_a_h ? &c_a_h->cell : nullptr;
 }
-
 size_t row::external_memory_usage(const schema& s, column_kind kind) const {
     return _cells.memory_usage([&] (column_id id, const cell_and_hash& cah) noexcept {
             auto& cdef = s.column_at(kind, id);
             return cah.cell.external_memory_usage(*cdef.type);
     });
 }
-
 size_t rows_entry::memory_usage(const schema& s) const {
     size_t size = 0;
     if (!dummy()) {
@@ -3419,7 +2987,6 @@ size_t rows_entry::memory_usage(const schema& s) const {
            row().cells().external_memory_usage(s, column_kind::regular_column) +
            sizeof(rows_entry);
 }
-
 size_t mutation_partition::external_memory_usage(const schema& s) const {
     check_schema(s);
     size_t sum = 0;
@@ -3429,10 +2996,8 @@ size_t mutation_partition::external_memory_usage(const schema& s) const {
         sum += clr.memory_usage(s);
     }
     sum += row_tombstones().external_memory_usage(s);
-
     return sum;
 }
-
 template<bool reversed, typename Func>
 requires std::is_invocable_r_v<stop_iteration, Func, rows_entry&>
 void mutation_partition::trim_rows(const schema& s,
@@ -3440,27 +3005,21 @@ void mutation_partition::trim_rows(const schema& s,
     Func&& func)
 {
     check_schema(s);
-
     stop_iteration stop = stop_iteration::no;
     auto last = reversal_traits<reversed>::begin(_rows);
     auto deleter = current_deleter<rows_entry>();
-
     auto range_begin = [this, &s] (const query::clustering_range& range) {
         return reversed ? upper_bound(s, range) : lower_bound(s, range);
     };
-
     auto range_end = [this, &s] (const query::clustering_range& range) {
         return reversed ? lower_bound(s, range) : upper_bound(s, range);
     };
-
     for (auto&& row_range : row_ranges) {
         if (stop) {
             break;
         }
-
         last = reversal_traits<reversed>::erase_and_dispose(_rows, last,
             reversal_traits<reversed>::maybe_reverse(_rows, range_begin(row_range)), deleter);
-
         auto end = reversal_traits<reversed>::maybe_reverse(_rows, range_end(row_range));
         while (last != end && !stop) {
             rows_entry& e = *last;
@@ -3472,10 +3031,8 @@ void mutation_partition::trim_rows(const schema& s,
             }
         }
     }
-
     reversal_traits<reversed>::erase_and_dispose(_rows, last, reversal_traits<reversed>::end(_rows), deleter);
 }
-
 uint32_t mutation_partition::do_compact(const schema& s,
     const dht::decorated_key& dk,
     gc_clock::time_point query_time,
@@ -3489,19 +3046,14 @@ uint32_t mutation_partition::do_compact(const schema& s,
 {
     check_schema(s);
     assert(row_limit > 0);
-
     auto gc_before = drop_tombstones_unconditionally ? gc_clock::time_point::max() :
         gc_state.get_gc_before_for_key(s.shared_from_this(), dk, query_time);
-
     auto should_purge_tombstone = [&] (const tombstone& t) {
         return t.deletion_time < gc_before && can_gc(t);
     };
-
     bool static_row_live = _static_row.compact_and_expire(s, column_kind::static_column, row_tombstone(_tombstone),
         query_time, can_gc, gc_before);
-
     uint64_t row_count = 0;
-
     auto row_callback = [&] (rows_entry& e) {
         if (e.dummy()) {
             return stop_iteration::no;
@@ -3511,32 +3063,26 @@ uint32_t mutation_partition::do_compact(const schema& s,
         bool is_live = row.compact_and_expire(s, tomb, query_time, can_gc, gc_before, nullptr);
         return stop_iteration(is_live && ++row_count == row_limit);
     };
-
     if (reverse) {
         trim_rows<true>(s, row_ranges, row_callback);
     } else {
         trim_rows<false>(s, row_ranges, row_callback);
     }
-
     // #589 - Do not add extra row for statics unless we did a CK range-less query.
     // See comment in query
     bool return_static_content_on_partition_with_no_rows = always_return_static_content || !has_ck_selector(row_ranges);
     if (row_count == 0 && static_row_live && return_static_content_on_partition_with_no_rows) {
         ++row_count;
     }
-
     _row_tombstones.erase_where([&] (auto&& rt) {
         return should_purge_tombstone(rt.tomb) || rt.tomb <= _tombstone;
     });
     if (should_purge_tombstone(_tombstone)) {
         _tombstone = tombstone();
     }
-
     // FIXME: purge unneeded prefix tombstones based on row_ranges
-
     return row_count;
 }
-
 uint64_t
 mutation_partition::compact_for_query(
     const schema& s,
@@ -3553,7 +3099,6 @@ mutation_partition::compact_for_query(
     // so we can expect to not have to actually purge any tombstones here.
     return do_compact(s, dk, query_time, row_ranges, always_return_static_content, reverse, row_limit, always_gc, drop_tombstones_unconditionally, tombstone_gc_state(nullptr));
 }
-
 void mutation_partition::compact_for_compaction(const schema& s,
     can_gc_fn& can_gc, const dht::decorated_key& dk, gc_clock::time_point compaction_time,
     const tombstone_gc_state& gc_state)
@@ -3562,11 +3107,9 @@ void mutation_partition::compact_for_compaction(const schema& s,
     static const std::vector<query::clustering_range> all_rows = {
         query::clustering_range::make_open_ended_both_sides()
     };
-
     bool drop_tombstones_unconditionally = false;
     do_compact(s, dk, compaction_time, all_rows, true, false, query::partition_max_rows, can_gc, drop_tombstones_unconditionally, gc_state);
 }
-
 void mutation_partition::compact_for_compaction_drop_tombstones_unconditionally(const schema& s, const dht::decorated_key& dk)
 {
     check_schema(s);
@@ -3577,7 +3120,6 @@ void mutation_partition::compact_for_compaction_drop_tombstones_unconditionally(
     auto compaction_time = gc_clock::time_point::max();
     do_compact(s, dk, compaction_time, all_rows, true, false, query::partition_max_rows, always_gc, drop_tombstones_unconditionally, tombstone_gc_state(nullptr));
 }
-
 // Returns true if the mutation_partition represents no writes.
 bool mutation_partition::empty() const
 {
@@ -3586,7 +3128,6 @@ bool mutation_partition::empty() const
     }
     return !_static_row.size() && _rows.empty() && _row_tombstones.empty();
 }
-
 bool
 deletable_row::is_live(const schema& s, column_kind kind, tombstone base_tombstone, gc_clock::time_point query_time) const {
     // _created_at corresponds to the row marker cell, present for rows
@@ -3596,42 +3137,34 @@ deletable_row::is_live(const schema& s, column_kind kind, tombstone base_tombsto
     base_tombstone.apply(_deleted_at.tomb());
     return _marker.is_live(base_tombstone, query_time) || _cells.is_live(s, kind, base_tombstone, query_time);
 }
-
 bool
 row::is_live(const schema& s, column_kind kind, tombstone base_tombstone, gc_clock::time_point query_time) const {
     return has_any_live_data(s, kind, *this, base_tombstone, query_time);
 }
-
 bool
 mutation_partition::is_static_row_live(const schema& s, gc_clock::time_point query_time) const {
     check_schema(s);
     return has_any_live_data(s, column_kind::static_column, static_row().get(), _tombstone, query_time);
 }
-
 uint64_t
 mutation_partition::live_row_count(const schema& s, gc_clock::time_point query_time) const {
     check_schema(s);
     uint64_t count = 0;
-
     for (const rows_entry& e : non_dummy_rows()) {
         tombstone base_tombstone = range_tombstone_for_row(s, e.key());
         if (e.row().is_live(s, column_kind::regular_column, base_tombstone, query_time)) {
             ++count;
         }
     }
-
     if (count == 0 && is_static_row_live(s, query_time)) {
         return 1;
     }
-
     return count;
 }
-
 uint64_t
 mutation_partition::row_count() const {
     return _rows.calculate_size();
 }
-
 rows_entry::rows_entry(rows_entry&& o) noexcept
     : evictable(std::move(o))
     , _link(std::move(o._link))
@@ -3641,7 +3174,6 @@ rows_entry::rows_entry(rows_entry&& o) noexcept
     , _flags(std::move(o._flags))
 {
 }
-
 void rows_entry::compact(const schema& s, tombstone t) {
     can_gc_fn never_gc = [] (tombstone) { return false; };
     row().compact_and_expire(s,
@@ -3651,26 +3183,21 @@ void rows_entry::compact(const schema& s, tombstone t) {
                              gc_clock::time_point::min()); // no GC
     // FIXME: Purge redundant _range_tombstone
 }
-
 void rows_entry::replace_with(rows_entry&& o) noexcept {
     swap(o);
     _range_tombstone = std::move(o._range_tombstone);
     _row = std::move(o._row);
 }
-
 row::row(const schema& s, column_kind kind, const row& o) : _size(o._size)
 {
     auto clone_cell_and_hash = [&s, &kind] (column_id id, const cell_and_hash& cah) {
         auto& cdef = s.column_at(kind, id);
         return cell_and_hash(cah.cell.copy(*cdef.type), cah.hash);
     };
-
     _cells.clone_from(o._cells, clone_cell_and_hash);
 }
-
 row::~row() {
 }
-
 const atomic_cell_or_collection& row::cell_at(column_id id) const {
     auto&& cell = find_cell(id);
     if (!cell) {
@@ -3678,12 +3205,10 @@ const atomic_cell_or_collection& row::cell_at(column_id id) const {
     }
     return *cell;
 }
-
 bool row::equal(column_kind kind, const schema& this_schema, const row& other, const schema& other_schema) const {
     if (size() != other.size()) {
         return false;
     }
-
     auto cells_equal = [&] (column_id id1, const atomic_cell_or_collection& c1,
                             column_id id2, const atomic_cell_or_collection& c2) {
         static_assert(schema::row_column_ids_are_ordered_by_name::value, "Relying on column ids being ordered by name");
@@ -3693,12 +3218,10 @@ bool row::equal(column_kind kind, const schema& this_schema, const row& other, c
                && this_schema.column_at(kind, id1).name() == other_schema.column_at(kind, id2).name()
                && c1.equals(at1, c2);
     };
-
     auto i1 = _cells.begin();
     auto i1_end = _cells.end();
     auto i2 = other._cells.begin();
     auto i2_end = other._cells.end();
-
     while (true) {
         if (i1 == i1_end) {
             return i2 == i2_end;
@@ -3706,24 +3229,19 @@ bool row::equal(column_kind kind, const schema& this_schema, const row& other, c
         if (i2 == i2_end) {
             return i1 == i1_end;
         }
-
         if (!cells_equal(i1.key(), i1->cell, i2.key(), i2->cell)) {
             return false;
         }
-
         i1++;
         i2++;
     }
 }
-
 row::row() {
 }
-
 row::row(row&& other) noexcept
     : _size(other._size), _cells(std::move(other._cells)) {
     other._size = 0;
 }
-
 row& row::operator=(row&& other) noexcept {
     if (this != &other) {
         this->~row();
@@ -3731,7 +3249,6 @@ row& row::operator=(row&& other) noexcept {
     }
     return *this;
 }
-
 void row::apply(const schema& s, column_kind kind, const row& other) {
     if (other.empty()) {
         return;
@@ -3740,11 +3257,9 @@ void row::apply(const schema& s, column_kind kind, const row& other) {
         apply(s.column_at(kind, id), c_a_h.cell, c_a_h.hash);
     });
 }
-
 void row::apply(const schema& s, column_kind kind, row&& other) {
     apply_monotonically(s, kind, std::move(other));
 }
-
 void row::apply_monotonically(const schema& s, column_kind kind, row&& other) {
     if (other.empty()) {
         return;
@@ -3753,7 +3268,6 @@ void row::apply_monotonically(const schema& s, column_kind kind, row&& other) {
         apply_monotonically(s.column_at(kind, id), std::move(c_a_h.cell), std::move(c_a_h.hash));
     });
 }
-
 // When views contain a primary key column that is not part of the base table primary key,
 // that column determines whether the row is live or not. We need to ensure that when that
 // cell is dead, and thus the derived row marker, either by normal deletion of by TTL, so
@@ -3765,7 +3279,6 @@ static bool dead_marker_shadows_row(const schema& s, column_kind kind, const row
             && !marker.is_live()
             && kind == column_kind::regular_column; // not applicable to static rows
 }
-
 bool row::compact_and_expire(
         const schema& s,
         column_kind kind,
@@ -3788,7 +3301,6 @@ bool row::compact_and_expire(
             auto can_erase_cell = [&] {
                 return cell.deletion_time() < gc_before && can_gc(tombstone(cell.timestamp(), cell.deletion_time()));
             };
-
             if (cell.is_covered_by(tomb.regular(), def.is_counter())) {
                 erase = true;
             } else if (cell.is_covered_by(tomb.shadowable().tomb(), def.is_counter())) {
@@ -3823,7 +3335,6 @@ bool row::compact_and_expire(
     });
     return any_live;
 }
-
 bool row::compact_and_expire(
         const schema& s,
         column_kind kind,
@@ -3835,7 +3346,6 @@ bool row::compact_and_expire(
     row_marker m;
     return compact_and_expire(s, kind, tomb, query_time, can_gc, gc_before, m, collector);
 }
-
 bool lazy_row::compact_and_expire(
         const schema& s,
         column_kind kind,
@@ -3850,7 +3360,6 @@ bool lazy_row::compact_and_expire(
     }
     return _row->compact_and_expire(s, kind, tomb, query_time, can_gc, gc_before, marker, collector);
 }
-
 bool lazy_row::compact_and_expire(
         const schema& s,
         column_kind kind,
@@ -3864,11 +3373,9 @@ bool lazy_row::compact_and_expire(
     }
     return _row->compact_and_expire(s, kind, tomb, query_time, can_gc, gc_before, collector);
 }
-
 std::ostream& operator<<(std::ostream& os, const lazy_row::printer& p) {
     return os << row::printer(p._schema, p._kind, p._row.get());
 }
-
 bool deletable_row::compact_and_expire(const schema& s,
                                        tombstone tomb,
                                        gc_clock::time_point query_time,
@@ -3879,19 +3386,14 @@ bool deletable_row::compact_and_expire(const schema& s,
     auto should_purge_row_tombstone = [&] (const row_tombstone& t) {
         return t.max_deletion_time() < gc_before && can_gc(t.tomb());
     };
-
     apply(tomb);
     bool is_live = marker().compact_and_expire(deleted_at().tomb(), query_time, can_gc, gc_before);
     is_live |= cells().compact_and_expire(s, column_kind::regular_column, deleted_at(), query_time, can_gc, gc_before, marker(), collector);
-
     if (deleted_at().tomb() <= tomb || should_purge_row_tombstone(deleted_at())) {
         remove_tombstone();
     }
-
     return is_live;
 }
-
-
 deletable_row deletable_row::difference(const schema& s, column_kind kind, const deletable_row& other) const
 {
     deletable_row dr;
@@ -3904,16 +3406,13 @@ deletable_row deletable_row::difference(const schema& s, column_kind kind, const
     dr._cells = _cells.difference(s, kind, other._cells);
     return dr;
 }
-
 row row::difference(const schema& s, column_kind kind, const row& other) const
 {
     row r;
-
     auto c = _cells.begin();
     auto c_end = _cells.end();
     auto it = other._cells.begin();
     auto it_end = other._cells.end();
-
     while (c != c_end) {
         while (it != it_end && it.key() < c.key()) {
             ++it;
@@ -3939,10 +3438,8 @@ row row::difference(const schema& s, column_kind kind, const row& other) const
         }
         c++;
     }
-
     return r;
 }
-
 bool row_marker::compact_and_expire(tombstone tomb, gc_clock::time_point now,
         can_gc_fn& can_gc, gc_clock::time_point gc_before, compaction_garbage_collector* collector) {
     if (is_missing()) {
@@ -3964,7 +3461,6 @@ bool row_marker::compact_and_expire(tombstone tomb, gc_clock::time_point now,
     }
     return !is_missing() && _ttl != dead;
 }
-
 mutation_partition mutation_partition::difference(schema_ptr s, const mutation_partition& other) const
 {
     check_schema(*s);
@@ -3973,9 +3469,7 @@ mutation_partition mutation_partition::difference(schema_ptr s, const mutation_p
         mp.apply(_tombstone);
     }
     mp._static_row = _static_row.difference(*s, column_kind::static_column, other._static_row);
-
     mp._row_tombstones = _row_tombstones.difference(*s, other._row_tombstones);
-
     auto it_r = other._rows.begin();
     rows_entry::compare cmp_r(*s);
     for (auto&& r : _rows) {
@@ -3996,7 +3490,6 @@ mutation_partition mutation_partition::difference(schema_ptr s, const mutation_p
     }
     return mp;
 }
-
 void mutation_partition::accept(const schema& s, mutation_partition_visitor& v) const {
     check_schema(s);
     v.accept_partition_tombstone(_tombstone);
@@ -4024,7 +3517,6 @@ void mutation_partition::accept(const schema& s, mutation_partition_visitor& v) 
         });
     }
 }
-
 void
 mutation_partition::upgrade(const schema& old_schema, const schema& new_schema) {
     // We need to copy to provide strong exception guarantees.
@@ -4034,7 +3526,6 @@ mutation_partition::upgrade(const schema& old_schema, const schema& new_schema) 
     accept(old_schema, v);
     *this = std::move(tmp);
 }
-
 mutation_querier::mutation_querier(const schema& s, query::result::partition_writer pw,
                                    query::result_memory_accounter& memory_accounter)
     : _schema(s)
@@ -4043,7 +3534,6 @@ mutation_querier::mutation_querier(const schema& s, query::result::partition_wri
     , _static_cells_wr(pw.start().start_static_row().start_cells())
 {
 }
-
 void mutation_querier::query_static_row(const row& r, tombstone current_tombstone)
 {
     const query::partition_slice& slice = _pw.slice();
@@ -4071,13 +3561,11 @@ void mutation_querier::query_static_row(const row& r, tombstone current_tombston
     }
     _rows_wr.emplace(std::move(_static_cells_wr).end_cells().end_static_row().start_rows());
 }
-
 stop_iteration mutation_querier::consume(static_row&& sr, tombstone current_tombstone) {
     query_static_row(sr.cells(), current_tombstone);
     _live_data_in_static_row = true;
     return stop_iteration::no;
 }
-
 void mutation_querier::prepare_writers() {
     if (!_rows_wr) {
         row empty_row;
@@ -4085,12 +3573,9 @@ void mutation_querier::prepare_writers() {
         _live_data_in_static_row = false;
     }
 }
-
 stop_iteration mutation_querier::consume(clustering_row&& cr, row_tombstone current_tombstone) {
     prepare_writers();
-
     const query::partition_slice& slice = _pw.slice();
-
     if (_pw.requested_digest()) {
         _pw.digest().feed_hash(cr.key(), _schema);
         _pw.digest().feed_hash(current_tombstone);
@@ -4099,7 +3584,6 @@ stop_iteration mutation_querier::consume(clustering_row&& cr, row_tombstone curr
         _pw.digest().feed_hash(cr.cells(), _schema, column_kind::regular_column, slice.regular_columns, max_ts);
         _pw.last_modified() = max_ts.max;
     }
-
     auto write_row = [&] (auto& rows_writer) {
         auto cells_wr = [&] {
             if (slice.options.contains(query::partition_slice::option::send_clustering_key)) {
@@ -4111,7 +3595,6 @@ stop_iteration mutation_querier::consume(clustering_row&& cr, row_tombstone curr
         get_compacted_row_slice(_schema, slice, column_kind::regular_column, cr.cells(), slice.regular_columns, cells_wr);
         std::move(cells_wr).end_cells().end_cells().end_qr_clustered_row();
     };
-
     auto stop = stop_iteration::no;
     if (_pw.requested_result()) {
         auto start = _rows_wr->_out.size();
@@ -4124,14 +3607,11 @@ stop_iteration mutation_querier::consume(clustering_row&& cr, row_tombstone curr
         write_row(out);
         stop = _memory_accounter.update_and_check(stream.size() - start);
     }
-
     _live_clustering_rows++;
     return stop;
 }
-
 uint64_t mutation_querier::consume_end_of_stream() {
     prepare_writers();
-
     // If we got no rows, but have live static columns, we should only
     // give them back IFF we did not have any CK restrictions.
     // #589
@@ -4151,15 +3631,12 @@ uint64_t mutation_querier::consume_end_of_stream() {
         return live_rows;
     }
 }
-
 query_result_builder::query_result_builder(const schema& s, query::result::builder& rb) noexcept
     : _schema(s), _rb(rb)
 { }
-
 void query_result_builder::consume_new_partition(const dht::decorated_key& dk) {
     _mutation_consumer.emplace(mutation_querier(_schema, _rb.add_partition(_schema, dk.key()), _rb.memory_accounter()));
 }
-
 void query_result_builder::consume(tombstone t) {
     _mutation_consumer->consume(t);
     _stop = _rb.bump_and_check_tombstone_limit();
@@ -4184,7 +3661,6 @@ stop_iteration query_result_builder::consume(range_tombstone_change&& rtc) {
     _stop = _rb.bump_and_check_tombstone_limit();
     return _stop;
 }
-
 stop_iteration query_result_builder::consume_end_of_partition() {
     auto live_rows_in_partition = _mutation_consumer->consume_end_of_stream();
     if (live_rows_in_partition > 0 && !_stop) {
@@ -4195,10 +3671,8 @@ stop_iteration query_result_builder::consume_end_of_partition() {
     }
     return _stop;
 }
-
 void query_result_builder::consume_end_of_stream() {
 }
-
 stop_iteration query::result_memory_accounter::check_local_limit() const {
     if (_short_read_allowed) {
         return stop_iteration(_total_used_memory > _maximum_result_size.get_page_size());
@@ -4217,7 +3691,6 @@ stop_iteration query::result_memory_accounter::check_local_limit() const {
     }
     return stop_iteration::no;
 }
-
 void reconcilable_result_builder::consume_new_partition(const dht::decorated_key& dk) {
     _rt_assembler.reset();
     _return_static_content_on_partition_with_no_rows =
@@ -4227,17 +3700,14 @@ void reconcilable_result_builder::consume_new_partition(const dht::decorated_key
     _live_rows = 0;
     _mutation_consumer.emplace(streamed_mutation_freezer(_schema, dk.key(), _reversed));
 }
-
 void reconcilable_result_builder::consume(tombstone t) {
     _mutation_consumer->consume(t);
 }
-
 stop_iteration reconcilable_result_builder::consume(static_row&& sr, tombstone, bool is_alive) {
     _static_row_is_alive = is_alive;
     _memory_accounter.update(sr.memory_usage(_schema));
     return _mutation_consumer->consume(std::move(sr));
 }
-
 stop_iteration reconcilable_result_builder::consume(clustering_row&& cr, row_tombstone, bool is_alive) {
     if (_rt_assembler.needs_flush()) {
         if (auto rt_opt = _rt_assembler.flush(_schema, position_in_partition::after_key(_schema, cr.key()))) {
@@ -4256,7 +3726,6 @@ stop_iteration reconcilable_result_builder::consume(clustering_row&& cr, row_tom
     }
     return _mutation_consumer->consume(std::move(cr)) || _stop;
 }
-
 stop_iteration reconcilable_result_builder::consume(range_tombstone&& rt) {
     _memory_accounter.update(rt.memory_usage(_schema));
     if (_reversed) {
@@ -4265,14 +3734,12 @@ stop_iteration reconcilable_result_builder::consume(range_tombstone&& rt) {
     }
     return _mutation_consumer->consume(std::move(rt));
 }
-
 stop_iteration reconcilable_result_builder::consume(range_tombstone_change&& rtc) {
     if (auto rt_opt = _rt_assembler.consume(_schema, std::move(rtc))) {
         return consume(std::move(*rt_opt));
     }
     return stop_iteration::no;
 }
-
 stop_iteration reconcilable_result_builder::consume_end_of_partition() {
     _rt_assembler.on_end_of_stream();
     if (_live_rows == 0 && _static_row_is_alive && _return_static_content_on_partition_with_no_rows) {
@@ -4289,13 +3756,11 @@ stop_iteration reconcilable_result_builder::consume_end_of_partition() {
     _result.emplace_back(partition { _live_rows, _mutation_consumer->consume_end_of_stream() });
     return _stop;
 }
-
 reconcilable_result reconcilable_result_builder::consume_end_of_stream() {
     return reconcilable_result(_total_live_rows, std::move(_result),
                                query::short_read(bool(_stop)),
                                std::move(_memory_accounter).done());
 }
-
 future<query::result>
 to_data_query_result(const reconcilable_result& r, schema_ptr s, const query::partition_slice& slice, uint64_t max_rows, uint32_t max_partitions,
         query::result_options opts) {
@@ -4305,7 +3770,6 @@ to_data_query_result(const reconcilable_result& r, schema_ptr s, const query::pa
             max_partitions, query_result_builder(*s, builder));
     auto compaction_state = consumer.get_state();
     const auto reverse = slice.options.contains(query::partition_slice::option::reversed) ? consume_in_reverse::yes : consume_in_reverse::no;
-
     // FIXME: frozen_mutation::consume supports only forward consumers
     if (reverse == consume_in_reverse::no) {
         frozen_mutation_consumer_adaptor adaptor(s, consumer);
@@ -4329,7 +3793,6 @@ to_data_query_result(const reconcilable_result& r, schema_ptr s, const query::pa
     }
     co_return builder.build(compaction_state->current_full_position());
 }
-
 query::result
 query_mutation(mutation&& m, const query::partition_slice& slice, uint64_t row_limit, gc_clock::time_point now, query::result_options opts) {
     query::result::builder builder(slice, opts, query::result_memory_accounter{ query::result_memory_limiter::unlimited_result_size }, query::max_tombstones);
@@ -4340,7 +3803,6 @@ query_mutation(mutation&& m, const query::partition_slice& slice, uint64_t row_l
     std::move(m).consume(consumer, reverse);
     return builder.build(compaction_state->current_full_position());
 }
-
 class counter_write_query_result_builder {
     const schema& _schema;
     mutation_opt _mutation;
@@ -4374,7 +3836,6 @@ public:
         return std::move(_mutation);
     }
 };
-
 mutation_partition::mutation_partition(mutation_partition::incomplete_tag, const schema& s, tombstone t)
     : _tombstone(t)
     , _static_row_continuous(!s.has_static_columns())
@@ -4385,7 +3846,6 @@ mutation_partition::mutation_partition(mutation_partition::incomplete_tag, const
             current_allocator().construct<rows_entry>(s, rows_entry::last_dummy_tag(), is_continuous::no));
     _rows.insert_before(_rows.end(), std::move(e));
 }
-
 bool mutation_partition::is_fully_continuous() const {
     if (!_static_row_continuous) {
         return false;
@@ -4397,7 +3857,6 @@ bool mutation_partition::is_fully_continuous() const {
     }
     return true;
 }
-
 void mutation_partition::make_fully_continuous() {
     _static_row_continuous = true;
     auto i = _rows.begin();
@@ -4410,14 +3869,11 @@ void mutation_partition::make_fully_continuous() {
         }
     }
 }
-
 void mutation_partition::set_continuity(const schema& s, const position_range& pr, is_continuous cont) {
     auto cmp = rows_entry::tri_compare(s);
-
     if (cmp(pr.start(), pr.end()) >= 0) {
         return; // empty range
     }
-
     auto end = _rows.lower_bound(pr.end(), cmp);
     if (end == _rows.end() || cmp(pr.end(), end->position()) < 0) {
         auto e = alloc_strategy_unique_ptr<rows_entry>(
@@ -4425,17 +3881,14 @@ void mutation_partition::set_continuity(const schema& s, const position_range& p
                     end == _rows.end() ? is_continuous::yes : end->continuous()));
         end = _rows.insert_before(end, std::move(e));
     }
-
     auto i = _rows.lower_bound(pr.start(), cmp);
     if (cmp(pr.start(), i->position()) < 0) {
         auto e = alloc_strategy_unique_ptr<rows_entry>(
                 current_allocator().construct<rows_entry>(s, pr.start(), is_dummy::yes, i->continuous()));
         i = _rows.insert_before(i, std::move(e));
     }
-
     assert(i != end);
     ++i;
-
     while (1) {
         i->set_continuous(cont);
         if (i == end) {
@@ -4448,7 +3901,6 @@ void mutation_partition::set_continuity(const schema& s, const position_range& p
         }
     }
 }
-
 clustering_interval_set mutation_partition::get_continuity(const schema& s, is_continuous cont) const {
     check_schema(s);
     clustering_interval_set result;
@@ -4472,12 +3924,10 @@ clustering_interval_set mutation_partition::get_continuity(const schema& s, is_c
     }
     return result;
 }
-
 stop_iteration mutation_partition::clear_gently(cache_tracker* tracker) noexcept {
     if (_row_tombstones.clear_gently() == stop_iteration::no) {
         return stop_iteration::no;
     }
-
     auto del = current_deleter<rows_entry>();
     auto i = _rows.begin();
     auto end = _rows.end();
@@ -4486,7 +3936,6 @@ stop_iteration mutation_partition::clear_gently(cache_tracker* tracker) noexcept
             tracker->remove(*i);
         }
         i = _rows.erase_and_dispose(i, del);
-
         // The iterator comparison below is to not defer destruction of now empty
         // mutation_partition objects. Not doing this would cause eviction to leave garbage
         // versions behind unnecessarily.
@@ -4494,10 +3943,8 @@ stop_iteration mutation_partition::clear_gently(cache_tracker* tracker) noexcept
             return stop_iteration::no;
         }
     }
-
     return stop_iteration::yes;
 }
-
 bool
 mutation_partition::check_continuity(const schema& s, const position_range& r, is_continuous cont) const {
     check_schema(s);
@@ -4523,17 +3970,14 @@ mutation_partition::check_continuity(const schema& s, const position_range& r, i
     }
     return (end == _rows.end() ? is_continuous::yes : end->continuous()) == cont;
 }
-
 bool
 mutation_partition::fully_continuous(const schema& s, const position_range& r) {
     return check_continuity(s, r, is_continuous::yes);
 }
-
 bool
 mutation_partition::fully_discontinuous(const schema& s, const position_range& r) {
     return check_continuity(s, r, is_continuous::no);
 }
-
 future<mutation_opt> counter_write_query(schema_ptr s, const mutation_source& source, reader_permit permit,
                                          const dht::decorated_key& dk,
                                          const query::partition_slice& slice,
@@ -4542,10 +3986,8 @@ future<mutation_opt> counter_write_query(schema_ptr s, const mutation_source& so
     struct range_and_reader {
         dht::partition_range range;
         flat_mutation_reader_v2 reader;
-
         range_and_reader(range_and_reader&&) = delete;
         range_and_reader(const range_and_reader&) = delete;
-
         range_and_reader(schema_ptr s, const mutation_source& source, reader_permit permit,
                          const dht::decorated_key& dk,
                          const query::partition_slice& slice,
@@ -4556,7 +3998,6 @@ future<mutation_opt> counter_write_query(schema_ptr s, const mutation_source& so
                                                       mutation_reader::forwarding::no))
         { }
     };
-
     // do_with() doesn't support immovable objects
     auto r_a_r = std::make_unique<range_and_reader>(s, source, std::move(permit), dk, slice, std::move(trace_ptr));
     auto cwqrb = counter_write_query_result_builder(*s);
@@ -4567,7 +4008,6 @@ future<mutation_opt> counter_write_query(schema_ptr s, const mutation_source& so
         return r_a_r->reader.close();
     });
 }
-
 mutation_cleaner_impl::~mutation_cleaner_impl() {
     _worker_state->done = true;
     _worker_state->cv.signal();
@@ -4576,11 +4016,9 @@ mutation_cleaner_impl::~mutation_cleaner_impl() {
         clear();
     });
 }
-
 void mutation_cleaner_impl::clear() noexcept {
     while (clear_gently() == stop_iteration::no) ;
 }
-
 stop_iteration mutation_cleaner_impl::clear_gently() noexcept {
     while (clear_some() == memory::reclaiming_result::reclaimed_something) {
         if (need_preempt()) {
@@ -4589,7 +4027,6 @@ stop_iteration mutation_cleaner_impl::clear_gently() noexcept {
     }
     return stop_iteration::yes;
 }
-
 memory::reclaiming_result mutation_cleaner_impl::clear_some() noexcept {
     if (_versions.empty()) {
         return memory::reclaiming_result::reclaimed_nothing;
@@ -4602,7 +4039,6 @@ memory::reclaiming_result mutation_cleaner_impl::clear_some() noexcept {
     }
     return memory::reclaiming_result::reclaimed_something;
 }
-
 void mutation_cleaner_impl::merge(mutation_cleaner_impl& r) noexcept {
     _versions.splice(r._versions);
     for (partition_snapshot& snp : r._worker_state->snapshots) {
@@ -4613,7 +4049,6 @@ void mutation_cleaner_impl::merge(mutation_cleaner_impl& r) noexcept {
         _worker_state->cv.signal();
     }
 }
-
 void mutation_cleaner_impl::start_worker() {
     auto f = repeat([w = _worker_state, this] () mutable noexcept {
       if (w->done) {
@@ -4635,7 +4070,6 @@ void mutation_cleaner_impl::start_worker() {
         f.get();
     }
 }
-
 stop_iteration mutation_cleaner_impl::merge_some(partition_snapshot& snp) noexcept {
     auto&& region = snp.region();
     return with_allocator(region.allocator(), [&] {
@@ -4661,7 +4095,6 @@ stop_iteration mutation_cleaner_impl::merge_some(partition_snapshot& snp) noexce
         }
     });
 }
-
 stop_iteration mutation_cleaner_impl::merge_some() noexcept {
     if (_worker_state->snapshots.empty()) {
         return stop_iteration::yes;
@@ -4673,7 +4106,6 @@ stop_iteration mutation_cleaner_impl::merge_some() noexcept {
     }
     return stop_iteration::no;
 }
-
 future<> mutation_cleaner_impl::drain() {
     return repeat([this] {
         return merge_some();
@@ -4685,22 +4117,9 @@ future<> mutation_cleaner_impl::drain() {
         });
     });
 }
-
 can_gc_fn always_gc = [] (tombstone) { return true; };
-
 logging::logger compound_logger("compound");
-/*
- * Copyright (C) 2014-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 extern logging::logger mplog;
-
 mutation_partition_v2::mutation_partition_v2(const schema& s, const mutation_partition_v2& x)
         : _tombstone(x._tombstone)
         , _static_row(s, column_kind::static_column, x._static_row)
@@ -4712,7 +4131,6 @@ mutation_partition_v2::mutation_partition_v2(const schema& s, const mutation_par
     };
     _rows.clone_from(x._rows, cloner, current_deleter<rows_entry>());
 }
-
 mutation_partition_v2::mutation_partition_v2(const schema& s, mutation_partition&& x)
     : _tombstone(x.partition_tombstone())
     , _static_row(std::move(x.static_row()))
@@ -4723,14 +4141,12 @@ mutation_partition_v2::mutation_partition_v2(const schema& s, mutation_partition
     if (!tombstones.empty()) {
         try {
             mutation_partition_v2 p(s.shared_from_this());
-
             for (auto&& t: tombstones) {
                 range_tombstone & rt = t.tombstone();
                 p.clustered_rows_entry(s, rt.position(), is_dummy::yes, is_continuous::no);
                 p.clustered_rows_entry(s, rt.end_position(), is_dummy::yes, is_continuous::yes)
                         .set_range_tombstone(rt.tomb);
             }
-
             mutation_application_stats app_stats;
             apply_monotonically(s, std::move(p), s, app_stats);
         } catch (...) {
@@ -4739,15 +4155,12 @@ mutation_partition_v2::mutation_partition_v2(const schema& s, mutation_partition
         }
     }
 }
-
 mutation_partition_v2::mutation_partition_v2(const schema& s, const mutation_partition& x)
     : mutation_partition_v2(s, mutation_partition(s, x))
 { }
-
 mutation_partition_v2::~mutation_partition_v2() {
     _rows.clear_and_dispose(current_deleter<rows_entry>());
 }
-
 mutation_partition_v2&
 mutation_partition_v2::operator=(mutation_partition_v2&& x) noexcept {
     if (this != &x) {
@@ -4756,7 +4169,6 @@ mutation_partition_v2::operator=(mutation_partition_v2&& x) noexcept {
     }
     return *this;
 }
-
 void mutation_partition_v2::ensure_last_dummy(const schema& s) {
     check_schema(s);
     if (_rows.empty() || !_rows.rbegin()->is_last_dummy()) {
@@ -4765,7 +4177,6 @@ void mutation_partition_v2::ensure_last_dummy(const schema& s) {
         _rows.insert_before(_rows.end(), std::move(e));
     }
 }
-
 template <>
 struct fmt::formatter<apply_resume> : fmt::formatter<std::string_view> {
     template <typename FormatContext>
@@ -4773,28 +4184,23 @@ struct fmt::formatter<apply_resume> : fmt::formatter<std::string_view> {
         return fmt::format_to(ctx.out(), "{{{}, {}}}", int(res._stage), res._pos);
     }
 };
-
 stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutation_partition_v2&& p, cache_tracker* tracker,
         mutation_application_stats& app_stats, is_preemptible preemptible, apply_resume& res, is_evictable evictable) {
     return apply_monotonically(s, std::move(p), tracker, app_stats,
         preemptible ? default_preemption_check() : never_preempt(), res, evictable);
 }
-
 stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutation_partition_v2&& p, cache_tracker* tracker,
         mutation_application_stats& app_stats, preemption_check need_preempt, apply_resume& res, is_evictable evictable) {
     _tombstone.apply(p._tombstone);
     _static_row.apply_monotonically(s, column_kind::static_column, std::move(p._static_row));
     _static_row_continuous |= p._static_row_continuous;
-
     rows_entry::tri_compare cmp(s);
     position_in_partition::equal_compare eq(s);
     auto del = current_deleter<rows_entry>();
-
     auto compact = [&] (rows_entry& e) {
         ++app_stats.rows_compacted_with_tombstones;
         e.compact(s, _tombstone);
     };
-
     if (p._tombstone) {
         rows_type::iterator i;
         if (res._stage == apply_resume::stage::partition_tombstone_compaction) {
@@ -4821,7 +4227,6 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
         // TODO: Drop redundant range tombstones
         p._tombstone = {};
     }
-
     // Inserting new entries into LRU here is generally unsafe because
     // it may violate the "older versions are evicted first" rule (see row_cache.md).
     // It could happen, that there are newer versions in the MVCC chain with the same
@@ -4830,28 +4235,22 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
     // to apparent loss of writes.
     // To avoid this, when inserting sentinels we must use lru::add_before() so that
     // they are put right before in the same place in the LRU.
-
     // Note: This procedure is not violating the "older versions are evicted first" rule.
     // It may move some entries from the newer version into the old version,
     // so the older version may have entries while the new version is already experiencing
     // eviction. However, the original information which was there in the old version
     // is guaranteed to be evicted prior to that, so there is no way for old information
     // to be exposed by such eviction.
-
     auto p_i = p._rows.begin();
     auto i = _rows.begin();
     rows_type::iterator lb_i; // iterator into _rows for previously inserted entry.
-
     // When resuming, the predecessor of the sentinel may have been compacted.
     bool prev_compacted = true;
-
     if (res._stage < apply_resume::stage::merging_rows) {
         prev_compacted = false;
         res = apply_resume::merging_rows();
     }
-
     bool made_progress = false;
-
     // Engaged p_sentinel indicates that information in p up to sentinel->position() was
     // merged into this instance and that flags on the entry pointed to by p_i are
     // only valid for the key range up to sentinel->position().
@@ -4900,10 +4299,8 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
             }
         }
     });
-
     while (p_i != p._rows.end()) {
         rows_entry& src_e = *p_i;
-
         bool miss = true;
         if (i != _rows.end()) {
             auto x = cmp(*i, src_e);
@@ -4915,10 +4312,8 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
                 miss = x > 0;
             }
         }
-
         // Invariants:
         //   i->position() >= p_i->position()
-
         // The block below reflects the information from interval (lb_i->position(), p_i->position()) to _rows,
         // up to the last entry in _rows which has position() < p_i->position(). The remainder is reflected by the act of
         // moving p_i itself.
@@ -4926,7 +4321,6 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
         if (prev_interval_loaded) {
             // lb_i is only valid if prev_interval_loaded.
             rows_type::iterator prev_lb_i;
-
             if (lb_i) {
                 // If there is lb_i, it means the interval starts exactly at lb_i->position() in p.
                 // Increment is needed, we don't want to set attributes on the lower bound of the interval.
@@ -4935,20 +4329,16 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
             } else {
                 lb_i = _rows.begin();
             }
-
             while (lb_i != i) {
                 bool compaction_worthwhile = src_e.range_tombstone() > lb_i->range_tombstone();
-
                 // This works for both evictable and non-evictable snapshots.
                 // For evictable snapshots we could replace the tombstone with newer, but due to
                 // the "information monotonicity" rule, adding tombstone works too.
                 lb_i->set_range_tombstone(lb_i->range_tombstone() + src_e.range_tombstone());
                 lb_i->set_continuous(true);
-
                 if (prev_compacted && prev_lb_i) {
                     maybe_drop(s, tracker, prev_lb_i, app_stats);
                 }
-
                 prev_compacted = false;
                 if (lb_i->dummy()) {
                     prev_compacted = true;
@@ -4956,7 +4346,6 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
                     compact(*lb_i);
                     prev_compacted = true;
                 }
-
                 if (need_preempt()) {
                     auto s1 = alloc_strategy_unique_ptr<rows_entry>(
                             current_allocator().construct<rows_entry>(s,
@@ -4977,21 +4366,17 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
                     mplog.trace("preempted, res={}", res);
                     return stop_iteration::no;
                 }
-
                 prev_lb_i = lb_i;
                 ++lb_i;
             }
         }
-
         auto next_p_i = std::next(p_i);
-
         // next_interval_loaded is true iff there are attributes on next_p_i which apply
         // to the interval (p_i->position(), next_p_i->position), and we
         // have to prepare a sentinel when removing p_i from p in case merging
         // needs to stop before next_p_i is moved.
         bool next_interval_loaded = next_p_i != p._rows.end()
                 && ((evictable && next_p_i->continuous()) || (!evictable && next_p_i->range_tombstone()));
-
         bool do_compact = false;
         if (miss) {
             alloc_strategy_unique_ptr<rows_entry> s1;
@@ -5012,12 +4397,10 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
                     }
                 }
             }
-
             rows_type::key_grabber pi_kg(p_i);
             lb_i = _rows.insert_before(i, std::move(pi_kg));
             p_sentinel = std::move(s1);
             this_sentinel = std::move(s2);
-
             // Check if src_e falls into a continuous range.
             // The range past the last entry is also always implicitly continuous.
             if (i == _rows.end() || i->continuous()) {
@@ -5045,7 +4428,6 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
             assert(i->dummy() == src_e.dummy());
             alloc_strategy_unique_ptr<rows_entry> s1;
             alloc_strategy_unique_ptr<rows_entry> s2;
-
             if (next_interval_loaded) {
                 // FIXME: Avoid reallocation
                 s1 = alloc_strategy_unique_ptr<rows_entry>(
@@ -5062,7 +4444,6 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
                     }
                 }
             }
-
             {
                 // FIXME: This can be an evictable snapshot even if !tracker, see partition_entry::squashed()
                 // So we need to handle continuity as if it was an evictable snapshot.
@@ -5127,14 +4508,12 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
             lb_i = {};
         }
         ++app_stats.row_writes;
-
         // We must not return stop_iteration::no if we removed the last element from p._rows.
         // Otherwise, p_i will be left empty, and thus fully continuous, violating the
         // invariant that the sum of this and p has the same continuity as before merging.
         if (made_progress && need_preempt() && p_i != p._rows.end()) {
             return stop_iteration::no;
         }
-
         made_progress = true;
     }
     if (prev_compacted && lb_i != _rows.end()) {
@@ -5142,7 +4521,6 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
     }
     return stop_iteration::yes;
 }
-
 stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutation_partition_v2&& p, const schema& p_schema,
         mutation_application_stats& app_stats, is_preemptible preemptible, apply_resume& res, is_evictable evictable) {
     if (s.version() == p_schema.version()) {
@@ -5154,28 +4532,23 @@ stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutat
         return apply_monotonically(s, std::move(p2), no_cache_tracker, app_stats, never_preempt(), res, evictable); // FIXME: make preemptible
     }
 }
-
 stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutation_partition_v2&& p, cache_tracker *tracker,
                                                        mutation_application_stats& app_stats, is_evictable evictable) {
     apply_resume res;
     return apply_monotonically(s, std::move(p), tracker, app_stats, is_preemptible::no, res, evictable);
 }
-
 stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutation_partition_v2&& p, const schema& p_schema,
                                                        mutation_application_stats& app_stats) {
     apply_resume res;
     return apply_monotonically(s, std::move(p), p_schema, app_stats, is_preemptible::no, res, is_evictable::no);
 }
-
 void mutation_partition_v2::apply(const schema& s, const mutation_partition_v2& p, const schema& p_schema,
                                mutation_application_stats& app_stats) {
     apply_monotonically(s, mutation_partition_v2(p_schema, std::move(p)), p_schema, app_stats);
 }
-
 void mutation_partition_v2::apply(const schema& s, mutation_partition_v2&& p, mutation_application_stats& app_stats) {
     apply_monotonically(s, mutation_partition_v2(s, std::move(p)), no_cache_tracker, app_stats, is_evictable::no);
 }
-
 void
 mutation_partition_v2::apply_weak(const schema& s, mutation_partition_view p,
                                   const schema& p_schema, mutation_application_stats& app_stats) {
@@ -5185,17 +4558,14 @@ mutation_partition_v2::apply_weak(const schema& s, mutation_partition_view p,
     p.accept(p_schema, b);
     apply_monotonically(s, mutation_partition_v2(p_schema, std::move(p2)), p_schema, app_stats);
 }
-
 void mutation_partition_v2::apply_weak(const schema& s, const mutation_partition& p,
                                        const schema& p_schema, mutation_application_stats& app_stats) {
     // FIXME: Optimize
     apply_monotonically(s, mutation_partition_v2(s, p), p_schema, app_stats);
 }
-
 void mutation_partition_v2::apply_weak(const schema& s, mutation_partition&& p, mutation_application_stats& app_stats) {
     apply_monotonically(s, mutation_partition_v2(s, std::move(p)), no_cache_tracker, app_stats, is_evictable::no);
 }
-
 void
 mutation_partition_v2::apply_row_tombstone(const schema& schema, clustering_key_prefix prefix, tombstone t) {
     check_schema(schema);
@@ -5203,7 +4573,6 @@ mutation_partition_v2::apply_row_tombstone(const schema& schema, clustering_key_
     auto start = prefix;
     apply_row_tombstone(schema, range_tombstone{std::move(start), std::move(prefix), std::move(t)});
 }
-
 void
 mutation_partition_v2::apply_row_tombstone(const schema& schema, range_tombstone rt) {
     check_schema(schema);
@@ -5212,7 +4581,6 @@ mutation_partition_v2::apply_row_tombstone(const schema& schema, range_tombstone
     mutation_application_stats stats;
     apply_weak(schema, std::move(mp), stats);
 }
-
 void
 mutation_partition_v2::apply_delete(const schema& schema, const clustering_key_prefix& prefix, tombstone t) {
     check_schema(schema);
@@ -5224,7 +4592,6 @@ mutation_partition_v2::apply_delete(const schema& schema, const clustering_key_p
         apply_row_tombstone(schema, prefix, t);
     }
 }
-
 void
 mutation_partition_v2::apply_delete(const schema& schema, range_tombstone rt) {
     check_schema(schema);
@@ -5234,7 +4601,6 @@ mutation_partition_v2::apply_delete(const schema& schema, range_tombstone rt) {
     }
     apply_row_tombstone(schema, std::move(rt));
 }
-
 void
 mutation_partition_v2::apply_delete(const schema& schema, clustering_key&& prefix, tombstone t) {
     check_schema(schema);
@@ -5246,7 +4612,6 @@ mutation_partition_v2::apply_delete(const schema& schema, clustering_key&& prefi
         apply_row_tombstone(schema, std::move(prefix), t);
     }
 }
-
 void
 mutation_partition_v2::apply_delete(const schema& schema, clustering_key_prefix_view prefix, tombstone t) {
     check_schema(schema);
@@ -5258,7 +4623,6 @@ mutation_partition_v2::apply_delete(const schema& schema, clustering_key_prefix_
         apply_row_tombstone(schema, prefix, t);
     }
 }
-
 void
 mutation_partition_v2::apply_insert(const schema& s, clustering_key_view key, api::timestamp_type created_at) {
     clustered_row(s, key).apply(row_marker(created_at));
@@ -5272,14 +4636,12 @@ void mutation_partition_v2::insert_row(const schema& s, const clustering_key& ke
         current_allocator().construct<rows_entry>(key, std::move(row)));
     _rows.insert_before_hint(_rows.end(), std::move(e), rows_entry::tri_compare(s));
 }
-
 void mutation_partition_v2::insert_row(const schema& s, const clustering_key& key, const deletable_row& row) {
     check_schema(s);
     auto e = alloc_strategy_unique_ptr<rows_entry>(
         current_allocator().construct<rows_entry>(s, key, row));
     _rows.insert_before_hint(_rows.end(), std::move(e), rows_entry::tri_compare(s));
 }
-
 const row*
 mutation_partition_v2::find_row(const schema& s, const clustering_key& key) const {
     check_schema(s);
@@ -5289,7 +4651,6 @@ mutation_partition_v2::find_row(const schema& s, const clustering_key& key) cons
     }
     return &i->row().cells();
 }
-
 deletable_row&
 mutation_partition_v2::clustered_row(const schema& s, clustering_key&& key) {
     check_schema(s);
@@ -5301,7 +4662,6 @@ mutation_partition_v2::clustered_row(const schema& s, clustering_key&& key) {
     }
     return i->row();
 }
-
 deletable_row&
 mutation_partition_v2::clustered_row(const schema& s, const clustering_key& key) {
     check_schema(s);
@@ -5313,7 +4673,6 @@ mutation_partition_v2::clustered_row(const schema& s, const clustering_key& key)
     }
     return i->row();
 }
-
 deletable_row&
 mutation_partition_v2::clustered_row(const schema& s, clustering_key_view key) {
     check_schema(s);
@@ -5325,7 +4684,6 @@ mutation_partition_v2::clustered_row(const schema& s, clustering_key_view key) {
     }
     return i->row();
 }
-
 rows_entry&
 mutation_partition_v2::clustered_rows_entry(const schema& s, position_in_partition_view pos, is_dummy dummy, is_continuous continuous) {
     check_schema(s);
@@ -5337,12 +4695,10 @@ mutation_partition_v2::clustered_rows_entry(const schema& s, position_in_partiti
     }
     return *i;
 }
-
 deletable_row&
 mutation_partition_v2::clustered_row(const schema& s, position_in_partition_view pos, is_dummy dummy, is_continuous continuous) {
     return clustered_rows_entry(s, pos, dummy, continuous).row();
 }
-
 rows_entry&
 mutation_partition_v2::clustered_row(const schema& s, position_in_partition_view pos, is_dummy dummy) {
     check_schema(s);
@@ -5359,7 +4715,6 @@ mutation_partition_v2::clustered_row(const schema& s, position_in_partition_view
     }
     return *i;
 }
-
 deletable_row&
 mutation_partition_v2::append_clustered_row(const schema& s, position_in_partition_view pos, is_dummy dummy, is_continuous continuous) {
     check_schema(s);
@@ -5371,10 +4726,8 @@ mutation_partition_v2::append_clustered_row(const schema& s, position_in_partiti
     }
     auto e = alloc_strategy_unique_ptr<rows_entry>(current_allocator().construct<rows_entry>(s, pos, dummy, continuous));
     i = _rows.insert_before_hint(i, std::move(e), cmp).first;
-
     return i->row();
 }
-
 mutation_partition_v2::rows_type::const_iterator
 mutation_partition_v2::lower_bound(const schema& schema, const query::clustering_range& r) const {
     check_schema(schema);
@@ -5383,7 +4736,6 @@ mutation_partition_v2::lower_bound(const schema& schema, const query::clustering
     }
     return _rows.lower_bound(position_in_partition_view::for_range_start(r), rows_entry::tri_compare(schema));
 }
-
 mutation_partition_v2::rows_type::const_iterator
 mutation_partition_v2::upper_bound(const schema& schema, const query::clustering_range& r) const {
     check_schema(schema);
@@ -5392,28 +4744,23 @@ mutation_partition_v2::upper_bound(const schema& schema, const query::clustering
     }
     return _rows.lower_bound(position_in_partition_view::for_range_end(r), rows_entry::tri_compare(schema));
 }
-
 boost::iterator_range<mutation_partition_v2::rows_type::const_iterator>
 mutation_partition_v2::range(const schema& schema, const query::clustering_range& r) const {
     check_schema(schema);
     return boost::make_iterator_range(lower_bound(schema, r), upper_bound(schema, r));
 }
-
 boost::iterator_range<mutation_partition_v2::rows_type::iterator>
 mutation_partition_v2::range(const schema& schema, const query::clustering_range& r) {
     return unconst(_rows, static_cast<const mutation_partition_v2*>(this)->range(schema, r));
 }
-
 mutation_partition_v2::rows_type::iterator
 mutation_partition_v2::lower_bound(const schema& schema, const query::clustering_range& r) {
     return unconst(_rows, static_cast<const mutation_partition_v2*>(this)->lower_bound(schema, r));
 }
-
 mutation_partition_v2::rows_type::iterator
 mutation_partition_v2::upper_bound(const schema& schema, const query::clustering_range& r) {
     return unconst(_rows, static_cast<const mutation_partition_v2*>(this)->upper_bound(schema, r));
 }
-
 template<typename Func>
 void mutation_partition_v2::for_each_row(const schema& schema, const query::clustering_range& row_range, bool reversed, Func&& func) const
 {
@@ -5433,17 +4780,14 @@ void mutation_partition_v2::for_each_row(const schema& schema, const query::clus
         }
     }
 }
-
 std::ostream&
 operator<<(std::ostream& os, const mutation_partition_v2::printer& p) {
     const auto indent = "  ";
-
     auto& mp = p._mutation_partition;
     os << "mutation_partition_v2: {\n";
     if (mp._tombstone) {
         fmt::print(os, "{:2}tombstone: {},\n", "", mp._tombstone);
     }
-
     if (!mp.static_row().empty()) {
         os << indent << "static_row: {\n";
         const auto& srow = mp.static_row().get();
@@ -5454,12 +4798,9 @@ operator<<(std::ostream& os, const mutation_partition_v2::printer& p) {
         }); 
         os << indent << "},\n";
     }
-
     os << indent << "rows: [\n";
-
     for (const auto& re : mp.clustered_rows()) {
         os << indent << indent << "{\n";
-
         const auto& row = re.row();
         os << indent << indent << indent << "cont: " << re.continuous() << ",\n";
         os << indent << indent << indent << "dummy: " << re.dummy() << ",\n";
@@ -5472,50 +4813,38 @@ operator<<(std::ostream& os, const mutation_partition_v2::printer& p) {
         if (re.range_tombstone()) {
             fmt::print(os, "{:6}rt: {},\n", "", re.range_tombstone());
         }
-
         position_in_partition pip(re.position());
         if (pip.get_clustering_key_prefix()) {
             os << indent << indent << indent << "position: {\n";
-
             auto ck = *pip.get_clustering_key_prefix();
             auto type_iterator = ck.get_compound_type(p._schema)->types().begin();
             auto column_iterator = p._schema.clustering_key_columns().begin();
-
             os << indent << indent << indent << indent << "bound_weight: " << int32_t(pip.get_bound_weight()) << ",\n";
-
             for (auto&& e : ck.components(p._schema)) {
                 os << indent << indent << indent << indent << "'" << column_iterator->name_as_text() 
                    << "': " << (*type_iterator)->to_string(to_bytes(e)) << ",\n";
                 ++type_iterator;
                 ++column_iterator;
             }
-
             os << indent << indent << indent << "},\n";
         }
-
         row.cells().for_each_cell([&] (column_id& c_id, const atomic_cell_or_collection& cell) {
             auto& column_def = p._schema.column_at(column_kind::regular_column, c_id);
             os << indent << indent << indent <<  "'" << column_def.name_as_text() 
                << "': " << atomic_cell_or_collection::printer(column_def, cell) << ",\n";
         });
-
         os << indent << indent << "},\n";
     }
-
     os << indent << "]\n}";
-
     return os;
 }
-
 bool mutation_partition_v2::equal(const schema& s, const mutation_partition_v2& p) const {
     return equal(s, p, s);
 }
-
 bool mutation_partition_v2::equal(const schema& this_schema, const mutation_partition_v2& p, const schema& p_schema) const {
     if (_tombstone != p._tombstone) {
         return false;
     }
-
     if (!boost::equal(non_dummy_rows(), p.non_dummy_rows(),
         [&] (const rows_entry& e1, const rows_entry& e2) {
             return e1.equal(this_schema, e2, p_schema);
@@ -5523,15 +4852,12 @@ bool mutation_partition_v2::equal(const schema& this_schema, const mutation_part
     )) {
         return false;
     }
-
     return _static_row.equal(column_kind::static_column, this_schema, p._static_row, p_schema);
 }
-
 bool mutation_partition_v2::equal_continuity(const schema& s, const mutation_partition_v2& p) const {
     return _static_row_continuous == p._static_row_continuous
         && get_continuity(s).equals(s, p.get_continuity(s));
 }
-
 size_t mutation_partition_v2::external_memory_usage(const schema& s) const {
     check_schema(s);
     size_t sum = 0;
@@ -5540,10 +4866,8 @@ size_t mutation_partition_v2::external_memory_usage(const schema& s) const {
     for (auto& clr : clustered_rows()) {
         sum += clr.memory_usage(s);
     }
-
     return sum;
 }
-
 // Returns true if the mutation_partition_v2 represents no writes.
 bool mutation_partition_v2::empty() const
 {
@@ -5552,18 +4876,15 @@ bool mutation_partition_v2::empty() const
     }
     return !_static_row.size() && _rows.empty();
 }
-
 bool
 mutation_partition_v2::is_static_row_live(const schema& s, gc_clock::time_point query_time) const {
     check_schema(s);
     return has_any_live_data(s, column_kind::static_column, static_row().get(), _tombstone, query_time);
 }
-
 uint64_t
 mutation_partition_v2::row_count() const {
     return _rows.calculate_size();
 }
-
 void mutation_partition_v2::accept(const schema& s, mutation_partition_visitor& v) const {
     check_schema(s);
     v.accept_partition_tombstone(_tombstone);
@@ -5602,7 +4923,6 @@ void mutation_partition_v2::accept(const schema& s, mutation_partition_visitor& 
         prev_pos = e.position();
     }
 }
-
 void
 mutation_partition_v2::upgrade(const schema& old_schema, const schema& new_schema) {
     // We need to copy to provide strong exception guarantees.
@@ -5612,7 +4932,6 @@ mutation_partition_v2::upgrade(const schema& old_schema, const schema& new_schem
     accept(old_schema, v);
     *this = mutation_partition_v2(new_schema, std::move(tmp));
 }
-
 mutation_partition mutation_partition_v2::as_mutation_partition(const schema& s) const {
     mutation_partition tmp(s.shared_from_this());
     tmp.set_static_row_continuous(_static_row_continuous);
@@ -5620,7 +4939,6 @@ mutation_partition mutation_partition_v2::as_mutation_partition(const schema& s)
     accept(s, v);
     return tmp;
 }
-
 mutation_partition_v2::mutation_partition_v2(mutation_partition_v2::incomplete_tag, const schema& s, tombstone t)
     : _tombstone(t)
     , _static_row_continuous(!s.has_static_columns())
@@ -5630,7 +4948,6 @@ mutation_partition_v2::mutation_partition_v2(mutation_partition_v2::incomplete_t
             current_allocator().construct<rows_entry>(s, rows_entry::last_dummy_tag(), is_continuous::no));
     _rows.insert_before(_rows.end(), std::move(e));
 }
-
 bool mutation_partition_v2::is_fully_continuous() const {
     if (!_static_row_continuous) {
         return false;
@@ -5642,7 +4959,6 @@ bool mutation_partition_v2::is_fully_continuous() const {
     }
     return true;
 }
-
 void mutation_partition_v2::make_fully_continuous() {
     _static_row_continuous = true;
     auto i = _rows.begin();
@@ -5651,14 +4967,11 @@ void mutation_partition_v2::make_fully_continuous() {
         ++i;
     }
 }
-
 void mutation_partition_v2::set_continuity(const schema& s, const position_range& pr, is_continuous cont) {
     auto cmp = rows_entry::tri_compare(s);
-
     if (cmp(pr.start(), pr.end()) >= 0) {
         return; // empty range
     }
-
     auto end = _rows.lower_bound(pr.end(), cmp);
     if (end == _rows.end() || cmp(pr.end(), end->position()) < 0) {
         auto e = alloc_strategy_unique_ptr<rows_entry>(
@@ -5666,17 +4979,14 @@ void mutation_partition_v2::set_continuity(const schema& s, const position_range
                     end == _rows.end() ? is_continuous::yes : end->continuous()));
         end = _rows.insert_before(end, std::move(e));
     }
-
     auto i = _rows.lower_bound(pr.start(), cmp);
     if (cmp(pr.start(), i->position()) < 0) {
         auto e = alloc_strategy_unique_ptr<rows_entry>(
                 current_allocator().construct<rows_entry>(s, pr.start(), is_dummy::yes, i->continuous()));
         i = _rows.insert_before(i, std::move(e));
     }
-
     assert(i != end);
     ++i;
-
     while (1) {
         i->set_continuous(cont);
         if (i == end) {
@@ -5685,7 +4995,6 @@ void mutation_partition_v2::set_continuity(const schema& s, const position_range
         ++i;
     }
 }
-
 clustering_interval_set mutation_partition_v2::get_continuity(const schema& s, is_continuous cont) const {
     check_schema(s);
     clustering_interval_set result;
@@ -5707,7 +5016,6 @@ clustering_interval_set mutation_partition_v2::get_continuity(const schema& s, i
     }
     return result;
 }
-
 stop_iteration mutation_partition_v2::clear_gently(cache_tracker* tracker) noexcept {
     auto del = current_deleter<rows_entry>();
     auto i = _rows.begin();
@@ -5717,7 +5025,6 @@ stop_iteration mutation_partition_v2::clear_gently(cache_tracker* tracker) noexc
             tracker->remove(*i);
         }
         i = _rows.erase_and_dispose(i, del);
-
         // The iterator comparison below is to not defer destruction of now empty
         // mutation_partition_v2 objects. Not doing this would cause eviction to leave garbage
         // versions behind unnecessarily.
@@ -5725,10 +5032,8 @@ stop_iteration mutation_partition_v2::clear_gently(cache_tracker* tracker) noexc
             return stop_iteration::no;
         }
     }
-
     return stop_iteration::yes;
 }
-
 bool
 mutation_partition_v2::check_continuity(const schema& s, const position_range& r, is_continuous cont) const {
     check_schema(s);
@@ -5754,17 +5059,14 @@ mutation_partition_v2::check_continuity(const schema& s, const position_range& r
     }
     return (end == _rows.end() ? is_continuous::yes : end->continuous()) == cont;
 }
-
 bool
 mutation_partition_v2::fully_continuous(const schema& s, const position_range& r) {
     return check_continuity(s, r, is_continuous::yes);
 }
-
 bool
 mutation_partition_v2::fully_discontinuous(const schema& s, const position_range& r) {
     return check_continuity(s, r, is_continuous::no);
 }
-
 mutation_partition_v2::rows_type::iterator
 mutation_partition_v2::maybe_drop(const schema& s,
       cache_tracker* tracker,
@@ -5773,11 +5075,9 @@ mutation_partition_v2::maybe_drop(const schema& s,
 {
     rows_entry& e = *i;
     auto next_i = std::next(i);
-
     if (!e.row().empty() || e.is_last_dummy()) {
         return next_i;
     }
-
     // Pass only if continuity is the same on both sides and
     // range tombstones for the intervals are the same on both sides (if intervals are continuous).
     bool next_continuous = next_i == _rows.end() || next_i->continuous();
@@ -5793,9 +5093,7 @@ mutation_partition_v2::maybe_drop(const schema& s,
     } else {
         return next_i;
     }
-
     ++app_stats.rows_dropped_by_tombstones; // FIXME: it's more general than that now
-
     auto del = current_deleter<rows_entry>();
     i = _rows.erase(i);
     if (tracker) {
@@ -5804,7 +5102,6 @@ mutation_partition_v2::maybe_drop(const schema& s,
     del(&e);
     return next_i;
 }
-
 void mutation_partition_v2::compact(const schema& s, cache_tracker* tracker) {
     mutation_application_stats stats;
     auto i = _rows.begin();
@@ -5822,7 +5119,6 @@ void mutation_partition_v2::compact(const schema& s, cache_tracker* tracker) {
         maybe_drop(s, tracker, prev_i, stats);
     }
 }
-
 bool has_redundant_dummies(const mutation_partition_v2& p) {
     bool last_dummy = false;
     bool last_cont = false;
@@ -5843,30 +5139,15 @@ bool has_redundant_dummies(const mutation_partition_v2& p) {
     }
     return false;
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 using namespace db;
-
 static_assert(MutationViewVisitor<mutation_partition_view_virtual_visitor>);
-
 mutation_partition_view_virtual_visitor::~mutation_partition_view_virtual_visitor() = default;
-
 namespace {
-
 using atomic_cell_variant = boost::variant<ser::live_cell_view,
                                            ser::expiring_cell_view,
                                            ser::dead_cell_view,
                                            ser::counter_cell_view,
                                            ser::unknown_variant_type>;
-
 atomic_cell read_atomic_cell(const abstract_type& type, atomic_cell_variant cv, atomic_cell::collection_member cm = atomic_cell::collection_member::no)
 {
     class atomic_cell_visitor : public boost::static_visitor<atomic_cell> {
@@ -5890,7 +5171,6 @@ atomic_cell read_atomic_cell(const abstract_type& type, atomic_cell_variant cv, 
             public:
                 explicit counter_cell_visitor(api::timestamp_type ts)
                     : _created_at(ts) { }
-
                 atomic_cell operator()(ser::counter_cell_full_view& ccv) const {
                     // TODO: a lot of copying for something called view
                     counter_cell_builder ccb; // we know the final number of shards
@@ -5916,14 +5196,12 @@ atomic_cell read_atomic_cell(const abstract_type& type, atomic_cell_variant cv, 
     };
     return boost::apply_visitor(atomic_cell_visitor(type, cm), cv);
 }
-
 collection_mutation read_collection_cell(const abstract_type& type, ser::collection_cell_view cv)
 {
     collection_mutation_description mut;
     mut.tomb = cv.tomb();
     auto&& elements = cv.elements();
     mut.cells.reserve(elements.size());
-
     visit(type, make_visitor(
         [&] (const collection_type_impl& ctype) {
             auto& value_type = *ctype.value_comparator();
@@ -5936,7 +5214,6 @@ collection_mutation read_collection_cell(const abstract_type& type, ser::collect
                 bytes key = e.key();
                 auto idx = deserialize_field_index(key);
                 assert(idx < utype.size());
-
                 mut.cells.emplace_back(key, read_atomic_cell(*utype.type(idx), e.value(), atomic_cell::collection_member::yes));
             }
         },
@@ -5944,17 +5221,14 @@ collection_mutation read_collection_cell(const abstract_type& type, ser::collect
             throw std::runtime_error(format("attempted to read a collection cell with type: {}", o.name()));
         }
     ));
-
     return mut.serialize(type);
 }
-
 template<typename Visitor>
 void read_and_visit_row(ser::row_view rv, const column_mapping& cm, column_kind kind, Visitor&& visitor)
 {
     for (auto&& cv : rv.columns()) {
         auto id = cv.id();
         auto& col = cm.column_at(kind, id);
-
         class atomic_cell_or_collection_visitor : public boost::static_visitor<> {
             Visitor& _visitor;
             column_id _id;
@@ -5962,7 +5236,6 @@ void read_and_visit_row(ser::row_view rv, const column_mapping& cm, column_kind 
         public:
             explicit atomic_cell_or_collection_visitor(Visitor& v, column_id id, const column_mapping_entry& col)
                 : _visitor(v), _id(id), _col(col) { }
-
             void operator()(atomic_cell_variant& acv) const {
                 if (!_col.is_atomic()) {
                     throw std::runtime_error("A collection expected, got an atomic cell");
@@ -5990,7 +5263,6 @@ void read_and_visit_row(ser::row_view rv, const column_mapping& cm, column_kind 
         boost::apply_visitor(atomic_cell_or_collection_visitor(visitor, id, col), cell);
     }
 }
-
 row_marker read_row_marker(boost::variant<ser::live_marker_view, ser::expiring_marker_view, ser::dead_marker_view, ser::no_marker_view, ser::unknown_variant_type> rmv)
 {
     struct row_marker_visitor : boost::static_visitor<row_marker> {
@@ -6012,20 +5284,15 @@ row_marker read_row_marker(boost::variant<ser::live_marker_view, ser::expiring_m
     };
     return boost::apply_visitor(row_marker_visitor(), rmv);
 }
-
 }
-
 template<typename Visitor>
 requires MutationViewVisitor<Visitor>
 void mutation_partition_view::do_accept(const column_mapping& cm, Visitor& visitor) const {
     auto in = _in;
     auto mpv = ser::deserialize(in, boost::type<ser::mutation_partition_view>());
-
     visitor.accept_partition_tombstone(mpv.tomb());
-
     struct static_row_cell_visitor {
         Visitor& _visitor;
-
         void accept_atomic_cell(column_id id, atomic_cell ac) const {
            _visitor.accept_static_cell(id, std::move(ac));
         }
@@ -6034,18 +5301,14 @@ void mutation_partition_view::do_accept(const column_mapping& cm, Visitor& visit
         }
     };
     read_and_visit_row(mpv.static_row(), cm, column_kind::static_column, static_row_cell_visitor{visitor});
-
     for (auto&& rt : mpv.range_tombstones()) {
         visitor.accept_row_tombstone(rt);
     }
-
     for (auto&& cr : mpv.rows()) {
         auto t = row_tombstone(cr.deleted_at(), shadowable_tombstone(cr.shadowable_deleted_at()));
         visitor.accept_row(position_in_partition_view::for_key(cr.key()), t, read_row_marker(cr.marker()), is_dummy::no, is_continuous::yes);
-
         struct cell_visitor {
             Visitor& _visitor;
-
             void accept_atomic_cell(column_id id, atomic_cell ac) const {
                _visitor.accept_row_cell(id, std::move(ac));
             }
@@ -6056,18 +5319,14 @@ void mutation_partition_view::do_accept(const column_mapping& cm, Visitor& visit
         read_and_visit_row(cr.cells(), cm, column_kind::regular_column, cell_visitor{visitor});
     }
 }
-
 template<typename Visitor>
 requires MutationViewVisitor<Visitor>
 future<> mutation_partition_view::do_accept_gently(const column_mapping& cm, Visitor& visitor) const {
     auto in = _in;
     auto mpv = ser::deserialize(in, boost::type<ser::mutation_partition_view>());
-
     visitor.accept_partition_tombstone(mpv.tomb());
-
     struct static_row_cell_visitor {
         Visitor& _visitor;
-
         void accept_atomic_cell(column_id id, atomic_cell ac) const {
            _visitor.accept_static_cell(id, std::move(ac));
         }
@@ -6077,20 +5336,16 @@ future<> mutation_partition_view::do_accept_gently(const column_mapping& cm, Vis
     };
     read_and_visit_row(mpv.static_row(), cm, column_kind::static_column, static_row_cell_visitor{visitor});
     co_await coroutine::maybe_yield();
-
     for (auto rt : mpv.range_tombstones()) {
         visitor.accept_row_tombstone(rt);
         co_await coroutine::maybe_yield();
     }
-
     for (auto cr : mpv.rows()) {
         auto t = row_tombstone(cr.deleted_at(), shadowable_tombstone(cr.shadowable_deleted_at()));
         auto key = cr.key();
         visitor.accept_row(position_in_partition_view::for_key(key), t, read_row_marker(cr.marker()), is_dummy::no, is_continuous::yes);
-
         struct cell_visitor {
             Visitor& _visitor;
-
             void accept_atomic_cell(column_id id, atomic_cell ac) const {
                _visitor.accept_row_cell(id, std::move(ac));
             }
@@ -6102,22 +5357,18 @@ future<> mutation_partition_view::do_accept_gently(const column_mapping& cm, Vis
         co_await coroutine::maybe_yield();
     }
 }
-
 template <bool is_preemptible>
 mutation_partition_view::accept_ordered_result mutation_partition_view::do_accept_ordered(const schema& s, mutation_partition_view_virtual_visitor& visitor, accept_ordered_cookie cookie) const {
     auto in = _in;
     auto mpv = ser::deserialize(in, boost::type<ser::mutation_partition_view>());
     const column_mapping& cm = s.get_column_mapping();
-
     if (!cookie.accepted_partition_tombstone) {
         visitor.accept_partition_tombstone(mpv.tomb());
         cookie.accepted_partition_tombstone = true;
     }
-
     if (!cookie.accepted_static_row) {
         struct static_row_cell_visitor {
             mutation_partition_view_virtual_visitor& _visitor;
-
             void accept_atomic_cell(column_id id, atomic_cell ac) const {
                 _visitor.accept_static_cell(id, std::move(ac));
             }
@@ -6128,7 +5379,6 @@ mutation_partition_view::accept_ordered_result mutation_partition_view::do_accep
         read_and_visit_row(mpv.static_row(), cm, column_kind::static_column, static_row_cell_visitor{visitor});
         cookie.accepted_static_row = true;
     }
-
     if (!cookie.iterators) {
         cookie.iterators.emplace(accept_ordered_cookie::rts_crs_iterators{
             .rts_begin = mpv.range_tombstones().cbegin(),
@@ -6137,12 +5387,10 @@ mutation_partition_view::accept_ordered_result mutation_partition_view::do_accep
             .crs_end = mpv.rows().cend(),
         });
     }
-
     auto rt_it = cookie.iterators->rts_begin;
     const auto& rt_e = cookie.iterators->rts_end;
     auto cr_it = cookie.iterators->crs_begin;
     const auto& cr_e = cookie.iterators->crs_end;
-
     auto consume_rt = [&] (range_tombstone&& rt) {
         cookie.iterators->rts_begin = rt_it;
         return visitor.accept_row_tombstone(std::move(rt));
@@ -6153,10 +5401,8 @@ mutation_partition_view::accept_ordered_result mutation_partition_view::do_accep
         if (visitor.accept_row(position_in_partition_view::for_key(cr_key), t, read_row_marker(cr.marker()), is_dummy::no, is_continuous::yes)) {
             return stop_iteration::yes;
         }
-
         struct cell_visitor {
             mutation_partition_view_virtual_visitor& _visitor;
-
             void accept_atomic_cell(column_id id, atomic_cell ac) const {
                 _visitor.accept_row_cell(id, std::move(ac));
             }
@@ -6167,7 +5413,6 @@ mutation_partition_view::accept_ordered_result mutation_partition_view::do_accep
         read_and_visit_row(cr.cells(), cm, column_kind::regular_column, cell_visitor{visitor});
         return stop_iteration::no;
     };
-
     std::optional<range_tombstone> rt;
     auto next_rt = [&] {
         if (rt || rt_it == rt_e) {
@@ -6176,7 +5421,6 @@ mutation_partition_view::accept_ordered_result mutation_partition_view::do_accep
         rt = *rt_it;
         ++rt_it;
     };
-
     std::optional<ser::deletable_row_view> cr;
     std::optional<clustering_key_prefix> cr_key;
     auto next_cr = [&] {
@@ -6187,9 +5431,7 @@ mutation_partition_view::accept_ordered_result mutation_partition_view::do_accep
         cr_key = cr->key();
         ++cr_it;
     };
-
     position_in_partition::tri_compare cmp{s};
-
     for (;;) {
         next_rt();
         next_cr();
@@ -6212,33 +5454,26 @@ mutation_partition_view::accept_ordered_result mutation_partition_view::do_accep
         }
     }
 }
-
 void mutation_partition_view::accept(const schema& s, partition_builder& visitor) const
 {
     do_accept(s.get_column_mapping(), visitor);
 }
-
 future<> mutation_partition_view::accept_gently(const schema& s, partition_builder& visitor) const {
     return do_accept_gently(s.get_column_mapping(), visitor);
 }
-
 void mutation_partition_view::accept(const column_mapping& cm, converting_mutation_partition_applier& visitor) const
 {
     do_accept(cm, visitor);
 }
-
 future<> mutation_partition_view::accept_gently(const column_mapping& cm, converting_mutation_partition_applier& visitor) const {
     return do_accept_gently(cm, visitor);
 }
-
 void mutation_partition_view::accept(const column_mapping& cm, mutation_partition_view_virtual_visitor& visitor) const {
     do_accept(cm, visitor);
 }
-
 void mutation_partition_view::accept_ordered(const schema& s, mutation_partition_view_virtual_visitor& visitor) const {
     do_accept_ordered<false>(s, visitor, accept_ordered_cookie{});
 }
-
 future<> mutation_partition_view::accept_gently_ordered(const schema& s, mutation_partition_view_virtual_visitor& visitor) const {
     accept_ordered_result res;
     do {
@@ -6246,7 +5481,6 @@ future<> mutation_partition_view::accept_gently_ordered(const schema& s, mutatio
         co_await coroutine::maybe_yield();
     } while (!res.stop);
 }
-
 std::optional<clustering_key> mutation_partition_view::first_row_key() const
 {
     auto in = _in;
@@ -6257,7 +5491,6 @@ std::optional<clustering_key> mutation_partition_view::first_row_key() const
     }
     return (*rows.begin()).key();
 }
-
 std::optional<clustering_key> mutation_partition_view::last_row_key() const
 {
     auto in = _in;
@@ -6273,12 +5506,10 @@ std::optional<clustering_key> mutation_partition_view::last_row_key() const
     }
     return (*it).key();
 }
-
 mutation_partition_view mutation_partition_view::from_view(ser::mutation_partition_view v)
 {
     return { v.v };
 }
-
 mutation_fragment frozen_mutation_fragment::unfreeze(const schema& s, reader_permit permit)
 {
     auto in = ser::as_input_stream(_bytes);
@@ -6303,7 +5534,6 @@ mutation_fragment frozen_mutation_fragment::unfreeze(const schema& s, reader_per
                 }
                 mutation_fragment get_mutation_fragment() && { return std::move(_mf); }
             };
-
             auto cr = crv.row();
             auto t = row_tombstone(cr.deleted_at(), shadowable_tombstone(cr.shadowable_deleted_at()));
             clustering_row_builder builder(s, permit, cr.key(), std::move(t), read_row_marker(cr.marker()));
@@ -6328,7 +5558,6 @@ mutation_fragment frozen_mutation_fragment::unfreeze(const schema& s, reader_per
                 }
                 mutation_fragment get_mutation_fragment() && { return std::move(_mf); }
             };
-
             static_row_builder builder(s, permit);
             read_and_visit_row(sr.cells(), s.get_column_mapping(), column_kind::static_column, builder);
             return std::move(builder).get_mutation_fragment();
@@ -6348,21 +5577,8 @@ mutation_fragment frozen_mutation_fragment::unfreeze(const schema& s, reader_per
         }
     );
 }
-
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 using namespace db;
-
 namespace {
-
 template<typename Writer>
 auto write_live_cell(Writer&& writer, atomic_cell_view c)
 {
@@ -6370,7 +5586,6 @@ auto write_live_cell(Writer&& writer, atomic_cell_view c)
                             .write_fragmented_value(fragment_range(c.value()))
                         .end_live_cell();
 }
-
 template<typename Writer>
 auto write_counter_cell(Writer&& writer, atomic_cell_view c)
 {
@@ -6392,7 +5607,6 @@ auto write_counter_cell(Writer&& writer, atomic_cell_view c)
         }
     }().end_counter_cell();
 }
-
 template<typename Writer>
 auto write_expiring_cell(Writer&& writer, atomic_cell_view c)
 {
@@ -6404,7 +5618,6 @@ auto write_expiring_cell(Writer&& writer, atomic_cell_view c)
                             .end_c()
                         .end_expiring_cell();
 }
-
 template<typename Writer>
 auto write_dead_cell(Writer&& writer, atomic_cell_view c)
 {
@@ -6414,7 +5627,6 @@ auto write_dead_cell(Writer&& writer, atomic_cell_view c)
                             .end_tomb()
                         .end_dead_cell();
 }
-
 template<typename Writer>
 auto write_collection_cell(Writer&& collection_writer, collection_mutation_view cmv, const column_definition& def)
 {
@@ -6433,7 +5645,6 @@ auto write_collection_cell(Writer&& collection_writer, collection_mutation_view 
     return std::move(cells_writer).end_elements().end_collection_cell();
   });
 }
-
 template<typename Writer>
 auto write_row_cells(Writer&& writer, const row& r, const schema& s, column_kind kind)
 {
@@ -6459,7 +5670,6 @@ auto write_row_cells(Writer&& writer, const row& r, const schema& s, column_kind
     });
     return std::move(column_writer).end_columns();
 }
-
 template<typename Writer>
 auto write_row_marker(Writer&& writer, const row_marker& marker)
 {
@@ -6486,9 +5696,7 @@ auto write_row_marker(Writer&& writer, const row_marker& marker)
                                 .end_live_marker();
     }
 }
-
 }
-
 template <typename RowTombstones>
 static void write_tombstones(const schema& s, RowTombstones& row_tombstones, const range_tombstone_list& rt_list)
 {
@@ -6498,12 +5706,10 @@ static void write_tombstones(const schema& s, RowTombstones& row_tombstones, con
             .write_end(rt.end).write_end_kind(rt.end_kind).end_range_tombstone();
     }
 }
-
 template<typename Writer>
 static auto write_tombstone(Writer&& writer, const tombstone& t) {
     return std::move(writer).write_timestamp(t.timestamp).write_deletion_time(t.deletion_time);
 }
-
 template<typename Writer>
 static auto write_row(Writer&& writer, const schema& s, const clustering_key_prefix& key, const row& cells, const row_marker& m, const row_tombstone& t) {
     auto marker_writer = std::move(writer).write_key(key);
@@ -6512,7 +5718,6 @@ static auto write_row(Writer&& writer, const schema& s, const clustering_key_pre
     auto shadowable_deleted_at_writer = write_row_cells(std::move(row_writer), cells, s, column_kind::regular_column).end_cells().start_shadowable_deleted_at();
     return write_tombstone(std::move(shadowable_deleted_at_writer), t.shadowable().tomb()).end_shadowable_deleted_at();
 }
-
 template<typename Writer>
 void mutation_partition_serializer::write_serialized(Writer&& writer, const schema& s, const mutation_partition& mp)
 {
@@ -6525,21 +5730,17 @@ void mutation_partition_serializer::write_serialized(Writer&& writer, const sche
     }
     std::move(clustering_rows).end_rows().end_mutation_partition();
 }
-
 mutation_partition_serializer::mutation_partition_serializer(const schema& schema, const mutation_partition& p)
     : _schema(schema), _p(p)
 { }
-
 void
 mutation_partition_serializer::write(bytes_ostream& out) const {
     write(ser::writer_of_mutation_partition<bytes_ostream>(out));
 }
-
 void mutation_partition_serializer::write(ser::writer_of_mutation_partition<bytes_ostream>&& wr) const
 {
     write_serialized(std::move(wr), _schema, _p);
 }
-
 void serialize_mutation_fragments(const schema& s, tombstone partition_tombstone,
     std::optional<static_row> sr,  range_tombstone_list rts,
     std::deque<clustering_row> crs, ser::writer_of_mutation_partition<bytes_ostream>&& wr)
@@ -6553,10 +5754,8 @@ void serialize_mutation_fragments(const schema& s, tombstone partition_tombstone
         }
     }();
     sr = { };
-
     write_tombstones(s, row_tombstones, rts);
     rts.clear();
-
     auto clustering_rows = std::move(row_tombstones).end_range_tombstones().start_rows();
     while (!crs.empty()) {
         auto& cr = crs.front();
@@ -6565,7 +5764,6 @@ void serialize_mutation_fragments(const schema& s, tombstone partition_tombstone
     }
     std::move(clustering_rows).end_rows().end_mutation_partition();
 }
-
 frozen_mutation_fragment freeze(const schema& s, const mutation_fragment& mf)
 {
     bytes_ostream out;
@@ -6596,16 +5794,6 @@ frozen_mutation_fragment freeze(const schema& s, const mutation_fragment& mf)
     )).end_mutation_fragment();
     return frozen_mutation_fragment(std::move(out));
 }
-/*
- * Copyright (C) 2016-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 static void remove_or_mark_as_unique_owner(partition_version* current, mutation_cleaner* cleaner)
 {
     while (current && !current->is_referenced()) {
@@ -6622,7 +5810,6 @@ static void remove_or_mark_as_unique_owner(partition_version* current, mutation_
         current->back_reference().mark_as_unique_owner();
     }
 }
-
 partition_version::partition_version(partition_version&& pv) noexcept
     : anchorless_list_base_hook(std::move(pv))
     , _backref(pv._backref)
@@ -6633,7 +5820,6 @@ partition_version::partition_version(partition_version&& pv) noexcept
     }
     pv._backref = nullptr;
 }
-
 partition_version& partition_version::operator=(partition_version&& pv) noexcept
 {
     if (this != &pv) {
@@ -6642,39 +5828,32 @@ partition_version& partition_version::operator=(partition_version&& pv) noexcept
     }
     return *this;
 }
-
 partition_version::~partition_version()
 {
     if (_backref) {
         _backref->_version = nullptr;
     }
 }
-
 stop_iteration partition_version::clear_gently(cache_tracker* tracker) noexcept {
     return _partition.clear_gently(tracker);
 }
-
 size_t partition_version::size_in_allocator(const schema& s, allocation_strategy& allocator) const {
     return allocator.object_memory_size_in_allocator(this) +
            partition().external_memory_usage(s);
 }
-
 namespace {
-
 // A functor which transforms objects from Domain into objects from CoDomain
 template<typename U, typename Domain, typename CoDomain>
 concept Mapper =
     requires(U obj, const Domain& src) {
         { obj(src) } -> std::convertible_to<const CoDomain&>;
     };
-
 // A functor which merges two objects from Domain into one. The result is stored in the first argument.
 template<typename U, typename Domain>
 concept Reducer =
     requires(U obj, Domain& dst, const Domain& src) {
         { obj(dst, src) } -> std::same_as<void>;
     };
-
 // Calculates the value of particular part of mutation_partition represented by
 // the version chain starting from v.
 // |map| extracts the part from each version.
@@ -6691,7 +5870,6 @@ inline Result squashed(const partition_version_ref& v, Map&& map, Initial&& init
     }
     return r;
 }
-
 template <typename Result, typename Map, typename Reduce>
 requires Mapper<Map, mutation_partition_v2, Result> && Reducer<Reduce, Result>
 inline Result squashed(const partition_version_ref& v, Map&& map, Reduce&& reduce) {
@@ -6699,9 +5877,7 @@ inline Result squashed(const partition_version_ref& v, Map&& map, Reduce&& reduc
                             [] (auto&& o) -> decltype(auto) { return std::forward<decltype(o)>(o); },
                             reduce);
 }
-
 }
-
 ::static_row partition_snapshot::static_row(bool digest_requested) const {
     return ::static_row(::squashed<row>(version(),
                          [&] (const mutation_partition_v2& mp) -> const row& {
@@ -6713,17 +5889,14 @@ inline Result squashed(const partition_version_ref& v, Map&& map, Reduce&& reduc
                          [this] (const row& r) { return row(*_schema, column_kind::static_column, r); },
                          [this] (row& a, const row& b) { a.apply(*_schema, column_kind::static_column, b); }));
 }
-
 bool partition_snapshot::static_row_continuous() const {
     return version()->partition().static_row_continuous();
 }
-
 tombstone partition_snapshot::partition_tombstone() const {
     return ::squashed<tombstone>(version(),
                                [] (const mutation_partition_v2& mp) { return mp.partition_tombstone(); },
                                [] (tombstone& a, tombstone b) { a.apply(b); });
 }
-
 mutation_partition partition_snapshot::squashed() const {
     return ::squashed<mutation_partition>(version(),
                                [this] (const mutation_partition_v2& mp) -> mutation_partition {
@@ -6735,13 +5908,11 @@ mutation_partition partition_snapshot::squashed() const {
                                    a.apply(*_schema, b, *_schema, app_stats);
                                });
 }
-
 tombstone partition_entry::partition_tombstone() const {
     return ::squashed<tombstone>(_version,
         [] (const mutation_partition_v2& mp) { return mp.partition_tombstone(); },
         [] (tombstone& a, tombstone b) { a.apply(b); });
 }
-
 partition_snapshot::~partition_snapshot() {
     with_allocator(region().allocator(), [this] {
         if (_locked) {
@@ -6756,13 +5927,11 @@ partition_snapshot::~partition_snapshot() {
         }
     });
 }
-
 void merge_versions(const schema& s, mutation_partition_v2& newer, mutation_partition_v2&& older, cache_tracker* tracker, is_evictable evictable) {
     mutation_application_stats app_stats;
     older.apply_monotonically(s, std::move(newer), tracker, app_stats, evictable);
     newer = std::move(older);
 }
-
 stop_iteration partition_snapshot::merge_partition_versions(mutation_application_stats& app_stats) {
     partition_version_ref& v = version();
     if (!v.is_unique_owner()) {
@@ -6803,7 +5972,6 @@ stop_iteration partition_snapshot::merge_partition_versions(mutation_application
     }
     return stop_iteration::yes;
 }
-
 stop_iteration partition_snapshot::slide_to_oldest() noexcept {
     partition_version_ref& v = version();
     if (v.is_unique_owner()) {
@@ -6820,7 +5988,6 @@ stop_iteration partition_snapshot::slide_to_oldest() noexcept {
     }
     return current->prev() ? stop_iteration::no : stop_iteration::yes;
 }
-
 unsigned partition_snapshot::version_count()
 {
     unsigned count = 0;
@@ -6830,32 +5997,26 @@ unsigned partition_snapshot::version_count()
     }
     return count;
 }
-
 partition_entry::partition_entry(mutation_partition_v2 mp)
 {
     auto new_version = current_allocator().construct<partition_version>(std::move(mp));
     _version = partition_version_ref(*new_version);
 }
-
 partition_entry::partition_entry(const schema& s, mutation_partition mp)
     : partition_entry(mutation_partition_v2(s, std::move(mp)))
 { }
-
 partition_entry::partition_entry(partition_entry::evictable_tag, const schema& s, mutation_partition&& mp)
     : partition_entry([&] {
         mp.ensure_last_dummy(s);
         return mutation_partition_v2(s, std::move(mp));
     }())
 { }
-
 partition_entry partition_entry::make_evictable(const schema& s, mutation_partition&& mp) {
     return {evictable_tag(), s, std::move(mp)};
 }
-
 partition_entry partition_entry::make_evictable(const schema& s, const mutation_partition& mp) {
     return make_evictable(s, mutation_partition(s, mp));
 }
-
 partition_entry::~partition_entry() {
     if (!_version) {
         return;
@@ -6871,12 +6032,10 @@ partition_entry::~partition_entry() {
         remove_or_mark_as_unique_owner(v, no_cleaner);
     }
 }
-
 stop_iteration partition_entry::clear_gently(cache_tracker* tracker) noexcept {
     if (!_version) {
         return stop_iteration::yes;
     }
-
     if (_snapshot) {
         assert(!_snapshot->is_locked());
         _snapshot->_version = std::move(_version);
@@ -6884,7 +6043,6 @@ stop_iteration partition_entry::clear_gently(cache_tracker* tracker) noexcept {
         _snapshot->_entry = nullptr;
         return stop_iteration::yes;
     }
-
     partition_version* v = &*_version;
     _version = {};
     while (v) {
@@ -6902,7 +6060,6 @@ stop_iteration partition_entry::clear_gently(cache_tracker* tracker) noexcept {
     }
     return stop_iteration::yes;
 }
-
 void partition_entry::set_version(partition_version* new_version)
 {
     if (_snapshot) {
@@ -6910,11 +6067,9 @@ void partition_entry::set_version(partition_version* new_version)
         _snapshot->_version = std::move(_version);
         _snapshot->_entry = nullptr;
     }
-
     _snapshot = nullptr;
     _version = partition_version_ref(*new_version);
 }
-
 partition_version& partition_entry::add_version(const schema& s, cache_tracker* tracker) {
     // Every evictable version must have a dummy entry at the end so that
     // it can be tracked in the LRU. It is also needed to allow old versions
@@ -6931,12 +6086,10 @@ partition_version& partition_entry::add_version(const schema& s, cache_tracker* 
     }
     return *new_version;
 }
-
 void partition_entry::apply(logalloc::region& r, mutation_cleaner& cleaner, const schema& s, const mutation_partition_v2& mp, const schema& mp_schema,
         mutation_application_stats& app_stats) {
     apply(r, cleaner, s, mutation_partition_v2(mp_schema, mp), mp_schema, app_stats);
 }
-
 void partition_entry::apply(logalloc::region& r,
            mutation_cleaner& c,
            const schema& s,
@@ -6947,7 +6100,6 @@ void partition_entry::apply(logalloc::region& r,
     mp_v1.make_fully_continuous();
     apply(r, c, s, mutation_partition_v2(mp_schema, std::move(mp_v1)), mp_schema, app_stats);
 }
-
 void partition_entry::apply(logalloc::region& r, mutation_cleaner& cleaner, const schema& s, mutation_partition_v2&& mp, const schema& mp_schema,
         mutation_application_stats& app_stats) {
     // A note about app_stats: it may happen that mp has rows that overwrite other rows
@@ -6983,7 +6135,6 @@ void partition_entry::apply(logalloc::region& r, mutation_cleaner& cleaner, cons
     set_version(new_version);
     app_stats.row_writes += new_version->partition().row_count();
 }
-
 utils::coroutine partition_entry::apply_to_incomplete(const schema& s,
     partition_entry&& pe,
     mutation_cleaner& pe_cleaner,
@@ -7004,12 +6155,10 @@ utils::coroutine partition_entry::apply_to_incomplete(const schema& s,
     // segment compaction. This becomes especially significant for small
     // partitions where I saw 40% slow down.
     const bool preemptible = s.clustering_key_size() > 0;
-
     // When preemptible, later memtable reads could start using the snapshot before
     // snapshot's writes are made visible in cache, which would cause them to miss those writes.
     // So we cannot allow erasing when preemptible.
     bool can_move = !preemptible && !pe._snapshot;
-
     auto src_snp = pe.read(reg, pe_cleaner, s.shared_from_this(), no_cache_tracker);
     partition_snapshot_ptr prev_snp;
     if (preemptible) {
@@ -7019,7 +6168,6 @@ utils::coroutine partition_entry::apply_to_incomplete(const schema& s,
     }
     auto dst_snp = read(reg, tracker.cleaner(), s.shared_from_this(), &tracker, phase);
     dst_snp->lock();
-
     // Once we start updating the partition, we must keep all snapshots until the update completes,
     // otherwise partial writes would be published. So the scope of snapshots must enclose the scope
     // of allocating sections, so we return here to get out of the current allocating section and
@@ -7036,7 +6184,6 @@ utils::coroutine partition_entry::apply_to_incomplete(const schema& s,
         auto&& allocator = reg.allocator();
         return alloc(reg, [&] {
             size_t dirty_size = 0;
-
             if (!static_done) {
                 partition_version& dst = *dst_snp->version();
                 bool static_row_continuous = dst_snp->static_row_continuous();
@@ -7060,11 +6207,9 @@ utils::coroutine partition_entry::apply_to_incomplete(const schema& s,
                 acc.unpin_memory(dirty_size);
                 static_done = true;
             }
-
             if (!src_cur.maybe_refresh_static()) {
                 return stop_iteration::yes;
             }
-
             do {
                 auto size = src_cur.memory_usage();
                 // Range tombstones in memtables are bounded by dummy entries on both sides.
@@ -7088,7 +6233,6 @@ utils::coroutine partition_entry::apply_to_incomplete(const schema& s,
                             res.row.set_continuous(is_continuous::yes);
                         }
                         res.row.set_range_tombstone(cur.range_tombstone_for_row() + src_cur.range_tombstone());
-
                         // FIXME: Compact the row
                         ++tracker.get_stats().rows_covered_by_range_tombstones_from_memtable;
                         cur.next();
@@ -7138,7 +6282,6 @@ utils::coroutine partition_entry::apply_to_incomplete(const schema& s,
         });
     });
 }
-
 mutation_partition_v2 partition_entry::squashed(schema_ptr from, schema_ptr to, is_evictable evictable)
 {
     mutation_partition_v2 mp(to);
@@ -7152,13 +6295,11 @@ mutation_partition_v2 partition_entry::squashed(schema_ptr from, schema_ptr to, 
     }
     return mp;
 }
-
 mutation_partition partition_entry::squashed(const schema& s, is_evictable evictable)
 {
     return squashed(s.shared_from_this(), s.shared_from_this(), evictable)
         .as_mutation_partition(s);
 }
-
 void partition_entry::upgrade(schema_ptr from, schema_ptr to, mutation_cleaner& cleaner, cache_tracker* tracker)
 {
     auto new_version = current_allocator().construct<partition_version>(squashed(from, to, is_evictable(bool(tracker))));
@@ -7169,7 +6310,6 @@ void partition_entry::upgrade(schema_ptr from, schema_ptr to, mutation_cleaner& 
     }
     remove_or_mark_as_unique_owner(old_version, &cleaner);
 }
-
 partition_snapshot_ptr partition_entry::read(logalloc::region& r,
     mutation_cleaner& cleaner, schema_ptr entry_schema, cache_tracker* tracker, partition_snapshot::phase_type phase)
 {
@@ -7190,12 +6330,10 @@ partition_snapshot_ptr partition_entry::read(logalloc::region& r,
             });
         }
     }
-
     auto snp = make_lw_shared<partition_snapshot>(entry_schema, r, cleaner, this, tracker, phase);
     _snapshot = snp.get();
     return partition_snapshot_ptr(std::move(snp));
 }
-
 void partition_snapshot::touch() noexcept {
     // Eviction assumes that older versions are evicted before newer so only the latest snapshot
     // can be touched.
@@ -7207,7 +6345,6 @@ void partition_snapshot::touch() noexcept {
         _tracker->touch(last_dummy);
     }
 }
-
 std::ostream& operator<<(std::ostream& out, const partition_entry::printer& p) {
     auto& e = p._partition_entry;
     out << "{";
@@ -7239,7 +6376,6 @@ std::ostream& operator<<(std::ostream& out, const partition_entry::printer& p) {
     out << "}";
     return out;
 }
-
 void partition_entry::evict(mutation_cleaner& cleaner) noexcept {
     if (!_version) {
         return;
@@ -7255,7 +6391,6 @@ void partition_entry::evict(mutation_cleaner& cleaner) noexcept {
         remove_or_mark_as_unique_owner(v, &cleaner);
     }
 }
-
 partition_snapshot_ptr::~partition_snapshot_ptr() {
     if (_snp) {
         auto&& cleaner = _snp->cleaner();
@@ -7265,14 +6400,12 @@ partition_snapshot_ptr::~partition_snapshot_ptr() {
         }
     }
 }
-
 void partition_snapshot::lock() noexcept {
     // partition_entry::is_locked() assumes that if there is a locked snapshot,
     // it can be found attached directly to it.
     assert(at_latest_version());
     _locked = true;
 }
-
 void partition_snapshot::unlock() noexcept {
     // Locked snapshots must always be latest, is_locked() assumes that.
     // Also, touch() is only effective when this snapshot is latest. 
@@ -7280,16 +6413,6 @@ void partition_snapshot::unlock() noexcept {
     _locked = false;
     touch(); // Make the entry evictable again in case it was fully unlinked by eviction attempt.
 }
-/*
- * Copyright (C) 2016-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 std::optional<range_tombstone> range_tombstone::apply(const schema& s, range_tombstone&& src)
 {
     bound_view::compare cmp(s);
@@ -7308,22 +6431,18 @@ std::optional<range_tombstone> range_tombstone::apply(const schema& s, range_tom
     }
     return { };
 }
-
 position_in_partition_view range_tombstone::position() const {
     return position_in_partition_view(position_in_partition_view::range_tombstone_tag_t(), start_bound());
 }
-
 position_in_partition_view range_tombstone::end_position() const {
     return position_in_partition_view(position_in_partition_view::range_tombstone_tag_t(), end_bound());
 }
-
 void range_tombstone_accumulator::update_current_tombstone() {
     _current_tombstone = boost::accumulate(_range_tombstones, _partition_tombstone, [] (tombstone t, const range_tombstone& rt) {
         t.apply(rt.tomb);
         return t;
     });
 }
-
 void range_tombstone_accumulator::drop_unneeded_tombstones(const clustering_key_prefix& ck, int w) {
     auto cmp = [&] (const range_tombstone& rt, const clustering_key_prefix& ck, int w) {
         auto bv = rt.end_bound();
@@ -7338,31 +6457,19 @@ void range_tombstone_accumulator::drop_unneeded_tombstones(const clustering_key_
         update_current_tombstone();
     }
 }
-
 void range_tombstone_accumulator::apply(range_tombstone rt) {
     drop_unneeded_tombstones(rt.start, weight(rt.start_kind));
     _current_tombstone.apply(rt.tomb);
-
     auto cmp = [&] (const range_tombstone& rt1, const range_tombstone& rt2) {
         return _cmp(rt1.end_bound(), rt2.end_bound());
     };
     _range_tombstones.insert(boost::upper_bound(_range_tombstones, rt, cmp), std::move(rt));
 }
-
 void range_tombstone_accumulator::clear() {
     _range_tombstones.clear();
     _partition_tombstone = { };
     _current_tombstone = { };
 }
-/*
- * Copyright (C) 2016-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 range_tombstone_list::range_tombstone_list(const range_tombstone_list& x)
         : _tombstones(x._tombstones.value_comp()) {
     auto cloner = [] (const range_tombstone_entry& x) {
@@ -7370,16 +6477,13 @@ range_tombstone_list::range_tombstone_list(const range_tombstone_list& x)
     };
     _tombstones.clone_from(x._tombstones, cloner, current_deleter<range_tombstone_entry>());
 }
-
 range_tombstone_list::~range_tombstone_list() {
     _tombstones.clear_and_dispose(current_deleter<range_tombstone_entry>());
 }
-
 template <typename... Args>
 static auto construct_range_tombstone_entry(Args&&... args) {
     return alloc_strategy_unique_ptr<range_tombstone_entry>(current_allocator().construct<range_tombstone_entry>(range_tombstone(std::forward<Args>(args)...)));
 }
-
 void range_tombstone_list::apply_reversibly(const schema& s,
         clustering_key_prefix start_key, bound_kind start_kind,
         clustering_key_prefix end_key,
@@ -7390,11 +6494,9 @@ void range_tombstone_list::apply_reversibly(const schema& s,
     position_in_partition::less_compare less(s);
     position_in_partition start(position_in_partition::range_tag_t(), bound_view(std::move(start_key), start_kind));
     position_in_partition end(position_in_partition::range_tag_t(), bound_view(std::move(end_key), end_kind));
-
     if (!less(start, end)) {
         return;
     }
-
     if (!_tombstones.empty()) {
         auto last = --_tombstones.end();
         range_tombstones_type::iterator it;
@@ -7412,18 +6514,6 @@ void range_tombstone_list::apply_reversibly(const schema& s,
     rev.insert(_tombstones.end(), *rt);
     rt.release();
 }
-
-/*
- * Inserts a new element starting at the position pointed to by the iterator, it.
- * This method assumes that:
- *    (it - 1)->end <= start < it->end
- *
- * A range tombstone list is a list of ranges [s_0, e_0]...[s_n, e_n] such that:
- *   - s_i is a start bound and e_i is a end bound
- *   - s_i < e_i
- *   - e_i <= s_i+1
- * Basically, ranges are ordered and non-overlapping.
- */
 void range_tombstone_list::insert_from(const schema& s,
     range_tombstones_type::iterator it,
     position_in_partition start,
@@ -7432,7 +6522,6 @@ void range_tombstone_list::insert_from(const schema& s,
     reverter& rev)
 {
     position_in_partition::tri_compare cmp(s);
-
     if (it != _tombstones.begin()) {
         auto prev = std::prev(it);
         if (prev->tombstone().tomb == tomb && cmp(prev->end_position(), start) == 0) {
@@ -7444,7 +6533,6 @@ void range_tombstone_list::insert_from(const schema& s,
         if (cmp(end, start) <= 0) {
             return;
         }
-
         if (cmp(end, it->position()) < 0) {
             // not overlapping
             if (it->tombstone().tomb == tomb && cmp(end, it->position()) == 0) {
@@ -7456,7 +6544,6 @@ void range_tombstone_list::insert_from(const schema& s,
             }
             return;
         }
-
         auto c = tomb <=> it->tombstone().tomb;
         if (c == 0) {
             // same timestamp, overlapping or adjacent, so merge.
@@ -7469,7 +6556,6 @@ void range_tombstone_list::insert_from(const schema& s,
             it = rev.erase(it);
         } else if (c > 0) {
             // We overwrite the current tombstone.
-
             if (cmp(it->position(), start) < 0) {
                 {
                     auto rt = construct_range_tombstone_entry(it->position(), start, it->tombstone().tomb);
@@ -7478,7 +6564,6 @@ void range_tombstone_list::insert_from(const schema& s,
                     rt.release();
                 }
             }
-
             if (cmp(end, it->end_position()) < 0) {
                 // Here start <= it->start and end < it->end.
                 auto rt = construct_range_tombstone_entry(std::move(start), end, std::move(tomb));
@@ -7487,12 +6572,10 @@ void range_tombstone_list::insert_from(const schema& s,
                 rt.release();
                 return;
             }
-
             // Here start <= it->start and end >= it->end.
             it = rev.erase(it);
         } else {
             // We don't overwrite the current tombstone.
-
             if (cmp(start, it->position()) < 0) {
                 // The new tombstone starts before the current one.
                 if (cmp(it->position(), end) < 0) {
@@ -7511,7 +6594,6 @@ void range_tombstone_list::insert_from(const schema& s,
                     return;
                 }
             }
-
             if (cmp(it->end_position(), end) < 0) {
                 // Here the current tombstone overwrites a range of the new one.
                 start = it->end_position();
@@ -7522,41 +6604,31 @@ void range_tombstone_list::insert_from(const schema& s,
             }
         }
     }
-
     // If we got here, then just insert the remainder at the end.
     auto rt = construct_range_tombstone_entry(std::move(start), std::move(end), std::move(tomb));
     rev.insert(it, *rt);
     rt.release();
 }
-
 range_tombstone_list::range_tombstones_type::iterator range_tombstone_list::find(const schema& s, const range_tombstone_entry& rt) {
     bound_view::compare less(s);
     auto it = _tombstones.find(rt, [less](auto&& rt1, auto&& rt2) {
         return less(rt1.end_bound(), rt2.end_bound());
     });
-
     if (it != _tombstones.end() && it->tombstone().equal(s, rt.tombstone())) {
         return it;
     }
     return _tombstones.end();
 }
-
-/*
- * Returns the tombstone covering the specified key, or an empty tombstone otherwise.
- */
 tombstone range_tombstone_list::search_tombstone_covering(const schema& s, const clustering_key_prefix& key) const {
     bound_view::compare less(s);
     auto it = _tombstones.upper_bound(key, [less](auto&& k, auto&& rt) {
         return less(k, rt.end_bound());
     });
-
     if (it == _tombstones.end() || less(key, it->start_bound())) {
         return {};
     }
-
     return it->tombstone().tomb;
 }
-
 range_tombstone_list range_tombstone_list::difference(const schema& s, const range_tombstone_list& other) const {
     range_tombstone_list diff(s);
     bound_view::compare cmp_rt(s);
@@ -7611,7 +6683,6 @@ range_tombstone_list range_tombstone_list::difference(const schema& s, const ran
     }
     return diff;
 }
-
 stop_iteration range_tombstone_list::clear_gently() noexcept {
     auto del = current_deleter<range_tombstone_entry>();
     auto i = _tombstones.begin();
@@ -7624,13 +6695,11 @@ stop_iteration range_tombstone_list::clear_gently() noexcept {
     }
     return stop_iteration::yes;
 }
-
 void range_tombstone_list::apply(const schema& s, const range_tombstone_list& rt_list) {
     for (auto&& rt : rt_list) {
         apply(s, rt.tombstone());
     }
 }
-
 // See reversibly_mergeable.hh
 range_tombstone_list::reverter range_tombstone_list::apply_reversibly(const schema& s, range_tombstone_list& rt_list) {
     reverter rev(s, *this);
@@ -7639,7 +6708,6 @@ range_tombstone_list::reverter range_tombstone_list::apply_reversibly(const sche
     }
     return rev;
 }
-
 namespace {
 struct bv_order_by_end {
     bound_view::compare less;
@@ -7653,7 +6721,6 @@ struct bv_order_by_start {
     bool operator()(bound_view v, const range_tombstone_entry& rt) const { return less(v, rt.start_bound()); }
     bool operator()(const range_tombstone_entry& rt, bound_view v) const { return less(rt.start_bound(), v); }
 };
-
 struct pos_order_by_end {
     position_in_partition::less_compare less;
     pos_order_by_end(const schema& s) : less(s) {}
@@ -7667,7 +6734,6 @@ struct pos_order_by_start {
     bool operator()(const range_tombstone_entry& rt, position_in_partition_view v) const { return less(rt.position(), v); }
 };
 } // namespace
-
 range_tombstone_list::iterator_range
 range_tombstone_list::slice(const schema& s, const query::clustering_range& r) const {
     auto bv_range = bound_view::from_range(r);
@@ -7675,34 +6741,28 @@ range_tombstone_list::slice(const schema& s, const query::clustering_range& r) c
         _tombstones.lower_bound(bv_range.first, bv_order_by_end{s}),
         _tombstones.upper_bound(bv_range.second, bv_order_by_start{s}));
 }
-
 range_tombstone_list::iterator_range
 range_tombstone_list::slice(const schema& s, position_in_partition_view start, position_in_partition_view end) const {
     return boost::make_iterator_range(
         _tombstones.upper_bound(start, pos_order_by_end{s}), // end_position() is exclusive, hence upper_bound()
         _tombstones.lower_bound(end, pos_order_by_start{s}));
 }
-
 range_tombstone_list::iterator_range
 range_tombstone_list::lower_slice(const schema& s, bound_view start, position_in_partition_view before) const {
     return boost::make_iterator_range(
         _tombstones.lower_bound(start, bv_order_by_end{s}),
         _tombstones.lower_bound(before, pos_order_by_end{s}));
 }
-
 range_tombstone_list::iterator_range
 range_tombstone_list::upper_slice(const schema& s, position_in_partition_view after, bound_view end) const {
     return boost::make_iterator_range(
         _tombstones.upper_bound(after, pos_order_by_start{s}),
         _tombstones.upper_bound(end, bv_order_by_start{s}));
 }
-
-
 range_tombstone_list::iterator
 range_tombstone_list::erase(const_iterator a, const_iterator b) {
     return _tombstones.erase_and_dispose(a, b, current_deleter<range_tombstone_entry>());
 }
-
 void range_tombstone_list::trim(const schema& s, const query::clustering_row_ranges& ranges) {
     range_tombstone_list list(s);
     bound_view::compare less(s);
@@ -7718,24 +6778,20 @@ void range_tombstone_list::trim(const schema& s, const query::clustering_row_ran
     }
     *this = std::move(list);
 }
-
 range_tombstone_list::range_tombstones_type::iterator
 range_tombstone_list::reverter::insert(range_tombstones_type::iterator it, range_tombstone_entry& new_rt) {
     _ops.emplace_back(insert_undo_op(new_rt));
     return _dst._tombstones.insert_before(it, new_rt);
 }
-
 range_tombstone_list::range_tombstones_type::iterator
 range_tombstone_list::reverter::erase(range_tombstones_type::iterator it) {
     _ops.emplace_back(std::in_place_type<erase_undo_op>, *it);
     return _dst._tombstones.erase(it);
 }
-
 void range_tombstone_list::reverter::update(range_tombstones_type::iterator it, range_tombstone&& new_rt) {
     _ops.emplace_back(std::in_place_type<update_undo_op>, std::move(it->tombstone()), *it);
     it->tombstone() = std::move(new_rt);
 }
-
 void range_tombstone_list::reverter::revert() noexcept {
     for (auto&& rt : _ops | boost::adaptors::reversed) {
         seastar::visit(rt, [this] (auto& op) {
@@ -7744,43 +6800,35 @@ void range_tombstone_list::reverter::revert() noexcept {
     }
     cancel();
 }
-
 range_tombstone_list::range_tombstones_type::iterator
 range_tombstone_list::nop_reverter::insert(range_tombstones_type::iterator it, range_tombstone_entry& new_rt) {
     return _dst._tombstones.insert_before(it, new_rt);
 }
-
 range_tombstone_list::range_tombstones_type::iterator
 range_tombstone_list::nop_reverter::erase(range_tombstones_type::iterator it) {
     return _dst._tombstones.erase_and_dispose(it, alloc_strategy_deleter<range_tombstone_entry>());
 }
-
 void range_tombstone_list::nop_reverter::update(range_tombstones_type::iterator it, range_tombstone&& new_rt) {
     *it = std::move(new_rt);
 }
-
 void range_tombstone_list::insert_undo_op::undo(const schema& s, range_tombstone_list& rt_list) noexcept {
     auto it = rt_list.find(s, _new_rt);
     assert (it != rt_list.end());
     rt_list._tombstones.erase_and_dispose(it, current_deleter<range_tombstone_entry>());
 }
-
 void range_tombstone_list::erase_undo_op::undo(const schema& s, range_tombstone_list& rt_list) noexcept {
     rt_list._tombstones.insert(*_rt.release());
 }
-
 void range_tombstone_list::update_undo_op::undo(const schema& s, range_tombstone_list& rt_list) noexcept {
     auto it = rt_list.find(s, _new_rt);
     assert (it != rt_list.end());
     *it = std::move(_old_rt);
 }
-
 bool range_tombstone_list::equal(const schema& s, const range_tombstone_list& other) const {
     return boost::equal(_tombstones, other._tombstones, [&s] (auto&& rt1, auto&& rt2) {
         return rt1.tombstone().equal(s, rt2.tombstone());
     });
 }
-
 stop_iteration range_tombstone_list::apply_monotonically(const schema& s, range_tombstone_list&& list, is_preemptible preemptible) {
     auto del = current_deleter<range_tombstone_entry>();
     auto it = list.begin();
@@ -7794,13 +6842,11 @@ stop_iteration range_tombstone_list::apply_monotonically(const schema& s, range_
     }
     return stop_iteration::yes;
 }
-
 void range_tombstone_list::apply_monotonically(const schema& s, const range_tombstone_list& list) {
     for (auto&& rt : list) {
         apply_monotonically(s, rt.tombstone());
     }
 }
-
 void range_tombstone_list::apply_monotonically(const schema& s, const range_tombstone& rt) {
     // FIXME: Optimize given this has relaxed exception guarantees.
     // Note that apply() doesn't have monotonic guarantee because it doesn't restore erased entries.
@@ -7808,28 +6854,9 @@ void range_tombstone_list::apply_monotonically(const schema& s, const range_tomb
     apply_reversibly(s, rt.start, rt.start_kind, rt.end, rt.end_kind, rt.tomb, rev);
     rev.cancel();
 }
-/*
- * Copyright (C) 2020-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 size_t sstring_hash::operator()(std::string_view v) const noexcept {
     return absl::Hash<std::string_view>{}(v);
 }
-/*
- * Copyright (C) 2019-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 bytes_view collection_mutation_input_stream::read_linearized(size_t n) {
     managed_bytes_view mbv = ::read_simple_bytes(_src, n);
     if (mbv.is_linearized()) {
@@ -7844,28 +6871,22 @@ managed_bytes_view collection_mutation_input_stream::read_fragmented(size_t n) {
 bool collection_mutation_input_stream::empty() const {
     return _src.empty();
 }
-
 collection_mutation::collection_mutation(const abstract_type& type, collection_mutation_view v)
     : _data(v.data) {}
-
 collection_mutation::collection_mutation(const abstract_type& type, managed_bytes data)
     : _data(std::move(data)) {}
-
 collection_mutation::operator collection_mutation_view() const
 {
     return collection_mutation_view{managed_bytes_view(_data)};
 }
-
 collection_mutation_view atomic_cell_or_collection::as_collection_mutation() const {
     return collection_mutation_view{managed_bytes_view(_data)};
 }
-
 bool collection_mutation_view::is_empty() const {
     auto in = collection_mutation_input_stream(data);
     auto has_tomb = in.read_trivial<uint8_t>();
     return !has_tomb && in.read_trivial<uint32_t>() == 0;
 }
-
 bool collection_mutation_view::is_any_live(const abstract_type& type, tombstone tomb, gc_clock::time_point now) const {
     auto in = collection_mutation_input_stream(data);
     auto has_tomb = in.read_trivial<uint8_t>();
@@ -7874,7 +6895,6 @@ bool collection_mutation_view::is_any_live(const abstract_type& type, tombstone 
         auto ttl = in.read_trivial<gc_clock::duration::rep>();
         tomb.apply(tombstone{ts, gc_clock::time_point(gc_clock::duration(ttl))});
     }
-
     auto nr = in.read_trivial<uint32_t>();
     for (uint32_t i = 0; i != nr; ++i) {
         auto key_size = in.read_trivial<uint32_t>();
@@ -7885,10 +6905,8 @@ bool collection_mutation_view::is_any_live(const abstract_type& type, tombstone 
             return true;
         }
     }
-
     return false;
 }
-
 api::timestamp_type collection_mutation_view::last_update(const abstract_type& type) const {
     auto in = collection_mutation_input_stream(data);
     api::timestamp_type max = api::missing_timestamp;
@@ -7897,7 +6915,6 @@ api::timestamp_type collection_mutation_view::last_update(const abstract_type& t
         max = std::max(max, in.read_trivial<api::timestamp_type>());
         (void)in.read_trivial<gc_clock::duration::rep>();
     }
-
     auto nr = in.read_trivial<uint32_t>();
     for (uint32_t i = 0; i != nr; ++i) {
         const auto key_size = in.read_trivial<uint32_t>();
@@ -7906,10 +6923,8 @@ api::timestamp_type collection_mutation_view::last_update(const abstract_type& t
         auto value = atomic_cell_view::from_bytes(type, in.read_fragmented(vsize));
         max = std::max(value.timestamp(), max);
     }
-
     return max;
 }
-
 std::ostream& operator<<(std::ostream& os, const collection_mutation_view::printer& cmvp) {
     fmt::print(os, "{{collection_mutation_view ");
     cmvp._cmv.with_deserialized(cmvp._type, [&os, &type = cmvp._type] (const collection_mutation_view_description& cmvd) {
@@ -7946,14 +6961,11 @@ std::ostream& operator<<(std::ostream& os, const collection_mutation_view::print
     fmt::print(os, "}}");
     return os;
 }
-
-
 collection_mutation_description
 collection_mutation_view_description::materialize(const abstract_type& type) const {
     collection_mutation_description m;
     m.tomb = tomb;
     m.cells.reserve(cells.size());
-
     visit(type, make_visitor(
     [&] (const collection_type_impl& ctype) {
         auto& value_type = *ctype.value_comparator();
@@ -7970,10 +6982,8 @@ collection_mutation_view_description::materialize(const abstract_type& type) con
         throw std::runtime_error(format("attempted to materialize collection_mutation_view_description with type {}", o.name()));
     }
     ));
-
     return m;
 }
-
 bool collection_mutation_description::compact_and_expire(column_id id, row_tombstone base_tomb, gc_clock::time_point query_time,
     can_gc_fn& can_gc, gc_clock::time_point gc_before, compaction_garbage_collector* collector)
 {
@@ -7994,7 +7004,6 @@ bool collection_mutation_description::compact_and_expire(column_id id, row_tombs
         auto cannot_erase_cell = [&] {
             return cell.deletion_time() >= gc_before || !can_gc(tombstone(cell.timestamp(), cell.deletion_time()));
         };
-
         if (cell.is_covered_by(t, false) || cell.is_covered_by(base_tomb.shadowable().tomb(), false)) {
             continue;
         }
@@ -8023,7 +7032,6 @@ bool collection_mutation_description::compact_and_expire(column_id id, row_tombs
     cells = std::move(survivors);
     return any_live;
 }
-
 template <typename Iterator>
 static collection_mutation serialize_collection_mutation(
         const abstract_type& type,
@@ -8058,35 +7066,28 @@ static collection_mutation serialize_collection_mutation(
         auto&& k = kv.first;
         auto&& v = kv.second;
         writek(k);
-
         writev(v.serialize());
     }
     return collection_mutation(type, ret);
 }
-
 collection_mutation collection_mutation_description::serialize(const abstract_type& type) const {
     return serialize_collection_mutation(type, tomb, boost::make_iterator_range(cells.begin(), cells.end()));
 }
-
 collection_mutation collection_mutation_view_description::serialize(const abstract_type& type) const {
     return serialize_collection_mutation(type, tomb, boost::make_iterator_range(cells.begin(), cells.end()));
 }
-
 template <typename C>
 requires std::is_base_of_v<abstract_type, std::remove_reference_t<C>>
 static collection_mutation_view_description
 merge(collection_mutation_view_description a, collection_mutation_view_description b, C&& key_type) {
     using element_type = std::pair<bytes_view, atomic_cell_view>;
-
     auto compare = [&] (const element_type& e1, const element_type& e2) {
         return key_type.less(e1.first, e2.first);
     };
-
     auto merge = [] (const element_type& e1, const element_type& e2) {
         // FIXME: use std::max()?
         return std::make_pair(e1.first, compare_atomic_cell_for_merge(e1.second, e2.second) > 0 ? e1.second : e2.second);
     };
-
     // applied to a tombstone, returns a predicate checking whether a cell is killed by
     // the tombstone
     auto cell_killed = [] (const std::optional<tombstone>& t) {
@@ -8102,20 +7103,16 @@ merge(collection_mutation_view_description a, collection_mutation_view_descripti
             // FIXME: should we consider TTLs too?
         };
     };
-
     collection_mutation_view_description merged;
     merged.cells.reserve(a.cells.size() + b.cells.size());
-
     combine(a.cells.begin(), std::remove_if(a.cells.begin(), a.cells.end(), cell_killed(b.tomb)),
             b.cells.begin(), std::remove_if(b.cells.begin(), b.cells.end(), cell_killed(a.tomb)),
             std::back_inserter(merged.cells),
             compare,
             merge);
     merged.tomb = std::max(a.tomb, b.tomb);
-
     return merged;
 }
-
 collection_mutation merge(const abstract_type& type, collection_mutation_view a, collection_mutation_view b) {
     return a.with_deserialized(type, [&] (collection_mutation_view_description a_view) {
         return b.with_deserialized(type, [&] (collection_mutation_view_description b_view) {
@@ -8133,7 +7130,6 @@ collection_mutation merge(const abstract_type& type, collection_mutation_view a,
         });
     });
 }
-
 template <typename C>
 requires std::is_base_of_v<abstract_type, std::remove_reference_t<C>>
 static collection_mutation_view_description
@@ -8141,7 +7137,6 @@ difference(collection_mutation_view_description a, collection_mutation_view_desc
 {
     collection_mutation_view_description diff;
     diff.cells.reserve(std::max(a.cells.size(), b.cells.size()));
-
     auto it = b.cells.begin();
     for (auto&& c : a.cells) {
         while (it != b.cells.end() && key_type.less(it->first, c.first)) {
@@ -8149,7 +7144,6 @@ difference(collection_mutation_view_description a, collection_mutation_view_desc
         }
         if (it == b.cells.end() || !key_type.equal(it->first, c.first)
             || compare_atomic_cell_for_merge(c.second, it->second) > 0) {
-
             auto cell = std::make_pair(c.first, c.second);
             diff.cells.emplace_back(std::move(cell));
         }
@@ -8157,10 +7151,8 @@ difference(collection_mutation_view_description a, collection_mutation_view_desc
     if (a.tomb > b.tomb) {
         diff.tomb = a.tomb;
     }
-
     return diff;
 }
-
 collection_mutation difference(const abstract_type& type, collection_mutation_view a, collection_mutation_view b)
 {
     return a.with_deserialized(type, [&] (collection_mutation_view_description a_view) {
@@ -8179,30 +7171,25 @@ collection_mutation difference(const abstract_type& type, collection_mutation_vi
         });
     });
 }
-
 template <typename F>
 requires std::is_invocable_r_v<std::pair<bytes_view, atomic_cell_view>, F, collection_mutation_input_stream&>
 static collection_mutation_view_description
 deserialize_collection_mutation(collection_mutation_input_stream& in, F&& read_kv) {
     collection_mutation_view_description ret;
-
     auto has_tomb = in.read_trivial<uint8_t>();
     if (has_tomb) {
         auto ts = in.read_trivial<api::timestamp_type>();
         auto ttl = in.read_trivial<gc_clock::duration::rep>();
         ret.tomb = tombstone{ts, gc_clock::time_point(gc_clock::duration(ttl))};
     }
-
     auto nr = in.read_trivial<uint32_t>();
     ret.cells.reserve(nr);
     for (uint32_t i = 0; i != nr; ++i) {
         ret.cells.push_back(read_kv(in));
     }
-
     assert(in.empty());
     return ret;
 }
-
 collection_mutation_view_description
 deserialize_collection_mutation(const abstract_type& type, collection_mutation_input_stream& in) {
     return visit(type, make_visitor(
@@ -8232,21 +7219,11 @@ deserialize_collection_mutation(const abstract_type& type, collection_mutation_i
     }
     ));
 }
-/*
- * Copyright (C) 2021-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 caching_options::caching_options(sstring k, sstring r, bool enabled)
         : _key_cache(k), _row_cache(r), _enabled(enabled) {
     if ((k != "ALL") && (k != "NONE")) {
         throw exceptions::configuration_exception("Invalid key value: " + k); 
     }
-
     if ((r == "ALL") || (r == "NONE")) {
         return;
     } else {
@@ -8257,11 +7234,9 @@ caching_options::caching_options(sstring k, sstring r, bool enabled)
         }
     }
 }
-
 caching_options::caching_options()
         : _key_cache(default_key), _row_cache(default_row) {
 }
-
 std::map<sstring, sstring>
 caching_options::to_map() const {
     std::map<sstring, sstring> res = {{ "keys", _key_cache },
@@ -8271,23 +7246,19 @@ caching_options::to_map() const {
     }
     return res;
 }
-
 sstring
 caching_options::to_sstring() const {
     return rjson::print(rjson::from_string_map(to_map()));
 }
-
 caching_options
 caching_options::get_disabled_caching_options() {
     return caching_options("NONE", "NONE", false);
 }
-
 caching_options
 caching_options::from_map(const std::map<sstring, sstring>& map) {
     sstring k = default_key;
     sstring r = default_row;
     bool e = true;
-
     for (auto& p : map) {
         if (p.first == "keys") {
             k = p.second;
@@ -8301,24 +7272,12 @@ caching_options::from_map(const std::map<sstring, sstring>& map) {
     }
     return caching_options(k, r, e);
 }
-
 caching_options
 caching_options::from_sstring(const sstring& str) {
     return from_map(rjson::parse_to_map<std::map<sstring, sstring>>(str));
 }
-/*
- * Copyright (C) 2014-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 constexpr int32_t schema::NAME_LENGTH;
-
 extern logging::logger dblog;
-
 sstring to_sstring(column_kind k) {
     switch (k) {
     case column_kind::partition_key:  return "PARTITION_KEY";
@@ -8328,30 +7287,24 @@ sstring to_sstring(column_kind k) {
     }
     throw std::invalid_argument("unknown column kind");
 }
-
 bool is_compatible(column_kind k1, column_kind k2) {
     return k1 == k2;
 }
-
 column_mapping_entry::column_mapping_entry(bytes name, sstring type_name)
     : column_mapping_entry(std::move(name), db::marshal::type_parser::parse(type_name))
 {
 }
-
 column_mapping_entry::column_mapping_entry(const column_mapping_entry& o)
     : column_mapping_entry(o._name, o._type->name())
 {
 }
-
 column_mapping_entry& column_mapping_entry::operator=(const column_mapping_entry& o) {
     auto copy = o;
     return operator=(std::move(copy));
 }
-
 bool operator==(const column_mapping_entry& lhs, const column_mapping_entry& rhs) {
     return lhs.name() == rhs.name() && lhs.type() == rhs.type();
 }
-
 bool operator==(const column_mapping& lhs, const column_mapping& rhs) {
     const auto& lhs_columns = lhs.columns(), rhs_columns = rhs.columns();
     if (lhs_columns.size() != rhs_columns.size()) {
@@ -8365,7 +7318,6 @@ bool operator==(const column_mapping& lhs, const column_mapping& rhs) {
     }
     return true;
 }
-
 template<typename Sequence>
 std::vector<data_type>
 get_column_types(const Sequence& column_definitions) {
@@ -8375,11 +7327,9 @@ get_column_types(const Sequence& column_definitions) {
     }
     return result;
 }
-
 std::ostream& operator<<(std::ostream& out, const column_mapping& cm) {
     column_id n_static = cm.n_static();
     column_id n_regular = cm.columns().size() - n_static;
-
     auto pr_entry = [] (column_id i, const column_mapping_entry& e) {
         // Without schema we don't know if name is UTF8. If we had schema we could use
         // s->regular_column_name_type()->to_string(e.name()).
@@ -8392,17 +7342,14 @@ std::ostream& operator<<(std::ostream& out, const column_mapping& cm) {
                          boost::adaptors::transformed([&] (column_id i) { return pr_entry(i, cm.regular_column_at(i)); }), ", "));
     return out;
 }
-
 std::ostream& operator<<(std::ostream& os, ordinal_column_id id)
 {
     return os << static_cast<column_count_type>(id);
 }
-
 thread_local std::map<sstring, std::unique_ptr<dht::i_partitioner>> partitioners;
 thread_local std::map<std::pair<unsigned, unsigned>, std::unique_ptr<dht::sharder>> sharders;
 sstring default_partitioner_name = "org.apache.cassandra.dht.Murmur3Partitioner";
 unsigned default_partitioner_ignore_msb = 12;
-
 static const dht::i_partitioner& get_partitioner(const sstring& name) {
     auto it = partitioners.find(name);
     if (it == partitioners.end()) {
@@ -8411,12 +7358,10 @@ static const dht::i_partitioner& get_partitioner(const sstring& name) {
     }
     return *it->second;
 }
-
 void schema::set_default_partitioner(const sstring& class_name, unsigned ignore_msb) {
     default_partitioner_name = class_name;
     default_partitioner_ignore_msb = ignore_msb;
 }
-
 static const dht::sharder& get_sharder(unsigned shard_count, unsigned ignore_msb) {
     auto it = sharders.find({shard_count, ignore_msb});
     if (it == sharders.end()) {
@@ -8425,25 +7370,20 @@ static const dht::sharder& get_sharder(unsigned shard_count, unsigned ignore_msb
     }
     return *it->second;
 }
-
 const dht::i_partitioner& schema::get_partitioner() const {
     return _raw._partitioner.get();
 }
-
 const dht::sharder& schema::get_sharder() const {
     return _raw._sharder.get();
 }
-
 bool schema::has_custom_partitioner() const {
     return _raw._partitioner.get().name() != default_partitioner_name;
 }
-
 lw_shared_ptr<cql3::column_specification>
 schema::make_column_specification(const column_definition& def) const {
     auto id = ::make_shared<cql3::column_identifier>(def.name(), column_name_type(def));
     return make_lw_shared<cql3::column_specification>(_raw._ks_name, _raw._cf_name, std::move(id), def.type);
 }
-
 v3_columns::v3_columns(std::vector<column_definition> cols, bool is_dense, bool is_compound)
     : _is_dense(is_dense)
     , _is_compound(is_compound)
@@ -8453,11 +7393,9 @@ v3_columns::v3_columns(std::vector<column_definition> cols, bool is_dense, bool 
         _columns_by_name[def.name()] = &def;
     }
 }
-
 v3_columns v3_columns::from_v2_schema(const schema& s) {
     data_type static_column_name_type = utf8_type;
     std::vector<column_definition> cols;
-
     if (s.is_static_compact_table()) {
         if (s.has_static_columns()) {
             throw std::runtime_error(
@@ -8484,16 +7422,13 @@ v3_columns v3_columns::from_v2_schema(const schema& s) {
     } else {
         cols = s.all_columns();
     }
-
     for (column_definition& def : cols) {
         data_type name_type = def.is_static() ? static_column_name_type : utf8_type;
         auto id = ::make_shared<cql3::column_identifier>(def.name(), name_type);
         def.column_specification = make_lw_shared<cql3::column_specification>(s.ks_name(), s.cf_name(), std::move(id), def.type);
     }
-
     return v3_columns(std::move(cols), s.is_dense(), s.is_compound());
 }
-
 void v3_columns::apply_to(schema_builder& builder) const {
     if (is_static_compact()) {
         for (auto& c : _columns) {
@@ -8518,23 +7453,18 @@ void v3_columns::apply_to(schema_builder& builder) const {
         }
     }
 }
-
 bool v3_columns::is_static_compact() const {
     return !_is_dense && !_is_compound;
 }
-
 bool v3_columns::is_compact() const {
     return _is_dense || !_is_compound;
 }
-
 const std::unordered_map<bytes, const column_definition*>& v3_columns::columns_by_name() const {
     return _columns_by_name;
 }
-
 const std::vector<column_definition>& v3_columns::all_columns() const {
     return _columns;
 }
-
 void schema::rebuild() {
     _partition_key_type = make_lw_shared<compound_type<>>(get_column_types(partition_key_columns()));
     _clustering_key_type = make_lw_shared<compound_prefix>(get_column_types(clustering_key_columns()));
@@ -8542,11 +7472,9 @@ void schema::rebuild() {
     _regular_column_count = _raw._columns.size() - column_offset(column_kind::regular_column);
     _static_column_count = column_offset(column_kind::regular_column) - column_offset(column_kind::static_column);
     _columns_by_name.clear();
-
     for (const column_definition& def : all_columns()) {
         _columns_by_name[def.name()] = &def;
     }
-
     static_assert(row_column_ids_are_ordered_by_name::value, "row columns don't need to be ordered by name");
     if (!std::is_sorted(regular_columns().begin(), regular_columns().end(), column_definition::name_comparator(regular_column_name_type()))) {
         throw std::runtime_error("Regular columns should be sorted by name");
@@ -8554,7 +7482,6 @@ void schema::rebuild() {
     if (!std::is_sorted(static_columns().begin(), static_columns().end(), column_definition::name_comparator(static_column_name_type()))) {
         throw std::runtime_error("Static columns should be sorted by name");
     }
-
     {
         std::vector<column_mapping_entry> cm_columns;
         for (const column_definition& def : boost::range::join(static_columns(), regular_columns())) {
@@ -8562,10 +7489,8 @@ void schema::rebuild() {
         }
         _column_mapping = column_mapping(std::move(cm_columns), static_columns_count());
     }
-
     thrift()._compound = is_compound();
     thrift()._is_dynamic = clustering_key_size() > 0;
-
     if (is_counter()) {
         for (auto&& cdef : boost::range::join(static_columns(), regular_columns())) {
             if (!cdef.type->is_counter()) {
@@ -8579,21 +7504,17 @@ void schema::rebuild() {
             }
         }
     }
-
     _v3_columns = v3_columns::from_v2_schema(*this);
     _full_slice = make_shared<query::partition_slice>(partition_slice_builder(*this).build());
 }
-
 const column_mapping& schema::get_column_mapping() const {
     return _column_mapping;
 }
-
 schema::raw_schema::raw_schema(table_id id)
     : _id(id)
     , _partitioner(::get_partitioner(default_partitioner_name))
     , _sharder(::get_sharder(smp::count, default_partitioner_ignore_msb))
 { }
-
 schema::schema(private_tag, const raw_schema& raw, std::optional<raw_view_info> raw_view_info, const schema_static_props& props)
     : _raw(raw)
     , _static_props(props)
@@ -8602,7 +7523,6 @@ schema::schema(private_tag, const raw_schema& raw, std::optional<raw_view_info> 
             throw std::runtime_error(format("Column count limit ({:d}) overflowed: {:d}",
                                             std::numeric_limits<column_count_type>::max(), _raw._columns.size()));
         }
-
         auto& cols = _raw._columns;
         std::array<column_count_type, 4> count = { 0, 0, 0, 0 };
         auto i = cols.begin();
@@ -8630,28 +7550,23 @@ schema::schema(private_tag, const raw_schema& raw, std::optional<raw_view_info> 
             _raw._columns.begin()
                     + column_offset(column_kind::regular_column),
             _raw._columns.end(), column_definition::name_comparator(regular_column_name_type()));
-
     std::stable_sort(_raw._columns.begin(),
               _raw._columns.begin() + column_offset(column_kind::clustering_key),
               [] (auto x, auto y) { return x.id < y.id; });
     std::stable_sort(_raw._columns.begin() + column_offset(column_kind::clustering_key),
               _raw._columns.begin() + column_offset(column_kind::static_column),
               [] (auto x, auto y) { return x.id < y.id; });
-
     column_id id = 0;
     for (auto& def : _raw._columns) {
         def.column_specification = make_column_specification(def);
         assert(!def.id || def.id == id - column_offset(def.kind));
         def.ordinal_id = static_cast<ordinal_column_id>(id);
         def.id = id - column_offset(def.kind);
-
         auto dropped_at_it = _raw._dropped_columns.find(def.name_as_text());
         if (dropped_at_it != _raw._dropped_columns.end()) {
             def._dropped_at = std::max(def._dropped_at, dropped_at_it->second.timestamp);
         }
-
         def._thrift_bits = column_definition::thrift_bits();
-
         {
             // is_on_all_components
             // TODO : In origin, this predicate is "componentIndex == null", which is true in
@@ -8674,13 +7589,10 @@ schema::schema(private_tag, const raw_schema& raw, std::optional<raw_view_info> 
                 break;
             }
         }
-
         ++id;
     }
-
     rebuild();
 }
-
 schema::schema(const schema& o, const std::function<void(schema&)>& transform)
     : _raw(o._raw)
     , _static_props(o._static_props)
@@ -8691,15 +7603,12 @@ schema::schema(const schema& o, const std::function<void(schema&)>& transform)
     if (transform) {
         transform(*this);
     }
-
     rebuild();
 }
-
 schema::schema(const schema& o)
     : schema(o, {})
 {
 }
-
 schema::schema(reversed_tag, const schema& o)
     : schema(o, [] (schema& s) {
         s._raw._version = reversed(s._raw._version);
@@ -8711,7 +7620,6 @@ schema::schema(reversed_tag, const schema& o)
     })
 {
 }
-
 lw_shared_ptr<const schema> make_shared_schema(std::optional<table_id> id, std::string_view ks_name,
     std::string_view cf_name, std::vector<schema::column> partition_key, std::vector<schema::column> clustering_key,
     std::vector<schema::column> regular_columns, std::vector<schema::column> static_columns,
@@ -8732,18 +7640,15 @@ lw_shared_ptr<const schema> make_shared_schema(std::optional<table_id> id, std::
     builder.set_comment(comment);
     return builder.build();
 }
-
 schema::~schema() {
     if (_registry_entry) {
         _registry_entry->detach_schema();
     }
 }
-
 schema_registry_entry*
 schema::registry_entry() const noexcept {
     return _registry_entry;
 }
-
 sstring schema::thrift_key_validator() const {
     if (partition_key_size() == 1) {
         return partition_key_columns().begin()->type->name();
@@ -8755,14 +7660,12 @@ sstring schema::thrift_key_validator() const {
         return format("org.apache.cassandra.db.marshal.CompositeType({})", type_params);
     }
 }
-
 bool
 schema::has_multi_cell_collections() const {
     return boost::algorithm::any_of(all_columns(), [] (const column_definition& cdef) {
         return cdef.type->is_collection() && cdef.type->is_multi_cell();
     });
 }
-
 bool operator==(const schema& x, const schema& y)
 {
     return x._raw._id == y._raw._id
@@ -8798,11 +7701,7 @@ bool operator==(const schema& x, const schema& y)
         && x._raw._indices_by_name == y._raw._indices_by_name
         && x._raw._is_counter == y._raw._is_counter
         ;
-#if 0
-        && Objects.equal(triggers, other.triggers)
-#endif
 }
-
 index_metadata::index_metadata(const sstring& name,
                                const index_options_map& options,
                                index_metadata_kind kind,
@@ -8813,38 +7712,30 @@ index_metadata::index_metadata(const sstring& name,
     , _options{options}
     , _local{bool(local)}
 {}
-
 bool index_metadata::operator==(const index_metadata& other) const {
     return _id == other._id
            && _name == other._name
            && _kind == other._kind
            && _options == other._options;
 }
-
 bool index_metadata::equals_noname(const index_metadata& other) const {
     return _kind == other._kind && _options == other._options;
 }
-
 const table_id& index_metadata::id() const {
     return _id;
 }
-
 const sstring& index_metadata::name() const {
     return _name;
 }
-
 const index_metadata_kind index_metadata::kind() const {
     return _kind;
 }
-
 const index_options_map& index_metadata::options() const {
     return _options;
 }
-
 bool index_metadata::local() const {
     return _local;
 }
-
 sstring index_metadata::get_default_index_name(const sstring& cf_name,
                                                std::optional<sstring> root) {
     if (root) {
@@ -8861,7 +7752,6 @@ sstring index_metadata::get_default_index_name(const sstring& cf_name,
     }
     return cf_name + "_idx";
 }
-
 column_definition::column_definition(bytes name, data_type type, column_kind kind, column_id component_index, column_view_virtual is_view_virtual, column_computation_ptr computation, api::timestamp_type dropped_at)
         : _name(std::move(name))
         , _dropped_at(dropped_at)
@@ -8873,7 +7763,6 @@ column_definition::column_definition(bytes name, data_type type, column_kind kin
         , id(component_index)
         , kind(kind)
 {}
-
 std::ostream& operator<<(std::ostream& os, const column_definition& cd) {
     os << "ColumnDefinition{";
     os << "name=" << cd.name_as_text();
@@ -8890,7 +7779,6 @@ std::ostream& operator<<(std::ostream& os, const column_definition& cd) {
     os << "}";
     return os;
 }
-
 const column_definition*
 schema::get_column_definition(const bytes& name) const {
     auto i = _columns_by_name.find(name);
@@ -8899,12 +7787,10 @@ schema::get_column_definition(const bytes& name) const {
     }
     return i->second;
 }
-
 const column_definition&
 schema::column_at(column_kind kind, column_id id) const {
     return column_at(static_cast<ordinal_column_id>(column_offset(kind) + id));
 }
-
 const column_definition&
 schema::column_at(ordinal_column_id ordinal_id) const {
     if (size_t(ordinal_id) >= _raw._columns.size()) [[unlikely]] {
@@ -8913,7 +7799,6 @@ schema::column_at(ordinal_column_id ordinal_id) const {
     }
     return _raw._columns.at(static_cast<column_count_type>(ordinal_id));
 }
-
 std::ostream& operator<<(std::ostream& os, const schema& s) {
     os << "org.apache.cassandra.config.CFMetaData@" << &s << "[";
     os << "cfId=" << s._raw._id;
@@ -8997,7 +7882,6 @@ std::ostream& operator<<(std::ostream& os, const schema& s) {
     os << "]";
     return os;
 }
-
 static std::ostream& map_as_cql_param(std::ostream& os, const std::map<sstring, sstring>& map, bool first = true) {
     for (auto i: map) {
         if (first) {
@@ -9007,54 +7891,42 @@ static std::ostream& map_as_cql_param(std::ostream& os, const std::map<sstring, 
         }
         os << "'" << i.first << "': '" << i.second << "'";
     }
-
     return os;
 }
-
 static std::ostream& column_definition_as_cql_key(std::ostream& os, const column_definition & cd) {
     os << cd.name_as_cql_string();
     os << " " << cd.type->cql3_type_name();
-
     if (cd.kind == column_kind::static_column) {
         os << " STATIC";
     }
     return os;
 }
-
 static bool is_global_index(replica::database& db, const table_id& id, const schema& s) {
     return false;
 }
-
 static bool is_index(replica::database& db, const table_id& id, const schema& s) {
     return false;
 }
-
 sstring schema::element_type(replica::database& db) const {
     return "table";
 }
-
 std::ostream& schema::describe(replica::database& db, std::ostream& os, bool with_internals) const {
     return os;
 }
-
 const sstring&
 column_definition::name_as_text() const {
     return column_specification->name->text();
 }
-
 const bytes&
 column_definition::name() const {
     return _name;
 }
-
 sstring column_definition::name_as_cql_string() const {
     return cql3::util::maybe_quote(name_as_text());
 }
-
 bool column_definition::is_on_all_components() const {
     return _thrift_bits.is_on_all_components;
 }
-
 bool operator==(const column_definition& x, const column_definition& y)
 {
     return x._name == y._name
@@ -9063,37 +7935,29 @@ bool operator==(const column_definition& x, const column_definition& y)
         && x.kind == y.kind
         && x._dropped_at == y._dropped_at;
 }
-
 // Based on org.apache.cassandra.config.CFMetaData#generateLegacyCfId
 table_id
 generate_legacy_id(const sstring& ks_name, const sstring& cf_name) {
     return table_id(utils::UUID_gen::get_name_UUID(ks_name + cf_name));
 }
-
 bool thrift_schema::has_compound_comparator() const {
     return _compound;
 }
-
 bool thrift_schema::is_dynamic() const {
     return _is_dynamic;
 }
-
 schema_builder& schema_builder::set_compaction_strategy_options(std::map<sstring, sstring>&& options) {
     _raw._compaction_strategy_options = std::move(options);
     return *this;
 }
-
 schema_builder& schema_builder::with_partitioner(sstring name) {
     _raw._partitioner = get_partitioner(name);
     return *this;
 }
-
 schema_builder& schema_builder::with_sharder(unsigned shard_count, unsigned sharding_ignore_msb_bits) {
     _raw._sharder = get_sharder(shard_count, sharding_ignore_msb_bits);
     return *this;
 }
-
-
 schema_builder::schema_builder(std::string_view ks_name, std::string_view cf_name,
         std::optional<table_id> id, data_type rct)
         : _raw(id ? *id : table_id(utils::UUID_gen::get_time_UUID()))
@@ -9118,12 +7982,10 @@ schema_builder::schema_builder(std::string_view ks_name, std::string_view cf_nam
     _raw._cf_name = sstring(cf_name);
     _raw._regular_column_name_type = rct;
 }
-
 schema_builder::schema_builder(const schema_ptr s)
     : schema_builder(s->_raw)
 {
 }
-
 schema_builder::schema_builder(const schema::raw_schema& raw)
     : _raw(raw)
 {
@@ -9135,7 +7997,6 @@ schema_builder::schema_builder(const schema::raw_schema& raw)
             def.ordinal_id = static_cast<ordinal_column_id>(0);
     }
 }
-
 schema_builder::schema_builder(
         std::optional<table_id> id,
         std::string_view ks_name,
@@ -9161,7 +8022,6 @@ schema_builder::schema_builder(
     }
     set_comment(comment);
 }
-
 column_definition& schema_builder::find_column(const cql3::column_identifier& c) {
     auto i = std::find_if(_raw._columns.begin(), _raw._columns.end(), [c](auto& p) {
         return p.name() == c.name();
@@ -9171,23 +8031,19 @@ column_definition& schema_builder::find_column(const cql3::column_identifier& c)
     }
     throw std::invalid_argument(format("No such column {}", c.name()));
 }
-
 bool schema_builder::has_column(const cql3::column_identifier& c) {
     auto i = std::find_if(_raw._columns.begin(), _raw._columns.end(), [c](auto& p) {
         return p.name() == c.name();
      });
     return i != _raw._columns.end();
 }
-
 schema_builder& schema_builder::with_column_ordered(const column_definition& c) {
     return with_column(bytes(c.name()), data_type(c.type), column_kind(c.kind), c.position(), c.view_virtual(), c.get_computation_ptr());
 }
-
 schema_builder& schema_builder::with_column(bytes name, data_type type, column_kind kind, column_view_virtual is_view_virtual) {
     // component_index will be determined by schema cosntructor
     return with_column(name, type, kind, 0, is_view_virtual);
 }
-
 schema_builder& schema_builder::with_column(bytes name, data_type type, column_kind kind, column_id component_index, column_view_virtual is_view_virtual, column_computation_ptr computation) {
     _raw._columns.emplace_back(name, type, kind, component_index, is_view_virtual, std::move(computation));
     if (type->is_multi_cell()) {
@@ -9197,11 +8053,9 @@ schema_builder& schema_builder::with_column(bytes name, data_type type, column_k
 	}
     return *this;
 }
-
 schema_builder& schema_builder::with_computed_column(bytes name, data_type type, column_kind kind, column_computation_ptr computation) {
     return with_column(name, type, kind, 0, column_view_virtual::no, std::move(computation));
 }
-
 schema_builder& schema_builder::remove_column(bytes name)
 {
     auto it = boost::range::find_if(_raw._columns, [&] (auto& column) {
@@ -9215,11 +8069,9 @@ schema_builder& schema_builder::remove_column(bytes name)
     _raw._columns.erase(it);
     return *this;
 }
-
 schema_builder& schema_builder::without_column(sstring name, api::timestamp_type timestamp) {
     return without_column(std::move(name), bytes_type, timestamp);
 }
-
 schema_builder& schema_builder::without_column(sstring name, data_type type, api::timestamp_type timestamp)
 {
     auto ret = _raw._dropped_columns.emplace(name, schema::dropped_column{type, timestamp});
@@ -9229,7 +8081,6 @@ schema_builder& schema_builder::without_column(sstring name, data_type type, api
     }
     return *this;
 }
-
 schema_builder& schema_builder::rename_column(bytes from, bytes to)
 {
     auto it = std::find_if(_raw._columns.begin(), _raw._columns.end(), [&] (auto& col) {
@@ -9241,13 +8092,11 @@ schema_builder& schema_builder::rename_column(bytes from, bytes to)
     _raw._columns.erase(it);
     return with_column_ordered(new_def);
 }
-
 schema_builder& schema_builder::alter_column_type(bytes name, data_type new_type)
 {
     auto it = boost::find_if(_raw._columns, [&name] (auto& c) { return c.name() == name; });
     assert(it != _raw._columns.end());
     it->type = new_type;
-
     if (new_type->is_multi_cell()) {
         auto c_it = _raw._collections.find(name);
         assert(c_it != _raw._collections.end());
@@ -9255,46 +8104,37 @@ schema_builder& schema_builder::alter_column_type(bytes name, data_type new_type
     }
     return *this;
 }
-
 schema_builder& schema_builder::mark_column_computed(bytes name, column_computation_ptr computation) {
     auto it = boost::find_if(_raw._columns, [&name] (const column_definition& c) { return c.name() == name; });
     assert(it != _raw._columns.end());
     it->set_computed(std::move(computation));
-
     return *this;
 }
-
 schema_builder& schema_builder::with_collection(bytes name, data_type type)
 {
     _raw._collections.emplace(name, type);
     return *this;
 }
-
 schema_builder& schema_builder::with(compact_storage cs) {
     _compact_storage = cs;
     return *this;
 }
-
 schema_builder& schema_builder::with_version(table_schema_version v) {
     _version = v;
     return *this;
 }
-
 static const sstring default_partition_key_name = "key";
 static const sstring default_clustering_name = "column";
 static const sstring default_compact_value_name = "value";
-
 schema_builder::default_names::default_names(const schema_builder& builder)
     : default_names(builder._raw)
 {}
-
 schema_builder::default_names::default_names(const schema::raw_schema& raw)
     : _raw(raw)
     , _partition_index(0)
     , _clustering_index(1)
     , _compact_index(0)
 {}
-
 sstring schema_builder::default_names::unique_name(const sstring& base, size_t& idx, size_t off) const {
     for (;;) {
         auto candidate = idx == 0 ? base : base + std::to_string(idx + off);
@@ -9307,35 +8147,28 @@ sstring schema_builder::default_names::unique_name(const sstring& base, size_t& 
         }
     }
 }
-
 sstring schema_builder::default_names::partition_key_name() {
     // For compatibility sake, we call the first alias 'key' rather than 'key1'. This
     // is inconsistent with column alias, but it's probably not worth risking breaking compatibility now.
     return unique_name(default_partition_key_name, _partition_index, 1);
 }
-
 sstring schema_builder::default_names::clustering_name() {
     return unique_name(default_clustering_name, _clustering_index, 0);
 }
-
 sstring schema_builder::default_names::compact_value_name() {
     return unique_name(default_compact_value_name, _compact_index, 0);
 }
-
 void schema_builder::prepare_dense_schema(schema::raw_schema& raw) {
     auto is_dense = raw._is_dense;
     auto is_compound = raw._is_compound;
     auto is_compact_table = is_dense || !is_compound;
-
     if (is_compact_table) {
         auto count_kind = [&raw](column_kind kind) {
             return std::count_if(raw._columns.begin(), raw._columns.end(), [kind](const column_definition& c) {
                 return c.kind == kind;
             });
         };
-
         default_names names(raw);
-
         if (is_dense) {
             auto regular_cols = count_kind(column_kind::regular_column);
             // In Origin, dense CFs always have at least one regular column
@@ -9351,46 +8184,37 @@ void schema_builder::prepare_dense_schema(schema::raw_schema& raw) {
         }
     }
 }
-
 schema_builder& schema_builder::with_view_info(table_id base_id, sstring base_name, bool include_all_columns, sstring where_clause) {
     return *this;
 }
-
 schema_builder& schema_builder::with_index(const index_metadata& im) {
     _raw._indices_by_name.emplace(im.name(), im);
     return *this;
 }
-
 schema_builder& schema_builder::without_index(const sstring& name) {
     if (_raw._indices_by_name.contains(name)) {
         _raw._indices_by_name.erase(name);
     }
     return *this;
 }
-
 schema_builder& schema_builder::without_indexes() {
     _raw._indices_by_name.clear();
     return *this;
 }
-
 schema_ptr schema_builder::build() {
     schema::raw_schema new_raw = _raw; // Copy so that build() remains idempotent.
-
     schema_static_props static_props{};
     for (const auto& c: static_configurators()) {
         c(new_raw._ks_name, new_raw._cf_name, static_props);
     }
-
     if (_version) {
         new_raw._version = *_version;
     } else {
         new_raw._version = table_schema_version(utils::UUID_gen::get_time_UUID());
     }
-
     if (new_raw._is_counter) {
         new_raw._default_validation_class = counter_type;
     }
-
     if (_compact_storage) {
         // Dense means that no part of the comparator stores a CQL column name. This means
         // COMPACT STORAGE with at least one columnAliases (otherwise it's a thrift "static" CF).
@@ -9398,7 +8222,6 @@ schema_ptr schema_builder::build() {
             return col.kind == column_kind::clustering_key;
         });
         new_raw._is_dense = (*_compact_storage == compact_storage::yes) && (clustering_key_size > 0);
-
         if (clustering_key_size == 0) {
             if (*_compact_storage == compact_storage::yes) {
                 new_raw._is_compound = false;
@@ -9413,78 +8236,62 @@ schema_ptr schema_builder::build() {
             }
         }
     }
-
     prepare_dense_schema(new_raw);
-
     // cache `paxos_grace_seconds` value for fast access through the schema object, which is immutable
     if (auto it = new_raw._extensions.find(db::paxos_grace_seconds_extension::NAME); it != new_raw._extensions.end()) {
         new_raw._paxos_grace_seconds =
             dynamic_pointer_cast<db::paxos_grace_seconds_extension>(it->second)->get_paxos_grace_seconds();
     }
-
     // cache the `per_partition_rate_limit` parameters for fast access through the schema object.
     if (auto it = new_raw._extensions.find(db::per_partition_rate_limit_extension::NAME); it != new_raw._extensions.end()) {
         new_raw._per_partition_rate_limit_options =
             dynamic_pointer_cast<db::per_partition_rate_limit_extension>(it->second)->get_options();
     }
-
     if (static_props.use_null_sharder) {
         new_raw._sharder = get_sharder(1, 0);
     }
-
     return make_lw_shared<schema>(schema::private_tag{}, new_raw, _view_info, static_props);
 }
-
 auto schema_builder::static_configurators() -> std::vector<static_configurator>& {
     static std::vector<static_configurator> result{};
     return result;
 }
-
 int schema_builder::register_static_configurator(static_configurator&& configurator) {
     static_configurators().push_back(std::move(configurator));
     return 0;
 }
-
 const cdc::options& schema::cdc_options() const {
     static const cdc::options default_cdc_options;
     const auto& schema_extensions = _raw._extensions;
-
     if (auto it = schema_extensions.find(cdc::cdc_extension::NAME); it != schema_extensions.end()) {
         return dynamic_pointer_cast<cdc::cdc_extension>(it->second)->get_options();
     }
     return default_cdc_options;
 }
-
 const ::tombstone_gc_options& schema::tombstone_gc_options() const {
     static const ::tombstone_gc_options default_tombstone_gc_options;
     const auto& schema_extensions = _raw._extensions;
-
     if (auto it = schema_extensions.find(tombstone_gc_extension::NAME); it != schema_extensions.end()) {
         return dynamic_pointer_cast<tombstone_gc_extension>(it->second)->get_options();
     }
     return default_tombstone_gc_options;
 }
-
 schema_builder& schema_builder::with_cdc_options(const cdc::options& opts) {
     add_extension(cdc::cdc_extension::NAME, ::make_shared<cdc::cdc_extension>(opts));
     return *this;
 }
-
 schema_builder& schema_builder::with_tombstone_gc_options(const tombstone_gc_options& opts) {
     add_extension(tombstone_gc_extension::NAME, ::make_shared<tombstone_gc_extension>(opts));
     return *this;
 }
-
 schema_builder& schema_builder::with_per_partition_rate_limit_options(const db::per_partition_rate_limit_options& opts) {
     add_extension(db::per_partition_rate_limit_extension::NAME, ::make_shared<db::per_partition_rate_limit_extension>(opts));
     return *this;
 }
-
 schema_builder& schema_builder::set_paxos_grace_seconds(int32_t seconds) {
     add_extension(db::paxos_grace_seconds_extension::NAME, ::make_shared<db::paxos_grace_seconds_extension>(seconds));
     return *this;
 }
-
 gc_clock::duration schema::paxos_grace_seconds() const {
     return std::chrono::duration_cast<gc_clock::duration>(
         std::chrono::seconds(
@@ -9492,31 +8299,24 @@ gc_clock::duration schema::paxos_grace_seconds() const {
         )
     );
 }
-
 schema_ptr schema_builder::build(compact_storage cp) {
     return with(cp).build();
 }
-
 // Useful functions to manipulate the schema's comparator field
 namespace cell_comparator {
-
 static constexpr auto _composite_str = "org.apache.cassandra.db.marshal.CompositeType";
 static constexpr auto _collection_str = "org.apache.cassandra.db.marshal.ColumnToCollectionType";
-
 static sstring compound_name(const schema& s) {
     sstring compound(_composite_str);
-
     compound += "(";
     if (s.clustering_key_size()) {
         for (auto &t : s.clustering_key_columns()) {
             compound += t.type->name() + ",";
         }
     }
-
     if (!s.is_dense()) {
         compound += s.regular_column_name_type()->name() + ",";
     }
-
     if (!s.collections().empty()) {
         compound += _collection_str;
         compound += "(";
@@ -9530,7 +8330,6 @@ static sstring compound_name(const schema& s) {
     compound.back() = ')';
     return compound;
 }
-
 sstring to_sstring(const schema& s) {
     if (s.is_compound()) {
         return compound_name(s);
@@ -9541,17 +8340,14 @@ sstring to_sstring(const schema& s) {
         return s.regular_column_name_type()->name();
     }
 }
-
 bool check_compound(sstring comparator) {
     static sstring compound(_composite_str);
     return comparator.compare(0, compound.size(), compound) == 0;
 }
-
 void read_collections(schema_builder& builder, sstring comparator)
 {
     // The format of collection entries in the comparator is:
     // org.apache.cassandra.db.marshal.ColumnToCollectionType(<name1>:<type1>, ...)
-
     auto find_closing_parenthesis = [] (sstring_view str, size_t start) {
         auto pos = start;
         auto nest_level = 0;
@@ -9569,9 +8365,7 @@ void read_collections(schema_builder& builder, sstring comparator)
         } while (nest_level > 0);
         return pos - 1;
     };
-
     auto collection_str_length = strlen(_collection_str);
-
     auto pos = comparator.find(_collection_str);
     if (pos == sstring::npos) {
         return;
@@ -9583,20 +8377,15 @@ void read_collections(schema_builder& builder, sstring comparator)
             throw marshal_exception("read_collections - open parenthesis not found");
         }
         end = find_closing_parenthesis(comparator, end) + 1;
-
         auto colon = comparator.find(':', pos);
         if (colon == sstring::npos || colon > end) {
             throw marshal_exception("read_collections - colon not found");
         }
-
         auto name = from_hex(sstring_view(comparator.c_str() + pos, colon - pos));
-
         colon++;
         auto type_str = sstring_view(comparator.c_str() + colon, end - colon);
         auto type = db::marshal::type_parser::parse(type_str);
-
         builder.with_collection(name, type);
-
         if (end < comparator.size() && comparator[end] == ',') {
             pos = end + 1;
         } else if (end < comparator.size() && comparator[end] == ')') {
@@ -9606,19 +8395,15 @@ void read_collections(schema_builder& builder, sstring comparator)
         }
     }
 }
-
 }
-
 schema::const_iterator
 schema::regular_begin() const {
     return regular_columns().begin();
 }
-
 schema::const_iterator
 schema::regular_end() const {
     return regular_columns().end();
 }
-
 struct column_less_comparator {
     bool operator()(const column_definition& def, const bytes& name) {
         return def.name() < name;
@@ -9627,32 +8412,26 @@ struct column_less_comparator {
         return name < def.name();
     }
 };
-
 schema::const_iterator
 schema::regular_lower_bound(const bytes& name) const {
     return boost::lower_bound(regular_columns(), name, column_less_comparator());
 }
-
 schema::const_iterator
 schema::regular_upper_bound(const bytes& name) const {
     return boost::upper_bound(regular_columns(), name, column_less_comparator());
 }
-
 schema::const_iterator
 schema::static_begin() const {
     return static_columns().begin();
 }
-
 schema::const_iterator
 schema::static_end() const {
     return static_columns().end();
 }
-
 schema::const_iterator
 schema::static_lower_bound(const bytes& name) const {
     return boost::lower_bound(static_columns(), name, column_less_comparator());
 }
-
 schema::const_iterator
 schema::static_upper_bound(const bytes& name) const {
     return boost::upper_bound(static_columns(), name, column_less_comparator());
@@ -9664,12 +8443,10 @@ schema::column_name_type(const column_definition& def, const data_type& regular_
     }
     return utf8_type;
 }
-
 data_type
 schema::column_name_type(const column_definition& def) const {
     return column_name_type(def, _raw._regular_column_name_type);
 }
-
 const column_definition&
 schema::regular_column_at(column_id id) const {
     if (id >= regular_columns_count()) {
@@ -9678,7 +8455,6 @@ schema::regular_column_at(column_id id) const {
     }
     return _raw._columns.at(column_offset(column_kind::regular_column) + id);
 }
-
 const column_definition&
 schema::clustering_column_at(column_id id) const {
     if (id >= clustering_key_size()) {
@@ -9687,7 +8463,6 @@ schema::clustering_column_at(column_id id) const {
     }
     return _raw._columns.at(column_offset(column_kind::clustering_key) + id);
 }
-
 const column_definition&
 schema::static_column_at(column_id id) const {
     if (id >= static_columns_count()) {
@@ -9696,17 +8471,14 @@ schema::static_column_at(column_id id) const {
     }
     return _raw._columns.at(column_offset(column_kind::static_column) + id);
 }
-
 bool
 schema::is_last_partition_key(const column_definition& def) const {
     return &_raw._columns.at(partition_key_size() - 1) == &def;
 }
-
 bool
 schema::has_static_columns() const {
     return !static_columns().empty();
 }
-
 column_count_type
 schema::columns_count(column_kind kind) const {
     switch (kind) {
@@ -9726,31 +8498,26 @@ column_count_type
 schema::partition_key_size() const {
     return column_offset(column_kind::clustering_key);
 }
-
 schema::const_iterator_range_type
 schema::partition_key_columns() const {
     return boost::make_iterator_range(_raw._columns.begin() + column_offset(column_kind::partition_key)
             , _raw._columns.begin() + column_offset(column_kind::clustering_key));
 }
-
 schema::const_iterator_range_type
 schema::clustering_key_columns() const {
     return boost::make_iterator_range(_raw._columns.begin() + column_offset(column_kind::clustering_key)
             , _raw._columns.begin() + column_offset(column_kind::static_column));
 }
-
 schema::const_iterator_range_type
 schema::static_columns() const {
     return boost::make_iterator_range(_raw._columns.begin() + column_offset(column_kind::static_column)
             , _raw._columns.begin() + column_offset(column_kind::regular_column));
 }
-
 schema::const_iterator_range_type
 schema::regular_columns() const {
     return boost::make_iterator_range(_raw._columns.begin() + column_offset(column_kind::regular_column)
             , _raw._columns.end());
 }
-
 schema::const_iterator_range_type
 schema::columns(column_kind kind) const {
     switch (kind) {
@@ -9765,7 +8532,6 @@ schema::columns(column_kind kind) const {
     }
     throw std::invalid_argument(std::to_string(int(kind)));
 }
-
 schema::select_order_range schema::all_columns_in_select_order() const {
     auto is_static_compact_table = this->is_static_compact_table();
     auto no_non_pk_columns = is_compact_table()
@@ -9784,7 +8550,6 @@ schema::select_order_range schema::all_columns_in_select_order() const {
                                         : const_iterator_range_type(static_columns().begin(), all_columns().end());
     return boost::range::join(pk_range, ck_v_range);
 }
-
 uint32_t
 schema::position(const column_definition& column) const {
     if (column.is_primary_key()) {
@@ -9792,7 +8557,6 @@ schema::position(const column_definition& column) const {
     }
     return clustering_key_size();
 }
-
 std::optional<index_metadata> schema::find_index_noname(const index_metadata& target) const {
     const auto& it = boost::find_if(_raw._indices_by_name, [&] (auto&& e) {
         return e.second.equals_noname(target);
@@ -9802,52 +8566,41 @@ std::optional<index_metadata> schema::find_index_noname(const index_metadata& ta
     }
     return {};
 }
-
 std::vector<index_metadata> schema::indices() const {
     return boost::copy_range<std::vector<index_metadata>>(_raw._indices_by_name | boost::adaptors::map_values);
 }
-
 const std::unordered_map<sstring, index_metadata>& schema::all_indices() const {
     return _raw._indices_by_name;
 }
-
 bool schema::has_index(const sstring& index_name) const {
     return _raw._indices_by_name.contains(index_name);
 }
-
 std::vector<sstring> schema::index_names() const {
     return boost::copy_range<std::vector<sstring>>(_raw._indices_by_name | boost::adaptors::map_keys);
 }
-
 data_type schema::make_legacy_default_validator() const {
     return _raw._default_validation_class;
 }
-
 bool schema::is_synced() const {
     return _registry_entry && _registry_entry->is_synced();
 }
-
 bool schema::equal_columns(const schema& other) const {
     return boost::equal(all_columns(), other.all_columns());
 }
-
 schema_ptr schema::make_reversed() const {
     return make_lw_shared<schema>(schema::reversed_tag{}, *this);
 }
-
 schema_ptr schema::get_reversed() const {
     return local_schema_registry().get_or_load(reversed(_raw._version), [this] (table_schema_version) {
         return frozen_schema(make_reversed());
     });
 }
-
 raw_view_info::raw_view_info(table_id base_id, sstring base_name, bool include_all_columns, sstring where_clause)
         : _base_id(std::move(base_id))
         , _base_name(std::move(base_name))
         , _include_all_columns(include_all_columns)
         , _where_clause(where_clause)
 { }
-
 column_computation_ptr column_computation::deserialize(bytes_view raw) {
     rjson::value parsed = rjson::parse(std::string_view(reinterpret_cast<const char*>(raw.begin()), reinterpret_cast<const char*>(raw.end())));
     if (!parsed.IsObject()) {
@@ -9866,7 +8619,6 @@ column_computation_ptr column_computation::deserialize(bytes_view raw) {
     }
     if (type.starts_with("collection_")) {
         const rjson::value* collection_name = rjson::find(parsed, "collection_name");
-
         if (collection_name && collection_name->IsString()) {
             auto collection = rjson::to_string_view(*collection_name);
             auto collection_as_bytes = bytes(collection.begin(), collection.end());
@@ -9877,28 +8629,23 @@ column_computation_ptr column_computation::deserialize(bytes_view raw) {
     }
     throw std::runtime_error(format("Incorrect column computation type {} found when parsing {}", *type_json, parsed));
 }
-
 bytes legacy_token_column_computation::serialize() const {
     rjson::value serialized = rjson::empty_object();
     rjson::add(serialized, "type", rjson::from_string("token"));
     return to_bytes(rjson::print(serialized));
 }
-
 bytes legacy_token_column_computation::compute_value(const schema& schema, const partition_key& key) const {
     return {dht::get_token(schema, key).data()};
 }
-
 bytes token_column_computation::serialize() const {
     rjson::value serialized = rjson::empty_object();
     rjson::add(serialized, "type", rjson::from_string("token_v2"));
     return to_bytes(rjson::print(serialized));
 }
-
 bytes token_column_computation::compute_value(const schema& schema, const partition_key& key) const {
     auto long_value = dht::token::to_int64(dht::get_token(schema, key));
     return long_type->decompose(long_value);
 }
-
 bytes collection_column_computation::serialize() const {
     rjson::value serialized = rjson::empty_object();
     const char* type = nullptr;
@@ -9917,7 +8664,6 @@ bytes collection_column_computation::serialize() const {
     rjson::add(serialized, "collection_name", rjson::from_string(to_sstring_view(_collection_name)));
     return to_bytes(rjson::print(serialized));
 }
-
 column_computation_ptr collection_column_computation::for_target_type(std::string_view type, const bytes& collection_name) {
     if (type == "collection_keys") {
         return collection_column_computation::for_keys(collection_name).clone();
@@ -9930,15 +8676,11 @@ column_computation_ptr collection_column_computation::for_target_type(std::strin
     }
     return {};
 }
-
 void collection_column_computation::operate_on_collection_entries(
         std::invocable<collection_kv*, collection_kv*, tombstone> auto&& old_and_new_row_func, const schema& schema,
         const partition_key& key, const db::view::clustering_or_static_row& update, const std::optional<db::view::clustering_or_static_row>& existing) const {
-
     const column_definition* cdef = schema.get_column_definition(_collection_name);
-
     decltype(collection_mutation_view_description::cells) update_cells, existing_cells;
-
     const auto* update_cell = update.cells().find_cell(cdef->id);
     tombstone update_tombstone = update.tomb().tomb();
     if (update_cell) {
@@ -9957,15 +8699,12 @@ void collection_column_computation::operate_on_collection_entries(
             });
         }
     }
-
     auto compare = [](const collection_kv& p1, const collection_kv& p2) {
         return p1.first <=> p2.first;
     };
-
     // Both collections are assumed to be sorted by the keys.
     auto existing_it = existing_cells.begin();
     auto update_it = update_cells.begin();
-
     auto is_existing_end = [&] {
         return existing_it == existing_cells.end();
     };
@@ -9981,14 +8720,12 @@ void collection_column_computation::operate_on_collection_entries(
             }
             return compare(*existing_it, *update_it);
         }();
-
         auto existing_ptr = [&] () -> collection_kv* {
             return (!is_existing_end() && cmp <= 0) ? &*existing_it : nullptr;
         };
         auto update_ptr = [&] () -> collection_kv* {
             return (!is_update_end() && cmp >= 0) ? &*update_it : nullptr;
         };
-
         old_and_new_row_func(existing_ptr(), update_ptr(), update_tombstone);
         if (cmp <= 0) {
             ++existing_it;
@@ -9998,11 +8735,9 @@ void collection_column_computation::operate_on_collection_entries(
         }
     }
 }
-
 bytes collection_column_computation::compute_value(const schema&, const partition_key&) const {
     throw std::runtime_error(fmt::format("{}: not supported", __PRETTY_FUNCTION__));
 }
-
 std::vector<db::view::view_key_and_action> collection_column_computation::compute_values_with_action(const schema& schema, const partition_key& key,
         const db::view::clustering_or_static_row& update, const std::optional<db::view::clustering_or_static_row>& existing) const {
     using collection_kv = std::pair<bytes_view, atomic_cell_view>;
@@ -10020,13 +8755,10 @@ std::vector<db::view::view_key_and_action> collection_column_computation::comput
         }
         std::abort(); // compiler will error
     };
-
     std::vector<db::view::view_key_and_action> ret;
-
     auto compute_row_marker = [] (auto&& cell) -> row_marker {
         return cell.is_live_and_has_ttl() ? row_marker(cell.timestamp(), cell.ttl(), cell.expiry()) : row_marker(cell.timestamp());
     };
-
     auto fn = [&ret, &compute_row_marker, &serialize_cell] (collection_kv* existing, collection_kv* update, tombstone tomb) {
         api::timestamp_type operation_ts = tomb.timestamp;
         if (existing && update && compare_atomic_cell_for_merge(existing->second, update->second) == 0) {
@@ -10049,59 +8781,25 @@ std::vector<db::view::view_key_and_action> collection_column_computation::comput
     return ret;
 }
 
-bool operator==(const raw_view_info& x, const raw_view_info& y) {
-    return x._base_id == y._base_id
-        && x._base_name == y._base_name
-        && x._include_all_columns == y._include_all_columns
-        && x._where_clause == y._where_clause;
-}
 
-std::ostream& operator<<(std::ostream& os, const raw_view_info& view) {
-    os << "ViewInfo{";
-    os << "baseTableId=" << view._base_id;
-    os << ", baseTableName=" << view._base_name;
-    os << ", includeAllColumns=" << view._include_all_columns;
-    os << ", whereClause=" << view._where_clause;
-    os << "}";
-    return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const view_ptr& view) {
-    return view ? os << *view : os << "null";
-}
 
 schema_mismatch_error::schema_mismatch_error(table_schema_version expected, const schema& access)
     : std::runtime_error(fmt::format("Attempted to deserialize schema-dependent object of version {} using {}.{} {}",
         expected, access.ks_name(), access.cf_name(), access.version()))
 { }
-/*
- * Copyright 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 static logging::logger slogger("schema_registry");
-
 static thread_local schema_registry registry;
-
 schema_version_not_found::schema_version_not_found(table_schema_version v)
         : std::runtime_error{format("Schema version {} not found", v)}
 { }
-
 schema_version_loading_failed::schema_version_loading_failed(table_schema_version v)
         : std::runtime_error{format("Failed to load schema version {}", v)}
 { }
-
 schema_registry_entry::~schema_registry_entry() {
     if (_schema) {
         _schema->_registry_entry = nullptr;
     }
 }
-
 schema_registry_entry::schema_registry_entry(table_schema_version v, schema_registry& r)
     : _state(state::INITIAL)
     , _version(v)
@@ -10118,13 +8816,10 @@ schema_registry_entry::schema_registry_entry(table_schema_version v, schema_regi
         }
     });
 }
-
 schema_registry::~schema_registry() = default;
-
 void schema_registry::init(const db::schema_ctxt& ctxt) {
     _ctxt = std::make_unique<db::schema_ctxt>(ctxt);
 }
-
 schema_ptr schema_registry::learn(const schema_ptr& s) {
     if (s->registry_entry()) {
         return std::move(s);
@@ -10139,7 +8834,6 @@ schema_ptr schema_registry::learn(const schema_ptr& s) {
     _entries.emplace(s->version(), e_ptr);
     return loaded_s;
 }
-
 schema_registry_entry& schema_registry::get_entry(table_schema_version v) const {
     auto i = _entries.find(v);
     if (i == _entries.end()) {
@@ -10151,19 +8845,15 @@ schema_registry_entry& schema_registry::get_entry(table_schema_version v) const 
     }
     return e;
 }
-
 schema_registry_entry::erase_clock::duration schema_registry::grace_period() const {
     return std::chrono::seconds(_ctxt->schema_registry_grace_period());
 }
-
 schema_ptr schema_registry::get(table_schema_version v) const {
     return get_entry(v).get_schema();
 }
-
 frozen_schema schema_registry::get_frozen(table_schema_version v) const {
     return get_entry(v).frozen();
 }
-
 future<schema_ptr> schema_registry::get_or_load(table_schema_version v, const async_schema_loader& loader) {
     auto i = _entries.find(v);
     if (i == _entries.end()) {
@@ -10178,7 +8868,6 @@ future<schema_ptr> schema_registry::get_or_load(table_schema_version v, const as
     }
     return make_ready_future<schema_ptr>(e.get_schema());
 }
-
 schema_ptr schema_registry::get_or_null(table_schema_version v) const {
     auto i = _entries.find(v);
     if (i == _entries.end()) {
@@ -10190,7 +8879,6 @@ schema_ptr schema_registry::get_or_null(table_schema_version v) const {
     }
     return e.get_schema();
 }
-
 schema_ptr schema_registry::get_or_load(table_schema_version v, const schema_loader& loader) {
     auto i = _entries.find(v);
     if (i == _entries.end()) {
@@ -10205,7 +8893,6 @@ schema_ptr schema_registry::get_or_load(table_schema_version v, const schema_loa
     }
     return e.get_schema();
 }
-
 schema_ptr schema_registry_entry::load(frozen_schema fs) {
     _frozen_schema = std::move(fs);
     auto s = get_schema();
@@ -10217,7 +8904,6 @@ schema_ptr schema_registry_entry::load(frozen_schema fs) {
     slogger.trace("Loaded {} = {}", _version, *s);
     return s;
 }
-
 future<schema_ptr> schema_registry_entry::start_loading(async_schema_loader loader) {
     _loader = std::move(loader);
     auto f = _loader(_version);
@@ -10245,7 +8931,6 @@ future<schema_ptr> schema_registry_entry::start_loading(async_schema_loader load
     });
     return sf;
 }
-
 schema_ptr schema_registry_entry::get_schema() {
     if (!_schema) {
         slogger.trace("Activating {}", _version);
@@ -10261,18 +8946,15 @@ schema_ptr schema_registry_entry::get_schema() {
         return _schema->shared_from_this();
     }
 }
-
 void schema_registry_entry::detach_schema() noexcept {
     slogger.trace("Deactivating {}", _version);
     _schema = nullptr;
     _erase_timer.arm(_registry.grace_period());
 }
-
 frozen_schema schema_registry_entry::frozen() const {
     assert(_state >= state::LOADED);
     return *_frozen_schema;
 }
-
 future<> schema_registry_entry::maybe_sync(std::function<future<>()> syncer) {
     switch (_sync_state) {
         case schema_registry_entry::sync_state::SYNCED:
@@ -10308,11 +8990,9 @@ future<> schema_registry_entry::maybe_sync(std::function<future<>()> syncer) {
     }
     abort();
 }
-
 bool schema_registry_entry::is_synced() const {
     return _sync_state == sync_state::SYNCED;
 }
-
 void schema_registry_entry::mark_synced() {
     if (_sync_state == sync_state::SYNCING) {
         _synced_promise.set_value();
@@ -10321,14 +9001,9 @@ void schema_registry_entry::mark_synced() {
     slogger.debug("Marked {} as synced", _version);
 }
 
-schema_registry& local_schema_registry() {
-    return registry;
-}
-
 global_schema_ptr::global_schema_ptr(const global_schema_ptr& o)
     : global_schema_ptr(o.get())
 { }
-
 global_schema_ptr::global_schema_ptr(global_schema_ptr&& o) noexcept {
     auto current = this_shard_id();
     assert(o._cpu_of_origin == current);
@@ -10336,7 +9011,6 @@ global_schema_ptr::global_schema_ptr(global_schema_ptr&& o) noexcept {
     _cpu_of_origin = current;
     _base_schema = std::move(o._base_schema);
 }
-
 schema_ptr global_schema_ptr::get() const {
     if (this_shard_id() == _cpu_of_origin) {
         return _ptr;
@@ -10350,7 +9024,6 @@ schema_ptr global_schema_ptr::get() const {
             }
             return ret;
         };
-
         schema_ptr registered_bs;
         // the following code contains registry entry dereference of a foreign shard
         // however, it is guarantied to succeed since we made sure in the constructor
@@ -10376,7 +9049,6 @@ schema_ptr global_schema_ptr::get() const {
         return s;
     }
 }
-
 global_schema_ptr::global_schema_ptr(const schema_ptr& ptr)
         : _cpu_of_origin(this_shard_id()) {
     // _ptr must always have an associated registry entry,
@@ -10391,7 +9063,6 @@ global_schema_ptr::global_schema_ptr(const schema_ptr& ptr)
             });
         }
     };
-
     schema_ptr s = ensure_registry_entry(ptr);
     if (s->is_view()) {
         if (s->view_info()->base_info()) {
@@ -10401,22 +9072,12 @@ global_schema_ptr::global_schema_ptr(const schema_ptr& ptr)
         } else {
             on_internal_error(slogger, format("Tried to build a global schema for view {}.{} with an uninitialized base info", s->ks_name(), s->cf_name()));
         }
-
         if (!s->view_info()->base_info() || !s->view_info()->base_info()->base_schema()->registry_entry()) {
             s->view_info()->set_base_info(s->view_info()->make_base_dependent_view_info(*_base_schema));
         }
     }
     _ptr = s;
 }
-/*
- * Copyright 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 frozen_schema::frozen_schema(const schema_ptr& s)
     : _data([&s] {
         schema_mutations sm = db::schema_tables::make_schema_mutations(s, api::new_timestamp(), true);
@@ -10428,7 +9089,6 @@ frozen_schema::frozen_schema(const schema_ptr& s)
         return out;
     }())
 { }
-
 schema_ptr frozen_schema::unfreeze(const db::schema_ctxt& ctxt) const {
     auto in = ser::as_input_stream(_data);
     auto sv = ser::deserialize(in, boost::type<ser::schema_view>());
@@ -10436,82 +9096,43 @@ schema_ptr frozen_schema::unfreeze(const db::schema_ctxt& ctxt) const {
          ? db::schema_tables::create_view_from_mutations(ctxt, sv.mutations(), sv.version())
          : db::schema_tables::create_table_from_mutations(ctxt, sv.mutations(), sv.version());
 }
-
 frozen_schema::frozen_schema(bytes_ostream b)
     : _data(std::move(b))
 { }
-
 const bytes_ostream& frozen_schema::representation() const
 {
     return _data;
 }
-/*
- * Copyright (C) 2020-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-#ifdef __x86_64__
 #define arch_target(name) [[gnu::target(name)]]
-#else
-#define arch_target(name)
-#endif
-
 namespace utils {
-
 arch_target("default") int array_search_gt_impl(int64_t val, const int64_t* array, const int capacity, const int size) {
     int i;
-
     for (i = 0; i < size; i++) {
         if (val < array[i])
             break;
     }
-
     return i;
 }
-
 static inline unsigned array_search_eq_impl(uint8_t val, const uint8_t* arr, unsigned len) {
     unsigned i;
-
     for (i = 0; i < len; i++) {
         if (arr[i] == val) {
             break;
         }
     }
-
     return i;
 }
-
 arch_target("default") unsigned array_search_16_eq_impl(uint8_t val, const uint8_t* arr) {
     return array_search_eq_impl(val, arr, 16);
 }
-
 arch_target("default") unsigned array_search_32_eq_impl(uint8_t val, const uint8_t* arr) {
     return array_search_eq_impl(val, arr, 32);
 }
-
 arch_target("default") unsigned array_search_x32_eq_impl(uint8_t val, const uint8_t* arr, int nr) {
     return array_search_eq_impl(val, arr, 32 * nr);
 }
-
-#ifdef __x86_64__
-
-/*
- * The AVX2 version doesn't take @size argument into account and expects
- * all the elements above it to be less than any possible value.
- *
- * To make it work without this requirement we'd need to:
- *  - limit the loop iterations to size instead of capacity
- *  - explicitly set to 1 all the mask's bits for elements >= size
- * both do make things up to 50% slower.
- */
-
 arch_target("avx2") int array_search_gt_impl(int64_t val, const int64_t* array, const int capacity, const int size) {
     int cnt = 0;
-
     // 0. Load key into 256-bit ymm
     __m256i k = _mm256_set1_epi64x(val);
     for (int i = 0; i < capacity; i += 4) {
@@ -10527,27 +9148,8 @@ arch_target("avx2") int array_search_gt_impl(int64_t val, const int64_t* array, 
                     )
                 ) / 8;
     }
-
-    /*
-     * 5. We need the index of the first gt value. Unused elements are < k
-     *    for sure, so count from the tail of the used part.
-     *
-     *   <grumble>
-     *    We might have done it the other way -- store the maximum in unused,
-     *    check for key >= array[i] in the above loop and just return the cnt,
-     *    but ...  AVX2 instructions set doesn't have the PCMPGE
-     *
-     *    SSE* set (predecessor) has cmpge, but eats 2 keys in one go
-     *    AVX-512 (successor) has it back, and even eats 8 keys, but is
-     *    not widely available
-     *   </grumble>
-     */
     return size - cnt;
 }
-
-/*
- * SSE4 version of searching in array for an exact match.
- */
 arch_target("sse") unsigned array_search_16_eq_impl(uint8_t val, const uint8_t* arr) {
 	auto a = _mm_set1_epi8(val);
 	auto b = _mm_lddqu_si128((__m128i*)arr);
@@ -10555,10 +9157,6 @@ arch_target("sse") unsigned array_search_16_eq_impl(uint8_t val, const uint8_t* 
 	unsigned int m = _mm_movemask_epi8(c);
 	return __builtin_ctz(m | 0x10000);
 }
-
-/*
- * AVX2 version of searching in array for an exact match.
- */
 arch_target("avx2") unsigned array_search_32_eq_impl(uint8_t val, const uint8_t* arr) {
     auto a = _mm256_set1_epi8(val);
     auto b = _mm256_lddqu_si256((__m256i*)arr);
@@ -10566,7 +9164,6 @@ arch_target("avx2") unsigned array_search_32_eq_impl(uint8_t val, const uint8_t*
     unsigned long long m = _mm256_movemask_epi8(c);
     return __builtin_ctzll(m | 0x100000000ull);
 }
-
 arch_target("avx2") unsigned array_search_x32_eq_impl(uint8_t val, const uint8_t* arr, int nr) {
     unsigned len = 32 * nr;
     auto a = _mm256_set1_epi8(val);
@@ -10580,36 +9177,19 @@ arch_target("avx2") unsigned array_search_x32_eq_impl(uint8_t val, const uint8_t
     }
     return len;
 }
-
-#endif
-
 int array_search_gt(int64_t val, const int64_t* array, const int capacity, const int size) {
     return array_search_gt_impl(val, array, capacity, size);
 }
-
 unsigned array_search_16_eq(uint8_t val, const uint8_t* arr) {
     return array_search_16_eq_impl(val, arr);
 }
-
 unsigned array_search_32_eq(uint8_t val, const uint8_t* array) {
     return array_search_32_eq_impl(val, array);
 }
-
 unsigned array_search_x32_eq(uint8_t val, const uint8_t* array, int nr) {
     return array_search_x32_eq_impl(val, array, nr);
 }
-
 }
-/*
- * Copyright 2019-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 // Arrays for quickly converting to and from an integer between 0 and 63,
 // and the character used in base64 encoding to represent it.
 static class base64_chars {
@@ -10628,7 +9208,6 @@ public:
         }
     }
 } base64_chars;
-
 std::string base64_encode(bytes_view in) {
     std::string ret;
     ret.reserve(((4 * in.size() / 3) + 3) & ~3);
@@ -10659,21 +9238,18 @@ std::string base64_encode(bytes_view in) {
     }
     return ret;
 }
-
 static size_t base64_padding_len(std::string_view str) {
     size_t padding = 0;
     padding += (!str.empty() && str.back() == '=');
     padding += (str.size() > 1 && *(str.end() - 2) == '=');
     return padding;
 }
-
 static void base64_trim_padding(std::string_view& str) {
     if (str.size() % 4 != 0) {
         throw std::invalid_argument(format("Base64 encoded length is expected a multiple of 4 bytes but found: {}", str.size()));
     }
     str.remove_suffix(base64_padding_len(str));
 }
-
 static std::string base64_decode_string(std::string_view in) {
     base64_trim_padding(in);
     int i = 0;
@@ -10702,7 +9278,6 @@ static std::string base64_decode_string(std::string_view in) {
     }
     return ret;
 }
-
 bytes base64_decode(std::string_view in) {
     // FIXME: This copy is sad. The problem is we need back "bytes"
     // but "bytes" doesn't have efficient append and std::string.
@@ -10710,11 +9285,9 @@ bytes base64_decode(std::string_view in) {
     std::string ret = base64_decode_string(in);
     return bytes(ret.begin(), ret.end());
 }
-
 size_t base64_decoded_len(std::string_view str) {
     return str.size() / 4 * 3 - base64_padding_len(str);
 }
-
 bool base64_begins_with(std::string_view base, std::string_view operand) {
     if (base.size() < operand.size() || base.size() % 4 != 0 || operand.size() % 4 != 0) {
         return false;
@@ -10732,20 +9305,7 @@ bool base64_begins_with(std::string_view base, std::string_view operand) {
     const std::string operand_remainder = base64_decode_string(operand.substr(operand.size() - 4));
     return base_remainder.starts_with(operand_remainder);
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
-
-
 using namespace std::chrono_literals;
-
 // For each aligned 8 byte segment, the algorithm used by address
 // sanitizer can represent any addressable prefix followd by a
 // poisoned suffix. The details are at:
@@ -10777,18 +9337,13 @@ void poison(const T* addr, size_t size) {
 void unpoison(const char *addr, size_t size) {
     ASAN_UNPOISON_MEMORY_REGION(addr, size);
 }
-
 namespace bi = boost::intrusive;
-
 standard_allocation_strategy standard_allocation_strategy_instance;
-
 namespace {
-
 class migrators_base {
 protected:
     std::vector<const migrate_fn_type*> _migrators;
 };
-
 class migrators : public migrators_base, public enable_lw_shared_from_this<migrators> {
 private:
     struct backtrace_entry {
@@ -10796,7 +9351,6 @@ private:
         saved_backtrace _deregistration;
     };
     std::vector<std::unique_ptr<backtrace_entry>> _backtraces;
-
     static logging::logger _logger;
 private:
     void on_error() { abort(); }
@@ -10838,9 +9392,7 @@ public:
         return _migrators[idx];
     }
 };
-
 logging::logger migrators::_logger("lsa-migrator-sanitizer");
-
 static
 migrators&
 static_migrators() noexcept {
@@ -10848,16 +9400,10 @@ static_migrators() noexcept {
     static thread_local lw_shared_ptr<migrators> obj = make_lw_shared<migrators>();
     return *obj;
 }
-
 }
-
 namespace debug {
-
 thread_local migrators* static_migrators = &::static_migrators();
-
 }
-
-
 uint32_t
 migrate_fn_type::register_migrator(migrate_fn_type* m) {
     auto& migrators = *debug::static_migrators;
@@ -10867,14 +9413,11 @@ migrate_fn_type::register_migrator(migrate_fn_type* m) {
     m->_migrators = migrators.shared_from_this();
     return idx;
 }
-
 void
 migrate_fn_type::unregister_migrator(uint32_t index) {
     static_migrators().remove(index);
 }
-
 namespace logalloc {
-
 class region_sanitizer {
     struct allocation {
         size_t size;
@@ -10882,7 +9425,6 @@ class region_sanitizer {
     };
 private:
     static logging::logger logger;
-
     const bool* _report_backtrace = nullptr;
     bool _broken = false;
     std::unordered_map<const void*, allocation> _allocations;
@@ -10992,24 +9534,17 @@ public:
         });
     }
 };
-
 logging::logger region_sanitizer::logger("lsa-sanitizer");
-
 struct segment;
-
 static logging::logger llogger("lsa");
 static logging::logger timing_logger("lsa-timing");
-
 static tracker& get_tracker_instance() noexcept {
     memory::scoped_critical_alloc_section dfg;
     static thread_local tracker obj;
     return obj;
 }
-
 static thread_local tracker& tracker_instance = get_tracker_instance();
-
 using clock = std::chrono::steady_clock;
-
 class background_reclaimer {
     scheduling_group _sg;
     noncopyable_function<void (size_t target)> _reclaim;
@@ -11075,10 +9610,8 @@ public:
         return std::move(_done);
     }
 };
-
 class segment_pool;
 struct reclaim_timer;
-
 class tracker::impl {
     std::unique_ptr<logalloc::segment_pool> _segment_pool;
     std::optional<background_reclaimer> _background_reclaimer;
@@ -11176,107 +9709,82 @@ private:
     // Like reclaim() but assumes that reclaim_lock is held around the operation.
     size_t reclaim_locked(size_t bytes, is_preemptible p);
 };
-
 tracker_reclaimer_lock::tracker_reclaimer_lock(tracker::impl& impl) noexcept : _tracker_impl(impl) {
     _tracker_impl.disable_reclaim();
 }
-
 tracker_reclaimer_lock::~tracker_reclaimer_lock() {
     _tracker_impl.enable_reclaim();
 }
-
 tracker::tracker()
     : _impl(std::make_unique<impl>())
     , _reclaimer([this] (seastar::memory::reclaimer::request r) { return reclaim(r); }, memory::reclaimer_scope::sync)
 { }
-
 tracker::~tracker() {
 }
-
 future<>
 tracker::stop() {
     return _impl->stop();
 }
-
 size_t tracker::reclaim(size_t bytes) {
     return _impl->reclaim(bytes, is_preemptible::no);
 }
-
 occupancy_stats tracker::global_occupancy() const noexcept {
     return _impl->global_occupancy();
 }
-
 occupancy_stats tracker::region_occupancy() const noexcept {
     return _impl->region_occupancy();
 }
-
 occupancy_stats tracker::occupancy() const noexcept {
     return _impl->occupancy();
 }
-
 size_t tracker::non_lsa_used_space() const noexcept {
     return _impl->non_lsa_used_space();
 }
-
 void tracker::full_compaction() {
     return _impl->full_compaction();
 }
-
 void tracker::reclaim_all_free_segments() {
     return _impl->reclaim_all_free_segments();
 }
-
 tracker& shard_tracker() noexcept {
     return tracker_instance;
 }
-
 struct alignas(segment_size) segment {
     static constexpr int size_shift = segment_size_shift;
     static constexpr int size_mask = segment_size | (segment_size - 1);
     using size_type = std::conditional_t<(size_shift < 16), uint16_t, uint32_t>;
     static constexpr size_t size = segment_size;
-
     uint8_t data[size];
-
     segment() noexcept { }
-
     template<typename T = void>
     const T* at(size_t offset) const noexcept {
         return reinterpret_cast<const T*>(data + offset);
     }
-
     template<typename T = void>
     T* at(size_t offset) noexcept {
         return reinterpret_cast<T*>(data + offset);
     }
-
     static void* operator new(size_t size) = delete;
     static void* operator new(size_t, void* ptr) noexcept { return ptr; }
     static void operator delete(void* ptr) = delete;
 };
-
 static constexpr size_t max_managed_object_size = segment_size * 0.1;
 static constexpr auto max_used_space_ratio_for_compaction = 0.85;
 static constexpr size_t max_used_space_for_compaction = segment_size * max_used_space_ratio_for_compaction;
 static constexpr size_t min_free_space_for_compaction = segment_size - max_used_space_for_compaction;
-
 struct [[gnu::packed]] non_lsa_object_cookie {
     uint64_t value = 0xbadcaffe;
 };
-
 static_assert(min_free_space_for_compaction >= max_managed_object_size,
     "Segments which cannot fit max_managed_object_size must not be considered compactible for the sake of forward progress of compaction");
-
 // Since we only compact if there's >= min_free_space_for_compaction of free space,
 // we use min_free_space_for_compaction as the histogram's minimum size and put
 // everything below that value in the same bucket.
 extern constexpr log_heap_options segment_descriptor_hist_options(min_free_space_for_compaction, 3, segment_size);
-
 enum segment_kind : int {
     regular = 0, // Holds objects allocated with region_impl::alloc_small()
     bufs = 1     // Holds objects allocated with region_impl::alloc_buf()
 };
-
 struct segment_descriptor : public log_heap_hook<segment_descriptor_hist_options> {
     static constexpr segment::size_type free_space_mask = segment::size_mask;
     static constexpr unsigned bits_for_free_space = segment::size_shift + 1;
@@ -11284,27 +9792,21 @@ struct segment_descriptor : public log_heap_hook<segment_descriptor_hist_options
     static constexpr unsigned bits_for_segment_kind = 1;
     static constexpr unsigned shift_for_segment_kind = bits_for_free_space;
     static_assert(sizeof(segment::size_type) * 8 >= bits_for_free_space + bits_for_segment_kind);
-
     segment::size_type _free_space;
     region::impl* _region;
-
     segment::size_type free_space() const noexcept {
         return _free_space & free_space_mask;
     }
-
     void set_free_space(segment::size_type free_space) noexcept {
         _free_space = (_free_space & ~free_space_mask) | free_space;
     }
-
     segment_kind kind() const noexcept {
         return static_cast<segment_kind>((_free_space & segment_kind_mask) >> shift_for_segment_kind);
     }
-
     void set_kind(segment_kind kind) noexcept {
         _free_space = (_free_space & ~segment_kind_mask)
                 | static_cast<segment::size_type>(kind) << shift_for_segment_kind;
     }
-
     // Valid if kind() == segment_kind::bufs.
     //
     // _buf_pointers holds links to lsa_buffer objects (paired with lsa_buffer::_link)
@@ -11313,30 +9815,23 @@ struct segment_descriptor : public log_heap_hook<segment_descriptor_hist_options
     // The order of entangled objects in the vector is irrelevant.
     // Also, not all entangled objects may be engaged.
     std::vector<entangled> _buf_pointers;
-
     segment_descriptor() noexcept
         : _region(nullptr)
     { }
-
     bool is_empty() const noexcept {
         return free_space() == segment::size;
     }
-
     occupancy_stats occupancy() const noexcept {
         return { free_space(), segment::size };
     }
-
     void record_alloc(segment::size_type size) noexcept {
         _free_space -= size;
     }
-
     void record_free(segment::size_type size) noexcept {
         _free_space += size;
     }
 };
-
 using segment_descriptor_hist = log_heap<segment_descriptor, segment_descriptor_hist_options>;
-
 class segment_store_backend {
 protected:
     memory::memory_layout _layout;
@@ -11344,7 +9839,6 @@ protected:
     bool _freed_segment_increases_general_memory_availability;
     // Aligned (to segment::size) address of the first segment.
     uintptr_t _segments_base;
-
 public:
     explicit segment_store_backend(memory::memory_layout layout, bool freed_segment_increases_general_memory_availability) noexcept
         : _layout(layout)
@@ -11365,7 +9859,6 @@ public:
         }
     }
 };
-
 // Segments are allocated from the seastar allocator.
 // The entire memory area of the local shard is used as a segment store, i.e.
 // segments are allocated from the same memory area regular objeces are.
@@ -11384,7 +9877,6 @@ public:
         return memory::free_memory();
     }
 };
-
 // Segments storage is allocated via `mmap()`.
 // This area cannot be shrunk or enlarged, so freeing segments doesn't increase
 // memory availability.
@@ -11392,12 +9884,10 @@ class standard_memory_segment_store_backend : public segment_store_backend {
     struct free_segment {
         free_segment* next = nullptr;
     };
-
 private:
     uintptr_t _segments_offset = 0;
     free_segment* _freelist = nullptr;
     size_t _available_segments; // for fast free_memory()
-
 private:
     static memory::memory_layout allocate_memory(size_t segments) {
         const auto size = segments * segment_size;
@@ -11444,13 +9934,10 @@ public:
         return _available_segments * segment_size;
     }
 };
-
 static constexpr size_t segment_npos = size_t(-1);
-
 // Segments are allocated from a large contiguous memory area.
 class contiguous_memory_segment_store {
     std::unique_ptr<segment_store_backend> _backend;
-
 public:
     size_t non_lsa_reserve = 0;
     contiguous_memory_segment_store()
@@ -11498,7 +9985,6 @@ public:
     }
 };
 using segment_store = contiguous_memory_segment_store;
-
 // Segment pool implementation for the seastar allocator.
 // Stores segment descriptors in a vector which is indexed using most significant
 // bits of segment address.
@@ -11517,7 +10003,6 @@ class segment_pool {
     size_t _emergency_reserve_max = 30;
     bool _allocation_failure_flag = false;
     bool _allocation_enabled = true;
-
     struct allocation_lock {
         segment_pool& _pool;
         bool _prev;
@@ -11531,7 +10016,6 @@ class segment_pool {
             _pool._allocation_enabled = _prev;
         }
     };
-
     size_t _non_lsa_memory_in_use = 0;
     // Invariants - a segment is in one of the following states:
     //   In use by some region
@@ -11549,7 +10033,6 @@ private:
     void deallocate_segment(segment* seg) noexcept;
     friend void* segment::operator new(size_t);
     friend void segment::operator delete(void*);
-
     segment* allocate_or_fallback_to_reserve();
     const segment* segment_from_idx(size_t idx) const noexcept {
         return _store.segment_from_idx(idx);
@@ -11621,7 +10104,6 @@ public:
     void reclaim_all_free_segments() {
         reclaim_segments(std::numeric_limits<size_t>::max(), is_preemptible::no);
     }
-
 private:
     tracker::stats _stats{};
 public:
@@ -11633,7 +10115,6 @@ public:
     size_t unreserved_free_segments() const noexcept { return _free_segments - std::min(_free_segments, _emergency_reserve_max); }
     size_t free_segments() const noexcept { return _free_segments; }
 };
-
 struct reclaim_timer {
     using extra_logger = noncopyable_function<void(log_level)>;
 private:
@@ -11647,7 +10128,6 @@ private:
     struct stats {
         occupancy_stats region_occupancy;
         tracker::stats pool_stats;
-
         friend stats operator+(const stats& s1, const stats& s2) {
             stats result(s1);
             result += s2;
@@ -11669,11 +10149,8 @@ private:
             return *this;
         }
     };
-
     clock::duration _duration_threshold;
-
     const char* _name;
-
     const is_preemptible _preemptible;
     const size_t _memory_to_release;
     const size_t _segments_to_release;
@@ -11681,34 +10158,24 @@ private:
     tracker::impl& _tracker;
     segment_pool& _segment_pool;
     extra_logger _extra_logs;
-
     const bool _debug_enabled;
     bool _stall_detected = false;
-
     size_t _memory_released = 0;
-
     clock::time_point _start;
     stats _start_stats, _end_stats, _stat_diff;
-
     clock::duration _duration;
-
     inline reclaim_timer(const char* name, is_preemptible preemptible, size_t memory_to_release, size_t segments_to_release, tracker::impl& tracker, segment_pool& segment_pool, extra_logger extra_logs);
-
 public:
     inline reclaim_timer(const char* name, is_preemptible preemptible, size_t memory_to_release, size_t segments_to_release, tracker::impl& tracker, extra_logger extra_logs = [](log_level){})
         : reclaim_timer(name, preemptible, memory_to_release, segments_to_release, tracker, tracker.segment_pool(), std::move(extra_logs))
     {}
-
     inline reclaim_timer(const char* name, is_preemptible preemptible, size_t memory_to_release, size_t segments_to_release, segment_pool& segment_pool, extra_logger extra_logs = [](log_level){})
         : reclaim_timer(name, preemptible, memory_to_release, segments_to_release, segment_pool.tracker(), segment_pool, std::move(extra_logs))
     {}
-
     inline ~reclaim_timer();
-
     size_t set_memory_released(size_t memory_released) noexcept {
         return this->_memory_released = memory_released;
     }
-
 private:
     void sample_stats(stats& data);
     template <typename T>
@@ -11729,26 +10196,20 @@ private:
             timing_logger.log(level, "- {}: {:.3f} MiB", name, (float)value / (1024*1024));
         }
     }
-
     void report() const noexcept;
 };
-
 tracker::stats tracker::statistics() const {
     return _impl->segment_pool().statistics();
 }
-
 size_t segment_pool::reclaim_segments(size_t target, is_preemptible preempt) {
     // Reclaimer tries to release segments occupying lower parts of the address
     // space.
     llogger.debug("Trying to reclaim {} segments", target);
-
     // Reclamation. Migrate segments to higher addresses and shrink segment pool.
     size_t reclaimed_segments = 0;
-
     reclaim_timer timing_guard("reclaim_segments", preempt, target * segment::size, target, *this, [&] (log_level level) {
         timing_logger.log(level, "- reclaimed {} out of requested {} segments", reclaimed_segments, target);
     });
-
     // We may fail to reclaim because a region has reclaim disabled (usually because
     // it is in an allocating_section. Failed reclaims can cause high CPU usage
     // if all of the lower addresses happen to be in a reclaim-disabled region (this
@@ -11762,7 +10223,6 @@ size_t segment_pool::reclaim_segments(size_t target, is_preemptible preempt) {
     // retried with all regions being reclaimable, and succeed in allocating
     // contiguous memory.
     size_t failed_reclaims_allowance = 10;
-
     for (size_t src_idx = _lsa_owned_segments_bitmap.find_first_set();
             reclaimed_segments != target && src_idx != utils::dynamic_bitset::npos
                     && _free_segments > _current_emergency_reserve_goal;
@@ -11785,12 +10245,10 @@ size_t segment_pool::reclaim_segments(size_t target, is_preemptible preempt) {
             break;
         }
     }
-
     llogger.debug("Reclaimed {} segments (requested {})", reclaimed_segments, target);
     timing_guard.set_memory_released(reclaimed_segments * segment::size);
     return reclaimed_segments;
 }
-
 segment* segment_pool::allocate_segment(size_t reserve)
 {
     //
@@ -11827,14 +10285,12 @@ segment* segment_pool::allocate_segment(size_t reserve)
     } while (_tracker.compact_and_evict(reserve, _tracker.reclamation_step() * segment::size, is_preemptible::no));
     return nullptr;
 }
-
 void segment_pool::deallocate_segment(segment* seg) noexcept
 {
     assert(_lsa_owned_segments_bitmap.test(idx_from_segment(seg)));
     _lsa_free_segments_bitmap.set(idx_from_segment(seg));
     _free_segments++;
 }
-
 void segment_pool::refill_emergency_reserve() {
     while (_free_segments < _emergency_reserve_max) {
         auto seg = allocate_segment(_emergency_reserve_max);
@@ -11845,7 +10301,6 @@ void segment_pool::refill_emergency_reserve() {
         free_segment(seg);
     }
 }
-
 segment*
 segment_pool::containing_segment(const void* obj) noexcept {
     auto addr = reinterpret_cast<uintptr_t>(obj);
@@ -11862,14 +10317,12 @@ segment_pool::containing_segment(const void* obj) noexcept {
         return nullptr;
     }
 }
-
 segment*
 segment_pool::segment_from(const segment_descriptor& desc) noexcept {
     assert(desc._region);
     auto index = &desc - &_segments[0];
     return segment_from_idx(index);
 }
-
 segment*
 segment_pool::allocate_or_fallback_to_reserve() {
     auto seg = allocate_segment(_current_emergency_reserve_goal);
@@ -11879,7 +10332,6 @@ segment_pool::allocate_or_fallback_to_reserve() {
     }
     return seg;
 }
-
 segment*
 segment_pool::new_segment(region::impl* r) {
     auto seg = allocate_or_fallback_to_reserve();
@@ -11890,18 +10342,15 @@ segment_pool::new_segment(region::impl* r) {
     desc._region = r;
     return seg;
 }
-
 void segment_pool::free_segment(segment* seg) noexcept {
     free_segment(seg, descriptor(seg));
 }
-
 void segment_pool::free_segment(segment* seg, segment_descriptor& desc) noexcept {
     llogger.trace("Releasing segment {}", fmt::ptr(seg));
     desc._region = nullptr;
     deallocate_segment(seg);
     --_segments_in_use;
 }
-
 segment_pool::segment_pool(tracker::impl& tracker)
     : _tracker(tracker)
     , _segments(max_segments())
@@ -11909,7 +10358,6 @@ segment_pool::segment_pool(tracker::impl& tracker)
     , _lsa_free_segments_bitmap(max_segments())
 {
 }
-
 void segment_pool::prime(size_t available_memory, size_t min_free_memory) {
     auto old_emergency_reserve = std::exchange(_emergency_reserve_max, std::numeric_limits<size_t>::max());
     try {
@@ -11929,7 +10377,6 @@ void segment_pool::prime(size_t available_memory, size_t min_free_memory) {
     // Since the reclaimer is not yet in place, free some low memory for general use
     reclaim_segments(_store.non_lsa_reserve / segment::size, is_preemptible::no);
 }
-
 void segment_pool::use_standard_allocator_segment_pool_backend(size_t available_memory) {
     if (_segments_in_use) {
         throw std::runtime_error("cannot change segment store backend after segments are in use");
@@ -11939,24 +10386,19 @@ void segment_pool::use_standard_allocator_segment_pool_backend(size_t available_
     _lsa_owned_segments_bitmap = utils::dynamic_bitset(max_segments());
     _lsa_free_segments_bitmap = utils::dynamic_bitset(max_segments());
 }
-
 inline void segment_pool::on_segment_compaction(size_t used_size) noexcept {
     _stats.segments_compacted++;
     _stats.memory_compacted += used_size;
 }
-
 inline void segment_pool::on_memory_allocation(size_t size) noexcept {
     _stats.memory_allocated += size;
 }
-
 inline void segment_pool::on_memory_deallocation(size_t size) noexcept {
     _stats.memory_freed += size;
 }
-
 inline void segment_pool::on_memory_eviction(size_t size) noexcept {
     _stats.memory_evicted += size;
 }
-
 // RAII wrapper to maintain segment_pool::current_emergency_reserve_goal()
 class segment_pool::reservation_goal {
     segment_pool& _sp;
@@ -11970,11 +10412,9 @@ public:
         _sp.set_current_emergency_reserve_goal(_old_goal);
     }
 };
-
 size_t segment_pool::segments_in_use() const noexcept {
     return _segments_in_use;
 }
-
 reclaim_timer::reclaim_timer(const char* name, is_preemptible preemptible, size_t memory_to_release, size_t segments_to_release, tracker::impl& tracker, segment_pool& segment_pool, extra_logger extra_logs)
     : _duration_threshold(
             // We only report reclaim stalls when their measured duration is
@@ -12012,16 +10452,13 @@ reclaim_timer::reclaim_timer(const char* name, is_preemptible preemptible, size_
     if (!_tracker.try_set_active_timer(*this)) {
         return;
     }
-
     _start = clock::now();
     sample_stats(_start_stats);
 }
-
 reclaim_timer::~reclaim_timer() {
     if (!_tracker.try_reset_active_timer(*this)) {
         return;
     }
-
     _duration = clock::now() - _start;
     _stall_detected = _duration >= _duration_threshold;
     if (_debug_enabled || _stall_detected) {
@@ -12030,26 +10467,22 @@ reclaim_timer::~reclaim_timer() {
         report();
     }
 }
-
 void reclaim_timer::sample_stats(stats& data) {
     if (_debug_enabled) {
         data.region_occupancy = _tracker.region_occupancy();
     }
     data.pool_stats = _segment_pool.statistics();
 }
-
 void reclaim_timer::report() const noexcept {
     // The logger can allocate (and will recover from allocation failure), and
     // we're in a memory-sensitive situation here and allocation can easily fail.
     // Prevent --abort-on-seastar-bad-alloc from crashing us in a situation that
     // we're likely to recover from, by reclaiming more.
     auto guard = memory::disable_abort_on_alloc_failure_temporarily();
-
     auto time_level = _stall_detected ? log_level::warn : log_level::debug;
     auto info_level = _stall_detected ? log_level::info : log_level::debug;
     auto MiB = 1024*1024;
     auto msg_extra = _stall_detected ? fmt::format(", at {}", current_backtrace()) : "";
-
     timing_logger.log(time_level, "{} took {} us, trying to release {:.3f} MiB {}preemptibly, reserve: {{goal: {}, max: {}}}{}",
                         _name, (_duration + 500ns) / 1us, (float)_memory_to_release / MiB, _preemptible ? "" : "non-",
                         _reserve_goal, _reserve_max,
@@ -12061,21 +10494,17 @@ void reclaim_timer::report() const noexcept {
             static_cast<float>(_memory_released) / std::chrono::duration_cast<std::chrono::duration<float>>(_duration).count();
         timing_logger.log(info_level, "- reclamation rate = {} MiB/s", format("{:.3f}", bytes_per_second / MiB));
     }
-
     if (_debug_enabled) {
         log_if_changed(info_level, "occupancy of regions",
                         _start_stats.region_occupancy.used_fraction(), _end_stats.region_occupancy.used_fraction());
     }
-
     auto pool_diff = _stat_diff.pool_stats;
     log_if_any_mem(info_level, "evicted memory", pool_diff.memory_evicted);
     log_if_any(info_level, "compacted segments", pool_diff.segments_compacted);
     log_if_any_mem(info_level, "compacted memory", pool_diff.memory_compacted);
     log_if_any_mem(info_level, "allocated memory", pool_diff.memory_allocated);
 }
-
 region_listener::~region_listener() = default;
-
 //
 // For interface documentation see logalloc::region and allocation_strategy.
 //
@@ -12121,56 +10550,44 @@ class region_impl final : public basic_region_impl {
         object_descriptor(allocation_strategy::migrate_fn migrator) noexcept
                 : _n(migrator->index() * 2 + 1)
         { }
-
         static object_descriptor make_dead(size_t size) noexcept {
             return object_descriptor(size * 2);
         }
-
         allocation_strategy::migrate_fn migrator() const noexcept {
             return static_migrators()[_n / 2];
         }
-
         uint8_t alignment() const noexcept {
             return migrator()->align();
         }
-
         // excluding descriptor
         segment::size_type live_size(const void* obj) const noexcept {
             return migrator()->size(obj);
         }
-
         // including descriptor
         segment::size_type dead_size() const noexcept {
             return _n / 2;
         }
-
         bool is_live() const noexcept {
             return (_n & 1) == 1;
         }
-
         segment::size_type encoded_size() const noexcept {
             return utils::uleb64_encoded_size(_n); // 0 is illegal
         }
-
         void encode(char*& pos) const noexcept {
             utils::uleb64_encode(pos, _n, poison<char>, unpoison);
         }
-
         // non-canonical encoding to allow padding (for alignment); encoded_size must be
         // sufficient (greater than this->encoded_size()), _n must be the migrator's
         // index() (i.e. -- suitable for express encoding)
         void encode(char*& pos, size_t encoded_size, size_t size) const noexcept {
             utils::uleb64_express_encode(pos, _n, encoded_size, size, poison<char>, unpoison);
         }
-
         static object_descriptor decode_forwards(const char*& pos) noexcept {
             return object_descriptor(utils::uleb64_decode_forwards(pos, poison<char>, unpoison));
         }
-
         static object_descriptor decode_backwards(const char*& pos) noexcept {
             return object_descriptor(utils::uleb64_decode_bacwards(pos, poison<char>, unpoison));
         }
-
         friend std::ostream& operator<<(std::ostream& out, const object_descriptor& desc) {
             if (!desc.is_live()) {
                 return out << format("{{free {:d}}}", desc.dead_size());
@@ -12227,34 +10644,28 @@ private:
             _region._reclaiming_enabled = _prev;
         }
     };
-
     void* alloc_small(const object_descriptor& desc, segment::size_type size, size_t alignment) {
         if (!_active) {
             _active = new_segment();
             _active_offset = 0;
         }
-
         auto desc_encoded_size = desc.encoded_size();
-
         size_t obj_offset = align_up_for_asan(align_up(_active_offset + desc_encoded_size, alignment));
         if (obj_offset + size > segment::size) {
             close_and_open();
             return alloc_small(desc, size, alignment);
         }
-
         auto old_active_offset = _active_offset;
         auto pos = _active->at<char>(_active_offset);
         // Use non-canonical encoding to allow for alignment pad
         desc.encode(pos, obj_offset - _active_offset, size);
         unpoison(pos, size);
         _active_offset = obj_offset + size;
-
         // Align the end of the value so that the next descriptor is aligned
         _active_offset = align_up_for_asan(_active_offset);
         segment_pool().descriptor(_active).record_alloc(_active_offset - old_active_offset);
         return pos;
     }
-
     template<typename Func>
     requires std::is_invocable_r_v<void, Func, const object_descriptor*, void*, size_t>
     void for_each_live(segment* seg, Func&& func) {
@@ -12273,7 +10684,6 @@ private:
             pos = align_up_for_asan(pos);
         }
     }
-
     void close_active() {
         if (!_active) {
             return;
@@ -12286,11 +10696,9 @@ private:
         auto& desc = segment_pool().descriptor(_active);
         llogger.trace("Closing segment {}, used={}, waste={} [B]", fmt::ptr(_active), desc.occupancy(), segment::size - _active_offset);
         _closed_occupancy += desc.occupancy();
-
         _segment_descs.push(desc);
         _active = nullptr;
     }
-
     void close_buf_active() {
         if (!_buf_active) {
             return;
@@ -12298,19 +10706,15 @@ private:
         auto& desc = segment_pool().descriptor(_buf_active);
         llogger.trace("Closing buf segment {}, used={}, waste={} [B]", fmt::ptr(_buf_active), desc.occupancy(), segment::size - _buf_active_offset);
         _closed_occupancy += desc.occupancy();
-
         _segment_descs.push(desc);
         _buf_active = nullptr;
     }
-
     void free_segment(segment_descriptor& desc) noexcept {
         free_segment(segment_pool().segment_from(desc), desc);
     }
-
     void free_segment(segment* seg) noexcept {
         free_segment(seg, segment_pool().descriptor(seg));
     }
-
     void free_segment(segment* seg, segment_descriptor& desc) noexcept {
         segment_pool().free_segment(seg, desc);
         if (_listener) {
@@ -12318,7 +10722,6 @@ private:
             _listener->decrease_usage(_region, -segment::size);
         }
     }
-
     segment* new_segment() {
         segment* seg = segment_pool().new_segment(this);
         if (_listener) {
@@ -12327,7 +10730,6 @@ private:
         }
         return seg;
     }
-
     lsa_buffer alloc_buf(size_t buf_size) {
         // Note: Can be re-entered from allocation sites below due to memory reclamation which
         // invokes segment compaction.
@@ -12335,42 +10737,33 @@ private:
         if (buf_size > segment::size) {
             throw_with_backtrace<std::runtime_error>(format("Buffer size {} too large", buf_size));
         }
-
         if (_buf_active_offset + buf_size > segment::size) {
             close_buf_active();
         }
-
         if (!_buf_active) {
             new_buf_active();
         }
-
         lsa_buffer ptr;
         ptr._buf = _buf_active->at<char>(_buf_active_offset);
         ptr._size = buf_size;
         unpoison(ptr._buf, buf_size);
-
         segment_descriptor& desc = segment_pool().descriptor(_buf_active);
         ptr._desc = &desc;
         desc._buf_pointers.emplace_back(entangled::make_paired_with(ptr._link));
         auto alloc_size = align_up(buf_size, buf_align);
         desc.record_alloc(alloc_size);
         _buf_active_offset += alloc_size;
-
         return ptr;
     }
-
     void free_buf(lsa_buffer& buf) noexcept {
         segment_descriptor &desc = *buf._desc;
         segment *seg = segment_pool().segment_from(desc);
-
         if (seg != _buf_active) {
             _closed_occupancy -= desc.occupancy();
         }
-
         auto alloc_size = align_up(buf._size, buf_align);
         desc.record_free(alloc_size);
         poison(buf._buf, buf._size);
-
         // Pack links so that segment compaction only has to walk live objects.
         // This procedure also ensures that the link for buf is destroyed, either
         // by replacing it with the last entangled, or by popping it from the back
@@ -12380,7 +10773,6 @@ private:
         entangled& buf_link = *buf._link.get();
         std::swap(last_link, buf_link);
         desc._buf_pointers.pop_back();
-
         if (seg != _buf_active) {
             if (desc.is_empty()) {
                 assert(desc._buf_pointers.empty());
@@ -12393,13 +10785,10 @@ private:
             }
         }
     }
-
     void compact_segment_locked(segment* seg, segment_descriptor& desc) noexcept {
         auto seg_occupancy = desc.occupancy();
         llogger.debug("Compacting segment {} from region {}, {}", fmt::ptr(seg), id(), seg_occupancy);
-
         ++_invalidate_counter;
-
         if (desc.kind() == segment_kind::bufs) {
             // This will free the storage of _buf_ptrs_for_compact_segment
             // making sure that alloc_buf() makes progress.
@@ -12424,18 +10813,15 @@ private:
                 desc->migrator()->migrate(obj, dst, size);
             });
         }
-
         free_segment(seg, desc);
         segment_pool().on_segment_compaction(seg_occupancy.used_space());
     }
-
     void close_and_open() {
         segment* new_active = new_segment();
         close_active();
         _active = new_active;
         _active_offset = 0;
     }
-
     void new_buf_active() {
         std::vector<entangled> ptrs;
         ptrs.reserve(segment::size / buf_align);
@@ -12451,7 +10837,6 @@ private:
         _buf_active = new_active;
         _buf_active_offset = 0;
     }
-
     static uint64_t next_id() noexcept {
         static std::atomic<uint64_t> id{0};
         return id.fetch_add(1);
@@ -12471,7 +10856,6 @@ private:
             }
         }
     };
-
 public:
     explicit region_impl(tracker& tracker, region* region)
         : basic_region_impl(tracker), _region(region), _sanitizer(tracker.get_impl().sanitizer_report_backtrace()), _id(next_id())
@@ -12480,12 +10864,9 @@ public:
         _preferred_max_contiguous_allocation = max_managed_object_size;
         tracker_instance._impl->register_region(this);
     }
-
     virtual ~region_impl() {
         _sanitizer.on_region_destruction();
-
         _tracker.get_impl().unregister_region(this);
-
         while (!_segment_descs.empty()) {
             auto& desc = _segment_descs.one_of_largest();
             _segment_descs.pop_one_of_largest();
@@ -12504,23 +10885,18 @@ public:
             _buf_active = nullptr;
         }
     }
-
     region_impl(region_impl&&) = delete;
     region_impl(const region_impl&) = delete;
-
     logalloc::segment_pool& segment_pool() const {
         return _tracker.get_impl().segment_pool();
     }
-
     bool empty() const noexcept {
         return occupancy().used_space() == 0;
     }
-
     void listen(region_listener* listener) {
         _listener = listener;
         _listener->add(_region);
     }
-
     void unlisten() {
         // _listener may have been removed be merge(), so check for that.
         // Yes, it's awkward, we should have the caller unlisten before merge
@@ -12530,14 +10906,12 @@ public:
             _listener = nullptr;
         }
     }
-
     void moved(region* new_region) {
         if (_listener) {
             _listener->moved(_region, new_region);
         }
         _region = new_region;
     }
-
     // Note: allocation is disallowed in this path
     // since we don't instantiate reclaiming_lock
     // while traversing _regions
@@ -12552,22 +10926,18 @@ public:
         }
         return total;
     }
-
     occupancy_stats compactible_occupancy() const noexcept {
         return _closed_occupancy;
     }
-
     occupancy_stats evictable_occupancy() const noexcept {
         return occupancy_stats(0, _evictable_space & _evictable_space_mask);
     }
-
     void ground_evictable_occupancy() {
         _evictable_space_mask = 0;
         if (_listener) {
             _listener->decrease_evictable_usage(_region);
         }
     }
-
     //
     // Returns true if this region can be compacted and compact() will make forward progress,
     // so that this will eventually stop:
@@ -12581,11 +10951,9 @@ public:
             && (_closed_occupancy.free_space() >= 4 * segment::size)
             && _segment_descs.contains_above_min();
     }
-
     bool is_idle_compactible() const noexcept {
         return is_compactible();
     }
-
     virtual void* alloc(allocation_strategy::migrate_fn migrator, size_t size, size_t alignment) override {
         compaction_lock _(*this);
         memory::on_alloc_point();
@@ -12611,7 +10979,6 @@ public:
             return ptr;
         }
     }
-
 private:
     void on_non_lsa_free(void* obj) noexcept {
         auto allocated_size = malloc_usable_size(obj);
@@ -12633,27 +11000,21 @@ public:
             standard_allocator().free(obj);
             return;
         }
-
         auto pos = reinterpret_cast<const char*>(obj);
         auto desc = object_descriptor::decode_backwards(pos);
         free(obj, desc.live_size(obj));
     }
-
     virtual void free(void* obj, size_t size) noexcept override {
         compaction_lock _(*this);
         auto& pool = segment_pool();
         segment* seg = pool.containing_segment(obj);
-
         if (!seg) {
             on_non_lsa_free(obj);
             standard_allocator().free(obj, size);
             return;
         }
-
         _sanitizer.on_free(obj, size);
-
         segment_descriptor& seg_desc = pool.descriptor(seg);
-
         auto pos = reinterpret_cast<const char*>(obj);
         auto old_pos = pos;
         auto desc = object_descriptor::decode_backwards(pos);
@@ -12662,14 +11023,11 @@ public:
         auto npos = const_cast<char*>(pos);
         desc.encode(npos);
         poison(pos, dead_size);
-
         if (seg != _active) {
             _closed_occupancy -= seg_desc.occupancy();
         }
-
         seg_desc.record_free(dead_size);
         pool.on_memory_deallocation(dead_size);
-
         if (seg != _active) {
             if (seg_desc.is_empty()) {
                 _segment_descs.erase(seg_desc);
@@ -12680,10 +11038,8 @@ public:
             }
         }
     }
-
     virtual size_t object_memory_size_in_allocator(const void* obj) const noexcept override {
         segment* seg = segment_pool().containing_segment(obj);
-
         if (!seg) {
             return standard_allocator().object_memory_size_in_allocator(obj);
         } else {
@@ -12692,7 +11048,6 @@ public:
             return desc.encoded_size() + desc.live_size(obj);
         }
     }
-
     // Merges another region into this region. The other region is made
     // to refer to this region.
     // Doesn't invalidate references to allocated objects.
@@ -12701,14 +11056,11 @@ public:
         // fail, because we have a matching deallocation before that and we don't
         // allocate between them.
         memory::scoped_critical_alloc_section dfg;
-
         compaction_lock dct1(*this);
         compaction_lock dct2(other);
         unlisten_temporarily ult1(this);
         unlisten_temporarily ult2(&other);
-
         auto& pool = segment_pool();
-
         if (_active && pool.descriptor(_active).is_empty()) {
             pool.free_segment(_active);
             _active = nullptr;
@@ -12724,25 +11076,20 @@ public:
             other.close_active();
         }
         other.close_buf_active();
-
         for (auto& desc : other._segment_descs) {
             pool.set_region(desc, this);
         }
         _segment_descs.merge(other._segment_descs);
-
         _closed_occupancy += other._closed_occupancy;
         _non_lsa_occupancy += other._non_lsa_occupancy;
         other._closed_occupancy = {};
         other._non_lsa_occupancy = {};
-
         // Make sure both regions will notice a future increment
         // to the reclaim counter
         _invalidate_counter = std::max(_invalidate_counter, other._invalidate_counter);
-
         _sanitizer.merge(other._sanitizer);
         other._sanitizer = region_sanitizer(_tracker.get_impl().sanitizer_report_backtrace());
     }
-
     // Returns occupancy of the sparsest compactible segment.
     occupancy_stats min_occupancy() const noexcept {
         if (_segment_descs.empty()) {
@@ -12750,7 +11097,6 @@ public:
         }
         return _segment_descs.one_of_largest().occupancy();
     }
-
     // Compacts a single segment, most appropriate for it
     void compact() noexcept {
         compaction_lock _(*this);
@@ -12760,7 +11106,6 @@ public:
         segment* seg = segment_pool().segment_from(desc);
         compact_segment_locked(seg, desc);
     }
-
     // Compacts everything. Mainly for testing.
     // Invalidates references to allocated objects.
     void full_compaction() {
@@ -12778,7 +11123,6 @@ public:
         }
         llogger.debug("Done, {}", occupancy());
     }
-
     void compact_segment(segment* seg, segment_descriptor& desc) {
         compaction_lock _(*this);
         if (_active == seg) {
@@ -12790,20 +11134,16 @@ public:
         _closed_occupancy -= desc.occupancy();
         compact_segment_locked(seg, desc);
     }
-
     allocation_strategy& allocator() noexcept {
         return *this;
     }
-
     uint64_t id() const noexcept {
         return _id;
     }
-
     // Returns true if this pool is evictable, so that evict_some() can be called.
     bool is_evictable() const noexcept {
         return _evictable && _reclaiming_enabled;
     }
-
     memory::reclaiming_result evict_some() {
         ++_invalidate_counter;
         auto& pool = segment_pool();
@@ -12812,47 +11152,38 @@ public:
         pool.on_memory_eviction(pool.statistics().memory_freed - freed);
         return ret;
     }
-
     void make_not_evictable() noexcept {
         _evictable = false;
         _eviction_fn = {};
     }
-
     void make_evictable(eviction_fn fn) noexcept {
         _evictable = true;
         _eviction_fn = std::move(fn);
     }
-
     const eviction_fn& evictor() const noexcept {
         return _eviction_fn;
     }
-
     friend class region;
     friend class lsa_buffer;
     friend class region_evictable_occupancy_ascending_less_comparator;
 };
-
 lsa_buffer::~lsa_buffer() {
     if (_link) {
         _desc->_region->free_buf(*this);
     }
 }
-
 size_t tracker::reclamation_step() const noexcept {
     return _impl->reclamation_step();
 }
-
 bool tracker::should_abort_on_bad_alloc() const noexcept {
     return _impl->should_abort_on_bad_alloc();
 }
-
 void tracker::configure(const config& cfg) {
     if (cfg.defragment_on_idle) {
         engine().set_idle_cpu_handler([this] (reactor::work_waiting_on_reactor check_for_work) {
             return _impl->compact_on_idle(check_for_work);
         });
     }
-
     _impl->set_reclamation_step(cfg.lsa_reclamation_step);
     if (cfg.abort_on_lsa_bad_alloc) {
         _impl->enable_abort_on_bad_alloc();
@@ -12860,34 +11191,28 @@ void tracker::configure(const config& cfg) {
     _impl->setup_background_reclaim(cfg.background_reclaim_sched_group);
     _impl->set_sanitizer_report_backtrace(cfg.sanitizer_report_backtrace);
 }
-
 memory::reclaiming_result tracker::reclaim(seastar::memory::reclaimer::request r) {
     return reclaim(std::max(r.bytes_to_reclaim, _impl->reclamation_step() * segment::size))
            ? memory::reclaiming_result::reclaimed_something
            : memory::reclaiming_result::reclaimed_nothing;
 }
-
 region::region()
     : _impl(make_shared<impl>(shard_tracker(), this))
 { }
-
 void
 region::listen(region_listener* listener) {
     get_impl().listen(listener);
 }
-
 void
 region::unlisten() {
     get_impl().unlisten();
 }
-
 region_impl& region::get_impl() noexcept {
     return *static_cast<region_impl*>(_impl.get());
 }
 const region_impl& region::get_impl() const noexcept {
     return *static_cast<const region_impl*>(_impl.get());
 }
-
 region::region(region&& other) noexcept
     : _impl(std::move(other._impl))
 {
@@ -12896,7 +11221,6 @@ region::region(region&& other) noexcept
         r_impl->moved(this);
     }
 }
-
 region& region::operator=(region&& other) noexcept {
     if (this == &other || _impl == other._impl) {
         return *this;
@@ -12911,21 +11235,17 @@ region& region::operator=(region&& other) noexcept {
     }
     return *this;
 }
-
 region::~region() {
     if (_impl) {
         unlisten();
     }
 }
-
 occupancy_stats region::occupancy() const noexcept {
     return get_impl().occupancy();
 }
-
 lsa_buffer region::alloc_buf(size_t buffer_size) {
     return get_impl().alloc_buf(buffer_size);
 }
-
 void region::merge(region& other) noexcept {
     if (_impl != other._impl) {
         auto& other_impl = other.get_impl();
@@ -12937,47 +11257,37 @@ void region::merge(region& other) noexcept {
         other._impl = _impl;
     }
 }
-
 void region::full_compaction() {
     get_impl().full_compaction();
 }
-
 memory::reclaiming_result region::evict_some() {
     if (get_impl().is_evictable()) {
         return get_impl().evict_some();
     }
     return memory::reclaiming_result::reclaimed_nothing;
 }
-
 void region::make_evictable(eviction_fn fn) noexcept {
     get_impl().make_evictable(std::move(fn));
 }
-
 void region::ground_evictable_occupancy() {
     get_impl().ground_evictable_occupancy();
 }
-
 occupancy_stats region::evictable_occupancy() const noexcept {
     return get_impl().evictable_occupancy();
 }
-
 const eviction_fn& region::evictor() const noexcept {
     return get_impl().evictor();
 }
-
 uint64_t region::id() const noexcept {
     return get_impl().id();
 }
-
 std::ostream& operator<<(std::ostream& out, const occupancy_stats& stats) {
     return out << format("{:.2f}%, {:d} / {:d} [B]",
         stats.used_fraction() * 100, stats.used_space(), stats.total_space());
 }
-
 occupancy_stats tracker::impl::global_occupancy() const noexcept {
     return occupancy_stats(_segment_pool->total_free_memory(), _segment_pool->total_memory_in_use());
 }
-
 // Note: allocation is disallowed in this path
 // since we don't instantiate reclaiming_lock
 // while traversing _regions
@@ -12988,7 +11298,6 @@ occupancy_stats tracker::impl::region_occupancy() const noexcept {
     }
     return total;
 }
-
 occupancy_stats tracker::impl::occupancy() const noexcept {
     auto occ = region_occupancy();
     {
@@ -12997,43 +11306,34 @@ occupancy_stats tracker::impl::occupancy() const noexcept {
     }
     return occ;
 }
-
 size_t tracker::impl::non_lsa_used_space() const noexcept {
     auto free_space_in_lsa = _segment_pool->free_segments() * segment_size;
     return memory::stats().allocated_memory() - region_occupancy().total_space() - free_space_in_lsa;
 }
-
 void tracker::impl::reclaim_all_free_segments()
 {
     llogger.debug("Reclaiming all free segments");
     _segment_pool->reclaim_all_free_segments();
     llogger.debug("Reclamation done");
 }
-
 void tracker::impl::full_compaction() {
     reclaiming_lock _(*this);
-
     llogger.debug("Full compaction on all regions, {}", region_occupancy());
-
     for (region_impl* r : _regions) {
         if (r->reclaiming_enabled()) {
             r->full_compaction();
         }
     }
-
     llogger.debug("Compaction done, {}", region_occupancy());
 }
-
 static void reclaim_from_evictable(region::impl& r, size_t target_mem_in_use, is_preemptible preempt) {
     llogger.debug("reclaim_from_evictable: total_memory_in_use={} target={}", r.segment_pool().total_memory_in_use(), target_mem_in_use);
-
     // Before attempting segment compaction, try to evict at least deficit and one segment more so that
     // for workloads in which eviction order matches allocation order we will reclaim full segments
     // without needing to perform expensive compaction.
     auto deficit = r.segment_pool().total_memory_in_use() - target_mem_in_use;
     auto used = r.occupancy().used_space();
     auto used_target = used - std::min(used, deficit + segment::size);
-
     while (r.segment_pool().total_memory_in_use() > target_mem_in_use) {
         used = r.occupancy().used_space();
         if (used > used_target) {
@@ -13076,7 +11376,6 @@ static void reclaim_from_evictable(region::impl& r, size_t target_mem_in_use, is
         r.compact();
     }
 }
-
 idle_cpu_handler_result tracker::impl::compact_on_idle(work_waiting_on_reactor check_for_work) {
     if (_reclaiming_disabled_depth) {
         return idle_cpu_handler_result::no_more_work;
@@ -13086,31 +11385,24 @@ idle_cpu_handler_result tracker::impl::compact_on_idle(work_waiting_on_reactor c
         return idle_cpu_handler_result::no_more_work;
     }
     segment_pool::reservation_goal open_emergency_pool(*_segment_pool, 0);
-
     auto cmp = [] (region::impl* c1, region::impl* c2) {
         if (c1->is_idle_compactible() != c2->is_idle_compactible()) {
             return !c1->is_idle_compactible();
         }
         return c2->min_occupancy() < c1->min_occupancy();
     };
-
     boost::range::make_heap(_regions, cmp);
-
     while (!check_for_work()) {
         boost::range::pop_heap(_regions, cmp);
         region::impl* r = _regions.back();
-
         if (!r->is_idle_compactible()) {
             return idle_cpu_handler_result::no_more_work;
         }
-
         r->compact();
-
         boost::range::push_heap(_regions, cmp);
     }
     return idle_cpu_handler_result::interrupted_by_higher_priority_task;
 }
-
 size_t tracker::impl::reclaim(size_t memory_to_release, is_preemptible preempt) {
     if (_reclaiming_disabled_depth) {
         return 0;
@@ -13119,7 +11411,6 @@ size_t tracker::impl::reclaim(size_t memory_to_release, is_preemptible preempt) 
     reclaim_timer timing_guard("reclaim", preempt, memory_to_release, 0, *this);
     return timing_guard.set_memory_released(reclaim_locked(memory_to_release, preempt));
 }
-
 size_t tracker::impl::reclaim_locked(size_t memory_to_release, is_preemptible preempt) {
     llogger.debug("reclaim_locked({}, preempt={})", memory_to_release, int(bool(preempt)));
     // Reclamation steps:
@@ -13137,23 +11428,18 @@ size_t tracker::impl::reclaim_locked(size_t memory_to_release, is_preemptible pr
         llogger.debug("reclaim_locked() = {}", mem_released);
         return mem_released;
     }
-
     auto compacted = compact_and_evict_locked(_segment_pool->current_emergency_reserve_goal(), memory_to_release - mem_released, preempt);
-
     if (compacted == 0) {
         llogger.debug("reclaim_locked() = {}", mem_released);
         return mem_released;
     }
-
     // compact_and_evict_locked() will not return segments to the standard allocator,
     // so do it here:
     nr_released = _segment_pool->reclaim_segments(compacted / segment::size, preempt);
     mem_released += nr_released * segment::size;
-
     llogger.debug("reclaim_locked() = {}", mem_released);
     return mem_released;
 }
-
 size_t tracker::impl::compact_and_evict(size_t reserve_segments, size_t memory_to_release, is_preemptible preempt) {
     if (_reclaiming_disabled_depth) {
         return 0;
@@ -13161,7 +11447,6 @@ size_t tracker::impl::compact_and_evict(size_t reserve_segments, size_t memory_t
     reclaiming_lock rl(*this);
     return compact_and_evict_locked(reserve_segments, memory_to_release, preempt);
 }
-
 size_t tracker::impl::compact_and_evict_locked(size_t reserve_segments, size_t memory_to_release, is_preemptible preempt) {
     llogger.debug("compact_and_evict_locked({}, {}, {})", reserve_segments, memory_to_release, int(bool(preempt)));
     //
@@ -13176,41 +11461,32 @@ size_t tracker::impl::compact_and_evict_locked(size_t reserve_segments, size_t m
     // When compaction is not sufficient to reclaim space, we evict data from
     // evictable regions.
     //
-
     // This may run synchronously with allocation, so we should not allocate
     // memory, otherwise we may get std::bad_alloc. Currently we only allocate
     // in the logger when debug level is enabled. It's disabled during normal
     // operation. Having it is still valuable during testing and in most cases
     // should work just fine even if allocates.
-
     size_t mem_released = 0;
-
     size_t mem_in_use = _segment_pool->total_memory_in_use();
     memory_to_release += (reserve_segments - std::min(reserve_segments, _segment_pool->free_segments())) * segment::size;
     auto target_mem = mem_in_use - std::min(mem_in_use, memory_to_release - mem_released);
-
     llogger.debug("Compacting, requested {} bytes, {} bytes in use, target is {}",
         memory_to_release, mem_in_use, target_mem);
-
     // Allow dipping into reserves while compacting
     segment_pool::reservation_goal open_emergency_pool(*_segment_pool, 0);
-
     auto cmp = [] (region::impl* c1, region::impl* c2) {
         if (c1->is_compactible() != c2->is_compactible()) {
             return !c1->is_compactible();
         }
         return c2->min_occupancy() < c1->min_occupancy();
     };
-
     boost::range::make_heap(_regions, cmp);
-
     if (llogger.is_enabled(logging::log_level::debug)) {
         llogger.debug("Occupancy of regions:");
         for (region::impl* r : _regions) {
             llogger.debug(" - {}: min={}, avg={}", r->id(), r->min_occupancy(), r->compactible_occupancy());
         }
     }
-
     {
         int regions = 0, evictable_regions = 0;
         reclaim_timer timing_guard("compact", preempt, memory_to_release, reserve_segments, *this, [&] (log_level level) {
@@ -13220,13 +11496,11 @@ size_t tracker::impl::compact_and_evict_locked(size_t reserve_segments, size_t m
         while (_segment_pool->total_memory_in_use() > target_mem) {
             boost::range::pop_heap(_regions, cmp);
             region::impl* r = _regions.back();
-
             if (!r->is_compactible()) {
                 llogger.trace("Unable to release segments, no compactible pools.");
                 break;
             }
             ++regions;
-
             // Prefer evicting if average occupancy ratio is above the compaction threshold to avoid
             // overhead of compaction in workloads where allocation order matches eviction order, where
             // we can reclaim memory by eviction only. In some cases the cost of compaction on allocation
@@ -13237,17 +11511,13 @@ size_t tracker::impl::compact_and_evict_locked(size_t reserve_segments, size_t m
             } else {
                 r->compact();
             }
-
             boost::range::push_heap(_regions, cmp);
-
             if (preempt && need_preempt()) {
                 break;
             }
         }
     }
-
     auto released_during_compaction = mem_in_use - _segment_pool->total_memory_in_use();
-
     if (_segment_pool->total_memory_in_use() > target_mem) {
         int regions = 0, evictable_regions = 0;
         reclaim_timer timing_guard("evict", preempt, memory_to_release, reserve_segments, *this, [&] (log_level level) {
@@ -13269,15 +11539,11 @@ size_t tracker::impl::compact_and_evict_locked(size_t reserve_segments, size_t m
             }
         }
     }
-
     mem_released += mem_in_use - _segment_pool->total_memory_in_use();
-
     llogger.debug("Released {} bytes (wanted {}), {} during compaction",
         mem_released, memory_to_release, released_during_compaction);
-
     return mem_released;
 }
-
 void tracker::impl::register_region(region::impl* r) {
     // If needed, increase capacity of regions before taking the reclaim lock,
     // to avoid failing an allocation when push_back() tries to increase
@@ -13294,58 +11560,42 @@ void tracker::impl::register_region(region::impl* r) {
     _regions.push_back(r);
     llogger.debug("Registered region @{} with id={}", fmt::ptr(r), r->id());
 }
-
 void tracker::impl::unregister_region(region::impl* r) noexcept {
     reclaiming_lock _(*this);
     llogger.debug("Unregistering region, id={}", r->id());
     _regions.erase(std::remove(_regions.begin(), _regions.end(), r), _regions.end());
 }
-
 tracker::impl::impl() : _segment_pool(std::make_unique<logalloc::segment_pool>(*this)) {
     namespace sm = seastar::metrics;
-
     _metrics.add_group("lsa", {
         sm::make_gauge("total_space_bytes", [this] { return region_occupancy().total_space(); },
                        sm::description("Holds a current size of allocated memory in bytes.")),
-
         sm::make_gauge("used_space_bytes", [this] { return region_occupancy().used_space(); },
                        sm::description("Holds a current amount of used memory in bytes.")),
-
         sm::make_gauge("small_objects_total_space_bytes", [this] { return region_occupancy().total_space() - _segment_pool->non_lsa_memory_in_use(); },
                        sm::description("Holds a current size of \"small objects\" memory region in bytes.")),
-
         sm::make_gauge("small_objects_used_space_bytes", [this] { return region_occupancy().used_space() - _segment_pool->non_lsa_memory_in_use(); },
                        sm::description("Holds a current amount of used \"small objects\" memory in bytes.")),
-
         sm::make_gauge("large_objects_total_space_bytes", [this] { return _segment_pool->non_lsa_memory_in_use(); },
                        sm::description("Holds a current size of allocated non-LSA memory.")),
-
         sm::make_gauge("non_lsa_used_space_bytes", [this] { return non_lsa_used_space(); },
                        sm::description("Holds a current amount of used non-LSA memory.")),
-
         sm::make_gauge("free_space", [this] { return _segment_pool->unreserved_free_segments() * segment_size; },
                        sm::description("Holds a current amount of free memory that is under lsa control.")),
-
         sm::make_gauge("occupancy", [this] { return region_occupancy().used_fraction() * 100; },
                        sm::description("Holds a current portion (in percents) of the used memory.")),
-
         sm::make_counter("segments_compacted", [this] { return _segment_pool->statistics().segments_compacted; },
                         sm::description("Counts a number of compacted segments.")),
-
         sm::make_counter("memory_compacted", [this] { return _segment_pool->statistics().memory_compacted; },
                         sm::description("Counts number of bytes which were copied as part of segment compaction.")),
-
         sm::make_counter("memory_allocated", [this] { return _segment_pool->statistics().memory_allocated; },
                         sm::description("Counts number of bytes which were requested from LSA.")),
-
         sm::make_counter("memory_evicted", [this] { return _segment_pool->statistics().memory_evicted; },
                         sm::description("Counts number of bytes which were evicted.")),
-
         sm::make_counter("memory_freed", [this] { return _segment_pool->statistics().memory_freed; },
                         sm::description("Counts number of bytes which were requested to be freed in LSA.")),
     });
 }
-
 tracker::impl::~impl() {
     if (!_regions.empty()) {
         for (auto&& r : _regions) {
@@ -13354,32 +11604,26 @@ tracker::impl::~impl() {
         abort();
     }
 }
-
 bool segment_pool::compact_segment(segment* seg) {
     auto& desc = descriptor(seg);
     if (!desc._region->reclaiming_enabled()) {
         return false;
     }
-
     // Called with emergency reserve, open one for
     // region::alloc_small not to throw if it needs
     // one more segment
     reservation_goal open_emergency_pool(*this, 0);
     allocation_lock no_alloc(*this);
     tracker_reclaimer_lock no_reclaim(_tracker);
-
     desc._region->compact_segment(seg, desc);
     return true;
 }
-
 allocating_section::guard::guard(tracker::impl& tracker) noexcept
     : _tracker(tracker), _prev(_tracker.segment_pool().emergency_reserve_max())
 { }
-
 allocating_section::guard::~guard() {
     _tracker.segment_pool().set_emergency_reserve_max(_prev);
 }
-
 void allocating_section::maybe_decay_reserve() noexcept {
     // The decay rate is inversely proportional to the reserve
     // (every (s_segments_per_decay/_lsa_reserve) allocations).
@@ -13392,14 +11636,12 @@ void allocating_section::maybe_decay_reserve() noexcept {
     //
     // If the reserve is low, it is not expensive to maintain, so we
     // decay it at a lower rate.
-
     _remaining_lsa_segments_until_decay -= _lsa_reserve;
     if (_remaining_lsa_segments_until_decay < 0) {
         _remaining_lsa_segments_until_decay = s_segments_per_decay;
         _lsa_reserve = std::max(s_min_lsa_reserve, _lsa_reserve / 2);
         llogger.debug("Decaying LSA reserve in section {} to {} segments", static_cast<void*>(this), _lsa_reserve);
     }
-
     _remaining_std_bytes_until_decay -= _std_reserve;
     if (_remaining_std_bytes_until_decay < 0) {
         _remaining_std_bytes_until_decay = s_bytes_per_decay;
@@ -13407,13 +11649,11 @@ void allocating_section::maybe_decay_reserve() noexcept {
         llogger.debug("Decaying standard allocator head-room in section {} to {} [B]", static_cast<void*>(this), _std_reserve);
     }
 }
-
 void allocating_section::reserve(tracker::impl& tracker) {
     auto& pool = tracker.segment_pool();
   try {
     pool.set_emergency_reserve_max(std::max(_lsa_reserve, _minimum_lsa_emergency_reserve));
     pool.refill_emergency_reserve();
-
     while (true) {
         size_t free = memory::free_memory();
         if (free >= _std_reserve) {
@@ -13423,7 +11663,6 @@ void allocating_section::reserve(tracker::impl& tracker) {
             throw std::bad_alloc();
         }
     }
-
     pool.clear_allocation_failure_flag();
   } catch (const std::bad_alloc&) {
         if (tracker.should_abort_on_bad_alloc()) {
@@ -13433,7 +11672,6 @@ void allocating_section::reserve(tracker::impl& tracker) {
         throw;
   }
 }
-
 void allocating_section::on_alloc_failure(logalloc::region& r) {
     r.allocator().invalidate_references();
     if (r.get_tracker().get_impl().segment_pool().allocation_failure_flag()) {
@@ -13445,49 +11683,32 @@ void allocating_section::on_alloc_failure(logalloc::region& r) {
     }
     reserve(r.get_tracker().get_impl());
 }
-
 void allocating_section::set_lsa_reserve(size_t reserve) noexcept {
     _lsa_reserve = reserve;
 }
-
 void allocating_section::set_std_reserve(size_t reserve) noexcept {
     _std_reserve = reserve;
 }
-
 future<> prime_segment_pool(size_t available_memory, size_t min_free_memory) {
     return smp::invoke_on_all([=] {
         shard_tracker().get_impl().segment_pool().prime(available_memory, min_free_memory);
     });
 }
-
 future<> use_standard_allocator_segment_pool_backend(size_t available_memory) {
     return smp::invoke_on_all([=] {
         shard_tracker().get_impl().segment_pool().use_standard_allocator_segment_pool_backend(available_memory);
     });
 }
-
 }
-
 // Orders segments by free space, assuming all segments have the same size.
 // This avoids using the occupancy, which entails extra division operations.
 template<>
 size_t hist_key<logalloc::segment_descriptor>(const logalloc::segment_descriptor& desc) {
     return desc.free_space();
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 using namespace seastar;
-
 large_bitset::large_bitset(size_t nr_bits) : _nr_bits(nr_bits) {
     assert(thread::running_in_thread());
-
     const size_t orig_nr_ints = align_up(nr_bits, bits_per_int()) / bits_per_int();
     auto nr_ints = orig_nr_ints;
     while (nr_ints) {
@@ -13505,7 +11726,6 @@ large_bitset::large_bitset(size_t nr_bits) : _nr_bits(nr_bits) {
         }
     }
 }
-
 void
 large_bitset::clear() {
     assert(thread::running_in_thread());
@@ -13516,17 +11736,7 @@ large_bitset::clear() {
         }
     }
 }
-/*
- * Copyright (C) 2017-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 using namespace seastar;
-
 class buffer_data_source_impl : public data_source_impl {
 private:
     temporary_buffer<char> _buf;
@@ -13534,10 +11744,8 @@ public:
     buffer_data_source_impl(temporary_buffer<char>&& buf)
         : _buf(std::move(buf))
     {}
-
     buffer_data_source_impl(buffer_data_source_impl&&) noexcept = default;
     buffer_data_source_impl& operator=(buffer_data_source_impl&&) noexcept = default;
-
     virtual future<temporary_buffer<char>> get() override {
         return make_ready_future<temporary_buffer<char>>(std::move(_buf));
     }
@@ -13547,29 +11755,17 @@ public:
         return make_ready_future<temporary_buffer<char>>(std::move(_buf));
     }
 };
-
 input_stream<char> make_buffer_input_stream(temporary_buffer<char>&& buf) {
     return input_stream < char > {
         data_source{std::make_unique<buffer_data_source_impl>(std::move(buf))}
     };
 }
-
 input_stream<char> make_buffer_input_stream(temporary_buffer<char>&& buf,
                                             seastar::noncopyable_function<size_t()>&& limit_generator) {
     auto res = data_source{std::make_unique<buffer_data_source_impl>(std::move(buf))};
     return input_stream < char > { make_limiting_data_source(std::move(res), std::move(limit_generator)) };
 }
-/*
- * Copyright (C) 2017-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 using namespace seastar;
-
 class limiting_data_source_impl final : public data_source_impl {
     data_source _src;
     seastar::noncopyable_function<size_t()> _limit_generator;
@@ -13585,10 +11781,8 @@ public:
         : _src(std::move(src))
         , _limit_generator(std::move(limit_generator))
     {}
-
     limiting_data_source_impl(limiting_data_source_impl&&) noexcept = default;
     limiting_data_source_impl& operator=(limiting_data_source_impl&&) noexcept = default;
-
     virtual future<temporary_buffer<char>> get() override {
         if (_buf.empty()) {
             _buf.release();
@@ -13612,41 +11806,25 @@ public:
         });
     }
 };
-
 data_source make_limiting_data_source(data_source&& src, seastar::noncopyable_function<size_t()>&& limit_generator) {
     return data_source{std::make_unique<limiting_data_source_impl>(std::move(src), std::move(limit_generator))};
 }
-/*
- * Copyright (C) 2019-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
-
 namespace utils {
-
 updateable_value_base::updateable_value_base(const updateable_value_source_base& source) {
     source.add_ref(this);
     _source = &source;
 }
-
 updateable_value_base::~updateable_value_base() {
     if (_source) {
         _source->del_ref(this);
     }
 }
-
 updateable_value_base::updateable_value_base(const updateable_value_base& v) {
     if (v._source) {
         v._source->add_ref(this);
         _source = v._source;
     }
 }
-
 updateable_value_base&
 updateable_value_base::updateable_value_base::operator=(const updateable_value_base& v) {
     if (this != &v) {
@@ -13663,14 +11841,12 @@ updateable_value_base::updateable_value_base::operator=(const updateable_value_b
     }
     return *this;
 }
-
 updateable_value_base::updateable_value_base(updateable_value_base&& v) noexcept
         : _source(std::exchange(v._source, nullptr)) {
     if (_source) {
         _source->update_ref(&v, this);
     }
 }
-
 updateable_value_base&
 updateable_value_base::operator=(updateable_value_base&& v) noexcept {
     if (this != &v) {
@@ -13684,7 +11860,6 @@ updateable_value_base::operator=(updateable_value_base&& v) noexcept {
     }
     return *this;
 }
-
 updateable_value_base&
 updateable_value_base::updateable_value_base::operator=(std::nullptr_t) {
     if (_source) {
@@ -13693,47 +11868,31 @@ updateable_value_base::updateable_value_base::operator=(std::nullptr_t) {
     }
     return *this;
 }
-
 void
 updateable_value_source_base::for_each_ref(std::function<void (updateable_value_base* ref)> func) {
     for (auto ref : _refs) {
         func(ref);
     }
 }
-
 updateable_value_source_base::~updateable_value_source_base() {
     for (auto ref : _refs) {
         ref->_source = nullptr;
     }
 }
-
 void
 updateable_value_source_base::add_ref(updateable_value_base* ref) const {
     _refs.push_back(ref);
 }
-
 void
 updateable_value_source_base::del_ref(updateable_value_base* ref) const {
     _refs.erase(std::remove(_refs.begin(), _refs.end(), ref), _refs.end());
 }
-
 void
 updateable_value_source_base::update_ref(updateable_value_base* old_ref, updateable_value_base* new_ref) const {
     std::replace(_refs.begin(), _refs.end(), old_ref, new_ref);
 }
-
 }
-/*
- * Copyright (C) 2019-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace utils {
-
 static future<> disk_sanity(fs::path path, bool developer_mode) {
     return check_direct_io_support(path.native()).then([] {
         return make_ready_future<>();
@@ -13742,7 +11901,6 @@ static future<> disk_sanity(fs::path path, bool developer_mode) {
         return make_exception_future<>(ep);
     });
 };
-
 static future<file_lock> touch_and_lock(fs::path path) {
     return io_check([path] { return recursive_touch_directory(path.native()); }).then_wrapped([path] (future<> f) {
         try {
@@ -13766,33 +11924,26 @@ static future<file_lock> touch_and_lock(fs::path path) {
         }
     });
 }
-
 void directories::set::add(fs::path path) {
     _paths.insert(path);
 }
-
 void directories::set::add(sstring path) {
     add(fs::path(path));
 }
-
 void directories::set::add(std::vector<sstring> paths) {
     for (auto& path : paths) {
         add(path);
     }
 }
-
 void directories::set::add_sharded(sstring p) {
     fs::path path(p);
-
     for (unsigned i = 0; i < smp::count; i++) {
         add(path / seastar::to_sstring(i).c_str());
     }
 }
-
 directories::directories(bool developer_mode)
         : _developer_mode(developer_mode)
 { }
-
 future<> directories::create_and_verify(directories::set dir_set) {
     return do_with(std::vector<file_lock>(), [this, dir_set = std::move(dir_set)] (std::vector<file_lock>& locks) {
         return parallel_for_each(dir_set.get_paths(), [this, &locks] (fs::path path) {
@@ -13810,7 +11961,6 @@ future<> directories::create_and_verify(directories::set dir_set) {
         });
     });
 }
-
 template <typename... Args>
 static inline
 future<> verification_error(fs::path path, const char* fstr, Args&&... args) {
@@ -13818,7 +11968,6 @@ future<> verification_error(fs::path path, const char* fstr, Args&&... args) {
     startlog.error("{}: {}", path.string(), emsg);
     return make_exception_future<>(std::runtime_error(emsg));
 }
-
 // Verify that all files and directories are owned by current uid
 // and that files can be read and directories can be read, written, and looked up (execute)
 // No other file types may exist.
@@ -13859,21 +12008,9 @@ future<> directories::verify_owner_and_mode(fs::path path) {
         }
     });
 };
-
 } // namespace utils
-/*
- * Copyright 2019-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace rjson {
-
 allocator the_allocator;
-
 // chunked_content_stream is a wrapper of a chunked_content which
 // presents the Stream concept that the rapidjson library expects as input
 // for its parser (https://rapidjson.org/classrapidjson_1_1_stream.html).
@@ -13931,31 +12068,16 @@ public:
     void Put(Ch) { RAPIDJSON_ASSERT(false); }
     void Flush() { RAPIDJSON_ASSERT(false); }
     size_t PutEnd(Ch*) { RAPIDJSON_ASSERT(false); return 0; }
-
 };
-
-/*
- * This wrapper class adds nested level checks to rapidjson's handlers.
- * Each rapidjson handler implements functions for accepting JSON values,
- * which includes strings, numbers, objects, arrays, etc.
- * Parsing objects and arrays needs to be performed carefully with regard
- * to stack overflow - each object/array layer adds another stack frame
- * to parsing, printing and destroying the parent JSON document.
- * To prevent stack overflow, a rapidjson handler can be wrapped with
- * guarded_json_handler, which accepts an additional max_nested_level parameter.
- * After trying to exceed the max nested level, a proper rjson::error will be thrown.
- */
 template<typename Handler, bool EnableYield, typename Buffer = string_buffer>
 struct guarded_yieldable_json_handler : public Handler {
     size_t _nested_level = 0;
     size_t _max_nested_level;
 public:
     using handler_base = Handler;
-
     explicit guarded_yieldable_json_handler(size_t max_nested_level) : _max_nested_level(max_nested_level) {}
     guarded_yieldable_json_handler(Buffer& buf, size_t max_nested_level)
             : handler_base(buf), _max_nested_level(max_nested_level) {}
-
     // Parse any stream fitting https://rapidjson.org/classrapidjson_1_1_stream.html
     template<typename Stream>
     void Parse(Stream& stream) {
@@ -13982,38 +12104,32 @@ public:
         rapidjson::EncodedInputStream<encoding, rapidjson::MemoryStream> is(ms);
         Parse(is);
     }
-
     void Parse(chunked_content&& content) {
         // Note that content was moved into this function. The intention is
         // that we free every chunk we are done with.
         chunked_content_stream is(std::move(content));
         Parse(is);
     }
-
     bool StartObject() {
         ++_nested_level;
         check_nested_level();
         maybe_yield();
         return handler_base::StartObject();
     }
-
     bool EndObject(rapidjson::SizeType elements_count = 0) {
         --_nested_level;
         return handler_base::EndObject(elements_count);
     }
-
     bool StartArray() {
         ++_nested_level;
         check_nested_level();
         maybe_yield();
         return handler_base::StartArray();
     }
-
     bool EndArray(rapidjson::SizeType elements_count = 0) {
         --_nested_level;
         return handler_base::EndArray(elements_count);
     }
-
     bool Null()                 { maybe_yield(); return handler_base::Null(); }
     bool Bool(bool b)           { maybe_yield(); return handler_base::Bool(b); }
     bool Int(int i)             { maybe_yield(); return handler_base::Int(i); }
@@ -14023,22 +12139,18 @@ public:
     bool Double(double d)       { maybe_yield(); return handler_base::Double(d); }
     bool String(const value::Ch* str, size_t length, bool copy = false) { maybe_yield(); return handler_base::String(str, length, copy); }
     bool Key(const value::Ch* str, size_t length, bool copy = false) { maybe_yield(); return handler_base::Key(str, length, copy); }
-
-
 protected:
     static void maybe_yield() {
         if constexpr (EnableYield) {
             thread::maybe_yield();
         }
     }
-
     void check_nested_level() const {
         if (RAPIDJSON_UNLIKELY(_nested_level > _max_nested_level)) {
             throw rjson::error(format("Max nested level reached: {}", _max_nested_level));
         }
     }
 };
-
 void* internal::throwing_allocator::Malloc(size_t size) {
     // For bypassing the address sanitizer failure in debug mode - allocating
     // too much memory results in an abort
@@ -14051,7 +12163,6 @@ void* internal::throwing_allocator::Malloc(size_t size) {
     }
     return ret;
 }
-
 void* internal::throwing_allocator::Realloc(void* orig_ptr, size_t orig_size, size_t new_size) {
     // For bypassing the address sanitizer failure in debug mode - allocating
     // too much memory results in an abort
@@ -14064,30 +12175,25 @@ void* internal::throwing_allocator::Realloc(void* orig_ptr, size_t orig_size, si
     }
     return ret;
 }
-
 void internal::throwing_allocator::Free(void* ptr) {
     base::Free(ptr);
 }
-
 std::string print(const rjson::value& value, size_t max_nested_level) {
     string_buffer buffer;
     guarded_yieldable_json_handler<writer, false> writer(buffer, max_nested_level);
     value.Accept(writer);
     return std::string(buffer.GetString());
 }
-
 future<> print(const rjson::value& value, seastar::output_stream<char>& os, size_t max_nested_level) {
     struct os_buffer {
         seastar::output_stream<char>& _os;
         temporary_buffer<char> _buf;
         size_t _pos = 0;
         future<> _f = make_ready_future<>();
-
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wunused-local-typedefs"
         using Ch = char;
         #pragma GCC diagnostic pop
-
         void send(bool try_reuse = true) {
             if (_f.failed()) {
                 _f.get0();
@@ -14132,33 +12238,27 @@ future<> print(const rjson::value& value, seastar::output_stream<char>& os, size
             return std::move(_f);
         }
     };
-
     os_buffer osb{ os };
     using streamer = rapidjson::Writer<os_buffer, encoding, encoding, allocator>;
     guarded_yieldable_json_handler<streamer, false, os_buffer> writer(osb, max_nested_level);
     value.Accept(writer);
     co_return co_await std::move(osb).finish();
 }
-
 rjson::malformed_value::malformed_value(std::string_view name, const rjson::value& value)
     : malformed_value(name, print(value))
 {}
-
 rjson::malformed_value::malformed_value(std::string_view name, std::string_view value)
     : error(format("Malformed value {} : {}", name, value))
 {}
-
 rjson::missing_value::missing_value(std::string_view name) 
     // TODO: using old message here, but as pointed out. 
     // "parameter" is not really a JSON concept. It is a value
     // missing according to (implicit) schema. 
     : error(format("JSON parameter {} not found", name))
 {}
-
 rjson::value copy(const rjson::value& value) {
     return rjson::value(value, the_allocator);
 }
-
 rjson::value parse(std::string_view str, size_t max_nested_level) {
     guarded_yieldable_json_handler<document, false> d(max_nested_level);
     d.Parse(str.data(), str.size());
@@ -14168,7 +12268,6 @@ rjson::value parse(std::string_view str, size_t max_nested_level) {
     rjson::value& v = d;
     return std::move(v);
 }
-
 rjson::value parse(chunked_content&& content, size_t max_nested_level) {
     guarded_yieldable_json_handler<document, false> d(max_nested_level);
     d.Parse(std::move(content));
@@ -14178,7 +12277,6 @@ rjson::value parse(chunked_content&& content, size_t max_nested_level) {
     rjson::value& v = d;
     return std::move(v);
 }
-
 std::optional<rjson::value> try_parse(std::string_view str, size_t max_nested_level) {
     guarded_yieldable_json_handler<document, false> d(max_nested_level);
     try {
@@ -14192,7 +12290,6 @@ std::optional<rjson::value> try_parse(std::string_view str, size_t max_nested_le
     rjson::value& v = d;
     return std::move(v);
 }
-
 rjson::value parse_yieldable(std::string_view str, size_t max_nested_level) {
     guarded_yieldable_json_handler<document, true> d(max_nested_level);
     d.Parse(str.data(), str.size());
@@ -14202,7 +12299,6 @@ rjson::value parse_yieldable(std::string_view str, size_t max_nested_level) {
     rjson::value& v = d;
     return std::move(v);
 }
-
 rjson::value parse_yieldable(chunked_content&& content, size_t max_nested_level) {
     guarded_yieldable_json_handler<document, true> d(max_nested_level);
     d.Parse(std::move(content));
@@ -14212,7 +12308,6 @@ rjson::value parse_yieldable(chunked_content&& content, size_t max_nested_level)
     rjson::value& v = d;
     return std::move(v);
 }
-
 rjson::value& get(rjson::value& value, std::string_view name) {
     // Although FindMember() has a variant taking a StringRef, it ignores the
     // given length (see https://github.com/Tencent/rapidjson/issues/1649).
@@ -14224,7 +12319,6 @@ rjson::value& get(rjson::value& value, std::string_view name) {
     }
     throw missing_value(name);
 }
-
 const rjson::value& get(const rjson::value& value, std::string_view name) {
     auto member_it = value.FindMember(rjson::value(name.data(), name.size()));
     if (member_it != value.MemberEnd()) {
@@ -14232,23 +12326,18 @@ const rjson::value& get(const rjson::value& value, std::string_view name) {
     }
     throw missing_value(name);
 }
-
 rjson::value from_string(const std::string& str) {
     return rjson::value(str.c_str(), str.size(), the_allocator);
 }
-
 rjson::value from_string(const sstring& str) {
     return rjson::value(str.c_str(), str.size(), the_allocator);
 }
-
 rjson::value from_string(const char* str, size_t size) {
     return rjson::value(str, size, the_allocator);
 }
-
 rjson::value from_string(std::string_view view) {
     return rjson::value(view.data(), view.size(), the_allocator);
 }
-
 const rjson::value* find(const rjson::value& value, std::string_view name) {
     // Although FindMember() has a variant taking a StringRef, it ignores the
     // given length (see https://github.com/Tencent/rapidjson/issues/1649).
@@ -14257,12 +12346,10 @@ const rjson::value* find(const rjson::value& value, std::string_view name) {
     auto member_it = value.FindMember(rjson::value(name.data(), name.size()));
     return member_it != value.MemberEnd() ? &member_it->value : nullptr;
 }
-
 rjson::value* find(rjson::value& value, std::string_view name) {
     auto member_it = value.FindMember(rjson::value(name.data(), name.size()));
     return member_it != value.MemberEnd() ? &member_it->value : nullptr;
 }
-
 bool remove_member(rjson::value& value, std::string_view name) {
     // Although RemoveMember() has a variant taking a StringRef, it ignores
     // given length (see https://github.com/Tencent/rapidjson/issues/1649).
@@ -14270,23 +12357,18 @@ bool remove_member(rjson::value& value, std::string_view name) {
     // and we can create a string GenericValue without copying the string.
     return value.RemoveMember(rjson::value(name.data(), name.size()));
 }
-
 void add_with_string_name(rjson::value& base, std::string_view name, rjson::value&& member) {
     base.AddMember(rjson::value(name.data(), name.size(), the_allocator), std::move(member), the_allocator);
 }
-
 void add_with_string_name(rjson::value& base, std::string_view name, rjson::string_ref_type member) {
     base.AddMember(rjson::value(name.data(), name.size(), the_allocator), rjson::value(member), the_allocator);
 }
-
 void add(rjson::value& base, rjson::string_ref_type name, rjson::value&& member) {
     base.AddMember(name, std::move(member), the_allocator);
 }
-
 void add(rjson::value& base, rjson::string_ref_type name, rjson::string_ref_type member) {
     base.AddMember(name, rjson::value(member), the_allocator);
 }
-
 void replace_with_string_name(rjson::value& base, const std::string_view name, rjson::value&& member) {
     rjson::value *m = rjson::find(base, name);
     if (m) {
@@ -14295,16 +12377,12 @@ void replace_with_string_name(rjson::value& base, const std::string_view name, r
         add_with_string_name(base, name, std::move(member));
     }
 }
-
 void push_back(rjson::value& base_array, rjson::value&& item) {
     base_array.PushBack(std::move(item), the_allocator);
-
 }
-
 bool single_value_comp::operator()(const rjson::value& r1, const rjson::value& r2) const {
    auto r1_type = r1.GetType();
    auto r2_type = r2.GetType();
-
    // null is the smallest type and compares with every other type, nothing is lesser than null
    if (r1_type == rjson::type::kNullType || r2_type == rjson::type::kNullType) {
        return r1_type < r2_type;
@@ -14315,7 +12393,6 @@ bool single_value_comp::operator()(const rjson::value& r1, const rjson::value& r
            throw rjson::error(format("Types are not comparable: {} {}", r1, r2));
        }
    }
-
    switch (r1_type) {
    case rjson::type::kNullType:
        // fall-through
@@ -14352,7 +12429,6 @@ bool single_value_comp::operator()(const rjson::value& r1, const rjson::value& r
        return false;
    }
 }
-
 rjson::value from_string_map(const std::map<sstring, sstring>& map) {
     rjson::value v = rjson::empty_object();
     for (auto& entry : map) {
@@ -14360,16 +12436,12 @@ rjson::value from_string_map(const std::map<sstring, sstring>& map) {
     }
     return v;
 }
-
 static inline bool is_control_char(char c) {
     return c >= 0 && c <= 0x1F;
 }
-
 static inline bool needs_escaping(const sstring& s) {
     return std::any_of(s.begin(), s.end(), [](char c) {return is_control_char(c) || c == '"' || c == '\\';});
 }
-
-
 sstring quote_json_string(const sstring& value) {
     if (!needs_escaping(value)) {
         return format("\"{}\"", value);
@@ -14412,24 +12484,11 @@ sstring quote_json_string(const sstring& value) {
     oss.put('"');
     return oss.str();
 }
-
 } // end namespace rjson
-
 std::ostream& std::operator<<(std::ostream& os, const rjson::value& v) {
     return os << rjson::print(v);
 }
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-/*
- * Copyright (C) 2020-present ScyllaDB
- */
-
-
-
 namespace utils {
-
 std::ostream& operator<<(std::ostream& os, const human_readable_value& val) {
     os << val.value;
     if (val.suffix) {
@@ -14437,12 +12496,10 @@ std::ostream& operator<<(std::ostream& os, const human_readable_value& val) {
     }
     return os;
 }
-
 static human_readable_value to_human_readable_value(uint64_t value, uint64_t step, uint64_t precision, const std::array<char, 5>& suffixes) {
     if (!value) {
         return {0, suffixes[0]};
     }
-
     uint64_t result = value;
     uint64_t remainder = 0;
     unsigned i = 0;
@@ -14458,22 +12515,11 @@ static human_readable_value to_human_readable_value(uint64_t value, uint64_t ste
     }
     return {uint16_t(remainder < (step / 2) ? result : result + 1), suffixes[i]};
 }
-
 human_readable_value to_hr_size(uint64_t size) {
     const std::array<char, 5> suffixes = {'B', 'K', 'M', 'G', 'T'};
     return to_human_readable_value(size, 1024, 8192, suffixes);
 }
-
 } // namespace utils
-/*
- * Copyright (C) 2022-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 seastar::metrics::histogram to_metrics_summary(const utils::summary_calculator& summary) noexcept {
     seastar::metrics::histogram res;
     res.buckets.resize(summary.quantiles().size());
@@ -14484,21 +12530,10 @@ seastar::metrics::histogram to_metrics_summary(const utils::summary_calculator& 
     }
     return res;
 }
-/*
- * Copyright (C) 2020-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 bool
 converting_mutation_partition_applier::is_compatible(const column_definition& new_def, const abstract_type& old_type, column_kind kind) {
     return ::is_compatible(new_def.kind, kind) && new_def.type->is_value_compatible_with(old_type);
 }
-
 atomic_cell
 converting_mutation_partition_applier::upgrade_cell(const abstract_type& new_type, const abstract_type& old_type, atomic_cell_view cell,
                                 atomic_cell::collection_member cm) {
@@ -14511,7 +12546,6 @@ converting_mutation_partition_applier::upgrade_cell(const abstract_type& new_typ
         return atomic_cell(new_type, cell);
     }
 }
-
 void
 converting_mutation_partition_applier::accept_cell(row& dst, column_kind kind, const column_definition& new_def, const abstract_type& old_type, atomic_cell_view cell) {
     if (!is_compatible(new_def, old_type, kind) || cell.timestamp() <= new_def.dropped_at()) {
@@ -14519,27 +12553,22 @@ converting_mutation_partition_applier::accept_cell(row& dst, column_kind kind, c
     }
     dst.apply(new_def, upgrade_cell(*new_def.type, old_type, cell));
 }
-
 void
 converting_mutation_partition_applier::accept_cell(row& dst, column_kind kind, const column_definition& new_def, const abstract_type& old_type, collection_mutation_view cell) {
     if (!is_compatible(new_def, old_type, kind)) {
         return;
     }
-
   cell.with_deserialized(old_type, [&] (collection_mutation_view_description old_view) {
     collection_mutation_description new_view;
     if (old_view.tomb.timestamp > new_def.dropped_at()) {
         new_view.tomb = old_view.tomb;
     }
-
     visit(old_type, make_visitor(
         [&] (const collection_type_impl& old_ctype) {
             assert(new_def.type->is_collection()); // because is_compatible
             auto& new_ctype = static_cast<const collection_type_impl&>(*new_def.type);
-
             auto& new_value_type = *new_ctype.value_comparator();
             auto& old_value_type = *old_ctype.value_comparator();
-
             for (auto& c : old_view.cells) {
                 if (c.second.timestamp() > new_def.dropped_at()) {
                     new_view.cells.emplace_back(c.first, upgrade_cell(
@@ -14550,12 +12579,10 @@ converting_mutation_partition_applier::accept_cell(row& dst, column_kind kind, c
         [&] (const user_type_impl& old_utype) {
             assert(new_def.type->is_user_type()); // because is_compatible
             auto& new_utype = static_cast<const user_type_impl&>(*new_def.type);
-
             for (auto& c : old_view.cells) {
                 if (c.second.timestamp() > new_def.dropped_at()) {
                     auto idx = deserialize_field_index(c.first);
                     assert(idx < new_utype.size() && idx < old_utype.size());
-
                     new_view.cells.emplace_back(c.first, upgrade_cell(
                             *new_utype.type(idx), *old_utype.type(idx), c.second, atomic_cell::collection_member::yes));
                 }
@@ -14565,13 +12592,11 @@ converting_mutation_partition_applier::accept_cell(row& dst, column_kind kind, c
             throw std::runtime_error(format("not a multi-cell type: {}", o.name()));
         }
     ));
-
     if (new_view.tomb || !new_view.cells.empty()) {
         dst.apply(new_def, new_view.serialize(*new_def.type));
     }
   });
 }
-
 converting_mutation_partition_applier::converting_mutation_partition_applier(
         const column_mapping& visited_column_mapping,
         const schema& target_schema,
@@ -14580,18 +12605,14 @@ converting_mutation_partition_applier::converting_mutation_partition_applier(
     , _p(target)
     , _visited_column_mapping(visited_column_mapping)
 { }
-
-
 void
 converting_mutation_partition_applier::accept_partition_tombstone(tombstone t) {
     _p.apply(t);
 }
-
 void
 converting_mutation_partition_applier::accept_static_cell(column_id id, atomic_cell cell) {
     return accept_static_cell(id, atomic_cell_view(cell));
 }
-
 void
 converting_mutation_partition_applier::accept_static_cell(column_id id, atomic_cell_view cell) {
     const column_mapping_entry& col = _visited_column_mapping.static_column_at(id);
@@ -14600,7 +12621,6 @@ converting_mutation_partition_applier::accept_static_cell(column_id id, atomic_c
         accept_cell(_p._static_row.maybe_create(), column_kind::static_column, *def, *col.type(), cell);
     }
 }
-
 void
 converting_mutation_partition_applier::accept_static_cell(column_id id, collection_mutation_view collection) {
     const column_mapping_entry& col = _visited_column_mapping.static_column_at(id);
@@ -14609,12 +12629,10 @@ converting_mutation_partition_applier::accept_static_cell(column_id id, collecti
         accept_cell(_p._static_row.maybe_create(), column_kind::static_column, *def, *col.type(), collection);
     }
 }
-
 void
 converting_mutation_partition_applier::accept_row_tombstone(const range_tombstone& rt) {
     _p.apply_row_tombstone(_p_schema, rt);
 }
-
 void
 converting_mutation_partition_applier::accept_row(position_in_partition_view key, const row_tombstone& deleted_at, const row_marker& rm, is_dummy dummy, is_continuous continuous) {
     deletable_row& r = _p.clustered_row(_p_schema, key, dummy, continuous);
@@ -14622,12 +12640,10 @@ converting_mutation_partition_applier::accept_row(position_in_partition_view key
     r.apply(deleted_at);
     _current_row = &r;
 }
-
 void
 converting_mutation_partition_applier::accept_row_cell(column_id id, atomic_cell cell) {
     return accept_row_cell(id, atomic_cell_view(cell));
 }
-
 void
 converting_mutation_partition_applier::accept_row_cell(column_id id, atomic_cell_view cell) {
     const column_mapping_entry& col = _visited_column_mapping.regular_column_at(id);
@@ -14636,7 +12652,6 @@ converting_mutation_partition_applier::accept_row_cell(column_id id, atomic_cell
         accept_cell(_current_row->cells(), column_kind::regular_column, *def, *col.type(), cell);
     }
 }
-
 void
 converting_mutation_partition_applier::accept_row_cell(column_id id, collection_mutation_view collection) {
     const column_mapping_entry& col = _visited_column_mapping.regular_column_at(id);
@@ -14645,7 +12660,6 @@ converting_mutation_partition_applier::accept_row_cell(column_id id, collection_
         accept_cell(_current_row->cells(), column_kind::regular_column, *def, *col.type(), collection);
     }
 }
-
 void
 converting_mutation_partition_applier::append_cell(row& dst, column_kind kind, const column_definition& new_def, const column_definition& old_def, const atomic_cell_or_collection& cell) {
     if (new_def.is_atomic()) {
@@ -14654,22 +12668,11 @@ converting_mutation_partition_applier::append_cell(row& dst, column_kind kind, c
         accept_cell(dst, kind, new_def, *old_def.type, cell.as_collection_mutation());
     }
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 reconcilable_result::~reconcilable_result() {}
-
 reconcilable_result::reconcilable_result()
     : _row_count_low_bits(0)
     , _row_count_high_bits(0)
 { }
-
 reconcilable_result::reconcilable_result(uint32_t row_count_low_bits, utils::chunked_vector<partition> p, query::short_read short_read,
                                          uint32_t row_count_high_bits, query::result_memory_tracker memory_tracker)
     : _row_count_low_bits(row_count_low_bits)
@@ -14678,25 +12681,20 @@ reconcilable_result::reconcilable_result(uint32_t row_count_low_bits, utils::chu
     , _partitions(std::move(p))
     , _row_count_high_bits(row_count_high_bits)
 { }
-
 reconcilable_result::reconcilable_result(uint64_t row_count, utils::chunked_vector<partition> p, query::short_read short_read,
                                          query::result_memory_tracker memory_tracker)
     : reconcilable_result(static_cast<uint32_t>(row_count), std::move(p), short_read, static_cast<uint32_t>(row_count >> 32), std::move(memory_tracker))
 { }
-
 const utils::chunked_vector<partition>& reconcilable_result::partitions() const {
     return _partitions;
 }
-
 utils::chunked_vector<partition>& reconcilable_result::partitions() {
     return _partitions;
 }
-
 bool
 reconcilable_result::operator==(const reconcilable_result& other) const {
     return boost::equal(_partitions, other._partitions);
 }
-
 std::ostream& operator<<(std::ostream& out, const reconcilable_result::printer& pr) {
     out << "{rows=" << pr.self.row_count() << ", short_read="
         << pr.self.is_short_read() << ", [";
@@ -14713,33 +12711,19 @@ std::ostream& operator<<(std::ostream& out, const reconcilable_result::printer& 
     out << "]}";
     return out;
 }
-
 reconcilable_result::printer reconcilable_result::pretty_printer(schema_ptr s) const {
     return { *this, std::move(s) };
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 logging::logger klog("keys");
-
 const legacy_compound_view<partition_key_view::c_type>
 partition_key_view::legacy_form(const schema& s) const {
     return { *get_compound_type(s), _bytes };
 }
-
 std::strong_ordering
 partition_key_view::legacy_tri_compare(const schema& s, partition_key_view o) const {
     auto cmp = legacy_compound_view<c_type>::tri_comparator(*get_compound_type(s));
     return cmp(this->representation(), o.representation());
 }
-
 std::strong_ordering
 partition_key_view::ring_order_tri_compare(const schema& s, partition_key_view k2) const {
     auto t1 = dht::get_token(s, *this);
@@ -14749,11 +12733,9 @@ partition_key_view::ring_order_tri_compare(const schema& s, partition_key_view k
     }
     return legacy_tri_compare(s, k2);
 }
-
 partition_key partition_key::from_nodetool_style_string(const schema_ptr s, const sstring& key) {
     std::vector<sstring> vec;
     boost::split(vec, key, boost::is_any_of(":"));
-
     auto it = std::begin(vec);
     if (vec.size() != s->partition_key_type()->types().size()) {
         throw std::invalid_argument("partition key '" + key + "' has mismatch number of components");
@@ -14765,7 +12747,6 @@ partition_key partition_key::from_nodetool_style_string(const schema_ptr s, cons
     }
     return partition_key::from_range(std::move(r));
 }
-
 std::ostream& operator<<(std::ostream& out, const bound_kind k) {
     switch (k) {
     case bound_kind::excl_end:
@@ -14779,7 +12760,6 @@ std::ostream& operator<<(std::ostream& out, const bound_kind k) {
     }
     abort();
 }
-
 bound_kind invert_kind(bound_kind k) {
     switch (k) {
     case bound_kind::excl_start: return bound_kind::incl_end;
@@ -14789,7 +12769,6 @@ bound_kind invert_kind(bound_kind k) {
     }
     abort();
 }
-
 bound_kind reverse_kind(bound_kind k) {
     switch (k) {
     case bound_kind::excl_start: return bound_kind::excl_end;
@@ -14799,7 +12778,6 @@ bound_kind reverse_kind(bound_kind k) {
     }
     on_internal_error(klog, format("reverse_kind(): invalid value for `bound_kind`: {}", static_cast<std::underlying_type_t<bound_kind>>(k)));
 }
-
 int32_t weight(bound_kind k) {
     switch (k) {
     case bound_kind::excl_end:
@@ -14813,33 +12791,19 @@ int32_t weight(bound_kind k) {
     }
     abort();
 }
-
 const thread_local clustering_key_prefix bound_view::_empty_prefix = clustering_key::make_empty();
-/*
- * Copyright (C) 2016-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 std::ostream& operator<<(std::ostream& os, counter_shard_view csv) {
     fmt::print(os, "{{global_shard id: {} value: {}, clock: {}}}",
                csv.id(), csv.value(), csv.logical_clock());
     return os;
 }
-
 std::ostream& operator<<(std::ostream& os, counter_cell_view ccv) {
     fmt::print(os, "{{counter_cell timestamp: {} shards: {{{}}}}}", ccv.timestamp(), fmt::join(ccv.shards(), ", "));
     return os;
 }
-
 void counter_cell_builder::do_sort_and_remove_duplicates()
 {
     boost::range::sort(_shards, [] (auto& a, auto& b) { return a.id() < b.id(); });
-
     std::vector<counter_shard> new_shards;
     new_shards.reserve(_shards.size());
     for (auto& cs : _shards) {
@@ -14852,17 +12816,14 @@ void counter_cell_builder::do_sort_and_remove_duplicates()
     _shards = std::move(new_shards);
     _sorted = true;
 }
-
 static bool apply_in_place(const column_definition& cdef, atomic_cell_mutable_view dst, atomic_cell_mutable_view src)
 {
     auto dst_ccmv = counter_cell_mutable_view(dst);
     auto src_ccmv = counter_cell_mutable_view(src);
     auto dst_shards = dst_ccmv.shards();
     auto src_shards = src_ccmv.shards();
-
     auto dst_it = dst_shards.begin();
     auto src_it = src_shards.begin();
-
     while (src_it != src_shards.end()) {
         while (dst_it != dst_shards.end() && dst_it->id() < src_it->id()) {
             ++dst_it;
@@ -14888,26 +12849,22 @@ static bool apply_in_place(const column_definition& cdef, atomic_cell_mutable_vi
         }
         ++src_it;
     }
-
     auto dst_ts = dst_ccmv.timestamp();
     auto src_ts = src_ccmv.timestamp();
     dst_ccmv.set_timestamp(std::max(dst_ts, src_ts));
     src_ccmv.set_timestamp(dst_ts);
     return true;
 }
-
 void counter_cell_view::apply(const column_definition& cdef, atomic_cell_or_collection& dst, atomic_cell_or_collection& src)
 {
     auto dst_ac = dst.as_atomic_cell(cdef);
     auto src_ac = src.as_atomic_cell(cdef);
-
     if (!dst_ac.is_live() || !src_ac.is_live()) {
         if (dst_ac.is_live() || (!src_ac.is_live() && compare_atomic_cell_for_merge(dst_ac, src_ac) < 0)) {
             std::swap(dst, src);
         }
         return;
     }
-
     if (dst_ac.is_counter_update() && src_ac.is_counter_update()) {
         auto src_v = src_ac.counter_update_value();
         auto dst_v = dst_ac.counter_update_value();
@@ -14915,10 +12872,8 @@ void counter_cell_view::apply(const column_definition& cdef, atomic_cell_or_coll
                                                     src_v + dst_v);
         return;
     }
-
     assert(!dst_ac.is_counter_update());
     assert(!src_ac.is_counter_update());
-
     auto src_ccv = counter_cell_view(src_ac);
     auto dst_ccv = counter_cell_view(dst_ac);
     if (dst_ccv.shard_count() >= src_ccv.shard_count()) {
@@ -14928,42 +12883,34 @@ void counter_cell_view::apply(const column_definition& cdef, atomic_cell_or_coll
             return;
         }
     }
-
     auto dst_shards = dst_ccv.shards();
     auto src_shards = src_ccv.shards();
-
     counter_cell_builder result;
     combine(dst_shards.begin(), dst_shards.end(), src_shards.begin(), src_shards.end(),
             result.inserter(), counter_shard_view::less_compare_by_id(), [] (auto& x, auto& y) {
                 return x.logical_clock() < y.logical_clock() ? y : x;
             });
-
     auto cell = result.build(std::max(dst_ac.timestamp(), src_ac.timestamp()));
     src = std::exchange(dst, atomic_cell_or_collection(std::move(cell)));
 }
-
 std::optional<atomic_cell> counter_cell_view::difference(atomic_cell_view a, atomic_cell_view b)
 {
     assert(!a.is_counter_update());
     assert(!b.is_counter_update());
-
     if (!b.is_live() || !a.is_live()) {
         if (b.is_live() || (!a.is_live() && compare_atomic_cell_for_merge(b, a) < 0)) {
             return atomic_cell(*counter_type, a);
         }
         return { };
     }
-
     auto a_ccv = counter_cell_view(a);
     auto b_ccv = counter_cell_view(b);
     auto a_shards = a_ccv.shards();
     auto b_shards = b_ccv.shards();
-
     auto a_it = a_shards.begin();
     auto a_end = a_shards.end();
     auto b_it = b_shards.begin();
     auto b_end = b_shards.end();
-
     counter_cell_builder result;
     while (a_it != a_end) {
         while (b_it != b_end && (*b_it).id() < (*a_it).id()) {
@@ -14974,7 +12921,6 @@ std::optional<atomic_cell> counter_cell_view::difference(atomic_cell_view a, ato
         }
         ++a_it;
     }
-
     std::optional<atomic_cell> diff;
     if (!result.empty()) {
         diff = result.build(std::max(a.timestamp(), b.timestamp()));
@@ -14983,13 +12929,9 @@ std::optional<atomic_cell> counter_cell_view::difference(atomic_cell_view a, ato
     }
     return diff;
 }
-
-
 void transform_counter_updates_to_shards(mutation& m, const mutation* current_state, uint64_t clock_offset, locator::host_id local_host_id) {
     // FIXME: allow current_state to be frozen_mutation
-
     utils::UUID local_id = local_host_id.uuid();
-
     auto transform_new_row_to_shards = [&s = *m.schema(), clock_offset, local_id] (column_kind kind, auto& cells) {
         cells.for_each_cell([&] (column_id id, atomic_cell_or_collection& ac_o_c) {
             auto& cdef = s.column_at(kind, id);
@@ -15002,7 +12944,6 @@ void transform_counter_updates_to_shards(mutation& m, const mutation* current_st
             ac_o_c = counter_cell_builder::from_single_shard(acv.timestamp(), cs);
         });
     };
-
     if (!current_state) {
         transform_new_row_to_shards(column_kind::static_column, m.partition().static_row());
         for (auto& cr : m.partition().clustered_rows()) {
@@ -15010,9 +12951,7 @@ void transform_counter_updates_to_shards(mutation& m, const mutation* current_st
         }
         return;
     }
-
     clustering_key::less_compare cmp(*m.schema());
-
     auto transform_row_to_shards = [&s = *m.schema(), clock_offset, local_id] (column_kind kind, auto& transformee, auto& state) {
         std::deque<std::pair<column_id, counter_shard>> shards;
         state.for_each_cell([&] (column_id id, const atomic_cell_or_collection& ac_o_c) {
@@ -15028,7 +12967,6 @@ void transform_counter_updates_to_shards(mutation& m, const mutation* current_st
             }
             shards.emplace_back(std::make_pair(id, counter_shard(*cs)));
           });
-
         transformee.for_each_cell([&] (column_id id, atomic_cell_or_collection& ac_o_c) {
             auto& cdef = s.column_at(kind, id);
             auto acv = ac_o_c.as_atomic_cell(cdef);
@@ -15038,9 +12976,7 @@ void transform_counter_updates_to_shards(mutation& m, const mutation* current_st
             while (!shards.empty() && shards.front().first < id) {
                 shards.pop_front();
             }
-
             auto delta = acv.counter_update_value();
-
             if (shards.empty() || shards.front().first > id) {
                 auto cs = counter_shard(counter_id(local_id), delta, clock_offset + 1);
                 ac_o_c = counter_cell_builder::from_single_shard(acv.timestamp(), cs);
@@ -15052,9 +12988,7 @@ void transform_counter_updates_to_shards(mutation& m, const mutation* current_st
             }
         });
     };
-
     transform_row_to_shards(column_kind::static_column, m.partition().static_row(), current_state->partition().static_row());
-
     auto& cstate = current_state->partition();
     auto it = cstate.clustered_rows().begin();
     auto end = cstate.clustered_rows().end();
@@ -15066,65 +13000,32 @@ void transform_counter_updates_to_shards(mutation& m, const mutation* current_st
             transform_new_row_to_shards(column_kind::regular_column, cr.row().cells());
             continue;
         }
-
         transform_row_to_shards(column_kind::regular_column, cr.row().cells(), it->row().cells());
     }
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 namespace runtime {
-
 static std::chrono::steady_clock::time_point boot_time;
-
 void init_uptime()
 {
     boot_time = std::chrono::steady_clock::now();
 }
-
 std::chrono::steady_clock::time_point get_boot_time() {
     return boot_time;
 }
-
 std::chrono::steady_clock::duration get_uptime()
 {
     return std::chrono::steady_clock::now() - boot_time;
 }
-
 }
-/*
- *
- * Modified by ScyllaDB
- * Copyright (C) 2015-present ScyllaDB
- *
- */
-
-/*
- * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
- */
-
-
 namespace utils {
-
 namespace murmur_hash {
-
 uint32_t hash32(bytes_view data, uint32_t seed)
 {
     uint32_t length = data.size();
     uint32_t m = 0x5bd1e995;
     uint32_t r = 24;
-
     uint32_t h = seed ^ length;
-
     uint32_t len_4 = length >> 2;
-
     for (uint32_t i = 0; i < len_4; i++)
     {
         uint32_t i_4 = i << 2;
@@ -15141,11 +13042,9 @@ uint32_t hash32(bytes_view data, uint32_t seed)
         h *= m;
         h ^= k;
     }
-
     // avoid calculating modulo
     uint32_t len_m = len_4 << 2;
     uint32_t left = length - len_m;
-
     if (left != 0)
     {
         if (left >= 3)
@@ -15160,46 +13059,34 @@ uint32_t hash32(bytes_view data, uint32_t seed)
         {
             h ^= (uint32_t) data[length - 1];
         }
-
         h *= m;
     }
-
     h ^= (uint32_t)h >> 13;
     h *= m;
     h ^= (uint32_t)h >> 15;
-
     return h;
 }
-
 uint64_t hash2_64(bytes_view key, uint64_t seed)
 {
     uint32_t length = key.size();
     uint64_t m64 = 0xc6a4a7935bd1e995L;
     uint32_t r64 = 47;
-
     uint64_t h64 = (seed & 0xffffffffL) ^ (m64 * length);
-
     uint32_t lenLongs = length >> 3;
-
     for (uint32_t i = 0; i < lenLongs; ++i)
     {
         uint32_t i_8 = i << 3;
-
         uint64_t k64 =  ((uint64_t)  key[i_8+0] & 0xff)      + (((uint64_t) key[i_8+1] & 0xff)<<8)  +
                 (((uint64_t) key[i_8+2] & 0xff)<<16) + (((uint64_t) key[i_8+3] & 0xff)<<24) +
                 (((uint64_t) key[i_8+4] & 0xff)<<32) + (((uint64_t) key[i_8+5] & 0xff)<<40) +
                 (((uint64_t) key[i_8+6] & 0xff)<<48) + (((uint64_t) key[i_8+7] & 0xff)<<56);
-
         k64 *= m64;
         k64 ^= k64 >> r64;
         k64 *= m64;
-
         h64 ^= k64;
         h64 *= m64;
     }
-
     uint32_t rem = length & 0x7;
-
     switch (rem)
     {
     case 0:
@@ -15220,14 +13107,11 @@ uint64_t hash2_64(bytes_view key, uint64_t seed)
         h64 ^= (uint64_t) key[length - rem];
         h64 *= m64;
     }
-
     h64 ^= (uint64_t)h64 >> r64;
     h64 *= m64;
     h64 ^= (uint64_t)h64 >> r64;
-
     return h64;
 }
-
 static inline uint64_t getblock(bytes_view key, uint32_t index)
 {
     uint32_t i_8 = index << 3;
@@ -15241,44 +13125,31 @@ static inline uint64_t getblock(bytes_view key, uint32_t index)
             | (uint64_t(p[6]) << 48)
             | (uint64_t(p[7]) << 56);
 }
-
 void hash3_x64_128(bytes_view key, uint64_t seed, std::array<uint64_t,2> &result)
 {
     uint32_t length = key.size();
     const uint32_t nblocks = length >> 4; // Process as 128-bit blocks.
-
     uint64_t h1 = seed;
     uint64_t h2 = seed;
-
     uint64_t c1 = 0x87c37b91114253d5L;
     uint64_t c2 = 0x4cf5ad432745937fL;
-
     //----------
     // body
-
     for(uint32_t i = 0; i < nblocks; i++)
     {
         uint64_t k1 = getblock(key, i*2+0);
         uint64_t k2 = getblock(key, i*2+1);
-
         k1 *= c1; k1 = rotl64(k1,31); k1 *= c2; h1 ^= k1;
-
         h1 = rotl64(h1,27); h1 += h2; h1 = h1*5+0x52dce729;
-
         k2 *= c2; k2  = rotl64(k2,33); k2 *= c1; h2 ^= k2;
-
         h2 = rotl64(h2,31); h2 += h1; h2 = h2*5+0x38495ab5;
     }
-
     //----------
     // tail
-
     // Advance offset to the unprocessed tail of the data.
     key.remove_prefix(nblocks * 16);
-
     uint64_t k1 = 0;
     uint64_t k2 = 0;
-
     switch (length & 15)
     {
     case 15: k2 ^= ((uint64_t) key[14]) << 48;
@@ -15299,39 +13170,21 @@ void hash3_x64_128(bytes_view key, uint64_t seed, std::array<uint64_t,2> &result
     case  1: k1 ^= ((uint64_t) key[0]);
         k1 *= c1; k1  = rotl64(k1,31); k1 *= c2; h1 ^= k1;
     };
-
     //----------
     // finalization
-
     h1 ^= length; h2 ^= length;
-
     h1 += h2;
     h2 += h1;
-
     h1 = fmix(h1);
     h2 = fmix(h2);
-
     h1 += h2;
     h2 += h1;
-
     result[0] = h1;
     result[1] = h2;
 }
-
 } // namespace murmur_hash
 } // namespace utils
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 namespace utils {
-
 UUID
 make_random_uuid() noexcept {
     static thread_local std::mt19937_64 engine(std::random_device().operator()());
@@ -15345,12 +13198,10 @@ make_random_uuid() noexcept {
     lsb |= uint64_t(0x2) << 62; // IETF variant
     return UUID(msb, lsb);
 }
-
 std::ostream& operator<<(std::ostream& out, const UUID& uuid) {
     fmt::print(out, "{}", uuid);
     return out;
 }
-
 UUID::UUID(sstring_view uuid) {
     sstring uuid_string(uuid.begin(), uuid.end());
     boost::erase_all(uuid_string, "-");
@@ -15375,24 +13226,12 @@ UUID::UUID(sstring_view uuid) {
         throw marshal_exception(format("invalid UUID: '{}'", uuid));
     }
 }
-
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 // Clang or boost have a problem navigating the enable_if maze
 // that is cpp_int's constructor. It ends up treating the
 // string_view as binary and "0" ends up 48.
-
 // Work around by casting to string.
 using string_view_workaround = std::string;
-
 uint64_t from_varint_to_integer(const utils::multiprecision_int& varint) {
     // The behavior CQL expects on overflow is for values to wrap
     // around. For cpp_int conversion functions, the behavior is to
@@ -15402,11 +13241,9 @@ uint64_t from_varint_to_integer(const utils::multiprecision_int& varint) {
     // with possible overflow, to ToType.
     return static_cast<uint64_t>(~static_cast<uint64_t>(0) & boost::multiprecision::cpp_int(varint));
 }
-
 big_decimal::big_decimal() : big_decimal(0, 0) {}
 big_decimal::big_decimal(int32_t scale, boost::multiprecision::cpp_int unscaled_value)
     : _scale(scale), _unscaled_value(std::move(unscaled_value)) {}
-
 big_decimal::big_decimal(sstring_view text)
 {
     size_t e_pos = text.find_first_of("eE");
@@ -15428,13 +13265,11 @@ big_decimal::big_decimal(sstring_view text)
     std::string_view integer(integer_str);
     const bool negative = !integer.empty() && integer.front() == '-';
     integer.remove_prefix(negative || (!integer.empty() && integer.front() == '+'));
-
     if (integer.empty()) {
         throw marshal_exception(format("big_decimal - both integer and fraction are empty"));
     } else if (!::isdigit(integer.front())) {
         throw marshal_exception(format("big_decimal - incorrect integer: {}", text));
     }
-
     integer.remove_prefix(std::min(integer.find_first_not_of("0"), integer.size() - 1));
     try {
         _unscaled_value = boost::multiprecision::cpp_int(string_view_workaround(integer));
@@ -15451,7 +13286,6 @@ big_decimal::big_decimal(sstring_view text)
     }
     _scale += fraction.size();
 }
-
 boost::multiprecision::cpp_rational big_decimal::as_rational() const {
     boost::multiprecision::cpp_int ten(10);
     auto unscaled_value = static_cast<const boost::multiprecision::cpp_int&>(_unscaled_value);
@@ -15465,7 +13299,6 @@ boost::multiprecision::cpp_rational big_decimal::as_rational() const {
     }
     return r;
 }
-
 sstring big_decimal::to_string() const
 {
     if (!_unscaled_value) {
@@ -15486,7 +13319,6 @@ sstring big_decimal::to_string() const
             nstr.append(str);
             str = std::move(nstr);
         }
-
         while (str.back() == '0') {
             str.pop_back();
         }
@@ -15499,7 +13331,6 @@ sstring big_decimal::to_string() const
     }
     return str;
 }
-
 std::strong_ordering big_decimal::operator<=>(const big_decimal& other) const
 {
     auto max_scale = std::max(_scale, other._scale);
@@ -15508,7 +13339,6 @@ std::strong_ordering big_decimal::operator<=>(const big_decimal& other) const
     boost::multiprecision::cpp_int y = other._unscaled_value * boost::multiprecision::pow(rescale, max_scale - other._scale);
     return x.compare(y) <=> 0;
 }
-
 big_decimal& big_decimal::operator+=(const big_decimal& other)
 {
     if (_scale == other._scale) {
@@ -15523,7 +13353,6 @@ big_decimal& big_decimal::operator+=(const big_decimal& other)
     }
     return *this;
 }
-
 big_decimal& big_decimal::operator-=(const big_decimal& other) {
     if (_scale == other._scale) {
         _unscaled_value -= other._unscaled_value;
@@ -15537,25 +13366,21 @@ big_decimal& big_decimal::operator-=(const big_decimal& other) {
     }
     return *this;
 }
-
 big_decimal big_decimal::operator+(const big_decimal& other) const {
     big_decimal ret(*this);
     ret += other;
     return ret;
 }
-
 big_decimal big_decimal::operator-(const big_decimal& other) const {
     big_decimal ret(*this);
     ret -= other;
     return ret;
 }
-
 big_decimal big_decimal::div(const ::uint64_t y, const rounding_mode mode) const
 {
     if (mode != rounding_mode::HALF_EVEN) {
         assert(0);
     }
-
     // Implementation of Division with Half to Even (aka Bankers) Rounding
     const boost::multiprecision::cpp_int sign = _unscaled_value >= 0 ? +1 : -1;
     const boost::multiprecision::cpp_int a = sign * _unscaled_value;
@@ -15564,44 +13389,20 @@ big_decimal big_decimal::div(const ::uint64_t y, const rounding_mode mode) const
     //   convert to cpp_int, so we force the conversion explicitly before cpp_int
     //   is converted to uint64_t.
     const uint64_t r = boost::multiprecision::cpp_int{a % y}.convert_to<uint64_t>();
-
     boost::multiprecision::cpp_int q = a / y;
-
-    /*
-     * Value r/y is fractional part of (*this)/y that is used to determine
-     *   the direction of rounding.
-     * For rounding one has to consider r/y cmp 1/2 or equivalently:
-     *   2*r cmp y.
-     */
     if (2*r < y) {
-        /* Number has its final value */
     } else if (2*r > y) {
         q += 1;
     } else if (q % 2 == 1) {
-        /* Change to closest even number */
         q += 1;
     }
-
     return big_decimal(_scale, sign * q);
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 static logging::logger tlogger("types");
-
 bytes_view_opt read_collection_value(bytes_view& in);
-
 void on_types_internal_error(std::exception_ptr ex) {
     on_internal_error(tlogger, std::move(ex));
 }
-
 template<typename T>
 requires requires {
         typename T::duration;
@@ -15617,14 +13418,12 @@ time_point_to_string(const T& tp)
     if (!gmtime_r(&seconds, &tm)) {
         return fmt::format("{} milliseconds (out of range)", count);
     }
-
     auto to_string = [] (const std::tm& tm) {
         auto year_digits = tm.tm_year >= -1900 ? 4 : 5;
         return fmt::format("{:-0{}d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}",
                 tm.tm_year + 1900, year_digits, tm.tm_mon + 1, tm.tm_mday,
                 tm.tm_hour, tm.tm_min, tm.tm_sec);
     };
-
     auto millis = d.rem;
     if (!millis) {
         return fmt::format("{}", to_string(tm));
@@ -15639,7 +13438,6 @@ time_point_to_string(const T& tp)
     auto micros = millis * 1000;
     return fmt::format("{}.{:06d}", to_string(tm), micros);
 }
-
 sstring simple_date_to_string(const uint32_t days_count) {
     date::days days{days_count - (1UL << 31)};
     date::year_month_day ymd{date::local_days{days}};
@@ -15647,7 +13445,6 @@ sstring simple_date_to_string(const uint32_t days_count) {
     str << ymd;
     return str.str();
 }
-
 sstring time_to_string(const int64_t nanoseconds_count) {
     std::chrono::nanoseconds nanoseconds{nanoseconds_count};
     auto time = date::make_time(nanoseconds);
@@ -15655,17 +13452,14 @@ sstring time_to_string(const int64_t nanoseconds_count) {
     str << time;
     return str.str();
 }
-
 sstring boolean_to_string(const bool b) {
     return b ? "true" : "false";
 }
-
 sstring inet_addr_type_impl::to_sstring(const seastar::net::inet_address& addr) {
     std::ostringstream out;
     out << addr;
     return out.str();
 }
-
 static const char* byte_type_name      = "org.apache.cassandra.db.marshal.ByteType";
 static const char* short_type_name     = "org.apache.cassandra.db.marshal.ShortType";
 static const char* int32_type_name     = "org.apache.cassandra.db.marshal.Int32Type";
@@ -15688,7 +13482,6 @@ static const char* decimal_type_name    = "org.apache.cassandra.db.marshal.Decim
 static const char* counter_type_name   = "org.apache.cassandra.db.marshal.CounterColumnType";
 static const char* duration_type_name = "org.apache.cassandra.db.marshal.DurationType";
 static const char* empty_type_name     = "org.apache.cassandra.db.marshal.EmptyType";
-
 template<typename T>
 struct simple_type_traits {
     static constexpr size_t serialized_size = sizeof(T);
@@ -15696,7 +13489,6 @@ struct simple_type_traits {
         return read_simple_exactly<T>(v);
     }
 };
-
 template<>
 struct simple_type_traits<bool> {
     static constexpr size_t serialized_size = 1;
@@ -15704,7 +13496,6 @@ struct simple_type_traits<bool> {
         return read_simple_exactly<int8_t>(v) != 0;
     }
 };
-
 template<>
 struct simple_type_traits<db_clock::time_point> {
     static constexpr size_t serialized_size = sizeof(uint64_t);
@@ -15712,22 +13503,18 @@ struct simple_type_traits<db_clock::time_point> {
         return db_clock::time_point(db_clock::duration(read_simple_exactly<int64_t>(v)));
     }
 };
-
 template <typename T>
 simple_type_impl<T>::simple_type_impl(abstract_type::kind k, sstring name, std::optional<uint32_t> value_length_if_fixed)
     : concrete_type<T>(k, std::move(name), std::move(value_length_if_fixed)) {}
-
 template <typename T>
 integer_type_impl<T>::integer_type_impl(
         abstract_type::kind k, sstring name, std::optional<uint32_t> value_length_if_fixed)
     : simple_type_impl<T>(k, name, std::move(value_length_if_fixed)) {}
-
 template <typename T> static bytes decompose_value(T v) {
     bytes b(bytes::initialized_later(), sizeof(v));
     write_unaligned<T>(b.begin(), net::hton(v));
     return b;
 }
-
 template <typename T> static T parse_int(const integer_type_impl<T>& t, sstring_view s) {
     try {
         auto value64 = boost::lexical_cast<int64_t>(s.begin(), s.size());
@@ -15740,38 +13527,25 @@ template <typename T> static T parse_int(const integer_type_impl<T>& t, sstring_
         throw marshal_exception(format("Invalid number format '{}'", s));
     }
 }
-
 // Note that although byte_type is of a fixed size,
 // Cassandra (erroneously) treats it as a variable-size
 // so we have to pass disengaged optional for the value size
 byte_type_impl::byte_type_impl() : integer_type_impl{kind::byte, byte_type_name, {}} {}
-
 short_type_impl::short_type_impl() : integer_type_impl{kind::short_kind, short_type_name, {}} {}
-
 int32_type_impl::int32_type_impl() : integer_type_impl{kind::int32, int32_type_name, 4} {}
-
 long_type_impl::long_type_impl() : integer_type_impl{kind::long_kind, long_type_name, 8} {}
-
 string_type_impl::string_type_impl(kind k, sstring name)
     : concrete_type(k, name, {}) {}
-
 ascii_type_impl::ascii_type_impl() : string_type_impl(kind::ascii, ascii_type_name) {}
-
 utf8_type_impl::utf8_type_impl() : string_type_impl(kind::utf8, utf8_type_name) {}
-
 bytes_type_impl::bytes_type_impl()
     : concrete_type(kind::bytes, bytes_type_name, {}) {}
-
 boolean_type_impl::boolean_type_impl() : simple_type_impl<bool>(kind::boolean, boolean_type_name, 1) {}
-
 date_type_impl::date_type_impl() : concrete_type(kind::date, date_type_name, 8) {}
-
 timeuuid_type_impl::timeuuid_type_impl()
     : concrete_type<utils::UUID>(
               kind::timeuuid, timeuuid_type_name, 16) {}
-
 timestamp_type_impl::timestamp_type_impl() : simple_type_impl(kind::timestamp, timestamp_type_name, 8) {}
-
 static boost::posix_time::ptime get_time(const boost::smatch& sm) {
     // Unfortunately boost::date_time  parsers are more strict with regards
     // to the expected date format than we need to be.
@@ -15779,12 +13553,10 @@ static boost::posix_time::ptime get_time(const boost::smatch& sm) {
     auto month = boost::lexical_cast<int>(sm[2]);
     auto day = boost::lexical_cast<int>(sm[3]);
     boost::gregorian::date date(year, month, day);
-
     auto hour = sm[5].length() ? boost::lexical_cast<int>(sm[5]) : 0;
     auto minute = sm[6].length() ? boost::lexical_cast<int>(sm[6]) : 0;
     auto second = sm[8].length() ? boost::lexical_cast<int>(sm[8]) : 0;
     boost::posix_time::time_duration time(hour, minute, second);
-
     if (sm[10].length()) {
         static constexpr auto milliseconds_string_length = 3;
         auto length = sm[10].length();
@@ -15798,10 +13570,8 @@ static boost::posix_time::ptime get_time(const boost::smatch& sm) {
         }
         time += boost::posix_time::milliseconds(value);
     }
-
     return boost::posix_time::ptime(date, time);
 }
-
 static boost::posix_time::time_duration get_utc_offset(const std::string& s) {
     static constexpr const char* formats[] = {
             "%H:%M",
@@ -15820,7 +13590,6 @@ static boost::posix_time::time_duration get_utc_offset(const std::string& s) {
     }
     throw marshal_exception("Cannot get UTC offset for a timestamp");
 }
-
 int64_t timestamp_from_string(sstring_view s) {
     try {
         std::string str;
@@ -15829,20 +13598,17 @@ int64_t timestamp_from_string(sstring_view s) {
         if (str == "now") {
             return db_clock::now().time_since_epoch().count();
         }
-
         char* end;
         auto v = std::strtoll(s.begin(), &end, 10);
         if (end == s.begin() + s.size()) {
             return v;
         }
-
         static const boost::regex date_re("^(\\d{4})-(\\d+)-(\\d+)([ tT](\\d+):(\\d+)(:(\\d+)(\\.(\\d+))?)?)?");
         boost::smatch dsm;
         if (!boost::regex_search(str, dsm, date_re)) {
             throw marshal_exception(format("Unable to parse timestamp from '{}'", str));
         }
         auto t = get_time(dsm);
-
         auto tz = dsm.suffix().str();
         static const boost::regex tz_re("([\\+-]\\d{2}:?(\\d{2})?)");
         boost::smatch tsm;
@@ -15866,13 +13632,10 @@ int64_t timestamp_from_string(sstring_view s) {
         throw marshal_exception(format("unable to parse date '{}': {}", s, std::current_exception()));
     }
 }
-
 db_clock::time_point timestamp_type_impl::from_sstring(sstring_view s) {
     return db_clock::time_point(db_clock::duration(timestamp_from_string(s)));
 }
-
 simple_date_type_impl::simple_date_type_impl() : simple_type_impl{kind::simple_date, simple_date_type_name, {}} {}
-
 static date::year_month_day get_simple_date_time(const boost::smatch& sm) {
     auto year = boost::lexical_cast<long>(sm[1]);
     auto month = boost::lexical_cast<unsigned>(sm[2]);
@@ -15904,9 +13667,7 @@ uint32_t simple_date_type_impl::from_sstring(sstring_view s) {
     auto t = get_simple_date_time(dsm);
     return serialize(str, date::local_days(t).time_since_epoch().count());
 }
-
 time_type_impl::time_type_impl() : simple_type_impl{kind::time, time_type_name, {}} {}
-
 int64_t time_type_impl::from_sstring(sstring_view s) {
     static auto format_error = "Timestamp format must be hh:mm:ss[.fffffffff]";
     auto hours_end = s.find(':');
@@ -15952,15 +13713,11 @@ int64_t time_type_impl::from_sstring(sstring_view s) {
     result += std::chrono::nanoseconds(nanoseconds);
     return result.count();
 }
-
 uuid_type_impl::uuid_type_impl()
     : concrete_type(kind::uuid, uuid_type_name, 16) {}
-
 using inet_address = seastar::net::inet_address;
-
 inet_addr_type_impl::inet_addr_type_impl()
     : concrete_type<inet_address>(kind::inet, inet_addr_type_name, {}) {}
-
 // Integer of same length of a given type. This is useful because our
 // ntoh functions only know how to operate on integers.
 template <typename T> struct int_of_size;
@@ -15974,7 +13731,6 @@ template <> struct int_of_size<double> :
     public int_of_size_impl<double, uint64_t> {};
 template <> struct int_of_size<float> :
     public int_of_size_impl<float, uint32_t> {};
-
 template <typename T>
 struct float_type_traits {
     static constexpr size_t serialized_size = sizeof(typename int_of_size<T>::itype);
@@ -15984,23 +13740,16 @@ struct float_type_traits {
 };
 template<> struct simple_type_traits<float> : public float_type_traits<float> {};
 template<> struct simple_type_traits<double> : public float_type_traits<double> {};
-
 template <typename T>
 floating_type_impl<T>::floating_type_impl(
         abstract_type::kind k, sstring name, std::optional<uint32_t> value_length_if_fixed)
     : simple_type_impl<T>(k, std::move(name), std::move(value_length_if_fixed)) {}
-
 double_type_impl::double_type_impl() : floating_type_impl{kind::double_kind, double_type_name, 8} {}
-
 float_type_impl::float_type_impl() : floating_type_impl{kind::float_kind, float_type_name, 4} {}
-
 varint_type_impl::varint_type_impl() : concrete_type{kind::varint, varint_type_name, { }} { }
-
 decimal_type_impl::decimal_type_impl() : concrete_type{kind::decimal, decimal_type_name, { }} { }
-
 counter_type_impl::counter_type_impl()
     : abstract_type{kind::counter, counter_type_name, {}} {}
-
 // TODO(jhaberku): Move this to Seastar.
 template <size_t... Ts, class Function>
 auto generate_tuple_from_index(std::index_sequence<Ts...>, Function&& f) {
@@ -16010,33 +13759,25 @@ auto generate_tuple_from_index(std::index_sequence<Ts...>, Function&& f) {
     using result_type = decltype(std::make_tuple(f(Ts)...));
     return result_type{f(Ts)...};
 }
-
 duration_type_impl::duration_type_impl()
     : concrete_type(kind::duration, duration_type_name, {}) {}
-
 using common_counter_type = cql_duration::common_counter_type;
 static std::tuple<common_counter_type, common_counter_type, common_counter_type> deserialize_counters(bytes_view v) {
     auto deserialize_and_advance = [&v] (auto&& i) {
         auto len = signed_vint::serialized_size_from_first_byte(v.front());
         const auto d = signed_vint::deserialize(v);
         v.remove_prefix(len);
-
         if (v.empty() && (i != 2)) {
             throw marshal_exception("Cannot deserialize duration");
         }
-
         return static_cast<common_counter_type>(d);
     };
-
     return generate_tuple_from_index(std::make_index_sequence<3>(), std::move(deserialize_and_advance));
 }
-
 empty_type_impl::empty_type_impl()
     : abstract_type(kind::empty, empty_type_name, 0) {}
-
 logging::logger collection_type_impl::_logger("collection_type_impl");
 const size_t collection_type_impl::max_elements;
-
 lw_shared_ptr<cql3::column_specification> collection_type_impl::make_collection_receiver(
         const cql3::column_specification& collection, bool is_key) const {
     struct visitor {
@@ -16055,35 +13796,27 @@ lw_shared_ptr<cql3::column_specification> collection_type_impl::make_collection_
     };
     return ::visit(*this, visitor{collection, is_key});
 }
-
 listlike_collection_type_impl::listlike_collection_type_impl(
         kind k, sstring name, data_type elements, bool is_multi_cell)
     : collection_type_impl(k, name, is_multi_cell), _elements(elements) {}
-
 std::strong_ordering listlike_collection_type_impl::compare_with_map(const map_type_impl& map_type, bytes_view list, bytes_view map) const
 {
     assert((is_set() && map_type.get_keys_type() == _elements) || (!is_set() && map_type.get_values_type() == _elements));
-
     if (list.empty()) {
         return map.empty() ? std::strong_ordering::equal : std::strong_ordering::less;
     } else if (map.empty()) {
         return std::strong_ordering::greater;
     }
-
     const abstract_type& element_type = *_elements;
-
     size_t list_size = read_collection_size(list);
     size_t map_size = read_collection_size(map);
-
     bytes_view_opt list_value;
     bytes_view_opt map_value[2];
-
     // Lists are represented as vector<pair<timeuuid, value>>, sets are vector<pair<value, empty>>
     size_t map_value_index = is_list();
     // Both set elements and map keys are sorted, so can be compared in linear order;
     // List elements are stored in both vectors in list index order.
     for (size_t i = 0; i < std::min(list_size, map_size); ++i) {
-
         list_value = read_collection_value_nonnull(list);
         map_value[0] = read_collection_value_nonnull(map);
         // sets-as-maps happen to be serialized with NULL
@@ -16099,30 +13832,25 @@ std::strong_ordering listlike_collection_type_impl::compare_with_map(const map_t
     }
     return list_size <=> map_size;
 }
-
 bytes listlike_collection_type_impl::serialize_map(const map_type_impl& map_type, const data_value& value) const
 {
     assert((is_set() && map_type.get_keys_type() == _elements) || (!is_set() && map_type.get_values_type() == _elements));
     const std::vector<std::pair<data_value, data_value>>& map = map_type.from_value(value);
     // Lists are represented as vector<pair<timeuuid, value>>, sets are vector<pair<value, empty>>
     bool first = is_set();
-
     size_t len = collection_size_len();
     size_t psz = collection_value_len();
     for (const std::pair<data_value, data_value>& entry : map) {
         len += psz + (first ? entry.first : entry.second).serialized_size();
     }
-
     bytes b(bytes::initialized_later(), len);
     bytes::iterator out = b.begin();
-
     write_collection_size(out, map.size());
     for (const std::pair<data_value, data_value>& entry : map) {
         write_collection_value(out, _elements, first ? entry.first : entry.second);
     }
     return b;
 }
-
 void
 listlike_collection_type_impl::validate_for_storage(const FragmentedView auto& value) const {
     for (auto val_opt : partially_deserialize_listlike(value)) {
@@ -16131,36 +13859,27 @@ listlike_collection_type_impl::validate_for_storage(const FragmentedView auto& v
         }
     }
 }
-
 template
 void listlike_collection_type_impl::validate_for_storage(const managed_bytes_view& value) const;
-
 template
 void listlike_collection_type_impl::validate_for_storage(const fragmented_temporary_buffer::view& value) const;
-
-
 static bool is_compatible_with_aux(const collection_type_impl& t, const abstract_type& previous) {
     if (t.get_kind() != previous.get_kind()) {
         return false;
     }
-
     auto& cprev = static_cast<const collection_type_impl&>(previous);
     if (t.is_multi_cell() != cprev.is_multi_cell()) {
         return false;
     }
-
     if (!t.is_multi_cell()) {
         return t.is_compatible_with_frozen(cprev);
     }
-
     if (!t.name_comparator()->is_compatible_with(*cprev.name_comparator())) {
         return false;
     }
-
     // the value comparator is only used for Cell values, so sorting doesn't matter
     return t.value_comparator()->is_value_compatible_with(*cprev.value_comparator());
 }
-
 static bool is_value_compatible_with_internal_aux(const collection_type_impl& t, const abstract_type& previous) {
     if (t.get_kind() != previous.get_kind()) {
         return false;
@@ -16172,24 +13891,18 @@ static bool is_value_compatible_with_internal_aux(const collection_type_impl& t,
     }
     return t.is_value_compatible_with_frozen(cprev);
 }
-
 size_t collection_size_len() {
     return sizeof(int32_t);
 }
-
 size_t collection_value_len() {
     return sizeof(int32_t);
 }
-
-
 int read_collection_size(bytes_view& in) {
     return read_simple<int32_t>(in);
 }
-
 void write_collection_size(bytes::iterator& out, int size) {
     serialize_int32(out, size);
 }
-
 bytes_view read_collection_value_nonnull(bytes_view& in) {
     int32_t size = read_simple<int32_t>(in);
     if (size == -2) {
@@ -16200,7 +13913,6 @@ bytes_view read_collection_value_nonnull(bytes_view& in) {
     }
     return read_simple_bytes(in, size);
 }
-
 bytes_view read_collection_key(bytes_view& in) {
     int32_t size = read_simple<int32_t>(in);
     if (size < 0) {
@@ -16221,7 +13933,6 @@ bytes_view_opt read_collection_value(bytes_view& in) {
     }
     return read_simple_bytes(in, size);
 }
-
 void write_collection_value(bytes::iterator& out, std::optional<bytes_view> val_bytes_opt) {
     if (!val_bytes_opt) {
         serialize_int32(out, int32_t(-1));
@@ -16231,7 +13942,6 @@ void write_collection_value(bytes::iterator& out, std::optional<bytes_view> val_
     serialize_int32(out, int32_t(val_bytes.size()));
     out = std::copy_n(val_bytes.begin(), val_bytes.size(), out);
 }
-
 // Passing the wrong integer type to a generic serialization function is a particularly
 // easy mistake to do, so we want to disable template parameter deduction here.
 // Hence std::type_identity.
@@ -16241,14 +13951,12 @@ void write_simple(bytes_ostream& out, std::type_identity_t<T> val) {
     auto val_ptr = reinterpret_cast<const bytes::value_type*>(&val_be);
     out.write(bytes_view(val_ptr, sizeof(T)));
 }
-
 void write_collection_value(bytes_ostream& out, atomic_cell_value_view val) {
     write_simple<int32_t>(out, int32_t(val.size_bytes()));
     for (auto&& frag : fragment_range(val)) {
         out.write(frag);
     }
 }
-
 void write_fragmented(managed_bytes_mutable_view& out, std::string_view val) {
     while (val.size() > 0) {
         size_t current_n = std::min(val.size(), out.current_fragment().size());
@@ -16257,7 +13965,6 @@ void write_fragmented(managed_bytes_mutable_view& out, std::string_view val) {
         out.remove_prefix(current_n);
     }
 }
-
 template<std::integral T>
 void write_simple(managed_bytes_mutable_view& out, std::type_identity_t<T> val) {
     val = net::hton(val);
@@ -16272,16 +13979,13 @@ void write_simple(managed_bytes_mutable_view& out, std::type_identity_t<T> val) 
         on_internal_error(tlogger, format("write_simple: attempted write of size {} to buffer of size {}", sizeof(T), out.size_bytes()));
     }
 }
-
 void write_collection_size(managed_bytes_mutable_view& out, int size) {
     write_simple<uint32_t>(out, uint32_t(size));
 }
-
 void write_collection_value(managed_bytes_mutable_view& out, bytes_view val) {
     write_simple<int32_t>(out, int32_t(val.size()));
     write_fragmented(out, single_fragmented_view(val));
 }
-
 void write_collection_value(managed_bytes_mutable_view& out, const managed_bytes_view_opt& val_opt) {
     if (!val_opt) {
         write_simple<int32_t>(out, int32_t(-1));
@@ -16291,11 +13995,9 @@ void write_collection_value(managed_bytes_mutable_view& out, const managed_bytes
     write_simple<int32_t>(out, int32_t(val.size_bytes()));
     write_fragmented(out, val);
 }
-
 void write_int32(bytes::iterator& out, int32_t value) {
     return serialize_int32(out, value);
 }
-
 shared_ptr<const abstract_type> abstract_type::underlying_type() const {
     struct visitor {
         shared_ptr<const abstract_type> operator()(const abstract_type& t) { return t.shared_from_this(); }
@@ -16303,7 +14005,6 @@ shared_ptr<const abstract_type> abstract_type::underlying_type() const {
     };
     return visit(*this, visitor{});
 }
-
 bool abstract_type::is_counter() const {
     struct visitor {
         bool operator()(const reversed_type_impl& r) { return r.underlying_type()->is_counter(); }
@@ -16312,7 +14013,6 @@ bool abstract_type::is_counter() const {
     };
     return visit(*this, visitor{});
 }
-
 bool abstract_type::is_collection() const {
     struct visitor {
         bool operator()(const reversed_type_impl& r) { return r.underlying_type()->is_collection(); }
@@ -16321,7 +14021,6 @@ bool abstract_type::is_collection() const {
     };
     return visit(*this, visitor{});
 }
-
 bool abstract_type::is_tuple() const {
     struct visitor {
         bool operator()(const abstract_type&) { return false; }
@@ -16330,7 +14029,6 @@ bool abstract_type::is_tuple() const {
     };
     return visit(*this, visitor{});
 }
-
 bool abstract_type::is_multi_cell() const {
     struct visitor {
         bool operator()(const abstract_type&) { return false; }
@@ -16340,9 +14038,7 @@ bool abstract_type::is_multi_cell() const {
     };
     return visit(*this, visitor{});
 }
-
 bool abstract_type::is_native() const { return !is_collection() && !is_tuple(); }
-
 bool abstract_type::is_string() const {
     struct visitor {
         bool operator()(const abstract_type&) { return false; }
@@ -16351,7 +14047,6 @@ bool abstract_type::is_string() const {
     };
     return visit(*this, visitor{});
 }
-
 template<typename Predicate>
 requires CanHandleAllTypes<Predicate>
 static bool find(const abstract_type& t, const Predicate& f) {
@@ -16372,7 +14067,6 @@ static bool find(const abstract_type& t, const Predicate& f) {
         return visitor{f}(t);
     });
 }
-
 bool abstract_type::references_duration() const {
     struct visitor {
         bool operator()(const abstract_type&) const { return false; }
@@ -16380,7 +14074,6 @@ bool abstract_type::references_duration() const {
     };
     return find(*this, visitor{});
 }
-
 bool abstract_type::references_user_type(const sstring& keyspace, const bytes& name) const {
     struct visitor {
         const sstring& keyspace;
@@ -16390,7 +14083,6 @@ bool abstract_type::references_user_type(const sstring& keyspace, const bytes& n
     };
     return find(*this, visitor{keyspace, name});
 }
-
 namespace {
 struct is_byte_order_equal_visitor {
     template <typename T> bool operator()(const simple_type_impl<T>&) { return true; }
@@ -16406,12 +14098,9 @@ struct is_byte_order_equal_visitor {
     bool operator()(const set_type_impl& s) { return s.get_elements_type()->is_byte_order_equal(); }
 };
 }
-
 bool abstract_type::is_byte_order_equal() const { return visit(*this, is_byte_order_equal_visitor{}); }
-
 static bool
 check_compatibility(const tuple_type_impl &t, const abstract_type& previous, bool (abstract_type::*predicate)(const abstract_type&) const);
-
 static
 bool
 is_fixed_size_int_type(const abstract_type& t) {
@@ -16450,7 +14139,6 @@ is_fixed_size_int_type(const abstract_type& t) {
     }
     __builtin_unreachable();
 }
-
 bool abstract_type::is_compatible_with(const abstract_type& previous) const {
     if (this == &previous) {
         return true;
@@ -16508,14 +14196,11 @@ bool abstract_type::is_compatible_with(const abstract_type& previous) const {
         }
         bool operator()(const abstract_type& t) { return false; }
     };
-
     return visit(*this, visitor{previous});
 }
-
 cql3::cql3_type abstract_type::as_cql3_type() const {
     return cql3::cql3_type(shared_from_this());
 }
-
 static sstring cql3_type_name_impl(const abstract_type& t) {
     struct visitor {
         sstring operator()(const ascii_type_impl&) { return "ascii"; }
@@ -16555,7 +14240,6 @@ static sstring cql3_type_name_impl(const abstract_type& t) {
     };
     return visit(t, visitor{});
 }
-
 const sstring& abstract_type::cql3_type_name() const {
     if (_cql3_type_name.empty()) {
         auto name = cql3_type_name_impl(*this);
@@ -16566,26 +14250,20 @@ const sstring& abstract_type::cql3_type_name() const {
     }
     return _cql3_type_name;
 }
-
 void write_collection_value(bytes::iterator& out, data_type type, const data_value& value) {
     if (value.is_null()) {
         auto val_len = -1;
         serialize_int32(out, val_len);
         return;
     }
-
     size_t val_len = value.serialized_size();
-
     serialize_int32(out, val_len);
-
     value.serialize(out);
 }
-
 map_type
 map_type_impl::get_instance(data_type keys, data_type values, bool is_multi_cell) {
     return intern::get_instance(std::move(keys), std::move(values), is_multi_cell);
 }
-
 sstring make_map_type_name(data_type keys, data_type values, bool is_multi_cell)
 {
     sstring ret = "";
@@ -16598,14 +14276,12 @@ sstring make_map_type_name(data_type keys, data_type values, bool is_multi_cell)
     }
     return ret;
 }
-
 map_type_impl::map_type_impl(data_type keys, data_type values, bool is_multi_cell)
         : concrete_type(kind::map, make_map_type_name(keys, values, is_multi_cell), is_multi_cell)
         , _keys(std::move(keys))
         , _values(std::move(values)) {
     _contains_set_or_map = true;
 }
-
 data_type
 map_type_impl::freeze() const {
     if (_is_multi_cell) {
@@ -16614,7 +14290,6 @@ map_type_impl::freeze() const {
         return shared_from_this();
     }
 }
-
 bool
 map_type_impl::is_compatible_with_frozen(const collection_type_impl& previous) const {
     assert(!_is_multi_cell);
@@ -16625,7 +14300,6 @@ map_type_impl::is_compatible_with_frozen(const collection_type_impl& previous) c
     return _keys->is_compatible_with(*p->_keys)
             && _values->is_compatible_with(*p->_values);
 }
-
 bool
 map_type_impl::is_value_compatible_with_frozen(const collection_type_impl& previous) const {
     assert(!_is_multi_cell);
@@ -16636,7 +14310,6 @@ map_type_impl::is_value_compatible_with_frozen(const collection_type_impl& previ
     return _keys->is_compatible_with(*p->_keys)
             && _values->is_value_compatible_with(*p->_values);
 }
-
 std::strong_ordering
 map_type_impl::compare_maps(data_type keys, data_type values, managed_bytes_view o1, managed_bytes_view o2) {
     if (o1.empty()) {
@@ -16663,7 +14336,6 @@ map_type_impl::compare_maps(data_type keys, data_type values, managed_bytes_view
     }
     return size1 <=> size2;
 }
-
 static size_t map_serialized_size(const map_type_impl::native_type* m) {
     size_t len = collection_size_len();
     size_t psz = collection_value_len();
@@ -16673,7 +14345,6 @@ static size_t map_serialized_size(const map_type_impl::native_type* m) {
     }
     return len;
 }
-
 static void
 serialize_map(const map_type_impl& t, const void* value, bytes::iterator& out) {
     auto& m = t.from_value(value);
@@ -16683,7 +14354,6 @@ serialize_map(const map_type_impl& t, const void* value, bytes::iterator& out) {
         write_collection_value(out, t.get_values_type(), kv.second);
     }
 }
-
 template <FragmentedView View>
 data_value
 map_type_impl::deserialize(View in) const {
@@ -16697,7 +14367,6 @@ map_type_impl::deserialize(View in) const {
     return make_value(std::move(m));
 }
 template data_value map_type_impl::deserialize<>(ser::buffer_view<bytes_ostream::fragment_iterator>) const;
-
 template <FragmentedView View>
 static void validate_aux(const map_type_impl& t, View v) {
     auto size = read_collection_size(v);
@@ -16706,14 +14375,11 @@ static void validate_aux(const map_type_impl& t, View v) {
         t.get_values_type()->validate(read_collection_value_nonnull(v));
     }
 }
-
 static sstring map_to_string(const std::vector<std::pair<data_value, data_value>>& v, bool include_frozen_type) {
     std::ostringstream out;
-
     if (include_frozen_type) {
         out << "(";
     }
-
     fmt::print(out, "{}", fmt::join(v | boost::adaptors::transformed([] (const std::pair<data_value, data_value>& p) {
         std::ostringstream out;
         const auto& k = p.first;
@@ -16722,14 +14388,11 @@ static sstring map_to_string(const std::vector<std::pair<data_value, data_value>
         out << v.type()->to_string_impl(v) << "}";
         return out.str();
     }), ", "));
-
     if (include_frozen_type) {
         out << ")";
     }
-
     return out.str();
 }
-
 bytes
 map_type_impl::serialize_partially_deserialized_form(
         const std::vector<std::pair<bytes_view, bytes_view>>& v) {
@@ -16739,7 +14402,6 @@ map_type_impl::serialize_partially_deserialized_form(
     }
     bytes b(bytes::initialized_later(), len);
     bytes::iterator out = b.begin();
-
     write_collection_size(out, v.size());
     for (auto&& e : v) {
         write_collection_value(out, e.first);
@@ -16747,7 +14409,6 @@ map_type_impl::serialize_partially_deserialized_form(
     }
     return b;
 }
-
 managed_bytes
 map_type_impl::serialize_partially_deserialized_form_fragmented(
         const std::vector<std::pair<managed_bytes_view, managed_bytes_view>>& v) {
@@ -16757,7 +14418,6 @@ map_type_impl::serialize_partially_deserialized_form_fragmented(
     }
     managed_bytes b(managed_bytes::initialized_later(), len);
     managed_bytes_mutable_view out = b;
-
     write_collection_size(out, v.size());
     for (auto&& e : v) {
         write_collection_value(out, e.first);
@@ -16765,7 +14425,6 @@ map_type_impl::serialize_partially_deserialized_form_fragmented(
     }
     return b;
 }
-
 static std::optional<data_type> update_user_type_aux(
         const map_type_impl& m, const shared_ptr<const user_type_impl> updated) {
     auto old_keys = m.get_keys_type();
@@ -16778,14 +14437,11 @@ static std::optional<data_type> update_user_type_aux(
     return std::make_optional(static_pointer_cast<const abstract_type>(
         map_type_impl::get_instance(k ? *k : old_keys, v ? *v : old_values, m.is_multi_cell())));
 }
-
 static void serialize(const abstract_type& t, const void* value, bytes::iterator& out);
-
 set_type
 set_type_impl::get_instance(data_type elements, bool is_multi_cell) {
     return intern::get_instance(elements, is_multi_cell);
 }
-
 sstring make_set_type_name(data_type elements, bool is_multi_cell)
 {
     sstring ret = "";
@@ -16798,17 +14454,14 @@ sstring make_set_type_name(data_type elements, bool is_multi_cell)
     }
     return ret;
 }
-
 set_type_impl::set_type_impl(data_type elements, bool is_multi_cell)
     : concrete_type(kind::set, make_set_type_name(elements, is_multi_cell), elements, is_multi_cell) {
         _contains_set_or_map = true;
     }
-
 data_type
 set_type_impl::value_comparator() const {
     return empty_type;
 }
-
 data_type
 set_type_impl::freeze() const {
     if (_is_multi_cell) {
@@ -16817,7 +14470,6 @@ set_type_impl::freeze() const {
         return shared_from_this();
     }
 }
-
 bool
 set_type_impl::is_compatible_with_frozen(const collection_type_impl& previous) const {
     assert(!_is_multi_cell);
@@ -16826,14 +14478,11 @@ set_type_impl::is_compatible_with_frozen(const collection_type_impl& previous) c
         return false;
     }
     return _elements->is_compatible_with(*p->_elements);
-
 }
-
 bool
 set_type_impl::is_value_compatible_with_frozen(const collection_type_impl& previous) const {
     return is_compatible_with(previous);
 }
-
 template <FragmentedView View>
 static void validate_aux(const set_type_impl& t, View v) {
     auto nr = read_collection_size(v);
@@ -16841,7 +14490,6 @@ static void validate_aux(const set_type_impl& t, View v) {
         t.get_elements_type()->validate(read_collection_value_nonnull(v));
     }
 }
-
 static size_t listlike_serialized_size(const std::vector<data_value>* s) {
     size_t len = collection_size_len();
     size_t psz = collection_value_len();
@@ -16850,7 +14498,6 @@ static size_t listlike_serialized_size(const std::vector<data_value>* s) {
     }
     return len;
 }
-
 static void
 serialize_set(const set_type_impl& t, const void* value, bytes::iterator& out) {
     auto& s = t.from_value(value);
@@ -16859,7 +14506,6 @@ serialize_set(const set_type_impl& t, const void* value, bytes::iterator& out) {
         write_collection_value(out, t.get_elements_type(), e);
     }
 }
-
 template <FragmentedView View>
 data_value
 set_type_impl::deserialize(View in) const {
@@ -16876,19 +14522,16 @@ set_type_impl::deserialize(View in) const {
     return make_value(std::move(s));
 }
 template data_value set_type_impl::deserialize<>(ser::buffer_view<bytes_ostream::fragment_iterator>) const;
-
 bytes
 set_type_impl::serialize_partially_deserialized_form(
         const std::vector<bytes_view>& v) {
     return pack(v.begin(), v.end(), v.size());
 }
-
 managed_bytes
 set_type_impl::serialize_partially_deserialized_form_fragmented(
         const std::vector<managed_bytes_view_opt>& v) {
     return pack_fragmented(v.begin(), v.end(), v.size());
 }
-
 template <FragmentedView View>
 utils::chunked_vector<managed_bytes_opt> partially_deserialize_listlike(View in) {
     auto nr = read_collection_size(in);
@@ -16901,7 +14544,6 @@ utils::chunked_vector<managed_bytes_opt> partially_deserialize_listlike(View in)
 }
 template utils::chunked_vector<managed_bytes_opt> partially_deserialize_listlike(managed_bytes_view in);
 template utils::chunked_vector<managed_bytes_opt> partially_deserialize_listlike(fragmented_temporary_buffer::view in);
-
 template <FragmentedView View>
 std::vector<std::pair<managed_bytes, managed_bytes>> partially_deserialize_map(View in) {
     auto nr = read_collection_size(in);
@@ -16919,12 +14561,10 @@ std::vector<std::pair<managed_bytes, managed_bytes>> partially_deserialize_map(V
 }
 template std::vector<std::pair<managed_bytes, managed_bytes>> partially_deserialize_map(managed_bytes_view in);
 template std::vector<std::pair<managed_bytes, managed_bytes>> partially_deserialize_map(fragmented_temporary_buffer::view in);
-
 list_type
 list_type_impl::get_instance(data_type elements, bool is_multi_cell) {
     return intern::get_instance(elements, is_multi_cell);
 }
-
 sstring make_list_type_name(data_type elements, bool is_multi_cell)
 {
     sstring ret = "";
@@ -16937,22 +14577,18 @@ sstring make_list_type_name(data_type elements, bool is_multi_cell)
     }
     return ret;
 }
-
 list_type_impl::list_type_impl(data_type elements, bool is_multi_cell)
     : concrete_type(kind::list, make_list_type_name(elements, is_multi_cell), elements, is_multi_cell) {
         _contains_set_or_map = _elements->contains_set_or_map();
     }
-
 data_type
 list_type_impl::name_comparator() const {
     return timeuuid_type;
 }
-
 data_type
 list_type_impl::value_comparator() const {
     return _elements;
 }
-
 data_type
 list_type_impl::freeze() const {
     if (_is_multi_cell) {
@@ -16961,7 +14597,6 @@ list_type_impl::freeze() const {
         return shared_from_this();
     }
 }
-
 bool
 list_type_impl::is_compatible_with_frozen(const collection_type_impl& previous) const {
     assert(!_is_multi_cell);
@@ -16970,17 +14605,13 @@ list_type_impl::is_compatible_with_frozen(const collection_type_impl& previous) 
         return false;
     }
     return _elements->is_compatible_with(*p->_elements);
-
 }
-
 static bool is_value_compatible_with_internal(const abstract_type& t, const abstract_type& other);
-
 bool
 list_type_impl::is_value_compatible_with_frozen(const collection_type_impl& previous) const {
     auto& lp = dynamic_cast<const list_type_impl&>(previous);
     return is_value_compatible_with_internal(*_elements, *lp._elements);
 }
-
 template <FragmentedView View>
 static void validate_aux(const list_type_impl& t, View v) {
     auto nr = read_collection_size(v);
@@ -16994,7 +14625,6 @@ static void validate_aux(const list_type_impl& t, View v) {
         throw marshal_exception("x");
     }
 }
-
 static void
 serialize_list(const list_type_impl& t, const void* value, bytes::iterator& out) {
     auto& s = t.from_value(value);
@@ -17003,7 +14633,6 @@ serialize_list(const list_type_impl& t, const void* value, bytes::iterator& out)
         write_collection_value(out, t.get_elements_type(), e);
     }
 }
-
 template <FragmentedView View>
 data_value
 list_type_impl::deserialize(View in) const {
@@ -17022,13 +14651,11 @@ list_type_impl::deserialize(View in) const {
     return make_value(std::move(s));
 }
 template data_value list_type_impl::deserialize<>(ser::buffer_view<bytes_ostream::fragment_iterator>) const;
-
 static sstring vector_to_string(const std::vector<data_value>& v, std::string_view sep) {
     return fmt::to_string(fmt::join(
             v | boost::adaptors::transformed([] (const data_value& e) { return e.type()->to_string_impl(e); }),
             sep));
 }
-
 template <typename F>
 static std::optional<data_type> update_listlike(
         const listlike_collection_type_impl& c, F&& f, shared_ptr<const user_type_impl> updated) {
@@ -17037,7 +14664,6 @@ static std::optional<data_type> update_listlike(
     }
     return std::nullopt;
 }
-
 tuple_type_impl::tuple_type_impl(kind k, sstring name, std::vector<data_type> types, bool freeze_inner)
         : concrete_type(k, std::move(name), { }), _types(std::move(types)) {
     if (freeze_inner) {
@@ -17045,20 +14671,16 @@ tuple_type_impl::tuple_type_impl(kind k, sstring name, std::vector<data_type> ty
             t = t->freeze();
         }
     }
-
     set_contains_collections();
 }
-
 tuple_type_impl::tuple_type_impl(std::vector<data_type> types, bool freeze_inner)
         : tuple_type_impl{kind::tuple, make_name(types), std::move(types), freeze_inner} {
     set_contains_collections();
 }
-
 tuple_type_impl::tuple_type_impl(std::vector<data_type> types)
         : tuple_type_impl(std::move(types), true) {
     set_contains_collections();
 }
-
 void tuple_type_impl::set_contains_collections() {
     for (const data_type& t : _types) {
         if (t->contains_set_or_map()) {
@@ -17066,12 +14688,10 @@ void tuple_type_impl::set_contains_collections() {
             break;
         }
     }
-
     if (_contains_set_or_map) {
         _contains_collection = true;
         return;
     }
-
     for (const data_type& t : _types) {
         if (t->contains_collection()) {
             _contains_collection = true;
@@ -17079,12 +14699,10 @@ void tuple_type_impl::set_contains_collections() {
         }
     }
 }
-
 shared_ptr<const tuple_type_impl>
 tuple_type_impl::get_instance(std::vector<data_type> types) {
     return intern::get_instance(std::move(types));
 }
-
 template <FragmentedView View>
 static void validate_aux(const tuple_type_impl& t, View v) {
     auto ti = t.all_types().begin();
@@ -17095,26 +14713,22 @@ static void validate_aux(const tuple_type_impl& t, View v) {
         }
         ++ti;
     }
-
     size_t extra_elements = 0;
     while (!v.empty()) {
         read_tuple_element(v);
         extra_elements += 1;
     }
-
     if (extra_elements > 0) {
         // This function is called for both tuple and user_type, print the name too
         throw marshal_exception(format("Value of type {} contained too many fields (expected {}, got {})",
                                 t.name(), t.size(), t.size() + extra_elements));
     }
 }
-
 namespace {
 template <FragmentedView View>
 struct validate_visitor {
     const View& v;
     ;
-
     void operator()(const reversed_type_impl& t) {
         visit(*t.underlying_type(), validate_visitor<View>{v});
     }
@@ -17195,26 +14809,21 @@ struct validate_visitor {
         if (v.size_bytes() < 3) {
             throw marshal_exception(format("Expected at least 3 bytes for a duration, got {:d}", v.size_bytes()));
         }
-
         common_counter_type months, days, nanoseconds;
         std::tie(months, days, nanoseconds) = with_linearized(v, [] (bytes_view bv) {
             return deserialize_counters(bv);
         });
-
         auto check_counter_range = [] (common_counter_type value, auto counter_value_type_instance,
                                            std::string_view counter_name) {
             using counter_value_type = decltype(counter_value_type_instance);
-
             if (static_cast<counter_value_type>(value) != value) {
                 throw marshal_exception(format("The duration {} ({:d}) must be a {:d} bit integer", counter_name, value,
                         std::numeric_limits<counter_value_type>::digits + 1));
             }
         };
-
         check_counter_range(months, months_counter::value_type(), "months");
         check_counter_range(days, days_counter::value_type(), "days");
         check_counter_range(nanoseconds, nanoseconds_counter::value_type(), "nanoseconds");
-
         if (!(((months <= 0) && (days <= 0) && (nanoseconds <= 0)) ||
                     ((months >= 0) && (days >= 0) && (nanoseconds >= 0)))) {
             throw marshal_exception(format("The duration months, days, and nanoseconds must be all of "
@@ -17284,7 +14893,6 @@ struct validate_visitor {
     }
 };
 }
-
 template <FragmentedView View>
 void abstract_type::validate(const View& view) const {
     visit(*this, validate_visitor<View>{view});
@@ -17293,24 +14901,19 @@ void abstract_type::validate(const View& view) const {
 template void abstract_type::validate<>(const single_fragmented_view&) const;
 template void abstract_type::validate<>(const fragmented_temporary_buffer::view&) const;
 template void abstract_type::validate<>(const managed_bytes_view&) const;
-
 void abstract_type::validate(bytes_view v) const {
     visit(*this, validate_visitor<single_fragmented_view>{single_fragmented_view(v)});
 }
-
 static void serialize_aux(const tuple_type_impl& type, const tuple_type_impl::native_type* val, bytes::iterator& out) {
     assert(val);
     auto& elems = *val;
-
     assert(elems.size() <= type.size());
-
     for (size_t i = 0; i < elems.size(); ++i) {
         const abstract_type& t = type.type(i)->without_reversed();
         const data_value& v = elems[i];
         if (!v.is_null() && t != *v.type()) {
             throw std::runtime_error(format("tuple element type mismatch: expected {}, got {}", t.name(), v.type()->name()));
         }
-
         if (v.is_null()) {
             write(out, int32_t(-1));
         } else {
@@ -17319,9 +14922,7 @@ static void serialize_aux(const tuple_type_impl& type, const tuple_type_impl::na
         }
     }
 }
-
 static size_t concrete_serialized_size(const utils::multiprecision_int& num);
-
 static void serialize_varint_aux(bytes::iterator& out, const boost::multiprecision::cpp_int& num, uint8_t mask) {
     struct inserter_with_prefix {
         bytes::iterator& out;
@@ -17345,10 +14946,8 @@ static void serialize_varint_aux(bytes::iterator& out, const boost::multiprecisi
             return *this;
         }
     };
-
     export_bits(num, inserter_with_prefix{out, mask}, 8);
 }
-
 static void serialize_varint(bytes::iterator& out, const boost::multiprecision::cpp_int& num) {
     if (num < 0) {
         serialize_varint_aux(out, -num - 1, 0xff);
@@ -17356,13 +14955,10 @@ static void serialize_varint(bytes::iterator& out, const boost::multiprecision::
         serialize_varint_aux(out, num, 0);
     }
 }
-
 static void serialize_varint(bytes::iterator& out, const utils::multiprecision_int& num) {
     serialize_varint(out, static_cast<const boost::multiprecision::cpp_int&>(num));
 }
-
 static void serialize(const abstract_type& t, const void* value, bytes::iterator& out);
-
 namespace {
 struct serialize_visitor {
     bytes::iterator& out;
@@ -17424,7 +15020,6 @@ struct serialize_visitor {
         if (value->empty()) {
             return;
         }
-
         value->get().serialize(out);
     }
     void operator()(const inet_addr_type_impl& t, const inet_addr_type_impl::native_type* ipv) {
@@ -17450,7 +15045,6 @@ struct serialize_visitor {
         if (value->empty()) {
             return;
         }
-
         T d = *value;
         if (std::isnan(d)) {
             // Java's Double.doubleToLongBits() documentation specifies that
@@ -17466,7 +15060,6 @@ struct serialize_visitor {
         if (num1->empty()) {
             return;
         }
-
         serialize_varint(out, num1->get());
     }
     void operator()(const decimal_type_impl& t, const decimal_type_impl::native_type* bd1) {
@@ -17502,11 +15095,9 @@ struct serialize_visitor {
     }
 };
 }
-
 static void serialize(const abstract_type& t, const void* value, bytes::iterator& out) {
     visit(t, value, serialize_visitor{out});
 }
-
 template <FragmentedView View>
 data_value collection_type_impl::deserialize_impl(View v) const {
     struct visitor {
@@ -17533,10 +15124,8 @@ template data_value collection_type_impl::deserialize_impl<>(ser::buffer_view<by
 template data_value collection_type_impl::deserialize_impl<>(fragmented_temporary_buffer::view) const;
 template data_value collection_type_impl::deserialize_impl<>(single_fragmented_view) const;
 template data_value collection_type_impl::deserialize_impl<>(managed_bytes_view) const;
-
 template int read_collection_size(ser::buffer_view<bytes_ostream::fragment_iterator>& in);
 template ser::buffer_view<bytes_ostream::fragment_iterator> read_collection_value_nonnull(ser::buffer_view<bytes_ostream::fragment_iterator>& in);
-
 template <FragmentedView View>
 data_value deserialize_aux(const tuple_type_impl& t, View v) {
     tuple_type_impl::native_type ret;
@@ -17556,7 +15145,6 @@ data_value deserialize_aux(const tuple_type_impl& t, View v) {
     }
     return data_value::make(t.shared_from_this(), std::make_unique<tuple_type_impl::native_type>(std::move(ret)));
 }
-
 template<FragmentedView View>
 utils::multiprecision_int deserialize_value(const varint_type_impl&, View v) {
     if (v.empty()) {
@@ -17580,7 +15168,6 @@ utils::multiprecision_int deserialize_value(const varint_type_impl&, View v) {
     }
     return negative ? -num : num;
 }
-
 template<typename T, FragmentedView View>
 T deserialize_value(const floating_type_impl<T>&, View v) {
     typename int_of_size<T>::itype i = read_simple<typename int_of_size<T>::itype>(v);
@@ -17591,14 +15178,12 @@ T deserialize_value(const floating_type_impl<T>&, View v) {
     memcpy(&d, &i, sizeof(T));
     return d;
 }
-
 template<FragmentedView View>
 big_decimal deserialize_value(const decimal_type_impl&, View v) {
     auto scale = read_simple<int32_t>(v);
     auto unscaled = deserialize_value(static_cast<const varint_type_impl&>(*varint_type), v);
     return big_decimal(scale, unscaled);
 }
-
 template<FragmentedView View>
 cql_duration deserialize_value(const duration_type_impl& t, View v) {
     common_counter_type months, days, nanoseconds;
@@ -17607,7 +15192,6 @@ cql_duration deserialize_value(const duration_type_impl& t, View v) {
     });
     return cql_duration(months_counter(months), days_counter(days), nanoseconds_counter(nanoseconds));
 }
-
 template<FragmentedView View>
 inet_address deserialize_value(const inet_addr_type_impl&, View v) {
     switch (v.size_bytes()) {
@@ -17622,7 +15206,6 @@ inet_address deserialize_value(const inet_addr_type_impl&, View v) {
         throw marshal_exception(format("cannot deserialize inet_address, unsupported size {:d} bytes", v.size_bytes()));
     }
 }
-
 template<FragmentedView View>
 utils::UUID deserialize_value(const uuid_type_impl&, View v) {
     auto msb = read_simple<uint64_t>(v);
@@ -17632,28 +15215,23 @@ utils::UUID deserialize_value(const uuid_type_impl&, View v) {
     }
     return utils::UUID(msb, lsb);
 }
-
 template<FragmentedView View>
 utils::UUID deserialize_value(const timeuuid_type_impl&, View v) {
     return deserialize_value(static_cast<const uuid_type_impl&>(*uuid_type), v);
 }
-
 template<FragmentedView View>
 db_clock::time_point deserialize_value(const timestamp_date_base_class&, View v) {
     auto v2 = read_simple_exactly<uint64_t>(v);
     return db_clock::time_point(db_clock::duration(v2));
 }
-
 template<FragmentedView View>
 uint32_t deserialize_value(const simple_date_type_impl&, View v) {
     return read_simple_exactly<uint32_t>(v);
 }
-
 template<FragmentedView View>
 int64_t deserialize_value(const time_type_impl&, View v) {
     return read_simple_exactly<int64_t>(v);
 }
-
 template<FragmentedView View>
 bool deserialize_value(const boolean_type_impl&, View v) {
     if (v.size_bytes() != 1) {
@@ -17662,12 +15240,10 @@ bool deserialize_value(const boolean_type_impl&, View v) {
     skip_empty_fragments(v);
     return v.current_fragment().front() != 0;
 }
-
 template<typename T, FragmentedView View>
 T deserialize_value(const integer_type_impl<T>& t, View v) {
     return read_simple_exactly<T>(v);
 }
-
 template<FragmentedView View>
 sstring deserialize_value(const string_type_impl&, View v) {
     // FIXME: validation?
@@ -17679,12 +15255,10 @@ sstring deserialize_value(const string_type_impl&, View v) {
     }
     return buf;
 }
-
 template<typename T>
 decltype(auto) deserialize_value(const T& t, bytes_view v) {
     return deserialize_value(t, single_fragmented_view(v));
 }
-
 namespace {
 template <FragmentedView View>
 struct deserialize_visitor {
@@ -17722,7 +15296,6 @@ struct deserialize_visitor {
     data_value operator()(const empty_type_impl& t) { return data_value(empty_type_representation()); }
 };
 }
-
 template <FragmentedView View>
 data_value abstract_type::deserialize_impl(View v) const {
     return visit(*this, deserialize_visitor<View>{v});
@@ -17733,7 +15306,6 @@ template data_value abstract_type::deserialize_impl<>(fragmented_temporary_buffe
 template data_value abstract_type::deserialize_impl<>(single_fragmented_view) const;
 template data_value abstract_type::deserialize_impl<>(ser::buffer_view<bytes_ostream::fragment_iterator>) const;
 template data_value abstract_type::deserialize_impl<>(managed_bytes_view) const;
-
 std::strong_ordering compare_aux(const tuple_type_impl& t, const managed_bytes_view& v1, const managed_bytes_view& v2) {
     // This is a slight modification of lexicographical_tri_compare:
     // when the only difference between the tuples is that one of them has additional trailing nulls,
@@ -17745,53 +15317,40 @@ std::strong_ordering compare_aux(const tuple_type_impl& t, const managed_bytes_v
     // 5. select * from cf where b = {a:0,b:null};
     // the row with a = 0 should be returned, even though the value stored in the database is shorter
     // (by one null) than the value given by the user.
-
     auto types_first = t.all_types().begin();
     auto types_last = t.all_types().end();
-
     auto first1 = tuple_deserializing_iterator::start(v1);
     auto last1 = tuple_deserializing_iterator::finish(v1);
-
     auto first2 = tuple_deserializing_iterator::start(v2);
     auto last2 = tuple_deserializing_iterator::finish(v2);
-
     while (types_first != types_last && first1 != last1 && first2 != last2) {
         if (auto c = tri_compare_opt(*types_first, *first1, *first2); c != 0) {
             return c;
         }
-
         ++first1;
         ++first2;
         ++types_first;
     }
-
     while (types_first != types_last && first1 != last1) {
         if (*first1) {
             return std::strong_ordering::greater;
         }
-
         ++first1;
         ++types_first;
     }
-
     while (types_first != types_last && first2 != last2) {
         if (*first2) {
             return std::strong_ordering::less;
         }
-
         ++first2;
         ++types_first;
     }
-
     return std::strong_ordering::equal;
 }
-
 namespace {
-
 struct compare_visitor {
     managed_bytes_view v1;
     managed_bytes_view v2;
-
     template <std::invocable<> Func>
     requires std::same_as<std::strong_ordering, std::invoke_result_t<Func>>
     std::strong_ordering with_empty_checks(Func func) {
@@ -17803,7 +15362,6 @@ struct compare_visitor {
         }
         return func();
     }
-
     template <typename T> std::strong_ordering operator()(const simple_type_impl<T>&) {
       return with_empty_checks([&] {
         T a = simple_type_traits<T>::read_nonempty(v1);
@@ -17850,16 +15408,13 @@ struct compare_visitor {
             return v2.size() < 16 ? std::strong_ordering::equal : std::strong_ordering::less;
         }
         if (v2.size() < 16) {
-
             return std::strong_ordering::greater;
         }
         auto c1 = (v1[6] >> 4) & 0x0f;
         auto c2 = (v2[6] >> 4) & 0x0f;
-
         if (c1 != c2) {
             return c1 <=> c2;
         }
-
         if (c1 == 1) {
             return with_linearized(v1, [&] (bytes_view v1) {
                 return with_linearized(v2, [&] (bytes_view v2) {
@@ -17895,7 +15450,6 @@ struct compare_visitor {
       return with_empty_checks([&] {
         T a = simple_type_traits<T>::read_nonempty(v1);
         T b = simple_type_traits<T>::read_nonempty(v2);
-
         // in java world NaN == NaN and NaN is greater than anything else
         if (std::isnan(a) && std::isnan(b)) {
             return std::strong_ordering::equal;
@@ -17917,11 +15471,9 @@ struct compare_visitor {
     std::strong_ordering operator()(const reversed_type_impl& r) { return r.underlying_type()->compare(v2, v1); }
 };
 }
-
 std::strong_ordering abstract_type::compare(bytes_view v1, bytes_view v2) const {
     return compare(managed_bytes_view(v1), managed_bytes_view(v2));
 }
-
 std::strong_ordering abstract_type::compare(managed_bytes_view v1, managed_bytes_view v2) const {
     try {
         return visit(*this, compare_visitor{v1, v2});
@@ -17929,15 +15481,12 @@ std::strong_ordering abstract_type::compare(managed_bytes_view v1, managed_bytes
         on_types_internal_error(std::current_exception());
     }
 }
-
 std::strong_ordering abstract_type::compare(managed_bytes_view v1, bytes_view v2) const {
     return compare(v1, managed_bytes_view(v2));
 }
-
 std::strong_ordering abstract_type::compare(bytes_view v1, managed_bytes_view v2) const {
     return compare(managed_bytes_view(v1), v2);
 }
-
 bool abstract_type::equal(bytes_view v1, bytes_view v2) const {
     return ::visit(*this, [&](const auto& t) {
         if (is_byte_order_equal_visitor{}(t)) {
@@ -17946,7 +15495,6 @@ bool abstract_type::equal(bytes_view v1, bytes_view v2) const {
         return compare_visitor{v1, v2}(t) == 0;
     });
 }
-
 bool abstract_type::equal(managed_bytes_view v1, managed_bytes_view v2) const {
     return ::visit(*this, [&](const auto& t) {
         if (is_byte_order_equal_visitor{}(t)) {
@@ -17955,15 +15503,12 @@ bool abstract_type::equal(managed_bytes_view v1, managed_bytes_view v2) const {
         return compare_visitor{v1, v2}(t) == 0;
     });
 }
-
 bool abstract_type::equal(managed_bytes_view v1, bytes_view v2) const {
     return equal(v1, managed_bytes_view(v2));
 }
-
 bool abstract_type::equal(bytes_view v1, managed_bytes_view v2) const {
     return equal(managed_bytes_view(v1), v2);
 }
-
 // Count number of ':' which are not preceded by '\'.
 static std::size_t count_segments(sstring_view v) {
     std::size_t segment_count = 1;
@@ -17976,7 +15521,6 @@ static std::size_t count_segments(sstring_view v) {
     }
     return segment_count;
 }
-
 // Split on ':', unless it's preceded by '\'.
 static std::vector<sstring_view> split_field_strings(sstring_view v) {
     if (v.empty()) {
@@ -17996,17 +15540,14 @@ static std::vector<sstring_view> split_field_strings(sstring_view v) {
     result.push_back(v.substr(prev, v.size() - prev));
     return result;
 }
-
 // Replace "\:" with ":" and "\@" with "@".
 static std::string unescape(sstring_view s) {
     return boost::regex_replace(std::string(s), boost::regex("\\\\([@:])"), "$1");
 }
-
 // Replace ":" with "\:" and "@" with "\@".
 static std::string escape(sstring_view s) {
     return boost::regex_replace(std::string(s), boost::regex("[@:]"), "\\\\$0");
 }
-
 // Concat list of bytes into a single bytes.
 static bytes concat_fields(const std::vector<bytes>& fields, const std::vector<int32_t> field_len) {
     std::size_t result_size = 4 * fields.size();
@@ -18024,11 +15565,9 @@ static bytes concat_fields(const std::vector<bytes>& fields, const std::vector<i
     }
     return result;
 }
-
 size_t abstract_type::hash(bytes_view v) const {
     return hash(managed_bytes_view(v));
 }
-
 size_t abstract_type::hash(managed_bytes_view v) const {
     struct visitor {
         managed_bytes_view v;
@@ -18055,8 +15594,6 @@ size_t abstract_type::hash(managed_bytes_view v) const {
     };
     return visit(*this, visitor{v});
 }
-
-
 static size_t concrete_serialized_size(const byte_type_impl::native_type&) { return sizeof(int8_t); }
 static size_t concrete_serialized_size(const short_type_impl::native_type&) { return sizeof(int16_t); }
 static size_t concrete_serialized_size(const int32_type_impl::native_type&) { return sizeof(int32_t); }
@@ -18070,7 +15607,6 @@ static size_t concrete_serialized_size(const simple_date_type_impl::native_type&
 static size_t concrete_serialized_size(const string_type_impl::native_type& v) { return v.size(); }
 static size_t concrete_serialized_size(const bytes_type_impl::native_type& v) { return v.size(); }
 static size_t concrete_serialized_size(const inet_addr_type_impl::native_type& v) { return v.get().size(); }
-
 static size_t concrete_serialized_size_aux(const boost::multiprecision::cpp_int& num) {
     if (num) {
         return align_up(boost::multiprecision::msb(num) + 2, 8u) / 8;
@@ -18078,33 +15614,27 @@ static size_t concrete_serialized_size_aux(const boost::multiprecision::cpp_int&
         return 1;
     }
 }
-
 static size_t concrete_serialized_size(const boost::multiprecision::cpp_int& num) {
     if (num < 0) {
         return concrete_serialized_size_aux(-num - 1);
     }
     return concrete_serialized_size_aux(num);
 }
-
 static size_t concrete_serialized_size(const utils::multiprecision_int& num) {
     return concrete_serialized_size(static_cast<const boost::multiprecision::cpp_int&>(num));
 }
-
 static size_t concrete_serialized_size(const varint_type_impl::native_type& v) {
     return concrete_serialized_size(v.get());
 }
-
 static size_t concrete_serialized_size(const decimal_type_impl::native_type& v) {
     const boost::multiprecision::cpp_int& uv = v.get().unscaled_value();
     return sizeof(int32_t) + concrete_serialized_size(uv);
 }
-
 static size_t concrete_serialized_size(const duration_type_impl::native_type& v) {
     const auto& d = v.get();
     return signed_vint::serialized_size(d.months) + signed_vint::serialized_size(d.days) +
            signed_vint::serialized_size(d.nanoseconds);
 }
-
 static size_t concrete_serialized_size(const tuple_type_impl::native_type& v) {
     size_t len = 0;
     for (auto&& e : v) {
@@ -18112,9 +15642,7 @@ static size_t concrete_serialized_size(const tuple_type_impl::native_type& v) {
     }
     return len;
 }
-
 static size_t serialized_size(const abstract_type& t, const void* value);
-
 namespace {
 struct serialized_size_visitor {
     size_t operator()(const reversed_type_impl& t, const void* v) { return serialized_size(*t.underlying_type(), v); }
@@ -18134,11 +15662,9 @@ struct serialized_size_visitor {
     }
 };
 }
-
 static size_t serialized_size(const abstract_type& t, const void* value) {
     return visit(t, value, serialized_size_visitor{});
 }
-
 template<typename T>
 static bytes serialize_value(const T& t, const typename T::native_type& v) {
     bytes b(bytes::initialized_later(), serialized_size_visitor{}(t, &v));
@@ -18146,7 +15672,6 @@ static bytes serialize_value(const T& t, const typename T::native_type& v) {
     serialize_visitor{i}(t, &v);
     return b;
 }
-
 seastar::net::inet_address inet_addr_type_impl::from_sstring(sstring_view s) {
     try {
         return inet_address(std::string(s.data(), s.size()));
@@ -18154,7 +15679,6 @@ seastar::net::inet_address inet_addr_type_impl::from_sstring(sstring_view s) {
         throw marshal_exception(format("Failed to parse inet_addr from '{}'", s));
     }
 }
-
 utils::UUID uuid_type_impl::from_sstring(sstring_view s) {
     static const boost::regex re("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$");
     if (!boost::regex_match(s.begin(), s.end(), re)) {
@@ -18162,7 +15686,6 @@ utils::UUID uuid_type_impl::from_sstring(sstring_view s) {
     }
     return utils::UUID(s);
 }
-
 utils::UUID timeuuid_type_impl::from_sstring(sstring_view s) {
     static const boost::regex re("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$");
     if (!boost::regex_match(s.begin(), s.end(), re)) {
@@ -18174,7 +15697,6 @@ utils::UUID timeuuid_type_impl::from_sstring(sstring_view s) {
     }
     return v;
 }
-
 namespace {
 struct from_string_visitor {
     sstring_view s;
@@ -18277,7 +15799,6 @@ struct from_string_visitor {
         if (s.empty()) {
             return bytes();
         }
-
         try {
             return serialize_value(t, cql_duration(s));
         } catch (cql_duration_error const& e) {
@@ -18317,16 +15838,13 @@ struct from_string_visitor {
     }
 };
 }
-
 bytes abstract_type::from_string(sstring_view s) const { return visit(*this, from_string_visitor{s}); }
-
 static sstring tuple_to_string(const tuple_type_impl &t, const tuple_type_impl::native_type& b) {
     std::ostringstream out;
     for (size_t i = 0; i < b.size(); ++i) {
         if (i > 0) {
             out << ":";
         }
-
         const auto& val = b[i];
         if (val.is_null()) {
             out << "@";
@@ -18336,10 +15854,8 @@ static sstring tuple_to_string(const tuple_type_impl &t, const tuple_type_impl::
             out << escape(typ->to_string(typ->decompose(val)));
         }
     }
-
     return out.str();
 }
-
 template <typename N, typename A, typename F>
 static sstring format_if_not_empty(
         const concrete_type<N, A>& type, const typename concrete_type<N, A>::native_type* b, F&& f) {
@@ -18348,9 +15864,7 @@ static sstring format_if_not_empty(
     }
     return f(static_cast<const N&>(*b));
 }
-
 static sstring to_string_impl(const abstract_type& t, const void* v);
-
 namespace {
 struct to_string_impl_visitor {
     template <typename T>
@@ -18412,15 +15926,12 @@ struct to_string_impl_visitor {
     }
 };
 }
-
 static sstring to_string_impl(const abstract_type& t, const void* v) {
     return visit(t, v, to_string_impl_visitor{});
 }
-
 sstring abstract_type::to_string_impl(const data_value& v) const {
     return ::to_string_impl(*this, get_value_ptr(v));
 }
-
 static bool
 check_compatibility(const tuple_type_impl &t, const abstract_type& previous, bool (abstract_type::*predicate)(const abstract_type&) const) {
     auto* x = dynamic_cast<const tuple_type_impl*>(&previous);
@@ -18433,34 +15944,27 @@ check_compatibility(const tuple_type_impl &t, const abstract_type& previous, boo
                 [predicate] (data_type a, data_type b) { return ((*a).*predicate)(*b); });
     return c.second == x->all_types().end();  // this allowed to be longer
 }
-
 static bool is_value_compatible_with_internal_aux(const user_type_impl& t, const abstract_type& previous) {
     if (&t == &previous) {
         return true;
     }
-
     if (!previous.is_user_type()) {
         return false;
     }
-
     auto& x = static_cast<const user_type_impl&>(previous);
-
     if (t.is_multi_cell() != x.is_multi_cell() || t._keyspace != x._keyspace) {
         return false;
     }
-
     auto c = std::mismatch(
             t.all_types().begin(), t.all_types().end(),
             x.all_types().begin(), x.all_types().end(),
             [] (const data_type& a, const data_type& b) { return a->is_compatible_with(*b); });
     return c.second == x.all_types().end(); // `this` allowed to have additional fields
 }
-
 static bool is_date_long_or_timestamp(const abstract_type& t) {
     auto k = t.get_kind();
     return k == abstract_type::kind::long_kind || k == abstract_type::kind::date || k == abstract_type::kind::timestamp;
 }
-
 // Needed to handle ReversedType in value-compatibility checks.
 static bool is_value_compatible_with_internal(const abstract_type& t, const abstract_type& other) {
     struct visitor {
@@ -18487,11 +15991,9 @@ static bool is_value_compatible_with_internal(const abstract_type& t, const abst
     };
     return visit(t, visitor{other});
 }
-
 bool abstract_type::is_value_compatible_with(const abstract_type& other) const {
     return is_value_compatible_with_internal(*this, *other.underlying_type());
 }
-
 std::optional<size_t>
 user_type_impl::idx_of_field(const bytes& name) const {
     for (size_t i = 0; i < _field_names.size(); ++i) {
@@ -18501,13 +16003,11 @@ user_type_impl::idx_of_field(const bytes& name) const {
     }
     return {};
 }
-
 shared_ptr<const user_type_impl>
 user_type_impl::get_instance(sstring keyspace, bytes name,
         std::vector<bytes> field_names, std::vector<data_type> field_types, bool multi_cell) {
     return intern::get_instance(std::move(keyspace), std::move(name), std::move(field_names), std::move(field_types), multi_cell);
 }
-
 sstring
 tuple_type_impl::make_name(const std::vector<data_type>& types) {
     // To keep format compatibility with Origin we never wrap
@@ -18517,7 +16017,6 @@ tuple_type_impl::make_name(const std::vector<data_type>& types) {
     // For more details see #4087
     return format("org.apache.cassandra.db.marshal.TupleType({})", fmt::join(types | boost::adaptors::transformed(std::mem_fn(&abstract_type::name)), ", "));
 }
-
 static std::optional<std::vector<data_type>>
 update_types(const std::vector<data_type> types, const user_type updated) {
     std::optional<std::vector<data_type>> new_types = std::nullopt;
@@ -18532,7 +16031,6 @@ update_types(const std::vector<data_type> types, const user_type updated) {
     }
     return new_types;
 }
-
 static std::optional<data_type> update_user_type_aux(
         const tuple_type_impl& t, const shared_ptr<const user_type_impl> updated) {
     if (auto new_types = update_types(t.all_types(), updated)) {
@@ -18540,7 +16038,6 @@ static std::optional<data_type> update_user_type_aux(
     }
     return std::nullopt;
 }
-
 namespace {
 struct native_value_clone_visitor {
     const void* from;
@@ -18557,11 +16054,9 @@ struct native_value_clone_visitor {
     }
 };
 }
-
 void* abstract_type::native_value_clone(const void* from) const {
     return visit(*this, native_value_clone_visitor{from});
 }
-
 namespace {
 struct native_value_delete_visitor {
     void* object;
@@ -18577,11 +16072,9 @@ struct native_value_delete_visitor {
     }
 };
 }
-
 static void native_value_delete(const abstract_type& t, void* object) {
     visit(t, native_value_delete_visitor{object});
 }
-
 namespace {
 struct native_typeid_visitor {
     template <typename N, typename A> const std::type_info& operator()(const concrete_type<N, A>&) {
@@ -18597,11 +16090,9 @@ struct native_typeid_visitor {
     }
 };
 }
-
 const std::type_info& abstract_type::native_typeid() const {
     return visit(*this, native_typeid_visitor{});
 }
-
 bytes abstract_type::decompose(const data_value& value) const {
     if (!value._value) {
         return {};
@@ -18611,7 +16102,6 @@ bytes abstract_type::decompose(const data_value& value) const {
     value.serialize(i);
     return b;
 }
-
 bool operator==(const data_value& x, const data_value& y) {
     if (x._type != y._type) {
         return false;
@@ -18624,20 +16114,17 @@ bool operator==(const data_value& x, const data_value& y) {
     }
     return x._type->equal(*x.serialize(), *y.serialize());
 }
-
 size_t data_value::serialized_size() const {
     if (!_value) {
         return 0;
     }
     return ::serialized_size(*_type, _value);
 }
-
 void data_value::serialize(bytes::iterator& out) const {
     if (_value) {
         ::serialize(*_type, _value, out);
     }
 }
-
 bytes_opt data_value::serialize() const {
     if (!_value) {
         return std::nullopt;
@@ -18647,14 +16134,12 @@ bytes_opt data_value::serialize() const {
     serialize(i);
     return b;
 }
-
 bytes data_value::serialize_nonnull() const {
     if (!_value) {
         on_internal_error(tlogger, "serialize_nonnull called on null");
     }
     return std::move(*serialize());
 }
-
 sstring abstract_type::get_string(const bytes& b) const {
     struct visitor {
         const bytes& b;
@@ -18666,17 +16151,14 @@ sstring abstract_type::get_string(const bytes& b) const {
     };
     return visit(*this, visitor{b});
 }
-
 sstring
 user_type_impl::get_name_as_string() const {
     auto real_utf8_type = static_cast<const utf8_type_impl*>(utf8_type.get());
     return ::deserialize_value(*real_utf8_type, _name);
 }
-
 sstring user_type_impl::get_name_as_cql_string() const {
     return cql3::util::maybe_quote(get_name_as_string());
 }
-
 std::ostream& user_type_impl::describe(std::ostream& os) const {
     os << "CREATE TYPE " << cql3::util::maybe_quote(_keyspace) << "." << get_name_as_cql_string() << " (\n";
     for (size_t i = 0; i < _string_field_names.size(); i++) {
@@ -18687,10 +16169,8 @@ std::ostream& user_type_impl::describe(std::ostream& os) const {
         os << "\n";
     }
     os << ");";
-
     return os;
 }
-
 data_type
 user_type_impl::freeze() const {
     if (_is_multi_cell) {
@@ -18699,7 +16179,6 @@ user_type_impl::freeze() const {
         return shared_from_this();
     }
 }
-
 sstring
 user_type_impl::make_name(sstring keyspace,
                           bytes name,
@@ -18720,7 +16199,6 @@ user_type_impl::make_name(sstring keyspace,
     }
     return os.str();
 }
-
 static std::optional<data_type> update_user_type_aux(
         const user_type_impl& u, const shared_ptr<const user_type_impl> updated) {
     if (u._keyspace == updated->_keyspace && u._name == updated->_name) {
@@ -18732,7 +16210,6 @@ static std::optional<data_type> update_user_type_aux(
     }
     return std::nullopt;
 }
-
 std::optional<data_type> abstract_type::update_user_type(const shared_ptr<const user_type_impl> updated) const {
     struct visitor {
         const shared_ptr<const user_type_impl> updated;
@@ -18755,7 +16232,6 @@ std::optional<data_type> abstract_type::update_user_type(const shared_ptr<const 
     };
     return visit(*this, visitor{updated});
 }
-
 static bytes_ostream serialize_for_cql_aux(const map_type_impl&, collection_mutation_view_description mut) {
     bytes_ostream out;
     auto len_slot = out.write_place_holder(collection_size_len());
@@ -18770,7 +16246,6 @@ static bytes_ostream serialize_for_cql_aux(const map_type_impl&, collection_muta
     write_collection_size(len_slot, elements);
     return out;
 }
-
 static bytes_ostream serialize_for_cql_aux(const set_type_impl&, collection_mutation_view_description mut) {
     bytes_ostream out;
     auto len_slot = out.write_place_holder(collection_size_len());
@@ -18784,7 +16259,6 @@ static bytes_ostream serialize_for_cql_aux(const set_type_impl&, collection_muta
     write_collection_size(len_slot, elements);
     return out;
 }
-
 static bytes_ostream serialize_for_cql_aux(const list_type_impl&, collection_mutation_view_description mut) {
     bytes_ostream out;
     auto len_slot = out.write_place_holder(collection_size_len());
@@ -18798,24 +16272,19 @@ static bytes_ostream serialize_for_cql_aux(const list_type_impl&, collection_mut
     write_collection_size(len_slot, elements);
     return out;
 }
-
 static bytes_ostream serialize_for_cql_aux(const user_type_impl& type, collection_mutation_view_description mut) {
     assert(type.is_multi_cell());
     assert(mut.cells.size() <= type.size());
-
     bytes_ostream out;
-
     size_t curr_field_pos = 0;
     for (auto&& e : mut.cells) {
         auto field_pos = deserialize_field_index(e.first);
         assert(field_pos < type.size());
-
         // Some fields don't have corresponding cells -- these fields are null.
         while (curr_field_pos < field_pos) {
             write_simple<int32_t>(out, int32_t(-1));
             ++curr_field_pos;
         }
-
         if (e.second.is_live(mut.tomb, false)) {
             auto value = e.second.value();
             write_simple<int32_t>(out, int32_t(value.size_bytes()));
@@ -18827,19 +16296,15 @@ static bytes_ostream serialize_for_cql_aux(const user_type_impl& type, collectio
         }
         ++curr_field_pos;
     }
-
     // Trailing null fields
     while (curr_field_pos < type.size()) {
         write_simple<int32_t>(out, int32_t(-1));
         ++curr_field_pos;
     }
-
     return out;
 }
-
 bytes_ostream serialize_for_cql(const abstract_type& type, collection_mutation_view v) {
     assert(type.is_multi_cell());
-
     return v.with_deserialized(type, [&] (collection_mutation_view_description mv) {
         return visit(type, make_visitor(
             [&] (const map_type_impl& ctype) { return serialize_for_cql_aux(ctype, std::move(mv)); },
@@ -18852,28 +16317,23 @@ bytes_ostream serialize_for_cql(const abstract_type& type, collection_mutation_v
         ));
     });
 }
-
 bytes serialize_field_index(size_t idx) {
     if (idx >= size_t(std::numeric_limits<int16_t>::max())) {
         // should've been rejected earlier, but just to be sure...
         throw std::runtime_error(format("index for user type field too large: {}", idx));
     }
-
     bytes b(bytes::initialized_later(), sizeof(int16_t));
     write_be(reinterpret_cast<char*>(b.data()), static_cast<int16_t>(idx));
     return b;
 }
-
 size_t deserialize_field_index(const bytes_view& b) {
     assert(b.size() == sizeof(int16_t));
     return read_be<int16_t>(reinterpret_cast<const char*>(b.data()));
 }
-
 size_t deserialize_field_index(managed_bytes_view b) {
     assert(b.size_bytes() == sizeof(int16_t));
     return be_to_cpu(read_simple_native<int16_t>(b));
 }
-
 thread_local const shared_ptr<const abstract_type> byte_type(make_shared<byte_type_impl>());
 thread_local const shared_ptr<const abstract_type> short_type(make_shared<short_type_impl>());
 thread_local const shared_ptr<const abstract_type> int32_type(make_shared<int32_type_impl>());
@@ -18896,7 +16356,6 @@ thread_local const shared_ptr<const abstract_type> decimal_type(make_shared<deci
 thread_local const shared_ptr<const abstract_type> counter_type(make_shared<counter_type_impl>());
 thread_local const shared_ptr<const abstract_type> duration_type(make_shared<duration_type_impl>());
 thread_local const data_type empty_type(make_shared<empty_type_impl>());
-
 data_type abstract_type::parse_type(const sstring& name)
 {
     static thread_local const std::unordered_map<sstring, data_type> types = {
@@ -18929,19 +16388,16 @@ data_type abstract_type::parse_type(const sstring& name)
     }
     return it->second;
 }
-
 data_value::~data_value() {
     if (_value) {
         native_value_delete(*_type, _value);
     }
 }
-
 data_value::data_value(const data_value& v) : _value(nullptr), _type(v._type) {
     if (v._value) {
         _value = _type->native_value_clone(v._value);
     }
 }
-
 data_value&
 data_value::operator=(data_value&& x) {
     auto tmp = std::move(x);
@@ -18949,93 +16405,65 @@ data_value::operator=(data_value&& x) {
     std::swap(tmp._type, this->_type);
     return *this;
 }
-
 data_value::data_value(bytes v) : data_value(make_new(bytes_type, v)) {
 }
-
 data_value::data_value(sstring&& v) : data_value(make_new(utf8_type, std::move(v))) {
 }
-
 data_value::data_value(const char* v) : data_value(std::string_view(v)) {
 }
-
 data_value::data_value(std::string_view v) : data_value(sstring(v)) {
 }
-
 data_value::data_value(const std::string& v) : data_value(std::string_view(v)) {
 }
-
 data_value::data_value(const sstring& v) : data_value(std::string_view(v)) {
 }
-
 data_value::data_value(ascii_native_type v) : data_value(make_new(ascii_type, v.string)) {
 }
-
 data_value::data_value(bool v) : data_value(make_new(boolean_type, v)) {
 }
-
 data_value::data_value(int8_t v) : data_value(make_new(byte_type, v)) {
 }
-
 data_value::data_value(int16_t v) : data_value(make_new(short_type, v)) {
 }
-
 data_value::data_value(int32_t v) : data_value(make_new(int32_type, v)) {
 }
-
 data_value::data_value(int64_t v) : data_value(make_new(long_type, v)) {
 }
-
 data_value::data_value(utils::UUID v) : data_value(make_new(uuid_type, v)) {
 }
-
 data_value::data_value(float v) : data_value(make_new(float_type, v)) {
 }
-
 data_value::data_value(double v) : data_value(make_new(double_type, v)) {
 }
-
 data_value::data_value(seastar::net::inet_address v) : data_value(make_new(inet_addr_type, v)) {
 }
-
 data_value::data_value(seastar::net::ipv4_address v) : data_value(seastar::net::inet_address(v)) {
 }
 data_value::data_value(seastar::net::ipv6_address v) : data_value(seastar::net::inet_address(v)) {
 }
-
 data_value::data_value(simple_date_native_type v) : data_value(make_new(simple_date_type, v.days)) {
 }
-
 data_value::data_value(db_clock::time_point v) : data_value(make_new(timestamp_type, v)) {
 }
-
 data_value::data_value(time_native_type v) : data_value(make_new(time_type, v.nanoseconds)) {
 }
-
 data_value::data_value(timeuuid_native_type v) : data_value(make_new(timeuuid_type, v.uuid)) {
 }
-
 data_value::data_value(date_type_native_type v) : data_value(make_new(date_type, v.tp)) {
 }
-
 data_value::data_value(utils::multiprecision_int v) : data_value(make_new(varint_type, v)) {
 }
-
 data_value::data_value(big_decimal v) : data_value(make_new(decimal_type, v)) {
 }
-
 data_value::data_value(cql_duration d) : data_value(make_new(duration_type, d)) {
 }
-
 data_value::data_value(empty_type_representation e) : data_value(make_new(empty_type, e)) {
 }
-
 sstring data_value::to_parsable_string() const {
     // For some reason trying to do it using fmt::format refuses to compile
     // auto to_parsable_str_transform = boost::adaptors::transformed([](const data_value& dv) -> sstring {
     //     return dv.to_parsable_string();
     // });
-
     if (_type->without_reversed().is_list()) {
         const list_type_impl::native_type* the_list = (const list_type_impl::native_type*)_value;
         std::ostringstream result;
@@ -19044,14 +16472,12 @@ sstring data_value::to_parsable_string() const {
             if (i != 0) {
                 result << ", ";
             }
-
             result << (*the_list)[i].to_parsable_string();
         }
         result << "]";
         return result.str();
         //return fmt::format("[{}]", fmt::join(*the_list | to_parsable_str_transform, ", "));
     }
-
     if (_type->without_reversed().is_set()) {
         const set_type_impl::native_type* the_set = (const set_type_impl::native_type*)_value;
         std::ostringstream result;
@@ -19060,14 +16486,12 @@ sstring data_value::to_parsable_string() const {
             if (i != 0) {
                 result << ", ";
             }
-
             result << (*the_set)[i].to_parsable_string();
         }
         result << "}";
         return result.str();
         //return fmt::format("{{{}}}", fmt::join(*the_set | to_parsable_str_transform, ", "));
     }
-
     if (_type->without_reversed().is_map()) {
         const map_type_impl::native_type* the_map = (const map_type_impl::native_type*)_value;
         std::ostringstream result;
@@ -19076,7 +16500,6 @@ sstring data_value::to_parsable_string() const {
             if (i != 0) {
                 result << ", ";
             }
-
             result << (*the_map)[i].first.to_parsable_string() << ":" << (*the_map)[i].second.to_parsable_string();
         }
         result << "}";
@@ -19089,13 +16512,11 @@ sstring data_value::to_parsable_string() const {
         //
         //return fmt::format("{{{}}}", fmt::join(*the_map | to_map_elem_transform, ", "));
     }
-
     if (_type->without_reversed().is_user_type()) {
         const user_type_impl* user_typ = dynamic_cast<const user_type_impl*>(&_type->without_reversed());
         const user_type_impl::native_type* field_values = (const user_type_impl::native_type*)_value;
         std::ostringstream result;
         result << "{";
-
         for (std::size_t i = 0; i < field_values->size(); i++) {
             if (i != 0) {
                 result << ", ";
@@ -19105,12 +16526,10 @@ sstring data_value::to_parsable_string() const {
         result << "}";
         return result.str();
     }
-
     if (_type->without_reversed().is_tuple()) {
         const tuple_type_impl::native_type* tuple_elements = (const tuple_type_impl::native_type*)_value;
         std::ostringstream result;
         result << "(";
-
         for (std::size_t i = 0; i < tuple_elements->size(); i++) {
             if (i != 0) {
                 result << ", ";
@@ -19120,15 +16539,12 @@ sstring data_value::to_parsable_string() const {
         result << ")";
         return result.str();
     }
-
     abstract_type::kind type_kind = _type->without_reversed().get_kind();
-
     if (type_kind == abstract_type::kind::date || type_kind == abstract_type::kind::timestamp) {
         // Put timezone information after a date or timestamp to specify that it's in UTC
         // Otherwise it will be parsed as a date in the local timezone.
         return fmt::format("'{}+0000'", *this);
     }
-
     if (type_kind == abstract_type::kind::utf8
         || type_kind == abstract_type::kind::ascii
         || type_kind == abstract_type::kind::inet
@@ -19137,47 +16553,38 @@ sstring data_value::to_parsable_string() const {
         // Put quotes on types that require it
         return fmt::format("'{}'", *this);
     }
-
     // For simple types the default operator<< should work ok
     return fmt::format("{}", *this);
 }
-
 data_value
 make_list_value(data_type type, list_type_impl::native_type value) {
     return data_value::make_new(std::move(type), std::move(value));
 }
-
 data_value
 make_set_value(data_type type, set_type_impl::native_type value) {
     return data_value::make_new(std::move(type), std::move(value));
 }
-
 data_value
 make_map_value(data_type type, map_type_impl::native_type value) {
     return data_value::make_new(std::move(type), std::move(value));
 }
-
 data_value
 make_tuple_value(data_type type, tuple_type_impl::native_type value) {
     return data_value::make_new(std::move(type), std::move(value));
 }
-
 data_value
 make_user_value(data_type type, user_type_impl::native_type value) {
     return data_value::make_new(std::move(type), std::move(value));
 }
-
 std::ostream& operator<<(std::ostream& out, const data_value& v) {
     if (v.is_null()) {
         return out << "null";
     }
     return out << v.type()->to_string_impl(v);
 }
-
 shared_ptr<const reversed_type_impl> reversed_type_impl::get_instance(data_type type) {
     return intern::get_instance(std::move(type));
 }
-
 data_type reversed(data_type type) {
     if (type->is_reversed()) {
         return type->underlying_type();
@@ -19185,40 +16592,25 @@ data_type reversed(data_type type) {
         return reversed_type_impl::get_instance(type);
     }
 }
-
 bool abstract_type::contains_set_or_map() const {
     return _contains_set_or_map;
 }
-
 bool abstract_type::contains_collection() const {
     return _contains_collection;
 }
-
 bool abstract_type::bound_value_needs_to_be_reserialized() const {
     // If a value contains set or map, then this collection can be sent in the wrong order
     // or there could be duplicates inside. We need to reserialize it into proper set or map.
     if (contains_set_or_map()) {
         return true;
     }
-
     return false;
 }
-
 // compile once the template instance that was externed in marshal_exception.hh
 namespace seastar {
 template void throw_with_backtrace<marshal_exception, sstring>(sstring&&);
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace cql3 {
-
 column_identifier::column_identifier(sstring raw_text, bool keep_case) {
     _text = std::move(raw_text);
     if (!keep_case) {
@@ -19226,37 +16618,29 @@ column_identifier::column_identifier(sstring raw_text, bool keep_case) {
     }
     bytes_ = to_bytes(_text);
 }
-
 column_identifier::column_identifier(bytes bytes_, data_type type)
     : bytes_(std::move(bytes_))
     , _text(type->get_string(this->bytes_))
 { }
-
 column_identifier::column_identifier(bytes bytes_, sstring text)
     : bytes_(std::move(bytes_))
     , _text(std::move(text))
 { }
-
 bool column_identifier::operator==(const column_identifier& other) const {
     return bytes_ == other.bytes_;
 }
-
 const bytes& column_identifier::name() const {
     return bytes_;
 }
-
 sstring column_identifier::to_string() const {
     return _text;
 }
-
 sstring column_identifier::to_cql_string() const {
     return util::maybe_quote(_text);
 }
-
 sstring column_identifier_raw::to_cql_string() const {
     return util::maybe_quote(_text);
 }
-
 column_identifier_raw::column_identifier_raw(sstring raw_text, bool keep_case)
     : _raw_text{raw_text}
     , _text{raw_text}
@@ -19265,17 +16649,14 @@ column_identifier_raw::column_identifier_raw(sstring raw_text, bool keep_case)
         std::transform(_text.begin(), _text.end(), _text.begin(), ::tolower);
     }
 }
-
 ::shared_ptr<column_identifier> column_identifier_raw::prepare(const schema& s) const {
     return prepare_column_identifier(s);
 }
-
 ::shared_ptr<column_identifier>
 column_identifier_raw::prepare_column_identifier(const schema& schema) const {
     if (schema.regular_column_name_type() == utf8_type) {
         return ::make_shared<column_identifier>(_text, true);
     }
-
     // We have a Thrift-created table with a non-text comparator.  We need to parse column names with the comparator
     // to get the correct ByteBuffer representation.  However, this doesn't apply to key aliases, so we need to
     // make a special check for those and treat them normally.  See CASSANDRA-8178.
@@ -19284,79 +16665,41 @@ column_identifier_raw::prepare_column_identifier(const schema& schema) const {
     if (def) {
         return ::make_shared<column_identifier>(std::move(text_bytes), _text);
     }
-
     return ::make_shared<column_identifier>(schema.regular_column_name_type()->from_string(_raw_text), _text);
 }
-
 bool column_identifier_raw::processes_selection() const {
     return false;
 }
-
 bool column_identifier_raw::operator==(const column_identifier_raw& other) const {
     return _text == other._text;
 }
-
 sstring column_identifier_raw::to_string() const {
     return _text;
 }
-
 std::ostream& operator<<(std::ostream& out, const column_identifier_raw& id) {
     return out << id._text;
 }
-
 }
-
 bool cql3::column_identifier::text_comparator::operator()(const cql3::column_identifier& c1, const cql3::column_identifier& c2) const {
     return c1.text() < c2.text();
 }
-/*
- * Copyright (C) 2016-present ScyllaDB
- *
- * Modified by ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
- */
-
-
 namespace cql3 {
-
 column_specification::column_specification(std::string_view ks_name_, std::string_view cf_name_, ::shared_ptr<column_identifier> name_, data_type type_)
         : ks_name(ks_name_)
         , cf_name(cf_name_)
         , name(name_)
         , type(type_)
     { }
-
-
 bool column_specification::all_in_same_table(const std::vector<lw_shared_ptr<column_specification>>& names)
 {
     assert(!names.empty());
-
     auto first = names.front();
     return std::all_of(std::next(names.begin()), names.end(), [first] (auto&& spec) {
         return spec->ks_name == first->ks_name && spec->cf_name == first->cf_name;
     });
 }
-
 }
-/*
- *
- * Modified by ScyllaDB
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
- */
-
-#ifdef __linux__
-#endif // __linux__
-
-
 namespace utils {
-
 static int64_t make_thread_local_node(int64_t node) {
     // An atomic counter to issue thread identifiers.
     // We should take current core number into consideration
@@ -19375,7 +16718,6 @@ static int64_t make_thread_local_node(int64_t node) {
     // value).
     return (node + (thread_id << 32)) & 0xFFFF'FFFF'FFFFL;
 }
-
 static int64_t make_random_node() {
     static int64_t random_node = [] {
         int64_t node = 0;
@@ -19391,12 +16733,10 @@ static int64_t make_random_node() {
     }();
     return random_node;
 }
-
 static int64_t make_node() {
     static int64_t global_node = 3;
     return make_thread_local_node(global_node);
 }
-
 static int64_t make_clock_seq_and_node()
 {
     // The original Java code did this, shuffling the number of millis
@@ -19405,42 +16745,32 @@ static int64_t make_clock_seq_and_node()
     //long clock = new Random(System.currentTimeMillis()).nextLong();
     unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
     int clock = rand_r(&seed);
-
     long lsb = 0;
     lsb |= 0x8000000000000000L;                 // variant (2 bits)
     lsb |= (clock & 0x0000000000003FFFL) << 48; // clock sequence (14 bits)
     lsb |= make_node();                          // 6 bytes
     return lsb;
 }
-
 UUID UUID_gen::get_name_UUID(bytes_view b) {
     return get_name_UUID(reinterpret_cast<const unsigned char*>(b.begin()), b.size());
 }
-
 UUID UUID_gen::get_name_UUID(sstring_view s) {
     static_assert(sizeof(char) == sizeof(sstring_view::value_type), "Assumed that str.size() counts in chars");
     return get_name_UUID(reinterpret_cast<const unsigned char*>(s.begin()), s.size());
 }
-
 UUID UUID_gen::get_name_UUID(const unsigned char *s, size_t len) {
     bytes digest = md5_hasher::calculate(std::string_view(reinterpret_cast<const char*>(s), len));
-
     // set version to 3
     digest[6] &= 0x0f;
     digest[6] |= 0x30;
-
     // set variant to IETF variant
     digest[8] &= 0x3f;
     digest[8] |= 0x80;
-
     return get_UUID(digest);
 }
-
 UUID UUID_gen::negate(UUID o) {
     auto lsb = o.get_least_significant_bits();
-
     const long clock_mask = 0x0000000000003FFFL;
-
     // We flip the node-and-clock-seq octet of the UUID for time-UUIDs. This
     // creates a virtual node with a time which cannot be generated anymore, so
     // is safe against collisions.
@@ -19448,70 +16778,37 @@ UUID UUID_gen::negate(UUID o) {
     // a buffer, flipping any bit should be safe against collisions.
     long clock = (lsb >> 48) & clock_mask;
     clock = ~clock & clock_mask;
-
     lsb &= ~(clock_mask << 48); // zero current clock
     lsb |= (clock << 48); // write new clock
-
     return UUID(o.get_most_significant_bits(), lsb);
 }
-
 const thread_local int64_t UUID_gen::spoof_node = make_thread_local_node(make_random_node());
 const thread_local int64_t UUID_gen::clock_seq_and_node = make_clock_seq_and_node();
 thread_local UUID_gen UUID_gen::_instance;
-
 } // namespace utils
-
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace utils {
 static logging::logger filterlog("bloom_filter");
-
 filter_ptr i_filter::get_filter(int64_t num_elements, double max_false_pos_probability, filter_format fformat) {
     assert(seastar::thread::running_in_thread());
-
     if (max_false_pos_probability > 1.0) {
         throw std::invalid_argument(format("Invalid probability {:f}: must be lower than 1.0", max_false_pos_probability));
     }
-
     if (max_false_pos_probability == 1.0) {
         return std::make_unique<filter::always_present_filter>();
     }
-
     int buckets_per_element = bloom_calculations::max_buckets_per_element(num_elements);
     auto spec = bloom_calculations::compute_bloom_spec(buckets_per_element, max_false_pos_probability);
     return filter::create_filter(spec.K, num_elements, spec.buckets_per_element, fformat);
 }
-
 hashed_key make_hashed_key(bytes_view b) {
     std::array<uint64_t, 2> h;
     utils::murmur_hash::hash3_x64_128(b, 0, h);
     return { h };
 }
-
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- *
- * Modified by ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
- */
-
-
 namespace utils {
 namespace filter {
-
 thread_local bloom_filter::stats bloom_filter::_shard_stats;
-
 template<typename Func>
 void for_each_index(hashed_key hk, int count, int64_t max, filter_format format, Func&& func) {
     auto h = hk.hash();
@@ -19524,7 +16821,6 @@ void for_each_index(hashed_key hk, int count, int64_t max, filter_format format,
         base = static_cast<int64_t>(static_cast<uint64_t>(base) + static_cast<uint64_t>(inc));
     }
 }
-
 bloom_filter::bloom_filter(int hashes, bitmap&& bs, filter_format format) noexcept
     : _bitset(std::move(bs))
     , _hash_count(hashes)
@@ -19532,11 +16828,9 @@ bloom_filter::bloom_filter(int hashes, bitmap&& bs, filter_format format) noexce
 {
     _stats.memory_size += memory_size();
 }
-
 bloom_filter::~bloom_filter() noexcept {
     _stats.memory_size -= memory_size();
 }
-
 bool bloom_filter::is_present(hashed_key key) {
     bool result = true;
     for_each_index(key, _hash_count, _bitset.size(), _format, [this, &result] (auto i) {
@@ -19548,22 +16842,18 @@ bool bloom_filter::is_present(hashed_key key) {
     });
     return result;
 }
-
 void bloom_filter::add(const bytes_view& key) {
     for_each_index(make_hashed_key(key), _hash_count, _bitset.size(), _format, [this] (auto i) {
         _bitset.set(i);
         return stop_iteration::no;
     });
 }
-
 bool bloom_filter::is_present(const bytes_view& key) {
     return is_present(make_hashed_key(key));
 }
-
 filter_ptr create_filter(int hash, large_bitset&& bitset, filter_format format) {
     return std::make_unique<murmur3_bloom_filter>(hash, std::move(bitset), format);
 }
-
 filter_ptr create_filter(int hash, int64_t num_elements, int buckets_per, filter_format format) {
     int64_t num_bits = (num_elements * buckets_per) + bloom_calculations::EXCESS;
     num_bits = align_up<int64_t>(num_bits, 64);  // Seems to be implied in origin
@@ -19572,28 +16862,8 @@ filter_ptr create_filter(int hash, int64_t num_elements, int buckets_per, filter
 }
 }
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- *
- * Modified by ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
- */
-
-
 namespace utils {
-
 namespace bloom_calculations {
-
-/**
- * In the following keyspace_name, the row 'i' shows false positive rates if i buckets
- * per element are used.  Cell 'j' shows false positive rates if j hash
- * functions are used.  The first row is 'i=0', the first column is 'j=0'.
- * Each cell (i,j) the false positive rate determined by using i buckets per
- * element and j hash functions.
- */
 const std::vector<std::vector<double>> probs = {
         {1.0}, // dummy row representing 0 buckets per element
         {1.0, 1.0}, // dummy row representing 1 buckets per element
@@ -19617,17 +16887,9 @@ const std::vector<std::vector<double>> probs = {
         {1.0, 0.0513, 0.00998, 0.00312, 0.0013,  0.000663, 0.000394, 0.000264, 0.000194, 0.000155, 0.000132, 0.000118, 0.000111, 0.000109},
         {1.0, 0.0488, 0.00906, 0.0027,  0.00108, 0.00053,  0.000303, 0.000196, 0.00014,  0.000108, 8.89e-05, 7.77e-05, 7.12e-05, 6.79e-05, 6.71e-05} // 20
 };  // the first column is a dummy column representing K=0.
-
-
-/**
- * The optimal number of hashes for a given number of bits per element.
- * These values are automatically calculated from the data above.
- */
 static std::vector<int> initialize_opt_k() {
-
     std::vector<int> arr;
     arr.resize(probs.size());
-
     for (auto i = 0; i < int(probs.size()); i++) {
         double min = std::numeric_limits<double>::max();
         auto& prob = probs[i];
@@ -19640,19 +16902,9 @@ static std::vector<int> initialize_opt_k() {
     }
     return arr;
 }
-
 const std::vector<int> opt_k_per_buckets = initialize_opt_k();
 }
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 utils::rate_limiter::rate_limiter(size_t rate)
         : _units_per_s(rate) {
     if (_units_per_s != 0) {
@@ -19662,11 +16914,9 @@ utils::rate_limiter::rate_limiter(size_t rate)
                         std::chrono::seconds(1) });
     }
 }
-
 void utils::rate_limiter::on_timer() {
     _sem.signal(_units_per_s - _sem.current());
 }
-
 future<> utils::rate_limiter::reserve(size_t u) {
     if (_units_per_s == 0) {
         return make_ready_future<>();
@@ -19680,17 +16930,6 @@ future<> utils::rate_limiter::reserve(size_t u) {
         return reserve(r);
     });
 }
-/*
- * Copyright (C) 2014-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
-
 class utils::file_lock::impl {
 public:
     impl(fs::path path)
@@ -19714,22 +16953,17 @@ public:
     fs::path _path;
     file_desc _fd;
 };
-
 utils::file_lock::file_lock(fs::path path)
     : _impl(std::make_unique<impl>(std::move(path)))
 {}
-
 utils::file_lock::file_lock(file_lock&& f) noexcept
     : _impl(std::move(f._impl))
 {}
-
 utils::file_lock::~file_lock()
 {}
-
 fs::path utils::file_lock::path() const {
     return _impl ? _impl->_path : "";
 }
-
 future<utils::file_lock> utils::file_lock::acquire(fs::path path) {
     // meh. not really any future stuff here. but pretend, for the
     // day when a future version of lock etc is added.
@@ -19739,22 +16973,10 @@ future<utils::file_lock> utils::file_lock::acquire(fs::path path) {
         return make_exception_future<utils::file_lock>(std::current_exception());
     }
 }
-
 std::ostream& utils::operator<<(std::ostream& out, const file_lock& f) {
     return out << "file lock '" << f.path() << "'";
 }
-/*
- * Copyright 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 namespace utils {
-
 void dynamic_bitset::set(size_t n) noexcept {
     for (auto& level : _bits) {
         auto idx = n / bits_per_int;
@@ -19766,7 +16988,6 @@ void dynamic_bitset::set(size_t n) noexcept {
         n = idx; // prepare for next level
     }
 }
-
 void dynamic_bitset::clear(size_t n) noexcept {
     for (auto& level : _bits) {
         auto idx = n / bits_per_int;
@@ -19778,7 +16999,6 @@ void dynamic_bitset::clear(size_t n) noexcept {
         n = idx; // prepare for next level
     }
 }
-
 size_t dynamic_bitset::find_first_set() const noexcept
 {
     size_t pos = 0;
@@ -19793,14 +17013,11 @@ size_t dynamic_bitset::find_first_set() const noexcept
     }
     return pos;
 }
-
 size_t dynamic_bitset::find_next_set(size_t n) const noexcept
 {
     ++n;
-
     unsigned level = 0;
     unsigned nlevels = _bits.size();
-
     // Climb levels until we find a set bit in the right place
     while (level != nlevels) {
         if (n >= _bits_count) {
@@ -19814,11 +17031,9 @@ size_t dynamic_bitset::find_next_set(size_t n) const noexcept
         ++level;
         n = align_up(n, size_t(1) << (level_shift * level));
     }
-
     if (level == nlevels) {
         return npos;
     }
-
     // Descend levels until we reach level 0
     do {
         auto v = _bits[level][level_idx(level, n)];
@@ -19826,10 +17041,8 @@ size_t dynamic_bitset::find_next_set(size_t n) const noexcept
         n = align_down(n, size_t(1) << (level_shift * (level + 1)));
         n += count_trailing_zeros(v) << (level_shift * level);
     } while (level-- != 0);
-
     return n;
 }
-
 size_t dynamic_bitset::find_last_set() const noexcept
 {
     size_t pos = 0;
@@ -19844,7 +17057,6 @@ size_t dynamic_bitset::find_last_set() const noexcept
     }
     return pos;
 }
-
 dynamic_bitset::dynamic_bitset(size_t nr_bits)
     : _bits_count(nr_bits)
 {
@@ -19864,19 +17076,7 @@ dynamic_bitset::dynamic_bitset(size_t nr_bits)
         level_bits = level_words; // for next iteration
     }
 }
-
 }
-
-/*
- * Copyright 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 bytes_opt
 to_bytes_opt(const managed_bytes_opt& mbo) {
     if (!mbo) {
@@ -19886,14 +17086,12 @@ to_bytes_opt(const managed_bytes_opt& mbo) {
         return bytes_opt(bv);
     });
 }
-
 managed_bytes_opt to_managed_bytes_opt(const bytes_opt& bo) {
     if (!bo) {
         return std::nullopt;
     }
     return managed_bytes(*bo);
 }
-
 std::unique_ptr<bytes_view::value_type[]>
 managed_bytes::do_linearize_pure() const {
     auto b = _u.ptr;
@@ -19905,38 +17103,24 @@ managed_bytes::do_linearize_pure() const {
     }
     return data;
 }
-
 sstring to_hex(const managed_bytes& b) {
     return fmt::to_string(managed_bytes_view(b));
 }
-
 sstring to_hex(const managed_bytes_opt& b) {
     return !b ? "null" : to_hex(*b);
 }
-
 std::ostream& operator<<(std::ostream& os, const managed_bytes_opt& b) {
     if (b) {
         return os << *b;
     }
     return os << "null";
 }
-/*
- * Copyright 2015-present ScyllaDB
- */
-
-/* SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
-
 bool check_exception(system_error_lambda_t f)
 {
     auto e = std::current_exception();
     if (!e) {
         return false;
     }
-
     try {
         std::rethrow_exception(e);
     } catch (std::system_error &e) {
@@ -19946,7 +17130,6 @@ bool check_exception(system_error_lambda_t f)
     }
     return false;
 }
-
 bool is_system_error_errno(int err_no)
 {
     return check_exception([err_no] (const std::system_error &e) {
@@ -19955,7 +17138,6 @@ bool is_system_error_errno(int err_no)
                code.category() == std::system_category();
     });
 }
-
 bool should_stop_on_system_error(const std::system_error& e) {
     if (e.code().category() == std::system_category()) {
 	// Whitelist of errors that don't require us to stop the server:
@@ -19969,7 +17151,6 @@ bool should_stop_on_system_error(const std::system_error& e) {
     }
     return true;
 }
-
 bool is_timeout_exception(std::exception_ptr e) {
     if (try_catch<seastar::rpc::timeout_error>(e)) {
         return true;
@@ -19982,14 +17163,11 @@ bool is_timeout_exception(std::exception_ptr e) {
     }
     return false;
 }
-
-
 void* utils::internal::try_catch_dynamic(std::exception_ptr& eptr, const std::type_info* catch_type) noexcept {
     // In both libstdc++ and libc++, exception_ptr has just one field
     // which is a pointer to the exception data
     void* raw_ptr = reinterpret_cast<void*&>(eptr);
     const std::type_info* ex_type = utils::abi::get_cxa_exception(raw_ptr)->exceptionType;
-
     // __do_catch can return true and set raw_ptr to nullptr, but only in the case
     // when catch_type is a pointer and a nullptr is thrown. try_catch_dynamic
     // doesn't work with catching pointers.
@@ -19998,33 +17176,14 @@ void* utils::internal::try_catch_dynamic(std::exception_ptr& eptr, const std::ty
     }
     return nullptr;
 }
-
-/*
- * Copyright (C) 2017-present ScyllaDB
- *
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
-
-
-
-
 namespace bpo = boost::program_options;
-
 template<>
 std::istream& std::operator>>(std::istream& is, std::unordered_map<seastar::sstring, seastar::sstring>& map) {
    std::istreambuf_iterator<char> i(is), e;
-
    int level = 0;
    bool sq = false, dq = false, qq = false;
    sstring key, val;
    sstring* ps = &key;
-
    auto add = [&] {
       if (!key.empty()) {
          map[key] = std::move(val);
@@ -20033,10 +17192,8 @@ std::istream& std::operator>>(std::istream& is, std::unordered_map<seastar::sstr
       val = {};
       ps = &key;
    };
-
    while (i != e && level >= 0) {
       auto c = *i++;
-
       switch (c) {
       case '\\':
          qq = !qq;
@@ -20086,37 +17243,29 @@ std::istream& std::operator>>(std::istream& is, std::unordered_map<seastar::sstr
       default:
          break;
       }
-
       if (level == 0) {
          ++level;
       }
       qq = false;
       ps->append(&c, 1);
    }
-
    add();
-
    return is;
 }
-
 template<>
 std::istream& std::operator>>(std::istream& is, std::vector<seastar::sstring>& res) {
    std::istreambuf_iterator<char> i(is), e;
-
    int level = 0;
    bool sq = false, dq = false, qq = false;
    sstring val;
-
    auto add = [&] {
       if (!val.empty()) {
          res.emplace_back(std::exchange(val, {}));
       }
       val = {};
    };
-
    while (i != e && level >= 0) {
       auto c = *i++;
-
       switch (c) {
       case '\\':
          qq = !qq;
@@ -20160,26 +17309,20 @@ std::istream& std::operator>>(std::istream& is, std::vector<seastar::sstring>& r
       default:
          break;
       }
-
       if (level == 0) {
          ++level;
       }
       qq = false;
       val.append(&c, 1);
    }
-
    add();
-
    return is;
 }
-
 thread_local unsigned utils::config_file::s_shard_id = 0;
-
 json::json_return_type
 utils::config_type::to_json(const void* value) const {
     return _to_json(value);
 }
-
 bool
 utils::config_file::config_src::matches(std::string_view name) const {
     // The below line provides support for option names in the "long_name,short_name" format,
@@ -20187,7 +17330,6 @@ utils::config_file::config_src::matches(std::string_view name) const {
     // But since at some point (due to a bug) the YAML config parser expected the silly
     // double form ("workdir,W") instead, we support both for backward compatibility.
     std::string_view long_name = _name.substr(0, _name.find_first_of(','));
-
     if (_name == name || long_name == name) {
         return true;
     }
@@ -20196,22 +17338,18 @@ utils::config_file::config_src::matches(std::string_view name) const {
     }
     return false;
 }
-
 json::json_return_type
 utils::config_file::config_src::value_as_json() const {
     return _type->to_json(current_value());
 }
-
 sstring utils::hyphenate(const std::string_view& v) {
     sstring result(v.begin(), v.end());
     std::replace(result.begin(), result.end(), '_', '-');
     return result;
 }
-
 utils::config_file::config_file(std::initializer_list<cfg_ref> cfgs)
     : _cfgs(cfgs)
 {}
-
 void utils::config_file::add(cfg_ref cfg, std::unique_ptr<any_value> value) {
     if (_per_shard_values.size() != 1) {
         throw std::runtime_error("Can only add config_src to config_file during initialization");
@@ -20222,26 +17360,21 @@ void utils::config_file::add(cfg_ref cfg, std::unique_ptr<any_value> value) {
     _per_shard_values[0].emplace_back(std::move(value));
     undo.cancel();
 }
-
 void utils::config_file::add(std::initializer_list<cfg_ref> cfgs) {
     _cfgs.insert(_cfgs.end(), cfgs.begin(), cfgs.end());
 }
-
 void utils::config_file::add(const std::vector<cfg_ref> & cfgs) {
     _cfgs.insert(_cfgs.end(), cfgs.begin(), cfgs.end());
 }
-
 bpo::options_description utils::config_file::get_options_description() {
     bpo::options_description opts("");
     return get_options_description(opts);
 }
-
 bpo::options_description utils::config_file::get_options_description(boost::program_options::options_description opts) {
     auto init = opts.add_options();
     add_options(init);
     return opts;
 }
-
 bpo::options_description_easy_init&
 utils::config_file::add_options(bpo::options_description_easy_init& init) {
     for (config_src& src : _cfgs) {
@@ -20251,38 +17384,25 @@ utils::config_file::add_options(bpo::options_description_easy_init& init) {
     }
     return init;
 }
-
 void utils::config_file::read_from_yaml(const sstring& yaml, error_handler h) {
     read_from_yaml(yaml.c_str(), std::move(h));
 }
-
 void utils::config_file::read_from_yaml(const char* yaml, error_handler h) {
     std::unordered_map<sstring, cfg_ref> values;
-
     if (!h) {
         h = [](auto & opt, auto & msg, auto) {
             throw std::invalid_argument(msg + " : " + opt);
         };
     }
-    /*
-     * Note: this is not very "half-fault" tolerant. I.e. there could be
-     * yaml syntax errors that origin handles and still sets the options
-     * where as we don't...
-     * There are no exhaustive attempts at converting, we rely on syntax of
-     * file mapping to the data type...
-     */
     auto doc = YAML::Load(yaml);
     for (auto node : doc) {
         auto label = node.first.as<sstring>();
-
         auto i = std::find_if(_cfgs.begin(), _cfgs.end(), [&label](const config_src& cfg) { return cfg.matches(label); });
         if (i == _cfgs.end()) {
             h(label, "Unknown option", std::nullopt);
             continue;
         }
-
         config_src& cfg = *i;
-
         if (cfg.source() > config_source::SettingsFile) {
             // already set
             continue;
@@ -20308,13 +17428,11 @@ void utils::config_file::read_from_yaml(const char* yaml, error_handler h) {
         }
     }
 }
-
 utils::config_file::configs utils::config_file::set_values() const {
     return boost::copy_range<configs>(_cfgs | boost::adaptors::filtered([] (const config_src& cfg) {
         return cfg.status() > value_status::Used || cfg.source() > config_source::None;
     }));
 }
-
 utils::config_file::configs utils::config_file::unset_values() const {
     configs res;
     for (config_src& cfg : _cfgs) {
@@ -20328,17 +17446,14 @@ utils::config_file::configs utils::config_file::unset_values() const {
     }
     return res;
 }
-
 future<> utils::config_file::read_from_file(file f, error_handler h) {
     return make_ready_future<>();
 }
-
 future<> utils::config_file::read_from_file(const sstring& filename, error_handler h) {
     return open_file_dma(filename, open_flags::ro).then([this, h](file f) {
        return read_from_file(std::move(f), h);
     });
 }
-
 future<> utils::config_file::broadcast_to_all_shards() {
     return async([this] {
         if (_per_shard_values.size() != smp::count) {
@@ -20368,7 +17483,6 @@ future<> utils::config_file::broadcast_to_all_shards() {
                 }
             }).get();
         }
-
         // #4713
         // We can have values retained that are not pointing to
         // our storage (extension config). Need to broadcast
@@ -20385,10 +17499,8 @@ future<> utils::config_file::broadcast_to_all_shards() {
         }
     });
 }
-
 sstring utils::config_file::config_src::source_name() const noexcept {
     auto src = source();
-
     switch (src) {
     case utils::config_file::config_source::None:
         return "default";
@@ -20403,80 +17515,18 @@ sstring utils::config_file::config_src::source_name() const noexcept {
     case utils::config_file::config_source::API:
         return "api";
     }
-
     __builtin_unreachable();
 }
-/*
- * Copyright (C) 2020-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 namespace utils {
-
 std::string multiprecision_int::str() const {
     return _v.str();
 }
-
 std::ostream& operator<<(std::ostream& os, const multiprecision_int& x) {
     return os << x._v;
 }
-
 }
-
-/*
- * Copyright (C) 2018-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- *
- */
-
-/*
- * CRC32(M(x)) = M(x) * x^32 mod G(x)
- *
- * Where M(x) is a polynomial with binary coefficients from an integer field modulo 2.
- *
- *   M(X) = a_0 * x^0 + a_1 * x^1 + ... + a_n * x^N
- *
- *   a_i in { 0, 1 }
- *
- * Since it's a modulo-2 field, addition of coefficients is done by XORing.
- *
- * G(x) is a constant polynomial of degree 32:
- *
- *   G(x) = x^32 + x^26 + x^23 + x^22 + x^16 + x^12 + x^11 + x^10 + x^8 + x^7 + x^5 + x^4 + x^2 + x + 1
- *
- * Polynomials are represented in memory as sequences of bits, where each
- * bit represents the coefficient of some x^N term. Bit-reversed form is used,
- * meaning that the coefficients for higher powers are stored in less significant bits:
- *
- *            MSB                           LSB
- *    bit:    31  30   29            2   1   0
- *
- *           | 1 | 0 | 1 |   ...   | 1 | 0 | 1 |
- *
- *    P(x) =  x^0 +   x^2 + ... + x^29   + x^31
- *
- */
-
-
 using u32 = uint32_t;
 using u64 = uint64_t;
-
-#if defined(__x86_64__) || defined(__i386__) || defined(__aarch64__)
-
-
-/*
- * Calculates:
- *
- *   P1(x) * P2(x)
- */
 static
 u64 pmul(u32 p1, u32 p2) {
     // Because the representation is bit-reversed, we need to shift left
@@ -20484,181 +17534,50 @@ u64 pmul(u32 p1, u32 p2) {
     // corresponds to the coefficient of x^63 and not x^62.
     return clmul(p1, p2) << 1;
 }
-
-/*
- * Calculates:
- *
- *   P1(x) * P2(x) mod G(x)
- */
 static
 u32 pmul_mod(u32 p1, u32 p2) {
     return crc32_fold_barrett_u64(pmul(p1, p2));
 }
-
-/*
- * Calculates:
- *
- *   R(x) = P(x) * x^(e*8) mod G(x)
- *
- */
 static
 u32 mul_by_x_pow_mul8(u32 p, u64 e) {
-    /*
-     * Let's expand e as a series with coefficients corresponding to the binary form:
-     *
-     *   e = e_0 * 2^0 + e_1 * 2^1 + ... + e_(n-1) * 2^(n-1) + e_n * 2^n
-     *
-     * for short:
-     *
-     *   e = SUM(e_i * 2^i)
-     *   i in 0..63
-     *
-     * then:
-     *
-     *   R(X) = P(x) * x^(e*8) mod G(x)
-     *        = P(x) * x^(SUM(e_i * 2^i)*8) mod G(x)
-     *        = P(x) * x^(SUM(e_i * 2^(i+3)))) mod G(x)
-     *        = P(x) * MUL(x^(e_i * 2^(i+3)))) mod G(x)
-     *
-     * To simplify notation:
-     *
-     *   t_i(x, u) = x^(u * 2^(i+3))
-     *
-     * then:
-     *
-     *   R(X) = P(x) * MUL(t_i(x, e_i)) mod G(x)
-     *
-     * One observation is that we could apply modulo G(x) to each of the t_i term without
-     * changing the result.
-     *
-     * Also, each t_i can have 2 possible values:
-     *
-     *   t_i(x, u) = { x^(2^(i+3)) mod G(x) for u = 1,
-     *                                    1 for u = 0 }
-     *
-     * So t_i(x, u) is a polynomial of degree up to 31 and its 2 possible values could be precomputed.
-     *
-     * There are 64 t_i terms, selected for multiplication by the bits of e. That means we have to
-     * do up to 64 multiplications. Each multiplication doubles the order of the polynomial and
-     * multiplication is natively supported only for up to degree 64, so we would have to also
-     * fold (apply the modulo operator) along the way.
-     *
-     * We can reduce the number of multiplications by grouping the terms, e.g. by 8:
-     *
-     *   R(X) = P(x) * (t_0(x, e_0) * t_1(x, e_1) * ... * t_7(x, e_7) mod G(x))
-     *               * (t_8(x, e_8) * t_9(x, e_9) * ... * t_15(x, e_15) mod G(x))
-     *               ...
-     *               * (t_56(x, e_56) * t_57(x, e_57) * ... * t_63(x, e_63) mod G(x)) mod G(x)
-     *
-     * Each group multiplies 8 t_i terms and can have 256 possible values depending on 8 bits of e.
-     * The trick is to pre-compute the values. They are stored in crc32_x_pow_radix_8_table_base_{0,8,16,24}.
-     * We can also observe that t_(i+32)(x, u) = t_i(x, u), so we actually need to compute values for
-     * only the first 4 groups.
-     *
-     * When we know that all bits in e relevant for given group are 0, that group will evaluate to 1
-     * and thus doesn't participate in the end result. So for small values of e we only have to multiply
-     * lower-order groups.
-     */
-
     u32 x0 = crc32_x_pow_radix_8_table_base_0[e & 0xff];
-
     if (__builtin_expect(e < 0x100, false)) {
         return pmul_mod(p, x0);
     }
-
     u32 x1 = crc32_x_pow_radix_8_table_base_8[(e >> 8) & 0xff];
     u32 x2 = crc32_x_pow_radix_8_table_base_16[(e >> 16) & 0xff];
-
     u64 y0 = pmul(p, x0);
     u64 y1 = pmul(x1, x2);
     u32 z0 = crc32_fold_barrett_u64(y0);
     u32 z1 = crc32_fold_barrett_u64(y1);
-
     if (__builtin_expect(e < 0x1000000, true)) {
         return pmul_mod(z0, z1);
     }
-
     u32 x3 = crc32_x_pow_radix_8_table_base_24[(e >> 24) & 0xff];
     z1 = pmul_mod(z1, x3);
-
     if (__builtin_expect(e < 0x100000000, true)) {
         return pmul_mod(z0, z1);
     }
-
     u32 x4 = crc32_x_pow_radix_8_table_base_0[(e >> 32) & 0xff];
     u32 x5 = crc32_x_pow_radix_8_table_base_8[(e >> 40) & 0xff];
     u32 x6 = crc32_x_pow_radix_8_table_base_16[(e >> 48) & 0xff];
     u32 x7 = crc32_x_pow_radix_8_table_base_24[(e >> 56) & 0xff];
-
     u64 y2 = pmul(x4, x5);
     u64 y3 = pmul(x6, x7);
     u64 u0 = pmul(z0, z1);
-
     u32 z2 = crc32_fold_barrett_u64(y2);
     u32 z3 = crc32_fold_barrett_u64(y3);
-
     u64 u1 = pmul(z2, z3);
     u32 v0 = crc32_fold_barrett_u64(u0);
     u32 v1 = crc32_fold_barrett_u64(u1);
-
     return pmul_mod(v0, v1);
 }
-
 u32 fast_crc32_combine(u32 crc, u32 crc2, ssize_t len2) {
     if (len2 == 0) {
         return crc;
     }
-    /*
-     * We need to calculate:
-     *
-     *   CRC(A(x) * x^|B(x)| + B(x))
-     *
-     * given:
-     *
-     *   CRC(A(x)) = crc
-     *   CRC(B(x)) = crc2
-     *   |B(x)|    = len2 * 8
-     *
-     *   CRC(A(x)) = A(x) * x^32 mod G(x)
-     *   CRC(B(x)) = B(x) * x^32 mod G(x)
-     *
-     * CRC(A(x) * x^|B(x)| + B(x))
-     *   = (A(x) * x^|B(x)| + B(x)) * x^32 mod G(x)
-     *   = (A(x) * x^32 mod G(x) * x^|B(x)|) + (B(x) * x^32 mod G(x)) mod G(x)
-     *   = (crc * x^(len2 * 8)) + crc2 mod G(x)
-     *
-     */
     return mul_by_x_pow_mul8(crc, len2) ^ crc2;
 }
-
-#else
-
-// FIXME: Optimize for other archs
-// That boils down to implementing crc32_fold_barrett_u64() and clmul()
-// and reusing the algorithm above. For now, delegate to zlib.
-
-
-u32 fast_crc32_combine(u32 crc, u32 crc2, ssize_t len2) {
-    if (len2 == 0) {
-        return crc;
-    }
-    return crc32_combine(crc, crc2, len2);
-}
-
-#endif
-/*
- * Copyright (C) 2018-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- *
- */
-
-#if defined(__x86_64__) || defined(__i386__) || defined(__aarch64__)
-
-
-
 template <int bits>
 static
 constexpr
@@ -20674,7 +17593,6 @@ make_crc32_power_table() {
     }
     return pows;
 }
-
 static
 constexpr
 std::array<uint32_t, 256>
@@ -20691,33 +17609,15 @@ make_crc32_table(int base, int radix_bits, uint32_t one, std::array<uint32_t, 32
     }
     return table;
 }
-
 static constexpr int bits = 32;
 static constexpr int radix_bits = 8;
 static constexpr uint32_t one = 0x80000000; // x^0
 static constexpr auto pows = make_crc32_power_table<bits>(); // pows[i] = x^(2^i*8) mod G(x)
-
 constinit std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_0 = make_crc32_table(0, radix_bits, one, pows);
 constinit std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_8 = make_crc32_table(8, radix_bits, one, pows);
 constinit std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_16 = make_crc32_table(16, radix_bits, one, pows);
 constinit std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_24 = make_crc32_table(24, radix_bits, one, pows);
-
-#else
-
-#error "Not implemented for this CPU architecture."
-
-#endif
-/*
- * Copyright (C) 2022-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace utils {
-
 inline size_t iovec_len(const std::vector<iovec>& iov)
 {
     size_t ret = 0;
@@ -20726,18 +17626,13 @@ inline size_t iovec_len(const std::vector<iovec>& iov)
     }
     return ret;
 }
-
 }
-
 namespace s3 {
-
 static logging::logger s3l("s3");
-
 future<> ignore_reply(const http::reply& rep, input_stream<char>&& in_) {
     auto in = std::move(in_);
     co_await util::skip_entire_stream(in);
 }
-
 class dns_connection_factory : public http::experimental::connection_factory {
 protected:
     std::string _host;
@@ -20749,10 +17644,8 @@ protected:
     };
     lw_shared_ptr<state> _state;
     shared_future<> _done;
-
     future<> initialize(bool use_https) {
         auto state = _state;
-
         co_await coroutine::all(
             [state, host = _host, port = _port] () -> future<> {
                 auto hent = co_await net::dns::get_host_by_name(host, net::inet_address::family::INET);
@@ -20766,11 +17659,9 @@ protected:
                 }
             }
         );
-
         state->initialized = true;
         s3l.debug("Initialized factory, address={} tls={}", state->addr, state->creds == nullptr ? "no" : "yes");
     }
-
 public:
     dns_connection_factory(std::string host, int port, bool use_https)
         : _host(std::move(host))
@@ -20779,13 +17670,11 @@ public:
         , _done(initialize(use_https))
     {
     }
-
     virtual future<connected_socket> make() override {
         if (!_state->initialized) {
             s3l.debug("Waiting for factory to initialize");
             co_await _done.get_future();
         }
-
         if (_state->creds) {
             s3l.debug("Making new HTTPS connection addr={} host={}", _state->addr, _host);
             co_return co_await tls::connect(_state->creds, _state->addr, _host);
@@ -20795,7 +17684,6 @@ public:
         }
     }
 };
-
 client::client(std::string host, endpoint_config_ptr cfg, global_factory gf, private_tag)
         : _host(std::move(host))
         , _cfg(std::move(cfg))
@@ -20803,23 +17691,19 @@ client::client(std::string host, endpoint_config_ptr cfg, global_factory gf, pri
         , _gf(std::move(gf))
 {
 }
-
 void client::update_config(endpoint_config_ptr cfg) {
     if (_cfg->port != cfg->port || _cfg->use_https != cfg->use_https) {
         throw std::runtime_error("Updating port and/or https usage is not possible");
     }
     _cfg = std::move(cfg);
 }
-
 shared_ptr<client> client::make(std::string endpoint, endpoint_config_ptr cfg, global_factory gf) {
     return seastar::make_shared<client>(std::move(endpoint), std::move(cfg), std::move(gf), private_tag{});
 }
-
 void client::authorize(http::request& req) {
     if (!_cfg->aws) {
         return;
     }
-
     auto time_point_str = utils::aws::format_time_point(db_clock::now());
     auto time_point_st = time_point_str.substr(0, 8);
     req._headers["x-amz-date"] = time_point_str;
@@ -20855,14 +17739,12 @@ void client::authorize(http::request& req) {
         _cfg->aws->region, "s3", query_string);
     req._headers["Authorization"] = format("AWS4-HMAC-SHA256 Credential={}/{}/{}/s3/aws4_request,SignedHeaders={},Signature={}", _cfg->aws->key, time_point_st, _cfg->aws->region, signed_headers_list, sig);
 }
-
 future<> client::get_object_header(sstring object_name, http::experimental::client::reply_handler handler) {
     s3l.trace("HEAD {}", object_name);
     auto req = http::request::make("HEAD", _host, object_name);
     authorize(req);
     return _http.make_request(std::move(req), std::move(handler));
 }
-
 future<uint64_t> client::get_object_size(sstring object_name) {
     uint64_t len = 0;
     co_await get_object_header(std::move(object_name), [&len] (const http::reply& rep, input_stream<char>&& in_) mutable -> future<> {
@@ -20871,11 +17753,9 @@ future<uint64_t> client::get_object_size(sstring object_name) {
     });
     co_return len;
 }
-
 // TODO: possibly move this to seastar's http subsystem.
 static std::time_t parse_http_last_modified_time(const sstring& object_name, sstring last_modified) {
     std::tm tm = {0};
-
     // format conforms to HTTP-date, defined in the specification (RFC 7231).
     if (strptime(last_modified.c_str(), "%a, %d %b %Y %H:%M:%S %Z", &tm) == nullptr) {
         s3l.warn("Unable to parse {} as Last-Modified for {}", last_modified, object_name);
@@ -20884,7 +17764,6 @@ static std::time_t parse_http_last_modified_time(const sstring& object_name, sst
     }
     return std::mktime(&tm);
 }
-
 future<client::stats> client::get_object_stats(sstring object_name) {
     struct stats st{};
     co_await get_object_header(object_name, [&] (const http::reply& rep, input_stream<char>&& in_) mutable -> future<> {
@@ -20894,7 +17773,6 @@ future<client::stats> client::get_object_stats(sstring object_name) {
     });
     co_return st;
 }
-
 future<temporary_buffer<char>> client::get_object_contiguous(sstring object_name, std::optional<range> range) {
     auto req = http::request::make("GET", _host, object_name);
     http::reply::status_type expected = http::reply::status_type::ok;
@@ -20906,7 +17784,6 @@ future<temporary_buffer<char>> client::get_object_contiguous(sstring object_name
     } else {
         s3l.trace("GET {} contiguous", object_name);
     }
-
     size_t off = 0;
     std::optional<temporary_buffer<char>> ret;
     authorize(req);
@@ -20918,7 +17795,6 @@ future<temporary_buffer<char>> client::get_object_contiguous(sstring object_name
             if (buf.empty()) {
                 return make_ready_future<consumption_result<char>>(stop_consuming(std::move(buf)));
             }
-
             size_t to_copy = std::min(ret->size() - off, buf.size());
             if (to_copy > 0) {
                 std::copy_n(buf.get(), to_copy, ret->get_write() + off);
@@ -20931,7 +17807,6 @@ future<temporary_buffer<char>> client::get_object_contiguous(sstring object_name
     s3l.trace("Consumed {} bytes of {}", off, object_name);
     co_return std::move(*ret);
 }
-
 future<> client::put_object(sstring object_name, temporary_buffer<char> buf) {
     s3l.trace("PUT {}", object_name);
     auto req = http::request::make("PUT", _host, object_name);
@@ -20953,7 +17828,6 @@ future<> client::put_object(sstring object_name, temporary_buffer<char> buf) {
     authorize(req);
     co_await _http.make_request(std::move(req), ignore_reply);
 }
-
 future<> client::put_object(sstring object_name, ::memory_data_sink_buffers bufs) {
     s3l.trace("PUT {} (buffers)", object_name);
     auto req = http::request::make("PUT", _host, object_name);
@@ -20977,20 +17851,17 @@ future<> client::put_object(sstring object_name, ::memory_data_sink_buffers bufs
     authorize(req);
     co_await _http.make_request(std::move(req), ignore_reply);
 }
-
 future<> client::delete_object(sstring object_name) {
     s3l.trace("DELETE {}", object_name);
     auto req = http::request::make("DELETE", _host, object_name);
     authorize(req);
     co_await _http.make_request(std::move(req), ignore_reply, http::reply::status_type::no_content);
 }
-
 class client::upload_sink : public data_sink_impl {
     // "Each part must be at least 5 MB in size, except the last part."
     // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html
     static constexpr size_t minimum_part_size = 5 << 20;
     static constexpr int flush_concurrency = 3;
-
     shared_ptr<client> _client;
     http::experimental::client& _http;
     sstring _object_name;
@@ -20998,18 +17869,15 @@ class client::upload_sink : public data_sink_impl {
     sstring _upload_id;
     utils::chunked_vector<sstring> _part_etags;
     semaphore _flush_sem{flush_concurrency};
-
     future<> start_upload();
     future<> finalize_upload();
     future<> maybe_flush();
     future<> do_flush();
     future<> upload_part(unsigned part_number, memory_data_sink_buffers bufs);
     future<> abort_upload();
-
     bool upload_started() const noexcept {
         return !_upload_id.empty();
     }
-
 public:
     upload_sink(shared_ptr<client> cln, sstring object_name)
         : _client(std::move(cln))
@@ -21017,40 +17885,32 @@ public:
         , _object_name(std::move(object_name))
     {
     }
-
     virtual future<> put(net::packet) override {
         throw_with_backtrace<std::runtime_error>("s3 put(net::packet) unsupported");
     }
-
     virtual future<> put(temporary_buffer<char> buf) override {
         _bufs.put(std::move(buf));
         return maybe_flush();
     }
-
     virtual future<> put(std::vector<temporary_buffer<char>> data) override {
         for (auto&& buf : data) {
             _bufs.put(std::move(buf));
         }
         return maybe_flush();
     }
-
     virtual future<> flush() override {
         return finalize_upload();
     }
-
     virtual future<> close() override;
-
     virtual size_t buffer_size() const noexcept override {
         return 128 * 1024;
     }
 };
-
 future<> client::upload_sink::maybe_flush() {
     if (_bufs.size() >= minimum_part_size) {
         co_await do_flush();
     }
 }
-
 future<> client::upload_sink::do_flush() {
     if (!upload_started()) {
         co_await start_upload();
@@ -21059,7 +17919,6 @@ future<> client::upload_sink::do_flush() {
     _part_etags.emplace_back();
     co_await upload_part(pn, std::move(_bufs));
 }
-
 sstring parse_multipart_upload_id(sstring& body) {
     auto doc = std::make_unique<rapidxml::xml_document<>>();
     try {
@@ -21074,20 +17933,15 @@ sstring parse_multipart_upload_id(sstring& body) {
     auto uploadid_node = root_node->first_node("UploadId");
     return uploadid_node->value();
 }
-
 static constexpr std::string_view multipart_upload_complete_header =
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
         "<CompleteMultipartUpload xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">";
-
 static constexpr std::string_view multipart_upload_complete_entry =
         "<Part><ETag>{}</ETag><PartNumber>{}</PartNumber></Part>";
-
 static constexpr std::string_view multipart_upload_complete_trailer =
         "</CompleteMultipartUpload>";
-
 unsigned prepare_multipart_upload_parts(const utils::chunked_vector<sstring>& etags) {
     unsigned ret = multipart_upload_complete_header.size();
-
     unsigned nr = 1;
     for (auto& etag : etags) {
         if (etag.empty()) {
@@ -21102,12 +17956,10 @@ unsigned prepare_multipart_upload_parts(const utils::chunked_vector<sstring>& et
     ret += multipart_upload_complete_trailer.size();
     return ret;
 }
-
 future<> dump_multipart_upload_parts(output_stream<char> out, const utils::chunked_vector<sstring>& etags) {
     std::exception_ptr ex;
     try {
         co_await out.write(multipart_upload_complete_header.data(), multipart_upload_complete_header.size());
-
         unsigned nr = 1;
         for (auto& etag : etags) {
             assert(!etag.empty());
@@ -21124,7 +17976,6 @@ future<> dump_multipart_upload_parts(output_stream<char> out, const utils::chunk
         co_await coroutine::return_exception_ptr(std::move(ex));
     }
 }
-
 future<> client::upload_sink::start_upload() {
     s3l.trace("POST uploads {}", _object_name);
     auto rep = http::request::make("POST", _client->_host, _object_name);
@@ -21140,7 +17991,6 @@ future<> client::upload_sink::start_upload() {
         s3l.trace("created uploads for {} -> id = {}", _object_name, _upload_id);
     });
 }
-
 future<> client::upload_sink::upload_part(unsigned part_number, memory_data_sink_buffers bufs) {
     s3l.trace("PUT part {} {} bytes in {} buffers (upload id {})", part_number, bufs.size(), bufs.buffers().size(), _upload_id);
     auto req = http::request::make("PUT", _client->_host, _object_name);
@@ -21164,7 +18014,6 @@ future<> client::upload_sink::upload_part(unsigned part_number, memory_data_sink
             co_await coroutine::return_exception_ptr(std::move(ex));
         }
     });
-
     // Do upload in the background so that several parts could go in parallel.
     // The semaphore is used for two things -- control the concurrency and let
     // the finalize_upload() wait in any background activity before checking
@@ -21184,7 +18033,6 @@ future<> client::upload_sink::upload_part(unsigned part_number, memory_data_sink
         s3l.warn("couldn't upload part {}: {} (upload id {})", part_number, ex, _upload_id);
     }).finally([units = std::move(units)] {});
 }
-
 future<> client::upload_sink::abort_upload() {
     s3l.trace("DELETE upload {}", _upload_id);
     auto req = http::request::make("DELETE", _client->_host, _object_name);
@@ -21192,23 +18040,18 @@ future<> client::upload_sink::abort_upload() {
     _client->authorize(req);
     co_await _http.make_request(std::move(req), ignore_reply, http::reply::status_type::no_content);
 }
-
 future<> client::upload_sink::finalize_upload() {
     if (_bufs.size() == 0) {
         co_return;
     }
-
     co_await do_flush();
-
     s3l.trace("wait for {} parts to complete (upload id {})", _part_etags.size(), _upload_id);
     co_await _flush_sem.wait(flush_concurrency);
-
     unsigned parts_xml_len = prepare_multipart_upload_parts(_part_etags);
     if (parts_xml_len == 0) {
         co_await abort_upload();
         co_await coroutine::return_exception(std::runtime_error("couldn't upload parts"));
     }
-
     s3l.trace("POST upload completion {} parts (upload id {})", _part_etags.size(), _upload_id);
     auto req = http::request::make("POST", _client->_host, _object_name);
     req.query_parameters["uploadId"] = std::exchange(_upload_id, ""); // now upload_started() returns false
@@ -21218,7 +18061,6 @@ future<> client::upload_sink::finalize_upload() {
     _client->authorize(req);
     co_await _http.make_request(std::move(req), ignore_reply);
 }
-
 future<> client::upload_sink::close() {
     if (upload_started()) {
         s3l.warn("closing incomplete multipart upload -> aborting");
@@ -21227,20 +18069,16 @@ future<> client::upload_sink::close() {
         s3l.trace("closing multipart upload");
     }
 }
-
 data_sink client::make_upload_sink(sstring object_name) {
     return data_sink(std::make_unique<upload_sink>(shared_from_this(), std::move(object_name)));
 }
-
 class client::readable_file : public file_impl {
     shared_ptr<client> _client;
     http::experimental::client& _http;
     sstring _object_name;
-
     [[noreturn]] void unsupported() {
         throw_with_backtrace<std::logic_error>("unsupported operation on s3 readable file");
     }
-
 public:
     readable_file(shared_ptr<client> cln, sstring object_name)
         : _client(std::move(cln))
@@ -21248,43 +18086,34 @@ public:
         , _object_name(std::move(object_name))
     {
     }
-
     virtual future<size_t> write_dma(uint64_t pos, const void* buffer, size_t len, const io_priority_class& pc) override { unsupported(); }
     virtual future<size_t> write_dma(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc) override { unsupported(); }
     virtual future<> truncate(uint64_t length) override { unsupported(); }
     virtual subscription<directory_entry> list_directory(std::function<future<> (directory_entry de)> next) override { unsupported(); }
-
     virtual future<> flush(void) override { return make_ready_future<>(); }
     virtual future<> allocate(uint64_t position, uint64_t length) override { return make_ready_future<>(); }
     virtual future<> discard(uint64_t offset, uint64_t length) override { return make_ready_future<>(); }
-
     class readable_file_handle_impl final : public file_handle_impl {
         client::handle _h;
         sstring _object_name;
-
     public:
         readable_file_handle_impl(client::handle h, sstring object_name)
                 : _h(std::move(h))
                 , _object_name(std::move(object_name))
         {}
-
         virtual std::unique_ptr<file_handle_impl> clone() const override {
             return std::make_unique<readable_file_handle_impl>(_h, _object_name);
         }
-
         virtual shared_ptr<file_impl> to_file() && override {
             return make_shared<readable_file>(std::move(_h).to_client(), std::move(_object_name));
         }
     };
-
     virtual std::unique_ptr<file_handle_impl> dup() override {
         return std::make_unique<readable_file_handle_impl>(client::handle(*_client), _object_name);
     }
-
     virtual future<uint64_t> size(void) override {
         return _client->get_object_size(_object_name);
     }
-
     virtual future<struct stat> stat(void) override {
         auto object_stats = co_await _client->get_object_stats(_object_name);
         struct stat ret {};
@@ -21298,13 +18127,11 @@ public:
         ret.st_ctime = object_stats.last_modified;
         co_return ret;
     }
-
     virtual future<size_t> read_dma(uint64_t pos, void* buffer, size_t len, const io_priority_class& pc) override {
         auto buf = co_await _client->get_object_contiguous(_object_name, range{ pos, len });
         std::copy_n(buf.get(), buf.size(), reinterpret_cast<uint8_t*>(buffer));
         co_return buf.size();
     }
-
     virtual future<size_t> read_dma(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc) override {
         auto buf = co_await _client->get_object_contiguous(_object_name, range{ pos, utils::iovec_len(iov) });
         uint64_t off = 0;
@@ -21318,39 +18145,23 @@ public:
         }
         co_return off;
     }
-
     virtual future<temporary_buffer<uint8_t>> dma_read_bulk(uint64_t offset, size_t range_size, const io_priority_class& pc) override {
         auto buf = co_await _client->get_object_contiguous(_object_name, range{ offset, range_size });
         co_return temporary_buffer<uint8_t>(reinterpret_cast<uint8_t*>(buf.get_write()), buf.size(), buf.release());
     }
-
     virtual future<> close() override {
         return make_ready_future<>();
     }
 };
-
 file client::make_readable_file(sstring object_name) {
     return file(make_shared<readable_file>(shared_from_this(), std::move(object_name)));
 }
-
 future<> client::close() {
     co_await _http.close();
 }
-
 } // s3 namespace
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace dht {
-
 static logging::logger logger("i_partitioner");
-
 sharder::sharder(unsigned shard_count, unsigned sharding_ignore_msb_bits)
     : _shard_count(shard_count)
     // if one shard, ignore sharding_ignore_msb_bits as they will just cause needless
@@ -21358,42 +18169,33 @@ sharder::sharder(unsigned shard_count, unsigned sharding_ignore_msb_bits)
     , _sharding_ignore_msb_bits(shard_count > 1 ? sharding_ignore_msb_bits : 0)
     , _shard_start(init_zero_based_shard_start(_shard_count, _sharding_ignore_msb_bits))
 {}
-
 unsigned
 sharder::shard_of(const token& t) const {
     return dht::shard_of(_shard_count, _sharding_ignore_msb_bits, t);
 }
-
 token
 sharder::token_for_next_shard(const token& t, shard_id shard, unsigned spans) const {
     return dht::token_for_next_shard(_shard_start, _shard_count, _sharding_ignore_msb_bits, t, shard, spans);
 }
-
 std::ostream& operator<<(std::ostream& out, const decorated_key& dk) {
     fmt::print(out, "{{key: {}, token: {}}}", dk._key, dk._token);
     return out;
 }
-
 std::ostream& operator<<(std::ostream& out, partition_ranges_view v) {
     out << "{";
-
     if (v.empty()) {
         out << " }";
         return out;
     }
-
     auto it = v.begin();
     out << *it;
     ++it;
-
     for (;it != v.end(); ++it) {
         out << ", " << *it;
     }
-
     out << "}";
     return out;
 }
-
 std::unique_ptr<dht::i_partitioner> make_partitioner(sstring partitioner_name) {
     try {
         return create_object<i_partitioner>(partitioner_name);
@@ -21406,7 +18208,6 @@ std::unique_ptr<dht::i_partitioner> make_partitioner(sstring partitioner_name) {
                 partitioner_name, supported_partitioners, e.what()));
     }
 }
-
 bool
 decorated_key::equal(const schema& s, const decorated_key& other) const {
     if (_token == other._token) {
@@ -21414,7 +18215,6 @@ decorated_key::equal(const schema& s, const decorated_key& other) const {
     }
     return false;
 }
-
 std::strong_ordering
 decorated_key::tri_compare(const schema& s, const decorated_key& other) const {
     auto r = _token <=> other._token;
@@ -21424,7 +18224,6 @@ decorated_key::tri_compare(const schema& s, const decorated_key& other) const {
         return _key.legacy_tri_compare(s, other._key);
     }
 }
-
 std::strong_ordering
 decorated_key::tri_compare(const schema& s, const ring_position& other) const {
     auto r = _token <=> other.token();
@@ -21435,67 +18234,33 @@ decorated_key::tri_compare(const schema& s, const ring_position& other) const {
     }
     return 0 <=> other.relation_to_keys();
 }
-
 bool
 decorated_key::less_compare(const schema& s, const ring_position& other) const {
     return tri_compare(s, other) < 0;
 }
-
 bool
 decorated_key::less_compare(const schema& s, const decorated_key& other) const {
     return tri_compare(s, other) < 0;
 }
-
 decorated_key::less_comparator::less_comparator(schema_ptr s)
     : s(std::move(s))
 { }
-
 bool
 decorated_key::less_comparator::operator()(const decorated_key& lhs, const decorated_key& rhs) const {
     return lhs.less_compare(*s, rhs);
 }
-
 bool
 decorated_key::less_comparator::operator()(const ring_position& lhs, const decorated_key& rhs) const {
     return rhs.tri_compare(*s, lhs) > 0;
 }
-
 bool
 decorated_key::less_comparator::operator()(const decorated_key& lhs, const ring_position& rhs) const {
     return lhs.tri_compare(*s, rhs) < 0;
 }
 
-std::ostream& operator<<(std::ostream& out, const ring_position_ext& pos) {
-    return out << (ring_position_view)pos;
-}
 
-std::ostream& operator<<(std::ostream& out, const ring_position& pos) {
-    out << "{" << pos.token();
-    if (pos.has_key()) {
-        out << ", " << *pos.key();
-    } else {
-        out << ", " << ((pos.relation_to_keys() < 0) ? "start" : "end");
-    }
-    return out << "}";
-}
 
-std::ostream& operator<<(std::ostream& out, ring_position_view pos) {
-    out << "{" << *pos._token;
-    if (pos._key) {
-        out << ", " << *pos._key;
-    }
-    out << ", w=" << static_cast<int>(pos._weight);
-    return out << "}";
-}
 
-std::ostream& operator<<(std::ostream& out, const i_partitioner& p) {
-    out << "{partitioner name = " << p.name();
-    return out << "}";
-}
-
-unsigned shard_of(const schema& s, const token& t) {
-    return s.get_sharder().shard_of(t);
-}
 
 std::optional<dht::token_range>
 selective_token_range_sharder::next() {
@@ -21513,11 +18278,9 @@ selective_token_range_sharder::next() {
             return *intersection;
         }
     }
-
     _done = true;
     return {};
 }
-
 std::optional<ring_position_range_and_shard>
 ring_position_range_sharder::next(const schema& s) {
     if (_done) {
@@ -21540,14 +18303,12 @@ ring_position_range_sharder::next(const schema& s) {
     _done = true;
     return ring_position_range_and_shard{std::move(_range), shard};
 }
-
 ring_position_range_vector_sharder::ring_position_range_vector_sharder(const sharder& sharder, dht::partition_range_vector ranges)
         : _ranges(std::move(ranges))
         , _sharder(sharder)
         , _current_range(_ranges.begin()) {
     next_range();
 }
-
 std::optional<ring_position_range_and_shard_and_element>
 ring_position_range_vector_sharder::next(const schema& s) {
     if (!_current_sharder) {
@@ -21564,7 +18325,6 @@ ring_position_range_vector_sharder::next(const schema& s) {
     }
     return ret;
 }
-
 future<utils::chunked_vector<partition_range>>
 split_range_to_single_shard(const schema& s, const partition_range& pr, shard_id shard) {
     const sharder& sharder = s.get_sharder();
@@ -21595,42 +18355,17 @@ split_range_to_single_shard(const schema& s, const partition_range& pr, shard_id
         return make_ready_future<std::optional<utils::chunked_vector<partition_range>>>(std::move(ret));
     });
 }
-
 std::strong_ordering ring_position::tri_compare(const schema& s, const ring_position& o) const {
     return ring_position_comparator(s)(*this, o);
 }
-
 std::strong_ordering token_comparator::operator()(const token& t1, const token& t2) const {
     return t1 <=> t2;
 }
-
 bool ring_position::equal(const schema& s, const ring_position& other) const {
     return tri_compare(s, other) == 0;
 }
-
 bool ring_position::less_compare(const schema& s, const ring_position& other) const {
     return tri_compare(s, other) < 0;
-}
-
-std::strong_ordering ring_position_tri_compare(const schema& s, ring_position_view lh, ring_position_view rh) {
-    auto token_cmp = *lh._token <=> *rh._token;
-    if (token_cmp != 0) {
-        return token_cmp;
-    }
-    if (lh._key && rh._key) {
-        auto c = lh._key->legacy_tri_compare(s, *rh._key);
-        if (c != 0) {
-            return c;
-        }
-        return (lh._weight - rh._weight) <=> 0;
-    }
-    if (!lh._key && !rh._key) {
-        return lh._weight - rh._weight <=> 0;
-    } else if (!lh._key) {
-        return lh._weight > 0 ? std::strong_ordering::greater : std::strong_ordering::less;
-    } else {
-        return rh._weight > 0 ? std::strong_ordering::less : std::strong_ordering::greater;
-    }
 }
 
 std::strong_ordering ring_position_comparator_for_sstables::operator()(ring_position_view lh, sstables::decorated_key_view rh) const {
@@ -21646,66 +18381,23 @@ std::strong_ordering ring_position_comparator_for_sstables::operator()(ring_posi
     }
     return lh._weight <=> 0;
 }
-
 std::strong_ordering ring_position_comparator_for_sstables::operator()(sstables::decorated_key_view a, ring_position_view b) const {
     return 0 <=> (*this)(b, a);
 }
 
-dht::partition_range
-to_partition_range(dht::token_range r) {
-    using bound_opt = std::optional<dht::partition_range::bound>;
-    auto start = r.start()
-                 ? bound_opt(dht::ring_position(r.start()->value(),
-                                                r.start()->is_inclusive()
-                                                ? dht::ring_position::token_bound::start
-                                                : dht::ring_position::token_bound::end))
-                 : bound_opt();
 
-    auto end = r.end()
-               ? bound_opt(dht::ring_position(r.end()->value(),
-                                              r.end()->is_inclusive()
-                                              ? dht::ring_position::token_bound::end
-                                              : dht::ring_position::token_bound::start))
-               : bound_opt();
-
-    return { std::move(start), std::move(end) };
-}
-
-dht::partition_range_vector to_partition_ranges(const dht::token_range_vector& ranges, utils::can_yield can_yield) {
-    dht::partition_range_vector prs;
-    prs.reserve(ranges.size());
-    for (auto& range : ranges) {
-        prs.push_back(dht::to_partition_range(range));
-        utils::maybe_yield(can_yield);
-    }
-    return prs;
-}
-
-std::map<unsigned, dht::partition_range_vector>
-split_range_to_shards(dht::partition_range pr, const schema& s) {
-    std::map<unsigned, dht::partition_range_vector> ret;
-    auto sharder = dht::ring_position_range_sharder(s.get_sharder(), std::move(pr));
-    auto rprs = sharder.next(s);
-    while (rprs) {
-        ret[rprs->shard].emplace_back(rprs->ring_range);
-        rprs = sharder.next(s);
-    }
-    return ret;
-}
 
 flat_mutation_reader_v2::filter incremental_owned_ranges_checker::make_partition_filter(const dht::token_range_vector& sorted_owned_ranges) {
     return [checker = incremental_owned_ranges_checker(sorted_owned_ranges)] (const dht::decorated_key& dk) mutable {
         return checker.belongs_to_current_node(dk.token());
     };
 }
-
 future<dht::partition_range_vector> subtract_ranges(const schema& schema, const dht::partition_range_vector& source_ranges, dht::partition_range_vector ranges_to_subtract) {
     auto cmp = dht::ring_position_comparator(schema);
     // optimize set of potentially overlapping ranges by deoverlapping them.
     auto ranges = dht::partition_range::deoverlap(source_ranges, cmp);
     dht::partition_range_vector res;
     res.reserve(ranges.size() * 2);
-
     auto range = ranges.begin();
     auto range_end = ranges.end();
     auto range_to_subtract = ranges_to_subtract.begin();
@@ -21717,7 +18409,6 @@ future<dht::partition_range_vector> subtract_ranges(const schema& schema, const 
             ++range;
             continue;
         }
-
         auto diff = range->subtract(*range_to_subtract, cmp);
         auto size = diff.size();
         switch (size) {
@@ -21734,7 +18425,6 @@ future<dht::partition_range_vector> subtract_ranges(const schema& schema, const 
             //    a.ii range_to_subtract.start > range.end
             // b. range_to_subtrace.start > range.start, so it removes the range suffix
             // c. range_to_subtrace.start < range.start, so it removes the range prefix
-
             // Does range_to_subtract sort after range?
             if (range_to_subtract->start() && (!range->start() || cmp(range_to_subtract->start()->value(), range->start()->value()) > 0)) {
                 // save range prefix in the result
@@ -21751,7 +18441,6 @@ future<dht::partition_range_vector> subtract_ranges(const schema& schema, const 
             break;
         case 2:
             // range contains range_to_subtract
-
             // save range prefix in the result
             res.emplace_back(std::move(diff[0]));
             // set the current range to the remaining suffix
@@ -21764,10 +18453,8 @@ future<dht::partition_range_vector> subtract_ranges(const schema& schema, const 
         }
         co_await coroutine::maybe_yield();
     }
-
     co_return res;
 }
-
 dht::token_range_vector split_token_range_msb(unsigned most_significant_bits) {
     dht::token_range_vector ret;
     // Avoid shift left 64
@@ -21800,43 +18487,25 @@ dht::token_range_vector split_token_range_msb(unsigned most_significant_bits) {
     }
     return ret;
 }
-
 }
-/*
- * Copyright (C) 2020-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 namespace dht {
-
 using uint128_t = unsigned __int128;
-
 inline int64_t long_token(const token& t) {
     if (t.is_minimum() || t.is_maximum()) {
         return std::numeric_limits<int64_t>::min();
     }
-
     return t._data;
 }
-
 static const token min_token{ token::kind::before_all_keys, 0 };
 static const token max_token{ token::kind::after_all_keys, 0 };
-
 const token&
 minimum_token() noexcept {
     return min_token;
 }
-
 const token&
 maximum_token() noexcept {
     return max_token;
 }
-
 std::strong_ordering operator<=>(const token& t1, const token& t2) {
     if (t1._kind < t2._kind) {
             return std::strong_ordering::less;
@@ -21847,23 +18516,19 @@ std::strong_ordering operator<=>(const token& t1, const token& t2) {
     }
     return std::strong_ordering::equal;
 }
-
 std::ostream& operator<<(std::ostream& out, const token& t) {
     fmt::print(out, "{}", t);
     return out;
 }
-
 sstring token::to_sstring() const {
     return seastar::to_sstring<sstring>(long_token(*this));
 }
-
 token token::midpoint(const token& t1, const token& t2) {
     uint64_t l1 = long_token(t1);
     uint64_t l2 = long_token(t2);
     int64_t mid = l1 + (l2 - l1)/2;
     return token{kind::key, mid};
 }
-
 token token::get_random_token() {
     static thread_local std::default_random_engine re{std::random_device{}()};
     // std::numeric_limits<int64_t>::min() value is reserved and shouldn't
@@ -21872,7 +18537,6 @@ token token::get_random_token() {
             std::numeric_limits<int64_t>::min() + 1);
     return token(kind::key, dist(re));
 }
-
 token token::from_sstring(const sstring& t) {
     auto lp = boost::lexical_cast<long>(t);
     if (lp == std::numeric_limits<long>::min()) {
@@ -21881,12 +18545,10 @@ token token::from_sstring(const sstring& t) {
         return token(kind::key, uint64_t(lp));
     }
 }
-
 token token::from_bytes(bytes_view bytes) {
     if (bytes.size() != sizeof(int64_t)) {
         throw runtime_exception(format("Invalid token. Should have size {:d}, has size {:d}\n", sizeof(int64_t), bytes.size()));
     }
-
     auto tok = net::ntoh(read_unaligned<int64_t>(bytes.begin()));
     if (tok == std::numeric_limits<int64_t>::min()) {
         return minimum_token();
@@ -21894,18 +18556,14 @@ token token::from_bytes(bytes_view bytes) {
         return dht::token(dht::token::kind::key, tok);
     }
 }
-
 static float ratio_helper(int64_t a, int64_t b) {
-
     uint64_t val = (a > b)? static_cast<uint64_t>(a) - static_cast<uint64_t>(b) : (static_cast<uint64_t>(a) - static_cast<uint64_t>(b) - 1);
     return val/(float)std::numeric_limits<uint64_t>::max();
 }
-
 std::map<token, float>
 token::describe_ownership(const std::vector<token>& sorted_tokens) {
     std::map<token, float> ownerships;
     auto i = sorted_tokens.begin();
-
     // 0-case
     if (i == sorted_tokens.end()) {
         throw runtime_exception("No nodes present in the cluster. Has this node finished starting up?");
@@ -21916,7 +18574,6 @@ token::describe_ownership(const std::vector<token>& sorted_tokens) {
     // n-case
     } else {
         const token& start = sorted_tokens[0];
-
         int64_t ti = long_token(start);  // The first token and its value
         int64_t start_long = ti;
         int64_t tim1 = ti; // The last token and its value (after loop)
@@ -21925,27 +18582,21 @@ token::describe_ownership(const std::vector<token>& sorted_tokens) {
             ownerships[*i]= ratio_helper(ti, tim1);  // save (T(i) -> %age)
             tim1 = ti;
         }
-
         // The start token's range extends backward to the last token, which is why both were saved above.
         ownerships[start] = ratio_helper(start_long, ti);
     }
-
     return ownerships;
 }
-
 data_type
 token::get_token_validator() {
     return long_type;
 }
-
 uint64_t unbias(const token& t) {
     return uint64_t(long_token(t)) + uint64_t(std::numeric_limits<int64_t>::min());
 }
-
 token bias(uint64_t n) {
     return token(token::kind::key, n - uint64_t(std::numeric_limits<int64_t>::min()));
 }
-
 inline
 unsigned
 zero_based_shard_of(uint64_t token, unsigned shards, unsigned sharding_ignore_msb_bits) {
@@ -21955,7 +18606,6 @@ zero_based_shard_of(uint64_t token, unsigned shards, unsigned sharding_ignore_ms
     //    shard = floor((0.token) * shards)
     return (uint128_t(token) * shards) >> 64;
 }
-
 std::vector<uint64_t>
 init_zero_based_shard_start(unsigned shards, unsigned sharding_ignore_msb_bits) {
     // computes the inverse of zero_based_shard_of(). ret[s] will return the smallest token that belongs to s
@@ -21975,7 +18625,6 @@ init_zero_based_shard_start(unsigned shards, unsigned sharding_ignore_msb_bits) 
     }
     return ret;
 }
-
 unsigned
 shard_of(unsigned shard_count, unsigned sharding_ignore_msb_bits, const token& t) {
     switch (t._kind) {
@@ -21989,7 +18638,6 @@ shard_of(unsigned shard_count, unsigned sharding_ignore_msb_bits, const token& t
     }
     abort();
 }
-
 token
 token_for_next_shard(const std::vector<uint64_t>& shard_start, unsigned shard_count, unsigned sharding_ignore_msb_bits, const token& t, shard_id shard, unsigned spans) {
     uint64_t n = 0;
@@ -22003,7 +18651,6 @@ token_for_next_shard(const std::vector<uint64_t>& shard_start, unsigned shard_co
             break;
     }
     auto s = zero_based_shard_of(n, shard_count, sharding_ignore_msb_bits);
-
     if (!sharding_ignore_msb_bits) {
         // This ought to be the same as the else branch, but avoids shifts by 64
         n = shard_start[shard];
@@ -22022,15 +18669,12 @@ token_for_next_shard(const std::vector<uint64_t>& shard_start, unsigned shard_co
     }
     return bias(n);
 }
-
 int64_t token::to_int64(token t) {
     return long_token(t);
 }
-
 dht::token token::from_int64(int64_t i) {
     return {kind::key, i};
 }
-
 static
 dht::token find_first_token_for_shard_in_not_wrap_around_range(const dht::sharder& sharder, dht::token start, dht::token end, size_t shard_idx) {
     // Invariant start < end
@@ -22041,7 +18685,6 @@ dht::token find_first_token_for_shard_in_not_wrap_around_range(const dht::sharde
     }
     return std::min(t, end);
 }
-
 dht::token find_first_token_for_shard(
         const dht::sharder& sharder, dht::token start, dht::token end, size_t shard_idx) {
     if (start < end) { // Not a wrap around token range
@@ -22061,7 +18704,6 @@ dht::token find_first_token_for_shard(
                 sharder, dht::minimum_token(), end, shard_idx);
     }
 }
-
 size_t
 compaction_group_of(unsigned most_significant_bits, const token& t) {
     if (!most_significant_bits) {
@@ -22078,7 +18720,6 @@ compaction_group_of(unsigned most_significant_bits, const token& t) {
     }
     __builtin_unreachable();
 }
-
 token last_token_of_compaction_group(unsigned most_significant_bits, size_t group) {
     uint64_t n;
     if (group == ((1ul << most_significant_bits) - 1)) {
@@ -22088,19 +18729,8 @@ token last_token_of_compaction_group(unsigned most_significant_bits, size_t grou
     }
     return bias(n);
 }
-
 } // namespace dht
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace dht {
-
 // Note: Cassandra has a special case where for an empty key it returns
 // minimum_token() instead of 0 (the naturally-calculated hash function for
 // an empty string). Their thinking was that empty partition keys are not
@@ -22117,19 +18747,16 @@ murmur3_partitioner::get_token(bytes_view key) const {
     utils::murmur_hash::hash3_x64_128(key, 0, hash);
     return get_token(hash[0]);
 }
-
 token
 murmur3_partitioner::get_token(uint64_t value) const {
     return token(token::kind::key, value);
 }
-
 token
 murmur3_partitioner::get_token(const sstables::key_view& key) const {
     return key.with_linearized([&] (bytes_view v) {
         return get_token(v);
     });
 }
-
 token
 murmur3_partitioner::get_token(const schema& s, partition_key_view key) const {
     std::array<uint64_t, 2> hash;
@@ -22137,31 +18764,12 @@ murmur3_partitioner::get_token(const schema& s, partition_key_view key) const {
     utils::murmur_hash::hash3_x64_128(legacy.begin(), legacy.size(), 0, hash);
     return get_token(hash[0]);
 }
-
 using registry = class_registrator<i_partitioner, murmur3_partitioner>;
 static registry registrator("org.apache.cassandra.dht.Murmur3Partitioner");
 static registry registrator_short_name("Murmur3Partitioner");
-
 }
-
-
-/*
- *
- * Modified by ScyllaDB
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
- */
-
-
-
-
 static logging::logger blogger("boot_strapper");
-
 namespace dht {
-
 future<> boot_strapper::bootstrap(streaming::stream_reason reason, gms::gossiper& gossiper, inet_address replace_address) {
     blogger.debug("Beginning bootstrap process: sorted_tokens={}", get_token_metadata().sorted_tokens());
     sstring description;
@@ -22196,21 +18804,17 @@ future<> boot_strapper::bootstrap(streaming::stream_reason reason, gms::gossiper
         throw;
     }
 }
-
 std::unordered_set<token> boot_strapper::get_random_bootstrap_tokens(const token_metadata_ptr tmptr, size_t num_tokens, dht::check_token_endpoint check) {
     if (num_tokens < 1) {
         throw std::runtime_error("num_tokens must be >= 1");
     }
-
     if (num_tokens == 1) {
         blogger.warn("Picking random token for a single vnode.  You should probably add more vnodes; failing that, you should probably specify the token manually");
     }
-
     auto tokens = get_random_tokens(std::move(tmptr), num_tokens);
     blogger.info("Get random bootstrap_tokens={}", tokens);
     return tokens;
 }
-
 std::unordered_set<token> boot_strapper::get_bootstrap_tokens(const token_metadata_ptr tmptr, const db::config& cfg, dht::check_token_endpoint check) {
     std::unordered_set<sstring> initial_tokens;
     sstring tokens_string = cfg.initial_token();
@@ -22220,7 +18824,6 @@ std::unordered_set<token> boot_strapper::get_bootstrap_tokens(const token_metada
         throw std::runtime_error(format("Unable to parse initial_token={}", tokens_string));
     }
     initial_tokens.erase("");
-
     // if user specified tokens, use those
     if (initial_tokens.size() > 0) {
         blogger.debug("tokens manually specified as {}", initial_tokens);
@@ -22237,7 +18840,6 @@ std::unordered_set<token> boot_strapper::get_bootstrap_tokens(const token_metada
     }
     return get_random_bootstrap_tokens(tmptr, cfg.num_tokens(), check);
 }
-
 std::unordered_set<token> boot_strapper::get_random_tokens(const token_metadata_ptr tmptr, size_t num_tokens) {
     std::unordered_set<token> tokens;
     while (tokens.size() < num_tokens) {
@@ -22249,24 +18851,9 @@ std::unordered_set<token> boot_strapper::get_random_tokens(const token_metadata_
     }
     return tokens;
 }
-
-
 } // namespace dht
-/*
- *
- * Modified by ScyllaDB
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
- */
-
-
 namespace dht {
-
 using inet_address = gms::inet_address;
-
 std::unordered_map<inet_address, dht::token_range_vector>
 range_streamer::get_range_fetch_map(const std::unordered_map<dht::token_range, std::vector<inet_address>>& ranges_with_sources,
                                     const std::unordered_set<std::unique_ptr<i_source_filter>>& source_filters,
@@ -22282,7 +18869,6 @@ range_streamer::get_range_fetch_map(const std::unordered_map<dht::token_range, s
                 found_source = true;
                 continue;
             }
-
             auto filtered = false;
             for (const auto& filter : source_filters) {
                 if (!filter->should_include(get_token_metadata().get_topology(), address)) {
@@ -22290,17 +18876,14 @@ range_streamer::get_range_fetch_map(const std::unordered_map<dht::token_range, s
                     break;
                 }
             }
-
             if (filtered) {
                 logger.debug("In get_range_fetch_map, keyspace = {}, endpoint= {} is filtered", keyspace, address);
                 continue;
             }
-
             range_fetch_map_map[address].push_back(range_);
             found_source = true;
             break; // ensure we only stream from one other node for each range
         }
-
         if (!found_source) {
             auto& ks = _db.local().find_keyspace(keyspace);
             auto rf = ks.get_effective_replication_map()->get_replication_factor();
@@ -22314,19 +18897,14 @@ range_streamer::get_range_fetch_map(const std::unordered_map<dht::token_range, s
             }
         }
     }
-
     return range_fetch_map_map;
 }
-
 // Must be called from a seastar thread
 std::unordered_map<dht::token_range, std::vector<inet_address>>
 range_streamer::get_all_ranges_with_sources_for(const sstring& keyspace_name, locator::vnode_effective_replication_map_ptr erm, dht::token_range_vector desired_ranges) {
     logger.debug("{} ks={}", __func__, keyspace_name);
-
     auto range_addresses = erm->get_range_addresses().get0();
-
     logger.debug("keyspace={}, desired_ranges.size={}, range_addresses.size={}", keyspace_name, desired_ranges.size(), range_addresses.size());
-
     std::unordered_map<dht::token_range, std::vector<inet_address>> range_sources;
     for (auto& desired_range : desired_ranges) {
         auto found = false;
@@ -22344,38 +18922,29 @@ range_streamer::get_all_ranges_with_sources_for(const sstring& keyspace_name, lo
                 found = true;
             }
         }
-
         if (!found) {
             throw std::runtime_error(format("No sources found for {}", desired_range));
         }
     }
-
     return range_sources;
 }
-
 // Must be called from a seastar thread
 std::unordered_map<dht::token_range, std::vector<inet_address>>
 range_streamer::get_all_ranges_with_strict_sources_for(const sstring& keyspace_name, locator::vnode_effective_replication_map_ptr erm, dht::token_range_vector desired_ranges, gms::gossiper& gossiper) {
     logger.debug("{} ks={}", __func__, keyspace_name);
     assert (_tokens.empty() == false);
-
     auto& strat = erm->get_replication_strategy();
-
     //Active ranges
     auto metadata_clone = get_token_metadata().clone_only_token_map().get0();
     auto range_addresses = strat.get_range_addresses(metadata_clone).get0();
-
     //Pending ranges
     metadata_clone.update_topology(_address, _dr);
     metadata_clone.update_normal_tokens(_tokens, _address).get();
     auto pending_range_addresses  = strat.get_range_addresses(metadata_clone).get0();
     metadata_clone.clear_gently().get();
-
     //Collects the source that will have its range moved to the new node
     std::unordered_map<dht::token_range, std::vector<inet_address>> range_sources;
-
     logger.debug("keyspace={}, desired_ranges.size={}, range_addresses.size={}", keyspace_name, desired_ranges.size(), range_addresses.size());
-
     for (auto& desired_range : desired_ranges) {
         for (auto& x : range_addresses) {
             const range<token>& src_range = x.first;
@@ -22388,7 +18957,6 @@ range_streamer::get_all_ranges_with_strict_sources_for(const sstring& keyspace_n
                 if (it == pending_range_addresses.end()) {
                     throw std::runtime_error(format("Can not find desired_range = {} in pending_range_addresses", desired_range));
                 }
-
                 std::unordered_set<inet_address> new_endpoints(it->second.begin(), it->second.end());
                 //Due to CASSANDRA-5953 we can have a higher RF then we have endpoints.
                 //So we need to be careful to only be strict when endpoints == RF
@@ -22402,27 +18970,21 @@ range_streamer::get_all_ranges_with_strict_sources_for(const sstring& keyspace_n
                 range_sources[desired_range].push_back(old_endpoints.front());
             }
         }
-
         //Validate
         auto it = range_sources.find(desired_range);
         if (it == range_sources.end()) {
             throw std::runtime_error(format("No sources found for {}", desired_range));
         }
-
         if (it->second.size() != 1) {
             throw std::runtime_error(format("Multiple endpoints found for {}", desired_range));
         }
-
         inet_address source_ip = it->second.front();
-
         if (gossiper.is_enabled() && !gossiper.is_alive(source_ip)) {
             throw std::runtime_error(format("A node required to move the data consistently is down ({}).  If you wish to move the data from a potentially inconsistent replica, restart the node with consistent_rangemovement=false", source_ip));
         }
     }
-
     return range_sources;
 }
-
 bool range_streamer::use_strict_sources_for_ranges(const sstring& keyspace_name, const locator::vnode_effective_replication_map_ptr& erm) {
     auto rf = erm->get_replication_factor();
     auto nr_nodes_in_ring = get_token_metadata().get_all_endpoints().size();
@@ -22436,7 +18998,6 @@ bool range_streamer::use_strict_sources_for_ranges(const sstring& keyspace_name,
             keyspace_name, nr_nodes_in_ring, rf, strict);
     return strict;
 }
-
 void range_streamer::add_tx_ranges(const sstring& keyspace_name, std::unordered_map<inet_address, dht::token_range_vector> ranges_per_endpoint) {
     if (_nr_rx_added) {
         throw std::runtime_error("Mixed sending and receiving is not supported");
@@ -22444,7 +19005,6 @@ void range_streamer::add_tx_ranges(const sstring& keyspace_name, std::unordered_
     _nr_tx_added++;
     _to_stream.emplace(keyspace_name, std::move(ranges_per_endpoint));
 }
-
 void range_streamer::add_rx_ranges(const sstring& keyspace_name, std::unordered_map<inet_address, dht::token_range_vector> ranges_per_endpoint) {
     if (_nr_tx_added) {
         throw std::runtime_error("Mixed sending and receiving is not supported");
@@ -22452,7 +19012,6 @@ void range_streamer::add_rx_ranges(const sstring& keyspace_name, std::unordered_
     _nr_rx_added++;
     _to_stream.emplace(keyspace_name, std::move(ranges_per_endpoint));
 }
-
 // TODO: This is the legacy range_streamer interface, it is add_rx_ranges which adds rx ranges.
 future<> range_streamer::add_ranges(const sstring& keyspace_name, locator::vnode_effective_replication_map_ptr erm, dht::token_range_vector ranges, gms::gossiper& gossiper, bool is_replacing) {
   return seastar::async([this, keyspace_name, erm = std::move(erm), ranges= std::move(ranges), &gossiper, is_replacing] () mutable {
@@ -22463,16 +19022,13 @@ future<> range_streamer::add_ranges(const sstring& keyspace_name, locator::vnode
     auto ranges_for_keyspace = !is_replacing && use_strict_sources_for_ranges(keyspace_name, erm)
         ? get_all_ranges_with_strict_sources_for(keyspace_name, erm, std::move(ranges), gossiper)
         : get_all_ranges_with_sources_for(keyspace_name, erm, std::move(ranges));
-
     if (logger.is_enabled(logging::log_level::debug)) {
         for (auto& x : ranges_for_keyspace) {
             logger.debug("{} : keyspace {} range {} exists on {}", _description, keyspace_name, x.first, x.second);
         }
     }
-
     std::unordered_map<inet_address, dht::token_range_vector> range_fetch_map = get_range_fetch_map(ranges_for_keyspace, _source_filters, keyspace_name);
     utils::clear_gently(ranges_for_keyspace).get();
-
     if (logger.is_enabled(logging::log_level::debug)) {
         for (auto& x : range_fetch_map) {
             logger.debug("{} : keyspace={}, ranges={} from source={}, range_size={}", _description, keyspace_name, x.second, x.first, x.second.size());
@@ -22481,7 +19037,6 @@ future<> range_streamer::add_ranges(const sstring& keyspace_name, locator::vnode
     _to_stream.emplace(keyspace_name, std::move(range_fetch_map));
   });
 }
-
 future<> range_streamer::stream_async() {
     _nr_ranges_remaining = nr_ranges_to_stream();
     _nr_total_ranges = _nr_ranges_remaining;
@@ -22563,7 +19118,6 @@ future<> range_streamer::stream_async() {
         }
     });
 }
-
 size_t range_streamer::nr_ranges_to_stream() {
     size_t nr_ranges_remaining = 0;
     for (auto& fetch : _to_stream) {
@@ -22578,23 +19132,10 @@ size_t range_streamer::nr_ranges_to_stream() {
     }
     return nr_ranges_remaining;
 }
-
 } // dht
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace unimplemented {
-
 static thread_local std::unordered_map<cause, bool> _warnings;
-
 static logging::logger ulogger("unimplemented");
-
 std::ostream& operator<<(std::ostream& out, cause c) {
     switch (c) {
         case cause::INDEXES: return out << "INDEXES";
@@ -22628,43 +19169,25 @@ std::ostream& operator<<(std::ostream& out, cause c) {
     }
     abort();
 }
-
 void warn(cause c) {
     if (!_warnings.contains(c)) {
         _warnings.insert({c, true});
         ulogger.debug("{}", c);
     }
 }
-
 void fail(cause c) {
     throw std::runtime_error(format("Not implemented: {}", c));
 }
-
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace query {
-
 static logging::logger qlogger("query");
-
 constexpr size_t result_memory_limiter::minimum_result_size;
 constexpr size_t result_memory_limiter::maximum_result_size;
 constexpr size_t result_memory_limiter::unlimited_result_size;
-
 thread_local semaphore result_memory_tracker::_dummy { 0 };
-
 const dht::partition_range full_partition_range = dht::partition_range::make_open_ended_both_sides();
 const clustering_range full_clustering_range = clustering_range::make_open_ended_both_sides();
-
 std::ostream& operator<<(std::ostream& out, const specific_ranges& s);
-
 std::ostream& operator<<(std::ostream& out, const partition_slice& ps) {
     fmt::print(out,
                "{{regular_cols=[{}], static_cols=[{}], rows=[{}]",
@@ -22679,13 +19202,11 @@ std::ostream& operator<<(std::ostream& out, const partition_slice& ps) {
                ps.options.mask(), ps.partition_row_limit());
     return out;
 }
-
 std::ostream& operator<<(std::ostream& out, const read_command& r) {
     fmt::print(out, "read_command{{cf_id={}, version={}, slice={}, limit={}, timestamp={}, partition_limit={}, query_uuid={}, is_first_page={}, read_timestamp={}}}",
                r.cf_id, r.schema_version, r.slice, r.get_row_limit(), r.timestamp.time_since_epoch().count(), r.partition_limit, r.query_uuid, r.is_first_page, r.read_timestamp);
     return out;
 }
-
 std::ostream& operator<<(std::ostream& out, const forward_request::reduction_type& r) {
     out << "reduction_type{";
     switch (r) {
@@ -22698,13 +19219,11 @@ std::ostream& operator<<(std::ostream& out, const forward_request::reduction_typ
     }
     return out << "}";
 }
-
 std::ostream& operator<<(std::ostream& out, const forward_request::aggregation_info& a) {
     fmt::print(out, "aggregation_info{{, name={}, column_names=[{}]}}",
                a.name, fmt::join(a.column_names, ","));;
     return out;
 }
-
 std::ostream& operator<<(std::ostream& out, const forward_request& r) {
     auto ms = std::chrono::time_point_cast<std::chrono::milliseconds>(r.timeout).time_since_epoch().count();
     fmt::print(out, "forward_request{{reductions=[{}]",
@@ -22719,97 +19238,12 @@ std::ostream& operator<<(std::ostream& out, const forward_request& r) {
 }
 
 
-std::ostream& operator<<(std::ostream& out, const specific_ranges& s) {
-    fmt::print(out, "{{{} : {}}}", s._pk, fmt::join(s._ranges, ", "));
-    return out;
-}
-
-void trim_clustering_row_ranges_to(const schema& s, clustering_row_ranges& ranges, position_in_partition pos, bool reversed) {
-    auto cmp = [reversed, cmp = position_in_partition::composite_tri_compare(s)] (const auto& a, const auto& b) {
-        return reversed ? cmp(b, a) : cmp(a, b);
-    };
-    auto start_bound = [reversed] (const auto& range) -> position_in_partition_view {
-        return reversed ? position_in_partition_view::for_range_end(range) : position_in_partition_view::for_range_start(range);
-    };
-    auto end_bound = [reversed] (const auto& range) -> position_in_partition_view {
-        return reversed ? position_in_partition_view::for_range_start(range) : position_in_partition_view::for_range_end(range);
-    };
-
-    auto it = ranges.begin();
-    while (it != ranges.end()) {
-        if (cmp(end_bound(*it), pos) <= 0) {
-            it = ranges.erase(it);
-            continue;
-        } else if (cmp(start_bound(*it), pos) <= 0) {
-            assert(cmp(pos, end_bound(*it)) < 0);
-            auto r = reversed ?
-                clustering_range(it->start(), clustering_range::bound(pos.key(), pos.get_bound_weight() != bound_weight::before_all_prefixed)) :
-                clustering_range(clustering_range::bound(pos.key(), pos.get_bound_weight() != bound_weight::after_all_prefixed), it->end());
-            *it = std::move(r);
-        }
-        ++it;
-    }
-}
-
-void trim_clustering_row_ranges_to(const schema& s, clustering_row_ranges& ranges, const clustering_key& key, bool reversed) {
-    return trim_clustering_row_ranges_to(s, ranges,
-            reversed ? position_in_partition::before_key(key) : position_in_partition::after_key(s, key), reversed);
-}
 
 
-clustering_range reverse(const clustering_range& range) {
-    if (range.is_singular()) {
-        return range;
-    }
-    return clustering_range(range.end(), range.start());
-}
 
 
-static void reverse_clustering_ranges_bounds(clustering_row_ranges& ranges) {
-    for (auto& range : ranges) {
-        range = reverse(range);
-    }
-}
 
-partition_slice legacy_reverse_slice_to_native_reverse_slice(const schema& schema, partition_slice slice) {
-    return partition_slice_builder(schema, std::move(slice))
-        .mutate_ranges([] (clustering_row_ranges& ranges) { reverse_clustering_ranges_bounds(ranges); })
-        .mutate_specific_ranges([] (specific_ranges& ranges) { reverse_clustering_ranges_bounds(ranges.ranges()); })
-        .build();
-}
 
-partition_slice native_reverse_slice_to_legacy_reverse_slice(const schema& schema, partition_slice slice) {
-    // They are the same, we give them different names to express intent
-    return legacy_reverse_slice_to_native_reverse_slice(schema, std::move(slice));
-}
-
-partition_slice reverse_slice(const schema& schema, partition_slice slice) {
-    return partition_slice_builder(schema, std::move(slice))
-        .mutate_ranges([] (clustering_row_ranges& ranges) {
-            std::reverse(ranges.begin(), ranges.end());
-            reverse_clustering_ranges_bounds(ranges);
-        })
-        .mutate_specific_ranges([] (specific_ranges& sranges) {
-            auto& ranges = sranges.ranges();
-            std::reverse(ranges.begin(), ranges.end());
-            reverse_clustering_ranges_bounds(ranges);
-        })
-        .with_option_toggled<partition_slice::option::reversed>()
-        .build();
-}
-
-partition_slice half_reverse_slice(const schema& schema, partition_slice slice) {
-    return partition_slice_builder(schema, std::move(slice))
-        .mutate_ranges([] (clustering_row_ranges& ranges) {
-            std::reverse(ranges.begin(), ranges.end());
-        })
-        .mutate_specific_ranges([] (specific_ranges& sranges) {
-            auto& ranges = sranges.ranges();
-            std::reverse(ranges.begin(), ranges.end());
-        })
-        .with_option_toggled<partition_slice::option::reversed>()
-        .build();
-}
 
 partition_slice::partition_slice(clustering_row_ranges row_ranges,
     query::column_id_vector static_columns,
@@ -22829,7 +19263,6 @@ partition_slice::partition_slice(clustering_row_ranges row_ranges,
 {
     cql_format.ensure_supported();
 }
-
 partition_slice::partition_slice(clustering_row_ranges row_ranges,
     query::column_id_vector static_columns,
     query::column_id_vector regular_columns,
@@ -22840,7 +19273,6 @@ partition_slice::partition_slice(clustering_row_ranges row_ranges,
             std::move(specific_ranges), cql_serialization_format::latest(), static_cast<uint32_t>(partition_row_limit),
             static_cast<uint32_t>(partition_row_limit >> 32))
 {}
-
 partition_slice::partition_slice(clustering_row_ranges ranges, const schema& s, const column_set& columns, option_set options)
     : partition_slice(ranges, query::column_id_vector{}, query::column_id_vector{}, options)
 {
@@ -22854,11 +19286,8 @@ partition_slice::partition_slice(clustering_row_ranges ranges, const schema& s, 
         } // else clustering or partition key column - skip, these are controlled by options
     }
 }
-
 partition_slice::partition_slice(partition_slice&&) = default;
-
 partition_slice& partition_slice::operator=(partition_slice&& other) noexcept = default;
-
 // Only needed because selection_statement::execute does copies of its read_command
 // in the map-reduce op.
 partition_slice::partition_slice(const partition_slice& s)
@@ -22870,15 +19299,12 @@ partition_slice::partition_slice(const partition_slice& s)
     , _partition_row_limit_low_bits(s._partition_row_limit_low_bits)
     , _partition_row_limit_high_bits(s._partition_row_limit_high_bits)
 {}
-
 partition_slice::~partition_slice()
 {}
-
 const clustering_row_ranges& partition_slice::row_ranges(const schema& s, const partition_key& k) const {
     auto* r = _specific_ranges ? _specific_ranges->range_for(s, k) : nullptr;
     return r ? *r : _row_ranges;
 }
-
 void partition_slice::set_range(const schema& s, const partition_key& k, clustering_row_ranges range) {
     if (!_specific_ranges) {
         _specific_ranges = std::make_unique<specific_ranges>(k, std::move(range));
@@ -22886,7 +19312,6 @@ void partition_slice::set_range(const schema& s, const partition_key& k, cluster
         _specific_ranges->add(s, k, std::move(range));
     }
 }
-
 void partition_slice::clear_range(const schema& s, const partition_key& k) {
     if (_specific_ranges && _specific_ranges->contains(s, k)) {
         // just in case someone changes the impl above,
@@ -22896,7 +19321,6 @@ void partition_slice::clear_range(const schema& s, const partition_key& k) {
         _specific_ranges = nullptr;
     }
 }
-
 clustering_row_ranges partition_slice::get_all_ranges() const {
     auto all_ranges = default_row_ranges();
     const auto& specific_ranges = get_specific_ranges();
@@ -22905,7 +19329,6 @@ clustering_row_ranges partition_slice::get_all_ranges() const {
     }
     return all_ranges;
 }
-
 sstring
 result::pretty_print(schema_ptr s, const query::partition_slice& slice) const {
     std::ostringstream out;
@@ -22922,17 +19345,14 @@ result::pretty_print(schema_ptr s, const query::partition_slice& slice) const {
     out << ", short_read=" << is_short_read() << " }";
     return out.str();
 }
-
 query::result::printer
 result::pretty_printer(schema_ptr s, const query::partition_slice& slice) const {
     return query::result::printer{s, slice, *this};
 }
-
 std::ostream& operator<<(std::ostream& os, const query::result::printer& p) {
     os << p.res.pretty_print(p.s, p.slice);
     return os;
 }
-
 void result::ensure_counts() {
     if (!_partition_count || !row_count()) {
         uint64_t row_count;
@@ -22942,7 +19362,6 @@ void result::ensure_counts() {
         set_row_count(row_count);
     }
 }
-
 full_position result::get_or_calculate_last_position() const {
     if (_last_position) {
         return *_last_position;
@@ -22951,7 +19370,6 @@ full_position result::get_or_calculate_last_position() const {
         return v.calculate_last_position();
     });
 }
-
 result::result()
     : result([] {
         bytes_ostream out;
@@ -22959,7 +19377,6 @@ result::result()
         return out;
     }(), short_read::no, 0, 0, {})
 { }
-
 static void write_partial_partition(ser::writer_of_qr_partition<bytes_ostream>&& pw, const ser::qr_partition_view& pv, uint64_t rows_to_include) {
     auto key = pv.key();
     auto static_cells_wr = (key ? std::move(pw).write_key(*key) : std::move(pw).skip_key())
@@ -22980,20 +19397,16 @@ static void write_partial_partition(ser::writer_of_qr_partition<bytes_ostream>&&
     }
     std::move(rows_wr).end_rows().end_qr_partition();
 }
-
 foreign_ptr<lw_shared_ptr<query::result>> result_merger::get() {
     if (_partial.size() == 1) {
         return std::move(_partial[0]);
     }
-
     bytes_ostream w;
     auto partitions = ser::writer_of_query_result<bytes_ostream>(w).start_partitions();
     uint64_t row_count = 0;
     short_read is_short_read;
     uint32_t partition_count = 0;
-
     std::optional<full_position> last_position;
-
     for (auto&& r : _partial) {
         result_view::do_with(*r, [&] (result_view rv) {
             last_position.reset();
@@ -23026,107 +19439,69 @@ foreign_ptr<lw_shared_ptr<query::result>> result_merger::get() {
             break;
         }
     }
-
     std::move(partitions).end_partitions().end_query_result();
     return make_foreign(make_lw_shared<query::result>(std::move(w), is_short_read, row_count, partition_count, std::move(last_position)));
 }
-
 std::ostream& operator<<(std::ostream& out, const query::forward_result::printer& p) {
     if (p.functions.size() != p.res.query_results.size()) {
         return out << "[malformed forward_result (" << p.res.query_results.size()
             << " results, " << p.functions.size() << " aggregates)]";
     }
-
     out << "[";
     for (size_t i = 0; i < p.functions.size(); i++) {
         auto& return_type = p.functions[i]->return_type();
         out << return_type->to_string(bytes_view(*p.res.query_results[i]));
-
         if (i + 1 < p.functions.size()) {
             out << ", ";
         }
     }
     return out << "]";
 }
-
 }
-
 std::optional<query::clustering_range> position_range_to_clustering_range(const position_range& r, const schema& s) {
     assert(r.start().get_type() == partition_region::clustered);
     assert(r.end().get_type() == partition_region::clustered);
-
     if (r.start().has_key() && r.end().has_key()
             && clustering_key_prefix::equality(s)(r.start().key(), r.end().key())) {
         assert(r.start().get_bound_weight() != r.end().get_bound_weight());
-
         if (r.end().get_bound_weight() == bound_weight::after_all_prefixed
                 && r.start().get_bound_weight() != bound_weight::after_all_prefixed) {
             // [before x, after x) and [for x, after x) get converted to [x, x].
             return query::clustering_range::make_singular(r.start().key());
         }
-
         // [before x, for x) does not contain any keys.
         return std::nullopt;
     }
-
     // position_range -> clustering_range
     // (recall that position_ranges are always left-closed, right opened):
     // [before x, ...), [for x, ...) -> [x, ...
     // [after x, ...) -> (x, ...
     // [..., before x), [..., for x) -> ..., x)
     // [..., after x) -> ..., x]
-
     auto to_bound = [&s] (const position_in_partition& p, bool left) -> std::optional<query::clustering_range::bound> {
         if (p.is_before_all_clustered_rows(s)) {
             assert(left);
             return {};
         }
-
         if (p.is_after_all_clustered_rows(s)) {
             assert(!left);
             return {};
         }
-
         assert(p.has_key());
-
         auto bw = p.get_bound_weight();
         bool inclusive = left
             ? bw != bound_weight::after_all_prefixed
             : bw == bound_weight::after_all_prefixed;
-
         return query::clustering_range::bound{p.key(), inclusive};
     };
-
     return query::clustering_range{to_bound(r.start(), true), to_bound(r.end(), false)};
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
-
 std::atomic<int64_t> clocks_offset;
-
 std::string format_timestamp(api::timestamp_type ts) {
     auto t = std::time_t(std::chrono::duration_cast<std::chrono::seconds>(api::timestamp_clock::duration(ts)).count());
     ::tm t_buf;
     return format("{}", std::put_time(::gmtime_r(&t, &t_buf), "%Y/%m/%d %T"));
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 partition_slice_builder::partition_slice_builder(const schema& schema, query::partition_slice slice)
     : _regular_columns(std::move(slice.regular_columns))
     , _static_columns(std::move(slice.static_columns))
@@ -23136,7 +19511,6 @@ partition_slice_builder::partition_slice_builder(const schema& schema, query::pa
     , _options(std::move(slice.options))
 {
 }
-
 partition_slice_builder::partition_slice_builder(const schema& schema)
     : _schema(schema)
 {
@@ -23145,7 +19519,6 @@ partition_slice_builder::partition_slice_builder(const schema& schema)
     _options.set<query::partition_slice::option::send_timestamp>();
     _options.set<query::partition_slice::option::send_expiry>();
 }
-
 query::partition_slice
 partition_slice_builder::build() {
     std::vector<query::clustering_range> ranges;
@@ -23154,7 +19527,6 @@ partition_slice_builder::build() {
     } else {
         ranges.emplace_back(query::clustering_range::make_open_ended_both_sides());
     }
-
     query::column_id_vector static_columns;
     if (_static_columns) {
         static_columns = std::move(*_static_columns);
@@ -23162,7 +19534,6 @@ partition_slice_builder::build() {
         boost::range::push_back(static_columns,
             _schema.static_columns() | boost::adaptors::transformed(std::mem_fn(&column_definition::id)));
     }
-
     query::column_id_vector regular_columns;
     if (_regular_columns) {
         regular_columns = std::move(*_regular_columns);
@@ -23170,7 +19541,6 @@ partition_slice_builder::build() {
         boost::range::push_back(regular_columns,
             _schema.regular_columns() | boost::adaptors::transformed(std::mem_fn(&column_definition::id)));
     }
-
     return {
         std::move(ranges),
         std::move(static_columns),
@@ -23180,7 +19550,6 @@ partition_slice_builder::build() {
         _partition_row_limit,
     };
 }
-
 partition_slice_builder&
 partition_slice_builder::with_range(query::clustering_range range) {
     if (!_row_ranges) {
@@ -23189,7 +19558,6 @@ partition_slice_builder::with_range(query::clustering_range range) {
     _row_ranges->emplace_back(std::move(range));
     return *this;
 }
-
 partition_slice_builder&
 partition_slice_builder::with_ranges(std::vector<query::clustering_range> ranges) {
     if (!_row_ranges) {
@@ -23201,7 +19569,6 @@ partition_slice_builder::with_ranges(std::vector<query::clustering_range> ranges
     }
     return *this;
 }
-
 partition_slice_builder&
 partition_slice_builder::mutate_ranges(std::function<void(std::vector<query::clustering_range>&)> func) {
     if (_row_ranges) {
@@ -23209,7 +19576,6 @@ partition_slice_builder::mutate_ranges(std::function<void(std::vector<query::clu
     }
     return *this;
 }
-
 partition_slice_builder&
 partition_slice_builder::mutate_specific_ranges(std::function<void(query::specific_ranges&)> func) {
     if (_specific_ranges) {
@@ -23217,19 +19583,16 @@ partition_slice_builder::mutate_specific_ranges(std::function<void(query::specif
     }
     return *this;
 }
-
 partition_slice_builder&
 partition_slice_builder::with_no_regular_columns() {
     _regular_columns = query::column_id_vector();
     return *this;
 }
-
 partition_slice_builder&
 partition_slice_builder::with_regular_column(bytes name) {
     if (!_regular_columns) {
         _regular_columns = query::column_id_vector();
     }
-
     const column_definition* def = _schema.get_column_definition(name);
     if (!def) {
         throw std::runtime_error(format("No such column: {}", _schema.regular_column_name_type()->to_string(name)));
@@ -23240,19 +19603,16 @@ partition_slice_builder::with_regular_column(bytes name) {
     _regular_columns->push_back(def->id);
     return *this;
 }
-
 partition_slice_builder&
 partition_slice_builder::with_no_static_columns() {
     _static_columns = query::column_id_vector();
     return *this;
 }
-
 partition_slice_builder&
 partition_slice_builder::with_static_column(bytes name) {
     if (!_static_columns) {
         _static_columns = query::column_id_vector();
     }
-
     const column_definition* def = _schema.get_column_definition(name);
     if (!def) {
         throw std::runtime_error(format("No such column: {}", utf8_type->to_string(name)));
@@ -23263,45 +19623,31 @@ partition_slice_builder::with_static_column(bytes name) {
     _static_columns->push_back(def->id);
     return *this;
 }
-
 partition_slice_builder&
 partition_slice_builder::reversed() {
     _options.set<query::partition_slice::option::reversed>();
     return *this;
 }
-
 partition_slice_builder&
 partition_slice_builder::without_partition_key_columns() {
     _options.remove<query::partition_slice::option::send_partition_key>();
     return *this;
 }
-
 partition_slice_builder&
 partition_slice_builder::without_clustering_key_columns() {
     _options.remove<query::partition_slice::option::send_clustering_key>();
     return *this;
 }
-
 partition_slice_builder& partition_slice_builder::with_partition_row_limit(uint64_t limit) {
     _partition_row_limit = limit;
     return *this;
 }
-/*
- * Copyright 2016-present ScyllaDB
- **/
-
-/* SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 thread_local disk_error_signal_type commit_error;
 thread_local disk_error_signal_type general_disk_error;
 thread_local disk_error_signal_type sstable_write_error;
-
 thread_local io_error_handler commit_error_handler = default_io_error_handler(commit_error);
 thread_local io_error_handler general_disk_error_handler = default_io_error_handler(general_disk_error);
 thread_local io_error_handler sstable_write_error_handler = default_io_error_handler(sstable_write_error);
-
 io_error_handler default_io_error_handler(disk_error_signal_type& signal) {
     return [&signal] (std::exception_ptr eptr) {
         try {
@@ -23314,33 +19660,19 @@ io_error_handler default_io_error_handler(disk_error_signal_type& signal) {
         }
     };
 }
-
 io_error_handler_gen default_io_error_handler_gen() {
     return [] (disk_error_signal_type& signal) {
         return default_io_error_handler(signal);
     };
 }
-/*
- * Copyright (C) 2019-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 static_assert(Hasher<hasher>);
-
 static_assert(HasherReturningBytes<md5_hasher>);
 static_assert(HasherReturningBytes<sha256_hasher>);
 static_assert(HasherReturningBytes<xx_hasher>);
-
 static_assert(SimpleHasher<simple_xx_hasher>);
-
 template <typename T> struct hasher_traits;
 template <> struct hasher_traits<md5_hasher> { using impl_type = CryptoPP::Weak::MD5; };
 template <> struct hasher_traits<sha256_hasher> { using impl_type = CryptoPP::SHA256; };
-
 template<typename H>
 concept HashUpdater =
     requires(typename hasher_traits<H>::impl_type& h, const CryptoPP::byte* ptr, size_t size) {
@@ -23348,79 +19680,52 @@ concept HashUpdater =
         // in CryptoPP source. We'll just hope it doesn't throw.
         { h.Update(ptr, size) } -> std::same_as<void>;
     };
-
 template <typename T, size_t size>
 struct cryptopp_hasher<T, size>::impl {
     static_assert(HashUpdater<T>);
     using impl_type = typename hasher_traits<T>::impl_type;
-
     impl_type hash{};
-
     void update(const char* ptr, size_t length) noexcept {
         using namespace CryptoPP;
         static_assert(sizeof(char) == sizeof(byte), "Assuming lengths will be the same");
         hash.Update(reinterpret_cast<const byte*>(ptr), length * sizeof(byte));
     }
-
     bytes finalize() {
         bytes digest{bytes::initialized_later(), size};
         hash.Final(reinterpret_cast<unsigned char*>(digest.begin()));
         return digest;
     }
-
     std::array<uint8_t, size> finalize_array() {
         std::array<uint8_t, size> array;
         hash.Final(reinterpret_cast<unsigned char*>(array.data()));
         return array;
     }
 };
-
 template <typename T, size_t size> cryptopp_hasher<T, size>::cryptopp_hasher() : _impl(std::make_unique<impl>()) {}
-
 template <typename T, size_t size> cryptopp_hasher<T, size>::~cryptopp_hasher() = default;
-
 template <typename T, size_t size> cryptopp_hasher<T, size>::cryptopp_hasher(cryptopp_hasher&& o) noexcept = default;
-
 template <typename T, size_t size> cryptopp_hasher<T, size>::cryptopp_hasher(const cryptopp_hasher& o) : _impl(std::make_unique<cryptopp_hasher<T, size>::impl>(*o._impl)) {}
-
 template <typename T, size_t size> cryptopp_hasher<T, size>& cryptopp_hasher<T, size>::operator=(cryptopp_hasher&& o) noexcept = default;
-
 template <typename T, size_t size> cryptopp_hasher<T, size>& cryptopp_hasher<T, size>::operator=(const cryptopp_hasher& o) {
     _impl = std::make_unique<cryptopp_hasher<T, size>::impl>(*o._impl);
     return *this;
 }
-
 template <typename T, size_t size> bytes cryptopp_hasher<T, size>::finalize() { return _impl->finalize(); }
-
 template <typename T, size_t size> std::array<uint8_t, size> cryptopp_hasher<T, size>::finalize_array() {
     return _impl->finalize_array();
 }
-
 template <typename T, size_t size> void cryptopp_hasher<T, size>::update(const char* ptr, size_t length) noexcept { _impl->update(ptr, length); }
-
 template <typename T, size_t size> bytes cryptopp_hasher<T, size>::calculate(const std::string_view& s) {
     typename cryptopp_hasher<T, size>::impl::impl_type hash;
     unsigned char digest[size];
     hash.CalculateDigest(digest, reinterpret_cast<const unsigned char*>(s.data()), s.size());
     return bytes{reinterpret_cast<const int8_t*>(digest), size};
 }
-
 template class cryptopp_hasher<md5_hasher, 16>;
 template class cryptopp_hasher<sha256_hasher, 32>;
-/*
- * Copyright (C) 2023-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 using namespace std::chrono_literals;
-
 namespace utils {
 namespace aws {
-
 static hmac_sha256_digest hmac_sha256(std::string_view key, std::string_view msg) {
     hmac_sha256_digest digest;
     int ret = gnutls_hmac_fast(GNUTLS_MAC_SHA256, key.data(), key.size(), msg.data(), msg.size(), digest.data());
@@ -23429,7 +19734,6 @@ static hmac_sha256_digest hmac_sha256(std::string_view key, std::string_view msg
     }
     return digest;
 }
-
 static hmac_sha256_digest get_signature_key(std::string_view key, std::string_view date_stamp, std::string_view region_name, std::string_view service_name) {
     auto date = hmac_sha256("AWS4" + std::string(key), date_stamp);
     auto region = hmac_sha256(std::string_view(date.data(), date.size()), region_name);
@@ -23437,13 +19741,11 @@ static hmac_sha256_digest get_signature_key(std::string_view key, std::string_vi
     auto signing = hmac_sha256(std::string_view(service.data(), service.size()), "aws4_request");
     return signing;
 }
-
 static std::string apply_sha256(std::string_view msg) {
     sha256_hasher hasher;
     hasher.update(msg.data(), msg.size());
     return to_hex(hasher.finalize());
 }
-
 static std::string apply_sha256(const std::vector<temporary_buffer<char>>& msg) {
     sha256_hasher hasher;
     for (const temporary_buffer<char>& buf : msg) {
@@ -23451,7 +19753,6 @@ static std::string apply_sha256(const std::vector<temporary_buffer<char>>& msg) 
     }
     return to_hex(hasher.finalize());
 }
-
 std::string format_time_point(db_clock::time_point tp) {
     time_t time_point_repr = db_clock::to_time_t(tp);
     std::string time_point_str;
@@ -23462,7 +19763,6 @@ std::string format_time_point(db_clock::time_point tp) {
     time_point_str.resize(16);
     return time_point_str;
 }
-
 void check_expiry(std::string_view signature_date) {
     //FIXME: The default 15min can be changed with X-Amz-Expires header - we should honor it
     std::string expiration_str = format_time_point(db_clock::now() - 15min);
@@ -23478,7 +19778,6 @@ void check_expiry(std::string_view signature_date) {
                 signature_date, validity_str));
     }
 }
-
 std::string get_signature(std::string_view access_key_id, std::string_view secret_access_key,
         std::string_view host, std::string_view canonical_uri, std::string_view method,
         std::optional<std::string_view> orig_datestamp, std::string_view signed_headers_str, const std::map<std::string_view, std::string_view>& signed_headers_map,
@@ -23497,83 +19796,54 @@ std::string get_signature(std::string_view access_key_id, std::string_view secre
                             *orig_datestamp, datestamp));
         }
     }
-
     std::stringstream canonical_headers;
     for (const auto& header : signed_headers_map) {
         canonical_headers << fmt::format("{}:{}", header.first, header.second) << '\n';
     }
-
     std::string payload_hash = body_content != nullptr ? apply_sha256(*body_content) : "UNSIGNED-PAYLOAD";
     std::string canonical_request = fmt::format("{}\n{}\n{}\n{}\n{}\n{}", method, canonical_uri, query_string, canonical_headers.str(), signed_headers_str, payload_hash);
-
     std::string_view algorithm = "AWS4-HMAC-SHA256";
     std::string credential_scope = fmt::format("{}/{}/{}/aws4_request", datestamp, region, service);
     std::string string_to_sign = fmt::format("{}\n{}\n{}\n{}", algorithm, amz_date, credential_scope,  apply_sha256(canonical_request));
-
     hmac_sha256_digest signing_key = get_signature_key(secret_access_key, datestamp, region, service);
     hmac_sha256_digest signature = hmac_sha256(std::string_view(signing_key.data(), signing_key.size()), string_to_sign);
-
     return to_hex(bytes_view(reinterpret_cast<const int8_t*>(signature.data()), signature.size()));
 }
-
 } // aws namespace
 } // utils namespace
-/*
- * Copyright (C) 2017-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
-
 namespace {
-
 //
 // Helper for retrieving the counter based on knowing its type.
 //
 template<class Counter>
 constexpr typename Counter::value_type& counter_ref(cql_duration &) noexcept;
-
 template<>
 constexpr months_counter::value_type& counter_ref<months_counter>(cql_duration &d) noexcept {
     return d.months;
 }
-
 template<>
 constexpr days_counter::value_type& counter_ref<days_counter>(cql_duration &d) noexcept {
     return d.days;
 }
-
 template<>
 constexpr nanoseconds_counter::value_type& counter_ref<nanoseconds_counter>(cql_duration &d) noexcept {
     return d.nanoseconds;
 }
-
 // Unit for a component of a duration. For example, years.
 class duration_unit {
 public:
     using index_type = uint8_t;
     using common_counter_type = cql_duration::common_counter_type;
-
     virtual ~duration_unit() = default;
-
     // Units with larger indicies are greater. For example, "months" have a greater index than "days".
     virtual index_type index() const noexcept = 0;
-
     virtual const char* short_name() const noexcept = 0;
-
     virtual const char* long_name() const noexcept = 0;
-
     // Increment the appropriate counter in the duration instance based on a count of this unit.
     virtual void increment_count(cql_duration&, common_counter_type) const noexcept = 0;
-
     // The remaining capacity (in terms of this unit) of the appropriate counter in the duration instance.
     virtual common_counter_type available_count(const cql_duration&) const noexcept = 0;
 };
-
 // `_index` is the assigned index of this unit.
 // `Counter` is the counter type in the `cql_duration` instance that is used to store this unit.
 // `_factor` is the conversion factor of one count of this unit to the corresponding count in `Counter`.
@@ -23581,73 +19851,58 @@ template <uint8_t _index, class Counter, cql_duration::common_counter_type _fact
 class duration_unit_impl : public duration_unit {
 public:
     static constexpr auto factor = _factor;
-
     virtual ~duration_unit_impl() = default;
-
     index_type index() const noexcept override {
         return _index;
     }
-
     void increment_count(cql_duration &d, common_counter_type c) const noexcept override {
         counter_ref<Counter>(d) += (c * factor);
     }
-
     common_counter_type available_count(const cql_duration& d) const noexcept override {
         const auto limit = std::numeric_limits<typename Counter::value_type>::max();
         return {(limit - counter_ref<Counter>(const_cast<cql_duration&>(d))) / factor};
     }
 };
-
 struct nanosecond_unit final : public duration_unit_impl<0, nanoseconds_counter , 1> {
     const char* short_name() const noexcept override { return "ns"; }
     const char* long_name() const noexcept override { return "nanoseconds"; }
 } const nanosecond{};
-
 struct microsecond_unit final : public duration_unit_impl<1, nanoseconds_counter, 1000> {
     const char* short_name() const noexcept override { return "us"; }
     const char* long_name() const noexcept override { return "microseconds"; }
 } const microsecond{};
-
 struct millisecond_unit final : public duration_unit_impl<2, nanoseconds_counter, microsecond_unit::factor * 1000> {
     const char* short_name() const noexcept override { return "ms"; }
     const char* long_name() const noexcept override { return "milliseconds"; }
 } const millisecond{};
-
 struct second_unit final : public duration_unit_impl<3, nanoseconds_counter, millisecond_unit::factor * 1000> {
     const char* short_name() const noexcept override { return "s"; }
     const char* long_name() const noexcept override { return "seconds"; }
 } const second{};
-
 struct minute_unit final : public duration_unit_impl<4, nanoseconds_counter, second_unit::factor * 60> {
     const char* short_name() const noexcept override { return "m"; }
     const char* long_name() const noexcept override { return "minutes"; }
 } const minute{};
-
 struct hour_unit final : public duration_unit_impl<5, nanoseconds_counter, minute_unit::factor * 60> {
     const char* short_name() const noexcept override { return "h"; }
     const char* long_name() const noexcept override { return "hours"; }
 } const hour{};
-
 struct day_unit final : public duration_unit_impl<6, days_counter, 1> {
     const char* short_name() const noexcept override { return "d"; }
     const char* long_name() const noexcept override { return "days"; }
 } const day{};
-
 struct week_unit final : public duration_unit_impl<7, days_counter, 7> {
     const char* short_name() const noexcept override { return "w"; }
     const char* long_name() const noexcept override { return "weeks"; }
 } const week{};
-
 struct month_unit final : public duration_unit_impl<8, months_counter, 1> {
     const char* short_name() const noexcept override { return "mo"; }
     const char* long_name() const noexcept override { return "months"; }
 } const month{};
-
 struct year_unit final : public duration_unit_impl<9, months_counter, 12> {
     const char* short_name() const noexcept override { return "y"; }
     const char* long_name() const noexcept override { return "years"; }
 } const year{};
-
 const auto unit_table = std::unordered_map<std::string_view, std::reference_wrapper<const duration_unit>>{
         {year.short_name(), year},
         {month.short_name(), month},
@@ -23660,7 +19915,6 @@ const auto unit_table = std::unordered_map<std::string_view, std::reference_wrap
         {microsecond.short_name(), microsecond}, {"µs", microsecond},
         {nanosecond.short_name(), nanosecond}
 };
-
 //
 // Convenient helper to parse the indexed sub-expression from a match group as a duration counter.
 //
@@ -23674,7 +19928,6 @@ cql_duration::common_counter_type parse_count(const Match& m, Index group_index)
         throw std::out_of_range("duration counter");
     }
 }
-
 //
 // Build up a duration unit-by-unit.
 //
@@ -23688,40 +19941,31 @@ public:
     duration_builder& add(cql_duration::common_counter_type count, const duration_unit& unit) {
         validate_addition(count, unit);
         validate_and_update_order(unit);
-
         unit.increment_count(_duration, count);
         return *this;
     }
-
     template <class Match, class Index = typename Match::size_type>
     duration_builder& add_parsed_count(const Match& m, Index group_index, const duration_unit& unit) {
         cql_duration::common_counter_type count;
-
         try {
             count = parse_count(m, group_index);
         } catch (const std::out_of_range&) {
             throw cql_duration_error(seastar::format("Invalid duration. The count for the {} is out of range", unit.long_name()));
         }
-
         return add(count, unit);
     }
-
     cql_duration build() const noexcept {
         return _duration;
     }
-
 private:
     const duration_unit* _current_unit{nullptr};
-
     cql_duration _duration{};
-
     //
     // Throws `cql_duration_error` if the addition of a quantity of the designated unit would overflow one of the
     // counters.
     //
     void validate_addition(typename cql_duration::common_counter_type count, const duration_unit& unit) const {
         const auto available = unit.available_count(_duration);
-
         if (count > available) {
             throw cql_duration_error(
                     seastar::format("Invalid duration. The number of {} must be less than or equal to {}",
@@ -23729,7 +19973,6 @@ private:
                            available));
         }
     }
-
     //
     // Validate that an addition of a quantity of the designated unit is not out of order. We require that units are
     // added in decreasing size.
@@ -23740,7 +19983,6 @@ private:
     //
     void validate_and_update_order(const duration_unit& unit) {
         const auto index = unit.index();
-
         if (_current_unit != nullptr) {
             if (index == _current_unit->index()) {
                 throw cql_duration_error(seastar::format("Invalid duration. The {} are specified multiple times", unit.long_name()));
@@ -23751,110 +19993,83 @@ private:
                                unit.long_name()));
             }
         }
-
         _current_unit = &unit;
     }
 };
-
 //
 // These functions assume no sign information ('-). That is left to the `cql_duration` constructor.
 //
-
 std::optional<cql_duration> parse_duration_standard_format(std::string_view s) {
-
     //
     // We parse one component (pair of a count and unit) at a time in order to give more precise error messages when
     // units are specified multiple times or out of order rather than just "parse error".
     //
     // The other formats are more strict and complain less helpfully.
     //
-
     static const auto pattern =
             boost::regex("(\\d+)(y|Y|mo|MO|mO|Mo|w|W|d|D|h|H|s|S|ms|MS|mS|Ms|us|US|uS|Us|µs|µS|ns|NS|nS|Ns|m|M)");
-
     auto iter = s.cbegin();
     boost::cmatch match;
-
     duration_builder b;
-
     // `match_continuous` ensures that the entire string must be included in a match.
     while (boost::regex_search(iter, s.end(), match, pattern, boost::regex_constants::match_continuous)) {
         iter += match.length();
-
         auto symbol = match[2].str();
-
         // Special case for mu.
         {
             auto view = std::string_view(symbol);
             view.remove_suffix(1);
-
             if (view == reinterpret_cast<const char*>(u8"µ")) {
                 b.add_parsed_count(match, 1, microsecond);
                 continue;
             }
         }
-
         // Otherwise, we can just convert to lower-case for look-up.
         std::transform(symbol.begin(), symbol.end(), symbol.begin(), [](char ch) { return std::tolower(ch); });
         b.add_parsed_count(match, 1, unit_table.at(symbol));
     }
-
     if (iter != s.cend()) {
         // There is unconsumed input.
         return {};
     }
-
     return b.build();
 }
-
 std::optional<cql_duration> parse_duration_iso8601_format(std::string_view s) {
     static const auto pattern = boost::regex("P((\\d+)Y)?((\\d+)M)?((\\d+)D)?(T((\\d+)H)?((\\d+)M)?((\\d+)S)?)?");
-
     boost::cmatch match;
     if (!boost::regex_match(s.data(), match, pattern)) {
         return {};
     }
-
     duration_builder b;
-
     if (match[1].matched) {
         b.add_parsed_count(match, 2, year);
     }
-
     if (match[3].matched) {
         b.add_parsed_count(match, 4, month);
     }
-
     if (match[5].matched) {
         b.add_parsed_count(match, 6, day);
     }
-
     // Optional, more granular, information.
     if (match[7].matched) {
         if (match[8].matched) {
             b.add_parsed_count(match, 9, hour);
         }
-
         if (match[10].matched) {
             b.add_parsed_count(match, 11, minute);
         }
-
         if (match[12].matched) {
             b.add_parsed_count(match, 13, second);
         }
     }
-
     return b.build();
 }
-
 std::optional<cql_duration> parse_duration_iso8601_alternative_format(std::string_view s) {
     static const auto pattern = boost::regex("P(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})");
-
     boost::cmatch match;
     if (!boost::regex_match(s.data(), match, pattern)) {
         return {};
     }
-
     return duration_builder()
             .add_parsed_count(match, 1, year)
             .add_parsed_count(match, 2, month)
@@ -23864,296 +20079,175 @@ std::optional<cql_duration> parse_duration_iso8601_alternative_format(std::strin
             .add_parsed_count(match, 6, second)
             .build();
 }
-
 std::optional<cql_duration> parse_duration_iso8601_week_format(std::string_view s) {
     static const auto pattern = boost::regex("P(\\d+)W");
-
     boost::cmatch match;
     if (!boost::regex_match(s.data(), match, pattern)) {
         return {};
     }
-
     return duration_builder()
             .add_parsed_count(match, 1, week)
             .build();
 }
-
 // Parse a duration string without sign information assuming one of the supported formats.
 std::optional<cql_duration> parse_duration(std::string_view s) {
     if (s.length() == 0u) {
         return {};
     }
-
     if (s.front() == 'P') {
         if (s.back() == 'W') {
             return parse_duration_iso8601_week_format(s);
         }
-
         if (s.find('-') != s.npos) {
             return parse_duration_iso8601_alternative_format(s);
         }
-
         return parse_duration_iso8601_format(s);
     }
-
     return parse_duration_standard_format(s);
 }
-
 }
-
 cql_duration::cql_duration(std::string_view s) {
     const bool is_negative = (s.length() != 0) && (s[0] == '-');
-
     // Without any sign indicator ('-').
     const auto ps = (is_negative ? s.cbegin() + 1 : s.cbegin());
-
     const auto d = parse_duration(ps);
     if (!d) {
         throw cql_duration_error(seastar::format("Unable to convert '{}' to a duration", s));
     }
-
     *this = *d;
-
     if (is_negative) {
         months = -months;
         days = -days;
         nanoseconds = -nanoseconds;
     }
 }
-
 std::ostream& operator<<(std::ostream& os, const cql_duration& d) {
     if ((d.months < 0) || (d.days < 0) || (d.nanoseconds < 0)) {
         os << '-';
     }
-
     // If a non-zero integral component of the count can be expressed in `unit`, then append it to the stream with its
     // unit.
     //
     // Returns the remaining count.
     const auto append = [&os](cql_duration::common_counter_type count, auto&& unit) {
         const auto divider = unit.factor;
-
         if ((count == 0) || (count < divider)) {
             return count;
         }
-
         os << (count / divider) << unit.short_name();
         return count % divider;
     };
-
     const auto month_remainder = append(std::abs(d.months), year);
     append(month_remainder, month);
-
     append(std::abs(d.days), day);
-
     auto nanosecond_remainder = append(std::abs(d.nanoseconds), hour);
     nanosecond_remainder = append(nanosecond_remainder, minute);
     nanosecond_remainder = append(nanosecond_remainder, second);
     nanosecond_remainder = append(nanosecond_remainder, millisecond);
     nanosecond_remainder = append(nanosecond_remainder, microsecond);
     append(nanosecond_remainder, nanosecond);
-
     return os;
 }
-
 seastar::sstring to_string(const cql_duration& d) {
     std::ostringstream ss;
     ss << d;
     return ss.str();
 }
-/*
- * Copyright 2017-present ScyllaDB
- *
- * Modified by ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
- */
-
-
-
-
 static_assert(-1 == ~0, "Not a twos-complement architecture");
-
 // Accounts for the case that all bits are zero.
 static vint_size_type count_leading_zero_bits(uint64_t n) noexcept {
     if (n == 0) {
         return vint_size_type(std::numeric_limits<uint64_t>::digits);
     }
-
     return vint_size_type(count_leading_zeros(n));
 }
-
 static constexpr uint64_t encode_zigzag(int64_t n) noexcept {
     // The right shift has to be arithmetic and not logical.
     return (static_cast<uint64_t>(n) << 1) ^ static_cast<uint64_t>(n >> 63);
 }
-
 static constexpr int64_t decode_zigzag(uint64_t n) noexcept {
     return static_cast<int64_t>((n >> 1) ^ -(n & 1));
 }
-
 // Mask for extracting from the first byte the part that is not used for indicating the total number of bytes.
 static uint64_t first_byte_value_mask(vint_size_type extra_bytes_size) {
     // Include the sentinel zero bit in the mask.
     return uint64_t(0xff) >> extra_bytes_size;
 }
-
 vint_size_type signed_vint::serialize(int64_t value, bytes::iterator out) {
     return unsigned_vint::serialize(encode_zigzag(value), out);
 }
-
 vint_size_type signed_vint::serialized_size(int64_t value) noexcept {
     return unsigned_vint::serialized_size(encode_zigzag(value));
 }
-
 int64_t signed_vint::deserialize(bytes_view v) {
     const auto un = unsigned_vint::deserialize(v);
     return decode_zigzag(un);
 }
-
 vint_size_type signed_vint::serialized_size_from_first_byte(bytes::value_type first_byte) {
     return unsigned_vint::serialized_size_from_first_byte(first_byte);
 }
-
 // The number of additional bytes that we need to read.
 static vint_size_type count_extra_bytes(int8_t first_byte) {
     // Sign extension.
     const int64_t v(first_byte);
-
     return count_leading_zero_bits(static_cast<uint64_t>(~v)) - vint_size_type(64 - 8);
 }
-
 static void encode(uint64_t value, vint_size_type size, bytes::iterator out) {
     std::array<int8_t, 9> buffer({});
-
     // `size` is always in the range [1, 9].
     const auto extra_bytes_size = size - 1;
-
     for (vint_size_type i = 0; i <= extra_bytes_size; ++i) {
         buffer[extra_bytes_size - i] = static_cast<int8_t>(value & 0xff);
         value >>= 8;
     }
-
     buffer[0] |= ~first_byte_value_mask(extra_bytes_size);
     std::copy_n(buffer.cbegin(), size, out);
 }
-
 vint_size_type unsigned_vint::serialize(uint64_t value, bytes::iterator out) {
     const auto size = serialized_size(value);
-
     if (size == 1) {
         *out = static_cast<int8_t>(value & 0xff);
         return 1;
     }
-
     encode(value, size, out);
     return size;
 }
-
 vint_size_type unsigned_vint::serialized_size(uint64_t value) noexcept {
     // No need for the overhead of checking that all bits are zero.
     //
     // A signed quantity, to allow the case of `magnitude == 0` to result in a value of 9 below.
     const auto magnitude = static_cast<int64_t>(count_leading_zeros(value | uint64_t(1)));
-
     return vint_size_type(9) - vint_size_type((magnitude - 1) / 7);
 }
-
 uint64_t unsigned_vint::deserialize(bytes_view v) {
     auto src = v.data();
     auto len = v.size();
     const int8_t first_byte = *src;
-
     // No additional bytes, since the most significant bit is not set.
     if (first_byte >= 0) {
         return uint64_t(first_byte);
     }
-
     const auto extra_bytes_size = count_extra_bytes(first_byte);
-
     // Extract the bits not used for counting bytes.
     auto result = uint64_t(first_byte) & first_byte_value_mask(extra_bytes_size);
-
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    uint64_t value;
-    // If we can overread do that. It is cheaper to have a single 64-bit read and
-    // then mask out the unneeded part than to do 8x 1 byte reads.
-    if (__builtin_expect(len >= sizeof(uint64_t) + 1, true)) {
-        std::copy_n(src + 1, sizeof(uint64_t), reinterpret_cast<int8_t*>(&value));
-    } else {
-        value = 0;
-        std::copy_n(src + 1, extra_bytes_size, reinterpret_cast<int8_t*>(&value));
-    }
-    value = be_to_cpu(value << (64 - (extra_bytes_size * 8)));
-    result <<= (extra_bytes_size * 8) % 64;
-    result |= value;
-#else
     for (vint_size_type index = 0; index < extra_bytes_size; ++index) {
         result <<= 8;
         result |= (uint64_t(v[index + 1]) & uint64_t(0xff));
     }
-#endif
     return result;
 }
-
 vint_size_type unsigned_vint::serialized_size_from_first_byte(bytes::value_type first_byte) {
     int8_t first_byte_casted = first_byte;
     return 1 + (first_byte_casted >= 0 ? 0 : count_extra_bytes(first_byte_casted));
 }
-/*
- * Leverage SIMD for fast UTF-8 validation with range base algorithm.
- * Details at https://github.com/cyb70289/utf8/.
- *
- * Copyright (c) 2018, Arm Limited and affiliates. All rights reserved.
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-/*
- * http://www.unicode.org/versions/Unicode6.0.0/ch03.pdf - page 94
- *
- * Table 3-7. Well-Formed UTF-8 Byte Sequences
- *
- * +--------------------+------------+-------------+------------+-------------+
- * | Code Points        | First Byte | Second Byte | Third Byte | Fourth Byte |
- * +--------------------+------------+-------------+------------+-------------+
- * | U+0000..U+007F     | 00..7F     |             |            |             |
- * +--------------------+------------+-------------+------------+-------------+
- * | U+0080..U+07FF     | C2..DF     | 80..BF      |            |             |
- * +--------------------+------------+-------------+------------+-------------+
- * | U+0800..U+0FFF     | E0         | A0..BF      | 80..BF     |             |
- * +--------------------+------------+-------------+------------+-------------+
- * | U+1000..U+CFFF     | E1..EC     | 80..BF      | 80..BF     |             |
- * +--------------------+------------+-------------+------------+-------------+
- * | U+D000..U+D7FF     | ED         | 80..9F      | 80..BF     |             |
- * +--------------------+------------+-------------+------------+-------------+
- * | U+E000..U+FFFF     | EE..EF     | 80..BF      | 80..BF     |             |
- * +--------------------+------------+-------------+------------+-------------+
- * | U+10000..U+3FFFF   | F0         | 90..BF      | 80..BF     | 80..BF      |
- * +--------------------+------------+-------------+------------+-------------+
- * | U+40000..U+FFFFF   | F1..F3     | 80..BF      | 80..BF     | 80..BF      |
- * +--------------------+------------+-------------+------------+-------------+
- * | U+100000..U+10FFFF | F4         | 80..8F      | 80..BF     | 80..BF      |
- * +--------------------+------------+-------------+------------+-------------+
- */
-
-
 namespace utils {
-
 namespace utf8 {
-
 using namespace internal;
-
 struct codepoint_status {
     size_t bytes_validated;
     bool error;
     uint8_t more_bytes_needed;
 };
-
 static
 codepoint_status
 inline
@@ -24173,11 +20267,9 @@ evaluate_codepoint(const uint8_t* data, size_t len) {
             return codepoint_status{.bytes_validated = codepoint_len};
         } else if (len >= 3) {
             const uint8_t byte2 = data[1];
-
             // Is byte2, byte3 between 0x80 ~ 0xBF
             const int byte2_ok = (int8_t)byte2 <= (int8_t)0xBF;
             const int byte3_ok = (int8_t)data[2] <= (int8_t)0xBF;
-
             if (byte2_ok && byte3_ok &&
                      // E0, A0..BF, 80..BF
                     ((byte1 == 0xE0 && byte2 >= 0xA0) ||
@@ -24191,7 +20283,6 @@ evaluate_codepoint(const uint8_t* data, size_t len) {
             } else if (len >= 4) {
                 // Is byte4 between 0x80 ~ 0xBF
                 const int byte4_ok = (int8_t)data[3] <= (int8_t)0xBF;
-
                 if (byte2_ok && byte3_ok && byte4_ok &&
                          // F0, 90..BF, 80..BF, 80..BF
                         ((byte1 == 0xF0 && byte2 >= 0x90) ||
@@ -24211,11 +20302,9 @@ evaluate_codepoint(const uint8_t* data, size_t len) {
         }
     }
 }
-
 // 3x faster than boost utf_to_utf
 static inline std::optional<size_t> validate_naive(const uint8_t *data, size_t len) {
     size_t pos = 0;
-
     while (len) {
         auto cs = evaluate_codepoint(data, len);
         pos += cs.bytes_validated;
@@ -24225,10 +20314,8 @@ static inline std::optional<size_t> validate_naive(const uint8_t *data, size_t l
             return pos;
         }
     }
-
     return std::nullopt;
 }
-
 static
 partial_validation_results
 validate_partial_naive(const uint8_t *data, size_t len) {
@@ -24245,17 +20332,10 @@ validate_partial_naive(const uint8_t *data, size_t len) {
     }
     return partial_validation_results{};
 }
-
 } // namespace utf8
-
 } // namespace utils
-
-#if   defined(__x86_64__)
-
 namespace utils {
-
 namespace utf8 {
-
 // Map high nibble of "First Byte" to legal character length minus 1
 // 0x00 ~ 0xBF --> 0
 // 0xC0 ~ 0xDF --> 1
@@ -24264,12 +20344,10 @@ namespace utf8 {
 alignas(16) static const int8_t s_first_len_tbl[] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3,
 };
-
 // Map "First Byte" to 8-th item of range table (0xC2 ~ 0xF4)
 alignas(16) static const int8_t s_first_range_tbl[] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8,
 };
-
 // Range table, map range index to min and max values
 // Index 0    : 00 ~ 7F (First Byte, ascii)
 // Index 1,2,3: 80 ~ BF (Second, Third, Fourth Byte)
@@ -24287,7 +20365,6 @@ alignas(16) static const int8_t s_range_max_tbl[] = {
     '\x7F', '\xBF', '\xBF', '\xBF', '\xBF', '\x9F', '\xBF', '\x8F',
     '\xF4', '\x80', '\x80', '\x80', '\x80', '\x80', '\x80', '\x80',
 };
-
 // Tables for fast handling of four special First Bytes(E0,ED,F0,F4), after
 // which the Second Byte are not 80~BF. It contains "range index adjustment".
 // +------------+---------------+------------------+----------------+
@@ -24309,14 +20386,12 @@ alignas(16) static const int8_t s_df_ee_tbl[] = {
 alignas(16) static const int8_t s_ef_fe_tbl[] = {
     0, 3, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
-
 // 5x faster than naive method
 partial_validation_results
 internal::validate_partial(const uint8_t *data, size_t len) {
     if (len >= 16) {
         __m128i prev_input = _mm_set1_epi8(0);
         __m128i prev_first_len = _mm_set1_epi8(0);
-
         // Cached tables
         const __m128i first_len_tbl = _mm_load_si128((const __m128i *)s_first_len_tbl);
         const __m128i first_range_tbl = _mm_load_si128((const __m128i *)s_first_range_tbl);
@@ -24324,31 +20399,24 @@ internal::validate_partial(const uint8_t *data, size_t len) {
         const __m128i range_max_tbl = _mm_load_si128((const __m128i *)s_range_max_tbl);
         const __m128i df_ee_tbl = _mm_load_si128((const __m128i *)s_df_ee_tbl);
         const __m128i ef_fe_tbl = _mm_load_si128((const __m128i *)s_ef_fe_tbl);
-
         __m128i error = _mm_set1_epi8(0);
-
         while (len >= 16) {
             const __m128i input = _mm_lddqu_si128((const __m128i *)data);
-
             // high_nibbles = input >> 4
             const __m128i high_nibbles =
                 _mm_and_si128(_mm_srli_epi16(input, 4), _mm_set1_epi8(0x0F));
-
             // first_len = legal character length minus 1
             // 0 for 00~7F, 1 for C0~DF, 2 for E0~EF, 3 for F0~FF
             // first_len = first_len_tbl[high_nibbles]
             __m128i first_len = _mm_shuffle_epi8(first_len_tbl, high_nibbles);
-
             // First Byte: set range index to 8 for bytes within 0xC0 ~ 0xFF
             // range = first_range_tbl[high_nibbles]
             __m128i range = _mm_shuffle_epi8(first_range_tbl, high_nibbles);
-
             // Second Byte: set range index to first_len
             // 0 for 00~7F, 1 for C0~DF, 2 for E0~EF, 3 for F0~FF
             // range |= (first_len, prev_first_len) << 1 byte
             range = _mm_or_si128(
                     range, _mm_alignr_epi8(first_len, prev_first_len, 15));
-
             // Third Byte: set range index to saturate_sub(first_len, 1)
             // 0 for 00~7F, 0 for C0~DF, 1 for E0~EF, 2 for F0~FF
             __m128i tmp1, tmp2;
@@ -24358,7 +20426,6 @@ internal::validate_partial(const uint8_t *data, size_t len) {
             tmp2 = _mm_subs_epu8(prev_first_len, _mm_set1_epi8(1));
             // range |= (tmp1, tmp2) << 2 bytes
             range = _mm_or_si128(range, _mm_alignr_epi8(tmp1, tmp2, 14));
-
             // Fourth Byte: set range index to saturate_sub(first_len, 2)
             // 0 for 00~7F, 0 for C0~DF, 0 for E0~EF, 1 for F0~FF
             // tmp1 = saturate_sub(first_len, 2)
@@ -24367,7 +20434,6 @@ internal::validate_partial(const uint8_t *data, size_t len) {
             tmp2 = _mm_subs_epu8(prev_first_len, _mm_set1_epi8(2));
             // range |= (tmp1, tmp2) << 3 bytes
             range = _mm_or_si128(range, _mm_alignr_epi8(tmp1, tmp2, 13));
-
             // Now we have below range indices caluclated
             // Correct cases:
             // - 8 for C0~FF
@@ -24379,7 +20445,6 @@ internal::validate_partial(const uint8_t *data, size_t len) {
             // Error cases:
             //   9,10,11 if non ascii First Byte overlaps
             //   E.g., F1 80 C2 90 --> 8 3 10 2, where 10 indicates error
-
             // Adjust Second Byte range for special First Bytes(E0,ED,F0,F4)
             // Overlaps lead to index 9~15, which are illegal in range table
             __m128i shift1, pos, range2;
@@ -24394,31 +20459,24 @@ internal::validate_partial(const uint8_t *data, size_t len) {
             range2 = _mm_shuffle_epi8(df_ee_tbl, tmp1);
             tmp2 = _mm_adds_epu8(pos, _mm_set1_epi8(112));
             range2 = _mm_add_epi8(range2, _mm_shuffle_epi8(ef_fe_tbl, tmp2));
-
             range = _mm_add_epi8(range, range2);
-
             // Load min and max values per calculated range index
             __m128i minv = _mm_shuffle_epi8(range_min_tbl, range);
             __m128i maxv = _mm_shuffle_epi8(range_max_tbl, range);
-
             // Check value range
             error = _mm_or_si128(error, _mm_cmplt_epi8(input, minv));
             error = _mm_or_si128(error, _mm_cmpgt_epi8(input, maxv));
-
             prev_input = input;
             prev_first_len = first_len;
-
             data += 16;
             len -= 16;
         }
-
         // Reduce error vector, error_reduced = 0xFFFF if error == 0
         int error_reduced =
             _mm_movemask_epi8(_mm_cmpeq_epi8(error, _mm_set1_epi8(0)));
         if (error_reduced != 0xFFFF) {
             return partial_validation_results{.error = true};
         }
-
         // Find previous token (not 80~BF)
         int32_t token4 = _mm_extract_epi32(prev_input, 3);
         const int8_t *token = (const int8_t *)&token4;
@@ -24433,46 +20491,17 @@ internal::validate_partial(const uint8_t *data, size_t len) {
         data -= lookahead;
         len += lookahead;
     }
-
     // Continue with remaining bytes with naive method
     return validate_partial_naive(data, len);
 }
-
 } // namespace utf8
-
 } // namespace utils
-
-#else
-
 namespace utils {
-
 namespace utf8 {
-
-namespace internal {
-
-// No SIMD implementation for this arch, fallback to naive method
-partial_validation_results
-validate_partial(const uint8_t *data, size_t len) {
-    return validate_partial_naive(data, len);
-}
-
-}
-
-} // namespace utf8
-
-} // namespace utils
-
-#endif
-
-namespace utils {
-
-namespace utf8 {
-
 bool validate(const uint8_t* data, size_t len) {
     auto pvr = validate_partial(data, len);
     return !pvr.error && !pvr.unvalidated_tail;
 }
-
 std::optional<size_t> validate_with_error_position(const uint8_t *data, size_t len) {
     // First pass - validate data (using optimized code)
     if (validate(data, len)) {
@@ -24481,75 +20510,38 @@ std::optional<size_t> validate_with_error_position(const uint8_t *data, size_t l
     // Second pass - data is invalid. Find the error position using naive method
     return validate_naive(data, len);
 }
-
 } // namespace utf8
-
 } // namespace utils
-/*
- * Fast ASCII string validataion.
- *
- * Copyright (c) 2018, Arm Limited.
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace utils {
-
 namespace ascii {
-
 bool validate(const uint8_t *data, size_t len) {
     // OR all bytes
     uint8_t orall = 0;
-
     // Fast OR by 8-bytes and two independent streams
     if (len >= 16) {
         uint64_t or1 = 0, or2 = 0;
-
         do {
             or1 |= seastar::read_le<uint64_t>((const char *)data);
             or2 |= seastar::read_le<uint64_t>((const char *)data+8);
-
             data += 16;
             len -= 16;
         } while (len >= 16);
-
         // Idea from Benny Halevy <bhalevy@scylladb.com>
         // - 7-th bit set   ==> orall = !(non-zero) - 1 = 0 - 1 = 0xFF
         // - 7-th bit clear ==> orall = !0 - 1          = 1 - 1 = 0x00
         orall = !((or1 | or2) & 0x8080808080808080ULL) - 1;
     }
-
     // OR remaining bytes
     while (len--) {
         orall |= *data++;
     }
-
     // 7-th bit should be 0
     return orall < 0x80;
 }
-
 } // namespace ascii
-
 } // namespace utils
-
-/*
- * Copyright 2019-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
-
 namespace {
-
 using std::wstring;
-
 /// Processes a new pattern character, extending re with the equivalent regex pattern.
 void process_char(wchar_t c, wstring& re, bool& escaping) {
     if (c == L'\\' && !escaping) {
@@ -24585,7 +20577,6 @@ void process_char(wchar_t c, wstring& re, bool& escaping) {
     }
     escaping = false;
 }
-
 /// Returns a regex string matching the given LIKE pattern.
 wstring regex_from_pattern(bytes_view pattern) {
     if (pattern.empty()) {
@@ -24606,9 +20597,7 @@ wstring regex_from_pattern(bytes_view pattern) {
     }
     return re;
 }
-
 } // anonymous namespace
-
 class like_matcher::impl {
     bytes _pattern;
     boost::u32regex _re; // Performs pattern matching.
@@ -24621,60 +20610,34 @@ class like_matcher::impl {
         _re = boost::make_u32regex(regex_from_pattern(_pattern), boost::u32regex::basic | boost::u32regex::optimize);
     }
 };
-
 like_matcher::impl::impl(bytes_view pattern) : _pattern(pattern) {
     init_re();
 }
-
 bool like_matcher::impl::operator()(bytes_view text) const {
     return boost::u32regex_match(text.begin(), text.end(), _re);
 }
-
 void like_matcher::impl::reset(bytes_view pattern) {
     if (pattern != _pattern) {
         _pattern = bytes(pattern);
         init_re();
     }
 }
-
 like_matcher::like_matcher(bytes_view pattern)
         : _impl(std::make_unique<impl>(pattern)) {
 }
-
 like_matcher::~like_matcher() = default;
-
 like_matcher::like_matcher(like_matcher&& that) noexcept = default;
-
 bool like_matcher::operator()(bytes_view text) const {
     return _impl->operator()(text);
 }
-
 void like_matcher::reset(bytes_view pattern) {
     return _impl->reset(pattern);
 }
-/*
- * Copyright (C) 2020-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace utils {
-
 logging::logger errinj_logger("debug_error_injection");
-
 thread_local error_injection<false> error_injection<false>::_local;
-
 } // namespace utils
-/*
- * Copyright (C) 2019-present ScyllaDB
- */
-
-
 using namespace seastar;
-
 static const Elf64_Nhdr* get_nt_build_id(dl_phdr_info* info) {
     auto base = info->dlpi_addr;
     const auto* h = info->dlpi_phdr;
@@ -24683,7 +20646,6 @@ static const Elf64_Nhdr* get_nt_build_id(dl_phdr_info* info) {
         if (h->p_type != PT_NOTE) {
             continue;
         }
-
         auto* p = reinterpret_cast<const char*>(base + h->p_vaddr);
         auto* e = p + h->p_memsz;
         while (p != e) {
@@ -24691,35 +20653,25 @@ static const Elf64_Nhdr* get_nt_build_id(dl_phdr_info* info) {
             if (n->n_type == NT_GNU_BUILD_ID) {
                 return n;
             }
-
             p += sizeof(Elf64_Nhdr);
-
             p += n->n_namesz;
             p = align_up(p, 4);
-
             p += n->n_descsz;
             p = align_up(p, 4);
         }
     }
-
     assert(0 && "no NT_GNU_BUILD_ID note");
 }
-
 static int callback(dl_phdr_info* info, size_t size, void* data) {
     std::string& ret = *(std::string*)data;
     std::ostringstream os;
-
     // The first DSO is always the main program, which has an empty name.
     assert(strlen(info->dlpi_name) == 0);
-
     auto* n = get_nt_build_id(info);
     auto* p = reinterpret_cast<const unsigned char*>(n);
-
     p += sizeof(Elf64_Nhdr);
-
     p += n->n_namesz;
     p = align_up(p, 4);
-
     auto* desc = p;
     auto* desc_end = p + n->n_descsz;
     while (desc < desc_end) {
@@ -24728,14 +20680,12 @@ static int callback(dl_phdr_info* info, size_t size, void* data) {
     ret = os.str();
     return 1;
 }
-
 static std::string really_get_build_id() {
     std::string ret;
     int r = dl_iterate_phdr(callback, &ret);
     assert(r == 1);
     return ret;
 }
-
 std::string get_build_id() {
     static thread_local std::string cache;
     if (cache.empty()) {
@@ -24743,23 +20693,10 @@ std::string get_build_id() {
     }
     return cache;
 }
-/*
- * Copyright (C) 2021-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace ser {
-
 logging::logger serlog("serializer");
-
 } // namespace ser
-
 namespace utils {
-
 managed_bytes_view
 buffer_view_to_managed_bytes_view(ser::buffer_view<bytes_ostream::fragment_iterator> bv) {
     auto impl = bv.extract_implementation();
@@ -24769,7 +20706,6 @@ buffer_view_to_managed_bytes_view(ser::buffer_view<bytes_ostream::fragment_itera
             impl.size
     );
 }
-
 managed_bytes_view_opt
 buffer_view_to_managed_bytes_view(std::optional<ser::buffer_view<bytes_ostream::fragment_iterator>> bvo) {
     if (!bvo) {
@@ -24777,20 +20713,8 @@ buffer_view_to_managed_bytes_view(std::optional<ser::buffer_view<bytes_ostream::
     }
     return buffer_view_to_managed_bytes_view(*bvo);
 }
-
-
 } // namespace utils
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace std {
-
 std::ostream& operator<<(std::ostream& os, const std::strong_ordering& order) {
     if (order > 0) {
         os << "gt";
@@ -24801,7 +20725,6 @@ std::ostream& operator<<(std::ostream& os, const std::strong_ordering& order) {
     }
     return os;
 }
-
 std::ostream& operator<<(std::ostream& os, const std::weak_ordering& order) {
     if (order > 0) {
         os << "gt";
@@ -24813,129 +20736,27 @@ std::ostream& operator<<(std::ostream& os, const std::weak_ordering& order) {
     return os;
 }
 
-std::ostream& operator<<(std::ostream& os, const std::partial_ordering& order) {
-    if (order == std::partial_ordering::unordered) {
-        os << "unordered";
-    } else if (order > 0) {
-        os << "gt";
-    } else if (order < 0) {
-        os << "lt";
-    } else {
-        os << "eq";
-    }
-    return os;
-}
-
 } // namespace std
-/*
- * Copyright (C) 2020-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
 seastar::logger testlog("testlog");
-/*
- * Copyright (C) 2020-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 namespace tests {
-
 namespace {
 
-std::string format_msg(std::string_view test_function_name, bool ok, std::source_location sl, std::string_view msg) {
-    return fmt::format("{}(): {} @ {}() {}:{:d}{}{}", test_function_name, ok ? "OK" : "FAIL", sl.function_name(), sl.file_name(), sl.line(), msg.empty() ? "" : ": ", msg);
-}
-
-}
-
-bool do_check(bool condition, std::source_location sl, std::string_view msg) {
-    if (condition) {
-        testlog.trace("{}", format_msg(__FUNCTION__, condition, sl, msg));
-    } else {
-        testlog.error("{}", format_msg(__FUNCTION__, condition, sl, msg));
-    }
-    return condition;
-}
-
-void do_require(bool condition, std::source_location sl, std::string_view msg) {
-    if (condition) {
-        testlog.trace("{}", format_msg(__FUNCTION__, condition, sl, msg));
-    } else {
-        auto formatted_msg = format_msg(__FUNCTION__, condition, sl, msg);
-        testlog.error("{}", formatted_msg);
-        throw_with_backtrace<std::runtime_error>(std::move(formatted_msg));
-    }
-
-}
-
-void fail(std::string_view msg, std::source_location sl) {
-    throw_with_backtrace<std::runtime_error>(format_msg(__FUNCTION__, false, sl, msg));
 }
 
 
-extern boost::test_tools::assertion_result has_scylla_test_env(boost::unit_test::test_unit_id) {
-    if (::getenv("SCYLLA_TEST_ENV")) {
-        return true;
-    }
 
-    testlog.info("Test environment is not configured. "
-        "Check test/pylib/minio_server.py for an example of how to configure the environment for it to run.");
-    return false;
-}
 
 }
 
-sstring make_random_string(size_t size) {
-    static thread_local std::default_random_engine rng;
-    std::uniform_int_distribution<char> dist;
-    sstring str = uninitialized_string(size);
-    for (auto&& b : str) {
-        b = dist(rng);
-    }
-    return str;
-}
 
-sstring make_random_numeric_string(size_t size) {
-    static thread_local std::default_random_engine rng;
-    std::uniform_int_distribution<char> dist('0', '9');
-    sstring str = uninitialized_string(size);
-    for (auto&& b : str) {
-        b = dist(rng);
-    }
-    return str;
-}
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
-static inline
-sstring to_sstring(const bytes& b) {
-    return sstring(b.begin(), b.end());
-}
 
 bool
 row_assertion::matches(const query::result_set_row& row) const {
     for (auto&& column_and_value : _expected_values) {
         auto&& name = column_and_value.first;
         auto&& value = column_and_value.second;
-
         // FIXME: result_set_row works on sstring column names instead of more general "bytes".
         auto ss_name = to_sstring(name);
-
         const data_value* val = row.get_data_value(ss_name);
         if (val == nullptr) {
             if (!value.is_null()) {
@@ -24957,7 +20778,6 @@ row_assertion::matches(const query::result_set_row& row) const {
     }
     return true;
 }
-
 sstring
 row_assertion::describe(schema_ptr schema) const {
     return format("{{{}}}", fmt::join(_expected_values | boost::adaptors::transformed([&schema] (auto&& e) {
@@ -24974,7 +20794,6 @@ row_assertion::describe(schema_ptr schema) const {
         }
     }), ", "));
 }
-
 const result_set_assertions&
 result_set_assertions::has(const row_assertion& ra) const {
     for (auto&& row : _rs.rows()) {
@@ -24985,7 +20804,6 @@ result_set_assertions::has(const row_assertion& ra) const {
     BOOST_FAIL(format("Row {} not found in {}", ra.describe(_rs.schema()), _rs));
     return *this;
 }
-
 const result_set_assertions&
 result_set_assertions::has_only(const row_assertion& ra) const {
     BOOST_REQUIRE(_rs.rows().size() == 1);
@@ -24995,27 +20813,16 @@ result_set_assertions::has_only(const row_assertion& ra) const {
     }
     return *this;
 }
-
 const result_set_assertions&
 result_set_assertions::is_empty() const {
     BOOST_REQUIRE_EQUAL(_rs.rows().size(), 0);
     return *this;
 }
-
 const result_set_assertions&
 result_set_assertions::has_size(int row_count) const {
     BOOST_REQUIRE_EQUAL(_rs.rows().size(), row_count);
     return *this;
 }
-/*
- * Copyright (C) 2015-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 // partitions must be sorted by decorated key
 static void require_no_token_duplicates(const std::vector<mutation>& partitions) {
     std::optional<dht::token> last_token;
@@ -25027,14 +20834,11 @@ static void require_no_token_duplicates(const std::vector<mutation>& partitions)
         last_token = key.token();
     }
 }
-
 static api::timestamp_type new_timestamp() {
     static thread_local api::timestamp_type ts = api::min_timestamp;
     return ts++;
 }
-
 namespace {
-
 // Helper class for testing mutation_reader::fast_forward_to(dht::partition_range).
 class partition_range_walker {
     std::vector<dht::partition_range> _ranges;
@@ -25055,21 +20859,15 @@ public:
         }
     }
 };
-
 }
-
 static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
     testlog.info(__PRETTY_FUNCTION__);
-
     simple_schema s;
-
     const sstring value = "v";
     constexpr unsigned ckey_count = 4;
-
     auto dkeys = s.make_pkeys(128);
     auto dkeys_pos = 0;
     std::vector<mutation> mutations;
-
     {   // All clustered rows and a static row, range tombstones covering each row
         auto m = mutation(s.schema(), dkeys.at(dkeys_pos++));
         s.add_static_row(m, value);
@@ -25081,7 +20879,6 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
         }
         mutations.emplace_back(std::move(m));
     }
-
     {   // All clustered rows and a static row, a range tombstone covering all rows
         auto m = mutation(s.schema(), dkeys.at(dkeys_pos++));
         s.add_static_row(m, value);
@@ -25091,7 +20888,6 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
         }
         mutations.emplace_back(std::move(m));
     }
-
     {   // All clustered rows and a static row, range tombstones disjoint with rows
         auto m = mutation(s.schema(), dkeys.at(dkeys_pos++));
         s.add_static_row(m, value);
@@ -25103,7 +20899,6 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
         }
         mutations.emplace_back(std::move(m));
     }
-
     {   // All clustered rows but no static row and no range tombstones
         auto m = mutation(s.schema(), dkeys.at(dkeys_pos++));
         s.add_static_row(m, value);
@@ -25112,13 +20907,11 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
         }
         mutations.emplace_back(std::move(m));
     }
-
     {   // Just a static row
         auto m = mutation(s.schema(), dkeys.at(dkeys_pos++));
         s.add_static_row(m, value);
         mutations.emplace_back(std::move(m));
     }
-
     {   // Every other clustered row and a static row
         auto m = mutation(s.schema(), dkeys.at(dkeys_pos++));
         s.add_static_row(m, value);
@@ -25127,7 +20920,6 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
         }
         mutations.emplace_back(std::move(m));
     }
-
     {   // Every other clustered row but no static row
         auto m = mutation(s.schema(), dkeys.at(dkeys_pos++));
         s.add_static_row(m, value);
@@ -25136,18 +20928,14 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
         }
         mutations.emplace_back(std::move(m));
     }
-
     mutation_source ms = populate(s.schema(), mutations, gc_clock::now());
-
     auto test_ckey = [&] (std::vector<dht::partition_range> pranges, std::vector<mutation> mutations, mutation_reader::forwarding fwd_mr) {
         for (auto range_size = 1u; range_size <= ckey_count + 1; range_size++) {
             for (auto start = 0u; start <= ckey_count; start++) {
                 auto range = range_size == 1
                     ? query::clustering_range::make_singular(s.make_ckey(start))
                     : query::clustering_range::make({s.make_ckey(start)}, {s.make_ckey(start + range_size), false});
-
                 testlog.info("Clustering key range {}", range);
-
                 auto test_common = [&] (const query::partition_slice& slice) {
                     testlog.info("Read whole partitions at once");
                     auto pranges_walker = partition_range_walker(pranges);
@@ -25175,7 +20963,6 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
                         actual.produces_partition_end();
                     }
                     actual.produces_end_of_stream();
-
                     testlog.info("Read partitions with fast-forwarding to each individual row");
                     pranges_walker = partition_range_walker(pranges);
                     mr = ms.make_reader_v2(s.schema(), semaphore.make_permit(), pranges_walker.initial_range(), slice,
@@ -25205,19 +20992,15 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
                     }
                     actual.produces_end_of_stream();
                 };
-
                 testlog.info("Single-range slice");
                 auto slice = partition_slice_builder(*s.schema())
                     .with_range(range)
                     .build();
-
                 test_common(slice);
-
                 testlog.info("Test monotonic positions");
                 auto mr = ms.make_reader_v2(s.schema(), semaphore.make_permit(), query::full_partition_range, slice,
                                             default_priority_class(), nullptr, streamed_mutation::forwarding::no, fwd_mr);
                 assert_that(std::move(mr)).has_monotonic_positions();
-
                 if (range_size != 1) {
                     testlog.info("Read partitions fast-forwarded to the range of interest");
                     auto pranges_walker = partition_range_walker(pranges);
@@ -25226,7 +21009,6 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
                     auto actual = assert_that(std::move(mr));
                     for (auto& expected : mutations) {
                         pranges_walker.fast_forward_if_needed(actual, expected);
-
                         actual.produces_partition_start(expected.decorated_key());
                         if (!expected.partition().static_row().empty()) {
                             actual.produces_static_row();
@@ -25253,12 +21035,10 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
                     }
                     actual.produces_end_of_stream();
                 }
-
                 testlog.info("Slice with not clustering ranges");
                 slice = partition_slice_builder(*s.schema())
                     .with_ranges({})
                     .build();
-
                 testlog.info("Read partitions with just static rows");
                 auto pranges_walker = partition_range_walker(pranges);
                 mr = ms.make_reader_v2(s.schema(), semaphore.make_permit(), pranges_walker.initial_range(), slice,
@@ -25266,7 +21046,6 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
                 auto actual = assert_that(std::move(mr));
                 for (auto& expected : mutations) {
                     pranges_walker.fast_forward_if_needed(actual, expected);
-
                     actual.produces_partition_start(expected.decorated_key());
                     if (!expected.partition().static_row().empty()) {
                         actual.produces_static_row();
@@ -25274,7 +21053,6 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
                     actual.produces_partition_end();
                 }
                 actual.produces_end_of_stream();
-
                 if (range_size != 1) {
                     testlog.info("Slice with single-row ranges");
                     std::vector<query::clustering_range> ranges;
@@ -25284,9 +21062,7 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
                     slice = partition_slice_builder(*s.schema())
                         .with_ranges(ranges)
                         .build();
-
                     test_common(slice);
-
                     testlog.info("Test monotonic positions");
                     auto mr = ms.make_reader_v2(s.schema(), semaphore.make_permit(), query::full_partition_range, slice,
                                                 default_priority_class(), nullptr, streamed_mutation::forwarding::no, fwd_mr);
@@ -25295,9 +21071,7 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
             }
         }
     };
-
     test_ckey({query::full_partition_range}, mutations, mutation_reader::forwarding::no);
-
     for (auto prange_size = 1u; prange_size < mutations.size(); prange_size += 2) {
         for (auto pstart = 0u; pstart + prange_size <= mutations.size(); pstart++) {
             auto ms = boost::copy_range<std::vector<mutation>>(
@@ -25310,7 +21084,6 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
                 test_ckey({dht::partition_range::make({mutations[pstart].decorated_key()}, {mutations[pstart + prange_size - 1].decorated_key()})},
                         ms, mutation_reader::forwarding::no);
             }
-
             {
                 auto pranges = std::vector<dht::partition_range>();
                 for (auto current = pstart; current < pstart + prange_size; current++) {
@@ -25318,7 +21091,6 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
                 }
                 test_ckey(pranges, ms, mutation_reader::forwarding::yes);
             }
-
             if (prange_size > 1) {
                 auto pranges = std::vector<dht::partition_range>();
                 for (auto current = pstart; current < pstart + prange_size;) {
@@ -25329,40 +21101,30 @@ static void test_slicing_and_fast_forwarding(tests::reader_concurrency_semaphore
                     }
                     current += 2;
                 }
-
                 test_ckey(pranges, ms, mutation_reader::forwarding::yes);
             }
         }
     }
 }
-
 static void test_streamed_mutation_forwarding_is_consistent_with_slicing(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
     testlog.info(__PRETTY_FUNCTION__);
-
     // Generates few random mutations and row slices and verifies that using
     // fast_forward_to() over the slices gives the same mutations as using those
     // slices in partition_slice without forwarding.
-
     random_mutation_generator gen(random_mutation_generator::generate_counters::no, local_shard_only::yes,
             random_mutation_generator::generate_uncompactable::yes);
-
     for (int i = 0; i < 10; ++i) {
         mutation m = gen();
-
         std::vector<query::clustering_range> ranges = gen.make_random_ranges(10);
         auto prange = dht::partition_range::make_singular(m.decorated_key());
         query::partition_slice full_slice = partition_slice_builder(*m.schema()).build();
         query::partition_slice slice_with_ranges = partition_slice_builder(*m.schema())
             .with_ranges(ranges)
             .build();
-
         testlog.info("ranges: {}", ranges);
-
         mutation_source ms = populate(m.schema(), {m}, gc_clock::now());
-
         auto sliced_reader = ms.make_reader_v2(m.schema(), semaphore.make_permit(), prange, slice_with_ranges);
         auto close_sliced_reader = deferred_close(sliced_reader);
-
         auto fwd_reader =
             ms.make_reader_v2(m.schema(), semaphore.make_permit(), prange, full_slice, default_priority_class(), nullptr, streamed_mutation::forwarding::yes);
         std::vector<position_range> position_ranges;
@@ -25370,1514 +21132,42 @@ static void test_streamed_mutation_forwarding_is_consistent_with_slicing(tests::
             position_ranges.emplace_back(r);
         }
         auto fwd_m = forwardable_reader_to_mutation(std::move(fwd_reader), position_ranges);
-
         mutation_opt sliced_m = read_mutation_from_flat_mutation_reader(sliced_reader).get0();
         BOOST_REQUIRE(bool(sliced_m));
         assert_that(*sliced_m).is_equal_to(fwd_m, slice_with_ranges.row_ranges(*m.schema(), m.key()));
     }
 }
 
-static void test_streamed_mutation_forwarding_guarantees(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    simple_schema table;
-    schema_ptr s = table.schema();
-
-    // mutation will include odd keys
-    auto contains_key = [] (int i) {
-        return i % 2 == 1;
-    };
-
-    const int n_keys = 1001;
-    assert(!contains_key(n_keys - 1)); // so that we can form a range with position greater than all keys
-
-    mutation m(s, table.make_pkey());
-    std::vector<clustering_key> keys;
-    for (int i = 0; i < n_keys; ++i) {
-        keys.push_back(table.make_ckey(i));
-        if (contains_key(i)) {
-            table.add_row(m, keys.back(), "value");
-        }
-    }
-
-    table.add_static_row(m, "static_value");
-
-    mutation_source ms = populate(s, std::vector<mutation>({m}), gc_clock::now());
-
-    auto new_stream = [&ms, s, &semaphore, &m] () -> flat_reader_assertions_v2 {
-        testlog.info("Creating new streamed_mutation");
-        auto res = assert_that(ms.make_reader_v2(s,
-            semaphore.make_permit(),
-            query::full_partition_range,
-            s->full_slice(),
-            default_priority_class(),
-            nullptr,
-            streamed_mutation::forwarding::yes));
-        res.produces_partition_start(m.decorated_key());
-        return res;
-    };
-
-    auto verify_range = [&] (flat_reader_assertions_v2& sm, int start, int end) {
-        sm.fast_forward_to(keys[start], keys[end]);
-
-        for (; start < end; ++start) {
-            if (!contains_key(start)) {
-                testlog.trace("skip {:d}", start);
-                continue;
-            }
-            sm.produces_row_with_key(keys[start]);
-        }
-        sm.produces_end_of_stream();
-    };
-
-    // Test cases start here
-
-    {
-        auto sm = new_stream();
-        sm.produces_static_row();
-        sm.produces_end_of_stream();
-    }
-
-    {
-        auto sm = new_stream();
-        sm.fast_forward_to(position_range(query::full_clustering_range));
-        for (int i = 0; i < n_keys; ++i) {
-            if (contains_key(i)) {
-                sm.produces_row_with_key(keys[i]);
-            }
-        }
-        sm.produces_end_of_stream();
-    }
-
-    {
-        auto sm = new_stream();
-        verify_range(sm, 0, 1);
-        verify_range(sm, 1, 2);
-        verify_range(sm, 2, 4);
-        verify_range(sm, 7, 7);
-        verify_range(sm, 7, 9);
-        verify_range(sm, 11, 15);
-        verify_range(sm, 21, 32);
-        verify_range(sm, 132, 200);
-        verify_range(sm, 300, n_keys - 1);
-    }
-
-    // Skip before EOS
-    {
-        auto sm = new_stream();
-        sm.fast_forward_to(keys[0], keys[4]);
-        sm.produces_row_with_key(keys[1]);
-        sm.fast_forward_to(keys[5], keys[8]);
-        sm.produces_row_with_key(keys[5]);
-        sm.produces_row_with_key(keys[7]);
-        sm.produces_end_of_stream();
-        sm.fast_forward_to(keys[9], keys[12]);
-        sm.fast_forward_to(keys[12], keys[13]);
-        sm.fast_forward_to(keys[13], keys[13]);
-        sm.produces_end_of_stream();
-        sm.fast_forward_to(keys[13], keys[16]);
-        sm.produces_row_with_key(keys[13]);
-        sm.produces_row_with_key(keys[15]);
-        sm.produces_end_of_stream();
-    }
-
-    {
-        auto sm = new_stream();
-        verify_range(sm, n_keys - 2, n_keys - 1);
-    }
-
-    {
-        auto sm = new_stream();
-        verify_range(sm, 0, n_keys - 1);
-    }
-
-    // Few random ranges
-    auto& rnd = seastar::testing::local_random_engine;
-    std::uniform_int_distribution<int> key_dist{0, n_keys - 1};
-    for (int i = 0; i < 10; ++i) {
-        std::vector<int> indices;
-        const int n_ranges = 7;
-        for (int j = 0; j < n_ranges * 2; ++j) {
-            indices.push_back(key_dist(rnd));
-        }
-        std::sort(indices.begin(), indices.end());
-
-        auto sm = new_stream();
-        for (int j = 0; j < n_ranges; ++j) {
-            verify_range(sm, indices[j*2], indices[j*2 + 1]);
-        }
-    }
-}
-
 // Reproduces https://github.com/scylladb/scylla/issues/2733
-static void test_fast_forwarding_across_partitions_to_empty_range(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
 
-    simple_schema table;
-    schema_ptr s = table.schema();
 
-    std::vector<mutation> partitions;
 
-    const unsigned ckeys_per_part = 100;
-    auto keys = table.make_pkeys(10);
 
-    auto missing_key = keys[3];
-    keys.erase(keys.begin() + 3);
 
-    auto key_after_all = keys.back();
-    keys.erase(keys.begin() + (keys.size() - 1));
 
-    unsigned next_ckey = 0;
 
-    for (auto&& key : keys) {
-        mutation m(s, key);
-        sstring val = make_random_string(1024);
-        for (auto i : boost::irange(0u, ckeys_per_part)) {
-            table.add_row(m, table.make_ckey(next_ckey + i), val);
-        }
-        next_ckey += ckeys_per_part;
-        partitions.push_back(m);
-    }
 
-    mutation_source ms = populate(s, partitions, gc_clock::now());
 
-    auto pr = dht::partition_range::make({keys[0]}, {keys[1]});
-    auto rd = assert_that(ms.make_reader_v2(s,
-        semaphore.make_permit(),
-        pr,
-        s->full_slice(),
-        default_priority_class(),
-        nullptr,
-        streamed_mutation::forwarding::no,
-        mutation_reader::forwarding::yes));
 
-    rd.fill_buffer().get();
-    BOOST_REQUIRE(rd.is_buffer_full()); // if not, increase n_ckeys
-    rd.produces_partition_start(keys[0])
-        .produces_row_with_key(table.make_ckey(0))
-        .produces_row_with_key(table.make_ckey(1));
-    // ...don't finish consumption to leave the reader in the middle of partition
 
-    pr = dht::partition_range::make({missing_key}, {missing_key});
-    rd.fast_forward_to(pr);
 
-    rd.produces_end_of_stream();
 
-    pr = dht::partition_range::make({keys[3]}, {keys[3]});
-    rd.fast_forward_to(pr)
-        .produces_partition_start(keys[3])
-        .produces_row_with_key(table.make_ckey(ckeys_per_part * 3))
-        .produces_row_with_key(table.make_ckey(ckeys_per_part * 3 + 1));
 
-    rd.next_partition();
-    rd.produces_end_of_stream();
 
-    pr = dht::partition_range::make_starting_with({keys[keys.size() - 1]});
-    rd.fast_forward_to(pr)
-        .produces_partition_start(keys.back())
-        .produces_row_with_key(table.make_ckey(ckeys_per_part * (keys.size() - 1)));
 
-    // ...don't finish consumption to leave the reader in the middle of partition
 
-    pr = dht::partition_range::make({key_after_all}, {key_after_all});
-    rd.fast_forward_to(pr)
-        .produces_end_of_stream();
-}
 
-static void test_streamed_mutation_slicing_returns_only_relevant_tombstones(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
 
-    simple_schema table;
-    schema_ptr s = table.schema();
 
-    mutation m(s, table.make_pkey());
-
-    std::vector<clustering_key> keys;
-    for (int i = 0; i < 20; ++i) {
-        keys.push_back(table.make_ckey(i));
-    }
-
-    auto rt1 = table.delete_range(m, query::clustering_range::make(
-        query::clustering_range::bound(keys[0], true),
-        query::clustering_range::bound(keys[1], true)
-    ));
-
-    table.add_row(m, keys[2], "value");
-
-    auto rt2 = table.delete_range(m, query::clustering_range::make(
-        query::clustering_range::bound(keys[3], true),
-        query::clustering_range::bound(keys[4], true)
-    ));
-
-    table.add_row(m, keys[5], "value");
-
-    auto rt3 = table.delete_range(m, query::clustering_range::make(
-        query::clustering_range::bound(keys[6], true),
-        query::clustering_range::bound(keys[7], true)
-    ));
-
-    table.add_row(m, keys[8], "value");
-
-    auto rt4 = table.delete_range(m, query::clustering_range::make(
-        query::clustering_range::bound(keys[9], true),
-        query::clustering_range::bound(keys[10], true)
-    ));
-
-    auto rt5 = table.delete_range(m, query::clustering_range::make(
-        query::clustering_range::bound(keys[11], true),
-        query::clustering_range::bound(keys[12], true)
-    ));
-
-    table.add_row(m, keys[10], "value");
-
-    auto pr = dht::partition_range::make_singular(m.decorated_key());
-    mutation_source ms = populate(s, std::vector<mutation>({m}), gc_clock::now());
-
-    {
-        auto slice = partition_slice_builder(*s)
-            .with_range(query::clustering_range::make(
-                query::clustering_range::bound(keys[2], true),
-                query::clustering_range::bound(keys[2], true)
-            ))
-            .with_range(query::clustering_range::make(
-                query::clustering_range::bound(keys[7], true),
-                query::clustering_range::bound(keys[9], true)
-            ))
-            .build();
-
-        auto rd = assert_that(ms.make_reader_v2(s, semaphore.make_permit(), pr, slice));
-
-        auto rt3_trimmed = rt3; trim_range_tombstone(*s, rt3_trimmed, slice.row_ranges(*s, m.key()));
-        auto rt4_trimmed = rt4; trim_range_tombstone(*s, rt4_trimmed, slice.row_ranges(*s, m.key()));
-
-        rd.produces_partition_start(m.decorated_key());
-        rd.produces_row_with_key(keys[2]);
-        rd.produces_range_tombstone_change({rt3_trimmed.position(), rt3.tomb});
-        rd.produces_range_tombstone_change({rt3_trimmed.end_position(), {}});
-        rd.produces_row_with_key(keys[8]);
-        rd.produces_range_tombstone_change({rt4_trimmed.position(), rt4.tomb});
-        rd.produces_range_tombstone_change({rt4_trimmed.end_position(), {}});
-        rd.produces_partition_end();
-        rd.produces_end_of_stream();
-    }
-
-    {
-        auto slice = partition_slice_builder(*s)
-            .with_range(query::clustering_range::make(
-                query::clustering_range::bound(keys[7], true),
-                query::clustering_range::bound(keys[9], true)
-            ))
-            .build();
-
-        auto rd = assert_that(ms.make_reader_v2(s, semaphore.make_permit(), pr, slice));
-
-        auto rt3_trimmed = rt3; trim_range_tombstone(*s, rt3_trimmed, slice.row_ranges(*s, m.key()));
-        auto rt4_trimmed = rt4; trim_range_tombstone(*s, rt4_trimmed, slice.row_ranges(*s, m.key()));
-
-        rd.produces_partition_start(m.decorated_key())
-            .produces_range_tombstone_change({rt3_trimmed.position(), rt3.tomb})
-            .produces_range_tombstone_change({rt3_trimmed.end_position(), {}})
-            .produces_row_with_key(keys[8])
-            .produces_range_tombstone_change({rt4_trimmed.position(), rt4.tomb})
-            .produces_range_tombstone_change({rt4_trimmed.end_position(), {}})
-            .produces_partition_end()
-            .produces_end_of_stream();
-    }
-}
-
-static void test_streamed_mutation_forwarding_across_range_tombstones(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    simple_schema table;
-    schema_ptr s = table.schema();
-
-    mutation m(s, table.make_pkey());
-
-    std::vector<clustering_key> keys;
-    for (int i = 0; i < 20; ++i) {
-        keys.push_back(table.make_ckey(i));
-    }
-
-    auto rt1 = table.delete_range(m, query::clustering_range::make(
-        query::clustering_range::bound(keys[0], true),
-        query::clustering_range::bound(keys[1], false)
-    ));
-
-    table.add_row(m, keys[2], "value");
-
-    auto rt2_range = query::clustering_range::make(
-        query::clustering_range::bound(keys[3], true),
-        query::clustering_range::bound(keys[6], true)
-    );
-    auto rt2 = table.delete_range(m, rt2_range);
-
-    table.add_row(m, keys[4], "value");
-
-    auto rt3_range = query::clustering_range::make(
-        query::clustering_range::bound(keys[7], true),
-        query::clustering_range::bound(keys[8], true)
-    );
-    auto rt3 = table.delete_range(m, rt3_range);
-
-    auto rt4_range = query::clustering_range::make(
-        query::clustering_range::bound(keys[9], true),
-        query::clustering_range::bound(keys[10], true)
-    );
-    auto rt4 = table.delete_range(m, rt4_range);
-
-    auto rt5_range = query::clustering_range::make(
-        query::clustering_range::bound(keys[11], true),
-        query::clustering_range::bound(keys[13], true)
-    );
-    auto rt5 = table.delete_range(m, rt5_range);
-
-    mutation_source ms = populate(s, std::vector<mutation>({m}), gc_clock::now());
-    auto rd = assert_that(ms.make_reader_v2(s,
-        semaphore.make_permit(),
-        query::full_partition_range,
-        s->full_slice(),
-        default_priority_class(),
-        nullptr,
-        streamed_mutation::forwarding::yes));
-    rd.produces_partition_start(m.decorated_key());
-
-    auto ff0 = query::clustering_range::make(
-        query::clustering_range::bound(keys[1], true),
-        query::clustering_range::bound(keys[2], true)
-    );
-    rd.fast_forward_to(position_range(ff0));
-
-    // there might be a dummy rt [{keys[1],before},{keys[1],before}]
-    rd.may_produce_tombstones(position_range(ff0));
-
-    rd.produces_row_with_key(keys[2]);
-
-    auto ff1 = query::clustering_range::make(
-        query::clustering_range::bound(keys[4], true),
-        query::clustering_range::bound(keys[8], false)
-    );
-    rd.fast_forward_to(position_range(ff1));
-
-    auto rt2_trimmed = rt2; trim_range_tombstone(*s, rt2_trimmed, {ff1});
-    rd.produces_range_tombstone_change({rt2_trimmed.position(), rt2.tomb});
-    rd.produces_row_with_key(keys[4]);
-    rd.produces_range_tombstone_change({rt2_trimmed.end_position(), {}});
-
-    auto rt3_trimmed = rt3; trim_range_tombstone(*s, rt3_trimmed, {ff1});
-    rd.produces_range_tombstone_change({rt3_trimmed.position(), rt3.tomb});
-    rd.produces_range_tombstone_change({rt3_trimmed.end_position(), {}});
-
-    auto ff2 = query::clustering_range::make(
-        query::clustering_range::bound(keys[10], true),
-        query::clustering_range::bound(keys[12], false)
-    );
-    rd.fast_forward_to(position_range(ff2));
-
-    auto rt4_trimmed = rt4; trim_range_tombstone(*s, rt4_trimmed, {ff2});
-    auto rt5_trimmed = rt5; trim_range_tombstone(*s, rt5_trimmed, {ff2});
-    rd.produces_range_tombstone_change({rt4_trimmed.position(), rt4.tomb});
-    rd.produces_range_tombstone_change({rt4_trimmed.end_position(), {}});
-    rd.produces_range_tombstone_change({rt5_trimmed.position(), rt5.tomb});
-    rd.produces_range_tombstone_change({rt5_trimmed.end_position(), {}});
-    rd.produces_end_of_stream();
-
-    rd.fast_forward_to(position_range(query::clustering_range::make(
-        query::clustering_range::bound(keys[14], true),
-        query::clustering_range::bound(keys[15], false)
-    )));
-
-    rd.produces_end_of_stream();
-
-    rd.fast_forward_to(position_range(query::clustering_range::make(
-        query::clustering_range::bound(keys[15], true),
-        query::clustering_range::bound(keys[16], false)
-    )));
-
-    rd.produces_end_of_stream();
-}
-
-static void test_range_queries(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    auto s = schema_builder("ks", "cf")
-        .with_column("key", bytes_type, column_kind::partition_key)
-        .with_column("v", bytes_type)
-        .build();
-
-    auto make_partition_mutation = [s] (dht::decorated_key key) -> mutation {
-        mutation m(s, std::move(key));
-        m.set_clustered_cell(clustering_key::make_empty(), "v", data_value(bytes("v1")), 1);
-        return m;
-    };
-
-    int partition_count = 300;
-
-    auto keys = tests::generate_partition_keys(partition_count, s);
-
-    std::vector<mutation> partitions;
-    for (int i = 0; i < partition_count; ++i) {
-        partitions.emplace_back(
-            make_partition_mutation(keys[i]));
-    }
-
-    std::sort(partitions.begin(), partitions.end(), mutation_decorated_key_less_comparator());
-    require_no_token_duplicates(partitions);
-
-    dht::decorated_key key_before_all = partitions.front().decorated_key();
-    partitions.erase(partitions.begin());
-
-    dht::decorated_key key_after_all = partitions.back().decorated_key();
-    partitions.pop_back();
-
-    auto ds = populate(s, partitions, gc_clock::now());
-
-    auto test_slice = [&] (dht::partition_range r) {
-        testlog.info("Testing range {}", r);
-        assert_that(ds.make_reader_v2(s, semaphore.make_permit(), r))
-            .produces(slice(partitions, r))
-            .produces_end_of_stream();
-    };
-
-    auto inclusive_token_range = [&] (size_t start, size_t end) {
-        return dht::partition_range::make(
-            {dht::ring_position::starting_at(partitions[start].token())},
-            {dht::ring_position::ending_at(partitions[end].token())});
-    };
-
-    test_slice(dht::partition_range::make(
-        {key_before_all, true}, {partitions.front().decorated_key(), true}));
-
-    test_slice(dht::partition_range::make(
-        {key_before_all, false}, {partitions.front().decorated_key(), true}));
-
-    test_slice(dht::partition_range::make(
-        {key_before_all, false}, {partitions.front().decorated_key(), false}));
-
-    test_slice(dht::partition_range::make(
-        {dht::ring_position::starting_at(key_before_all.token())},
-        {dht::ring_position::ending_at(partitions.front().token())}));
-
-    test_slice(dht::partition_range::make(
-        {dht::ring_position::ending_at(key_before_all.token())},
-        {dht::ring_position::ending_at(partitions.front().token())}));
-
-    test_slice(dht::partition_range::make(
-        {dht::ring_position::ending_at(key_before_all.token())},
-        {dht::ring_position::starting_at(partitions.front().token())}));
-
-    test_slice(dht::partition_range::make(
-        {partitions.back().decorated_key(), true}, {key_after_all, true}));
-
-    test_slice(dht::partition_range::make(
-        {partitions.back().decorated_key(), true}, {key_after_all, false}));
-
-    test_slice(dht::partition_range::make(
-        {partitions.back().decorated_key(), false}, {key_after_all, false}));
-
-    test_slice(dht::partition_range::make(
-        {dht::ring_position::starting_at(partitions.back().token())},
-        {dht::ring_position::ending_at(key_after_all.token())}));
-
-    test_slice(dht::partition_range::make(
-        {dht::ring_position::starting_at(partitions.back().token())},
-        {dht::ring_position::starting_at(key_after_all.token())}));
-
-    test_slice(dht::partition_range::make(
-        {dht::ring_position::ending_at(partitions.back().token())},
-        {dht::ring_position::starting_at(key_after_all.token())}));
-
-    test_slice(dht::partition_range::make(
-        {partitions[0].decorated_key(), false},
-        {partitions[1].decorated_key(), true}));
-
-    test_slice(dht::partition_range::make(
-        {partitions[0].decorated_key(), true},
-        {partitions[1].decorated_key(), false}));
-
-    test_slice(dht::partition_range::make(
-        {partitions[1].decorated_key(), true},
-        {partitions[3].decorated_key(), false}));
-
-    test_slice(dht::partition_range::make(
-        {partitions[1].decorated_key(), false},
-        {partitions[3].decorated_key(), true}));
-
-    test_slice(dht::partition_range::make_ending_with(
-        {partitions[3].decorated_key(), true}));
-
-    test_slice(dht::partition_range::make_starting_with(
-        {partitions[partitions.size() - 4].decorated_key(), true}));
-
-    test_slice(inclusive_token_range(0, 0));
-    test_slice(inclusive_token_range(1, 1));
-    test_slice(inclusive_token_range(2, 4));
-    test_slice(inclusive_token_range(127, 128));
-    test_slice(inclusive_token_range(128, 128));
-    test_slice(inclusive_token_range(128, 129));
-    test_slice(inclusive_token_range(127, 129));
-    test_slice(inclusive_token_range(partitions.size() - 1, partitions.size() - 1));
-
-    test_slice(inclusive_token_range(0, partitions.size() - 1));
-    test_slice(inclusive_token_range(0, partitions.size() - 2));
-    test_slice(inclusive_token_range(0, partitions.size() - 3));
-    test_slice(inclusive_token_range(0, partitions.size() - 128));
-
-    test_slice(inclusive_token_range(1, partitions.size() - 1));
-    test_slice(inclusive_token_range(2, partitions.size() - 1));
-    test_slice(inclusive_token_range(3, partitions.size() - 1));
-    test_slice(inclusive_token_range(128, partitions.size() - 1));
-}
-
-void test_all_data_is_read_back(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    const auto query_time = gc_clock::now();
-
-    for_each_mutation([&semaphore, &populate, query_time] (const mutation& m) mutable {
-        auto ms = populate(m.schema(), {m}, query_time);
-        mutation copy(m);
-        copy.partition().compact_for_compaction(*copy.schema(), always_gc, copy.decorated_key(), query_time, tombstone_gc_state(nullptr));
-        assert_that(ms.make_reader_v2(m.schema(), semaphore.make_permit())).produces_compacted(copy, query_time);
-    });
-}
-
-void test_mutation_reader_fragments_have_monotonic_positions(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    for_each_mutation([&semaphore, &populate] (const mutation& m) {
-        auto ms = populate(m.schema(), {m}, gc_clock::now());
-
-        auto rd = ms.make_reader_v2(m.schema(), semaphore.make_permit());
-        assert_that(std::move(rd)).has_monotonic_positions();
-    });
-}
-
-static void test_date_tiered_clustering_slicing(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    simple_schema ss;
-
-    auto s = schema_builder(ss.schema())
-        .set_compaction_strategy(sstables::compaction_strategy_type::date_tiered)
-        .build();
-
-    auto pkey = ss.make_pkey();
-
-    mutation m1(s, pkey);
-    m1.partition().apply(ss.new_tombstone());
-    ss.add_static_row(m1, "s");
-    ss.add_row(m1, ss.make_ckey(0), "v1");
-
-    mutation_source ms = populate(s, {m1}, gc_clock::now());
-
-    // query row outside the range of existing rows to exercise sstable clustering key filter
-    {
-        auto slice = partition_slice_builder(*s)
-            .with_range(ss.make_ckey_range(1, 2))
-            .build();
-        auto prange = dht::partition_range::make_singular(pkey);
-        assert_that(ms.make_reader_v2(s, semaphore.make_permit(), prange, slice))
-            .produces(m1, slice.row_ranges(*s, pkey.key()))
-            .produces_end_of_stream();
-    }
-
-    {
-        auto slice = partition_slice_builder(*s)
-            .with_range(query::clustering_range::make_singular(ss.make_ckey(0)))
-            .build();
-        auto prange = dht::partition_range::make_singular(pkey);
-        assert_that(ms.make_reader_v2(s, semaphore.make_permit(), prange, slice))
-            .produces(m1)
-            .produces_end_of_stream();
-    }
-}
-
-static void test_clustering_slices(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-    auto s = schema_builder("ks", "cf")
-        .with_column("key", bytes_type, column_kind::partition_key)
-        .with_column("c1", int32_type, column_kind::clustering_key)
-        .with_column("c2", int32_type, column_kind::clustering_key)
-        .with_column("c3", int32_type, column_kind::clustering_key)
-        .with_column("v", bytes_type)
-        .build();
-
-    auto make_ck = [&] (int ck1, std::optional<int> ck2 = std::nullopt, std::optional<int> ck3 = std::nullopt) {
-        std::vector<data_value> components;
-        components.push_back(data_value(ck1));
-        if (ck2) {
-            components.push_back(data_value(ck2));
-        }
-        if (ck3) {
-            components.push_back(data_value(ck3));
-        }
-        return clustering_key::from_deeply_exploded(*s, components);
-    };
-
-    auto partition_count = 3;
-    auto keys = tests::generate_partition_keys(partition_count, s);
-    std::sort(keys.begin(), keys.end(), dht::ring_position_less_comparator(*s));
-
-    auto pk = keys[1];
-
-    auto make_row = [&] (clustering_key k, int v) {
-        mutation m(s, pk);
-        m.set_clustered_cell(k, "v", data_value(bytes("v1")), v);
-        return m;
-    };
-
-    auto make_delete = [&] (const query::clustering_range& r) {
-        mutation m(s, pk);
-        auto bv_range = bound_view::from_range(r);
-        range_tombstone rt(bv_range.first, bv_range.second, tombstone(new_timestamp(), gc_clock::now()));
-        m.partition().apply_delete(*s, rt);
-        return m;
-    };
-
-    auto ck1 = make_ck(1, 1, 1);
-    auto ck2 = make_ck(1, 1, 2);
-    auto ck3 = make_ck(1, 2, 1);
-    auto ck4 = make_ck(1, 2, 2);
-    auto ck5 = make_ck(1, 3, 1);
-    auto ck6 = make_ck(2, 1, 1);
-    auto ck7 = make_ck(2, 1, 2);
-    auto ck8 = make_ck(3, 1, 1);
-
-    mutation row1 = make_row(ck1, 1);
-    mutation row2 = make_row(ck2, 2);
-    mutation row3 = make_row(ck3, 3);
-    mutation row4 = make_row(ck4, 4);
-    mutation del_1 = make_delete(query::clustering_range::make({make_ck(1, 2, 1), true}, {make_ck(2, 0, 0), true}));
-    mutation row5 = make_row(ck5, 5);
-    mutation del_2 = make_delete(query::clustering_range::make({make_ck(2, 1), true}, {make_ck(2), true}));
-    mutation row6 = make_row(ck6, 6);
-    mutation row7 = make_row(ck7, 7);
-    mutation del_3 = make_delete(query::clustering_range::make({make_ck(3), true}, {make_ck(3), true}));
-    mutation row8 = make_row(ck8, 8);
-
-    mutation m = row1 + row2 + row3 + row4 + row5 + row6 + row7 + del_1 + del_2 + row8 + del_3;
-
-    mutation_source ds = populate(s, {m}, gc_clock::now());
-
-    auto pr = dht::partition_range::make_singular(pk);
-
-    {
-        auto slice = partition_slice_builder(*s)
-            .with_range(query::clustering_range::make_singular(make_ck(0)))
-            .build();
-        assert_that(ds.make_reader_v2(s, semaphore.make_permit(), pr, slice))
-            .produces_eos_or_empty_mutation();
-    }
-
-    {
-        auto slice = partition_slice_builder(*s)
-            .build();
-        auto rd = assert_that(ds.make_reader_v2(s, semaphore.make_permit(), pr, slice, default_priority_class(), nullptr, streamed_mutation::forwarding::yes));
-        rd.produces_partition_start(pk)
-          .fast_forward_to(position_range(position_in_partition::for_key(ck1), position_in_partition::after_key(*s, ck2)))
-          .produces_row_with_key(ck1)
-          .produces_row_with_key(ck2)
-          .produces_end_of_stream();
-    }
-
-    {
-        auto slice = partition_slice_builder(*s)
-            .build();
-        auto rd = assert_that(ds.make_reader_v2(s, semaphore.make_permit(), pr, slice, default_priority_class(), nullptr, streamed_mutation::forwarding::yes));
-        rd.produces_partition_start(pk)
-          .produces_end_of_stream()
-          .fast_forward_to(position_range(position_in_partition::for_key(ck1), position_in_partition::after_key(*s, ck2)))
-          .produces_row_with_key(ck1)
-          .produces_row_with_key(ck2)
-          .produces_end_of_stream();
-    }
-    {
-        auto slice = partition_slice_builder(*s)
-            .with_range(query::clustering_range::make_singular(make_ck(1)))
-            .build();
-        assert_that(ds.make_reader_v2(s, semaphore.make_permit(), pr, slice))
-            .produces(row1 + row2 + row3 + row4 + row5 + del_1, slice.row_ranges(*s, pk.key()))
-            .produces_end_of_stream();
-    }
-    {
-        auto slice = partition_slice_builder(*s)
-            .with_range(query::clustering_range::make_singular(make_ck(2)))
-            .build();
-        assert_that(ds.make_reader_v2(s, semaphore.make_permit(), pr, slice))
-            .produces(row6 + row7 + del_1 + del_2, slice.row_ranges(*s, pk.key()))
-            .produces_end_of_stream();
-    }
-
-    {
-        auto slice = partition_slice_builder(*s)
-            .with_range(query::clustering_range::make_singular(make_ck(1, 2)))
-            .build();
-        assert_that(ds.make_reader_v2(s, semaphore.make_permit(), pr, slice))
-            .produces(row3 + row4 + del_1, slice.row_ranges(*s, pk.key()))
-            .produces_end_of_stream();
-    }
-
-    {
-        auto slice = partition_slice_builder(*s)
-            .with_range(query::clustering_range::make_singular(make_ck(3)))
-            .build();
-        assert_that(ds.make_reader_v2(s, semaphore.make_permit(), pr, slice))
-            .produces(row8 + del_3, slice.row_ranges(*s, pk.key()))
-            .produces_end_of_stream();
-    }
-
-    // Test out-of-range partition keys
-    {
-        auto pr = dht::partition_range::make_singular(keys[0]);
-        assert_that(ds.make_reader_v2(s, semaphore.make_permit(), pr, s->full_slice()))
-            .produces_eos_or_empty_mutation();
-    }
-    {
-        auto pr = dht::partition_range::make_singular(keys[2]);
-        assert_that(ds.make_reader_v2(s, semaphore.make_permit(), pr, s->full_slice()))
-            .produces_eos_or_empty_mutation();
-    }
-}
-
-static void test_query_only_static_row(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    simple_schema s;
-
-    auto pkeys = s.make_pkeys(1);
-
-    mutation m1(s.schema(), pkeys[0]);
-    m1.partition().apply(s.new_tombstone());
-    s.add_static_row(m1, "s1");
-    s.add_row(m1, s.make_ckey(0), "v1");
-    s.add_row(m1, s.make_ckey(1), "v2");
-
-    mutation_source ms = populate(s.schema(), {m1}, gc_clock::now());
-
-    // fully populate cache
-    {
-        auto prange = dht::partition_range::make_ending_with(dht::ring_position(m1.decorated_key()));
-        assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), prange, s.schema()->full_slice()))
-            .produces(m1)
-            .produces_end_of_stream();
-    }
-
-    // query just a static row
-    {
-        auto slice = partition_slice_builder(*s.schema())
-            .with_ranges({})
-            .build();
-        auto prange = dht::partition_range::make_ending_with(dht::ring_position(m1.decorated_key()));
-        assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), prange, slice))
-            .produces(m1, slice.row_ranges(*s.schema(), m1.key()))
-            .produces_end_of_stream();
-    }
-
-    // query just a static row, single-partition case
-    {
-        auto slice = partition_slice_builder(*s.schema())
-            .with_ranges({})
-            .build();
-        auto prange = dht::partition_range::make_singular(m1.decorated_key());
-        assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), prange, slice))
-            .produces(m1, slice.row_ranges(*s.schema(), m1.key()))
-            .produces_end_of_stream();
-    }
-}
-
-static void test_query_no_clustering_ranges_no_static_columns(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    simple_schema s(simple_schema::with_static::no);
-
-    auto pkeys = s.make_pkeys(1);
-
-    mutation m1(s.schema(), pkeys[0]);
-    m1.partition().apply(s.new_tombstone());
-    s.add_row(m1, s.make_ckey(0), "v1");
-    s.add_row(m1, s.make_ckey(1), "v2");
-
-    mutation_source ms = populate(s.schema(), {m1}, gc_clock::now());
-
-    {
-        auto prange = dht::partition_range::make_ending_with(dht::ring_position(m1.decorated_key()));
-        assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), prange, s.schema()->full_slice()))
-            .produces(m1)
-            .produces_end_of_stream();
-    }
-
-    // multi-partition case
-    {
-        auto slice = partition_slice_builder(*s.schema())
-            .with_ranges({})
-            .build();
-        auto prange = dht::partition_range::make_ending_with(dht::ring_position(m1.decorated_key()));
-        assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), prange, slice))
-            .produces(m1, slice.row_ranges(*s.schema(), m1.key()))
-            .produces_end_of_stream();
-    }
-
-    // single-partition case
-    {
-        auto slice = partition_slice_builder(*s.schema())
-            .with_ranges({})
-            .build();
-        auto prange = dht::partition_range::make_singular(m1.decorated_key());
-        assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), prange, slice))
-            .produces(m1, slice.row_ranges(*s.schema(), m1.key()))
-            .produces_end_of_stream();
-    }
-}
-
-void test_streamed_mutation_forwarding_succeeds_with_no_data(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    simple_schema s;
-    auto cks = s.make_ckeys(6);
-
-    auto pkey = s.make_pkey();
-    mutation m(s.schema(), pkey);
-    s.add_row(m, cks[0], "data");
-
-    auto source = populate(s.schema(), {m}, gc_clock::now());
-    assert_that(source.make_reader_v2(s.schema(),
-                semaphore.make_permit(),
-                query::full_partition_range,
-                s.schema()->full_slice(),
-                default_priority_class(),
-                nullptr,
-                streamed_mutation::forwarding::yes
-                ))
-        .produces_partition_start(pkey)
-        .produces_end_of_stream()
-        .fast_forward_to(position_range(position_in_partition::for_key(cks[0]), position_in_partition::before_key(cks[1])))
-        .produces_row_with_key(cks[0])
-        .produces_end_of_stream()
-        .fast_forward_to(position_range(position_in_partition::for_key(cks[1]), position_in_partition::before_key(cks[3])))
-        .produces_end_of_stream()
-        .fast_forward_to(position_range(position_in_partition::for_key(cks[4]), position_in_partition::before_key(cks[5])))
-        .produces_end_of_stream()
-        .next_partition()
-        .produces_end_of_stream()
-        .fast_forward_to(position_range(position_in_partition::for_key(cks[0]), position_in_partition::before_key(cks[1])))
-        .produces_end_of_stream()
-        .fast_forward_to(position_range(position_in_partition::for_key(cks[1]), position_in_partition::before_key(cks[3])))
-        .produces_end_of_stream()
-        .fast_forward_to(position_range(position_in_partition::for_key(cks[4]), position_in_partition::before_key(cks[5])))
-        .produces_end_of_stream();
-}
-
-static
-void test_slicing_with_overlapping_range_tombstones(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    simple_schema ss;
-    auto s = ss.schema();
-
-    auto rt1 = ss.make_range_tombstone(ss.make_ckey_range(1, 10));
-    auto rt2 = ss.make_range_tombstone(ss.make_ckey_range(1, 5)); // rt1 + rt2 = {[1, 5], (5, 10]}
-
-    auto key = tests::generate_partition_key(s);
-    mutation m1(s, key);
-    m1.partition().apply_delete(*s, rt1);
-
-    mutation m2(s, key);
-    m2.partition().apply_delete(*s, rt2);
-    ss.add_row(m2, ss.make_ckey(4), "v2"); // position after rt2.position() but before rt2.end_position().
-
-    mutation_source ds = populate(s, {m1, m2}, gc_clock::now());
-
-    // upper bound ends before the row in m2, so that the raw is fetched after next fast forward.
-    auto range = ss.make_ckey_range(0, 3);
-
-    {
-        auto slice = partition_slice_builder(*s).with_range(range).build();
-        auto rd = ds.make_reader_v2(s, semaphore.make_permit(), query::full_partition_range, slice);
-        auto close_rd = deferred_close(rd);
-
-        auto prange = position_range(range);
-
-        mutation_rebuilder_v2 rebuilder(s);
-        rd.consume_pausable([&] (mutation_fragment_v2&& mf) {
-            testlog.trace("mf: {}", mutation_fragment_v2::printer(*s, mf));
-            if (mf.position().is_clustering_row() && !prange.contains(*s, mf.position())) {
-                testlog.trace("m1: {}", m1);
-                testlog.trace("m2: {}", m2);
-                BOOST_FAIL(format("Received row which is not relevant for the slice: {}, slice: {}",
-                                  mutation_fragment_v2::printer(*s, mf), prange));
-            }
-            return rebuilder.consume(std::move(mf));
-        }).get();
-        auto result = *rebuilder.consume_end_of_stream();
-
-        assert_that(result).is_equal_to(m1 + m2, query::clustering_row_ranges({range}));
-    }
-
-    // Check fast_forward_to()
-    {
-        auto rd = ds.make_fragment_v1_stream(s, semaphore.make_permit(), query::full_partition_range, s->full_slice(), default_priority_class(),
-            nullptr, streamed_mutation::forwarding::yes);
-        auto close_rd = deferred_close(rd);
-
-        auto prange = position_range(range);
-        mutation result(m1.schema(), m1.decorated_key());
-
-        rd.consume_pausable([&](mutation_fragment&& mf) {
-            BOOST_REQUIRE(!mf.position().has_clustering_key());
-            result.partition().apply(*s, std::move(mf));
-            return stop_iteration::no;
-        }).get();
-
-        rd.fast_forward_to(prange).get();
-
-        position_in_partition last_pos = position_in_partition::before_all_clustered_rows();
-        auto consume_clustered = [&] (mutation_fragment&& mf) {
-            position_in_partition::less_compare less(*s);
-            if (less(mf.position(), last_pos)) {
-                BOOST_FAIL(format("Out of order fragment: {}, last pos: {}", mutation_fragment::printer(*s, mf), last_pos));
-            }
-            last_pos = position_in_partition(mf.position());
-            result.partition().apply(*s, std::move(mf));
-            return stop_iteration::no;
-        };
-
-        rd.consume_pausable(consume_clustered).get();
-        rd.fast_forward_to(position_range(prange.end(), position_in_partition::after_all_clustered_rows())).get();
-        rd.consume_pausable(consume_clustered).get();
-
-        assert_that(result).is_equal_to(m1 + m2);
-    }
-}
-
-void test_range_tombstones_v2(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    simple_schema s;
-    auto pkey = s.make_pkey();
-
-    std::vector<mutation> mutations;
-
-    mutation m(s.schema(), pkey);
-    s.add_row(m, s.make_ckey(0), "v1");
-    auto t1 = s.new_tombstone();
-    s.delete_range(m, s.make_ckey_range(1, 10), t1);
-    s.add_row(m, s.make_ckey(5), "v2");
-    auto t2 = s.new_tombstone();
-    s.delete_range(m, s.make_ckey_range(7, 12), t2);
-    s.add_row(m, s.make_ckey(15), "v2");
-    auto t3 = s.new_tombstone();
-    s.delete_range(m, s.make_ckey_range(17, 19), t3);
-
-    mutations.push_back(std::move(m));
-
-    auto ms = populate(s.schema(), mutations, gc_clock::now());
-    auto pr = dht::partition_range::make_singular(pkey);
-
-    assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit()))
-            .next_partition() // Does nothing before first partition
-            .produces_partition_start(pkey)
-            .produces_row_with_key(s.make_ckey(0))
-            .produces_range_tombstone_change(range_tombstone_change(position_in_partition_view::before_key(s.make_ckey(1)), t1))
-            .produces_row_with_key(s.make_ckey(5))
-            .produces_range_tombstone_change(range_tombstone_change(position_in_partition_view::before_key(s.make_ckey(7)), t2))
-            .produces_range_tombstone_change(range_tombstone_change(position_in_partition::after_key(*s.schema(), s.make_ckey(12)), tombstone()))
-            .produces_row_with_key(s.make_ckey(15))
-            .produces_range_tombstone_change(range_tombstone_change(position_in_partition_view::before_key(s.make_ckey(17)), t3))
-            .produces_range_tombstone_change(range_tombstone_change(position_in_partition::after_key(*s.schema(), s.make_ckey(19)), tombstone()))
-            .produces_partition_end()
-            .produces_end_of_stream();
-
-    assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), pr,
-                                  s.schema()->full_slice(),
-                                  default_priority_class(),
-                                  nullptr,
-                                  streamed_mutation::forwarding::yes,
-                                  mutation_reader::forwarding::no))
-            .produces_partition_start(pkey)
-            .produces_end_of_stream()
-
-            .fast_forward_to(position_range(
-                    position_in_partition::after_key(*s.schema(), s.make_ckey(0)),
-                    position_in_partition::before_key(s.make_ckey(2))))
-            .produces_range_tombstone_change(range_tombstone_change(position_in_partition_view::before_key(s.make_ckey(1)), t1))
-            .produces_range_tombstone_change(range_tombstone_change(position_in_partition_view::before_key(s.make_ckey(2)), {}))
-            .produces_end_of_stream()
-
-            .fast_forward_to(position_range(
-                    position_in_partition::before_key(s.make_ckey(5)),
-                    position_in_partition::after_key(*s.schema(), s.make_ckey(5))))
-            .produces_range_tombstone_change(range_tombstone_change(position_in_partition_view::before_key(s.make_ckey(5)), t1))
-            .produces_row_with_key(s.make_ckey(5))
-            .produces_range_tombstone_change(range_tombstone_change(position_in_partition::after_key(*s.schema(), s.make_ckey(5)), {}))
-            .produces_end_of_stream();
-
-    assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), pr,
-                                  s.schema()->full_slice(),
-                                  default_priority_class(),
-                                  nullptr,
-                                  streamed_mutation::forwarding::yes,
-                                  mutation_reader::forwarding::no))
-            .produces_partition_start(pkey)
-            .produces_end_of_stream()
-            .fast_forward_to(position_range(
-                    position_in_partition::after_key(*s.schema(), s.make_ckey(0)),
-                    position_in_partition::for_key(s.make_ckey(2))))
-            .produces_range_tombstone_change(range_tombstone_change(position_in_partition_view::before_key(s.make_ckey(1)), t1))
-            .produces_range_tombstone_change(range_tombstone_change(position_in_partition_view::before_key(s.make_ckey(2)), {}))
-            .produces_end_of_stream();
-
-    assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), pr,
-                                  s.schema()->full_slice(),
-                                  default_priority_class(),
-                                  nullptr,
-                                  streamed_mutation::forwarding::yes,
-                                  mutation_reader::forwarding::no))
-            .produces_partition_start(pkey)
-            .produces_end_of_stream()
-
-            .fast_forward_to(position_range(
-                    position_in_partition::before_key(s.make_ckey(0)),
-                    position_in_partition::before_key(s.make_ckey(1))))
-            .produces_row_with_key(s.make_ckey(0))
-            .produces_end_of_stream()
-
-            .fast_forward_to(position_range(
-                    position_in_partition::before_key(s.make_ckey(1)),
-                    position_in_partition::before_key(s.make_ckey(2))))
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(1)), t1})
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(2)), {}})
-            .produces_end_of_stream();
-
-
-    assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), pr,
-                                  s.schema()->full_slice(),
-                                  default_priority_class(),
-                                  nullptr,
-                                  streamed_mutation::forwarding::yes,
-                                  mutation_reader::forwarding::no))
-            .produces_partition_start(pkey)
-            .produces_end_of_stream()
-
-            .fast_forward_to(position_range(
-                    position_in_partition::before_key(s.make_ckey(1)),
-                    position_in_partition::before_key(s.make_ckey(6))))
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(1)), t1})
-            .produces_row_with_key(s.make_ckey(5))
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(6)), {}})
-            .produces_end_of_stream();
-
-    assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), pr,
-                                  s.schema()->full_slice(),
-                                  default_priority_class(),
-                                  nullptr,
-                                  streamed_mutation::forwarding::yes,
-                                  mutation_reader::forwarding::no))
-            .produces_partition_start(pkey)
-            .produces_end_of_stream()
-
-            .fast_forward_to(position_range(
-                    position_in_partition::before_key(s.make_ckey(6)),
-                    position_in_partition::before_key(s.make_ckey(7))))
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(6)), t1})
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(7)), {}})
-            .produces_end_of_stream();
-
-    assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), pr,
-                                  s.schema()->full_slice(),
-                                  default_priority_class(),
-                                  nullptr,
-                                  streamed_mutation::forwarding::yes,
-                                  mutation_reader::forwarding::no))
-            .produces_partition_start(pkey)
-            .produces_end_of_stream()
-
-            .fast_forward_to(position_range(
-                    position_in_partition::before_key(s.make_ckey(6)),
-                    position_in_partition::before_key(s.make_ckey(8))))
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(6)), t1})
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(7)), t2})
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(8)), {}})
-            .produces_end_of_stream()
-
-            .fast_forward_to(position_range(
-                    position_in_partition::before_key(s.make_ckey(9)),
-                    position_in_partition::before_key(s.make_ckey(10))))
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(9)), t2})
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(10)), {}})
-            .produces_end_of_stream()
-
-            .fast_forward_to(position_range(
-                    position_in_partition::before_key(s.make_ckey(10)),
-                    position_in_partition::before_key(s.make_ckey(13))))
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(10)), t2})
-            .produces_range_tombstone_change({position_in_partition::after_key(*s.schema(), s.make_ckey(12)), {}})
-            .produces_end_of_stream()
-
-            .fast_forward_to(position_range(
-                    position_in_partition::before_key(s.make_ckey(16)),
-                    position_in_partition::after_key(*s.schema(), s.make_ckey(16))))
-            .produces_end_of_stream()
-
-            .fast_forward_to(position_range(
-                    position_in_partition::before_key(s.make_ckey(17)),
-                    position_in_partition::after_key(*s.schema(), s.make_ckey(18))))
-            .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(17)), t3})
-            .produces_range_tombstone_change({position_in_partition::after_key(*s.schema(), s.make_ckey(18)), {}})
-            .produces_end_of_stream();
-
-    // Slicing using query restrictions
-
-    {
-        auto slice = partition_slice_builder(*s.schema())
-                .with_range(s.make_ckey_range(16, 18))
-                .build();
-        assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), pr, slice))
-                .produces_partition_start(pkey)
-                .produces_range_tombstone_change({position_in_partition_view::before_key(s.make_ckey(17)), t3})
-                .produces_range_tombstone_change({position_in_partition::after_key(*s.schema(), s.make_ckey(18)), {}})
-                .produces_partition_end()
-                .produces_end_of_stream();
-    }
-
-    {
-        auto slice = partition_slice_builder(*s.schema())
-                .with_range(s.make_ckey_range(0, 3))
-                .with_range(s.make_ckey_range(8, 11))
-                .build();
-        assert_that(ms.make_reader_v2(s.schema(), semaphore.make_permit(), pr, slice))
-                .produces_partition_start(pkey)
-                .produces_row_with_key(s.make_ckey(0))
-                .produces_range_tombstone_change(range_tombstone_change(position_in_partition_view::before_key(s.make_ckey(1)), t1))
-                .produces_range_tombstone_change(range_tombstone_change(position_in_partition::after_key(*s.schema(), s.make_ckey(3)), {}))
-                .produces_range_tombstone_change(range_tombstone_change(position_in_partition_view::before_key(s.make_ckey(8)), t2))
-                .produces_range_tombstone_change(range_tombstone_change(position_in_partition::after_key(*s.schema(), s.make_ckey(11)), {}))
-                .produces_partition_end()
-                .produces_end_of_stream();
-    }
-}
-
-void test_reader_conversions(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    for_each_mutation([&] (const mutation& m) mutable {
-        std::vector<mutation> mutations = { m };
-        auto ms = populate(m.schema(), mutations, gc_clock::now());
-
-        // Query time must be fetched after populate. If compaction is executed
-        // during populate it may be executed with timestamp later than query_time.
-        // This would cause the compaction below and compaction during flush to
-        // be executed at different time points producing different
-        // results. The result would be sporadic test failures depending on relative
-        // timing of those operations. If no other mutations happen after populate,
-        // and query_time is later than the compaction time during population, we're
-        // guaranteed to have the same results.
-        const auto query_time = gc_clock::now();
-
-        mutation m_compacted(m);
-        m_compacted.partition().compact_for_compaction(*m_compacted.schema(), always_gc, m_compacted.decorated_key(), query_time, tombstone_gc_state(nullptr));
-
-        {
-            auto rd = ms.make_fragment_v1_stream(m.schema(), semaphore.make_permit());
-            match_compacted_mutation(read_mutation_from_flat_mutation_reader(rd).get0(), m_compacted, query_time);
-            rd.close().get();
-        }
-    });
-}
-
-void test_next_partition(tests::reader_concurrency_semaphore_wrapper&, populate_fn_ex);
-
-void run_mutation_reader_tests(populate_fn_ex populate, bool with_partition_range_forwarding) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    tests::reader_concurrency_semaphore_wrapper semaphore;
-
-    test_range_tombstones_v2(semaphore, populate);
-    test_reader_conversions(semaphore, populate);
-    test_date_tiered_clustering_slicing(semaphore, populate);
-    test_clustering_slices(semaphore, populate);
-    test_mutation_reader_fragments_have_monotonic_positions(semaphore, populate);
-    test_streamed_mutation_forwarding_across_range_tombstones(semaphore, populate);
-    test_streamed_mutation_forwarding_guarantees(semaphore, populate);
-    test_all_data_is_read_back(semaphore, populate);
-    test_streamed_mutation_slicing_returns_only_relevant_tombstones(semaphore, populate);
-    test_streamed_mutation_forwarding_is_consistent_with_slicing(semaphore, populate);
-    test_range_queries(semaphore, populate);
-    test_query_only_static_row(semaphore, populate);
-    test_query_no_clustering_ranges_no_static_columns(semaphore, populate);
-    test_next_partition(semaphore, populate);
-    test_streamed_mutation_forwarding_succeeds_with_no_data(semaphore, populate);
-    test_slicing_with_overlapping_range_tombstones(semaphore, populate);
-    
-    if (with_partition_range_forwarding) {
-        test_fast_forwarding_across_partitions_to_empty_range(semaphore, populate);
-        test_slicing_and_fast_forwarding(semaphore, populate);
-    }
-}
-
-void test_next_partition(tests::reader_concurrency_semaphore_wrapper& semaphore, populate_fn_ex populate) {
-    testlog.info(__PRETTY_FUNCTION__);
-
-    simple_schema s;
-    auto pkeys = s.make_pkeys(4);
-
-    std::vector<mutation> mutations;
-    for (auto key : pkeys) {
-        mutation m(s.schema(), key);
-        s.add_static_row(m, "s1");
-        s.add_row(m, s.make_ckey(0), "v1");
-        s.add_row(m, s.make_ckey(1), "v2");
-        mutations.push_back(std::move(m));
-    }
-    auto source = populate(s.schema(), mutations, gc_clock::now());
-    assert_that(source.make_reader_v2(s.schema(), semaphore.make_permit()))
-        .next_partition() // Does nothing before first partition
-        .produces_partition_start(pkeys[0])
-        .produces_static_row()
-        .produces_row_with_key(s.make_ckey(0))
-        .produces_row_with_key(s.make_ckey(1))
-        .produces_partition_end()
-        .next_partition() // Does nothing between partitions
-        .produces_partition_start(pkeys[1])
-        .next_partition() // Moves to next partition
-        .produces_partition_start(pkeys[2])
-        .produces_static_row()
-        .next_partition()
-        .produces_partition_start(pkeys[3])
-        .produces_static_row()
-        .produces_row_with_key(s.make_ckey(0))
-        .next_partition()
-        .produces_end_of_stream();
-}
-
-void run_mutation_source_tests(populate_fn populate, bool with_partition_range_forwarding) {
-    auto populate_ex = [populate = std::move(populate)] (schema_ptr s, const std::vector<mutation>& muts, gc_clock::time_point) {
-        return populate(std::move(s), muts);
-    };
-    run_mutation_source_tests(std::move(populate_ex), with_partition_range_forwarding);
-}
-
-void run_mutation_source_tests(populate_fn_ex populate, bool with_partition_range_forwarding) {
-    run_mutation_source_tests_plain(populate, with_partition_range_forwarding);
-    run_mutation_source_tests_reverse(populate, with_partition_range_forwarding);
-    // Some tests call the sub-types individually, mind checking them
-    // if adding new stuff here
-}
-
-void run_mutation_source_tests_plain(populate_fn_ex populate, bool with_partition_range_forwarding) {
-    testlog.info(__PRETTY_FUNCTION__);
-    run_mutation_reader_tests(populate, with_partition_range_forwarding);
-}
-
-void run_mutation_source_tests_reverse(populate_fn_ex populate, bool with_partition_range_forwarding) {
-    testlog.info(__PRETTY_FUNCTION__);
-    // read in reverse
-    run_mutation_reader_tests([populate] (schema_ptr s, const std::vector<mutation>& m, gc_clock::time_point t) -> mutation_source {
-        auto table_schema = s->make_reversed();
-
-        std::vector<mutation> reversed_mutations;
-        reversed_mutations.reserve(m.size());
-        for (const auto& mut : m) {
-            reversed_mutations.emplace_back(reverse(mut));
-        }
-        auto ms = populate(table_schema, reversed_mutations, t);
-
-        return mutation_source([table_schema, ms = std::move(ms), reversed_slices = std::list<query::partition_slice>()] (
-                schema_ptr query_schema,
-                reader_permit permit,
-                const dht::partition_range& pr,
-                const query::partition_slice& slice,
-                const io_priority_class& pc,
-                tracing::trace_state_ptr tr,
-                streamed_mutation::forwarding fwd,
-                mutation_reader::forwarding mr_fwd) mutable {
-            reversed_slices.emplace_back(partition_slice_builder(*table_schema, query::native_reverse_slice_to_legacy_reverse_slice(*table_schema, slice))
-                    .with_option<query::partition_slice::option::reversed>()
-                    .build());
-            return ms.make_reader_v2(query_schema, std::move(permit), pr, reversed_slices.back(), pc, tr, fwd, mr_fwd);
-        });
-    }, false); // FIXME: pass with_partition_range_forwarding after all natively reversing sources have fast-forwarding support
-}
 
 struct mutation_sets {
     std::vector<std::vector<mutation>> equal;
     std::vector<std::vector<mutation>> unequal;
-    mutation_sets(){}
+    
 };
 
-static tombstone new_tombstone() {
-    return { new_timestamp(), gc_clock::now() + std::chrono::hours(10) };
-}
 
-static mutation_sets generate_mutation_sets() {
-    using mutations = std::vector<mutation>;
-    mutation_sets result;
-
-    {
-        auto common_schema = schema_builder("ks", "test")
-                .with_column("pk_col", bytes_type, column_kind::partition_key)
-                .with_column("ck_col_1", bytes_type, column_kind::clustering_key)
-                .with_column("ck_col_2", bytes_type, column_kind::clustering_key)
-                .with_column("regular_col_1", bytes_type)
-                .with_column("regular_col_2", bytes_type)
-                .with_column("static_col_1", bytes_type, column_kind::static_column)
-                .with_column("static_col_2", bytes_type, column_kind::static_column);
-
-        auto s1 = common_schema
-                .with_column("regular_col_1_s1", bytes_type) // will have id in between common columns
-                .build();
-
-        auto s2 = common_schema
-                .with_column("regular_col_1_s2", bytes_type) // will have id in between common columns
-                .build();
-
-        auto local_keys = tests::generate_partition_keys(2, s1); // use only one schema as s1 and s2 don't differ in representation.
-        auto& key1 = local_keys[0];
-        auto& key2 = local_keys[1];
-
-        // Differing keys
-        result.unequal.emplace_back(mutations{
-            mutation(s1, key1),
-            mutation(s2, key2)
-        });
-
-        auto m1 = mutation(s1, key1);
-        auto m2 = mutation(s2, key1);
-        result.equal.emplace_back(mutations{m1, m2});
-
-        clustering_key ck1 = clustering_key::from_deeply_exploded(*s1, {data_value(bytes("ck1_0")), data_value(bytes("ck1_1"))});
-        clustering_key ck2 = clustering_key::from_deeply_exploded(*s1, {data_value(bytes("ck2_0")), data_value(bytes("ck2_1"))});
-        auto ttl = gc_clock::duration(1);
-
-        {
-            auto tomb = new_tombstone();
-            m1.partition().apply(tomb);
-            result.unequal.emplace_back(mutations{m1, m2});
-            m2.partition().apply(tomb);
-            result.equal.emplace_back(mutations{m1, m2});
-        }
-
-        {
-            auto tomb = new_tombstone();
-            auto key = clustering_key_prefix::from_deeply_exploded(*s1, {data_value(bytes("ck2_0"))});
-            m1.partition().apply_row_tombstone(*s1, key, tomb);
-            result.unequal.emplace_back(mutations{m1, m2});
-            m2.partition().apply_row_tombstone(*s2, key, tomb);
-            result.equal.emplace_back(mutations{m1, m2});
-        }
-
-        {
-            auto tomb = new_tombstone();
-            m1.partition().apply_delete(*s1, ck2, tomb);
-            result.unequal.emplace_back(mutations{m1, m2});
-            m2.partition().apply_delete(*s2, ck2, tomb);
-            result.equal.emplace_back(mutations{m1, m2});
-        }
-
-        {
-            // Add a row which falls under the tombstone prefix.
-            auto ts = new_timestamp();
-            auto key_full = clustering_key_prefix::from_deeply_exploded(*s1, {data_value(bytes("ck2_0")), data_value(bytes("ck1_1")), });
-            m1.set_clustered_cell(key_full, "regular_col_2", data_value(bytes("regular_col_value")), ts, ttl);
-            result.unequal.emplace_back(mutations{m1, m2});
-            m2.set_clustered_cell(key_full, "regular_col_2", data_value(bytes("regular_col_value")), ts, ttl);
-            result.equal.emplace_back(mutations{m1, m2});
-        }
-
-        {
-            auto ts = new_timestamp();
-            m1.set_clustered_cell(ck1, "regular_col_1", data_value(bytes("regular_col_value")), ts, ttl);
-            result.unequal.emplace_back(mutations{m1, m2});
-            m2.set_clustered_cell(ck1, "regular_col_1", data_value(bytes("regular_col_value")), ts, ttl);
-            result.equal.emplace_back(mutations{m1, m2});
-        }
-
-        {
-            auto ts = new_timestamp();
-            m1.set_clustered_cell(ck1, "regular_col_2", data_value(bytes("regular_col_value")), ts, ttl);
-            result.unequal.emplace_back(mutations{m1, m2});
-            m2.set_clustered_cell(ck1, "regular_col_2", data_value(bytes("regular_col_value")), ts, ttl);
-            result.equal.emplace_back(mutations{m1, m2});
-        }
-
-        {
-            auto ts = new_timestamp();
-            m1.partition().apply_insert(*s1, ck2, ts);
-            result.unequal.emplace_back(mutations{m1, m2});
-            m2.partition().apply_insert(*s2, ck2, ts);
-            result.equal.emplace_back(mutations{m1, m2});
-        }
-
-        {
-            auto ts = new_timestamp();
-            m1.set_clustered_cell(ck2, "regular_col_1", data_value(bytes("ck2_regular_col_1_value")), ts);
-            result.unequal.emplace_back(mutations{m1, m2});
-            m2.set_clustered_cell(ck2, "regular_col_1", data_value(bytes("ck2_regular_col_1_value")), ts);
-            result.equal.emplace_back(mutations{m1, m2});
-        }
-
-        {
-            auto ts = new_timestamp();
-            m1.set_static_cell("static_col_1", data_value(bytes("static_col_value")), ts, ttl);
-            result.unequal.emplace_back(mutations{m1, m2});
-            m2.set_static_cell("static_col_1", data_value(bytes("static_col_value")), ts, ttl);
-            result.equal.emplace_back(mutations{m1, m2});
-        }
-
-        {
-            auto ts = new_timestamp();
-            m1.set_static_cell("static_col_2", data_value(bytes("static_col_value")), ts);
-            result.unequal.emplace_back(mutations{m1, m2});
-            m2.set_static_cell("static_col_2", data_value(bytes("static_col_value")), ts);
-            result.equal.emplace_back(mutations{m1, m2});
-        }
-
-        {
-            m1.partition().ensure_last_dummy(*m1.schema());
-            result.equal.emplace_back(mutations{m1, m2});
-
-            m2.partition().ensure_last_dummy(*m2.schema());
-            result.equal.emplace_back(mutations{m1, m2});
-        }
-
-        {
-            auto ts = new_timestamp();
-            m1.set_clustered_cell(ck2, "regular_col_1_s1", data_value(bytes("x")), ts);
-            result.unequal.emplace_back(mutations{m1, m2});
-            m2.set_clustered_cell(ck2, "regular_col_1_s2", data_value(bytes("x")), ts);
-            result.unequal.emplace_back(mutations{m1, m2});
-        }
-    }
-
-    static constexpr auto rmg_iterations = 10;
-
-    {
-        random_mutation_generator gen(random_mutation_generator::generate_counters::no, local_shard_only::yes,
-                random_mutation_generator::generate_uncompactable::yes);
-        for (int i = 0; i < rmg_iterations; ++i) {
-            auto m = gen();
-            result.unequal.emplace_back(mutations{m, gen()}); // collision unlikely
-            result.equal.emplace_back(mutations{m, m});
-        }
-    }
-
-    {
-        random_mutation_generator gen(random_mutation_generator::generate_counters::yes, local_shard_only::yes,
-                random_mutation_generator::generate_uncompactable::yes);
-        for (int i = 0; i < rmg_iterations; ++i) {
-            auto m = gen();
-            result.unequal.emplace_back(mutations{m, gen()}); // collision unlikely
-            result.equal.emplace_back(mutations{m, m});
-        }
-    }
-
-    return result;
-}
-
-static const mutation_sets& get_mutation_sets() {
-    static thread_local const auto ms = generate_mutation_sets();
-    return ms;
-}
-
+static const mutation_sets& get_mutation_sets() ;
 void for_each_mutation_pair(std::function<void(const mutation&, const mutation&, are_equal)> callback) {
     auto&& ms = get_mutation_sets();
     for (auto&& mutations : ms.equal) {
@@ -26899,7 +21189,6 @@ void for_each_mutation_pair(std::function<void(const mutation&, const mutation&,
         }
     }
 }
-
 void for_each_mutation(std::function<void(const mutation&)> callback) {
     auto&& ms = get_mutation_sets();
     for (auto&& mutations : ms.equal) {
@@ -26913,11 +21202,9 @@ void for_each_mutation(std::function<void(const mutation&)> callback) {
         }
     }
 }
-
 bytes make_blob(size_t blob_size) {
     return tests::random::get_bytes(blob_size);
 };
-
 class random_mutation_generator::impl {
     enum class timestamp_level {
         partition_tombstone = 0,
@@ -26929,14 +21216,11 @@ class random_mutation_generator::impl {
         cell_tombstone = 6,
         data = 7,
     };
-
 private:
     // Set to true in order to produce mutations which are easier to work with during debugging.
     static const bool debuggable = false;
-
     // The "333" prefix is so that it's easily distinguishable from other numbers in the printout.
     static const api::timestamp_type min_timestamp = debuggable ? 3330000 : ::api::min_timestamp;
-
     friend class random_mutation_generator;
     generate_counters _generate_counters;
     local_shard_only _local_shard_only;
@@ -26952,25 +21236,21 @@ private:
     std::uniform_int_distribution<int> _not_dummy_dist{0, 19};
     std::uniform_int_distribution<int> _range_tombstone_dist{0, 29};
     std::uniform_int_distribution<api::timestamp_type> _timestamp_dist{min_timestamp, min_timestamp + 2};
-
     // Sequence number for mutation elements.
     // Intended to be put as "deletion time".
     // The "777" prefix is so that it's easily distinguishable from other numbers in the printout.
     // Also makes it easy to grep for a particular element.
     uint64_t _seq = 777000000;
-
     template <typename Generator>
     static gc_clock::time_point expiry_dist(Generator& gen) {
         static thread_local std::uniform_int_distribution<int> dist(0, 2);
         return gc_clock::time_point() + std::chrono::seconds(dist(gen));
     }
-
     schema_ptr do_make_schema(data_type type, const char* ks_name, const char* cf_name) {
         auto builder = schema_builder(ks_name, cf_name)
                 .with_column("pk", bytes_type, column_kind::partition_key)
                 .with_column("ck1", bytes_type, column_kind::clustering_key)
                 .with_column("ck2", bytes_type, column_kind::clustering_key);
-
         auto add_column = [&] (const sstring& column_name, column_kind kind) {
             auto col_type = type == counter_type || _bool_dist(_gen) ? type : list_type_impl::get_instance(type, true);
             builder.with_column(to_bytes(column_name), col_type, kind);
@@ -26979,15 +21259,12 @@ private:
             add_column(format("v{:d}", i), column_kind::regular_column);
             add_column(format("s{:d}", i), column_kind::static_column);
         }
-
         return builder.build();
     }
-
     schema_ptr make_schema(const char* ks_name, const char* cf_name) {
         return _generate_counters ? do_make_schema(counter_type, ks_name, cf_name)
                                   : do_make_schema(bytes_type, ks_name, cf_name);
     }
-
     api::timestamp_type gen_timestamp(timestamp_level l) {
         auto ts = _timestamp_dist(_gen);
         if (_uncompactable) {
@@ -26997,12 +21274,10 @@ private:
         }
         return ts;
     }
-
     gc_clock::time_point new_expiry() {
         return debuggable ? gc_clock::time_point(gc_clock::time_point::duration(_seq++))
                           : expiry_dist(_gen);
     }
-
     tombstone random_tombstone(timestamp_level l) {
         return tombstone(gen_timestamp(l), new_expiry());
     }
@@ -27013,28 +21288,22 @@ public:
         auto seed = seed_opt.value_or(tests::random::get_int<uint32_t>());
         std::cout << "random_mutation_generator seed: " << seed << "\n";
         _gen = std::mt19937(seed);
-
         _schema = make_schema(ks_name, cf_name);
-
         // The pre-existing assumption here is that the type of all the primary key components is blob.
         // So we generate partition keys and take the single blob component and save it as a random blob value.
         auto keys = tests::generate_partition_keys(n_blobs, _schema, _local_shard_only, tests::key_size{_external_blob_size, _external_blob_size});
         _blobs =  boost::copy_range<std::vector<bytes>>(keys | boost::adaptors::transformed([] (const dht::decorated_key& dk) { return dk.key().explode().front(); }));
     }
-
     void set_key_cardinality(size_t n_keys) {
         assert(n_keys <= n_blobs);
         _ck_index_dist = std::uniform_int_distribution<size_t>{0, n_keys - 1};
     }
-
     bytes random_blob() {
         return _blobs[std::min(_blobs.size() - 1, std::max<size_t>(0, _ck_index_dist(_gen)))];
     }
-
     clustering_key make_random_key() {
         return clustering_key::from_exploded(*_schema, { random_blob(), random_blob() });
     }
-
     clustering_key_prefix make_random_prefix(std::optional<size_t> max_components_opt = std::nullopt) {
         std::vector<bytes> components = { random_blob() };
         auto max_components = max_components_opt.value_or(_schema->clustering_key_size());
@@ -27045,38 +21314,29 @@ public:
         }
         return clustering_key_prefix::from_exploded(*_schema, std::move(components));
     }
-
     std::vector<query::clustering_range> make_random_ranges(unsigned n_ranges) {
         std::vector<query::clustering_range> ranges;
-
         if (n_ranges == 0) {
             return ranges;
         }
-
         auto keys = std::set<clustering_key, clustering_key::less_compare>{clustering_key::less_compare(*_schema)};
         while (keys.size() < n_ranges * 2) {
             keys.insert(make_random_key());
         }
-
         auto i = keys.begin();
-
         bool open_start = _bool_dist(_gen);
         bool open_end = _bool_dist(_gen);
-
         if (open_start && open_end && n_ranges == 1) {
             ranges.push_back(query::clustering_range::make_open_ended_both_sides());
             return ranges;
         }
-
         if (open_start) {
             ranges.push_back(query::clustering_range(
                 { }, { query::clustering_range::bound(*i++, _bool_dist(_gen)) }
             ));
         }
-
         n_ranges -= unsigned(open_start);
         n_ranges -= unsigned(open_end);
-
         while (n_ranges--) {
             auto start_key = *i++;
             auto end_key = *i++;
@@ -27085,16 +21345,13 @@ public:
                 { query::clustering_range::bound(end_key, _bool_dist(_gen)) }
             ));
         }
-
         if (open_end) {
             ranges.push_back(query::clustering_range(
                 { query::clustering_range::bound(*i++, _bool_dist(_gen)) }, { }
             ));
         }
-
         return ranges;
     }
-
     range_tombstone make_random_range_tombstone() {
         auto t = random_tombstone(timestamp_level::range_tombstone);
         switch (_range_tombstone_dist(_gen)) {
@@ -27137,30 +21394,24 @@ public:
             return range_tombstone(std::move(start), std::move(end), std::move(t));
         }
     }
-
     mutation operator()() {
         std::uniform_int_distribution<column_id> column_count_dist(1, column_count);
         std::uniform_int_distribution<column_id> column_id_dist(0, column_count - 1);
         std::uniform_int_distribution<size_t> value_blob_index_dist(0, 2);
-
         auto pkey = partition_key::from_single_value(*_schema, _blobs[0]);
         mutation m(_schema, pkey);
-
         std::map<counter_id, std::set<int64_t>> counter_used_clock_values;
         std::vector<counter_id> counter_ids;
         std::generate_n(std::back_inserter(counter_ids), 8, counter_id::create_random_id);
-
         auto random_counter_cell = [&] {
             std::uniform_int_distribution<size_t> shard_count_dist(1, counter_ids.size());
             std::uniform_int_distribution<int64_t> value_dist(-100, 100);
             std::uniform_int_distribution<int64_t> clock_dist(0, 20000);
-
             auto shard_count = shard_count_dist(_gen);
             std::set<counter_id> shards;
             for (auto i = 0u; i < shard_count; i++) {
                 shards.emplace(counter_ids[shard_count_dist(_gen) - 1]);
             }
-
             counter_cell_builder ccb;
             for (auto&& id : shards) {
                 // Make sure we don't get shards with the same id and clock
@@ -27174,7 +21425,6 @@ public:
             }
             return ccb.build(gen_timestamp(timestamp_level::data));
         };
-
         auto set_random_cells = [&] (row& r, column_kind kind) {
             auto columns_to_set = column_count_dist(_gen);
             for (column_id i = 0; i < columns_to_set; ++i) {
@@ -27216,14 +21466,12 @@ public:
                     collection_mutation_description m;
                     m.tomb = tombstone(gen_timestamp(timestamp_level::collection_tombstone), new_expiry());
                     return m.serialize(*col.type);
-
                 };
                 // FIXME: generate expiring cells
                 auto cell = _bool_dist(_gen) ? get_live_cell() : get_dead_cell();
                 r.apply(_schema->column_at(kind, cid), std::move(cell));
             }
         };
-
         auto random_row_marker = [&] {
             static thread_local std::uniform_int_distribution<int> dist(0, 3);
             switch (dist(_gen)) {
@@ -27235,28 +21483,21 @@ public:
             }
             abort();
         };
-
         if (tests::random::with_probability(0.11)) {
             m.partition().apply(random_tombstone(timestamp_level::partition_tombstone));
         }
-
         m.partition().set_static_row_continuous(_bool_dist(_gen));
-
         set_random_cells(m.partition().static_row().maybe_create(), column_kind::static_column);
-
         auto row_count_dist = [&] (auto& gen) {
             static thread_local std::normal_distribution<> dist(32, 1.5);
             return static_cast<size_t>(std::min(100.0, std::max(0.0, dist(gen))));
         };
-
         size_t row_count = row_count_dist(_gen);
-
         std::unordered_set<clustering_key, clustering_key::hashing, clustering_key::equality> keys(
                 0, clustering_key::hashing(*_schema), clustering_key::equality(*_schema));
         while (keys.size() < row_count) {
             keys.emplace(make_random_key());
         }
-
         for (auto&& ckey : keys) {
             is_continuous continuous = is_continuous(_bool_dist(_gen));
             if (_not_dummy_dist(_gen)) {
@@ -27290,24 +21531,19 @@ public:
                 m.partition().clustered_row(*_schema, position_in_partition::after_key(*_schema, ckey), is_dummy::yes, continuous);
             }
         }
-
         size_t range_tombstone_count = row_count_dist(_gen);
         for (size_t i = 0; i < range_tombstone_count; ++i) {
             m.partition().apply_row_tombstone(*_schema, make_random_range_tombstone());
         }
-
         if (_bool_dist(_gen)) {
             m.partition().ensure_last_dummy(*_schema);
             m.partition().clustered_rows().rbegin()->set_continuous(is_continuous(_bool_dist(_gen)));
         }
-
         return m;
     }
-
     std::vector<dht::decorated_key> make_partition_keys(size_t n) {
         return tests::generate_partition_keys(n, _schema, _local_shard_only);
     }
-
     std::vector<mutation> operator()(size_t n) {
         auto keys = make_partition_keys(n);
         std::vector<mutation> mutations;
@@ -27318,45 +21554,34 @@ public:
         return mutations;
     }
 };
-
 random_mutation_generator::~random_mutation_generator() {}
-
 random_mutation_generator::random_mutation_generator(generate_counters counters, local_shard_only lso, generate_uncompactable uc, std::optional<uint32_t> seed_opt, const char* ks_name, const char* cf_name)
     : _impl(std::make_unique<random_mutation_generator::impl>(counters, lso, uc, seed_opt,  ks_name, cf_name))
 { }
-
 mutation random_mutation_generator::operator()() {
     return (*_impl)();
 }
-
 std::vector<mutation> random_mutation_generator::operator()(size_t n) {
     return (*_impl)(n);
 }
-
 std::vector<dht::decorated_key> random_mutation_generator::make_partition_keys(size_t n) {
     return _impl->make_partition_keys(n);
 }
-
 schema_ptr random_mutation_generator::schema() const {
     return _impl->_schema;
 }
-
 range_tombstone random_mutation_generator::make_random_range_tombstone() {
     return _impl->make_random_range_tombstone();
 }
-
 clustering_key random_mutation_generator::make_random_key() {
     return _impl->make_random_key();
 }
-
 std::vector<query::clustering_range> random_mutation_generator::make_random_ranges(unsigned n_ranges) {
     return _impl->make_random_ranges(n_ranges);
 }
-
 void random_mutation_generator::set_key_cardinality(size_t n_keys) {
     _impl->set_key_cardinality(n_keys);
 }
-
 void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mutation>&,
                                                schema_ptr, const std::vector<mutation>&)> fn) {
     auto map_of_int_to_int = map_type_impl::get_instance(int32_type, int32_type, true);
@@ -27380,7 +21605,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
     auto frozen_udt_int_blob_long = user_type_impl::get_instance("ks", "udt",
         { utf8_type->decompose("v1"), utf8_type->decompose("v2"), utf8_type->decompose("v3"), },
         { int32_type, bytes_type, long_type }, false);
-
     auto random_int32_value = [] {
         return int32_type->decompose(tests::random::get_int<int32_t>());
     };
@@ -27436,7 +21660,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
             tests::random::get_sstring(),
         }));
     };
-
     struct column_description {
         int id;
         data_type type;
@@ -27444,7 +21667,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
         std::vector<std::function<tests::data_model::mutation_description::value()>> data_generators;
         data_type old_type;
     };
-
     auto columns = std::vector<column_description> {
         { 100, int32_type, { varint_type, bytes_type }, { [&] { return random_int32_value(); }, [&] { return bytes(); } }, uuid_type },
         { 200, map_of_int_to_int, { map_of_int_to_bytes }, { [&] { return random_map(); } }, empty_type },
@@ -27457,7 +21679,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
     };
     auto static_columns = columns;
     auto regular_columns = columns;
-
     // Base schema
     auto s = tests::data_model::table_description({ { "pk1", int32_type }, { "pk2", int32_type }, { "pk3", int32_type }, },
                                                   { { "ck1", utf8_type }, { "ck2", utf8_type }, { "ck3", utf8_type }, });
@@ -27475,7 +21696,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
             s.add_old_regular_column(name, rc.old_type);
         }
     }
-
     auto max_generator_count = std::max(
         // boost::max_elements wants the iterators to be copy-assignable. The ones we get
         // from boost::adaptors::transformed aren't.
@@ -27486,9 +21706,7 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
             return c.data_generators.size();
         }), 0u, [] (size_t a, size_t b) { return std::max(a, b); })
     );
-
     // Base data
-
     // Single column in a static row, nothing else
     for (auto& [id, type, alter_to, data_generators, old_type] : static_columns) {
         auto name = format("s{}", id);
@@ -27498,7 +21716,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
             s.unordered_mutations().emplace_back(std::move(m));
         }
     }
-
     // Partition with rows each having a single column
     auto m = tests::data_model::mutation_description(random_partition_key());
     for (auto& [id, type, alter_to, data_generators, old_type] : regular_columns) {
@@ -27508,7 +21725,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
         }
     }
     s.unordered_mutations().emplace_back(std::move(m));
-
     // Absolutely everything
     for (auto i = 0u; i < max_generator_count; i++) {
         auto m = tests::data_model::mutation_description(random_partition_key());
@@ -27520,20 +21736,15 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
             auto name = format("r{}", id);
             m.add_clustered_cell(random_clustering_key(), name, data_generators[std::min<size_t>(i, data_generators.size() - 1)]());
         }
-
         m.add_range_tombstone(random_clustering_key(), random_clustering_key());
         m.add_range_tombstone(random_clustering_key(), random_clustering_key());
         m.add_range_tombstone(random_clustering_key(), random_clustering_key());
-
         s.unordered_mutations().emplace_back(std::move(m));
     }
-
     // Transformations
     auto base = s.build();
-
     std::vector<tests::data_model::table_description::table> schemas;
     schemas.emplace_back(base);
-
     auto test_mutated_schemas = [&] {
         auto& [ base_change_log, base_schema, base_mutations ] = base;
         for (auto&& [ mutated_change_log, mutated_schema, mutated_mutations ] : schemas) {
@@ -27549,7 +21760,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
         schemas.clear();
         schemas.emplace_back(base);
     };
-
     auto original_s = s;
      // Remove and add back all static columns
     for (auto& sc : static_columns) {
@@ -27562,7 +21772,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
         schemas.emplace_back(s.build());
     }
     test_mutated_schemas();
-
     s = original_s;
     // Remove and add back all regular columns
     for (auto& rc : regular_columns) {
@@ -27576,7 +21785,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
         schemas.emplace_back(s.build());
     }
     test_mutated_schemas();
-
     s = temp_s;
     schemas = temp_schemas;
     // Add back all regular columns as collections
@@ -27585,7 +21793,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
         schemas.emplace_back(s.build());
     }
     test_mutated_schemas();
-
     s = temp_s;
     schemas = temp_schemas;
     // Add back all regular columns as frozen collections
@@ -27594,7 +21801,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
         schemas.emplace_back(s.build());
     }
     test_mutated_schemas();
-
     s = original_s;
     // Add more static columns
     for (auto& sc : static_columns) {
@@ -27602,7 +21808,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
         schemas.emplace_back(s.build());
     }
     test_mutated_schemas();
-
     s = original_s;
     // Add more regular columns
     for (auto& rc : regular_columns) {
@@ -27610,7 +21815,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
         schemas.emplace_back(s.build());
     }
     test_mutated_schemas();
-
     s = original_s;
     // Alter column types
     for (auto& sc : static_columns) {
@@ -27634,7 +21838,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
         schemas.emplace_back(s.build());
     }
     test_mutated_schemas();
-
     s = original_s;
     // Rename clustering key
     for (auto i = 1; i <= 3; i++) {
@@ -27642,7 +21845,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
         schemas.emplace_back(s.build());
     }
     test_mutated_schemas();
-
     s = original_s;
     // Rename partition key
     for (auto i = 1; i <= 3; i++) {
@@ -27651,7 +21853,6 @@ void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mut
     }
     test_mutated_schemas();
 }
-
 static bool compare_readers(const schema& s, flat_mutation_reader_v2& authority, flat_reader_assertions_v2& tested) {
     bool empty = true;
     while (auto expected = authority().get()) {
@@ -27661,13 +21862,11 @@ static bool compare_readers(const schema& s, flat_mutation_reader_v2& authority,
     tested.produces_end_of_stream();
     return !empty;
 }
-
 void compare_readers(const schema& s, flat_mutation_reader_v2 authority, flat_mutation_reader_v2 tested) {
     auto close_authority = deferred_close(authority);
     auto assertions = assert_that(std::move(tested));
     compare_readers(s, authority, assertions);
 }
-
 // Assumes that the readers return fragments from (at most) a single (and the same) partition.
 void compare_readers(const schema& s, flat_mutation_reader_v2 authority, flat_mutation_reader_v2 tested, const std::vector<position_range>& fwd_ranges) {
     auto close_authority = deferred_close(authority);
@@ -27680,51 +21879,41 @@ void compare_readers(const schema& s, flat_mutation_reader_v2 authority, flat_mu
         }
     }
 }
-
 mutation forwardable_reader_to_mutation(flat_mutation_reader_v2 r, const std::vector<position_range>& fwd_ranges) {
     auto close_reader = deferred_close(r);
-
     struct consumer {
         schema_ptr _s;
         std::optional<mutation_rebuilder_v2>& _builder;
         consumer(schema_ptr s, std::optional<mutation_rebuilder_v2>& builder)
             : _s(std::move(s))
             , _builder(builder) { }
-
         void consume_new_partition(const dht::decorated_key& dk) {
             assert(!_builder);
             _builder = mutation_rebuilder_v2(std::move(_s));
             _builder->consume_new_partition(dk);
         }
-
         stop_iteration consume(tombstone t) {
             assert(_builder);
             return _builder->consume(t);
         }
-
         stop_iteration consume(range_tombstone_change&& rt) {
             assert(_builder);
             return _builder->consume(std::move(rt));
         }
-
         stop_iteration consume(static_row&& sr) {
             assert(_builder);
             return _builder->consume(std::move(sr));
         }
-
         stop_iteration consume(clustering_row&& cr) {
             assert(_builder);
             return _builder->consume(std::move(cr));
         }
-
         stop_iteration consume_end_of_partition() {
             assert(_builder);
             return stop_iteration::yes;
         }
-
         void consume_end_of_stream() { }
     };
-
     std::optional<mutation_rebuilder_v2> builder{};
     r.consume(consumer(r.schema(), builder)).get();
     BOOST_REQUIRE(builder);
@@ -27733,13 +21922,10 @@ mutation forwardable_reader_to_mutation(flat_mutation_reader_v2 r, const std::ve
         r.fast_forward_to(range).get();
         r.consume(consumer(r.schema(), builder)).get();
     }
-
     auto m = builder->consume_end_of_stream();
     BOOST_REQUIRE(m);
-
     return std::move(*m);
 }
-
 std::vector<mutation> squash_mutations(std::vector<mutation> mutations) {
     if (mutations.empty()) {
         return {};
@@ -27754,40 +21940,21 @@ std::vector<mutation> squash_mutations(std::vector<mutation> mutations) {
     }
     return boost::copy_range<std::vector<mutation>>(merged_muts | boost::adaptors::map_values);
 }
-/*
- * Copyright (C) 2019-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
-
 namespace tests::data_model {
-
-
 mutation_description::atomic_value::atomic_value(bytes value, api::timestamp_type timestamp) : value(std::move(value)), timestamp(timestamp)
 { }
-
 mutation_description::atomic_value::atomic_value(bytes value, api::timestamp_type timestamp, gc_clock::duration ttl, gc_clock::time_point expiry_point)
     : value(std::move(value)), timestamp(timestamp), expiring(expiry_info{ttl, expiry_point})
 { }
-
 mutation_description::collection::collection(std::initializer_list<collection_element> elements) : elements(elements)
 { }
-
 mutation_description::collection::collection(std::vector<collection_element> elements) : elements(std::move(elements))
 { }
-
 mutation_description::row_marker::row_marker(api::timestamp_type timestamp) : timestamp(timestamp)
 { }
-
 mutation_description::row_marker::row_marker(api::timestamp_type timestamp, gc_clock::duration ttl, gc_clock::time_point expiry_point)
     : timestamp(timestamp), expiring(expiry_info{ttl, expiry_point})
 { }
-
 void mutation_description::remove_column(row& r, const sstring& name) {
     auto it = boost::range::find_if(r, [&] (const cell& c) {
         return c.column_name == name;
@@ -27796,50 +21963,39 @@ void mutation_description::remove_column(row& r, const sstring& name) {
         r.erase(it);
     }
 }
-
 mutation_description::mutation_description(key partition_key)
     : _partition_key(std::move(partition_key))
 { }
-
 void mutation_description::set_partition_tombstone(tombstone partition_tombstone) {
     _partition_tombstone = partition_tombstone;
 }
-
 void mutation_description::add_static_cell(const sstring& column, value v) {
     _static_row.emplace_back(cell { column, std::move(v) });
 }
-
 void mutation_description::add_clustered_cell(const key& ck, const sstring& column, value v) {
     _clustered_rows[ck].cells.emplace_back(cell { column, std::move(v) });
 }
-
 void mutation_description::add_clustered_row_marker(const key& ck, row_marker marker) {
     _clustered_rows[ck].marker = marker;
 }
-
 void mutation_description::add_clustered_row_tombstone(const key& ck, row_tombstone tomb) {
     _clustered_rows[ck].tomb = tomb;
 }
-
 void mutation_description::remove_static_column(const sstring& name) {
     remove_column(_static_row, name);
 }
-
 void mutation_description::remove_regular_column(const sstring& name) {
     for (auto& [ ckey, cr ] : _clustered_rows) {
         (void)ckey;
         remove_column(cr.cells, name);
     }
 }
-
 void mutation_description::add_range_tombstone(const key& start, const key& end, tombstone tomb) {
     add_range_tombstone(nonwrapping_range<key>::make(start, end), tomb);
 }
-
 void mutation_description::add_range_tombstone(nonwrapping_range<key> range, tombstone tomb) {
     _range_tombstones.emplace_back(range_tombstone { std::move(range), tomb });
 }
-
 mutation mutation_description::build(schema_ptr s) const {
     auto m = mutation(s, partition_key::from_exploded(*s, _partition_key));
     m.partition().apply(_partition_tombstone);
@@ -27858,7 +22014,6 @@ mutation mutation_description::build(schema_ptr s) const {
             },
             [&] (const collection& c) {
                 assert(!cdef->is_atomic());
-
                 auto get_value_type = visit(*cdef->type, make_visitor(
                     [] (const collection_type_impl& ctype) -> std::function<const abstract_type&(bytes_view)> {
                         return [&] (bytes_view) -> const abstract_type& { return *ctype.value_comparator(); };
@@ -27870,7 +22025,6 @@ mutation mutation_description::build(schema_ptr s) const {
                         assert(false);
                     }
                 ));
-
                 collection_mutation_description mut;
                 mut.tomb = c.tomb;
                 for (auto& [ key, value ] : c.elements) {
@@ -27908,7 +22062,6 @@ mutation mutation_description::build(schema_ptr s) const {
                 },
             [&] (const collection& c) {
                     assert(!cdef->is_atomic());
-
                     auto get_value_type = visit(*cdef->type, make_visitor(
                         [] (const collection_type_impl& ctype) -> std::function<const abstract_type&(bytes_view)> {
                             return [&] (bytes_view) -> const abstract_type& { return *ctype.value_comparator(); };
@@ -27920,7 +22073,6 @@ mutation mutation_description::build(schema_ptr s) const {
                             assert(false);
                         }
                     ));
-
                     collection_mutation_description mut;
                     mut.tomb = c.tomb;
                     for (auto& [ key, value ] : c.elements) {
@@ -27935,7 +22087,6 @@ mutation mutation_description::build(schema_ptr s) const {
                                                                                value.expiring->ttl,
                                                                                atomic_cell::collection_member::yes));
                         }
-
                     }
                     m.set_clustered_cell(ck, *cdef, mut.serialize(*cdef->type));
                 }
@@ -27972,35 +22123,29 @@ mutation mutation_description::build(schema_ptr s) const {
     }
     return m;
 }
-
 std::vector<table_description::column>::iterator table_description::find_column(std::vector<column>& columns, const sstring& name) {
     return boost::range::find_if(columns, [&] (const column& c) {
         return std::get<sstring>(c) == name;
     });
 }
-
 void table_description::add_column(std::vector<column>& columns, const sstring& name, data_type type) {
     assert(find_column(columns, name) == columns.end());
     columns.emplace_back(name, type);
 }
-
 void table_description::add_old_column(const sstring& name, data_type type) {
     _removed_columns.emplace_back(removed_column { name, type, previously_removed_column_timestamp });
 }
-
 void table_description::remove_column(std::vector<column>& columns, const sstring& name) {
     auto it = find_column(columns, name);
     assert(it != columns.end());
     _removed_columns.emplace_back(removed_column { name, std::get<data_type>(*it), column_removal_timestamp });
     columns.erase(it);
 }
-
 void table_description::alter_column_type(std::vector<column>& columns, const sstring& name, data_type new_type) {
     auto it = find_column(columns, name);
     assert(it != columns.end());
     std::get<data_type>(*it) = new_type;
 }
-
 schema_ptr table_description::build_schema() const {
     auto sb = schema_builder("ks", "cf");
     for (auto&& [ name, type ] : _partition_key) {
@@ -28015,14 +22160,11 @@ schema_ptr table_description::build_schema() const {
     for (auto&& [ name, type ] : _regular_columns) {
         sb.with_column(utf8_type->decompose(name), type);
     }
-
     for (auto&& [ name, type, timestamp ] : _removed_columns) {
         sb.without_column(name, type, timestamp);
     }
-
     return sb.build();
 }
-
 std::vector<mutation> table_description::build_mutations(schema_ptr s) const {
     auto ms = boost::copy_range<std::vector<mutation>>(
         _mutations | boost::adaptors::transformed([&] (const mutation_description& md) {
@@ -28032,30 +22174,24 @@ std::vector<mutation> table_description::build_mutations(schema_ptr s) const {
     boost::sort(ms, mutation_decorated_key_less_comparator());
     return ms;
 }
-
 table_description::table_description(std::vector<column> partition_key, std::vector<column> clustering_key)
     : _partition_key(std::move(partition_key))
     , _clustering_key(std::move(clustering_key))
 { }
-
 void table_description::add_static_column(const sstring& name, data_type type) {
     _change_log.emplace_back(format("added static column \'{}\' of type \'{}\'", name, type->as_cql3_type().to_string()));
     add_column(_static_columns, name, type);
 }
-
 void table_description::add_regular_column(const sstring& name, data_type type) {
     _change_log.emplace_back(format("added regular column \'{}\' of type \'{}\'", name, type->as_cql3_type().to_string()));
     add_column(_regular_columns, name, type);
 }
-
 void table_description::add_old_static_column(const sstring& name, data_type type) {
     add_old_column(name, type);
 }
-
 void table_description::add_old_regular_column(const sstring& name, data_type type) {
     add_old_column(name, type);
 }
-
 void table_description::remove_static_column(const sstring& name) {
     _change_log.emplace_back(format("removed static column \'{}\'", name));
     remove_column(_static_columns, name);
@@ -28063,7 +22199,6 @@ void table_description::remove_static_column(const sstring& name) {
         m.remove_static_column(name);
     }
 }
-
 void table_description::remove_regular_column(const sstring& name) {
     _change_log.emplace_back(format("removed regular column \'{}\'", name));
     remove_column(_regular_columns, name);
@@ -28071,27 +22206,22 @@ void table_description::remove_regular_column(const sstring& name) {
         m.remove_regular_column(name);
     }
 }
-
 void table_description::alter_partition_column_type(const sstring& name, data_type new_type) {
     _change_log.emplace_back(format("altered partition column \'{}\' type to \'{}\'", name, new_type->as_cql3_type().to_string()));
     alter_column_type(_partition_key, name, new_type);
 }
-
 void table_description::alter_clustering_column_type(const sstring& name, data_type new_type) {
     _change_log.emplace_back(format("altered clustering column \'{}\' type to \'{}\'", name, new_type->as_cql3_type().to_string()));
     alter_column_type(_clustering_key, name, new_type);
 }
-
 void table_description::alter_static_column_type(const sstring& name, data_type new_type) {
     _change_log.emplace_back(format("altered static column \'{}\' type to \'{}\'", name, new_type->as_cql3_type().to_string()));
     alter_column_type(_static_columns, name, new_type);
 }
-
 void table_description::alter_regular_column_type(const sstring& name, data_type new_type) {
     _change_log.emplace_back(format("altered regular column \'{}\' type to \'{}\'", name, new_type->as_cql3_type().to_string()));
     alter_column_type(_regular_columns, name, new_type);
 }
-
 void table_description::rename_partition_column(const sstring& from, const sstring& to) {
     _change_log.emplace_back(format("renamed partition column \'{}\' to \'{}\'", from, to));
     auto it = find_column(_partition_key, from);
@@ -28104,23 +22234,11 @@ void table_description::rename_clustering_column(const sstring& from, const sstr
     assert(it != _clustering_key.end());
     std::get<sstring>(*it) = to;
 }
-
 table_description::table table_description::build() const {
     auto s = build_schema();
     return { boost::algorithm::join(_change_log, "\n"), s, build_mutations(s) };
 }
-
 }
-/*
- * Copyright (C) 2019-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 std::function<bool(const std::exception&)> exception_predicate::make(
         std::function<bool(const std::exception&)> check,
         std::function<sstring(const std::exception&)> err) {
@@ -28130,7 +22248,6 @@ std::function<bool(const std::exception&)> exception_predicate::make(
                return status;
            };
 }
-
 std::function<bool(const std::exception&)> exception_predicate::message_contains(
         const sstring& fragment,
         const std::source_location& loc) {
@@ -28140,7 +22257,6 @@ std::function<bool(const std::exception&)> exception_predicate::message_contains
                                        e.what(), fragment, loc.file_name(), loc.line());
                 });
 }
-
 std::function<bool(const std::exception&)> exception_predicate::message_equals(
         const sstring& text,
         const std::source_location& loc) {
@@ -28150,7 +22266,6 @@ std::function<bool(const std::exception&)> exception_predicate::message_equals(
                                        e.what(), text, loc.file_name(), loc.line());
                 });
 }
-
 std::function<bool(const std::exception&)> exception_predicate::message_matches(
         const std::string& regex,
         const std::source_location& loc) {
@@ -28161,18 +22276,7 @@ std::function<bool(const std::exception&)> exception_predicate::message_matches(
                                        e.what(), regex, loc.file_name(), loc.line());
                 });
 }
-/*
- * Copyright (C) 2019-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
-
 namespace tests {
-
 type_generator::type_generator(random_schema_specification& spec) : _spec(spec) {
     struct simple_type_generator {
         data_type type;
@@ -28199,7 +22303,6 @@ type_generator::type_generator(random_schema_specification& spec) : _spec(spec) 
         simple_type_generator{varint_type},
         simple_type_generator{decimal_type},
         simple_type_generator{duration_type}};
-
     // tuple
     _generators.emplace_back(
         [this] (std::mt19937& engine, is_multi_cell) {
@@ -28216,14 +22319,12 @@ type_generator::type_generator(random_schema_specification& spec) : _spec(spec) 
         [this] (std::mt19937& engine, is_multi_cell multi_cell) mutable {
             std::uniform_int_distribution<size_t> count_dist{2, 4};
             const auto count = count_dist(engine);
-
             std::vector<bytes> field_names;
             std::vector<data_type> field_types;
             for (size_t i = 0; i < count; ++i) {
                 field_names.emplace_back(to_bytes(format("f{}", i)));
                 field_types.emplace_back((*this)(engine, type_generator::is_multi_cell::no));
             }
-
             return user_type_impl::get_instance(_spec.keyspace_name(), to_bytes(_spec.udt_name(engine)), std::move(field_names),
                     std::move(field_types), bool(multi_cell));
         });
@@ -28247,7 +22348,6 @@ type_generator::type_generator(random_schema_specification& spec) : _spec(spec) 
             return map_type_impl::get_instance(std::move(key_type), std::move(value_type), bool(multi_cell));
         });
 }
-
 data_type type_generator::operator()(std::mt19937& engine, is_multi_cell multi_cell) {
     auto dist = std::uniform_int_distribution<size_t>(0, _generators.size() - 1);
     auto type = _generators.at(dist(engine))(engine, multi_cell);
@@ -28262,9 +22362,7 @@ data_type type_generator::operator()(std::mt19937& engine, is_multi_cell multi_c
     }
     return type;
 }
-
 namespace {
-
 class default_random_schema_specification : public random_schema_specification {
     std::unordered_set<unsigned> _used_table_ids;
     std::unordered_set<unsigned> _used_udt_ids;
@@ -28273,27 +22371,21 @@ class default_random_schema_specification : public random_schema_specification {
     std::uniform_int_distribution<size_t> _regular_column_count_dist;
     std::uniform_int_distribution<size_t> _static_column_count_dist;
     type_generator _type_generator;
-
 private:
     static unsigned generate_unique_id(std::mt19937& engine, std::unordered_set<unsigned>& used_ids) {
         std::uniform_int_distribution<unsigned> id_dist(0, 1024);
-
         unsigned id;
         do {
             id = id_dist(engine);
         } while (used_ids.contains(id));
-
         used_ids.insert(id);
         return id;
     }
-
     std::vector<data_type> generate_types(std::mt19937& engine, std::uniform_int_distribution<size_t>& count_dist,
             type_generator::is_multi_cell multi_cell, bool allow_reversed = false) {
         std::uniform_int_distribution<uint8_t> reversed_dist{0, uint8_t(allow_reversed)};
         std::uniform_int_distribution<uint8_t> multi_cell_dist{0, uint8_t(bool(multi_cell))};
-
         std::vector<data_type> types;
-
         const auto count = count_dist(engine);
         for (size_t c = 0; c < count; ++c) {
             auto type = _type_generator(engine, type_generator::is_multi_cell(bool(multi_cell_dist(engine))));
@@ -28303,10 +22395,8 @@ private:
                 types.emplace_back(std::move(type));
             }
         }
-
         return types;
     }
-
 public:
     default_random_schema_specification(
             sstring keyspace_name,
@@ -28342,9 +22432,7 @@ public:
         return generate_types(engine, _static_column_count_dist, type_generator::is_multi_cell::yes, false);
     }
 };
-
 } // anonymous namespace
-
 std::unique_ptr<random_schema_specification> make_random_schema_specification(
         sstring keyspace_name,
         std::uniform_int_distribution<size_t> partition_column_count_dist,
@@ -28354,12 +22442,9 @@ std::unique_ptr<random_schema_specification> make_random_schema_specification(
     return std::make_unique<default_random_schema_specification>(std::move(keyspace_name), partition_column_count_dist, clustering_column_count_dist,
             regular_column_count_dist, static_column_count_dist);
 }
-
 namespace {
-
 utils::multiprecision_int generate_multiprecision_integer_value(std::mt19937& engine, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     using utils::multiprecision_int;
-
     const auto max_bytes = std::min(size_t(16), std::max(size_t(2), max_size_in_bytes) - 1);
     const auto generate_int = [] (std::mt19937& engine, size_t max_bytes) {
         if (max_bytes == 8) {
@@ -28368,7 +22453,6 @@ utils::multiprecision_int generate_multiprecision_integer_value(std::mt19937& en
             return multiprecision_int(random::get_int<uint64_t>(0, (uint64_t(1) << (max_bytes * 8)) - uint64_t(1), engine));
         }
     };
-
     if (max_bytes <= 8) {
         return generate_int(engine, max_bytes);
     } else { // max_bytes > 8
@@ -28377,7 +22461,6 @@ utils::multiprecision_int generate_multiprecision_integer_value(std::mt19937& en
         return multiprecision_int(ls) + (multiprecision_int(ms) << 64);
     }
 }
-
 template <typename String>
 String generate_string_value(std::mt19937& engine, typename String::value_type min, typename String::value_type max,
         size_t min_size_in_bytes, size_t max_size_in_bytes) {
@@ -28387,328 +22470,254 @@ String generate_string_value(std::mt19937& engine, typename String::value_type m
         { 0.4, { 100,  999}},
         { 0.1, {1000, 9999}}}};
     auto char_dist = std::uniform_int_distribution<typename String::value_type>(min, max);
-
     const auto size = std::clamp(
             size_dist(engine),
             min_size_in_bytes / sizeof(typename String::value_type),
             max_size_in_bytes / sizeof(typename String::value_type));
     String str(size, '\0');
-
     for (size_t i = 0; i < size; ++i) {
         str[i] = char_dist(engine);
     }
-
     return str;
 }
-
 std::vector<data_value> generate_frozen_tuple_values(std::mt19937& engine, value_generator& val_gen, const std::vector<data_type>& member_types,
         size_t min_size_in_bytes, size_t max_size_in_bytes) {
     std::vector<data_value> values;
     values.reserve(member_types.size());
     const auto member_min_size_in_bytes = min_size_in_bytes / member_types.size();
     const auto member_max_size_in_bytes = max_size_in_bytes / member_types.size();
-
     for (auto member_type : member_types) {
         values.push_back(val_gen.generate_atomic_value(engine, *member_type, member_min_size_in_bytes, member_max_size_in_bytes));
     }
-
     return values;
 }
-
 data_model::mutation_description::collection generate_user_value(std::mt19937& engine, const user_type_impl& type,
         value_generator& val_gen) {
     using md = data_model::mutation_description;
-
     // Non-null fields.
     auto fields_num = std::uniform_int_distribution<size_t>(1, type.size())(engine);
     auto field_idxs = random::random_subset<unsigned>(type.size(), fields_num, engine);
     std::sort(field_idxs.begin(), field_idxs.end());
-
     md::collection collection;
     for (auto i: field_idxs) {
         collection.elements.push_back({serialize_field_index(i),
                 val_gen.generate_atomic_value(engine, *type.type(i), value_generator::no_size_in_bytes_limit).serialize_nonnull()});
     }
-
     return collection;
 }
-
 data_model::mutation_description::collection generate_collection(std::mt19937& engine, const abstract_type& key_type,
         const abstract_type& value_type, value_generator& val_gen) {
     using md = data_model::mutation_description;
     auto key_generator = val_gen.get_atomic_value_generator(key_type);
     auto value_generator = val_gen.get_atomic_value_generator(value_type);
-
     auto size_dist = std::uniform_int_distribution<size_t>(0, 16);
     const auto size = size_dist(engine);
-
     std::map<bytes, md::atomic_value, serialized_compare> collection{key_type.as_less_comparator()};
-
     for (size_t i = 0; i < size; ++i) {
         collection.emplace(key_generator(engine, 0, value_generator::no_size_in_bytes_limit).serialize_nonnull(),
                 value_generator(engine, 0, value_generator::no_size_in_bytes_limit).serialize().value_or(""));
     }
-
     md::collection flat_collection;
     flat_collection.elements.reserve(collection.size());
     for (auto&& [key, value] : collection) {
         flat_collection.elements.emplace_back(md::collection_element{key, value});
     }
-
     return flat_collection;
 }
-
 std::vector<data_value> generate_frozen_list(std::mt19937& engine, const abstract_type& value_type, value_generator& val_gen,
         size_t min_size_in_bytes, size_t max_size_in_bytes) {
     auto value_generator = val_gen.get_atomic_value_generator(value_type);
-
     auto size_dist = std::uniform_int_distribution<size_t>(0, 4);
     const auto size = std::min(size_dist(engine), max_size_in_bytes / std::max(val_gen.min_size(value_type), size_t(1)));
-
     std::vector<data_value> collection;
-
     if (!size) {
         return collection;
     }
-
     const auto value_min_size_in_bytes = min_size_in_bytes / size;
     const auto value_max_size_in_bytes = max_size_in_bytes / size;
-
     for (size_t i = 0; i < size; ++i) {
         collection.emplace_back(value_generator(engine, value_min_size_in_bytes, value_max_size_in_bytes));
     }
-
     return collection;
 }
-
 std::vector<data_value> generate_frozen_set(std::mt19937& engine, const abstract_type& key_type, value_generator& val_gen,
         size_t min_size_in_bytes, size_t max_size_in_bytes) {
     auto key_generator = val_gen.get_atomic_value_generator(key_type);
-
     auto size_dist = std::uniform_int_distribution<size_t>(0, 4);
     const auto size = std::min(size_dist(engine), max_size_in_bytes / std::max(val_gen.min_size(key_type), size_t(1)));
-
     std::map<bytes, data_value, serialized_compare> collection{key_type.as_less_comparator()};
     std::vector<data_value> flat_collection;
-
     if (!size) {
         return flat_collection;
     }
-
     const auto value_max_size_in_bytes = max_size_in_bytes / size;
     const auto value_min_size_in_bytes = min_size_in_bytes / size;
-
     for (size_t i = 0; i < size; ++i) {
         auto val = key_generator(engine, value_min_size_in_bytes, value_max_size_in_bytes);
         auto serialized_key = val.serialize_nonnull();
         collection.emplace(std::move(serialized_key), std::move(val));
     }
-
     flat_collection.reserve(collection.size());
     for (auto&& element : collection) {
         flat_collection.emplace_back(std::move(element.second));
     }
     return flat_collection;
 }
-
 std::vector<std::pair<data_value, data_value>> generate_frozen_map(std::mt19937& engine, const abstract_type& key_type,
         const abstract_type& value_type, value_generator& val_gen, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     auto key_generator = val_gen.get_atomic_value_generator(key_type);
     auto value_generator = val_gen.get_atomic_value_generator(value_type);
-
     auto size_dist = std::uniform_int_distribution<size_t>(0, 4);
     const auto min_item_size_in_bytes = val_gen.min_size(key_type) + val_gen.min_size(value_type);
     const auto size = std::min(size_dist(engine), max_size_in_bytes / std::max(min_item_size_in_bytes, size_t(1)));
-
     std::map<bytes, std::pair<data_value, data_value>, serialized_compare> collection(key_type.as_less_comparator());
     std::vector<std::pair<data_value, data_value>> flat_collection;
-
     if (!size) {
         return flat_collection;
     }
-
     const auto item_max_size_in_bytes = max_size_in_bytes / size;
     const auto key_max_size_in_bytes = item_max_size_in_bytes / 2;
     const auto value_max_size_in_bytes = item_max_size_in_bytes / 2;
     const auto item_min_size_in_bytes = min_size_in_bytes / size;
     const auto key_min_size_in_bytes = item_min_size_in_bytes / 2;
     const auto value_min_size_in_bytes = item_min_size_in_bytes / 2;
-
     for (size_t i = 0; i < size; ++i) {
         auto key = key_generator(engine, key_min_size_in_bytes, key_max_size_in_bytes);
         auto serialized_key = key.serialize_nonnull();
         auto value = value_generator(engine, value_min_size_in_bytes, value_max_size_in_bytes);
         collection.emplace(std::move(serialized_key), std::pair(std::move(key), std::move(value)));
     }
-
     flat_collection.reserve(collection.size());
     for (auto&& element : collection) {
         flat_collection.emplace_back(std::move(element.second));
     }
     return flat_collection;
 }
-
 data_value generate_empty_value(std::mt19937&, size_t, size_t) {
     return data_value::make_null(empty_type);
 }
-
 data_value generate_byte_value(std::mt19937& engine, size_t, size_t) {
     return data_value(random::get_int<int8_t>(engine));
 }
-
 data_value generate_short_value(std::mt19937& engine, size_t, size_t) {
     return data_value(random::get_int<int16_t>(engine));
 }
-
 data_value generate_int32_value(std::mt19937& engine, size_t, size_t) {
     return data_value(random::get_int<int32_t>(engine));
 }
-
 data_value generate_long_value(std::mt19937& engine, size_t, size_t) {
     return data_value(random::get_int<int64_t>(engine));
 }
-
 data_value generate_ascii_value(std::mt19937& engine, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     return data_value(ascii_native_type{generate_string_value<sstring>(engine, 0, 127, min_size_in_bytes, max_size_in_bytes)});
 }
-
 data_value generate_bytes_value(std::mt19937& engine, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     return data_value(generate_string_value<bytes>(engine, std::numeric_limits<bytes::value_type>::min(),
             std::numeric_limits<bytes::value_type>::max(), min_size_in_bytes, max_size_in_bytes));
 }
-
 data_value generate_utf8_value(std::mt19937& engine, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     auto wstr = generate_string_value<std::wstring>(engine, 0, 0x0FFF, min_size_in_bytes, max_size_in_bytes);
-
     std::locale locale("en_US.utf8");
     using codec = std::codecvt<wchar_t, char, std::mbstate_t>;
     auto& f = std::use_facet<codec>(locale);
-
     sstring utf8_str(wstr.size() * f.max_length(), '\0');
-
     const wchar_t* from_next;
     char* to_next;
     std::mbstate_t mb{};
     auto res = f.out(mb, &wstr[0], &wstr[wstr.size()], from_next, &utf8_str[0], &utf8_str[utf8_str.size()], to_next);
     assert(res == codec::ok);
     utf8_str.resize(to_next - &utf8_str[0]);
-
     return data_value(std::move(utf8_str));
 }
-
 data_value generate_boolean_value(std::mt19937& engine, size_t, size_t) {
     auto dist = std::uniform_int_distribution<int8_t>(0, 1);
     return data_value(bool(dist(engine)));
 }
-
 data_value generate_date_value(std::mt19937& engine, size_t, size_t) {
     return data_value(date_type_native_type{db_clock::time_point(db_clock::duration(random::get_int<std::make_unsigned_t<db_clock::rep>>(engine)))});
 }
-
 data_value generate_timeuuid_value(std::mt19937&, size_t, size_t) {
     return data_value(timeuuid_native_type{utils::UUID_gen::get_time_UUID()});
 }
-
 data_value generate_timestamp_value(std::mt19937& engine, size_t, size_t) {
     using pt = db_clock::time_point;
     return data_value(pt(pt::duration(random::get_int<pt::rep>(engine))));
 }
-
 data_value generate_simple_date_value(std::mt19937& engine, size_t, size_t) {
     return data_value(simple_date_native_type{random::get_int<simple_date_native_type::primary_type>(engine)});
 }
-
 data_value generate_time_value(std::mt19937& engine, size_t, size_t) {
     return data_value(time_native_type{random::get_int<time_native_type::primary_type>(engine)});
 }
-
 data_value generate_uuid_value(std::mt19937& engine, size_t, size_t) {
     return data_value(utils::make_random_uuid());
 }
-
 data_value generate_inet_addr_value(std::mt19937& engine, size_t, size_t) {
     return data_value(net::ipv4_address(random::get_int<int32_t>(engine)));
 }
-
 data_value generate_float_value(std::mt19937& engine, size_t, size_t) {
     return data_value(random::get_real<float>(engine));
 }
-
 data_value generate_double_value(std::mt19937& engine, size_t, size_t) {
     return data_value(random::get_real<double>(engine));
 }
-
 data_value generate_varint_value(std::mt19937& engine, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     return data_value(generate_multiprecision_integer_value(engine, min_size_in_bytes, max_size_in_bytes));
 }
-
 data_value generate_decimal_value(std::mt19937& engine, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     auto scale_dist = std::uniform_int_distribution<int32_t>(-8, 8);
     return data_value(big_decimal(scale_dist(engine), generate_multiprecision_integer_value(engine,
                     min_size_in_bytes - sizeof(int32_t), max_size_in_bytes - sizeof(int32_t))));
 }
-
 data_value generate_duration_value(std::mt19937& engine, size_t, size_t) {
     auto months = months_counter(random::get_int<months_counter::value_type>(engine));
     auto days = days_counter(random::get_int<days_counter::value_type>(0, 31, engine));
     auto nanoseconds = nanoseconds_counter(random::get_int<nanoseconds_counter::value_type>(86400000000000, engine));
     return data_value(cql_duration{months, days, nanoseconds});
 }
-
 data_value generate_frozen_tuple_value(std::mt19937& engine, const tuple_type_impl& type, value_generator& val_gen, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     assert(!type.is_multi_cell());
     return make_tuple_value(type.shared_from_this(), generate_frozen_tuple_values(engine, val_gen, type.all_types(), min_size_in_bytes, max_size_in_bytes));
 }
-
 data_value generate_frozen_user_value(std::mt19937& engine, const user_type_impl& type, value_generator& val_gen, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     assert(!type.is_multi_cell());
     return make_user_value(type.shared_from_this(), generate_frozen_tuple_values(engine, val_gen, type.all_types(), min_size_in_bytes, max_size_in_bytes));
 }
-
 data_model::mutation_description::collection generate_list_value(std::mt19937& engine, const list_type_impl& type, value_generator& val_gen) {
     assert(type.is_multi_cell());
     return generate_collection(engine, *type.name_comparator(), *type.value_comparator(), val_gen);
 }
-
 data_value generate_frozen_list_value(std::mt19937& engine, const list_type_impl& type, value_generator& val_gen, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     assert(!type.is_multi_cell());
     return make_list_value(type.shared_from_this(),
             generate_frozen_list(engine, *type.get_elements_type(), val_gen, min_size_in_bytes, max_size_in_bytes));
 }
-
 data_model::mutation_description::collection generate_set_value(std::mt19937& engine, const set_type_impl& type, value_generator& val_gen) {
     assert(type.is_multi_cell());
     return generate_collection(engine, *type.name_comparator(), *type.value_comparator(), val_gen);
 }
-
 data_value generate_frozen_set_value(std::mt19937& engine, const set_type_impl& type, value_generator& val_gen, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     assert(!type.is_multi_cell());
     return make_set_value(type.shared_from_this(),
             generate_frozen_set(engine, *type.get_elements_type(), val_gen, min_size_in_bytes, max_size_in_bytes));
 }
-
 data_model::mutation_description::collection generate_map_value(std::mt19937& engine, const map_type_impl& type, value_generator& val_gen) {
     assert(type.is_multi_cell());
     return generate_collection(engine, *type.name_comparator(), *type.value_comparator(), val_gen);
 }
-
 data_value generate_frozen_map_value(std::mt19937& engine, const map_type_impl& type, value_generator& val_gen, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     assert(!type.is_multi_cell());
     return make_map_value(type.shared_from_this(),
             generate_frozen_map(engine, *type.get_keys_type(), *type.get_values_type(), val_gen, min_size_in_bytes, max_size_in_bytes));
 }
-
 } // anonymous namespace
-
 data_value value_generator::generate_atomic_value(std::mt19937& engine, const abstract_type& type, size_t max_size_in_bytes) {
     return generate_atomic_value(engine, type, 0, max_size_in_bytes);
 }
-
 data_value value_generator::generate_atomic_value(std::mt19937& engine, const abstract_type& type, size_t min_size_in_bytes, size_t max_size_in_bytes) {
     assert(!type.is_multi_cell());
     return get_atomic_value_generator(type)(engine, min_size_in_bytes, max_size_in_bytes);
 }
-
 value_generator::value_generator()
     : _regular_value_generators{
             {empty_type.get(), &generate_empty_value},
@@ -28737,89 +22746,69 @@ value_generator::value_generator()
         _regular_value_min_sizes.emplace(regular_type, regular_value_gen(engine, size_t{}, size_t{}).serialized_size());
     }
 }
-
 size_t value_generator::min_size(const abstract_type& type) {
     assert(!type.is_multi_cell());
-
     auto it = _regular_value_min_sizes.find(&type);
     if (it != _regular_value_min_sizes.end()) {
         return it->second;
     }
-
     std::mt19937 engine;
-
     if (auto maybe_user_type = dynamic_cast<const user_type_impl*>(&type)) {
         return generate_frozen_user_value(engine, *maybe_user_type, *this, size_t{}, size_t{}).serialized_size();
     }
-
     if (auto maybe_tuple_type = dynamic_cast<const tuple_type_impl*>(&type)) {
         return generate_frozen_tuple_value(engine, *maybe_tuple_type, *this, size_t{}, size_t{}).serialized_size();
     }
-
     if (auto maybe_list_type = dynamic_cast<const list_type_impl*>(&type)) {
         return generate_frozen_list_value(engine, *maybe_list_type, *this, size_t{}, size_t{}).serialized_size();
     }
-
     if (auto maybe_set_type = dynamic_cast<const set_type_impl*>(&type)) {
         return generate_frozen_set_value(engine, *maybe_set_type, *this, size_t{}, size_t{}).serialized_size();
     }
-
     if (auto maybe_map_type = dynamic_cast<const map_type_impl*>(&type)) {
         return generate_frozen_map_value(engine, *maybe_map_type, *this, size_t{}, size_t{}).serialized_size();
     }
-
     if (auto maybe_reversed_type = dynamic_cast<const reversed_type_impl*>(&type)) {
         return min_size(*maybe_reversed_type->underlying_type());
     }
-
     throw std::runtime_error(fmt::format("Don't know how to calculate min size for unknown type {}", type.name()));
 }
-
 value_generator::atomic_value_generator value_generator::get_atomic_value_generator(const abstract_type& type) {
     assert(!type.is_multi_cell());
-
     auto it = _regular_value_generators.find(&type);
     if (it != _regular_value_generators.end()) {
         return it->second;
     }
-
     if (auto maybe_user_type = dynamic_cast<const user_type_impl*>(&type)) {
         return [this, maybe_user_type] (std::mt19937& engine, size_t min_size_in_bytes, size_t max_size_in_bytes) {
             return generate_frozen_user_value(engine, *maybe_user_type, *this, min_size_in_bytes, max_size_in_bytes);
         };
     }
-
     if (auto maybe_tuple_type = dynamic_cast<const tuple_type_impl*>(&type)) {
         return [this, maybe_tuple_type] (std::mt19937& engine, size_t min_size_in_bytes, size_t max_size_in_bytes) {
             return generate_frozen_tuple_value(engine, *maybe_tuple_type, *this, min_size_in_bytes, max_size_in_bytes);
         };
     }
-
     if (auto maybe_list_type = dynamic_cast<const list_type_impl*>(&type)) {
         return [this, maybe_list_type] (std::mt19937& engine, size_t min_size_in_bytes, size_t max_size_in_bytes) {
             return generate_frozen_list_value(engine, *maybe_list_type, *this, min_size_in_bytes, max_size_in_bytes);
         };
     }
-
     if (auto maybe_set_type = dynamic_cast<const set_type_impl*>(&type)) {
         return [this, maybe_set_type] (std::mt19937& engine, size_t min_size_in_bytes, size_t max_size_in_bytes) {
             return generate_frozen_set_value(engine, *maybe_set_type, *this, min_size_in_bytes, max_size_in_bytes);
         };
     }
-
     if (auto maybe_map_type = dynamic_cast<const map_type_impl*>(&type)) {
         return [this, maybe_map_type] (std::mt19937& engine, size_t min_size_in_bytes, size_t max_size_in_bytes) {
             return generate_frozen_map_value(engine, *maybe_map_type, *this, min_size_in_bytes, max_size_in_bytes);
         };
     }
-
     if (auto maybe_reversed_type = dynamic_cast<const reversed_type_impl*>(&type)) {
         return get_atomic_value_generator(*maybe_reversed_type->underlying_type());
     }
-
     throw std::runtime_error(fmt::format("Don't know how to generate value for unknown type {}", type.name()));
 }
-
 value_generator::generator value_generator::get_generator(const abstract_type& type) {
     auto it = _regular_value_generators.find(&type);
     if (it != _regular_value_generators.end()) {
@@ -28827,7 +22816,6 @@ value_generator::generator value_generator::get_generator(const abstract_type& t
             return gen(engine, 0, no_size_in_bytes_limit).serialize_nonnull();
         };
     }
-
     if (auto maybe_user_type = dynamic_cast<const user_type_impl*>(&type)) {
         if (maybe_user_type->is_multi_cell()) {
             return [this, maybe_user_type] (std::mt19937& engine) -> data_model::mutation_description::value {
@@ -28839,13 +22827,11 @@ value_generator::generator value_generator::get_generator(const abstract_type& t
             };
         }
     }
-
     if (auto maybe_tuple_type = dynamic_cast<const tuple_type_impl*>(&type)) {
         return [this, maybe_tuple_type] (std::mt19937& engine) -> data_model::mutation_description::value {
             return generate_frozen_tuple_value(engine, *maybe_tuple_type, *this, 0, no_size_in_bytes_limit).serialize_nonnull();
         };
     }
-
     if (auto maybe_list_type = dynamic_cast<const list_type_impl*>(&type)) {
         if (maybe_list_type->is_multi_cell()) {
             return [this, maybe_list_type] (std::mt19937& engine) -> data_model::mutation_description::value {
@@ -28857,7 +22843,6 @@ value_generator::generator value_generator::get_generator(const abstract_type& t
             };
         }
     }
-
     if (auto maybe_set_type = dynamic_cast<const set_type_impl*>(&type)) {
         if (maybe_set_type->is_multi_cell()) {
             return [this, maybe_set_type] (std::mt19937& engine) -> data_model::mutation_description::value {
@@ -28869,7 +22854,6 @@ value_generator::generator value_generator::get_generator(const abstract_type& t
             };
         }
     }
-
     if (auto maybe_map_type = dynamic_cast<const map_type_impl*>(&type)) {
         if (maybe_map_type->is_multi_cell()) {
             return [this, maybe_map_type] (std::mt19937& engine) -> data_model::mutation_description::value {
@@ -28881,87 +22865,70 @@ value_generator::generator value_generator::get_generator(const abstract_type& t
             };
         }
     }
-
     if (auto maybe_reversed_type = dynamic_cast<const reversed_type_impl*>(&type)) {
         return get_generator(*maybe_reversed_type->underlying_type());
     }
-
     throw std::runtime_error(fmt::format("Don't know how to generate value for unknown type {}", type.name()));
 }
-
 data_model::mutation_description::value value_generator::generate_value(std::mt19937& engine, const abstract_type& type) {
     return get_generator(type)(engine);
 }
-
 timestamp_generator default_timestamp_generator() {
     return [] (std::mt19937& engine, timestamp_destination, api::timestamp_type min_timestamp) {
         auto ts_dist = std::uniform_int_distribution<api::timestamp_type>(min_timestamp, api::max_timestamp);
         return ts_dist(engine);
     };
 }
-
 expiry_generator no_expiry_expiry_generator() {
     return [] (std::mt19937& engine, timestamp_destination destination) -> std::optional<expiry_info> {
         return std::nullopt;
     };
 }
-
 namespace {
-
 schema_ptr build_random_schema(uint32_t seed, random_schema_specification& spec) {
     auto engine = std::mt19937{seed};
     auto builder = schema_builder(spec.keyspace_name(), spec.table_name(engine));
-
     auto pk_columns = spec.partition_key_columns(engine);
     assert(!pk_columns.empty()); // Let's not pull in boost::test here
     for (size_t pk = 0; pk < pk_columns.size(); ++pk) {
         builder.with_column(to_bytes(format("pk{}", pk)), std::move(pk_columns[pk]), column_kind::partition_key);
     }
-
     const auto ck_columns = spec.clustering_key_columns(engine);
     for (size_t ck = 0; ck < ck_columns.size(); ++ck) {
         builder.with_column(to_bytes(format("ck{}", ck)), std::move(ck_columns[ck]), column_kind::clustering_key);
     }
-
     if (!ck_columns.empty()) {
         const auto static_columns = spec.static_columns(engine);
         for (size_t s = 0; s < static_columns.size(); ++s) {
             builder.with_column(to_bytes(format("s{}", s)), std::move(static_columns[s]), column_kind::static_column);
         }
     }
-
     const auto regular_columns = spec.regular_columns(engine);
     assert(!regular_columns.empty()); // Let's not pull in boost::test here
     for (size_t r = 0; r < regular_columns.size(); ++r) {
         builder.with_column(to_bytes(format("v{}", r)), std::move(regular_columns[r]), column_kind::regular_column);
     }
-
     return builder.build();
 }
-
 sstring udt_to_str(const user_type_impl& udt) {
     std::stringstream ss;
     udt.describe(ss);
     return ss.str();
 }
-
 struct udt_list {
     std::vector<const user_type_impl*> vector;
-
     void insert(const user_type_impl* udt) {
         auto it = std::find(vector.begin(), vector.end(), udt);
         if (it == vector.end()) {
             vector.push_back(udt);
         }
     }
-
     void merge(udt_list other) {
         for (auto& udt : other.vector) {
             insert(udt);
         }
     }
 };
-
 udt_list dump_udts(const std::vector<data_type>& types) {
     udt_list udts;
     for (const auto& dt : types) {
@@ -28983,29 +22950,23 @@ udt_list dump_udts(const std::vector<data_type>& types) {
     }
     return udts;
 }
-
 std::vector<const user_type_impl*> dump_udts(const schema& schema) {
     udt_list udts;
-
     const auto cdefs_to_types = [] (const schema::const_iterator_range_type& cdefs) -> std::vector<data_type> {
         return boost::copy_range<std::vector<data_type>>(cdefs |
                 boost::adaptors::transformed([] (const column_definition& cdef) { return cdef.type; }));
     };
-
     udts.merge(dump_udts(cdefs_to_types(schema.partition_key_columns())));
     udts.merge(dump_udts(cdefs_to_types(schema.clustering_key_columns())));
     udts.merge(dump_udts(cdefs_to_types(schema.regular_columns())));
     udts.merge(dump_udts(cdefs_to_types(schema.static_columns())));
-
     return udts.vector;
 }
-
 std::vector<sstring> columns_specs(schema_ptr schema, column_kind kind) {
     const auto count = schema->columns_count(kind);
     if (!count) {
         return {};
     }
-
     std::vector<sstring> col_specs;
     for (column_count_type c = 0; c < count; ++c) {
         const auto& cdef = schema->column_at(kind, c);
@@ -29014,13 +22975,11 @@ std::vector<sstring> columns_specs(schema_ptr schema, column_kind kind) {
     }
     return col_specs;
 }
-
 std::vector<sstring> column_names(schema_ptr schema, column_kind kind) {
     const auto count = schema->columns_count(kind);
     if (!count) {
         return {};
     }
-
     std::vector<sstring> col_names;
     for (column_count_type c = 0; c < count; ++c) {
         const auto& cdef = schema->column_at(kind, c);
@@ -29028,9 +22987,7 @@ std::vector<sstring> column_names(schema_ptr schema, column_kind kind) {
     }
     return col_names;
 }
-
 }
-
 void decorate_with_timestamps(const schema& schema, std::mt19937& engine, timestamp_generator& ts_gen, expiry_generator exp_gen,
         data_model::mutation_description::value& value) {
     std::visit(
@@ -29064,49 +23021,38 @@ void decorate_with_timestamps(const schema& schema, std::mt19937& engine, timest
                     }),
             value);
 }
-
 data_model::mutation_description::key random_schema::make_key(uint32_t n, value_generator& gen, schema::const_iterator_range_type columns,
         size_t max_size_in_bytes) {
     std::mt19937 engine(n);
-
     const size_t max_component_size = max_size_in_bytes / std::distance(columns.begin(), columns.end());
-
     std::vector<bytes> key;
     for (const auto& cdef : columns) {
         key.emplace_back(gen.generate_atomic_value(engine, *cdef.type, max_component_size).serialize_nonnull());
     }
-
     return key;
 }
-
 data_model::mutation_description::key random_schema::make_partition_key(uint32_t n, value_generator& gen) const {
     return make_key(n, gen, _schema->partition_key_columns(), std::numeric_limits<partition_key::compound::element_type::size_type>::max());
 }
-
 data_model::mutation_description::key random_schema::make_clustering_key(uint32_t n, value_generator& gen) const {
     assert(_schema->clustering_key_size() > 0);
     return make_key(n, gen, _schema->clustering_key_columns(), std::numeric_limits<clustering_key::compound::element_type::size_type>::max());
 }
-
 random_schema::random_schema(uint32_t seed, random_schema_specification& spec)
     : _schema(build_random_schema(seed, spec)) {
 }
-
 sstring random_schema::cql() const {
     auto udts = dump_udts(*_schema);
-
     sstring udts_str;
     if (!udts.empty()) {
         udts_str = boost::algorithm::join(udts |
                 boost::adaptors::transformed([] (const user_type_impl* const udt) { return udt_to_str(*udt); }), "\n");
     }
-
     std::vector<sstring> col_specs;
     for (auto kind : {column_kind::partition_key, column_kind::clustering_key, column_kind::regular_column, column_kind::static_column}) {
         auto cols = columns_specs(_schema, kind);
         std::move(cols.begin(), cols.end(), std::back_inserter(col_specs));
     }
-
     sstring primary_key;
     auto partition_column_names = column_names(_schema, column_kind::partition_key);
     auto clustering_key_names = column_names(_schema, column_kind::clustering_key);
@@ -29115,7 +23061,6 @@ sstring random_schema::cql() const {
     } else {
         primary_key = format("{}", boost::algorithm::join(partition_column_names, ", "));
     }
-
     // FIXME include the clustering column orderings
     return format(
             "{}\nCREATE TABLE {}.{} (\n\t{}\n\tPRIMARY KEY ({}))",
@@ -29125,51 +23070,40 @@ sstring random_schema::cql() const {
             boost::algorithm::join(col_specs, ",\n\t"),
             primary_key);
 }
-
 data_model::mutation_description::key random_schema::make_pkey(uint32_t n) {
     value_generator g;
     return make_partition_key(n, g);
 }
-
 std::vector<data_model::mutation_description::key> random_schema::make_pkeys(size_t n) {
     std::set<dht::decorated_key, dht::ring_position_less_comparator> keys{dht::ring_position_less_comparator{*_schema}};
     value_generator val_gen;
-
     uint32_t i{0};
     while (keys.size() < n) {
         keys.emplace(dht::decorate_key(*_schema, partition_key::from_exploded(make_partition_key(i, val_gen))));
         ++i;
     }
-
     return boost::copy_range<std::vector<data_model::mutation_description::key>>(keys |
             boost::adaptors::transformed([] (const dht::decorated_key& dkey) { return dkey.key().explode(); }));
 }
-
 data_model::mutation_description::key random_schema::make_ckey(uint32_t n) {
     value_generator g;
     return make_clustering_key(n, g);
 }
-
 std::vector<data_model::mutation_description::key> random_schema::make_ckeys(size_t n) {
     std::set<clustering_key, clustering_key::less_compare> keys{clustering_key::less_compare{*_schema}};
     value_generator val_gen;
-
     for (uint32_t i = 0; i < n; i++) {
         keys.emplace(clustering_key::from_exploded(make_clustering_key(i, val_gen)));
     }
-
     return boost::copy_range<std::vector<data_model::mutation_description::key>>(keys |
             boost::adaptors::transformed([] (const clustering_key& ckey) { return ckey.explode(); }));
 }
-
 data_model::mutation_description random_schema::new_mutation(data_model::mutation_description::key pkey) {
     return data_model::mutation_description(std::move(pkey));
 }
-
 data_model::mutation_description random_schema::new_mutation(uint32_t n) {
     return new_mutation(make_pkey(n));
 }
-
 void random_schema::set_partition_tombstone(std::mt19937& engine, data_model::mutation_description& md, timestamp_generator ts_gen,
         expiry_generator exp_gen) {
     if (const auto ts = ts_gen(engine, timestamp_destination::partition_tombstone, api::min_timestamp); ts != api::missing_timestamp) {
@@ -29178,12 +23112,10 @@ void random_schema::set_partition_tombstone(std::mt19937& engine, data_model::mu
         md.set_partition_tombstone(tombstone(ts, deletion_time));
     }
 }
-
 void random_schema::add_row(std::mt19937& engine, data_model::mutation_description& md, uint32_t n, timestamp_generator ts_gen,
         expiry_generator exp_gen) {
     add_row(engine, md, make_ckey(n), std::move(ts_gen), std::move(exp_gen));
 }
-
 void random_schema::add_static_row(std::mt19937& engine, data_model::mutation_description& md, timestamp_generator ts_gen, expiry_generator exp_gen) {
     value_generator gen;
     for (const auto& cdef : _schema->static_columns()) {
@@ -29192,7 +23124,6 @@ void random_schema::add_static_row(std::mt19937& engine, data_model::mutation_de
         md.add_static_cell(cdef.name_as_text(), std::move(value));
     }
 }
-
 void random_schema::delete_range(
         std::mt19937& engine,
         data_model::mutation_description& md,
@@ -29203,12 +23134,10 @@ void random_schema::delete_range(
     const auto deletion_time = expiry_opt ? expiry_opt->expiry_point : gc_clock::now();
     md.add_range_tombstone(std::move(range), tombstone{ts_gen(engine, timestamp_destination::range_tombstone, api::min_timestamp), deletion_time});
 }
-
 future<> random_schema::create_with_cql(cql_test_env& env) {
     return async([this, &env] {
         const auto ks_name = _schema->ks_name();
         const auto tbl_name = _schema->cf_name();
-
         for (const auto& udt : dump_udts(*_schema)) {
             env.execute_cql(udt_to_str(*udt)).get();
             eventually_true([&] () mutable {
@@ -29217,21 +23146,15 @@ future<> random_schema::create_with_cql(cql_test_env& env) {
                 }, true, std::logical_and<bool>{}).get();
             });
         }
-
         auto& db = env.local_db();
-
         std::stringstream ss;
         _schema->describe(db, ss, false);
-
         env.execute_cql(ss.str()).get();
-
         env.require_table_exists(ks_name, tbl_name).get();
         auto& tbl = db.find_column_family(ks_name, tbl_name);
-
         _schema = tbl.schema();
     });
 }
-
 future<std::vector<mutation>> generate_random_mutations(
         uint32_t seed,
         tests::random_schema& random_schema,
@@ -29249,21 +23172,17 @@ future<std::vector<mutation>> generate_random_mutations(
         auto mut = random_schema.new_mutation(pk);
         random_schema.set_partition_tombstone(engine, mut, ts_gen, exp_gen);
         random_schema.add_static_row(engine, mut, ts_gen, exp_gen);
-
         if (!schema_has_clustering_columns) {
             muts.emplace_back(mut.build(random_schema.schema()));
             continue;
         }
-
         const auto clustering_row_count = clustering_row_count_dist(engine);
         const auto range_tombstone_count = range_tombstone_count_dist(engine);
         auto ckeys = random_schema.make_ckeys(std::max(clustering_row_count, range_tombstone_count));
-
         for (uint32_t ck = 0; ck < ckeys.size(); ++ck) {
             random_schema.add_row(engine, mut, ckeys[ck], ts_gen, exp_gen);
             co_await coroutine::maybe_yield();
         }
-
         for (size_t i = 0; i < range_tombstone_count; ++i) {
             const auto a = tests::random::get_int<size_t>(0, ckeys.size() - 1, engine);
             const auto b = tests::random::get_int<size_t>(0, ckeys.size() - 1, engine);
@@ -29286,7 +23205,6 @@ future<std::vector<mutation>> generate_random_mutations(
     muts.erase(range.end(), muts.end());
     co_return std::move(muts);
 }
-
 future<std::vector<mutation>> generate_random_mutations(
         tests::random_schema& random_schema,
         timestamp_generator ts_gen,
@@ -29297,7 +23215,6 @@ future<std::vector<mutation>> generate_random_mutations(
     return generate_random_mutations(tests::random::get_int<uint32_t>(), random_schema, std::move(ts_gen), std::move(exp_gen), partition_count_dist,
             clustering_row_count_dist, range_tombstone_count_dist);
 }
-
 future<std::vector<mutation>> generate_random_mutations(tests::random_schema& random_schema, size_t partition_count) {
     return generate_random_mutations(
             random_schema,
@@ -29305,21 +23222,9 @@ future<std::vector<mutation>> generate_random_mutations(tests::random_schema& ra
             no_expiry_expiry_generator(),
             std::uniform_int_distribution<size_t>(partition_count, partition_count));
 }
-
 } // namespace tests
-/*
- * Copyright (C) 2023-present ScyllaDB
- */
-
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- */
-
-
 namespace tests {
-
 namespace {
-
 template<typename RawKey, typename DecoratedKey, typename Comparator>
 std::vector<DecoratedKey> generate_keys(
         size_t n,
@@ -29331,14 +23236,11 @@ std::vector<DecoratedKey> generate_keys(
         std::optional<key_size> size) {
     auto keys = std::set<DecoratedKey, Comparator>(cmp);
     const auto effective_size = size.value_or(tests::key_size{1, 128});
-
     std::mt19937 engine(tests::random::get_int<uint32_t>());
     std::uniform_int_distribution<size_t> component_count_dist(1, types.size());
     tests::value_generator value_gen;
-
     std::vector<data_value> components;
     components.reserve(types.size());
-
     while (keys.size() != n) {
         components.clear();
         auto component_count = allow_prefixes ? component_count_dist(engine) : types.size();
@@ -29356,12 +23258,9 @@ std::vector<DecoratedKey> generate_keys(
             keys.emplace(std::move(*decorated_key_opt));
         }
     }
-
     return std::vector<DecoratedKey>(keys.begin(), keys.end());
 }
-
 }
-
 std::vector<dht::decorated_key> generate_partition_keys(size_t n, schema_ptr s, std::optional<shard_id> shard, std::optional<key_size> size) {
     return generate_keys<partition_key, dht::decorated_key, dht::decorated_key::less_comparator>(
             n,
@@ -29381,20 +23280,16 @@ std::vector<dht::decorated_key> generate_partition_keys(size_t n, schema_ptr s, 
             false,
             size);
 }
-
 std::vector<dht::decorated_key> generate_partition_keys(size_t n, schema_ptr s, local_shard_only lso, std::optional<key_size> size) {
     return generate_partition_keys(n, std::move(s), lso == local_shard_only::yes ? std::optional(this_shard_id()) : std::nullopt, size);
 }
-
 dht::decorated_key generate_partition_key(schema_ptr s, std::optional<shard_id> shard, std::optional<key_size> size) {
     auto&& keys = generate_partition_keys(1, std::move(s), shard, size);
     return std::move(keys.front());
 }
-
 dht::decorated_key generate_partition_key(schema_ptr s, local_shard_only lso, std::optional<key_size> size) {
     return generate_partition_key(std::move(s), lso == local_shard_only::yes ? std::optional(this_shard_id()) : std::nullopt, size);
 }
-
 std::vector<clustering_key> generate_clustering_keys(size_t n, schema_ptr s, bool allow_prefixes, std::optional<key_size> size) {
     return generate_keys<clustering_key, clustering_key, clustering_key::less_compare>(
             n,
@@ -29405,10 +23300,8 @@ std::vector<clustering_key> generate_clustering_keys(size_t n, schema_ptr s, boo
             allow_prefixes,
             size);
 }
-
 clustering_key generate_clustering_key(schema_ptr s, bool allow_prefix, std::optional<key_size> size) {
     auto&& keys = generate_clustering_keys(1, std::move(s), allow_prefix, size);
     return std::move(keys.front());
 }
-
 } // namespace tests
