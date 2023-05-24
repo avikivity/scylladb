@@ -84,7 +84,7 @@ public:
     void visit(const result_message::schema_change&) override {};
     void visit(const result_message::rows&) override {};
     void visit(const result_message::bounce_to_shard&) override { assert(false); };
-    void visit(const result_message::exception&) override;
+    void visit(const result_message::exception&) override {}
 };
 
 class result_message::void_message : public result_message {
