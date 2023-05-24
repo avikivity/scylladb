@@ -464,11 +464,6 @@ defines = ['XXH_PRIVATE_API',
 ]
 
 scylla_raft_core = [
-    'raft/raft.cc',
-    'raft/server.cc',
-    'raft/fsm.cc',
-    'raft/tracker.cc',
-    'raft/log.cc',
 ]
 
 scylla_core = (['message/messaging_service.cc',
@@ -840,16 +835,9 @@ scylla_core = (['message/messaging_service.cc',
                 'lang/wasm.cc',
                 'lang/wasm_alien_thread_runner.cc',
                 'lang/wasm_instance_cache.cc',
-                'service/raft/group0_state_machine.cc',
-                'service/raft/raft_sys_table_storage.cc',
                 'serializer.cc',
                 'release.cc',
-                'service/raft/raft_rpc.cc',
-                'service/raft/raft_group_registry.cc',
-                'service/raft/discovery.cc',
-                'service/raft/raft_group0.cc',
                 'direct_failure_detector/failure_detector.cc',
-                'service/raft/raft_group0_client.cc',
                 'service/broadcast_tables/experimental/lang.cc',
                 'tasks/task_manager.cc',
                 'rust/wasmtime_bindings/src/lib.rs',

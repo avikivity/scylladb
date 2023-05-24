@@ -20,6 +20,7 @@
 class canonical_mutation {
     bytes_ostream _data;
 public:
+    canonical_mutation() {}
     explicit canonical_mutation(bytes_ostream);
     explicit canonical_mutation(const mutation&);
 

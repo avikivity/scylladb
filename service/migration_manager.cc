@@ -990,11 +990,6 @@ future<> migration_manager::announce(std::vector<mutation> schema, group0_guard 
     }
 }
 
-future<group0_guard> migration_manager::start_group0_operation() {
-    assert(this_shard_id() == 0);
-    return _group0_client.start_operation(&_as);
-}
-
 /**
  * Announce my version passively over gossip.
  * Used to notify nodes as they arrive in the cluster.

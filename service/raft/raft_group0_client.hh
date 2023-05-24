@@ -32,27 +32,18 @@ namespace service {
 // It is also required in order to perform group 0 changes
 // See `group0_guard::impl` for more detailed explanations.
 class group0_guard {
-    friend class raft_group0_client;
-    struct impl;
-    std::unique_ptr<impl> _impl;
-
-    group0_guard(std::unique_ptr<impl>);
-
 public:
-    ~group0_guard();
-    group0_guard(group0_guard&&) noexcept;
-    group0_guard& operator=(group0_guard&&) noexcept;
 
-    utils::UUID observed_group0_state_id() const;
-    utils::UUID new_group0_state_id() const;
+    utils::UUID observed_group0_state_id() const { return {}; }
+    utils::UUID new_group0_state_id() const { return {}; }
 
     // Use this timestamp when creating group 0 mutations.
-    api::timestamp_type write_timestamp() const;
+    api::timestamp_type write_timestamp() const { return {}; }
 
     // Are we *actually* using group 0 yet?
     // Until the upgrade procedure finishes, we will perform operations such as schema changes using the old way,
     // but still pass the guard around to synchronize operations with the upgrade procedure.
-    bool with_raft() const;
+    bool with_raft() const { return false; }
 };
 
 class group0_concurrent_modification : public std::runtime_error {
@@ -84,15 +75,11 @@ class raft_group0_client {
     // then `group0_state_machine` will save the result of that query and it can be returned by the guard.
     // Guard manages the lifetime of the _results entry. It creates and destroys the entry, which state machine puts the result in.
     class query_result_guard {
-        utils::UUID _query_id;
-        raft_group0_client* _client;
     public:
+        query_result_guard() {}
         query_result_guard(utils::UUID query_id, raft_group0_client& client);
-        query_result_guard(query_result_guard&&);
-        ~query_result_guard();
-
         // Preconditon: set_query_result was called with query_id=this->_query_id.
-        service::broadcast_tables::query_result get();
+        service::broadcast_tables::query_result get() { return {}; }
     };
 
 public:
@@ -101,9 +88,9 @@ public:
     // Call after `system_keyspace` is initialized.
     future<> init();
 
-    future<> add_entry(group0_command group0_cmd, group0_guard guard, seastar::abort_source* as = nullptr);
+    future<> add_entry(group0_command group0_cmd, group0_guard guard, seastar::abort_source* as = nullptr) { return make_ready_future<>(); }
 
-    future<> add_entry_unguarded(group0_command group0_cmd, seastar::abort_source* as = nullptr);
+    future<> add_entry_unguarded(group0_command group0_cmd, seastar::abort_source* as = nullptr) { return make_ready_future<>(); }
 
     // Ensures that all previously finished operations on group 0 are visible on this node;
     // in particular, performs a Raft read barrier on group 0.
@@ -127,10 +114,10 @@ public:
     // and add_entry would again forward to shard 0.
     future<group0_guard> start_operation(seastar::abort_source* as = nullptr);
 
-    group0_command prepare_command(broadcast_table_query query);
+    group0_command prepare_command(broadcast_table_query query) { return {}; }
     template<typename Command>
     requires std::same_as<Command, schema_change> || std::same_as<Command, topology_change>
-    group0_command prepare_command(Command change, group0_guard& guard, std::string_view description);
+    group0_command prepare_command(Command change, group0_guard& guard, std::string_view description) { return {}; }
 
     // Returns the current group 0 upgrade state.
     //
@@ -178,7 +165,7 @@ public:
     void set_history_gc_duration(gc_clock::duration d);
     semaphore& operation_mutex();
 
-    query_result_guard create_result_guard(utils::UUID query_id);
+    query_result_guard create_result_guard(utils::UUID query_id) { return {}; }
     void set_query_result(utils::UUID query_id, service::broadcast_tables::query_result qr);
 };
 
