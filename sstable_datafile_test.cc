@@ -1,3 +1,367 @@
+
+#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
+
+
+#include "absl-flat_hash_map.hh"
+#include <algorithm>
+#include <array>
+#include "array-search.hh"
+#include "ascii.hh"
+#include <atomic>
+#include "atomic_cell_hash.hh"
+#include "atomic_cell.hh"
+#include "barrett.hh"
+#include "base64.hh"
+#include "big_decimal.hh"
+#include "bloom_calculations.hh"
+#include "bloom_filter.hh"
+#include <boost/algorithm/cxx11/any_of.hpp>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/erase.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/any.hpp>
+#include <boost/date_time/c_local_time_adjustor.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/intrusive/list.hpp>
+#include <boost/intrusive/set.hpp>
+#include <boost/intrusive/slist.hpp>
+#include <boost/iterator/function_input_iterator.hpp>
+#include <boost/iterator/transform_iterator.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/locale/encoding.hpp>
+#include <boost/locale/encoding_utf.hpp>
+#include <boost/multiprecision/cpp_int.hpp>
+#include <boost/program_options.hpp>
+#include <boost/range/adaptor/filtered.hpp>
+#include <boost/range/adaptor/map.hpp>
+#include <boost/range/adaptor/reversed.hpp>
+#include <boost/range/adaptors.hpp>
+#include <boost/range/adaptor/transformed.hpp>
+#include <boost/range/algorithm/copy.hpp>
+#include <boost/range/algorithm_ext/push_back.hpp>
+#include <boost/range/algorithm/heap_algorithm.hpp>
+#include <boost/range/algorithm.hpp>
+#include <boost/range/algorithm/remove.hpp>
+#include <boost/range/algorithm/sort.hpp>
+#include <boost/range/algorithm/unique.hpp>
+#include <boost/range/algorithm/upper_bound.hpp>
+#include <boost/range/combine.hpp>
+#include <boost/range/irange.hpp>
+#include <boost/range/numeric.hpp>
+#include <boost/regex.hpp>
+#include <boost/regex/icu.hpp>
+#include <boost/test/unit_test.hpp>
+#include "buffer_input_stream.hh"
+#include "build_id.hh"
+#include "bytes.hh"
+#include "caching_options.hh"
+#include "canonical_mutation.hh"
+#include <cassert>
+#include <cctype>
+#include "cdc/cdc_extension.hh"
+#include <chrono>
+#include <cinttypes>
+#include "clocks-impl.hh"
+#include "clustering_bounds_comparator.hh"
+#include "clustering_interval_set.hh"
+#include "clustering_key_filter.hh"
+#include <cmath>
+#include "collection_mutation.hh"
+#include "combine.hh"
+#include "compaction/compaction_garbage_collector.hh"
+#include <concepts>
+#include "concrete_types.hh"
+#include "config_file.hh"
+#include "config_file_impl.hh"
+#include "converting_mutation_partition_applier.hh"
+#include "counters.hh"
+#include "cql3/column_identifier.hh"
+#include "cql3/column_specification.hh"
+#include "cql3/cql3_type.hh"
+#include "cql3/lists.hh"
+#include "cql3/maps.hh"
+#include "cql3/query_options.hh"
+#include "cql3/sets.hh"
+#include "cql3/util.hh"
+#include "crc_combine.hh"
+#include "crc_combine_table.hh"
+#include <cryptopp/md5.h>
+#include <cryptopp/sha.h>
+#include <cstdint>
+#include <cstdlib>
+#include <ctime>
+#include <ctype.h>
+#include "db_clock.hh"
+#include "db/config.hh"
+#include "db/marshal/type_parser.hh"
+#include "db/paxos_grace_seconds_extension.hh"
+#include "db/per_partition_rate_limit_extension.hh"
+#include "db/schema_tables.hh"
+#include "db/view/view.hh"
+#include <deque>
+#include "dht/boot_strapper.hh"
+#include "dht/i_partitioner.hh"
+#include "dht/partition_filter.hh"
+#include "dht/range_streamer.hh"
+#include "dht/token.hh"
+#include "dht/token-sharding.hh"
+#include "directories.hh"
+#include "duration.hh"
+#include <exception>
+#include "exceptions/exceptions.hh"
+#include "exceptions.hh"
+#include "fb_utilities.hh"
+#include <fcntl.h>
+#include "file_lock.hh"
+#include <fmt/chrono.h>
+#include <fmt/format.h>
+#include <fmt/ostream.h>
+#include "frozen_mutation.hh"
+#include "frozen_schema.hh"
+#include "gc_clock.hh"
+#include "gms/gossiper.hh"
+#include <gnutls/crypto.h>
+#include "hashing_partition_visitor.hh"
+#include "histogram_metrics_helper.hh"
+#include "idl/frozen_schema.dist.hh"
+#include "idl/frozen_schema.dist.impl.hh"
+#include "idl/mutation.dist.hh"
+#include "idl/mutation.dist.impl.hh"
+#include "i_filter.hh"
+#include "init.hh"
+#include <iostream>
+#include "i_partitioner.hh"
+#include "keys.hh"
+#include "large_bitset.hh"
+#include "like_matcher.hh"
+#include "limiting_data_source.hh"
+#include <limits>
+#include <link.h>
+#include "locator/abstract_replication_strategy.hh"
+#include "log.hh"
+#include "managed_bytes.hh"
+#include <map>
+#include "marshal_exception.hh"
+#include <memory>
+#include "multiprecision_int.hh"
+#include "murmur3_partitioner.hh"
+#include "murmur_hash.hh"
+#include "mutation/canonical_mutation.hh"
+#include "mutation_cleaner.hh"
+#include "mutation_compactor.hh"
+#include "mutation_fragment.hh"
+#include "mutation_fragment_v2.hh"
+#include "mutation.hh"
+#include "mutation/mutation_fragment.hh"
+#include "mutation/mutation_fragment_stream_validator.hh"
+#include "mutation/mutation_fragment_v2.hh"
+#include "mutation/mutation.hh"
+#include "mutation/mutation_partition.hh"
+#include "mutation/mutation_partition_serializer.hh"
+#include "mutation/mutation_partition_view.hh"
+#include "mutation/mutation_rebuilder.hh"
+#include "mutation_partition.hh"
+#include "mutation_partition_serializer.hh"
+#include "mutation_partition_v2.hh"
+#include "mutation_partition_view.hh"
+#include "mutation_partition_visitor.hh"
+#include "mutation_query.hh"
+#include "mutation_rebuilder.hh"
+#include <net/if_arp.h>
+#include <net/if.h>
+#include <optional>
+#include <ostream>
+#include "partition_builder.hh"
+#include "partition_slice_builder.hh"
+#include "partition_snapshot_row_cursor.hh"
+#include "partition_version.hh"
+#include "query-request.hh"
+#include "query-result.hh"
+#include "query_result_merger.hh"
+#include "query-result-reader.hh"
+#include "query-result-set.hh"
+#include "query-result-writer.hh"
+#include <random>
+#include "range_tombstone.hh"
+#include "range_tombstone_list.hh"
+#include <rapidjson/stream.h>
+#include <rapidxml.h>
+#include "rate_limiter.hh"
+#include "readers/flat_mutation_reader_v2.hh"
+#include "readers/mutation_source.hh"
+#include "real_dirty_memory_accounter.hh"
+#include "replica/database.hh"
+#include "reversibly_mergeable.hh"
+#include "rjson.hh"
+#include "row_cache.hh"
+#include "sanitizer/asan_interface.h"
+#include "schema_builder.hh"
+#include "schema.hh"
+#include "schema_mutations.hh"
+#include "schema_registry.hh"
+#include "schema/schema_builder.hh"
+#include "schema/schema.hh"
+#include "schema/schema_registry.hh"
+#include <seastar/core/abort_on_ebadf.hh>
+#include <seastar/core/align.hh>
+#include <seastar/core/bitops.hh>
+#include <seastar/core/byteorder.hh>
+#include <seastar/core/coroutine.hh>
+#include <seastar/core/do_with.hh>
+#include <seastar/core/enum.hh>
+#include <seastar/core/execution_stage.hh>
+#include <seastar/core/file.hh>
+#include <seastar/core/fstream.hh>
+#include <seastar/core/iostream.hh>
+#include <seastar/core/loop.hh>
+#include <seastar/core/memory.hh>
+#include <seastar/core/metrics.hh>
+#include <seastar/core/on_internal_error.hh>
+#include <seastar/core/posix.hh>
+#include <seastar/core/print.hh>
+#include <seastar/core/reactor.hh>
+#include <seastar/core/seastar.hh>
+#include <seastar/core/semaphore.hh>
+#include <seastar/core/sharded.hh>
+#include <seastar/core/shared_future.hh>
+#include "seastar/core/shared_ptr.hh"
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/simple-stream.hh>
+#include <seastar/core/sleep.hh>
+#include <seastar/core/smp.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/temporary_buffer.hh>
+#include "seastar/core/thread.hh"
+#include <seastar/core/thread.hh>
+#include <seastar/core/with_scheduling_group.hh>
+#include <seastar/coroutine/all.hh>
+#include <seastar/coroutine/maybe_yield.hh>
+#include <seastar/http/request.hh>
+#include <seastar/json/json_elements.hh>
+#include <seastar/net/byteorder.hh>
+#include <seastar/net/dns.hh>
+#include <seastar/net/inet_address.hh>
+#include <seastar/net/tls.hh>
+#include <seastar/rpc/rpc.hh>
+#include <seastar/util/alloc_failure_injector.hh>
+#include <seastar/util/backtrace.hh>
+#include <seastar/util/closeable.hh>
+#include <seastar/util/defer.hh>
+#include <seastar/util/later.hh>
+#include <seastar/util/log.hh>
+#include <seastar/util/short_streams.hh>
+#include <seastar/util/variant_utils.hh>
+#include "seastarx.hh"
+#include "serializer_impl.hh"
+#include "service/priority_manager.hh"
+#include <set>
+#include "sharder.hh"
+#include <smmintrin.h>
+#include "sstables/key.hh"
+#include <sstream>
+#include <stack>
+#include <stdexcept>
+#include <stdlib.h>
+#include "streaming/stream_plan.hh"
+#include "streaming/stream_reason.hh"
+#include "streaming/stream_state.hh"
+#include <string>
+#include "supervisor.hh"
+#include <sys/ioctl.h>
+#include <system_error>
+#include "test/lib/cql_test_env.hh"
+#include "test/lib/data_model.hh"
+#include "test/lib/exception_utils.hh"
+#include "test/lib/flat_mutation_reader_assertions.hh"
+#include "test/lib/key_utils.hh"
+#include "test/lib/log.hh"
+#include "test/lib/make_random_string.hh"
+#include "test/lib/mutation_source_test.hh"
+#include "test/lib/random_schema.hh"
+#include "test/lib/random_utils.hh"
+#include "test/lib/reader_concurrency_semaphore.hh"
+#include "test/lib/result_set_assertions.hh"
+#include "test/lib/scylla_test_case.hh"
+#include "test/lib/simple_schema.hh"
+#include "test/lib/test_utils.hh"
+#include "timestamp.hh"
+#include "tombstone_gc_extension.hh"
+#include "tombstone_gc.hh"
+#include "tombstone_gc_options.hh"
+#include <typeinfo>
+#include "types/collection.hh"
+#include "types/list.hh"
+#include "types/listlike_partial_deserializing_iterator.hh"
+#include "types/map.hh"
+#include "types/set.hh"
+#include "types/tuple.hh"
+#include "types/types.hh"
+#include "types/user.hh"
+#include <type_traits>
+#include "unimplemented.hh"
+#include <unistd.h>
+#include <unordered_map>
+#include "updateable_value.hh"
+#include "utf8.hh"
+#include <utility>
+#include "utils/abi/eh_ia64.hh"
+#include "utils/allocation_strategy.hh"
+#include "utils/amortized_reserve.hh"
+#include "utils/ascii.hh"
+#include "utils/aws_sigv4.hh"
+#include "utils/big_decimal.hh"
+#include "utils/chunked_vector.hh"
+#include "utils/class_registrator.hh"
+#include "utils/clmul.hh"
+#include "utils/coarse_steady_clock.hh"
+#include "utils/coroutine.hh"
+#include "utils/data_input.hh"
+#include "utils/date.h"
+#include "utils/disk-error-handler.hh"
+#include "utils/div_ceil.hh"
+#include "utils/dynamic_bitset.hh"
+#include "utils/error_injection.hh"
+#include "utils/exceptions.hh"
+#include "utils/fb_utilities.hh"
+#include "utils/fmt-compat.hh"
+#include "utils/fragment_range.hh"
+#include "utils/hashers.hh"
+#include "utils/hashing.hh"
+#include "utils/human_readable.hh"
+#include "utils/large_bitset.hh"
+#include "utils/lister.hh"
+#include "utils/logalloc.hh"
+#include "utils/log_heap.hh"
+#include "utils/managed_bytes.hh"
+#include "utils/memory_data_sink.hh"
+#include "utils/murmur_hash.hh"
+#include "utils/overloaded_functor.hh"
+#include "utils/preempt.hh"
+#include "utils/rjson.hh"
+#include "utils/runtime.hh"
+#include "utils/s3/client.hh"
+#include "utils/serialization.hh"
+#include "utils/simple_hashers.hh"
+#include "utils/stall_free.hh"
+#include "utils/to_string.hh"
+#include "utils/unconst.hh"
+#include "utils/utf8.hh"
+#include "utils/UUID_gen.hh"
+#include "utils/UUID.hh"
+#include "utils/vle.hh"
+#include "utils/xx_hasher.hh"
+#include "UUID_gen.hh"
+#include "UUID.hh"
+#include "version.hh"
+#include "view_info.hh"
+#include "vint-serialization.hh"
+#include <x86intrin.h>
+#include <yaml-cpp/yaml.h>
+#include <zlib.h>
+
+
 /*
  * Copyright (C) 2015-present ScyllaDB
  */
@@ -6,10 +370,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "test/lib/scylla_test_case.hh"
 
-#include "test/lib/random_utils.hh"
-#include "test/lib/random_schema.hh"
 
 
 namespace tests {
@@ -75,8 +436,6 @@ SEASTAR_TEST_CASE(test_validate_checksums) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "counters.hh"
-#include "types/types.hh"
 
 atomic_cell atomic_cell::make_dead(api::timestamp_type timestamp, gc_clock::time_point deletion_time) {
     return atomic_cell_type::make_dead(timestamp, deletion_time);
@@ -308,18 +667,6 @@ std::ostream& operator<<(std::ostream& os, const atomic_cell_or_collection::prin
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "canonical_mutation.hh"
-#include "mutation.hh"
-#include "mutation_partition_view.hh"
-#include "mutation_partition_visitor.hh"
-#include "mutation_partition_serializer.hh"
-#include "counters.hh"
-#include "converting_mutation_partition_applier.hh"
-#include "hashing_partition_visitor.hh"
-#include "utils/UUID.hh"
-#include "idl/mutation.dist.hh"
-#include "idl/mutation.dist.impl.hh"
-#include <iostream>
 
 canonical_mutation::canonical_mutation(bytes_ostream data)
         : _data(std::move(data))
@@ -460,21 +807,6 @@ std::ostream& operator<<(std::ostream& os, const canonical_mutation& cm) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <seastar/core/coroutine.hh>
-#include "frozen_mutation.hh"
-#include "schema/schema_registry.hh"
-#include "mutation_partition.hh"
-#include "mutation.hh"
-#include "counters.hh"
-#include "partition_builder.hh"
-#include "mutation_partition_serializer.hh"
-#include "utils/data_input.hh"
-#include "query-result-set.hh"
-#include "idl/mutation.dist.hh"
-#include "idl/mutation.dist.impl.hh"
-#include "readers/flat_mutation_reader_v2.hh"
-#include "converting_mutation_partition_applier.hh"
-#include "mutation_partition_view.hh"
 
 //
 // Representation layout:
@@ -760,9 +1092,6 @@ future<> fragment_and_freeze(flat_mutation_reader_v2 mr, frozen_mutation_consume
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "mutation.hh"
-#include "query-result-writer.hh"
-#include "mutation_rebuilder.hh"
 
 mutation::data::data(dht::decorated_key&& key, schema_ptr&& schema)
     : _schema(std::move(schema))
@@ -961,15 +1290,7 @@ std::ostream& operator<<(std::ostream& os, const mutation& m) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <stack>
-#include <boost/range/algorithm/heap_algorithm.hpp>
 
-#include "mutation.hh"
-#include "mutation_fragment.hh"
-#include "mutation_fragment_v2.hh"
-#include "clustering_interval_set.hh"
-#include "utils/hashing.hh"
-#include "utils/xx_hasher.hh"
 
 std::ostream&
 operator<<(std::ostream& os, const clustering_row::printer& p) {
@@ -1461,7 +1782,6 @@ template void appending_hash<mutation_fragment>::operator()<xx_hasher>(xx_hasher
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "mutation/mutation_fragment_stream_validator.hh"
 
 logging::logger validator_log("mutation_fragment_stream_validator");
 
@@ -1832,33 +2152,7 @@ void mutation_fragment_stream_validating_filter::on_end_of_stream() {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
-#include <boost/range/adaptor/reversed.hpp>
-#include "mutation_partition.hh"
-#include "clustering_interval_set.hh"
-#include "converting_mutation_partition_applier.hh"
-#include "partition_builder.hh"
-#include "query-result-writer.hh"
-#include "atomic_cell_hash.hh"
-#include "reversibly_mergeable.hh"
-#include "mutation_fragment.hh"
-#include "mutation_query.hh"
-#include "service/priority_manager.hh"
-#include "mutation_compactor.hh"
-#include "counters.hh"
-#include "row_cache.hh"
-#include "view_info.hh"
-#include "mutation_cleaner.hh"
-#include <seastar/core/execution_stage.hh>
-#include "types/map.hh"
-#include "compaction/compaction_garbage_collector.hh"
-#include "utils/exceptions.hh"
-#include "clustering_key_filter.hh"
-#include "mutation_partition_view.hh"
-#include "tombstone_gc.hh"
-#include "utils/unconst.hh"
 
 logging::logger mplog("mutation_partition");
 
@@ -4434,33 +4728,7 @@ logging::logger compound_logger("compound");
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
-#include <boost/range/adaptor/reversed.hpp>
-#include "mutation_partition_v2.hh"
-#include "clustering_interval_set.hh"
-#include "converting_mutation_partition_applier.hh"
-#include "partition_builder.hh"
-#include "query-result-writer.hh"
-#include "atomic_cell_hash.hh"
-#include "reversibly_mergeable.hh"
-#include "mutation_fragment.hh"
-#include "mutation_query.hh"
-#include "service/priority_manager.hh"
-#include "mutation_compactor.hh"
-#include "counters.hh"
-#include "row_cache.hh"
-#include "view_info.hh"
-#include "mutation_cleaner.hh"
-#include <seastar/core/execution_stage.hh>
-#include "types/map.hh"
-#include "compaction/compaction_garbage_collector.hh"
-#include "utils/exceptions.hh"
-#include "clustering_key_filter.hh"
-#include "mutation_partition_view.hh"
-#include "tombstone_gc.hh"
-#include "utils/unconst.hh"
 
 extern logging::logger mplog;
 
@@ -5634,22 +5902,7 @@ bool has_redundant_dummies(const mutation_partition_v2& p) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <seastar/core/simple-stream.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
-#include "mutation_partition_view.hh"
-#include "schema/schema.hh"
-#include "atomic_cell.hh"
-#include "utils/data_input.hh"
-#include "mutation_partition_serializer.hh"
-#include "mutation_partition.hh"
-#include "counters.hh"
-#include "frozen_mutation.hh"
-#include "partition_builder.hh"
-#include "converting_mutation_partition_applier.hh"
-#include "concrete_types.hh"
-#include "types/user.hh"
 
 using namespace db;
 
@@ -6155,13 +6408,7 @@ mutation_fragment frozen_mutation_fragment::unfreeze(const schema& s, reader_per
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "mutation_partition_serializer.hh"
-#include "mutation_partition.hh"
 
-#include "counters.hh"
-#include "idl/mutation.dist.hh"
-#include "idl/mutation.dist.impl.hh"
-#include "frozen_mutation.hh"
 
 using namespace db;
 
@@ -6408,13 +6655,7 @@ frozen_mutation_fragment freeze(const schema& s, const mutation_fragment& mf)
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <boost/range/algorithm/heap_algorithm.hpp>
 
-#include "partition_version.hh"
-#include "row_cache.hh"
-#include "partition_snapshot_row_cursor.hh"
-#include "utils/coroutine.hh"
-#include "real_dirty_memory_accounter.hh"
 
 static void remove_or_mark_as_unique_owner(partition_version* current, mutation_cleaner* cleaner)
 {
@@ -7098,11 +7339,7 @@ void partition_snapshot::unlock() noexcept {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "range_tombstone.hh"
-#include "mutation/mutation_fragment.hh"
-#include "mutation/mutation_fragment_v2.hh"
 
-#include <boost/range/algorithm/upper_bound.hpp>
 
 std::optional<range_tombstone> range_tombstone::apply(const schema& s, range_tombstone&& src)
 {
@@ -7176,11 +7413,6 @@ void range_tombstone_accumulator::clear() {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <boost/range/adaptor/reversed.hpp>
-#include "range_tombstone_list.hh"
-#include "utils/allocation_strategy.hh"
-#include "utils/amortized_reserve.hh"
-#include <seastar/util/variant_utils.hh>
 
 range_tombstone_list::range_tombstone_list(const range_tombstone_list& x)
         : _tombstones(x._tombstones.value_comp()) {
@@ -7635,7 +7867,6 @@ void range_tombstone_list::apply_monotonically(const schema& s, const range_tomb
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "absl-flat_hash_map.hh"
 
 size_t sstring_hash::operator()(std::string_view v) const noexcept {
     return absl::Hash<std::string_view>{}(v);
@@ -7648,14 +7879,7 @@ size_t sstring_hash::operator()(std::string_view v) const noexcept {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "types/collection.hh"
-#include "types/user.hh"
-#include "concrete_types.hh"
-#include "mutation/mutation_partition.hh"
-#include "compaction/compaction_garbage_collector.hh"
-#include "combine.hh"
 
-#include "collection_mutation.hh"
 
 bytes_view collection_mutation_input_stream::read_linearized(size_t n) {
     managed_bytes_view mbv = ::read_simple_bytes(_src, n);
@@ -8067,11 +8291,6 @@ deserialize_collection_mutation(const abstract_type& type, collection_mutation_i
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "caching_options.hh"
-#include <boost/lexical_cast.hpp>
-#include <map>
-#include "exceptions/exceptions.hh"
-#include "utils/rjson.hh"
 
 caching_options::caching_options(sstring k, sstring r, bool enabled)
         : _key_cache(k), _row_cache(r), _enabled(enabled) {
@@ -8146,35 +8365,6 @@ caching_options::from_sstring(const sstring& str) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <seastar/core/on_internal_error.hh>
-#include <map>
-#include "db/view/view.hh"
-#include "timestamp.hh"
-#include "utils/UUID_gen.hh"
-#include "cql3/column_identifier.hh"
-#include "cql3/util.hh"
-#include "schema.hh"
-#include "schema_builder.hh"
-#include <boost/algorithm/cxx11/any_of.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-#include "db/marshal/type_parser.hh"
-#include "version.hh"
-#include "schema_registry.hh"
-#include <boost/range/adaptor/map.hpp>
-#include <boost/range/algorithm.hpp>
-#include <boost/algorithm/cxx11/any_of.hpp>
-#include <type_traits>
-#include "view_info.hh"
-#include "partition_slice_builder.hh"
-#include "replica/database.hh"
-#include "dht/i_partitioner.hh"
-#include "dht/token-sharding.hh"
-#include "cdc/cdc_extension.hh"
-#include "tombstone_gc_extension.hh"
-#include "db/paxos_grace_seconds_extension.hh"
-#include "utils/rjson.hh"
-#include "tombstone_gc_options.hh"
-#include "db/per_partition_rate_limit_extension.hh"
 
 constexpr int32_t schema::NAME_LENGTH;
 
@@ -9943,12 +10133,7 @@ schema_mismatch_error::schema_mismatch_error(table_schema_version expected, cons
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <seastar/core/sharded.hh>
 
-#include "schema_registry.hh"
-#include "log.hh"
-#include "db/schema_tables.hh"
-#include "view_info.hh"
 
 static logging::logger slogger("schema_registry");
 
@@ -10282,12 +10467,6 @@ global_schema_ptr::global_schema_ptr(const schema_ptr& ptr)
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "frozen_schema.hh"
-#include "db/schema_tables.hh"
-#include "mutation/canonical_mutation.hh"
-#include "schema_mutations.hh"
-#include "idl/frozen_schema.dist.hh"
-#include "idl/frozen_schema.dist.impl.hh"
 
 frozen_schema::frozen_schema(const schema_ptr& s)
     : _data([&s] {
@@ -10326,9 +10505,7 @@ const bytes_ostream& frozen_schema::representation() const
  */
 
 
-#include "array-search.hh"
 #ifdef __x86_64__
-#include <x86intrin.h>
 #define arch_target(name) [[gnu::target(name)]]
 #else
 #define arch_target(name)
@@ -10482,10 +10659,7 @@ unsigned array_search_x32_eq(uint8_t val, const uint8_t* array, int nr) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "base64.hh"
 
-#include <ctype.h>
-#include <seastar/core/print.hh>
 
 // Arrays for quickly converting to and from an integer between 0 and 63,
 // and the character used in base64 encoding to represent it.
@@ -10617,42 +10791,13 @@ bool base64_begins_with(std::string_view base, std::string_view operand) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <boost/range/algorithm/heap_algorithm.hpp>
-#include <boost/range/algorithm/remove.hpp>
-#include <boost/range/algorithm.hpp>
-#include <boost/intrusive/list.hpp>
-#include <boost/intrusive/set.hpp>
-#include <boost/intrusive/slist.hpp>
-#include <boost/range/adaptors.hpp>
-#include <stack>
 
-#include <seastar/core/memory.hh>
-#include <seastar/core/align.hh>
-#include <seastar/core/print.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/util/alloc_failure_injector.hh>
-#include <seastar/util/backtrace.hh>
-#include <seastar/util/later.hh>
 
-#include "utils/logalloc.hh"
-#include "log.hh"
-#include "utils/dynamic_bitset.hh"
-#include "utils/log_heap.hh"
-#include "utils/preempt.hh"
-#include "utils/vle.hh"
-#include "utils/coarse_steady_clock.hh"
 
-#include <random>
-#include <chrono>
 
 using namespace std::chrono_literals;
 
 #ifdef SEASTAR_ASAN_ENABLED
-#include "sanitizer/asan_interface.h"
 // For each aligned 8 byte segment, the algorithm used by address
 // sanitizer can represent any addressable prefix followd by a
 // poisoned suffix. The details are at:
@@ -13549,11 +13694,6 @@ size_t hist_key<logalloc::segment_descriptor>(const logalloc::segment_descriptor
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "large_bitset.hh"
-#include <algorithm>
-#include <seastar/core/align.hh>
-#include <seastar/core/thread.hh>
-#include "seastarx.hh"
 
 using namespace seastar;
 
@@ -13596,8 +13736,6 @@ large_bitset::clear() {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "buffer_input_stream.hh"
-#include "limiting_data_source.hh"
 
 using namespace seastar;
 
@@ -13641,10 +13779,6 @@ input_stream<char> make_buffer_input_stream(temporary_buffer<char>&& buf,
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "limiting_data_source.hh"
-#include <seastar/core/iostream.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <cstdint>
 
 using namespace seastar;
 
@@ -13704,8 +13838,6 @@ data_source make_limiting_data_source(data_source&& src, seastar::noncopyable_fu
 
 
 
-#include "updateable_value.hh"
-#include <seastar/core/seastar.hh>
 
 namespace utils {
 
@@ -13811,14 +13943,6 @@ updateable_value_source_base::update_ref(updateable_value_base* old_ref, updatea
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <seastar/core/seastar.hh>
-#include "init.hh"
-#include "supervisor.hh"
-#include "directories.hh"
-#include "utils/disk-error-handler.hh"
-#include "utils/fmt-compat.hh"
-#include "db/config.hh"
-#include "utils/lister.hh"
 
 namespace utils {
 
@@ -13957,16 +14081,9 @@ future<> directories::verify_owner_and_mode(fs::path path) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "rjson.hh"
-#include <seastar/core/print.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/iostream.hh>
 #ifdef SANITIZE
-#include <seastar/core/memory.hh>
 #endif
 
-#include <rapidjson/stream.h>
 
 namespace rjson {
 
@@ -14528,10 +14645,7 @@ std::ostream& std::operator<<(std::ostream& os, const rjson::value& v) {
  * Copyright (C) 2020-present ScyllaDB
  */
 
-#include "utils/human_readable.hh"
 
-#include <array>
-#include <ostream>
 
 namespace utils {
 
@@ -14578,7 +14692,6 @@ human_readable_value to_hr_size(uint64_t size) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "histogram_metrics_helper.hh"
 
 seastar::metrics::histogram to_metrics_summary(const utils::summary_calculator& summary) noexcept {
     seastar::metrics::histogram res;
@@ -14598,12 +14711,7 @@ seastar::metrics::histogram to_metrics_summary(const utils::summary_calculator& 
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "converting_mutation_partition_applier.hh"
-#include "concrete_types.hh"
 
-#include "mutation/mutation_partition_view.hh"
-#include "mutation/mutation_partition.hh"
-#include "schema/schema.hh"
 
 bool
 converting_mutation_partition_applier::is_compatible(const column_definition& new_def, const abstract_type& old_type, column_kind kind) {
@@ -14773,11 +14881,6 @@ converting_mutation_partition_applier::append_cell(row& dst, column_kind kind, c
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "mutation_query.hh"
-#include "gc_clock.hh"
-#include "mutation/mutation_partition_serializer.hh"
-#include "service/priority_manager.hh"
-#include "query-result-writer.hh"
 
 reconcilable_result::~reconcilable_result() {}
 
@@ -14841,12 +14944,7 @@ reconcilable_result::printer reconcilable_result::pretty_printer(schema_ptr s) c
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <iostream>
 
-#include "keys.hh"
-#include "dht/i_partitioner.hh"
-#include "clustering_bounds_comparator.hh"
-#include <boost/algorithm/string.hpp>
 
 logging::logger klog("keys");
 
@@ -14944,11 +15042,7 @@ const thread_local clustering_key_prefix bound_view::_empty_prefix = clustering_
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "counters.hh"
-#include "mutation/mutation.hh"
-#include "combine.hh"
 
-#include <boost/range/algorithm/sort.hpp>
 
 std::ostream& operator<<(std::ostream& os, counter_shard_view csv) {
     fmt::print(os, "{{global_shard id: {} value: {}, clock: {}}}",
@@ -15203,9 +15297,7 @@ void transform_counter_updates_to_shards(mutation& m, const mutation* current_st
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "utils/runtime.hh"
 
-#include <chrono>
 
 namespace runtime {
 
@@ -15237,7 +15329,6 @@ std::chrono::steady_clock::duration get_uptime()
  * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
  */
 
-#include "murmur_hash.hh"
 
 namespace utils {
 
@@ -15457,15 +15548,6 @@ void hash3_x64_128(bytes_view key, uint64_t seed, std::array<uint64_t,2> &result
  */
 
 
-#include "UUID.hh"
-#include <seastar/net/byteorder.hh>
-#include <random>
-#include <boost/iterator/function_input_iterator.hpp>
-#include <boost/algorithm/string.hpp>
-#include <string>
-#include <seastar/core/sstring.hh>
-#include "utils/serialization.hh"
-#include "marshal_exception.hh"
 
 namespace utils {
 
@@ -15522,10 +15604,6 @@ UUID::UUID(sstring_view uuid) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "big_decimal.hh"
-#include <cassert>
-#include "marshal_exception.hh"
-#include <seastar/core/print.hh>
 
 #ifdef __clang__
 
@@ -15741,56 +15819,7 @@ big_decimal big_decimal::div(const ::uint64_t y, const rounding_mode mode) const
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <boost/lexical_cast.hpp>
-#include <algorithm>
-#include <cinttypes>
-#include "cql3/cql3_type.hh"
-#include "cql3/lists.hh"
-#include "cql3/maps.hh"
-#include "cql3/sets.hh"
-#include "cql3/util.hh"
-#include "concrete_types.hh"
-#include <exception>
-#include <seastar/core/print.hh>
-#include "types/types.hh"
-#include "utils/exceptions.hh"
-#include "utils/serialization.hh"
-#include "vint-serialization.hh"
-#include "combine.hh"
-#include <cmath>
-#include <chrono>
-#include <sstream>
-#include <string>
-#include <boost/regex.hpp>
-#include <concepts>
-#include <ctime>
-#include <cstdlib>
-#include <fmt/chrono.h>
-#include <boost/iterator/transform_iterator.hpp>
-#include <boost/range/adaptor/filtered.hpp>
-#include <boost/range/numeric.hpp>
-#include <boost/range/combine.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/date_time/c_local_time_adjustor.hpp>
-#include <boost/locale/encoding_utf.hpp>
-#include <boost/multiprecision/cpp_int.hpp>
-#include <boost/algorithm/cxx11/any_of.hpp>
-#include <seastar/net/inet_address.hh>
-#include "utils/big_decimal.hh"
-#include "utils/date.h"
-#include "utils/utf8.hh"
-#include "utils/ascii.hh"
-#include "utils/fragment_range.hh"
-#include "utils/managed_bytes.hh"
-#include "mutation/mutation_partition.hh"
 
-#include "types/user.hh"
-#include "types/tuple.hh"
-#include "types/collection.hh"
-#include "types/map.hh"
-#include "types/list.hh"
-#include "types/set.hh"
-#include "types/listlike_partial_deserializing_iterator.hh"
 
 static logging::logger tlogger("types");
 
@@ -19414,10 +19443,6 @@ template void throw_with_backtrace<marshal_exception, sstring>(sstring&&);
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "cql3/column_identifier.hh"
-#include "exceptions/exceptions.hh"
-#include "cql3/util.hh"
-#include "cql3/query_options.hh"
 
 namespace cql3 {
 
@@ -19521,7 +19546,6 @@ bool cql3::column_identifier::text_comparator::operator()(const cql3::column_ide
  * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
  */
 
-#include "cql3/column_specification.hh"
 
 namespace cql3 {
 
@@ -19554,15 +19578,9 @@ bool column_specification::all_in_same_table(const std::vector<lw_shared_ptr<col
  * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
  */
 
-#include "UUID_gen.hh"
 #ifdef __linux__
-#include <net/if.h>
-#include <sys/ioctl.h>
-#include <net/if_arp.h>
 #endif // __linux__
 
-#include <stdlib.h>
-#include "utils/hashers.hh"
 
 namespace utils {
 
@@ -19678,10 +19696,6 @@ thread_local UUID_gen UUID_gen::_instance;
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "log.hh"
-#include "bloom_filter.hh"
-#include "bloom_calculations.hh"
-#include <seastar/core/thread.hh>
 
 namespace utils {
 static logging::logger filterlog("bloom_filter");
@@ -19719,17 +19733,6 @@ hashed_key make_hashed_key(bytes_view b) {
  * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
  */
 
-#include "i_filter.hh"
-#include "fb_utilities.hh"
-#include "bytes.hh"
-#include "utils/murmur_hash.hh"
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/align.hh>
-#include <seastar/core/loop.hh>
-#include "utils/large_bitset.hh"
-#include <array>
-#include <cstdlib>
-#include "bloom_filter.hh"
 
 namespace utils {
 namespace filter {
@@ -19806,7 +19809,6 @@ filter_ptr create_filter(int hash, int64_t num_elements, int buckets_per, filter
  * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
  */
 
-#include "bloom_calculations.hh"
 
 namespace utils {
 
@@ -19877,7 +19879,6 @@ const std::vector<int> opt_k_per_buckets = initialize_opt_k();
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "rate_limiter.hh"
 
 utils::rate_limiter::rate_limiter(size_t rate)
         : _units_per_s(rate) {
@@ -19915,12 +19916,7 @@ future<> utils::rate_limiter::reserve(size_t u) {
  */
 
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/posix.hh>
-#include <unistd.h>
-#include <fcntl.h>
 
-#include "file_lock.hh"
 
 class utils::file_lock::impl {
 public:
@@ -19982,13 +19978,7 @@ std::ostream& utils::operator<<(std::ostream& out, const file_lock& f) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <seastar/core/bitops.hh>
-#include <seastar/core/align.hh>
-#include <boost/range/adaptor/reversed.hpp>
-#include <boost/range/irange.hpp>
 
-#include "utils/dynamic_bitset.hh"
-#include "seastarx.hh"
 
 namespace utils {
 
@@ -20113,7 +20103,6 @@ dynamic_bitset::dynamic_bitset(size_t nr_bits)
  */
 
 
-#include "managed_bytes.hh"
 
 bytes_opt
 to_bytes_opt(const managed_bytes_opt& mbo) {
@@ -20165,19 +20154,8 @@ std::ostream& operator<<(std::ostream& os, const managed_bytes_opt& b) {
 /* SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <seastar/core/print.hh>
-#include <seastar/rpc/rpc.hh>
-#include <seastar/util/log.hh>
-#include <seastar/util/backtrace.hh>
-#include <seastar/core/abort_on_ebadf.hh>
 
-#include <exception>
-#include <system_error>
-#include <atomic>
-#include "exceptions.hh"
-#include "utils/abi/eh_ia64.hh"
 
-#include <iostream>
 
 bool check_exception(system_error_lambda_t f)
 {
@@ -20234,8 +20212,6 @@ bool is_timeout_exception(std::exception_ptr e) {
 
 #if defined(OPTIMIZED_EXCEPTION_HANDLING_AVAILABLE)
 
-#include <typeinfo>
-#include "utils/abi/eh_ia64.hh"
 
 void* utils::internal::try_catch_dynamic(std::exception_ptr& eptr, const std::type_info* catch_type) noexcept {
     // In both libstdc++ and libc++, exception_ptr has just one field
@@ -20262,28 +20238,11 @@ void* utils::internal::try_catch_dynamic(std::exception_ptr& eptr, const std::ty
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <unordered_map>
 
-#include <yaml-cpp/yaml.h>
 
-#include <boost/program_options.hpp>
-#include <boost/any.hpp>
-#include <boost/range/adaptor/filtered.hpp>
 
-#include <seastar/core/file.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/do_with.hh>
-#include <seastar/core/print.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/util/defer.hh>
 
-#include <seastar/json/json_elements.hh>
 
-#include "config_file.hh"
-#include "config_file_impl.hh"
 
 namespace bpo = boost::program_options;
 
@@ -20686,8 +20645,6 @@ sstring utils::config_file::config_src::source_name() const noexcept {
  */
 
 
-#include "multiprecision_int.hh"
-#include <iostream>
 
 namespace utils {
 
@@ -20738,16 +20695,12 @@ std::ostream& operator<<(std::ostream& os, const multiprecision_int& x) {
  *
  */
 
-#include "crc_combine.hh"
-#include "crc_combine_table.hh"
-#include "utils/clmul.hh"
 
 using u32 = uint32_t;
 using u64 = uint64_t;
 
 #if defined(__x86_64__) || defined(__i386__) || defined(__aarch64__)
 
-#include "barrett.hh"
 
 /*
  * Calculates:
@@ -20914,7 +20867,6 @@ u32 fast_crc32_combine(u32 crc, u32 crc2, ssize_t len2) {
 // That boils down to implementing crc32_fold_barrett_u64() and clmul()
 // and reusing the algorithm above. For now, delegate to zlib.
 
-#include <zlib.h>
 
 u32 fast_crc32_combine(u32 crc, u32 crc2, ssize_t len2) {
     if (len2 == 0) {
@@ -20935,11 +20887,7 @@ u32 fast_crc32_combine(u32 crc, u32 crc2, ssize_t len2) {
 
 #if defined(__x86_64__) || defined(__i386__) || defined(__aarch64__)
 
-#include <array>
 
-#include "crc_combine_table.hh"
-#include "utils/clmul.hh"
-#include "barrett.hh"
 
 template <int bits>
 static
@@ -20997,26 +20945,6 @@ constinit std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_24 = make_crc
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <memory>
-#include <rapidxml.h>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/range/adaptor/map.hpp>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/shared_future.hh>
-#include <seastar/coroutine/all.hh>
-#include <seastar/net/dns.hh>
-#include <seastar/net/tls.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/http/request.hh>
-#include "utils/s3/client.hh"
-#include "utils/memory_data_sink.hh"
-#include "utils/chunked_vector.hh"
-#include "utils/aws_sigv4.hh"
-#include "db_clock.hh"
-#include "log.hh"
 
 namespace utils {
 
@@ -21648,24 +21576,6 @@ future<> client::close() {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "i_partitioner.hh"
-#include "sharder.hh"
-#include <seastar/core/seastar.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include "dht/token-sharding.hh"
-#include "dht/partition_filter.hh"
-#include "utils/class_registrator.hh"
-#include "types/types.hh"
-#include "utils/murmur_hash.hh"
-#include "utils/div_ceil.hh"
-#include <deque>
-#include <boost/range/adaptor/map.hpp>
-#include <boost/range/irange.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-#include "sstables/key.hh"
-#include <seastar/core/thread.hh>
-#include <seastar/core/on_internal_error.hh>
-#include "log.hh"
 
 namespace dht {
 
@@ -22130,14 +22040,7 @@ dht::token_range_vector split_token_range_msb(unsigned most_significant_bits) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <algorithm>
-#include <limits>
-#include <ostream>
-#include <utility>
 
-#include "dht/token.hh"
-#include "dht/token-sharding.hh"
-#include "dht/i_partitioner.hh"
 
 namespace dht {
 
@@ -22425,12 +22328,6 @@ token last_token_of_compaction_group(unsigned most_significant_bits, size_t grou
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "murmur3_partitioner.hh"
-#include "utils/murmur_hash.hh"
-#include "sstables/key.hh"
-#include "utils/class_registrator.hh"
-#include <boost/lexical_cast.hpp>
-#include <boost/range/irange.hpp>
 
 namespace dht {
 
@@ -22488,20 +22385,8 @@ static registry registrator_short_name("Murmur3Partitioner");
  * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
  */
 
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/erase.hpp>
-#include <boost/algorithm/string/classification.hpp>
 
-#include <seastar/core/coroutine.hh>
 
-#include "dht/boot_strapper.hh"
-#include "dht/range_streamer.hh"
-#include "gms/gossiper.hh"
-#include "log.hh"
-#include "db/config.hh"
-#include "replica/database.hh"
-#include "streaming/stream_reason.hh"
-#include "locator/abstract_replication_strategy.hh"
 
 static logging::logger blogger("boot_strapper");
 
@@ -22607,18 +22492,6 @@ std::unordered_set<token> boot_strapper::get_random_tokens(const token_metadata_
  * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
  */
 
-#include <seastar/core/sleep.hh>
-#include "dht/range_streamer.hh"
-#include "utils/fb_utilities.hh"
-#include "replica/database.hh"
-#include "gms/gossiper.hh"
-#include "log.hh"
-#include "streaming/stream_plan.hh"
-#include "streaming/stream_state.hh"
-#include "db/config.hh"
-#include <seastar/core/semaphore.hh>
-#include <boost/range/adaptors.hpp>
-#include "utils/stall_free.hh"
 
 namespace dht {
 
@@ -22945,12 +22818,6 @@ size_t range_streamer::nr_ranges_to_stream() {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <unordered_map>
-#include "unimplemented.hh"
-#include <seastar/core/sstring.hh>
-#include <seastar/core/enum.hh>
-#include "log.hh"
-#include "seastarx.hh"
 
 namespace unimplemented {
 
@@ -23012,23 +22879,6 @@ void fail(cause c) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <limits>
-#include <memory>
-#include <stdexcept>
-#include "query-request.hh"
-#include "query-result.hh"
-#include "query-result-writer.hh"
-#include "query-result-set.hh"
-#include "seastar/core/shared_ptr.hh"
-#include "seastar/core/thread.hh"
-#include "utils/to_string.hh"
-#include "bytes.hh"
-#include "mutation/mutation_partition_serializer.hh"
-#include "query-result-reader.hh"
-#include "query_result_merger.hh"
-#include "partition_slice_builder.hh"
-#include "schema/schema_registry.hh"
-#include "utils/overloaded_functor.hh"
 
 namespace query {
 
@@ -23487,12 +23337,8 @@ std::optional<query::clustering_range> position_range_to_clustering_range(const 
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <seastar/core/print.hh>
 
-#include "db_clock.hh"
-#include "timestamp.hh"
 
-#include "clocks-impl.hh"
 
 std::atomic<int64_t> clocks_offset;
 
@@ -23509,11 +23355,7 @@ std::string format_timestamp(api::timestamp_type ts) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <boost/range/adaptor/transformed.hpp>
-#include <boost/range/algorithm/copy.hpp>
-#include <boost/range/algorithm_ext/push_back.hpp>
 
-#include "partition_slice_builder.hh"
 
 partition_slice_builder::partition_slice_builder(const schema& schema, query::partition_slice slice)
     : _regular_columns(std::move(slice.regular_columns))
@@ -23681,7 +23523,6 @@ partition_slice_builder& partition_slice_builder::with_partition_row_limit(uint6
 /* SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "utils/disk-error-handler.hh"
 
 thread_local disk_error_signal_type commit_error;
 thread_local disk_error_signal_type general_disk_error;
@@ -23717,13 +23558,6 @@ io_error_handler_gen default_io_error_handler_gen() {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "utils/hashers.hh"
-#include "utils/xx_hasher.hh"
-#include "utils/simple_hashers.hh"
-
-#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-#include <cryptopp/md5.h>
-#include <cryptopp/sha.h>
 
 static_assert(Hasher<hasher>);
 
@@ -23811,10 +23645,6 @@ template class cryptopp_hasher<sha256_hasher, 32>;
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <gnutls/crypto.h>
-#include "utils/aws_sigv4.hh"
-#include "utils/hashers.hh"
-#include "db_clock.hh"
 
 using namespace std::chrono_literals;
 
@@ -23926,18 +23756,8 @@ std::string get_signature(std::string_view access_key_id, std::string_view secre
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "duration.hh"
 
-#include <boost/lexical_cast.hpp>
-#include <seastar/core/print.hh>
 
-#include <cctype>
-#include <optional>
-#include <limits>
-#include <boost/regex.hpp>
-#include <sstream>
-#include <string>
-#include <unordered_map>
 
 namespace {
 
@@ -24381,14 +24201,8 @@ seastar::sstring to_string(const cql_duration& d) {
  * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
  */
 
-#include "vint-serialization.hh"
 
-#include <seastar/core/bitops.hh>
 
-#include <algorithm>
-#include <array>
-#include <limits>
-#include <type_traits>
 
 static_assert(-1 == ~0, "Not a twos-complement architecture");
 
@@ -24557,7 +24371,6 @@ vint_size_type unsigned_vint::serialized_size_from_first_byte(bytes::value_type 
  * +--------------------+------------+-------------+------------+-------------+
  */
 
-#include "utf8.hh"
 
 namespace utils {
 
@@ -24668,7 +24481,6 @@ validate_partial_naive(const uint8_t *data, size_t len) {
 } // namespace utils
 
 #if defined(__aarch64__)
-#include <arm_neon.h>
 
 namespace utils {
 
@@ -24872,7 +24684,6 @@ internal::validate_partial(const uint8_t *data, size_t len) {
 } // namespace utils
 
 #elif defined(__x86_64__)
-#include <smmintrin.h>
 
 namespace utils {
 
@@ -25117,8 +24928,6 @@ std::optional<size_t> validate_with_error_position(const uint8_t *data, size_t l
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "ascii.hh"
-#include <seastar/core/byteorder.hh>
 
 namespace utils {
 
@@ -25168,11 +24977,7 @@ bool validate(const uint8_t *data, size_t len) {
  */
 
 
-#include "like_matcher.hh"
 
-#include <boost/regex/icu.hpp>
-#include <boost/locale/encoding.hpp>
-#include <string>
 
 namespace {
 
@@ -25288,7 +25093,6 @@ void like_matcher::reset(bytes_view pattern) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "utils/error_injection.hh"
 
 namespace utils {
 
@@ -25301,12 +25105,6 @@ thread_local error_injection<false> error_injection<false>::_local;
  * Copyright (C) 2019-present ScyllaDB
  */
 
-#include "build_id.hh"
-#include <fmt/ostream.h>
-#include <link.h>
-#include <seastar/core/align.hh>
-#include <sstream>
-#include <cassert>
 
 using namespace seastar;
 
@@ -25386,7 +25184,6 @@ std::string get_build_id() {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "serializer_impl.hh"
 
 namespace ser {
 
@@ -25424,7 +25221,6 @@ buffer_view_to_managed_bytes_view(std::optional<ser::buffer_view<bytes_ostream::
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "utils/to_string.hh"
 
 namespace std {
 
@@ -25471,7 +25267,6 @@ std::ostream& operator<<(std::ostream& os, const std::partial_ordering& order) {
 /*
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
-#include "test/lib/log.hh"
 
 seastar::logger testlog("testlog");
 /*
@@ -25482,16 +25277,7 @@ seastar::logger testlog("testlog");
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "test/lib/test_utils.hh"
 
-#include <boost/range/adaptor/map.hpp>
-#include <boost/range/algorithm/sort.hpp>
-#include <seastar/core/print.hh>
-#include <seastar/util/backtrace.hh>
-#include "test/lib/log.hh"
-#include "test/lib/simple_schema.hh"
-#include "seastarx.hh"
-#include <random>
 
 namespace tests {
 
@@ -25567,10 +25353,7 @@ sstring make_random_numeric_string(size_t size) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <boost/test/unit_test.hpp>
 
-#include "test/lib/result_set_assertions.hh"
-#include "utils/to_string.hh"
 
 static inline
 sstring to_sstring(const bytes& b) {
@@ -25665,34 +25448,6 @@ result_set_assertions::has_size(int row_count) const {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <set>
-#include <boost/range/adaptor/map.hpp>
-#include <boost/test/unit_test.hpp>
-#include "partition_slice_builder.hh"
-#include "schema/schema_builder.hh"
-#include "test/lib/mutation_source_test.hh"
-#include "readers/mutation_source.hh"
-#include "counters.hh"
-#include "mutation/mutation_rebuilder.hh"
-#include "test/lib/simple_schema.hh"
-#include "readers/flat_mutation_reader_v2.hh"
-#include "test/lib/flat_mutation_reader_assertions.hh"
-#include "mutation_query.hh"
-#include "mutation/mutation_rebuilder.hh"
-#include "test/lib/random_utils.hh"
-#include "cql3/cql3_type.hh"
-#include "test/lib/make_random_string.hh"
-#include "test/lib/data_model.hh"
-#include "test/lib/key_utils.hh"
-#include "test/lib/log.hh"
-#include "test/lib/reader_concurrency_semaphore.hh"
-#include <boost/algorithm/string/join.hpp>
-#include "types/user.hh"
-#include "types/map.hh"
-#include "types/list.hh"
-#include "types/set.hh"
-#include <seastar/util/closeable.hh>
-#include "utils/UUID_gen.hh"
 
 // partitions must be sorted by decorated key
 static void require_no_token_duplicates(const std::vector<mutation>& partitions) {
@@ -28440,13 +28195,8 @@ std::vector<mutation> squash_mutations(std::vector<mutation> mutations) {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "test/lib/data_model.hh"
 
-#include <boost/algorithm/string/join.hpp>
-#include <boost/range/algorithm/sort.hpp>
 
-#include "schema/schema_builder.hh"
-#include "concrete_types.hh"
 
 namespace tests::data_model {
 
@@ -28802,12 +28552,7 @@ table_description::table table_description::build() const {
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "test/lib/exception_utils.hh"
 
-#include <boost/regex.hpp>
-#include <boost/test/unit_test.hpp>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
 
 std::function<bool(const std::exception&)> exception_predicate::make(
         std::function<bool(const std::exception&)> check,
@@ -28857,24 +28602,7 @@ std::function<bool(const std::exception&)> exception_predicate::message_matches(
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include <boost/algorithm/string/join.hpp>
-#include <boost/range/algorithm/sort.hpp>
-#include <boost/range/algorithm/unique.hpp>
 
-#include "cql3/cql3_type.hh"
-#include "mutation/mutation.hh"
-#include "mutation/mutation_fragment.hh"
-#include "schema/schema_builder.hh"
-#include "test/lib/cql_test_env.hh"
-#include "test/lib/random_schema.hh"
-#include "test/lib/random_utils.hh"
-#include "types/list.hh"
-#include "types/map.hh"
-#include "types/set.hh"
-#include "types/tuple.hh"
-#include "types/user.hh"
-#include "utils/big_decimal.hh"
-#include "utils/UUID_gen.hh"
 
 namespace tests {
 
@@ -30020,10 +29748,6 @@ future<std::vector<mutation>> generate_random_mutations(tests::random_schema& ra
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#include "test/lib/key_utils.hh"
-#include "test/lib/random_schema.hh"
-#include "test/lib/random_utils.hh"
-#include "test/lib/test_utils.hh"
 
 namespace tests {
 
