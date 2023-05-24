@@ -375,13 +375,11 @@ wasms = set([
 ])
 
 apps = set([
-    'scylla',
 ])
 
 tests = scylla_tests | perf_tests | raft_tests
 
 other = set([
-    'iotune',
 ])
 
 all_artifacts = apps | tests | other | wasms
