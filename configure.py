@@ -903,36 +903,6 @@ api = ['api/api.cc',
        Json2Code('api/api-doc/authorization_cache.json'),
        ]
 
-alternator = [
-       'alternator/controller.cc',
-       'alternator/server.cc',
-       'alternator/executor.cc',
-       'alternator/stats.cc',
-       'alternator/serialization.cc',
-       'alternator/expressions.cc',
-       Antlr3Grammar('alternator/expressions.g'),
-       'alternator/conditions.cc',
-       'alternator/auth.cc',
-       'alternator/streams.cc',
-       'alternator/ttl.cc',
-]
-
-redis = [
-        'redis/controller.cc',
-        'redis/server.cc',
-        'redis/query_processor.cc',
-        'redis/protocol_parser.rl',
-        'redis/keyspace_utils.cc',
-        'redis/options.cc',
-        'redis/stats.cc',
-        'redis/mutation_utils.cc',
-        'redis/query_utils.cc',
-        'redis/abstract_command.cc',
-        'redis/command_factory.cc',
-        'redis/commands.cc',
-        'redis/lolwut.cc',
-        ]
-
 idls = ['idl/gossip_digest.idl.hh',
         'idl/uuid.idl.hh',
         'idl/range.idl.hh',
@@ -985,7 +955,7 @@ scylla_tests_generic_dependencies = [
     'test/lib/sstable_run_based_compaction_strategy_for_tests.cc',
 ]
 
-scylla_tests_dependencies = scylla_core + alternator + idls + scylla_tests_generic_dependencies + [
+scylla_tests_dependencies = scylla_core + idls + scylla_tests_generic_dependencies + [
     'test/lib/cql_assertions.cc',
     'test/lib/result_set_assertions.cc',
     'test/lib/mutation_source_test.cc',
@@ -1017,7 +987,7 @@ scylla_perfs = ['test/perf/perf_fast_forward.cc',
                 'seastar/tests/perf/linux_perf_event.cc']
 
 deps = {
-    'scylla': idls + ['main.cc'] + scylla_core + api + alternator + redis + scylla_tools + scylla_perfs,
+    'scylla': idls + ['main.cc'] + scylla_core + api + scylla_tools + scylla_perfs,
 }
 
 pure_boost_tests = set([
@@ -1035,7 +1005,7 @@ for t in sorted(scylla_tests):
     if t not in tests_not_using_seastar_test_framework:
         deps[t] += scylla_tests_dependencies
     else:
-        deps[t] += scylla_core + alternator + idls + scylla_tests_generic_dependencies
+        deps[t] += scylla_core + idls + scylla_tests_generic_dependencies
 
 perf_tests_seastar_deps = [
     'seastar/tests/perf/perf_tests.cc'
