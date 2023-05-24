@@ -543,6 +543,14 @@ scylla_core = ([
                 'utils/build_id.cc',
                 'serializer.cc',
                 'utils/to_string.cc',
+    'test/lib/log.cc',
+    'test/lib/test_utils.cc',
+    'test/lib/result_set_assertions.cc',
+    'test/lib/mutation_source_test.cc',
+    'test/lib/data_model.cc',
+    'test/lib/exception_utils.cc',
+    'test/lib/random_schema.cc',
+    'test/lib/key_utils.cc',
                 ] 
                   + scylla_raft_core
                )
@@ -555,17 +563,9 @@ idls = []
 headers = find_headers('.', excluded_dirs=['idl', 'build', 'seastar', '.git'])
 
 scylla_tests_generic_dependencies = [
-    'test/lib/log.cc',
-    'test/lib/test_utils.cc',
 ]
 
 scylla_tests_dependencies = scylla_core + idls + scylla_tests_generic_dependencies + [
-    'test/lib/result_set_assertions.cc',
-    'test/lib/mutation_source_test.cc',
-    'test/lib/data_model.cc',
-    'test/lib/exception_utils.cc',
-    'test/lib/random_schema.cc',
-    'test/lib/key_utils.cc',
 ]
 
 scylla_raft_dependencies = scylla_raft_core + ['utils/uuid.cc', 'utils/error_injection.cc']
