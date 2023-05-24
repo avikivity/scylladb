@@ -43,7 +43,7 @@ public:
 
     bool operator==(const column_identifier& other) const;
 
-    const sstring& text() const;
+    const sstring& text() const { return _text; }
 
     const bytes& name() const;
 

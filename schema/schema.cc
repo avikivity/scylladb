@@ -400,9 +400,6 @@ schema::schema(private_tag, const raw_schema& raw, std::optional<raw_view_info> 
     }
 
     rebuild();
-    if (raw_view_info) {
-        _view_info = std::make_unique<::view_info>(*this, *raw_view_info);
-    }
 }
 
 schema::schema(const schema& o, const std::function<void(schema&)>& transform)
@@ -417,12 +414,6 @@ schema::schema(const schema& o, const std::function<void(schema&)>& transform)
     }
 
     rebuild();
-    if (o.is_view()) {
-        _view_info = std::make_unique<::view_info>(*this, o.view_info()->raw());
-        if (o.view_info()->base_info()) {
-            _view_info->set_base_info(o.view_info()->base_info());
-        }
-    }
 }
 
 schema::schema(const schema& o)
@@ -525,7 +516,6 @@ bool operator==(const schema& x, const schema& y)
         && x._raw._caching_options == y._raw._caching_options
         && x._raw._dropped_columns == y._raw._dropped_columns
         && x._raw._collections == y._raw._collections
-        && indirect_equal_to<std::unique_ptr<::view_info>>()(x._view_info, y._view_info)
         && x._raw._indices_by_name == y._raw._indices_by_name
         && x._raw._is_counter == y._raw._is_counter
         ;
@@ -725,9 +715,6 @@ std::ostream& operator<<(std::ostream& os, const schema& s) {
         os << c.first << " : " << c.second.id();
     }
     os << "}";
-    if (s.is_view()) {
-        os << ", viewInfo=" << *s.view_info();
-    }
     os << "]";
     return os;
 }
@@ -756,174 +743,18 @@ static std::ostream& column_definition_as_cql_key(std::ostream& os, const column
 }
 
 static bool is_global_index(replica::database& db, const table_id& id, const schema& s) {
-    return  db.find_column_family(id).get_index_manager().is_global_index(s);
+    return false;
 }
 
 static bool is_index(replica::database& db, const table_id& id, const schema& s) {
-    return  db.find_column_family(id).get_index_manager().is_index(s);
+    return false;
 }
 
 sstring schema::element_type(replica::database& db) const {
-    if (is_view()) {
-        if (is_index(db, view_info()->base_id(), *this)) {
-            return "index";
-        } else {
-            return "view";
-        }
-    }
     return "table";
 }
 
 std::ostream& schema::describe(replica::database& db, std::ostream& os, bool with_internals) const {
-    os << "CREATE ";
-    int n = 0;
-
-    if (is_view()) {
-        if (is_index(db, view_info()->base_id(), *this)) {
-            auto is_local = !is_global_index(db, view_info()->base_id(), *this);
-
-            os << "INDEX " << cql3::util::maybe_quote(secondary_index::index_name_from_table_name(cf_name())) << " ON "
-                    << cql3::util::maybe_quote(ks_name()) << "." << cql3::util::maybe_quote(view_info()->base_name()) << "(";
-            if (is_local) {
-                os << "(";
-            }
-            for (auto& pk : partition_key_columns()) {
-                if (n++ != 0) {
-                    os << ", ";
-                }
-                os << pk.name_as_cql_string();
-            }
-            if (is_local) {
-                os << ")";
-                if (!clustering_key_columns().empty()) {
-                    os << ", " << clustering_key_columns().front().name_as_cql_string();
-                }
-            }
-            os <<");\n";
-            return os;
-        } else {
-            os << "MATERIALIZED VIEW " << cql3::util::maybe_quote(ks_name()) << "." << cql3::util::maybe_quote(cf_name()) << " AS\n";
-            os << "    SELECT ";
-            for (auto& cdef : all_columns()) {
-                if (cdef.is_hidden_from_cql()) {
-                    continue;
-                }
-                if (n++ != 0) {
-                    os << ", ";
-                }
-                os << cdef.name_as_cql_string();
-            }
-            os << "\n    FROM " << cql3::util::maybe_quote(ks_name()) << "." <<  cql3::util::maybe_quote(view_info()->base_name());
-            os << "\n    WHERE " << view_info()->where_clause();
-        }
-    } else {
-        os << "TABLE " << cql3::util::maybe_quote(ks_name()) << "." << cql3::util::maybe_quote(cf_name()) << " (";
-        for (auto& cdef : all_columns()) {
-            if (with_internals && dropped_columns().contains(cdef.name_as_text())) {
-                // If the column has been re-added after a drop, we don't include it right away. Instead, we'll add the
-                // dropped one first below, then we'll issue the DROP and then the actual ADD for this column, thus
-                // simulating the proper sequence of events.
-                continue;
-            }
-
-            os << "\n    ";
-            column_definition_as_cql_key(os, cdef);
-            os << ",";
-        }
-
-        if (with_internals) {
-            for (auto& cdef: dropped_columns()) {
-                os << "\n    ";
-                os << cql3::util::maybe_quote(cdef.first) << " " << cdef.second.type->cql3_type_name() << ",";
-            }
-        }
-    }
-
-    os << "\n    PRIMARY KEY (";
-    if (partition_key_columns().size() > 1) {
-        os << "(";
-    }
-    n = 0;
-    for (auto& pk : partition_key_columns()) {
-        if (n++ != 0) {
-            os << ", ";
-        }
-        os << pk.name_as_cql_string();
-    }
-    if (partition_key_columns().size() > 1) {
-        os << ")";
-    }
-    for (auto& pk : clustering_key_columns()) {
-        os << ", ";
-        os << pk.name_as_cql_string();
-    }
-    os << ")";
-    if (is_view()) {
-        os << "\n    ";
-    } else {
-        os << "\n) ";
-    }
-    os << "WITH ";
-    if (with_internals) {
-        os << "ID = " << id() << "\nAND ";
-    }
-    if (!clustering_key_columns().empty()) {
-        // Adding clustering key order can be optional, but there's no harm in doing so.
-        os << "CLUSTERING ORDER BY (";
-        n = 0;
-        for (auto& pk : clustering_key_columns()) {
-            if (n++ != 0) {
-                os << ", ";
-            }
-            os << pk.name_as_cql_string();
-            if (pk.type->is_reversed()) {
-                os << " DESC";
-            } else {
-                os << " ASC";
-            }
-        }
-        os << ")\n    AND ";
-    }
-    if (is_compact_table()) {
-        os << "COMPACT STORAGE\n    AND ";
-    }
-    os << "bloom_filter_fp_chance = " << bloom_filter_fp_chance();
-    os << "\n    AND caching = {";
-    map_as_cql_param(os, caching_options().to_map());
-    os << "}";
-    os << "\n    AND comment = " << cql3::util::single_quote(comment());
-    os << "\n    AND compaction = {'class': '" <<  sstables::compaction_strategy::name(compaction_strategy()) << "'";
-    map_as_cql_param(os, compaction_strategy_options(), false) << "}";
-    os << "\n    AND compression = {";
-    map_as_cql_param(os,  get_compressor_params().get_options());
-    os << "}";
-
-    os << "\n    AND crc_check_chance = " << crc_check_chance();
-    os << "\n    AND dclocal_read_repair_chance = " << dc_local_read_repair_chance();
-    os << "\n    AND default_time_to_live = " << default_time_to_live().count();
-    os << "\n    AND gc_grace_seconds = " << gc_grace_seconds().count();
-    os << "\n    AND max_index_interval = " << max_index_interval();
-    os << "\n    AND memtable_flush_period_in_ms = " << memtable_flush_period();
-    os << "\n    AND min_index_interval = " << min_index_interval();
-    os << "\n    AND read_repair_chance = " << read_repair_chance();
-    os << "\n    AND speculative_retry = '" << speculative_retry().to_sstring() << "';";
-    os << "\n";
-
-    if (with_internals) {
-        for (auto& cdef : dropped_columns()) {
-            os << "\nALTER TABLE " << cql3::util::maybe_quote(ks_name()) << "." << cql3::util::maybe_quote(cf_name())
-               << " DROP " << cql3::util::maybe_quote(cdef.first) << " USING TIMESTAMP " << cdef.second.timestamp << ";";
-
-            auto column = get_column_definition(to_bytes(cdef.first));
-            if (column) {
-                os << "\nALTER TABLE " << cql3::util::maybe_quote(ks_name()) << "." << cql3::util::maybe_quote(cf_name())
-                   << " ADD ";
-                column_definition_as_cql_key(os, *column);
-                os << ";";
-            }
-        }
-    }
-
     return os;
 }
 
@@ -1012,9 +843,6 @@ schema_builder::schema_builder(std::string_view ks_name, std::string_view cf_nam
 schema_builder::schema_builder(const schema_ptr s)
     : schema_builder(s->_raw)
 {
-    if (s->is_view()) {
-        _view_info = s->view_info()->raw();
-    }
 }
 
 schema_builder::schema_builder(const schema::raw_schema& raw)
@@ -1246,7 +1074,6 @@ void schema_builder::prepare_dense_schema(schema::raw_schema& raw) {
 }
 
 schema_builder& schema_builder::with_view_info(table_id base_id, sstring base_name, bool include_all_columns, sstring where_clause) {
-    _view_info = raw_view_info(std::move(base_id), std::move(base_name), include_all_columns, std::move(where_clause));
     return *this;
 }
 

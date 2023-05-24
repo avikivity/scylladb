@@ -93,17 +93,17 @@ private:
     std::optional<int> _chunk_length;
     std::optional<double> _crc_check_chance;
 public:
-    compression_parameters();
-    compression_parameters(compressor_ptr);
-    compression_parameters(const std::map<sstring, sstring>& options);
-    ~compression_parameters();
+    compression_parameters() {}
+    compression_parameters(compressor_ptr) {}
+    compression_parameters(const std::map<sstring, sstring>& options) {}
+    ~compression_parameters() {}
 
     compressor_ptr get_compressor() const { return _compressor; }
     int32_t chunk_length() const { return _chunk_length.value_or(int(DEFAULT_CHUNK_LENGTH)); }
     double crc_check_chance() const { return _crc_check_chance.value_or(double(DEFAULT_CRC_CHECK_CHANCE)); }
 
     void validate();
-    std::map<sstring, sstring> get_options() const;
+    std::map<sstring, sstring> get_options() const { return {}; }
     bool operator==(const compression_parameters& other) const;
 
     static compression_parameters no_compression() {

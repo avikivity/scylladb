@@ -1454,10 +1454,7 @@ static void validate_aux(const list_type_impl& t, View v) {
         }
     }
     if (v.size_bytes()) {
-        auto hex = with_linearized(v, [] (bytes_view bv) { return to_hex(bv); });
-        throw marshal_exception(format("Validation failed for type {}: bytes remaining after "
-                                       "reading all {} elements of the list -> [{}]",
-                t.name(), nr, hex));
+        throw marshal_exception("x");
     }
 }
 
@@ -2824,7 +2821,7 @@ struct to_string_impl_visitor {
         return format_if_not_empty(t, v, [] (const T& v) { return to_sstring(v); });
     }
     sstring operator()(const bytes_type_impl& b, const bytes* v) {
-        return format_if_not_empty(b, v, [] (const bytes& v) { return to_hex(v); });
+        return format_if_not_empty(b, v, [] (const bytes& v) { return "dd"; });
     }
     sstring operator()(const boolean_type_impl& b, const boolean_type_impl::native_type* v) {
         return format_if_not_empty(b, v, boolean_to_string);
@@ -3176,10 +3173,8 @@ user_type_impl::make_name(sstring keyspace,
     if (!is_multi_cell) {
         os << "org.apache.cassandra.db.marshal.FrozenType(";
     }
-    os << "org.apache.cassandra.db.marshal.UserType(" << keyspace << "," << to_hex(name);
     for (size_t i = 0; i < field_names.size(); ++i) {
         os << ",";
-        os << to_hex(field_names[i]) << ":";
         os << field_types[i]->name(); // FIXME: ignore frozen<>
     }
     os << ")";

@@ -1032,10 +1032,10 @@ public:
     // Handles eviction of the row, but doesn't attempt to handle eviction
     // of the containing partition_entry in case this is the last row.
     // Used by tests which don't keep the partition_entry inside a row_cache instance.
-    void on_evicted_shallow() noexcept override;
+    void on_evicted_shallow() noexcept override {}
 
-    void on_evicted(cache_tracker&) noexcept;
-    void on_evicted() noexcept override;
+    void on_evicted(cache_tracker&) noexcept {}
+    void on_evicted() noexcept override {}
 
     void compact(const schema&, tombstone);
 

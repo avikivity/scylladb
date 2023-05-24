@@ -35,10 +35,6 @@ bool column_identifier::operator==(const column_identifier& other) const {
     return bytes_ == other.bytes_;
 }
 
-const sstring& column_identifier::text() const {
-    return _text;
-}
-
 const bytes& column_identifier::name() const {
     return bytes_;
 }

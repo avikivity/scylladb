@@ -16,7 +16,6 @@ private:
     char** _new_argv = nullptr;
 public:
     scylla_tests_cmdline_options_processor() = default;
-    ~scylla_tests_cmdline_options_processor();
     // Returns new argv if compaction group option was processed.
-    std::pair<int, char**> process_cmdline_options(int argc, char** argv);
+    std::pair<int, char**> process_cmdline_options(int argc, char** argv) { return { argc, argv }; }
 };
