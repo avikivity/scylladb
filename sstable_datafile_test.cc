@@ -19434,6 +19434,706 @@ inline bool operator==(const cql3_type& a, const cql3_type& b) {
 }
 
 
+#include <iosfwd>
+#include <optional>
+#include <stdexcept>
+#include <unordered_map>
+#include <unordered_set>
+
+#include <seastar/core/print.hh>
+#include <seastar/core/sstring.hh>
+
+
+namespace auth {
+
+enum class authentication_option {
+    password,
+    options
+};
+
+using authentication_option_set = std::unordered_set<authentication_option>;
+
+using custom_options = std::unordered_map<sstring, sstring>;
+
+struct authentication_options final {
+    std::optional<sstring> password;
+    std::optional<custom_options> options;
+};
+
+inline bool any_authentication_options(const authentication_options& aos) noexcept {
+    return aos.password || aos.options;
+}
+
+class unsupported_authentication_option : public std::invalid_argument {
+public:
+    explicit unsupported_authentication_option(authentication_option k)
+            : std::invalid_argument(format("The {} option is not supported.", k)) {
+    }
+};
+
+}
+
+template <>
+struct fmt::formatter<auth::authentication_option> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const auth::authentication_option a, FormatContext& ctx) const {
+        using enum auth::authentication_option;
+        switch (a) {
+        case password:
+            return formatter<std::string_view>::format("PASSWORD", ctx);
+        case options:
+            return formatter<std::string_view>::format("OPTIONS", ctx);
+        }
+        std::abort();
+    }
+};
+
+#include <unordered_set>
+
+#include <seastar/core/sstring.hh>
+
+
+namespace auth {
+
+enum class permission {
+    //Deprecated
+    READ,
+    //Deprecated
+    WRITE,
+
+    // schema management
+    CREATE, // required for CREATE KEYSPACE and CREATE TABLE.
+    ALTER,  // required for ALTER KEYSPACE, ALTER TABLE, CREATE INDEX, DROP INDEX.
+    DROP,   // required for DROP KEYSPACE and DROP TABLE.
+
+    // data access
+    SELECT, // required for SELECT.
+    MODIFY, // required for INSERT, UPDATE, DELETE, TRUNCATE.
+
+    // permission management
+    AUTHORIZE, // required for GRANT and REVOKE.
+    DESCRIBE, // required on the root-level role resource to list all roles.
+
+    // function/aggregate/procedure calls
+    EXECUTE,
+};
+
+typedef enum_set<
+        super_enum<
+                permission,
+                permission::READ,
+                permission::WRITE,
+                permission::CREATE,
+                permission::ALTER,
+                permission::DROP,
+                permission::SELECT,
+                permission::MODIFY,
+                permission::AUTHORIZE,
+                permission::DESCRIBE,
+                permission::EXECUTE>> permission_set;
+
+bool operator<(const permission_set&, const permission_set&);
+
+namespace permissions {
+
+extern const permission_set ALL;
+extern const permission_set NONE;
+
+const sstring& to_string(permission);
+permission from_string(const sstring&);
+
+std::unordered_set<sstring> to_strings(const permission_set&);
+permission_set from_strings(const std::unordered_set<sstring>&);
+
+}
+
+}
+
+#ifndef UTILS_HASH_HH_
+#define UTILS_HASH_HH_
+
+#include <functional>
+
+namespace utils {
+
+// public for unit testing etc
+inline size_t hash_combine(size_t left, size_t right) {
+    return left + 0x9e3779b9 + (right << 6) + (right >> 2);
+}
+
+struct tuple_hash {
+private:
+    // CMH. Add specializations here to handle recursive tuples
+    template<typename T>
+    static size_t hash(const T& t) {
+        return std::hash<T>()(t);
+    }
+    template<size_t index, typename...Types>
+    struct hash_impl {
+        size_t operator()(const std::tuple<Types...>& t, size_t a) const {
+            return hash_impl<index-1, Types...>()(t, hash_combine(hash(std::get<index>(t)), a));
+        }
+        size_t operator()(const std::tuple<Types...>& t) const {
+            return hash_impl<index-1, Types...>()(t, hash(std::get<index>(t)));
+        }
+    };
+    template<class...Types>
+    struct hash_impl<0, Types...> {
+        size_t operator()(const std::tuple<Types...>& t, size_t a) const {
+            return hash_combine(hash(std::get<0>(t)), a);
+        }
+        size_t operator()(const std::tuple<Types...>& t) const {
+            return hash(std::get<0>(t));
+        }
+    };
+public:
+    // All the operator() implementations are templates, so this is transparent.
+    using is_transparent = void;
+
+    template<typename T1, typename T2>
+    size_t operator()(const std::pair<T1, T2>& p) const {
+        return hash_combine(hash(p.first), hash(p.second));
+    }
+    template<typename T1, typename T2>
+    size_t operator()(const T1& t1, const T2& t2) const {
+        return hash_combine(hash(t1), hash(t2));
+    }
+    template<typename... Args>
+    size_t operator()(const std::tuple<Args...>& v) const;
+};
+
+template<typename... Args>
+inline size_t tuple_hash::operator()(const std::tuple<Args...>& v) const {
+    return hash_impl<std::tuple_size<std::tuple<Args...>>::value - 1, Args...>()(v);
+}
+template<>
+inline size_t tuple_hash::operator()(const std::tuple<>& v) const {
+    return 0;
+}
+
+}
+
+#endif /* UTILS_HASH_HH_ */
+
+#include <string_view>
+#include <iostream>
+#include <optional>
+#include <stdexcept>
+#include <tuple>
+#include <vector>
+#include <unordered_set>
+
+#include <boost/range/adaptor/transformed.hpp>
+#include <seastar/core/print.hh>
+#include <seastar/core/sstring.hh>
+
+
+namespace auth {
+
+class invalid_resource_name : public std::invalid_argument {
+public:
+    explicit invalid_resource_name(std::string_view name)
+            : std::invalid_argument(format("The resource name '{}' is invalid.", name)) {
+    }
+};
+
+enum class resource_kind {
+    data, role, service_level, functions
+};
+
+///
+/// Type tag for constructing data resources.
+///
+struct data_resource_t final {};
+
+///
+/// Type tag for constructing role resources.
+///
+struct role_resource_t final {};
+
+///
+/// Type tag for constructing service_level resources.
+///
+struct service_level_resource_t final {};
+
+///
+/// Type tag for constructing function resources.
+///
+struct functions_resource_t final {};
+
+///
+/// Resources are entities that users can be granted permissions on.
+///
+/// There are data (keyspaces and tables), role and function resources. There may be other kinds of resources in the future.
+///
+/// When they are stored as system metadata, resources have the form `root/part_0/part_1/.../part_n`. Each kind of
+/// resource has a specific root prefix, followed by a maximum of `n` parts (where `n` is distinct for each kind of
+/// resource as well). In this code, this form is called the "name".
+///
+/// Since all resources have this same structure, all the different kinds are stored in instances of the same class:
+/// \ref resource. When we wish to query a resource for kind-specific data (like the table of a "data" resource), we
+/// create a kind-specific "view" of the resource.
+///
+class resource final {
+    resource_kind _kind;
+
+    utils::small_vector<sstring, 3> _parts;
+
+public:
+    ///
+    /// A root resource of a particular kind.
+    ///
+    explicit resource(resource_kind);
+    resource(data_resource_t, std::string_view keyspace);
+    resource(data_resource_t, std::string_view keyspace, std::string_view table);
+    resource(role_resource_t, std::string_view role);
+    resource(service_level_resource_t);
+    explicit resource(functions_resource_t);
+    resource(functions_resource_t, std::string_view keyspace);
+    resource(functions_resource_t, std::string_view keyspace, std::string_view function_signature);
+    resource(functions_resource_t, std::string_view keyspace, std::string_view function_name,
+            std::vector<::shared_ptr<cql3::cql3_type::raw>> function_args);
+
+    resource_kind kind() const noexcept {
+        return _kind;
+    }
+
+    ///
+    /// A machine-friendly identifier unique to each resource.
+    ///
+    sstring name() const;
+
+    std::optional<resource> parent() const;
+
+    permission_set applicable_permissions() const;
+
+private:
+    resource(resource_kind, utils::small_vector<sstring, 3> parts);
+
+    friend class std::hash<resource>;
+    friend class data_resource_view;
+    friend class role_resource_view;
+    friend class service_level_resource_view;
+    friend class functions_resource_view;
+
+    friend bool operator<(const resource&, const resource&);
+    friend bool operator==(const resource&, const resource&) = default;
+    friend resource parse_resource(std::string_view);
+};
+
+bool operator<(const resource&, const resource&);
+
+std::ostream& operator<<(std::ostream&, const resource&);
+
+class resource_kind_mismatch : public std::invalid_argument {
+public:
+    explicit resource_kind_mismatch(resource_kind expected, resource_kind actual)
+        : std::invalid_argument(
+            format("This resource has kind '{}', but was expected to have kind '{}'.", actual, expected)) {
+    }
+};
+
+/// A "data" view of \ref resource.
+///
+/// If neither `keyspace` nor `table` is present, this is the root resource.
+class data_resource_view final {
+    const resource& _resource;
+
+public:
+    ///
+    /// \throws `resource_kind_mismatch` if the argument is not a `data` resource.
+    ///
+    explicit data_resource_view(const resource& r);
+
+    std::optional<std::string_view> keyspace() const;
+
+    std::optional<std::string_view> table() const;
+};
+
+std::ostream& operator<<(std::ostream&, const data_resource_view&);
+
+///
+/// A "role" view of \ref resource.
+///
+/// If `role` is not present, this is the root resource.
+///
+class role_resource_view final {
+    const resource& _resource;
+
+public:
+    ///
+    /// \throws \ref resource_kind_mismatch if the argument is not a "role" resource.
+    ///
+    explicit role_resource_view(const resource&);
+
+    std::optional<std::string_view> role() const;
+};
+
+std::ostream& operator<<(std::ostream&, const role_resource_view&);
+
+///
+/// A "service_level" view of \ref resource.
+///
+class service_level_resource_view final {
+public:
+    ///
+    /// \throws \ref resource_kind_mismatch if the argument is not a "service_level" resource.
+    ///
+    explicit service_level_resource_view(const resource&);
+
+};
+
+std::ostream& operator<<(std::ostream&, const service_level_resource_view&);
+
+///
+/// A "function" view of \ref resource.
+///
+class functions_resource_view final {
+    const resource& _resource;
+public:
+    ///
+    /// \throws \ref resource_kind_mismatch if the argument is not a "function" resource.
+    ///
+    explicit functions_resource_view(const resource&);
+
+    std::optional<std::string_view> keyspace() const;
+    std::optional<std::string_view> function_signature() const;
+    std::optional<std::string_view> function_name() const;
+    std::optional<std::vector<std::string_view>> function_args() const;
+};
+
+std::ostream& operator<<(std::ostream&, const functions_resource_view&);
+
+///
+/// Parse a resource from its name.
+///
+/// \throws \ref invalid_resource_name when the name is malformed.
+///
+resource parse_resource(std::string_view name);
+
+const resource& root_data_resource();
+
+inline resource make_data_resource(std::string_view keyspace) {
+    return resource(data_resource_t{}, keyspace);
+}
+inline resource make_data_resource(std::string_view keyspace, std::string_view table) {
+    return resource(data_resource_t{}, keyspace, table);
+}
+
+const resource& root_role_resource();
+
+inline resource make_role_resource(std::string_view role) {
+    return resource(role_resource_t{}, role);
+}
+
+const resource& root_service_level_resource();
+
+inline resource make_service_level_resource() {
+    return resource(service_level_resource_t{});
+}
+
+const resource& root_function_resource();
+
+inline resource make_functions_resource() {
+    return resource(functions_resource_t{});
+}
+
+inline resource make_functions_resource(std::string_view keyspace) {
+    return resource(functions_resource_t{}, keyspace);
+}
+
+inline resource make_functions_resource(std::string_view keyspace, std::string_view function_signature) {
+    return resource(functions_resource_t{}, keyspace, function_signature);
+}
+
+inline resource make_functions_resource(std::string_view keyspace, std::string_view function_name, std::vector<::shared_ptr<cql3::cql3_type::raw>> function_signature) {
+    return resource(functions_resource_t{}, keyspace, function_name, function_signature);
+}
+
+sstring encode_signature(std::string_view name, std::vector<data_type> args);
+
+std::pair<sstring, std::vector<data_type>> decode_signature(std::string_view encoded_signature);
+
+}
+
+template <>
+struct fmt::formatter<auth::resource_kind> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const auth::resource_kind kind, FormatContext& ctx) const {
+        using enum auth::resource_kind;
+        switch (kind) {
+        case data:
+            return formatter<std::string_view>::format("data", ctx);
+        case role:
+            return formatter<std::string_view>::format("role", ctx);
+        case service_level:
+            return formatter<std::string_view>::format("service_level", ctx);
+        case functions:
+            return formatter<std::string_view>::format("functions", ctx);
+        }
+        std::abort();
+    }
+};
+
+namespace std {
+
+template <>
+struct hash<auth::resource> {
+    static size_t hash_data(const auth::data_resource_view& dv) {
+        return utils::tuple_hash()(std::make_tuple(auth::resource_kind::data, dv.keyspace(), dv.table()));
+    }
+
+    static size_t hash_role(const auth::role_resource_view& rv) {
+        return utils::tuple_hash()(std::make_tuple(auth::resource_kind::role, rv.role()));
+    }
+
+    static size_t hash_service_level(const auth::service_level_resource_view& rv) {
+            return utils::tuple_hash()(std::make_tuple(auth::resource_kind::service_level));
+    }
+
+    static size_t hash_function(const auth::functions_resource_view& fv) {
+        return utils::tuple_hash()(std::make_tuple(auth::resource_kind::functions, fv.keyspace(), fv.function_signature()));
+    }
+
+    size_t operator()(const auth::resource& r) const {
+        std::size_t value;
+
+        switch (r._kind) {
+        case auth::resource_kind::data: value = hash_data(auth::data_resource_view(r)); break;
+        case auth::resource_kind::role: value = hash_role(auth::role_resource_view(r)); break;
+        case auth::resource_kind::service_level: value = hash_service_level(auth::service_level_resource_view(r)); break;
+        case auth::resource_kind::functions: value = hash_function(auth::functions_resource_view(r)); break;
+        }
+
+        return value;
+    }
+};
+
+}
+
+namespace auth {
+
+using resource_set = std::unordered_set<resource>;
+
+//
+// A resource and all of its parents.
+//
+resource_set expand_resource_family(const resource&);
+
+}
+
+
+namespace auth {
+
+///
+/// A type-safe wrapper for the name of a logged-in user, or a nameless (anonymous) user.
+///
+class authenticated_user final {
+public:
+    ///
+    /// An anonymous user has no name.
+    ///
+    std::optional<sstring> name{};
+
+    ///
+    /// An anonymous user.
+    ///
+    authenticated_user() = default;
+    explicit authenticated_user(std::string_view name);
+    friend bool operator==(const authenticated_user&, const authenticated_user&) noexcept = default;
+};
+
+const authenticated_user& anonymous_user() noexcept;
+
+inline bool is_anonymous(const authenticated_user& u) noexcept {
+    return u == anonymous_user();
+}
+
+}
+
+///
+/// The user name, or "anonymous".
+///
+template <>
+struct fmt::formatter<auth::authenticated_user> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const auth::authenticated_user& u, FormatContext& ctx) const {
+        if (u.name) {
+            return fmt::format_to(ctx.out(), "{}", *u.name);
+        } else {
+            return fmt::format_to(ctx.out(), "{}", "anonymous");
+        }
+    }
+};
+
+namespace std {
+
+template <>
+struct hash<auth::authenticated_user> final {
+    size_t operator()(const auth::authenticated_user &u) const {
+        return std::hash<std::optional<sstring>>()(u.name);
+    }
+};
+
+}
+
+#include <functional>
+#include <optional>
+#include <string_view>
+
+#include <seastar/core/future.hh>
+#include <seastar/core/sstring.hh>
+
+
+namespace auth {
+
+///
+/// A stateful SASL challenge which supports many authentication schemes (depending on the implementation).
+///
+class sasl_challenge {
+public:
+    virtual ~sasl_challenge() = default;
+
+    virtual bytes evaluate_response(bytes_view client_response) = 0;
+
+    virtual bool is_complete() const = 0;
+
+    virtual future<authenticated_user> get_authenticated_user() const = 0;
+};
+
+class plain_sasl_challenge : public sasl_challenge {
+public:
+    using completion_callback = std::function<future<authenticated_user>(std::string_view, std::string_view)>;
+
+    explicit plain_sasl_challenge(completion_callback f) : _when_complete(std::move(f)) {
+    }
+
+    virtual bytes evaluate_response(bytes_view) override;
+
+    virtual bool is_complete() const override;
+
+    virtual future<authenticated_user> get_authenticated_user() const override;
+
+private:
+    std::optional<sstring> _username, _password;
+    completion_callback _when_complete;
+};
+
+}
+
+
+#include <string_view>
+#include <memory>
+#include <set>
+#include <stdexcept>
+#include <unordered_map>
+
+#include <seastar/core/enum.hh>
+#include <seastar/core/future.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/shared_ptr.hh>
+
+
+namespace db {
+    class config;
+}
+
+namespace auth {
+
+class authenticated_user;
+
+///
+/// Abstract client for authenticating role identity.
+///
+/// All state necessary to authorize a role is stored externally to the client instance.
+///
+class authenticator {
+public:
+    using ptr_type = std::unique_ptr<authenticator>;
+
+    ///
+    /// The name of the key to be used for the user-name part of password authentication with \ref authenticate.
+    ///
+    static const sstring USERNAME_KEY;
+
+    ///
+    /// The name of the key to be used for the password part of password authentication with \ref authenticate.
+    ///
+    static const sstring PASSWORD_KEY;
+
+    using credentials_map = std::unordered_map<sstring, sstring>;
+
+    virtual ~authenticator() = default;
+
+    virtual future<> start() = 0;
+
+    virtual future<> stop() = 0;
+
+    ///
+    /// A fully-qualified (class with package) Java-like name for this implementation.
+    ///
+    virtual std::string_view qualified_java_name() const = 0;
+
+    virtual bool require_authentication() const = 0;
+
+    virtual authentication_option_set supported_options() const = 0;
+
+    ///
+    /// A subset of `supported_options()` that users are permitted to alter for themselves.
+    ///
+    virtual authentication_option_set alterable_options() const = 0;
+
+    ///
+    /// Authenticate a user given implementation-specific credentials.
+    ///
+    /// If this implementation does not require authentication (\ref require_authentication), an anonymous user may
+    /// result.
+    ///
+    /// \returns an exceptional future with \ref exceptions::authentication_exception if given invalid credentials.
+    ///
+    virtual future<authenticated_user> authenticate(const credentials_map& credentials) const = 0;
+
+    ///
+    /// Create an authentication record for a new user. This is required before the user can log-in.
+    ///
+    /// The options provided must be a subset of `supported_options()`.
+    ///
+    virtual future<> create(std::string_view role_name, const authentication_options& options) const = 0;
+
+    ///
+    /// Alter the authentication record of an existing user.
+    ///
+    /// The options provided must be a subset of `supported_options()`.
+    ///
+    /// Callers must ensure that the specification of `alterable_options()` is adhered to.
+    ///
+    virtual future<> alter(std::string_view role_name, const authentication_options& options) const = 0;
+
+    ///
+    /// Delete the authentication record for a user. This will disallow the user from logging in.
+    ///
+    virtual future<> drop(std::string_view role_name) const = 0;
+
+    ///
+    /// Query for custom options (those corresponding to \ref authentication_options::options).
+    ///
+    /// If no options are set the result is an empty container.
+    ///
+    virtual future<custom_options> query_custom_options(std::string_view role_name) const = 0;
+
+    ///
+    /// System resources used internally as part of the implementation. These are made inaccessible to users.
+    ///
+    virtual const resource_set& protected_resources() const = 0;
+
+    virtual ::shared_ptr<sasl_challenge> new_sasl_challenge() const = 0;
+};
+
+}
+
+
+
+
 //#include "cql3/CqlParser.hpp"
 #include "cql3/lists.hh"
 #include "cql3/maps.hh"
