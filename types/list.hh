@@ -12,7 +12,6 @@
 #include <seastar/core/sstring.hh>
 #include <vector>
 
-#include "types/types.hh"
 #include "types/collection.hh"
 
 class user_type_impl;
