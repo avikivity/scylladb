@@ -17,8 +17,6 @@
 #include <seastar/util/bool_class.hh>
 #include <seastar/core/sharded.hh>
 
-#include "auth/authorizer.hh"
-#include "auth/permission.hh"
 #include "auth/permissions_cache.hh"
 #include "auth/role_manager.hh"
 #include "seastarx.hh"
