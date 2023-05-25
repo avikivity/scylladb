@@ -7,16 +7,3 @@
  */
 
 #pragma once
-
-namespace sstables {
-
-enum class compaction_strategy_type {
-    null,
-    size_tiered,
-    leveled,
-    date_tiered,
-    time_window,
-};
-
-enum class reshape_mode { strict, relaxed };
-}
