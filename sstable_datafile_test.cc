@@ -21477,6 +21477,571 @@ public:
 }
 
 
+#include <string_view>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <unordered_set>
+
+#include <seastar/core/future.hh>
+#include <seastar/core/print.hh>
+#include <seastar/core/sstring.hh>
+
+namespace auth {
+
+struct role_config final {
+    bool is_superuser{false};
+    bool can_login{false};
+};
+
+///
+/// Differential update for altering existing roles.
+///
+struct role_config_update final {
+    std::optional<bool> is_superuser{};
+    std::optional<bool> can_login{};
+};
+
+///
+/// A logical argument error for a role-management operation.
+///
+class roles_argument_exception : public exceptions::invalid_request_exception {
+public:
+    using exceptions::invalid_request_exception::invalid_request_exception;
+};
+
+class role_already_exists : public roles_argument_exception {
+public:
+    explicit role_already_exists(std::string_view role_name)
+            : roles_argument_exception(format("Role {} already exists.", role_name)) {
+    }
+};
+
+class nonexistant_role : public roles_argument_exception {
+public:
+    explicit nonexistant_role(std::string_view role_name)
+            : roles_argument_exception(format("Role {} doesn't exist.", role_name)) {
+    }
+};
+
+class role_already_included : public roles_argument_exception {
+public:
+    role_already_included(std::string_view grantee_name, std::string_view role_name)
+            : roles_argument_exception(
+                      format("{} already includes role {}.", grantee_name, role_name)) {
+    }
+};
+
+class revoke_ungranted_role : public roles_argument_exception {
+public:
+    revoke_ungranted_role(std::string_view revokee_name, std::string_view role_name)
+            : roles_argument_exception(
+                      format("{} was not granted role {}, so it cannot be revoked.", revokee_name, role_name)) {
+    }
+};
+
+using role_set = std::unordered_set<sstring>;
+
+enum class recursive_role_query { yes, no };
+
+///
+/// Abstract client for managing roles.
+///
+/// All state necessary for managing roles is stored externally to the client instance.
+///
+/// All implementations should throw role-related exceptions as documented. Authorization is not addressed here, and
+/// access-control should never be enforced in implementations.
+///
+class role_manager {
+public:
+    // this type represents a mapping between a role and some attribute value.
+    // i.e: given attribute name  'a' this map holds role name and it's assigned
+    // value of 'a'.
+    using attribute_vals = std::unordered_map<sstring, sstring>;
+    using ptr_type = std::unique_ptr<role_manager>;
+public:
+    virtual ~role_manager() = default;
+
+    virtual std::string_view qualified_java_name() const noexcept = 0;
+
+    virtual const resource_set& protected_resources() const = 0;
+
+    virtual future<> start() = 0;
+
+    virtual future<> stop() = 0;
+
+    ///
+    /// \returns an exceptional future with \ref role_already_exists for a role that has previously been created.
+    ///
+    virtual future<> create(std::string_view role_name, const role_config&) = 0;
+
+    ///
+    /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
+    ///
+    virtual future<> drop(std::string_view role_name) = 0;
+
+    ///
+    /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
+    ///
+    virtual future<> alter(std::string_view role_name, const role_config_update&) = 0;
+
+    ///
+    /// Grant `role_name` to `grantee_name`.
+    ///
+    /// \returns an exceptional future with \ref nonexistant_role if either the role or the grantee do not exist.
+    ///
+    /// \returns an exceptional future with \ref role_already_included if granting the role would be redundant, or
+    /// create a cycle.
+    ///
+    virtual future<> grant(std::string_view grantee_name, std::string_view role_name) = 0;
+
+    ///
+    /// Revoke `role_name` from `revokee_name`.
+    ///
+    /// \returns an exceptional future with \ref nonexistant_role if either the role or the revokee do not exist.
+    ///
+    /// \returns an exceptional future with \ref revoke_ungranted_role if the role was not granted.
+    ///
+    virtual future<> revoke(std::string_view revokee_name, std::string_view role_name) = 0;
+
+    ///
+    /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
+    ///
+    virtual future<role_set> query_granted(std::string_view grantee, recursive_role_query) = 0;
+
+    virtual future<role_set> query_all() = 0;
+
+    virtual future<bool> exists(std::string_view role_name) = 0;
+
+    ///
+    /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
+    ///
+    virtual future<bool> is_superuser(std::string_view role_name) = 0;
+
+    ///
+    /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
+    ///
+    virtual future<bool> can_login(std::string_view role_name) = 0;
+
+    ///
+    /// \returns the value of the named attribute, if one is set.
+    ///
+    virtual future<std::optional<sstring>> get_attribute(std::string_view role_name, std::string_view attribute_name) = 0;
+
+    ///
+    /// \returns a mapping of each role's value for the named attribute, if one is set for the role.
+    ///
+    virtual future<attribute_vals> query_attribute_for_all(std::string_view attribute_name) = 0;
+
+    /// Sets `attribute_name` with `attribute_value` for `role_name`.
+    /// \returns an exceptional future with nonexistant_role if the role does not exist.
+    ///
+    virtual future<> set_attribute(std::string_view role_name, std::string_view attribute_name, std::string_view attribute_value) = 0;
+
+    /// Removes `attribute_name` for `role_name`.
+    /// \returns an exceptional future with nonexistant_role if the role does not exist.
+    /// \note: This is a no-op if the role does not have the named attribute set.
+    ///
+    virtual future<> remove_attribute(std::string_view role_name, std::string_view attribute_name) = 0;
+};
+}
+
+#include <string_view>
+#include <memory>
+#include <optional>
+
+#include <seastar/core/future.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/util/bool_class.hh>
+#include <seastar/core/sharded.hh>
+
+
+namespace cql3 {
+class query_processor;
+}
+
+namespace service {
+class migration_manager;
+class migration_notifier;
+class migration_listener;
+}
+
+namespace auth {
+
+class role_or_anonymous;
+
+struct service_config final {
+    sstring authorizer_java_name;
+    sstring authenticator_java_name;
+    sstring role_manager_java_name;
+};
+
+///
+/// Due to poor (in this author's opinion) decisions of Apache Cassandra, certain choices of one role-manager,
+/// authenticator, or authorizer imply restrictions on the rest.
+///
+/// This exception is thrown when an invalid combination of modules is selected, with a message explaining the
+/// incompatibility.
+///
+class incompatible_module_combination : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+///
+/// Client for access-control in the system.
+///
+/// Access control encompasses user/role management, authentication, and authorization. This client provides access to
+/// the dynamically-loaded implementations of these modules (through the `underlying_*` member functions), but also
+/// builds on their functionality with caching and abstractions for common operations.
+///
+/// All state associated with access-control is stored externally to any particular instance of this class.
+///
+/// peering_sharded_service inheritance is needed to be able to access shard local authentication service
+/// given an object from another shard. Used for bouncing lwt requests to correct shard.
+class service final : public seastar::peering_sharded_service<service> {
+    utils::loading_cache_config _loading_cache_config;
+    std::unique_ptr<permissions_cache> _permissions_cache;
+
+    cql3::query_processor& _qp;
+
+    ::service::migration_notifier& _mnotifier;
+
+    authorizer::ptr_type _authorizer;
+
+    authenticator::ptr_type _authenticator;
+
+    role_manager::ptr_type _role_manager;
+
+    // Only one of these should be registered, so we end up with some unused instances. Not the end of the world.
+    std::unique_ptr<::service::migration_listener> _migration_listener;
+
+    std::function<void(uint32_t)> _permissions_cache_cfg_cb;
+    serialized_action _permissions_cache_config_action;
+
+    utils::observer<uint32_t> _permissions_cache_max_entries_observer;
+    utils::observer<uint32_t> _permissions_cache_update_interval_in_ms_observer;
+    utils::observer<uint32_t> _permissions_cache_validity_in_ms_observer;
+
+public:
+    service(
+            utils::loading_cache_config,
+            cql3::query_processor&,
+            ::service::migration_notifier&,
+            std::unique_ptr<authorizer>,
+            std::unique_ptr<authenticator>,
+            std::unique_ptr<role_manager>);
+
+    ///
+    /// This constructor is intended to be used when the class is sharded via \ref seastar::sharded. In that case, the
+    /// arguments must be copyable, which is why we delay construction with instance-construction instructions instead
+    /// of the instances themselves.
+    ///
+    service(
+            utils::loading_cache_config,
+            cql3::query_processor&,
+            ::service::migration_notifier&,
+            ::service::migration_manager&,
+            const service_config&);
+
+    future<> start(::service::migration_manager&);
+
+    future<> stop();
+
+    void update_cache_config();
+
+    void reset_authorization_cache();
+
+    ///
+    /// \returns an exceptional future with \ref nonexistant_role if the named role does not exist.
+    ///
+    future<permission_set> get_permissions(const role_or_anonymous&, const resource&) const;
+
+    ///
+    /// Like \ref get_permissions, but never returns cached permissions.
+    ///
+    future<permission_set> get_uncached_permissions(const role_or_anonymous&, const resource&) const;
+
+    ///
+    /// Query whether the named role has been granted a role that is a superuser.
+    ///
+    /// A role is always granted to itself. Therefore, a role that "is" a superuser also "has" superuser.
+    ///
+    /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
+    ///
+    future<bool> has_superuser(std::string_view role_name) const;
+
+    ///
+    /// Return the set of all roles granted to the given role, including itself and roles granted through other roles.
+    ///
+    /// \returns an exceptional future with \ref nonexistent_role if the role does not exist.
+    future<role_set> get_roles(std::string_view role_name) const;
+
+    future<bool> exists(const resource&) const;
+
+    const authenticator& underlying_authenticator() const {
+        return *_authenticator;
+    }
+
+    const authorizer& underlying_authorizer() const {
+        return *_authorizer;
+    }
+
+    role_manager& underlying_role_manager() const {
+        return *_role_manager;
+    }
+
+private:
+    future<bool> has_existing_legacy_users() const;
+
+    future<> create_keyspace_if_missing(::service::migration_manager& mm) const;
+};
+
+future<bool> has_superuser(const service&, const authenticated_user&);
+
+future<role_set> get_roles(const service&, const authenticated_user&);
+
+future<permission_set> get_permissions(const service&, const authenticated_user&, const resource&);
+
+///
+/// Access-control is "enforcing" when either the authenticator or the authorizer are not their "allow-all" variants.
+///
+/// Put differently, when access control is not enforcing, all operations on resources will be allowed and users do not
+/// need to authenticate themselves.
+///
+bool is_enforcing(const service&);
+
+/// A description of a CQL command from which auth::service can tell whether or not this command could endanger
+/// internal data on which auth::service depends.
+struct command_desc {
+    auth::permission permission; ///< Nature of the command's alteration.
+    const ::auth::resource& resource; ///< Resource impacted by this command.
+    enum class type {
+        ALTER_WITH_OPTS, ///< Command is ALTER ... WITH ...
+        OTHER
+    } type_ = type::OTHER;
+};
+
+///
+/// Protected resources cannot be modified even if the performer has permissions to do so.
+///
+bool is_protected(const service&, command_desc) noexcept;
+
+///
+/// Create a role with optional authentication information.
+///
+/// \returns an exceptional future with \ref role_already_exists if the user or role exists.
+///
+/// \returns an exceptional future with \ref unsupported_authentication_option if an unsupported option is included.
+///
+future<> create_role(
+        const service&,
+        std::string_view name,
+        const role_config&,
+        const authentication_options&);
+
+///
+/// Alter an existing role and its authentication information.
+///
+/// \returns an exceptional future with \ref nonexistant_role if the named role does not exist.
+///
+/// \returns an exceptional future with \ref unsupported_authentication_option if an unsupported option is included.
+///
+future<> alter_role(
+        const service&,
+        std::string_view name,
+        const role_config_update&,
+        const authentication_options&);
+
+///
+/// Drop a role from the system, including all permissions and authentication information.
+///
+/// \returns an exceptional future with \ref nonexistant_role if the named role does not exist.
+///
+future<> drop_role(const service&, std::string_view name);
+
+///
+/// Check if `grantee` has been granted the named role.
+///
+/// \returns an exceptional future with \ref nonexistent_role if `grantee` or `name` do not exist.
+///
+future<bool> has_role(const service&, std::string_view grantee, std::string_view name);
+///
+/// Check if the authenticated user has been granted the named role.
+///
+/// \returns an exceptional future with \ref nonexistent_role if the user or `name` do not exist.
+///
+future<bool> has_role(const service&, const authenticated_user&, std::string_view name);
+
+///
+/// \returns an exceptional future with \ref nonexistent_role if the named role does not exist.
+///
+/// \returns an exceptional future with \ref unsupported_authorization_operation if granting permissions is not
+/// supported.
+///
+future<> grant_permissions(
+        const service&,
+        std::string_view role_name,
+        permission_set,
+        const resource&);
+
+///
+/// Like \ref grant_permissions, but grants all applicable permissions on the resource.
+///
+/// \returns an exceptional future with \ref nonexistent_role if the named role does not exist.
+///
+/// \returns an exceptional future with \ref unsupported_authorization_operation if granting permissions is not
+/// supported.
+///
+future<> grant_applicable_permissions(const service&, std::string_view role_name, const resource&);
+future<> grant_applicable_permissions(const service&, const authenticated_user&, const resource&);
+
+///
+/// \returns an exceptional future with \ref nonexistent_role if the named role does not exist.
+///
+/// \returns an exceptional future with \ref unsupported_authorization_operation if revoking permissions is not
+/// supported.
+///
+future<> revoke_permissions(
+        const service&,
+        std::string_view role_name,
+        permission_set,
+        const resource&);
+
+using recursive_permissions = bool_class<struct recursive_permissions_tag>;
+
+///
+/// Query for all granted permissions according to filtering criteria.
+///
+/// Only permissions included in the provided set are included.
+///
+/// If a role name is provided, only permissions granted (directly or recursively) to the role are included.
+///
+/// If a resource filter is provided, only permissions granted on the resource are included. When \ref
+/// recursive_permissions is `true`, permissions on a parent resource are included.
+///
+/// \returns an exceptional future with \ref nonexistent_role if a role name is included which refers to a role that
+/// does not exist.
+///
+/// \returns an exceptional future with \ref unsupported_authorization_operation if listing permissions is not
+/// supported.
+///
+future<std::vector<permission_details>> list_filtered_permissions(
+        const service&,
+        permission_set,
+        std::optional<std::string_view> role_name,
+        const std::optional<std::pair<resource, recursive_permissions>>& resource_filter);
+
+}
+
+
+#include <iosfwd>
+#include <seastar/core/print.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/enum.hh>
+
+namespace unimplemented {
+
+enum class cause {
+    API,
+    INDEXES,
+    LWT,
+    PAGING,
+    AUTH,
+    PERMISSIONS,
+    TRIGGERS,
+    COUNTERS,
+    METRICS,
+    MIGRATIONS,
+    GOSSIP,
+    TOKEN_RESTRICTION,
+    LEGACY_COMPOSITE_KEYS,
+    COLLECTION_RANGE_TOMBSTONES,
+    RANGE_DELETES,
+    THRIFT,
+    VALIDATION,
+    REVERSED,
+    COMPRESSION,
+    NONATOMIC,
+    CONSISTENCY,
+    HINT,
+    SUPER,
+    WRAP_AROUND, // Support for handling wrap around ranges in queries on database level and below
+    STORAGE_SERVICE,
+    SCHEMA_CHANGE,
+    MIXED_CF,
+    SSTABLE_FORMAT_M,
+};
+
+[[noreturn]] void fail(cause what);
+void warn(cause what);
+
+}
+
+namespace std {
+
+template <>
+struct hash<unimplemented::cause> : seastar::enum_hash<unimplemented::cause> {};
+
+}
+
+#include <seastar/core/lowres_clock.hh>
+#include <seastar/core/semaphore.hh>
+#include <chrono>
+
+namespace db {
+using timeout_clock = seastar::lowres_clock;
+using timeout_semaphore = seastar::basic_semaphore<seastar::default_timeout_exception_factory, timeout_clock>;
+using timeout_semaphore_units = seastar::semaphore_units<seastar::default_timeout_exception_factory, timeout_clock>;
+static constexpr timeout_clock::time_point no_timeout = timeout_clock::time_point::max();
+}
+
+#include <chrono>
+
+namespace db { class config; }
+
+class updateable_timeout_config;
+
+/// timeout_config represents a snapshot of the options stored in it when
+/// an instance of this class is created. so far this class is only used by
+/// client_state and thrift_handler. so either these classes are obliged to
+/// update it by themselves, or they are fine with using the maybe-updated
+/// options in the lifecycle of a client / connection even if some of these
+/// options are changed whtn the client / connection is still alive.
+struct timeout_config {
+    using duration_t = db::timeout_clock::duration;
+
+    duration_t read_timeout;
+    duration_t write_timeout;
+    duration_t range_read_timeout;
+    duration_t counter_write_timeout;
+    duration_t truncate_timeout;
+    duration_t cas_timeout;
+    duration_t other_timeout;
+};
+
+struct updateable_timeout_config {
+    using timeout_option_t = utils::updateable_value<uint32_t>;
+
+    timeout_option_t read_timeout_in_ms;
+    timeout_option_t write_timeout_in_ms;
+    timeout_option_t range_read_timeout_in_ms;
+    timeout_option_t counter_write_timeout_in_ms;
+    timeout_option_t truncate_timeout_in_ms;
+    timeout_option_t cas_timeout_in_ms;
+    timeout_option_t other_timeout_in_ms;
+
+    explicit updateable_timeout_config(const db::config& cfg);
+
+    timeout_config current_values() const;
+};
+
+
+using timeout_config_selector = db::timeout_clock::duration (timeout_config::*);
+
+extern const timeout_config infinite_timeout_config;
+
+
 //#include "cql3/CqlParser.hpp"
 #include "cql3/lists.hh"
 #include "cql3/maps.hh"
