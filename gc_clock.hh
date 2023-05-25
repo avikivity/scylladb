@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include "clocks-impl.hh"
-#include "utils/hashing.hh"
-
 #include <seastar/core/lowres_clock.hh>
 
 #include <chrono>
