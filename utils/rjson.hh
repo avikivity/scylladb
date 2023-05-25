@@ -47,19 +47,6 @@ public:
 };
 }
 
-// rapidjson configuration macros
-#define RAPIDJSON_HAS_STDSTRING 1
-// Default rjson policy is to use assert() - which is dangerous for two reasons:
-// 1. assert() can be turned off with -DNDEBUG
-// 2. assert() crashes a program
-// Fortunately, the default policy can be overridden, and so rapidjson errors will
-// throw an rjson::error exception instead.
-#define RAPIDJSON_ASSERT(x) do { if (!(x)) throw rjson::error(std::string("JSON error: condition not met: ") + #x); } while (0)
-// This macro is used for functions which are called for every json char making it
-// quite costly if not inlined, by default rapidjson only enables it if NDEBUG
-// is defined which isn't the case for us.
-#define RAPIDJSON_FORCEINLINE __attribute__((always_inline))
-
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
 #include <rapidjson/stringbuffer.h>
