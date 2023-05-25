@@ -12,10 +12,3 @@
 
 #include "db/functions/function.hh"
 
-namespace cql3 {
-namespace functions {
-
-using function = db::functions::function;
-
-}
-}

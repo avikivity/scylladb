@@ -10,11 +10,6 @@
 
 #pragma once
 
-#include "cql3/column_specification.hh"
-#include "cql3/selection/selector.hh"
-#include "cql3/selection/selectable.hh"
-#include "exceptions/exceptions.hh"
-#include "unimplemented.hh"
 #include <seastar/core/thread.hh>
 
 namespace cql3 {

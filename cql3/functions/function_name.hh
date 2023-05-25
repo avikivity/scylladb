@@ -11,11 +11,3 @@
 #pragma once
 
 #include "db/functions/function_name.hh"
-
-namespace cql3 {
-namespace functions {
-
-using function_name = db::functions::function_name;
-
-}
-}
