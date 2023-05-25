@@ -78837,9 +78837,7 @@ namespace db::functions {
 class function_name;
 }
 
-#include "timestamp.hh"
 
-#include "seastarx.hh"
 
 class mutation;
 class schema;
@@ -90004,7 +90002,6 @@ public:
 #include <seastar/core/sleep.hh>
 #include <seastar/core/seastar.hh>
 #include <seastar/core/smp.hh>
-#include "seastarx.hh"
 
 
 #include <algorithm>
@@ -90879,31 +90876,651 @@ private:
 };
 
 
-#include "utils/memory_data_sink.hh"
-#include "utils/murmur_hash.hh"
-#include "utils/overloaded_functor.hh"
-#include "utils/preempt.hh"
-#include "utils/rjson.hh"
-#include "utils/runtime.hh"
-#include "utils/s3/client.hh"
-#include "utils/serialization.hh"
-#include "utils/simple_hashers.hh"
-#include "utils/stall_free.hh"
-#include "utils/to_string.hh"
-#include "utils/unconst.hh"
-#include "utils/utf8.hh"
-#include "utils/UUID_gen.hh"
-#include "utils/UUID.hh"
-#include "utils/vle.hh"
-#include "utils/xx_hasher.hh"
-#include "UUID_gen.hh"
-#include "UUID.hh"
-#include "version.hh"
-#include "view_info.hh"
-#include "vint-serialization.hh"
+
+namespace cql3::statements {
+class select_statement;
+}
+
+class view_info final {
+    const schema& _schema;
+    raw_view_info _raw;
+    // The following fields are used to select base table rows.
+    mutable shared_ptr<cql3::statements::select_statement> _select_statement;
+    mutable std::optional<query::partition_slice> _partition_slice;
+    db::view::base_info_ptr _base_info;
+    mutable bool _has_computed_column_depending_on_base_non_primary_key;
+public:
+    view_info(const schema& schema, const raw_view_info& raw_view_info);
+
+    const raw_view_info& raw() const {
+        return _raw;
+    }
+
+    const table_id& base_id() const {
+        return _raw.base_id();
+    }
+
+    const sstring& base_name() const {
+        return _raw.base_name();
+    }
+
+    bool include_all_columns() const {
+        return _raw.include_all_columns();
+    }
+
+    const sstring& where_clause() const {
+        return _raw.where_clause();
+    }
+
+    cql3::statements::select_statement& select_statement(data_dictionary::database) const;
+    const query::partition_slice& partition_slice(data_dictionary::database) const;
+    const column_definition* view_column(const schema& base, column_kind kind, column_id base_id) const;
+    const column_definition* view_column(const column_definition& base_def) const;
+    bool has_base_non_pk_columns_in_view_pk() const;
+    bool has_computed_column_depending_on_base_non_primary_key() const {
+        return _has_computed_column_depending_on_base_non_primary_key;
+    }
+
+    /// Returns a pointer to the base_dependent_view_info which matches the current
+    /// schema of the base table.
+    ///
+    /// base_dependent_view_info lives separately from the view schema.
+    /// It can change without the view schema changing its value.
+    /// This pointer is updated on base table schema changes as long as this view_info
+    /// corresponds to the current schema of the view. After that the pointer stops tracking
+    /// the base table schema.
+    ///
+    /// The snapshot of both the view schema and base_dependent_view_info is represented
+    /// by view_and_base. See with_base_info_snapshot().
+    const db::view::base_info_ptr& base_info() const { return _base_info; }
+    void set_base_info(db::view::base_info_ptr);
+    db::view::base_info_ptr make_base_dependent_view_info(const schema& base_schema) const;
+
+    friend bool operator==(const view_info& x, const view_info& y) {
+        return x._raw == y._raw;
+    }
+    friend std::ostream& operator<<(std::ostream& os, const view_info& view) {
+        return os << view._raw;
+    }
+};
+
+
+// Accumulates data sent to the memory_data_sink allowing it
+// to be examined later.
+class memory_data_sink_buffers {
+    using buffers_type = utils::small_vector<temporary_buffer<char>, 1>;
+    buffers_type _bufs;
+    size_t _size = 0;
+public:
+    size_t size() const { return _size; }
+    buffers_type& buffers() { return _bufs; }
+
+    // Strong exception guarantees
+    void put(temporary_buffer<char>&& buf) {
+        auto size = buf.size();
+        _bufs.emplace_back(std::move(buf));
+        _size += size;
+    }
+
+    void clear() {
+        _bufs.clear();
+        _size = 0;
+    }
+
+    memory_data_sink_buffers() = default;
+
+    memory_data_sink_buffers(memory_data_sink_buffers&& other)
+            : _bufs(std::move(other._bufs))
+            , _size(std::exchange(other._size, 0))
+    {
+    }
+};
+
+class memory_data_sink : public data_sink_impl {
+    memory_data_sink_buffers& _bufs;
+public:
+    memory_data_sink(memory_data_sink_buffers& b) : _bufs(b) {}
+    virtual future<> put(net::packet data)  override {
+        abort();
+        return make_ready_future<>();
+    }
+    virtual future<> put(temporary_buffer<char> buf) override {
+        _bufs.put(std::move(buf));
+        return make_ready_future<>();
+    }
+    virtual future<> flush() override {
+        return make_ready_future<>();
+    }
+    virtual future<> close() override {
+        return make_ready_future<>();
+    }
+    size_t buffer_size() const noexcept override {
+        return 128*1024;
+    }
+};
+
+
+
+#include <chrono>
+
+namespace runtime {
+
+void init_uptime();
+
+std::chrono::steady_clock::time_point get_boot_time();
+
+/// Returns the uptime of the system.
+std::chrono::steady_clock::duration get_uptime();
+
+}
+
+
+#include <seastar/core/file.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/http/client.hh>
+
+using namespace seastar;
+class memory_data_sink_buffers;
+
+namespace s3 {
+
+struct range {
+    uint64_t off;
+    size_t len;
+};
+
+class client : public enable_shared_from_this<client> {
+    class upload_sink;
+    class readable_file;
+    std::string _host;
+    endpoint_config_ptr _cfg;
+    http::experimental::client _http;
+    using global_factory = std::function<shared_ptr<client>(std::string)>;
+    global_factory _gf;
+
+    struct private_tag {};
+
+    void authorize(http::request&);
+
+    future<> get_object_header(sstring object_name, http::experimental::client::reply_handler handler);
+public:
+    explicit client(std::string host, endpoint_config_ptr cfg, global_factory gf, private_tag);
+    static shared_ptr<client> make(std::string endpoint, endpoint_config_ptr cfg, global_factory gf = {});
+
+    future<uint64_t> get_object_size(sstring object_name);
+    struct stats {
+        uint64_t size;
+        std::time_t last_modified;
+    };
+    future<stats> get_object_stats(sstring object_name);
+    future<temporary_buffer<char>> get_object_contiguous(sstring object_name, std::optional<range> range = {});
+    future<> put_object(sstring object_name, temporary_buffer<char> buf);
+    future<> put_object(sstring object_name, ::memory_data_sink_buffers bufs);
+    future<> delete_object(sstring object_name);
+
+    file make_readable_file(sstring object_name);
+    data_sink make_upload_sink(sstring object_name);
+
+    void update_config(endpoint_config_ptr);
+
+    struct handle {
+        std::string _host;
+        global_factory _gf;
+    public:
+        handle(const client& cln)
+                : _host(cln._host)
+                , _gf(cln._gf)
+        {}
+
+        shared_ptr<client> to_client() && {
+            return _gf(std::move(_host));
+        }
+    };
+
+    future<> close();
+};
+
+} // s3 namespace
+
+
+#include <list>
+#include <algorithm>
+#include <seastar/core/thread.hh>
+#include <seastar/core/future.hh>
+#include <seastar/core/future-util.hh>
+#include <seastar/core/sharded.hh>
+
+using namespace seastar;
+
+namespace utils {
+
+
+// Similar to std::merge but it does not stall. Must run inside a seastar
+// thread. It merges items from list2 into list1. Items from list2 can only be copied.
+template<class T, class Compare>
+requires LessComparable<T, T, Compare>
+void merge_to_gently(std::list<T>& list1, const std::list<T>& list2, Compare comp) {
+    auto first1 = list1.begin();
+    auto first2 = list2.begin();
+    auto last1 = list1.end();
+    auto last2 = list2.end();
+    while (first2 != last2) {
+        seastar::thread::maybe_yield();
+        if (first1 == last1) {
+            // Copy remaining items of list2 into list1
+            list1.insert(last1, *first2);
+            ++first2;
+            continue;
+        }
+        if (comp(*first2, *first1)) {
+            list1.insert(first1, *first2);
+            ++first2;
+        } else {
+            ++first1;
+        }
+    }
+}
+
+// The clear_gently functions are meant for
+// gently destroying the contents of containers.
+// The containers can be re-used after clear_gently
+// or may be destroyed.  But unlike e.g. std::vector::clear(),
+// clear_gently will not necessarily keep the object allocation.
+
+template <typename T>
+concept HasClearGentlyMethod = requires (T x) {
+    { x.clear_gently() } -> std::same_as<future<>>;
+};
+
+template <typename T>
+concept SmartPointer = requires (T x) {
+    { x.get() } -> std::same_as<typename T::element_type*>;
+    { *x } -> std::same_as<typename T::element_type&>;
+};
+
+template <typename T>
+concept SharedPointer = SmartPointer<T> && requires (T x) {
+    { x.use_count() } -> std::convertible_to<long>;
+};
+
+template <typename T>
+concept StringLike = requires (T x) {
+    std::is_same_v<typename T::traits_type, std::char_traits<typename T::value_type>>;
+};
+
+template <typename T>
+concept Iterable = requires (T x) {
+    { x.empty() } -> std::same_as<bool>;
+    { x.begin() } -> std::same_as<typename T::iterator>;
+    { x.end() } -> std::same_as<typename T::iterator>;
+};
+
+template <typename T>
+concept Sequence = Iterable<T> && requires (T x, size_t n) {
+    { x.back() } -> std::same_as<typename T::value_type&>;
+    { x.pop_back() } -> std::same_as<void>;
+};
+
+template <typename T>
+concept TriviallyClearableSequence =
+    Sequence<T> && std::is_trivially_destructible_v<typename T::value_type> && !HasClearGentlyMethod<typename T::value_type> && requires (T s) {
+        { s.clear() } -> std::same_as<void>;
+    };
+
+template <typename T>
+concept Container = Iterable<T> && requires (T x, typename T::iterator it) {
+    { x.erase(it) } -> std::same_as<typename T::iterator>;
+};
+
+template <typename T>
+concept MapLike = Container<T> && requires (T x) {
+    std::is_same_v<typename T::value_type, std::pair<const typename T::key_type, typename T::mapped_type>>;
+};
+
+template <HasClearGentlyMethod T>
+future<> clear_gently(T& o) noexcept;
+
+template <typename T>
+future<> clear_gently(foreign_ptr<T>& o) noexcept;
+
+template <SharedPointer T>
+future<> clear_gently(T& o) noexcept;
+
+template <SmartPointer T>
+future<> clear_gently(T& o) noexcept;
+
+template <typename T, std::size_t N>
+future<> clear_gently(std::array<T, N>&a) noexcept;
+
+template <typename T>
+requires (StringLike<T> || TriviallyClearableSequence<T>)
+future<> clear_gently(T& s) noexcept;
+
+template <Sequence T>
+requires (!StringLike<T> && !TriviallyClearableSequence<T>)
+future<> clear_gently(T& v) noexcept;
+
+template <MapLike T>
+future<> clear_gently(T& c) noexcept;
+
+template <Container T>
+requires (!StringLike<T> && !Sequence<T> && !MapLike<T>)
+future<> clear_gently(T& c) noexcept;
+
+template <typename T>
+future<> clear_gently(std::optional<T>& opt) noexcept;
+
+template <typename T>
+future<> clear_gently(seastar::optimized_optional<T>& opt) noexcept;
+
+namespace internal {
+
+template <typename T>
+concept HasClearGentlyImpl = requires (T x) {
+    { clear_gently(x) } -> std::same_as<future<>>;
+};
+
+template <typename T>
+requires HasClearGentlyImpl<T>
+future<> clear_gently(T& x) noexcept {
+    return utils::clear_gently(x);
+}
+
+// This default implementation of clear_gently
+// is required to "terminate" recursive clear_gently calls
+// at trivial objects
+template <typename T>
+future<> clear_gently(T&) noexcept {
+    return make_ready_future<>();
+}
+
+} // namespace internal
+
+template <HasClearGentlyMethod T>
+future<> clear_gently(T& o) noexcept {
+    return futurize_invoke(std::bind(&T::clear_gently, &o));
+}
+
+template <typename T>
+future<> clear_gently(foreign_ptr<T>& o) noexcept {
+    return smp::submit_to(o.get_owner_shard(), [&o] {
+        return internal::clear_gently(*o);
+    });
+}
+
+template <SharedPointer T>
+future<> clear_gently(T& o) noexcept {
+    if (o.use_count() == 1) {
+        return internal::clear_gently(*o);
+    }
+    return make_ready_future<>();
+}
+
+template <SmartPointer T>
+future<> clear_gently(T& o) noexcept {
+    if (auto p = o.get()) {
+        return internal::clear_gently(*p);
+    } else {
+        return make_ready_future<>();
+    }
+}
+
+template <typename T, std::size_t N>
+future<> clear_gently(std::array<T, N>& a) noexcept {
+    return do_for_each(a, [] (T& o) {
+        return internal::clear_gently(o);
+    });
+}
+
+// Trivially destructible elements can be safely cleared in bulk
+template <typename T>
+requires (StringLike<T> || TriviallyClearableSequence<T>)
+future<> clear_gently(T& s) noexcept {
+    // Note: clear() is pointless in this case since it keeps the allocation
+    // and since the values are trivially destructible it achieves nothing.
+    // `s = {}` will free the vector/string allocation.
+    s = {};
+    return make_ready_future<>();
+}
+
+// Clear the elements gently and destroy them one-by-one
+// in reverse order, to avoid copying.
+template <Sequence T>
+requires (!StringLike<T> && !TriviallyClearableSequence<T>)
+future<> clear_gently(T& v) noexcept {
+    return do_until([&v] { return v.empty(); }, [&v] {
+        return internal::clear_gently(v.back()).then([&v] {
+            v.pop_back();
+        });
+    });
+    return make_ready_future<>();
+}
+
+template <MapLike T>
+future<> clear_gently(T& c) noexcept {
+    return do_until([&c] { return c.empty(); }, [&c] {
+        auto it = c.begin();
+        return internal::clear_gently(it->second).then([&c, it = std::move(it)] () mutable {
+            c.erase(it);
+        });
+    });
+}
+
+template <Container T>
+requires (!StringLike<T> && !Sequence<T> && !MapLike<T>)
+future<> clear_gently(T& c) noexcept {
+    return do_until([&c] { return c.empty(); }, [&c] {
+        auto it = c.begin();
+        return internal::clear_gently(*it).then([&c, it = std::move(it)] () mutable {
+            c.erase(it);
+        });
+    });
+}
+
+template <typename T>
+future<> clear_gently(std::optional<T>& opt) noexcept {
+    if (opt) {
+        return utils::clear_gently(*opt);
+    } else {
+        return make_ready_future<>();
+    }
+}
+
+template <typename T>
+future<> clear_gently(seastar::optimized_optional<T>& opt) noexcept {
+    if (opt) {
+        return utils::clear_gently(*opt);
+    } else {
+        return make_ready_future<>();
+    }
+}
+
+}
+
+
+
+
+#include <boost/range/iterator_range.hpp>
+
+template <typename Container>
+boost::iterator_range<typename Container::iterator>
+unconst(Container& c, boost::iterator_range<typename Container::const_iterator> r) {
+    return boost::make_iterator_range(
+            c.erase(r.begin(), r.begin()),
+            c.erase(r.end(), r.end())
+    );
+}
+
+template <typename Container>
+typename Container::iterator
+unconst(Container& c, typename Container::const_iterator i) {
+    return c.erase(i, i);
+}
+
+
+
+#include <seastar/core/bitops.hh>
+#include <seastar/core/byteorder.hh>
+
+namespace utils {
+
+/*
+ * The express encoder below is optimized to encode a value
+ * that may only have non-zeroes in its first 12 bits
+ */
+static constexpr size_t uleb64_express_bits = 12;
+static constexpr uint32_t uleb64_express_supreme = 1 << uleb64_express_bits;
+
+// Returns the number of bytes needed to encode the value
+// The value cannot be 0 (not checked)
+static inline size_t uleb64_encoded_size(uint32_t val) noexcept {
+    return seastar::log2floor(val) / 6 + 1;
+}
+
+template <typename Poison, typename Unpoison>
+requires std::is_invocable<Poison, const char*, size_t>::value && std::is_invocable<Unpoison, const char*, size_t>::value
+static inline void uleb64_encode(char*& pos, uint32_t val, Poison&& poison, Unpoison&& unpoison) noexcept {
+    uint64_t b = 64;
+    auto start = pos;
+    do {
+        b |= val & 63;
+        val >>= 6;
+        if (!val) {
+            b |= 128;
+        }
+        unpoison(pos, 1);
+        *pos++ = b;
+        b = 0;
+    } while (val);
+    poison(start, pos - start);
+}
+
+template <typename Poison, typename Unpoison>
+requires std::is_invocable<Poison, const char*, size_t>::value && std::is_invocable<Unpoison, const char*, size_t>::value
+static inline void uleb64_encode(char*& pos, uint32_t val, size_t encoded_size, Poison&& poison, Unpoison&& unpoison) noexcept {
+    uint64_t b = 64;
+    auto start = pos;
+    unpoison(start, encoded_size);
+    do {
+        b |= val & 63;
+        val >>= 6;
+        if (!--encoded_size) {
+            b |= 128;
+        }
+        *pos++ = b;
+        b = 0;
+    } while (encoded_size);
+    poison(start, pos - start);
+}
+
+#if !defined(SEASTAR_ASAN_ENABLED)
+static inline void uleb64_express_encode_impl(char*& pos, uint64_t val, size_t size) noexcept {
+    static_assert(uleb64_express_bits == 12);
+
+    if (size > sizeof(uint64_t)) {
+        static uint64_t zero = 0;
+        std::copy_n(reinterpret_cast<char*>(&zero), sizeof(zero), pos + size - sizeof(uint64_t));
+    }
+    seastar::write_le(pos, uint64_t(((val & 0xfc0) << 2) | ((val & 0x3f) | 64)));
+    pos += size;
+    pos[-1] |= 0x80;
+}
+
+template <typename Poison, typename Unpoison>
+requires std::is_invocable<Poison, const char*, size_t>::value && std::is_invocable<Unpoison, const char*, size_t>::value
+static inline void uleb64_express_encode(char*& pos, uint32_t val, size_t encoded_size, size_t gap, Poison&& poison, Unpoison&& unpoison) noexcept {
+    if (encoded_size + gap > sizeof(uint64_t)) {
+        uleb64_express_encode_impl(pos, val, encoded_size);
+    } else {
+        uleb64_encode(pos, val, encoded_size, poison, unpoison);
+    }
+}
+#else
+template <typename Poison, typename Unpoison>
+requires std::is_invocable<Poison, const char*, size_t>::value && std::is_invocable<Unpoison, const char*, size_t>::value
+static inline void uleb64_express_encode(char*& pos, uint32_t val, size_t encoded_size, size_t gap, Poison&& poison, Unpoison&& unpoison) noexcept {
+    uleb64_encode(pos, val, encoded_size, poison, unpoison);
+}
+#endif
+
+template <typename Poison, typename Unpoison>
+requires std::is_invocable<Poison, const char*, size_t>::value && std::is_invocable<Unpoison, const char*, size_t>::value
+static inline uint32_t uleb64_decode_forwards(const char*& pos, Poison&& poison, Unpoison&& unpoison) noexcept {
+    uint32_t n = 0;
+    unsigned shift = 0;
+    auto p = pos; // avoid aliasing; p++ doesn't touch memory
+    uint8_t b;
+    do {
+        unpoison(p, 1);
+        b = *p++;
+        if (shift < 32) {
+            // non-canonical encoding can cause large shift; undefined in C++
+            n |= uint32_t(b & 63) << shift;
+        }
+        shift += 6;
+    } while ((b & 128) == 0);
+    poison(pos, p - pos);
+    pos = p;
+    return n;
+}
+
+template <typename Poison, typename Unpoison>
+requires std::is_invocable<Poison, const char*, size_t>::value && std::is_invocable<Unpoison, const char*, size_t>::value
+static inline uint32_t uleb64_decode_bacwards(const char*& pos, Poison&& poison, Unpoison&& unpoison) noexcept {
+    uint32_t n = 0;
+    uint8_t b;
+    auto p = pos; // avoid aliasing; --p doesn't touch memory
+    do {
+        --p;
+        unpoison(p, 1);
+        b = *p;
+        n = (n << 6) | (b & 63);
+    } while ((b & 64) == 0);
+    poison(p, pos - p);
+    pos = p;
+    return n;
+}
+
+} // namespace utils
+
+
+
+
+#include <cstdint>
+
+using vint_size_type = bytes::size_type;
+
+static constexpr size_t max_vint_length = 9;
+
+struct unsigned_vint final {
+    using value_type = uint64_t;
+
+    static vint_size_type serialized_size(value_type) noexcept;
+
+    static vint_size_type serialize(value_type, bytes::iterator out);
+
+    static value_type deserialize(bytes_view v);
+
+    static vint_size_type serialized_size_from_first_byte(bytes::value_type first_byte);
+};
+
+struct signed_vint final {
+    using value_type = int64_t;
+
+    static vint_size_type serialized_size(value_type) noexcept;
+
+    static vint_size_type serialize(value_type, bytes::iterator out);
+
+    static value_type deserialize(bytes_view v);
+
+    static vint_size_type serialized_size_from_first_byte(bytes::value_type first_byte);
+};
+
 #include <x86intrin.h>
 #include <yaml-cpp/yaml.h>
 #include <zlib.h>
+
 namespace tests {  }
  void tests::random_schema::add_row(std::mt19937& engine, data_model::mutation_description& md, data_model::mutation_description::key ckey,         timestamp_generator ts_gen, expiry_generator exp_gen) {     value_generator gen;     const auto& cdef = _schema->regular_columns()[0];     {         auto value = gen.generate_value(engine, *cdef.type);         md.add_clustered_cell(ckey, cdef.name_as_text(), std::move(value));     } }
  static auto ts_gen = tests::default_timestamp_generator();
