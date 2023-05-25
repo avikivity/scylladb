@@ -17737,7 +17737,782 @@ template <typename Func> inline auto visit(const data_value& v, Func&& f) {
 #include <seastar/core/coroutine.hh>
 #include <seastar/core/smp.hh>
 
-#include "config_file.hh"
+
+#include <seastar/util/noncopyable_function.hh>
+#include <vector>
+#include <boost/range/algorithm/replace.hpp>
+#include <boost/range/algorithm/remove.hpp>
+
+namespace utils {
+
+// observable/observer - a publish/subscribe utility
+//
+// An observable is an object that can broadcast notifications
+// about changes in some state. An observer listens for such notifications
+// in a particular observable it is connected to. Multiple observers can
+// observe a single observable.
+//
+// A connection between an observer and an observable is established when
+// the observer is constructed (using observable::observe()); from then
+// on their life cycles are separate, either can be moved or destroyed
+// without affecting the other.
+//
+// During construction, the observer specifies how to react to a change
+// in the observable's state by specifying a function to be called on
+// a state change. An observable causes the function to be executed
+// by calling its operator()() method.
+//
+// All observers are called without preemption, so an observer should have
+// a small number of observers.
+
+template <typename... Args>
+class observable {
+public:
+    class observer;
+private:
+    std::vector<observer*> _observers;
+public:
+    class observer {
+        friend class observable;
+        observable* _observable;
+        seastar::noncopyable_function<void (Args...)> _callback;
+    private:
+        void moved(observer* from) {
+            if (_observable) {
+                _observable->moved(from, this);
+            }
+        }
+    public:
+        observer(observable* o, seastar::noncopyable_function<void (Args...)> callback) noexcept
+                : _observable(o), _callback(std::move(callback)) {
+        }
+        observer(observer&& o) noexcept
+                : _observable(std::exchange(o._observable, nullptr))
+                , _callback(std::move(o._callback)) {
+            moved(&o);
+        }
+        observer& operator=(observer&& o) noexcept {
+            if (this != &o) {
+                disconnect();
+                _observable = std::exchange(o._observable, nullptr);
+                _callback = std::move(o._callback);
+                moved(&o);
+            }
+            return *this;
+        }
+        ~observer() {
+            disconnect();
+        }
+        // Stops observing the observable immediately, instead of
+        // during destruction.
+        void disconnect() {
+            if (_observable) {
+                _observable->destroyed(this);
+            }
+            _observable = nullptr;
+        }
+    };
+    friend class observer;
+private:
+    void destroyed(observer* dead) {
+        _observers.erase(boost::remove(_observers, dead), _observers.end());
+    }
+    void moved(observer* from, observer* to) {
+        boost::replace(_observers, from, to);
+    }
+    void update_observers(observable* ob) {
+        for (auto&& c : _observers) {
+            c->_observable = ob;
+        }
+    }
+public:
+    observable() = default;
+    observable(observable&& o) noexcept
+            : _observers(std::move(o._observers)) {
+        update_observers(this);
+    }
+    observable& operator=(observable&& o) noexcept {
+        if (this != &o) {
+            update_observers(nullptr);
+            _observers = std::move(o._observers);
+            update_observers(this);
+        }
+        return *this;
+    }
+    ~observable() {
+        update_observers(nullptr);
+    }
+    // Send args to all connected observers
+    void operator()(Args... args) const {
+        std::exception_ptr e;
+        for (auto&& ob : _observers) {
+            try {
+                ob->_callback(args...);
+            } catch (...) {
+                if (!e) {
+                    e = std::current_exception();
+                }
+            }
+        }
+        if (e) {
+            std::rethrow_exception(std::move(e));
+        }
+    }
+    // Adds an observer to an observable
+    observer observe(std::function<void (Args...)> callback) {
+        observer ob(this, std::move(callback));
+        _observers.push_back(&ob);
+        return ob;
+    }
+};
+
+// An observer<Args...> can receive notifications about changes
+// in an observable<Args...>'s state.
+template <typename... Args>
+using observer = typename observable<Args...>::observer;
+
+template <typename... Args>
+inline observer<Args...> dummy_observer() {
+    return observer<Args...>(nullptr, seastar::noncopyable_function<void(Args...)>());
+}
+
+}
+
+
+#include <functional>
+#include <seastar/core/semaphore.hh>
+#include <seastar/core/future.hh>
+#include <seastar/core/shared_future.hh>
+#include <seastar/util/later.hh>
+#include <seastar/core/abort_source.hh>
+
+// An async action wrapper which ensures that at most one action
+// is running at any time.
+class serialized_action {
+public:
+    template <typename... T>
+    using future = seastar::future<T...>;
+private:
+    std::function<future<>()> _func;
+    seastar::shared_future<> _pending;
+    seastar::semaphore _sem;
+private:
+    future<> do_trigger() {
+        _pending = {};
+        return futurize_invoke(_func);
+    }
+public:
+    serialized_action(std::function<future<>()> func)
+        : _func(std::move(func))
+        , _sem(1)
+    { }
+    serialized_action(serialized_action&&) = delete;
+    serialized_action(const serialized_action&) = delete;
+
+    // Makes sure that a new action will be started after this call and
+    // returns a future which resolves when that action completes.
+    // At most one action can run at any given moment.
+    // A single action is started on behalf of all earlier triggers.
+    //
+    // When action is not currently running, it is started immediately if !later or
+    // at some point in time soon after current fiber defers when later is true.
+    future<> trigger(bool later = false, seastar::abort_source* as = nullptr) {
+        if (_pending.valid()) {
+            return as ? _pending.get_future(*as) : _pending.get_future();
+        }
+        seastar::shared_promise<> pr;
+        _pending = pr.get_shared_future();
+        future<> ret = _pending;
+        std::optional<future<>> abortable;
+
+        if (as) {
+            abortable = _pending.get_future(*as);
+        }
+
+        // run in background, synchronize using `ret`
+        (void)_sem.wait().then([this, later] () mutable {
+            if (later) {
+                return seastar::yield().then([this] () mutable {
+                    return do_trigger();
+                });
+            }
+            return do_trigger();
+        }).then_wrapped([pr = std::move(pr)] (auto&& f) mutable {
+            if (f.failed()) {
+                pr.set_exception(f.get_exception());
+            } else {
+                pr.set_value();
+            }
+        });
+
+        ret = ret.finally([this] {
+            _sem.signal();
+        });
+
+        if (abortable) {
+            // exception will be delivered to each individual future as well
+            (void)std::move(ret).handle_exception([] (std::exception_ptr ep) {});
+            return std::move(*abortable);
+        }
+
+        return ret;
+    }
+
+    // Like trigger() but can be aborted
+    future<> trigger(seastar::abort_source& as) {
+        return trigger(false, &as);
+    }
+
+    // Like trigger(), but defers invocation of the action to allow for batching
+    // more requests.
+    future<> trigger_later() {
+        return trigger(true);
+    }
+
+    // Waits for all invocations initiated in the past.
+    future<> join() {
+        return get_units(_sem, 1).discard_result();
+    }
+
+    // The adaptor is to be used as an argument to utils::observable.observe()
+    // When the notification happens the adaptor just triggers the action
+    // Note, that all arguments provided by the notification callback are lost,
+    // its up to the action to get the needed values
+    // Also, the future<> returned from .trigger() is ignored, the action code
+    // runs in the background. The user should .join() the action if it needs
+    // to wait for it to finish on stop/drain/shutdown
+    class observing_adaptor {
+        friend class serialized_action;
+        serialized_action& _action;
+        observing_adaptor(serialized_action& act) noexcept : _action(act) {}
+
+    public:
+        template <typename... Args>
+        void operator()(Args&&...) { (void)_action.trigger(); };
+    };
+
+    observing_adaptor make_observer() noexcept {
+        return observing_adaptor(*this);
+    }
+};
+
+
+#include <seastar/core/future.hh>
+#include <vector>
+#include <functional>
+
+namespace utils {
+
+// This file contains two templates, updateable_value_source<T> and updateable_value<T>.
+//
+// The two are analogous to T and const T& respectively, with the following additional
+// functionality:
+//
+//  - updateable_value contains a copy of T, so it can be accessed without indirection
+//  - updateable_value and updateable_value_source track each other, so if they move,
+//    the references are updated
+//  - an observe() function is provided (to both) that can be used to attach a callback
+//    that is called whenever the value changes
+
+template <typename T>
+class updateable_value_source;
+
+class updateable_value_source_base;
+
+// Base class for updateable_value<T>, containing functionality for tracking
+// the update source. Used to reduce template bloat and not meant to be used
+// directly.
+class updateable_value_base {
+protected:
+    const updateable_value_source_base* _source = nullptr;
+public:
+    updateable_value_base() = default;
+    explicit updateable_value_base(const updateable_value_source_base& source);
+    ~updateable_value_base();
+    updateable_value_base(const updateable_value_base&);
+    updateable_value_base& operator=(const updateable_value_base&);
+    updateable_value_base(updateable_value_base&&) noexcept;
+    updateable_value_base& operator=(updateable_value_base&&) noexcept;
+    updateable_value_base& operator=(std::nullptr_t);
+
+    friend class updateable_value_source_base;
+};
+
+
+// A T that can be updated at runtime; uses updateable_value_base to track
+// the source as the object is moved or copied. Copying across shards is supported
+// unless #7316 is still open
+template <typename T>
+class updateable_value : public updateable_value_base {
+    T _value = {};
+private:
+    const updateable_value_source<T>* source() const;
+public:
+    updateable_value() = default;
+    explicit updateable_value(T value) : _value(std::move(value)) {}
+    explicit updateable_value(const updateable_value_source<T>& source);
+    updateable_value(const updateable_value& v);
+    updateable_value& operator=(T value);
+    updateable_value& operator=(const updateable_value&);
+    updateable_value(updateable_value&&) noexcept;
+    updateable_value& operator=(updateable_value&&) noexcept;
+    const T& operator()() const { return _value; }
+    operator const T& () const { return _value; }
+    const T& get() const { return _value; }
+    observer<T> observe(std::function<void (const T&)> callback) const;
+
+    friend class updateable_value_source_base;
+    template <typename U>
+    friend class updateable_value_source;
+};
+
+// Contains the mechanisms to track updateable_value_base.  Used to reduce template
+// bloat and not meant to be used directly.
+class updateable_value_source_base {
+protected:
+    // This class contains two different types of state: values and
+    // references to updateable_value_base. We consider adding and removing
+    // such references const operations since they don't change the logical
+    // state of the object (they don't allow changing the carried value).
+    mutable std::vector<updateable_value_base*> _refs; // all connected updateable_values on this shard
+    void for_each_ref(std::function<void (updateable_value_base* ref)> func);
+protected:
+    ~updateable_value_source_base();
+    void add_ref(updateable_value_base* ref) const;
+    void del_ref(updateable_value_base* ref) const;
+    void update_ref(updateable_value_base* old_ref, updateable_value_base* new_ref) const;
+
+    friend class updateable_value_base;
+};
+
+template <typename T>
+class updateable_value_source : public updateable_value_source_base {
+    T _value;
+    mutable observable<T> _updater;
+    void for_each_ref(std::function<void (updateable_value<T>*)> func) {
+        updateable_value_source_base::for_each_ref([func = std::move(func)] (updateable_value_base* ref) {
+            func(static_cast<updateable_value<T>*>(ref));
+        });
+    };
+private:
+    void add_ref(updateable_value<T>* ref) const {
+        updateable_value_source_base::add_ref(ref);
+    }
+    void del_ref(updateable_value<T>* ref) const {
+        updateable_value_source_base::del_ref(ref);
+    }
+    void update_ref(updateable_value<T>* old_ref, updateable_value<T>* new_ref) const {
+        updateable_value_source_base::update_ref(old_ref, new_ref);
+    }
+public:
+    explicit updateable_value_source(T value = T{})
+            : _value(std::move(value)) {}
+    updateable_value_source(const updateable_value_source& x) : updateable_value_source(x.get()) {
+        // We can't copy x's _refs and therefore also _updater. So this is an imperfect copy.
+        // This copy constructor therefore breaks updates made to the original copy; it only
+        // exists because unit tests copy configs like mad.
+    }
+    void set(T value) {
+        if (value == _value) {
+            return;
+        }
+        _value = std::move(value);
+        for_each_ref([&] (updateable_value<T>* ref) {
+            ref->_value = _value;
+        });
+        _updater(_value);
+    }
+    const T& get() const {
+        return _value;
+    }
+    const T& operator()() const {
+        return _value;
+    }
+    observable<T>& as_observable() const {
+        return _updater;
+    }
+    observer<T> observe(std::function<void (const T&)> callback) const {
+        return _updater.observe(std::move(callback));
+    }
+
+    friend class updateable_value_base;
+};
+
+template <typename T>
+updateable_value<T>::updateable_value(const updateable_value_source<T>& source)
+        : updateable_value_base(source)
+        , _value(source.get()) {
+}
+
+template <typename T>
+updateable_value<T>::updateable_value(const updateable_value& v) : updateable_value_base(v), _value(v._value) {
+}
+
+template <typename T>
+updateable_value<T>& updateable_value<T>::operator=(T value) {
+    updateable_value_base::operator=(nullptr);
+    _value = std::move(value);
+    return *this;
+}
+
+template <typename T>
+updateable_value<T>& updateable_value<T>::operator=(const updateable_value& v) {
+    if (this != &v) {
+        // Copy early to trigger exceptions, later move
+        auto new_val = v._value;
+        updateable_value_base::operator=(v);
+        _value = std::move(new_val);
+    }
+    return *this;
+}
+
+template <typename T>
+updateable_value<T>::updateable_value(updateable_value&& v) noexcept
+        : updateable_value_base(v)
+        , _value(std::move(v._value)) {
+}
+
+template <typename T>
+updateable_value<T>& updateable_value<T>::operator=(updateable_value&& v) noexcept {
+    if (this != &v) {
+        updateable_value_base::operator=(std::move(v));
+        _value = std::move(v._value);
+    }
+    return *this;
+}
+
+template <typename T>
+inline
+const updateable_value_source<T>*
+updateable_value<T>::source() const {
+    return static_cast<const updateable_value_source<T>*>(_source);
+}
+
+template <typename T>
+observer<T>
+updateable_value<T>::observe(std::function<void (const T&)> callback) const {
+    auto* src = source();
+    return src ? src->observe(std::move(callback)) : dummy_observer<T>();
+}
+
+// Automatically updates a value from a utils::updateable_value
+// Where they can be of different types.
+// An optional transfom function can provide an additional transformation
+// when updating the value, like multiplying it by a factor for unit conversion,
+// for example.
+template <typename ValueType, typename UpdateableValueType>
+class transforming_value_updater {
+    ValueType& _value;
+    utils::updateable_value<UpdateableValueType> _updateable_value;
+    serialized_action _updater;
+    utils::observer<UpdateableValueType> _observer;
+
+public:
+    transforming_value_updater(ValueType& value, utils::updateable_value<UpdateableValueType> updateable_value,
+            std::function<ValueType (UpdateableValueType)> transform = [] (UpdateableValueType uv) { return static_cast<ValueType>(uv); })
+        : _value(value)
+        , _updateable_value(std::move(updateable_value))
+        , _updater([this, transform = std::move(transform)] {
+                _value = transform(_updateable_value());
+                return make_ready_future<>();
+          })
+        , _observer(_updateable_value.observe(_updater.make_observer()))
+    {}
+};
+
+}
+#include <fmt/format.h>
+#include <fmt/ostream.h>
+#include <unordered_map>
+#include <iosfwd>
+#include <string_view>
+
+#include <boost/program_options.hpp>
+
+#include <seastar/core/sstring.hh>
+#include <seastar/core/future.hh>
+#include <seastar/util/log.hh>
+
+
+namespace seastar { class file; }
+namespace seastar::json { class json_return_type; }
+namespace YAML { class Node; }
+
+namespace utils {
+
+namespace bpo = boost::program_options;
+
+class config_type {
+    std::string_view _name;
+    std::function<json::json_return_type (const void*)> _to_json;
+private:
+    template <typename NativeType>
+    std::function<json::json_return_type (const void*)> make_to_json(json::json_return_type (*func)(const NativeType&)) {
+        return [func] (const void* value) {
+            return func(*static_cast<const NativeType*>(value));
+        };
+    }
+public:
+    template <typename NativeType>
+    config_type(std::string_view name, json::json_return_type (*to_json)(const NativeType&)) : _name(name), _to_json(make_to_json(to_json)) {}
+    std::string_view name() const { return _name; }
+    json::json_return_type to_json(const void* value) const;
+};
+
+template <typename T>
+extern const config_type config_type_for;
+
+class config_file {
+    static thread_local unsigned s_shard_id;
+    struct any_value {
+        virtual ~any_value() = default;
+        virtual std::unique_ptr<any_value> clone() const = 0;
+        virtual void update_from(const any_value* source) = 0;
+    };
+    std::vector<std::vector<std::unique_ptr<any_value>>> _per_shard_values { 1 };
+public:
+    typedef std::unordered_map<sstring, sstring> string_map;
+    typedef std::vector<sstring> string_list;
+
+    enum class value_status {
+        Used,
+        Unused,
+        Invalid,
+    };
+
+    enum class liveness {
+        LiveUpdate,
+        MustRestart,
+    };
+
+    enum class config_source : uint8_t {
+        None,
+        SettingsFile,
+        CommandLine,
+        CQL,
+        Internal,
+        API,
+    };
+
+    struct config_src {
+        config_file* _cf;
+        std::string_view _name, _alias, _desc;
+        const config_type* _type;
+        size_t _per_shard_values_offset;
+    protected:
+        virtual const void* current_value() const = 0;
+    public:
+        config_src(config_file* cf, std::string_view name, const config_type* type, std::string_view desc)
+            : _cf(cf)
+            , _name(name)
+            , _desc(desc)
+            , _type(type)
+        {}
+        config_src(config_file* cf, std::string_view name, std::string_view alias, const config_type* type, std::string_view desc)
+            : _cf(cf)
+            , _name(name)
+            , _alias(alias)
+            , _desc(desc)
+            , _type(type)
+        {}
+        virtual ~config_src() {}
+
+        const std::string_view & name() const {
+            return _name;
+        }
+        std::string_view alias() const {
+            return _alias;
+        }
+        const std::string_view & desc() const {
+            return _desc;
+        }
+        std::string_view type_name() const {
+            return _type->name();
+        }
+        config_file * get_config_file() const {
+            return _cf;
+        }
+        bool matches(std::string_view name) const;
+        virtual void add_command_line_option(bpo::options_description_easy_init&) = 0;
+        virtual void set_value(const YAML::Node&) = 0;
+        virtual bool set_value(sstring, config_source = config_source::Internal) = 0;
+        virtual future<> set_value_on_all_shards(const YAML::Node&) = 0;
+        virtual future<bool> set_value_on_all_shards(sstring, config_source = config_source::Internal) = 0;
+        virtual value_status status() const noexcept = 0;
+        virtual config_source source() const noexcept = 0;
+        sstring source_name() const noexcept;
+        json::json_return_type value_as_json() const;
+    };
+
+    template<typename T>
+    struct named_value : public config_src {
+    private:
+        friend class config;
+        config_source _source = config_source::None;
+        value_status _value_status;
+        struct the_value_type final : any_value {
+            the_value_type(T value) : value(std::move(value)) {}
+            utils::updateable_value_source<T> value;
+            virtual std::unique_ptr<any_value> clone() const override {
+                return std::make_unique<the_value_type>(value());
+            }
+            virtual void update_from(const any_value* source) override {
+                auto typed_source = static_cast<const the_value_type*>(source);
+                value.set(typed_source->value());
+            }
+        };
+        liveness _liveness;
+        std::vector<T> _allowed_values;
+    protected:
+        updateable_value_source<T>& the_value() {
+            any_value* av = _cf->_per_shard_values[_cf->s_shard_id][_per_shard_values_offset].get();
+            return static_cast<the_value_type*>(av)->value;
+        }
+        const updateable_value_source<T>& the_value() const {
+            return const_cast<named_value*>(this)->the_value();
+        }
+        virtual const void* current_value() const override {
+            return &the_value().get();
+        }
+    public:
+        typedef T type;
+        typedef named_value<T> MyType;
+
+        named_value(config_file* file, std::string_view name, std::string_view alias, liveness liveness_, value_status vs, const T& t = T(), std::string_view desc = {},
+                std::initializer_list<T> allowed_values = {})
+            : config_src(file, name, alias, &config_type_for<T>, desc)
+            , _value_status(vs)
+            , _liveness(liveness_)
+            , _allowed_values(std::move(allowed_values)) {
+            file->add(*this, std::make_unique<the_value_type>(std::move(t)));
+        }
+        named_value(config_file* file, std::string_view name, liveness liveness_, value_status vs, const T& t = T(), std::string_view desc = {},
+                std::initializer_list<T> allowed_values = {})
+            : named_value(file, name, {}, liveness_, vs, t, desc) {
+        }
+        named_value(config_file* file, std::string_view name, std::string_view alias, value_status vs, const T& t = T(), std::string_view desc = {},
+                std::initializer_list<T> allowed_values = {})
+                : named_value(file, name, alias, liveness::MustRestart, vs, t, desc, allowed_values) {
+        }
+        named_value(config_file* file, std::string_view name, value_status vs, const T& t = T(), std::string_view desc = {},
+                std::initializer_list<T> allowed_values = {})
+                : named_value(file, name, {}, liveness::MustRestart, vs, t, desc, allowed_values) {
+        }
+        value_status status() const noexcept override {
+            return _value_status;
+        }
+        config_source source() const noexcept override {
+            return _source;
+        }
+        bool is_set() const {
+            return _source > config_source::None;
+        }
+        MyType & operator()(const T& t, config_source src = config_source::Internal) {
+            if (!_allowed_values.empty() && std::find(_allowed_values.begin(), _allowed_values.end(), t) == _allowed_values.end()) {
+                throw std::invalid_argument(format("Invalid value for {}: got {} which is not inside the set of allowed values {}", name(), t, _allowed_values));
+            }
+            the_value().set(t);
+            if (src > config_source::None) {
+                _source = src;
+            }
+            return *this;
+        }
+        MyType & operator()(T&& t, config_source src = config_source::Internal) {
+            if (!_allowed_values.empty() && std::find(_allowed_values.begin(), _allowed_values.end(), t) == _allowed_values.end()) {
+                throw std::invalid_argument(format("Invalid value for {}: got {} which is not inside the set of allowed values {}", name(), t, _allowed_values));
+            }
+            the_value().set(std::move(t));
+            if (src > config_source::None) {
+                _source = src;
+            }
+            return *this;
+        }
+        void set(T&& t, config_source src = config_source::None) {
+            operator()(std::move(t), src);
+        }
+        const T& operator()() const {
+            return the_value().get();
+        }
+
+        operator updateable_value<T>() const & {
+            return updateable_value<T>(the_value());
+        }
+
+        observer<T> observe(std::function<void (const T&)> callback) const {
+            return the_value().observe(std::move(callback));
+        }
+
+        void add_command_line_option(bpo::options_description_easy_init&) override;
+        void set_value(const YAML::Node&) override;
+        bool set_value(sstring, config_source = config_source::Internal) override;
+        // For setting a single value on all shards,
+        // without having to call broadcast_to_all_shards
+        // that broadcasts all values to all shards.
+        future<> set_value_on_all_shards(const YAML::Node&) override;
+        future<bool> set_value_on_all_shards(sstring, config_source = config_source::Internal) override;
+    };
+
+    typedef std::reference_wrapper<config_src> cfg_ref;
+
+    config_file(std::initializer_list<cfg_ref> = {});
+    config_file(const config_file&) = delete;
+
+    void add(cfg_ref, std::unique_ptr<any_value> value);
+    void add(std::initializer_list<cfg_ref>);
+    void add(const std::vector<cfg_ref> &);
+
+    boost::program_options::options_description get_options_description();
+    boost::program_options::options_description get_options_description(boost::program_options::options_description);
+
+    boost::program_options::options_description_easy_init&
+    add_options(boost::program_options::options_description_easy_init&);
+
+    /**
+     * Default behaviour for yaml parser is to throw on
+     * unknown stuff, invalid opts or conversion errors.
+     *
+     * Error handling function allows overriding this.
+     *
+     * error: <option name>, <message>, <optional value_status>
+     *
+     * The last arg, opt value_status will tell you the type of
+     * error occurred. If not set, the option found does not exist.
+     * If invalid, it is invalid. Otherwise, a parse error.
+     *
+     */
+    using error_handler = std::function<void(const sstring&, const sstring&, std::optional<value_status>)>;
+
+    void read_from_yaml(const sstring&, error_handler = {});
+    void read_from_yaml(const char *, error_handler = {});
+    future<> read_from_file(const sstring&, error_handler = {});
+    future<> read_from_file(file, error_handler = {});
+
+    using configs = std::vector<cfg_ref>;
+
+    configs set_values() const;
+    configs unset_values() const;
+    const configs& values() const {
+        return _cfgs;
+    }
+    future<> broadcast_to_all_shards();
+private:
+    configs
+        _cfgs;
+};
+
+template <typename T>
+requires requires (const config_file::named_value<T>& nv) {
+    { nv().empty() } -> std::same_as<bool>;
+}
+const config_file::named_value<T>& operator||(const config_file::named_value<T>& a, const config_file::named_value<T>& b) {
+    return !a().empty() ? a : b;
+}
+
+extern template struct config_file::named_value<seastar::log_level>;
+
+}
+
+
 
 #include <seastar/json/json_elements.hh>
 
@@ -17957,9 +18732,67 @@ future<bool> utils::config_file::named_value<T>::set_value_on_all_shards(sstring
 
 
 
-#include "mutation/mutation_partition_visitor.hh"
-#include "mutation/atomic_cell.hh"
-#include "schema/schema.hh" // temporary: bring in definition of `column_kind`
+
+
+#include <seastar/util/bool_class.hh>
+
+class atomic_cell_view;
+class collection_mutation_view;
+class row_marker;
+class row_tombstone;
+class range_tombstone;
+class tombstone;
+class position_in_partition_view;
+
+// When used on an entry, marks the range between this entry and the previous
+// one as continuous or discontinuous, excluding the keys of both entries.
+// This information doesn't apply to continuity of the entries themselves,
+// that is specified by is_dummy flag.
+// See class doc of mutation_partition.
+using is_continuous = seastar::bool_class<class continuous_tag>;
+
+// Dummy entry is an entry which is incomplete.
+// Typically used for marking bounds of continuity range.
+// See class doc of mutation_partition.
+class dummy_tag {};
+using is_dummy = seastar::bool_class<dummy_tag>;
+
+// Guarantees:
+//
+// - any tombstones which affect cell's liveness are visited before that cell
+//
+// - rows are visited in ascending order with respect to their keys
+//
+// - row header (accept_row) is visited before that row's cells
+//
+// - row tombstones are visited in ascending order with respect to their key prefixes
+//
+// - cells in given row are visited in ascending order with respect to their column IDs
+//
+// - static row is visited before any clustered row
+//
+// - for each column in a row only one variant of accept_(static|row)_cell() is called, appropriate
+//   for column's kind (atomic or collection).
+//
+class mutation_partition_visitor {
+public:
+    virtual void accept_partition_tombstone(tombstone) = 0;
+
+    virtual void accept_static_cell(column_id, atomic_cell_view) = 0;
+
+    virtual void accept_static_cell(column_id, collection_mutation_view) = 0;
+
+    virtual void accept_row_tombstone(const range_tombstone&) = 0;
+
+    virtual void accept_row(position_in_partition_view key, const row_tombstone& deleted_at, const row_marker& rm,
+        is_dummy = is_dummy::no, is_continuous = is_continuous::yes) = 0;
+
+    virtual void accept_row_cell(column_id id, atomic_cell_view) = 0;
+
+    virtual void accept_row_cell(column_id id, collection_mutation_view) = 0;
+};
+
+
 
 class schema;
 class row;
@@ -18012,7 +18845,122 @@ private:
 
 #include <seastar/core/sstring.hh>
 
-#include "cql3/column_identifier.hh"
+
+
+#include <algorithm>
+#include <functional>
+#include <iosfwd>
+
+namespace cql3 {
+
+class column_identifier_raw;
+
+/**
+ * Represents an identifer for a CQL column definition.
+ * TODO : should support light-weight mode without text representation for when not interned
+ */
+class column_identifier final {
+public:
+    bytes bytes_;
+private:
+    sstring _text;
+public:
+    // less comparator sorting by text
+    struct text_comparator {
+        bool operator()(const column_identifier& c1, const column_identifier& c2) const;
+    };
+
+    column_identifier(sstring raw_text, bool keep_case);
+
+    column_identifier(bytes bytes_, data_type type);
+
+    column_identifier(bytes bytes_, sstring text);
+
+    bool operator==(const column_identifier& other) const;
+
+    const sstring& text() const { return _text; }
+
+    const bytes& name() const;
+
+    sstring to_string() const;
+
+    sstring to_cql_string() const;
+
+    friend std::ostream& operator<<(std::ostream& out, const column_identifier& i) {
+        return out << i._text;
+    }
+
+#if 0
+    public ColumnIdentifier clone(AbstractAllocator allocator)
+    {
+        return new ColumnIdentifier(allocator.clone(bytes), text);
+    }
+#endif
+
+    using raw = column_identifier_raw;
+};
+
+/**
+ * Because Thrift-created tables may have a non-text comparator, we cannot determine the proper 'key' until
+ * we know the comparator. ColumnIdentifier.Raw is a placeholder that can be converted to a real ColumnIdentifier
+ * once the comparator is known with prepare(). This should only be used with identifiers that are actual
+ * column names. See CASSANDRA-8178 for more background.
+ */
+class column_identifier_raw final {
+private:
+    const sstring _raw_text;
+    sstring _text;
+public:
+    column_identifier_raw(sstring raw_text, bool keep_case);
+
+    // for selectable::with_expression::raw:
+    ::shared_ptr<column_identifier> prepare(const schema& s) const;
+
+    ::shared_ptr<column_identifier> prepare_column_identifier(const schema& s) const;
+
+    // for selectable::with_expression::raw:
+    bool processes_selection() const;
+
+    bool operator==(const column_identifier_raw& other) const;
+
+    virtual sstring to_string() const;
+    sstring to_cql_string() const;
+
+    friend std::hash<column_identifier_raw>;
+    friend std::ostream& operator<<(std::ostream& out, const column_identifier_raw& id);
+};
+
+static inline
+const column_definition* get_column_definition(const schema& schema, const column_identifier& id) {
+    return schema.get_column_definition(id.bytes_);
+}
+
+static inline
+::shared_ptr<column_identifier> to_identifier(const column_definition& def) {
+    return def.column_specification->name;
+}
+
+}
+
+namespace std {
+
+template<>
+struct hash<cql3::column_identifier> {
+    size_t operator()(const cql3::column_identifier& i) const {
+        return std::hash<bytes>()(i.bytes_);
+    }
+};
+
+template<>
+struct hash<cql3::column_identifier_raw> {
+    size_t operator()(const cql3::column_identifier::raw& r) const {
+        return std::hash<sstring>()(r._text);
+    }
+};
+
+}
+
+
 #include "cql3/CqlParser.hpp"
 #include "cql3/error_collector.hh"
 #include "cql3/statements/raw/select_statement.hh"
