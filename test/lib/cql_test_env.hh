@@ -16,11 +16,6 @@
 #include <seastar/core/future.hh>
 #include <seastar/core/shared_ptr.hh>
 
-#include "replica/database.hh"
-#include "transport/messages/result_message_base.hh"
-#include "cql3/query_options_fwd.hh"
-#include "cql3/values.hh"
-#include "cql3/prepared_statements_cache.hh"
 #include "cql3/query_processor.hh"
 #include "bytes.hh"
 #include "schema/schema.hh"
