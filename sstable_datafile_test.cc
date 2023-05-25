@@ -9843,7 +9843,992 @@ inline void check_schema_version(table_schema_version expected, const schema& ac
     }
 }
 
-#include "serializer_impl.hh"
+#include <seastar/util/log.hh>
+
+namespace logging {
+
+//
+// Seastar changed the names of some of these types. Maintain the old names here to avoid too much churn.
+//
+
+using log_level = seastar::log_level;
+using logger = seastar::logger;
+using registry = seastar::logger_registry;
+
+inline registry& logger_registry() noexcept {
+    return seastar::global_logger_registry();
+}
+
+using settings = seastar::logging_settings;
+
+inline void apply_settings(const settings& s) {
+    seastar::apply_logging_settings(s);
+}
+
+using seastar::pretty_type_name;
+using seastar::level_name;
+
+}
+
+#include <seastar/util/bool_class.hh>
+#include <absl/container/btree_set.h>
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/on_internal_error.hh>
+
+namespace seastar {
+extern logger seastar_logger;
+}
+
+namespace ser {
+
+template<typename T>
+void set_size(seastar::measuring_output_stream& os, const T& obj) {
+    serialize(os, uint32_t(0));
+}
+
+template<typename Stream, typename T>
+void set_size(Stream& os, const T& obj) {
+    serialize(os, get_sizeof(obj));
+}
+
+
+template<typename Output>
+void safe_serialize_as_uint32(Output& out, uint64_t data) {
+    if (data > std::numeric_limits<uint32_t>::max()) {
+        throw std::runtime_error("Size is too big for serialization");
+    }
+    serialize(out, uint32_t(data));
+}
+
+template<typename T>
+constexpr bool can_serialize_fast() {
+    return !std::is_same<T, bool>::value && std::is_integral<T>::value && (sizeof(T) == 1 || __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
+}
+
+template<bool Fast, typename T>
+struct serialize_array_helper;
+
+template<typename T>
+struct serialize_array_helper<true, T> {
+    template<typename Container, typename Output>
+    static void doit(Output& out, const Container& v) {
+        out.write(reinterpret_cast<const char*>(v.data()), v.size() * sizeof(T));
+    }
+};
+
+template<typename T>
+struct serialize_array_helper<false, T> {
+    template<typename Container, typename Output>
+    static void doit(Output& out, const Container& v) {
+        for (auto&& e : v) {
+            serialize(out, e);
+        }
+    }
+};
+
+template<typename T, typename Container, typename Output>
+static inline void serialize_array(Output& out, const Container& v) {
+    serialize_array_helper<can_serialize_fast<T>(), T>::doit(out, v);
+}
+
+template<typename Container>
+struct container_traits;
+
+template<typename T>
+struct container_traits<absl::btree_set<T>> {
+    struct back_emplacer {
+        absl::btree_set<T>& c;
+        back_emplacer(absl::btree_set<T>& c_) : c(c_) {}
+        void operator()(T&& v) {
+            c.emplace(std::move(v));
+        }
+    };
+};
+
+template<typename T, typename... Args>
+struct container_traits<std::unordered_set<T, Args...>> {
+    struct back_emplacer {
+        std::unordered_set<T, Args...>& c;
+        back_emplacer(std::unordered_set<T, Args...>& c_) : c(c_) {}
+        void operator()(T&& v) {
+            c.emplace(std::move(v));
+        }
+    };
+};
+
+template<typename T>
+struct container_traits<std::list<T>> {
+    struct back_emplacer {
+        std::list<T>& c;
+        back_emplacer(std::list<T>& c_) : c(c_) {}
+        void operator()(T&& v) {
+            c.emplace_back(std::move(v));
+        }
+    };
+    void resize(std::list<T>& c, size_t size) {
+        c.resize(size);
+    }
+};
+
+template<typename T>
+struct container_traits<std::vector<T>> {
+    struct back_emplacer {
+        std::vector<T>& c;
+        back_emplacer(std::vector<T>& c_) : c(c_) {}
+        void operator()(T&& v) {
+            c.emplace_back(std::move(v));
+        }
+    };
+    void resize(std::vector<T>& c, size_t size) {
+        c.resize(size);
+    }
+};
+
+template<typename T, size_t N>
+struct container_traits<utils::small_vector<T, N>> {
+    struct back_emplacer {
+        utils::small_vector<T, N>& c;
+        back_emplacer(utils::small_vector<T, N>& c_) : c(c_) {}
+        void operator()(T&& v) {
+            c.emplace_back(std::move(v));
+        }
+    };
+    void resize(utils::small_vector<T, N>& c, size_t size) {
+        c.resize(size);
+    }
+};
+
+template<typename T>
+struct container_traits<utils::chunked_vector<T>> {
+    struct back_emplacer {
+        utils::chunked_vector<T>& c;
+        back_emplacer(utils::chunked_vector<T>& c_) : c(c_) {}
+        void operator()(T&& v) {
+            c.emplace_back(std::move(v));
+        }
+    };
+    void resize(utils::chunked_vector<T>& c, size_t size) {
+        c.resize(size);
+    }
+};
+
+template<typename T, size_t N>
+struct container_traits<std::array<T, N>> {
+    struct back_emplacer {
+        std::array<T, N>& c;
+        size_t idx = 0;
+        back_emplacer(std::array<T, N>& c_) : c(c_) {}
+        void operator()(T&& v) {
+            c[idx++] = std::move(v);
+        }
+    };
+    void resize(std::array<T, N>& c, size_t size) {}
+};
+
+template<bool Fast, typename T>
+struct deserialize_array_helper;
+
+template<typename T>
+struct deserialize_array_helper<true, T> {
+    template<typename Input, typename Container>
+    static void doit(Input& in, Container& v, size_t sz) {
+        container_traits<Container> t;
+        t.resize(v, sz);
+        in.read(reinterpret_cast<char*>(v.data()), v.size() * sizeof(T));
+    }
+    template<typename Input>
+    static void skip(Input& in, size_t sz) {
+        in.skip(sz * sizeof(T));
+    }
+};
+
+template<typename T>
+struct deserialize_array_helper<false, T> {
+    template<typename Input, typename Container>
+    static void doit(Input& in, Container& v, size_t sz) {
+        typename container_traits<Container>::back_emplacer be(v);
+        while (sz--) {
+            be(deserialize(in, boost::type<T>()));
+        }
+    }
+    template<typename Input>
+    static void skip(Input& in, size_t sz) {
+        while (sz--) {
+            serializer<T>::skip(in);
+        }
+    }
+};
+
+template<typename T, typename Input, typename Container>
+static inline void deserialize_array(Input& in, Container& v, size_t sz) {
+    deserialize_array_helper<can_serialize_fast<T>(), T>::doit(in, v, sz);
+}
+
+template<typename T, typename Input>
+static inline void skip_array(Input& in, size_t sz) {
+    deserialize_array_helper<can_serialize_fast<T>(), T>::skip(in, sz);
+}
+
+namespace idl::serializers::internal {
+
+template<typename Vector>
+struct vector_serializer {
+    using value_type = typename Vector::value_type;
+    template<typename Input>
+    static Vector read(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        Vector v;
+        v.reserve(sz);
+        deserialize_array<value_type>(in, v, sz);
+        return v;
+    }
+    template<typename Output>
+    static void write(Output& out, const Vector& v) {
+        safe_serialize_as_uint32(out, v.size());
+        serialize_array<value_type>(out, v);
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        skip_array<value_type>(in, sz);
+    }
+};
+
+}
+
+template<typename T>
+struct serializer<std::list<T>> {
+    template<typename Input>
+    static std::list<T> read(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        std::list<T> v;
+        deserialize_array_helper<false, T>::doit(in, v, sz);
+        return v;
+    }
+    template<typename Output>
+    static void write(Output& out, const std::list<T>& v) {
+        safe_serialize_as_uint32(out, v.size());
+        serialize_array_helper<false, T>::doit(out, v);
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        skip_array<T>(in, sz);
+    }
+};
+
+template<typename T>
+struct serializer<absl::btree_set<T>> {
+    template<typename Input>
+    static absl::btree_set<T> read(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        absl::btree_set<T> v;
+        deserialize_array_helper<false, T>::doit(in, v, sz);
+        return v;
+    }
+    template<typename Output>
+    static void write(Output& out, const absl::btree_set<T>& v) {
+        safe_serialize_as_uint32(out, v.size());
+        serialize_array_helper<false, T>::doit(out, v);
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        skip_array<T>(in, sz);
+    }
+};
+
+template<typename T, typename... Args>
+struct serializer<std::unordered_set<T, Args...>> {
+    template<typename Input>
+    static std::unordered_set<T, Args...> read(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        std::unordered_set<T, Args...> v;
+        v.reserve(sz);
+        deserialize_array_helper<false, T>::doit(in, v, sz);
+        return v;
+    }
+    template<typename Output>
+    static void write(Output& out, const std::unordered_set<T, Args...>& v) {
+        safe_serialize_as_uint32(out, v.size());
+        serialize_array_helper<false, T>::doit(out, v);
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        skip_array<T>(in, sz);
+    }
+};
+
+template<typename T>
+struct serializer<std::vector<T>>
+    : idl::serializers::internal::vector_serializer<std::vector<T>>
+{ };
+
+template<typename T>
+struct serializer<utils::chunked_vector<T>>
+    : idl::serializers::internal::vector_serializer<utils::chunked_vector<T>>
+{ };
+
+template<typename T, size_t N>
+struct serializer<utils::small_vector<T, N>>
+    : idl::serializers::internal::vector_serializer<utils::small_vector<T, N>>
+{ };
+
+template<typename T, typename Ratio>
+struct serializer<std::chrono::duration<T, Ratio>> {
+    template<typename Input>
+    static std::chrono::duration<T, Ratio> read(Input& in) {
+        return std::chrono::duration<T, Ratio>(deserialize(in, boost::type<T>()));
+    }
+    template<typename Output>
+    static void write(Output& out, const std::chrono::duration<T, Ratio>& d) {
+        serialize(out, d.count());
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        read(in);
+    }
+};
+
+template<typename Clock, typename Duration>
+struct serializer<std::chrono::time_point<Clock, Duration>> {
+    using value_type = std::chrono::time_point<Clock, Duration>;
+
+    template<typename Input>
+    static value_type read(Input& in) {
+        return typename Clock::time_point(Duration(deserialize(in, boost::type<uint64_t>())));
+    }
+    template<typename Output>
+    static void write(Output& out, const value_type& v) {
+        serialize(out, uint64_t(v.time_since_epoch().count()));
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        read(in);
+    }
+};
+
+template<size_t N, typename T>
+struct serializer<std::array<T, N>> {
+    template<typename Input>
+    static std::array<T, N> read(Input& in) {
+        std::array<T, N> v;
+        deserialize_array<T>(in, v, N);
+        return v;
+    }
+    template<typename Output>
+    static void write(Output& out, const std::array<T, N>& v) {
+        serialize_array<T>(out, v);
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        skip_array<T>(in, N);
+    }
+};
+
+template<typename K, typename V>
+struct serializer<std::map<K, V>> {
+    template<typename Input>
+    static std::map<K, V> read(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        std::map<K, V> m;
+        while (sz--) {
+            K k = deserialize(in, boost::type<K>());
+            V v = deserialize(in, boost::type<V>());
+            m[k] = v;
+        }
+        return m;
+    }
+    template<typename Output>
+    static void write(Output& out, const std::map<K, V>& v) {
+        safe_serialize_as_uint32(out, v.size());
+        for (auto&& e : v) {
+            serialize(out, e.first);
+            serialize(out, e.second);
+        }
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        while (sz--) {
+            serializer<K>::skip(in);
+            serializer<V>::skip(in);
+        }
+    }
+};
+
+template<typename K, typename V>
+struct serializer<std::unordered_map<K, V>> {
+    template<typename Input>
+    static std::unordered_map<K, V> read(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        std::unordered_map<K, V> m;
+        m.reserve(sz);
+        while (sz--) {
+            auto k = deserialize(in, boost::type<K>());
+            auto v = deserialize(in, boost::type<V>());
+            m.emplace(std::move(k), std::move(v));
+        }
+        return m;
+    }
+    template<typename Output>
+    static void write(Output& out, const std::unordered_map<K, V>& v) {
+        safe_serialize_as_uint32(out, v.size());
+        for (auto&& e : v) {
+            serialize(out, e.first);
+            serialize(out, e.second);
+        }
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        while (sz--) {
+            serializer<K>::skip(in);
+            serializer<V>::skip(in);
+        }
+    }
+};
+
+template<typename Tag>
+struct serializer<bool_class<Tag>> {
+    template<typename Input>
+    static bool_class<Tag> read(Input& in) {
+        return bool_class<Tag>(deserialize(in, boost::type<bool>()));
+    }
+
+    template<typename Output>
+    static void write(Output& out, bool_class<Tag> v) {
+        serialize(out, bool(v));
+    }
+
+    template<typename Input>
+    static void skip(Input& in) {
+        read(in);
+    }
+};
+
+template<typename Stream>
+class deserialized_bytes_proxy {
+    Stream _stream;
+
+    template<typename OtherStream>
+    friend class deserialized_bytes_proxy;
+public:
+    explicit deserialized_bytes_proxy(Stream stream)
+        : _stream(std::move(stream)) { }
+
+    template<typename OtherStream>
+    requires std::convertible_to<OtherStream, Stream>
+    deserialized_bytes_proxy(deserialized_bytes_proxy<OtherStream> proxy)
+        : _stream(std::move(proxy._stream)) { }
+
+    auto view() const {
+      if constexpr (std::is_same_v<Stream, simple_input_stream>) {
+        return bytes_view(reinterpret_cast<const int8_t*>(_stream.begin()), _stream.size());
+      } else {
+        using iterator_type = typename Stream::iterator_type ;
+        static_assert(FragmentRange<buffer_view<iterator_type>>);
+        return seastar::with_serialized_stream(_stream, seastar::make_visitor(
+            [&] (typename seastar::memory_input_stream<iterator_type >::simple stream) {
+                return buffer_view<iterator_type>(bytes_view(reinterpret_cast<const int8_t*>(stream.begin()),
+                                                        stream.size()));
+            },
+            [&] (typename seastar::memory_input_stream<iterator_type >::fragmented stream) {
+                return buffer_view<iterator_type>(bytes_view(reinterpret_cast<const int8_t*>(stream.first_fragment_data()),
+                                                        stream.first_fragment_size()),
+                                             stream.size(), stream.fragment_iterator());
+            }
+        ));
+      }
+    }
+
+    [[gnu::always_inline]]
+    operator bytes() && {
+        bytes v(bytes::initialized_later(), _stream.size());
+        _stream.read(reinterpret_cast<char*>(v.begin()), _stream.size());
+        return v;
+    }
+
+    [[gnu::always_inline]]
+    operator managed_bytes() && {
+        managed_bytes mb(managed_bytes::initialized_later(), _stream.size());
+        for (bytes_mutable_view frag : fragment_range(managed_bytes_mutable_view(mb))) {
+            _stream.read(reinterpret_cast<char*>(frag.data()), frag.size());
+        }
+        return mb;
+    }
+
+    [[gnu::always_inline]]
+    operator bytes_ostream() && {
+        bytes_ostream v;
+        _stream.copy_to(v);
+        return v;
+    }
+};
+
+template<>
+struct serializer<bytes> {
+    template<typename Input>
+    static deserialized_bytes_proxy<Input> read(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        return deserialized_bytes_proxy<Input>(in.read_substream(sz));
+    }
+    template<typename Output>
+    static void write(Output& out, bytes_view v) {
+        safe_serialize_as_uint32(out, uint32_t(v.size()));
+        out.write(reinterpret_cast<const char*>(v.begin()), v.size());
+    }
+    template<typename Output>
+    static void write(Output& out, const bytes& v) {
+        write(out, static_cast<bytes_view>(v));
+    }
+    template<typename Output>
+    static void write(Output& out, const managed_bytes& mb) {
+        safe_serialize_as_uint32(out, uint32_t(mb.size()));
+        for (bytes_view frag : fragment_range(managed_bytes_view(mb))) {
+            out.write(reinterpret_cast<const char*>(frag.data()), frag.size());
+        }
+    }
+    template<typename Output>
+    static void write(Output& out, const bytes_ostream& v) {
+        safe_serialize_as_uint32(out, uint32_t(v.size()));
+        for (bytes_view frag : v.fragments()) {
+            out.write(reinterpret_cast<const char*>(frag.begin()), frag.size());
+        }
+    }
+    template<typename Output, typename FragmentedBuffer>
+    requires FragmentRange<FragmentedBuffer>
+    static void write_fragmented(Output& out, FragmentedBuffer&& fragments) {
+        safe_serialize_as_uint32(out, uint32_t(fragments.size_bytes()));
+        for (bytes_view frag : fragments) {
+            out.write(reinterpret_cast<const char*>(frag.begin()), frag.size());
+        }
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        in.skip(sz);
+    }
+};
+
+template<typename Output>
+void serialize(Output& out, const bytes_view& v) {
+    serializer<bytes>::write(out, v);
+}
+template<typename Output>
+void serialize(Output& out, const managed_bytes& v) {
+    serializer<bytes>::write(out, v);
+}
+template<typename Output>
+void serialize(Output& out, const bytes_ostream& v) {
+    serializer<bytes>::write(out, v);
+}
+template<typename Input>
+bytes_ostream deserialize(Input& in, boost::type<bytes_ostream>) {
+    return serializer<bytes>::read(in);
+}
+template<typename Output, typename FragmentedBuffer>
+requires FragmentRange<FragmentedBuffer>
+void serialize_fragmented(Output& out, FragmentedBuffer&& v) {
+    serializer<bytes>::write_fragmented(out, std::forward<FragmentedBuffer>(v));
+}
+
+template<typename T>
+struct serializer<std::optional<T>> {
+    template<typename Input>
+    static std::optional<T> read(Input& in) {
+        std::optional<T> v;
+        auto b = deserialize(in, boost::type<bool>());
+        if (b) {
+            v.emplace(deserialize(in, boost::type<T>()));
+        }
+        return v;
+    }
+    template<typename Output>
+    static void write(Output& out, const std::optional<T>& v) {
+        serialize(out, bool(v));
+        if (v) {
+            serialize(out, v.value());
+        }
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        auto present = deserialize(in, boost::type<bool>());
+        if (present) {
+            serializer<T>::skip(in);
+        }
+    }
+};
+
+extern logging::logger serlog;
+
+// Warning: assumes that pointer is never null
+template<typename T>
+struct serializer<seastar::lw_shared_ptr<T>> {
+    template<typename Input>
+    static seastar::lw_shared_ptr<T> read(Input& in) {
+        return seastar::make_lw_shared<T>(deserialize(in, boost::type<T>()));
+    }
+    template<typename Output>
+    static void write(Output& out, const seastar::lw_shared_ptr<T>& v) {
+        if (!v) {
+            on_internal_error(serlog, "Unexpected nullptr while serializing a pointer");
+        }
+        serialize(out, *v);
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        serializer<T>::skip(in);
+    }
+};
+
+template<>
+struct serializer<sstring> {
+    template<typename Input>
+    static sstring read(Input& in) {
+        auto sz = deserialize(in, boost::type<uint32_t>());
+        sstring v = uninitialized_string(sz);
+        in.read(v.data(), sz);
+        return v;
+    }
+    template<typename Output>
+    static void write(Output& out, const sstring& v) {
+        safe_serialize_as_uint32(out, uint32_t(v.size()));
+        out.write(v.data(), v.size());
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        in.skip(deserialize(in, boost::type<size_type>()));
+    }
+};
+
+template<typename T>
+struct serializer<std::unique_ptr<T>> {
+    template<typename Input>
+    static std::unique_ptr<T> read(Input& in) {
+        std::unique_ptr<T> v;
+        auto b = deserialize(in, boost::type<bool>());
+        if (b) {
+            v = std::make_unique<T>(deserialize(in, boost::type<T>()));
+        }
+        return v;
+    }
+    template<typename Output>
+    static void write(Output& out, const std::unique_ptr<T>& v) {
+        serialize(out, bool(v));
+        if (v) {
+            serialize(out, *v);
+        }
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        auto present = deserialize(in, boost::type<bool>());
+        if (present) {
+            serializer<T>::skip(in);
+        }
+    }
+};
+
+template<typename Enum>
+struct serializer<enum_set<Enum>> {
+    template<typename Input>
+    static enum_set<Enum> read(Input& in) {
+        return enum_set<Enum>::from_mask(deserialize(in, boost::type<uint64_t>()));
+    }
+    template<typename Output>
+    static void write(Output& out, enum_set<Enum> v) {
+        serialize(out, uint64_t(v.mask()));
+    }
+    template<typename Input>
+    static void skip(Input& in) {
+        read(in);
+    }
+};
+
+template<>
+struct serializer<std::monostate> {
+    template<typename Input>
+    static std::monostate read(Input& in) {
+        return std::monostate{};
+    }
+    template<typename Output>
+    static void write(Output& out, std::monostate v) {}
+    template<typename Input>
+    static void skip(Input& in) {
+    }
+};
+
+template<typename T>
+size_type get_sizeof(const T& obj) {
+    seastar::measuring_output_stream ms;
+    serialize(ms, obj);
+    auto size = ms.size();
+    if (size > std::numeric_limits<size_type>::max()) {
+        throw std::runtime_error("Object is too big for get_sizeof");
+    }
+    return size;
+}
+
+template<typename Buffer, typename T>
+Buffer serialize_to_buffer(const T& v, size_t head_space) {
+    seastar::measuring_output_stream measure;
+    ser::serialize(measure, v);
+    Buffer ret(typename Buffer::initialized_later(), measure.size() + head_space);
+    seastar::simple_output_stream out(reinterpret_cast<char*>(ret.begin()), ret.size(), head_space);
+    ser::serialize(out, v);
+    return ret;
+}
+
+template<typename T, typename Buffer>
+T deserialize_from_buffer(const Buffer& buf, boost::type<T> type, size_t head_space) {
+    seastar::simple_input_stream in(reinterpret_cast<const char*>(buf.begin() + head_space), buf.size() - head_space);
+    return deserialize(in, std::move(type));
+}
+
+inline
+utils::input_stream as_input_stream(bytes_view b) {
+    return utils::input_stream::simple(reinterpret_cast<const char*>(b.begin()), b.size());
+}
+
+inline
+utils::input_stream as_input_stream(const bytes_ostream& b) {
+    if (b.is_linearized()) {
+        return as_input_stream(b.view());
+    }
+    return utils::input_stream::fragmented(b.fragments().begin(), b.size());
+}
+
+template<typename Output, typename ...T>
+void serialize(Output& out, const boost::variant<T...>& v) {}
+
+template<typename Input, typename ...T>
+boost::variant<T...> deserialize(Input& in, boost::type<boost::variant<T...>>) {
+    return boost::variant<T...>();
+}
+
+template<typename Output, typename ...T>
+void serialize(Output& out, const std::variant<T...>& v) {
+    static_assert(std::variant_size_v<std::variant<T...>> < 256);
+    size_t type_index = v.index();
+    serialize(out, uint8_t(type_index));
+    std::visit([&out] (const auto& member) {
+        serialize(out, member);
+    }, v);
+}
+
+template<typename Input, typename T, size_t... I>
+T deserialize_std_variant(Input& in, boost::type<T> t,  size_t idx, std::index_sequence<I...>) {
+    T v;
+    (void)((I == idx ? v.template emplace<I>(deserialize(in, boost::type<std::variant_alternative_t<I, T>>())), true : false) || ...);
+    return v;
+}
+
+template<typename Input, typename ...T>
+std::variant<T...> deserialize(Input& in, boost::type<std::variant<T...>> v) {
+    size_t idx = deserialize(in, boost::type<uint8_t>());
+    return deserialize_std_variant(in, v, idx, std::make_index_sequence<sizeof...(T)>());
+}
+
+template<typename Output>
+void serialize(Output& out, const unknown_variant_type& v) {
+    out.write(v.data.begin(), v.data.size());
+}
+template<typename Input>
+unknown_variant_type deserialize(Input& in, boost::type<unknown_variant_type>) {
+    return seastar::with_serialized_stream(in, [] (auto& in) {
+        auto size = deserialize(in, boost::type<size_type>());
+        auto index = deserialize(in, boost::type<size_type>());
+        auto sz = size - sizeof(size_type) * 2;
+        sstring v = uninitialized_string(sz);
+        in.read(v.data(), sz);
+        return unknown_variant_type{ index, std::move(v) };
+    });
+}
+
+// Class for iteratively deserializing a frozen vector
+// using a range.
+// Use begin() and end() to iterate through the frozen vector,
+// deserializing (or skipping) one element at a time.
+template <typename T, bool IsForward=true>
+class vector_deserializer {
+public:
+    using value_type = T;
+    using input_stream = utils::input_stream;
+
+private:
+    input_stream _in;
+    size_t _size;
+    utils::chunked_vector<input_stream> _substreams;
+
+    void fill_substreams() requires (!IsForward) {
+        input_stream in = _in;
+        input_stream in2 = _in;
+        for (size_t i = 0; i < size(); ++i) {
+            size_t old_size = in.size();
+            serializer<T>::skip(in);
+            size_t new_size = in.size();
+
+            _substreams.push_back(in2.read_substream(old_size - new_size));
+        }
+    }
+
+    struct forward_iterator_data {
+        input_stream _in = simple_input_stream();
+        void skip() {
+            serializer<T>::skip(_in);
+        }
+        value_type deserialize_next() {
+            return deserialize(_in, boost::type<T>());
+        }
+    };
+    struct reverse_iterator_data {
+        std::reverse_iterator<utils::chunked_vector<input_stream>::const_iterator> _substream_it;
+        void skip() {
+            ++_substream_it;
+        }
+        value_type deserialize_next() {
+            input_stream is = *_substream_it;
+            ++_substream_it;
+            return deserialize(is, boost::type<T>());
+        }
+    };
+
+
+public:
+    vector_deserializer() noexcept
+        : _in(simple_input_stream())
+        , _size(0)
+    { }
+
+    explicit vector_deserializer(input_stream in)
+        : _in(std::move(in))
+        , _size(deserialize(_in, boost::type<uint32_t>()))
+    {
+        if constexpr (!IsForward) {
+            fill_substreams();
+        }
+    }
+
+    // Get the number of items in the vector
+    size_t size() const noexcept {
+        return _size;
+    }
+
+    bool empty() const noexcept {
+        return _size == 0;
+    }
+
+    // Input iterator
+    class iterator {
+        // _idx is the distance from .begin(). It is used only for comparing iterators.
+        size_t _idx = 0;
+        bool _consumed = false;
+        std::conditional_t<IsForward, forward_iterator_data, reverse_iterator_data> _data;
+
+        iterator(input_stream in, size_t idx) noexcept requires(IsForward)
+            : _idx(idx)
+            , _data{in}
+        { }
+        iterator(decltype(reverse_iterator_data::_substream_it) substreams, size_t idx) noexcept requires(!IsForward)
+            : _idx(idx)
+            , _data{substreams}
+        { }
+
+        friend class vector_deserializer;
+   public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = T;
+        using pointer = value_type*;
+        using reference = value_type&;
+        using difference_type = ssize_t;
+
+        iterator() noexcept = default;
+
+        bool operator==(const iterator& it) const noexcept {
+            return _idx == it._idx;
+        }
+
+        // Deserializes and returns the item, effectively incrementing the iterator..
+        value_type operator*() const {
+            auto zis = const_cast<iterator*>(this);
+            zis->_idx++;
+            zis->_consumed = true;
+            return zis->_data.deserialize_next();
+        }
+
+        iterator& operator++() {
+            if (!_consumed) {
+                _data.skip();
+                ++_idx;
+            } else {
+                _consumed = false;
+            }
+            return *this;
+        }
+        iterator operator++(int) {
+            auto pre = *this;
+            ++*this;
+            return pre;
+        }
+
+        ssize_t operator-(const iterator& it) const noexcept {
+            return _idx - it._idx;
+        }
+    };
+
+    using const_iterator = iterator;
+
+    static_assert(std::input_iterator<iterator>);
+    static_assert(std::sentinel_for<iterator, iterator>);
+
+    iterator begin() noexcept requires(IsForward) {
+        return {_in, 0};
+    }
+    const_iterator begin() const noexcept requires(IsForward) {
+        return {_in, 0};
+    }
+    const_iterator cbegin() const noexcept requires(IsForward) {
+        return {_in, 0};
+    }
+
+    iterator end() noexcept requires(IsForward) {
+        return {_in, _size};
+    }
+    const_iterator end() const noexcept requires(IsForward) {
+        return {_in, _size};
+    }
+    const_iterator cend() const noexcept requires(IsForward) {
+        return {_in, _size};
+    }
+
+    iterator begin() noexcept requires(!IsForward) {
+        return {_substreams.crbegin(), 0};
+    }
+    const_iterator begin() const noexcept requires(!IsForward) {
+        return {_substreams.crbegin(), 0};
+    }
+    const_iterator cbegin() const noexcept requires(!IsForward) {
+        return {_substreams.crbegin(), 0};
+    }
+
+    iterator end() noexcept requires(!IsForward) {
+        return {_substreams.crend(), _size};
+    }
+    const_iterator end() const noexcept requires(!IsForward) {
+        return {_substreams.crend(), _size};
+    }
+    const_iterator cend() const noexcept requires(!IsForward) {
+        return {_substreams.crend(), _size};
+    }
+
+};
+
+static_assert(std::ranges::range<vector_deserializer<int>>);
+
+}
+
+
 
 namespace cdc {
 
@@ -9873,8 +10858,4789 @@ public:
 }
 
 
-#include "schema/schema_fwd.hh"
-#include "query-request.hh"
+#include <seastar/core/sstring.hh>
+#include "seastarx.hh"
+#include <iosfwd>
+#include <functional>
+
+namespace db {
+
+sstring system_keyspace_name();
+
+namespace functions {
+
+class function_name final {
+public:
+    sstring keyspace;
+    sstring name;
+
+    static function_name native_function(sstring name) {
+        return function_name(db::system_keyspace_name(), name);
+    }
+
+    function_name() = default; // for ANTLR
+    function_name(sstring keyspace, sstring name)
+            : keyspace(std::move(keyspace)), name(std::move(name)) {
+    }
+
+    function_name as_native_function() const {
+        return native_function(name);
+    }
+
+    bool has_keyspace() const {
+        return !keyspace.empty();
+    }
+
+    bool operator==(const function_name& x) const {
+        return keyspace == x.keyspace && name == x.name;
+    }
+};
+
+}
+}
+
+template <>
+struct fmt::formatter<db::functions::function_name> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const db::functions::function_name& fn, FormatContext& ctx) const {
+        auto out = ctx.out();
+        if (fn.has_keyspace()) {
+            out = fmt::format_to(out, "{}.", fn.keyspace);
+        }
+        return fmt::format_to(out, "{}", fn.name);
+    }
+};
+
+namespace std {
+
+template <>
+struct hash<db::functions::function_name> {
+    size_t operator()(const db::functions::function_name& x) const {
+        return std::hash<sstring>()(x.keyspace) ^ std::hash<sstring>()(x.name);
+    }
+};
+
+}
+
+
+#include <vector>
+#include <optional>
+
+namespace db {
+namespace functions {
+
+class function_name;
+
+class function {
+public:
+    using opt_bytes = std::optional<bytes>;
+    virtual ~function() {}
+    virtual const function_name& name() const = 0;
+    virtual const std::vector<data_type>& arg_types() const = 0;
+    virtual const data_type& return_type() const = 0;
+
+    /**
+     * Checks whether the function is a pure function (as in doesn't depend on, nor produce side effects) or not.
+     *
+     * @return <code>true</code> if the function is a pure function, <code>false</code> otherwise.
+     */
+    virtual bool is_pure() const = 0;
+
+    /**
+     * Checks whether the function is a native/hard coded one or not.
+     *
+     * @return <code>true</code> if the function is a native/hard coded one, <code>false</code> otherwise.
+     */
+    virtual bool is_native() const = 0;
+
+    virtual bool requires_thread() const = 0;
+
+    /**
+     * Checks whether the function is an aggregate function or not.
+     *
+     * @return <code>true</code> if the function is an aggregate function, <code>false</code> otherwise.
+     */
+    virtual bool is_aggregate() const = 0;
+
+    virtual void print(std::ostream& os) const = 0;
+
+    /**
+     * Returns the name of the function to use within a ResultSet.
+     *
+     * @param column_names the names of the columns used to call the function
+     * @return the name of the function to use within a ResultSet
+     */
+    virtual sstring column_name(const std::vector<sstring>& column_names) const = 0;
+
+    friend class function_call;
+    friend std::ostream& operator<<(std::ostream& os, const function& f);
+};
+
+inline
+std::ostream&
+operator<<(std::ostream& os, const function& f) {
+    f.print(os);
+    return os;
+}
+
+}
+}
+
+#include <span>
+
+namespace db::functions {
+
+class scalar_function : public virtual function {
+public:
+    /**
+     * Applies this function to the specified parameter.
+     *
+     * @param parameters the input parameters
+     * @return the result of applying this function to the parameter
+     * @throws InvalidRequestException if this function cannot not be applied to the parameter
+     */
+    virtual bytes_opt execute(std::span<const bytes_opt> parameters) = 0;
+};
+
+
+}
+
+
+#include <optional>
+
+namespace db::functions {
+
+struct stateless_aggregate_function final {
+    function_name name;
+    std::optional<sstring> column_name_override; // if unset, column name is synthesized from name and argument names
+
+    data_type state_type;
+    data_type result_type;
+    std::vector<data_type> argument_types;
+
+    bytes_opt initial_state;
+
+    // aggregates another input
+    // signature: (state_type, argument_types...) -> state_type
+    shared_ptr<scalar_function> aggregation_function;
+
+    // converts the state type to a result
+    // signature: (state_type) -> result_type
+    shared_ptr<scalar_function> state_to_result_function;
+
+    // optional: reduces states computed in parallel
+    // signature: (state_type, state_type) -> state_type
+    shared_ptr<scalar_function> state_reduction_function;
+};
+
+}
+
+
+#include <optional>
+
+namespace db {
+namespace functions {
+
+
+/**
+ * Performs a calculation on a set of values and return a single value.
+ */
+class aggregate_function : public virtual function {
+protected:
+    stateless_aggregate_function _agg;
+private:
+    shared_ptr<aggregate_function> _reducible;
+private:
+    static shared_ptr<aggregate_function> make_reducible_variant(stateless_aggregate_function saf);
+public:
+    explicit aggregate_function(stateless_aggregate_function saf, bool reducible_variant = false);
+
+    /**
+     * Creates a new <code>Aggregate</code> instance.
+     *
+     * @return a new <code>Aggregate</code> instance.
+     */
+    const stateless_aggregate_function& get_aggregate() const;
+
+    /**
+     * Checks wheather the function can be distributed and is able to reduce states.
+     *
+     * @return <code>true</code> if the function is reducible, <code>false</code> otherwise.
+     */
+    bool is_reducible() const;
+
+    /**
+     * Creates a <code>Aggregate Function</code> that can be reduced.
+     * Such <code>Aggregate Function</code> returns <code>Aggregate</code>,
+     * which returns not finalized output, but its accumulator that can be 
+     * later reduced with other one.
+     *
+     * Reducible aggregate function can be obtained only if <code>is_reducible()</code>
+     * return true. Otherwise, it should return <code>nullptr</code>.
+     *
+     * @return a reducible <code>Aggregate Function</code>.
+     */
+    ::shared_ptr<aggregate_function> reducible_aggregate_function();
+
+    virtual const function_name& name() const override;
+    virtual const std::vector<data_type>& arg_types() const override;
+    virtual const data_type& return_type() const override;
+    virtual bool is_pure() const override;
+    virtual bool is_native() const override;
+    virtual bool requires_thread() const override;
+    virtual bool is_aggregate() const override;
+    virtual void print(std::ostream& os) const override;
+    virtual sstring column_name(const std::vector<sstring>& column_names) const override;
+};
+
+}
+}
+
+
+#include <stdexcept>
+#include <type_traits>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/enum.hh>
+
+namespace sstables {
+
+enum class sstable_version_types { ka, la, mc, md, me };
+enum class sstable_format_types { big };
+
+constexpr std::array<sstable_version_types, 5> all_sstable_versions = {
+    sstable_version_types::ka,
+    sstable_version_types::la,
+    sstable_version_types::mc,
+    sstable_version_types::md,
+    sstable_version_types::me,
+};
+
+constexpr std::array<sstable_version_types, 3> writable_sstable_versions = {
+    sstable_version_types::mc,
+    sstable_version_types::md,
+    sstable_version_types::me,
+};
+
+constexpr sstable_version_types oldest_writable_sstable_format = sstable_version_types::mc;
+
+template <size_t S1, size_t S2>
+constexpr bool check_sstable_versions(const std::array<sstable_version_types, S1>& all_sstable_versions,
+        const std::array<sstable_version_types, S2>& writable_sstable_versions, sstable_version_types oldest_writable_sstable_format) {
+    for (auto v : writable_sstable_versions) {
+        if (v < oldest_writable_sstable_format) {
+            return false;
+        }
+    }
+    size_t expected = 0;
+    for (auto v : all_sstable_versions) {
+        if (v >= oldest_writable_sstable_format) {
+            ++expected;
+        }
+    }
+    return expected == S2;
+}
+
+static_assert(check_sstable_versions(all_sstable_versions, writable_sstable_versions, oldest_writable_sstable_format));
+
+inline auto get_highest_sstable_version() {
+    return all_sstable_versions[all_sstable_versions.size() - 1];
+}
+
+sstable_version_types version_from_string(std::string_view s);
+sstable_format_types format_from_string(std::string_view s);
+
+extern const std::unordered_map<sstable_version_types, seastar::sstring, seastar::enum_hash<sstable_version_types>> version_string;
+extern const std::unordered_map<sstable_format_types, seastar::sstring, seastar::enum_hash<sstable_format_types>> format_string;
+
+
+inline int operator<=>(sstable_version_types a, sstable_version_types b) {
+    auto to_int = [] (sstable_version_types x) {
+        return static_cast<std::underlying_type_t<sstable_version_types>>(x);
+    };
+    return to_int(a) - to_int(b);
+}
+
+}
+
+template <>
+struct fmt::formatter<sstables::sstable_version_types> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const sstables::sstable_version_types& version, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}", sstables::version_string.at(version));
+    }
+};
+
+template <>
+struct fmt::formatter<sstables::sstable_format_types> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const sstables::sstable_format_types& format, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}", sstables::format_string.at(format));
+    }
+};
+
+
+
+#include <boost/range/algorithm/copy.hpp>
+#include <boost/range/adaptor/transformed.hpp>
+#include <compare>
+
+//FIXME: de-inline methods and define this as static in a .cc file.
+extern logging::logger compound_logger;
+
+//
+// This header provides adaptors between the representation used by our compound_type<>
+// and representation used by Origin.
+//
+// For single-component keys the legacy representation is equivalent
+// to the only component's serialized form. For composite keys it the following
+// (See org.apache.cassandra.db.marshal.CompositeType):
+//
+//   <representation> ::= ( <component> )+
+//   <component>      ::= <length> <value> <EOC>
+//   <length>         ::= <uint16_t>
+//   <EOC>            ::= <uint8_t>
+//
+//  <value> is component's value in serialized form. <EOC> is always 0 for partition key.
+//
+
+// Given a representation serialized using @CompoundType, provides a view on the
+// representation of the same components as they would be serialized by Origin.
+//
+// The view is exposed in a form of a byte range. For example of use see to_legacy() function.
+template <typename CompoundType>
+class legacy_compound_view {
+    static_assert(!CompoundType::is_prefixable, "Legacy view not defined for prefixes");
+    CompoundType& _type;
+    managed_bytes_view _packed;
+public:
+    legacy_compound_view(CompoundType& c, managed_bytes_view packed)
+        : _type(c)
+        , _packed(packed)
+    { }
+
+    class iterator {
+    public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = bytes::value_type;
+        using difference_type = std::ptrdiff_t;
+        using pointer = bytes::value_type*;
+        using reference = bytes::value_type&;
+    private:
+        bool _singular;
+        // Offset within virtual output space of a component.
+        //
+        // Offset: -2             -1             0  ...  LEN-1 LEN
+        // Field:  [ length MSB ] [ length LSB ] [   VALUE   ] [ EOC ]
+        //
+        int32_t _offset;
+        typename CompoundType::iterator _i;
+    public:
+        struct end_tag {};
+
+        iterator(const legacy_compound_view& v)
+            : _singular(v._type.is_singular())
+            , _offset(_singular ? 0 : -2)
+            , _i(_singular && !v._type.begin(v._packed)->size() ?
+                    v._type.end(v._packed) : v._type.begin(v._packed))
+        { }
+
+        iterator(const legacy_compound_view& v, end_tag)
+            : _offset(v._type.is_singular() && !v._type.begin(v._packed)->size() ? 0 : -2)
+            , _i(v._type.end(v._packed))
+        { }
+
+        // Default constructor is incorrectly needed for c++20
+        // weakly_incrementable concept requires for ranges.
+        // Will be fixed by https://wg21.link/P2325R3 but still
+        // needed for now.
+        iterator() {}
+
+        value_type operator*() const {
+            int32_t component_size = _i->size();
+            if (_offset == -2) {
+                return (component_size >> 8) & 0xff;
+            } else if (_offset == -1) {
+                return component_size & 0xff;
+            } else if (_offset < component_size) {
+                return (*_i)[_offset];
+            } else { // _offset == component_size
+                return 0; // EOC field
+            }
+        }
+
+        iterator& operator++() {
+            auto component_size = (int32_t) _i->size();
+            if (_offset < component_size
+                // When _singular, we skip the EOC byte.
+                && (!_singular || _offset != (component_size - 1)))
+            {
+                ++_offset;
+            } else {
+                ++_i;
+                _offset = -2;
+            }
+            return *this;
+        }
+
+        iterator operator++(int) {
+            iterator i(*this);
+            ++(*this);
+            return i;
+        }
+
+        bool operator==(const iterator& other) const {
+            return _offset == other._offset && other._i == _i;
+        }
+    };
+
+    // A trichotomic comparator defined on @CompoundType representations which
+    // orders them according to lexicographical ordering of their corresponding
+    // legacy representations.
+    //
+    //   tri_comparator(t)(k1, k2)
+    //
+    // ...is equivalent to:
+    //
+    //   compare_unsigned(to_legacy(t, k1), to_legacy(t, k2))
+    //
+    // ...but more efficient.
+    //
+    struct tri_comparator {
+        const CompoundType& _type;
+
+        tri_comparator(const CompoundType& type)
+            : _type(type)
+        { }
+
+        // @k1 and @k2 must be serialized using @type, which was passed to the constructor.
+        std::strong_ordering operator()(managed_bytes_view k1, managed_bytes_view k2) const {
+            if (_type.is_singular()) {
+                return compare_unsigned(*_type.begin(k1), *_type.begin(k2));
+            }
+            return std::lexicographical_compare_three_way(
+                _type.begin(k1), _type.end(k1),
+                _type.begin(k2), _type.end(k2),
+                [] (const managed_bytes_view& c1, const managed_bytes_view& c2) -> std::strong_ordering {
+                    if (c1.size() != c2.size() || !c1.size()) {
+                        return c1.size() < c2.size() ? std::strong_ordering::less : c1.size() ? std::strong_ordering::greater : std::strong_ordering::equal;
+                    }
+                    return compare_unsigned(c1, c2);
+                });
+        }
+    };
+
+    // Equivalent to std::distance(begin(), end()), but computes faster
+    size_t size() const {
+        if (_type.is_singular()) {
+            return _type.begin(_packed)->size();
+        }
+        size_t s = 0;
+        for (auto&& component : _type.components(_packed)) {
+            s += 2 /* length field */ + component.size() + 1 /* EOC */;
+        }
+        return s;
+    }
+
+    iterator begin() const {
+        return iterator(*this);
+    }
+
+    iterator end() const {
+        return iterator(*this, typename iterator::end_tag());
+    }
+};
+
+// Converts compound_type<> representation to legacy representation
+// @packed is assumed to be serialized using supplied @type.
+template <typename CompoundType>
+static inline
+bytes to_legacy(CompoundType& type, managed_bytes_view packed) {
+    legacy_compound_view<CompoundType> lv(type, packed);
+    bytes legacy_form(bytes::initialized_later(), lv.size());
+    std::copy(lv.begin(), lv.end(), legacy_form.begin());
+    return legacy_form;
+}
+
+class composite_view;
+
+// Represents a value serialized according to Origin's CompositeType.
+// If is_compound is true, then the value is one or more components encoded as:
+//
+//   <representation> ::= ( <component> )+
+//   <component>      ::= <length> <value> <EOC>
+//   <length>         ::= <uint16_t>
+//   <EOC>            ::= <uint8_t>
+//
+// If false, then it encodes a single value, without a prefix length or a suffix EOC.
+class composite final {
+    bytes _bytes;
+    bool _is_compound;
+public:
+    composite(bytes&& b, bool is_compound)
+            : _bytes(std::move(b))
+            , _is_compound(is_compound)
+    { }
+
+    explicit composite(bytes&& b)
+            : _bytes(std::move(b))
+            , _is_compound(true)
+    { }
+
+    explicit composite(const composite_view& v);
+
+    composite()
+            : _bytes()
+            , _is_compound(true)
+    { }
+
+    using size_type = uint16_t;
+    using eoc_type = int8_t;
+
+    /*
+     * The 'end-of-component' byte should always be 0 for actual column name.
+     * However, it can set to 1 for query bounds. This allows to query for the
+     * equivalent of 'give me the full range'. That is, if a slice query is:
+     *   start = <3><"foo".getBytes()><0>
+     *   end   = <3><"foo".getBytes()><1>
+     * then we'll return *all* the columns whose first component is "foo".
+     * If for a component, the 'end-of-component' is != 0, there should not be any
+     * following component. The end-of-component can also be -1 to allow
+     * non-inclusive query. For instance:
+     *   end = <3><"foo".getBytes()><-1>
+     * allows to query everything that is smaller than <3><"foo".getBytes()>, but
+     * not <3><"foo".getBytes()> itself.
+     */
+    enum class eoc : eoc_type {
+        start = -1,
+        none = 0,
+        end = 1
+    };
+
+    using component = std::pair<bytes, eoc>;
+    using component_view = std::pair<bytes_view, eoc>;
+private:
+    template<typename Value>
+    requires (!std::same_as<const data_value, std::decay_t<Value>>)
+    static size_t size(const Value& val) {
+        return val.size();
+    }
+    static size_t size(const data_value& val) {
+        return val.serialized_size();
+    }
+    template<typename Value, typename CharOutputIterator>
+    requires (!std::same_as<const data_value, std::decay_t<Value>>)
+    static void write_value(Value&& val, CharOutputIterator& out) {
+        out = std::copy(val.begin(), val.end(), out);
+    }
+    template<typename CharOutputIterator>
+    static void write_value(managed_bytes_view val, CharOutputIterator& out) {
+        for (bytes_view frag : fragment_range(val)) {
+            out = std::copy(frag.begin(), frag.end(), out);
+        }
+    }
+    template <typename CharOutputIterator>
+    static void write_value(const data_value& val, CharOutputIterator& out) {
+        val.serialize(out);
+    }
+    template<typename RangeOfSerializedComponents, typename CharOutputIterator>
+    static void serialize_value(RangeOfSerializedComponents&& values, CharOutputIterator& out, bool is_compound) {
+        if (!is_compound) {
+            auto it = values.begin();
+            write_value(std::forward<decltype(*it)>(*it), out);
+            return;
+        }
+
+        for (auto&& val : values) {
+            write<size_type>(out, static_cast<size_type>(size(val)));
+            write_value(std::forward<decltype(val)>(val), out);
+            // Range tombstones are not keys. For collections, only frozen
+            // values can be keys. Therefore, for as long as it is safe to
+            // assume that this code will be used to create keys, it is safe
+            // to assume the trailing byte is always zero.
+            write<eoc_type>(out, eoc_type(eoc::none));
+        }
+    }
+    template <typename RangeOfSerializedComponents>
+    static size_t serialized_size(RangeOfSerializedComponents&& values, bool is_compound) {
+        size_t len = 0;
+        auto it = values.begin();
+        if (it != values.end()) {
+            // CQL3 uses a specific prefix (0xFFFF) to encode "static columns"
+            // (CASSANDRA-6561). This does mean the maximum size of the first component of a
+            // composite is 65534, not 65535 (or we wouldn't be able to detect if the first 2
+            // bytes is the static prefix or not).
+            auto value_size = size(*it);
+            if (value_size > static_cast<size_type>(std::numeric_limits<size_type>::max() - uint8_t(is_compound))) {
+                throw std::runtime_error(format("First component size too large: {:d} > {:d}", value_size, std::numeric_limits<size_type>::max() - is_compound));
+            }
+            if (!is_compound) {
+                return value_size;
+            }
+            len += sizeof(size_type) + value_size + sizeof(eoc_type);
+            ++it;
+        }
+        for ( ; it != values.end(); ++it) {
+            auto value_size = size(*it);
+            if (value_size > std::numeric_limits<size_type>::max()) {
+                throw std::runtime_error(format("Component size too large: {:d} > {:d}", value_size, std::numeric_limits<size_type>::max()));
+            }
+            len += sizeof(size_type) + value_size + sizeof(eoc_type);
+        }
+        return len;
+    }
+public:
+    template <typename Describer>
+    auto describe_type(sstables::sstable_version_types v, Describer f) const {
+        return f(const_cast<bytes&>(_bytes));
+    }
+
+    // marker is ignored if !is_compound
+    template<typename RangeOfSerializedComponents>
+    static composite serialize_value(RangeOfSerializedComponents&& values, bool is_compound = true, eoc marker = eoc::none) {
+        auto size = serialized_size(values, is_compound);
+        bytes b(bytes::initialized_later(), size);
+        auto i = b.begin();
+        serialize_value(std::forward<decltype(values)>(values), i, is_compound);
+        if (is_compound && !b.empty()) {
+            b.back() = eoc_type(marker);
+        }
+        return composite(std::move(b), is_compound);
+    }
+
+    template<typename RangeOfSerializedComponents>
+    static composite serialize_static(const schema& s, RangeOfSerializedComponents&& values) {
+        // FIXME: Optimize
+        auto b = bytes(size_t(2), bytes::value_type(0xff));
+        std::vector<bytes_view> sv(s.clustering_key_size());
+        b += composite::serialize_value(boost::range::join(sv, std::forward<RangeOfSerializedComponents>(values)), true).release_bytes();
+        return composite(std::move(b));
+    }
+
+    static eoc to_eoc(int8_t eoc_byte) {
+        return eoc_byte == 0 ? eoc::none : (eoc_byte < 0 ? eoc::start : eoc::end);
+    }
+
+    class iterator {
+    public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = const component_view;
+        using difference_type = std::ptrdiff_t;
+        using pointer = const component_view*;
+        using reference = const component_view&;
+    private:
+        bytes_view _v;
+        component_view _current;
+        bool _strict_mode = true;
+    private:
+        void do_read_current() {
+            size_type len;
+            {
+                if (_v.empty()) {
+                    _v = bytes_view(nullptr, 0);
+                    return;
+                }
+                len = read_simple<size_type>(_v);
+                if (_v.size() < len) {
+                    throw_with_backtrace<marshal_exception>(format("composite iterator - not enough bytes, expected {:d}, got {:d}", len, _v.size()));
+                }
+            }
+            auto value = bytes_view(_v.begin(), len);
+            _v.remove_prefix(len);
+            _current = component_view(std::move(value), to_eoc(read_simple<eoc_type>(_v)));
+        }
+        void read_current() {
+            try {
+                do_read_current();
+            } catch (marshal_exception&) {
+                if (_strict_mode) {
+                    on_internal_error(compound_logger, std::current_exception());
+                } else {
+                    throw;
+                }
+            }
+        }
+
+        struct end_iterator_tag {};
+
+        // In strict-mode de-serialization errors will invoke `on_internal_error()`.
+        iterator(const bytes_view& v, bool is_compound, bool is_static, bool strict_mode = true)
+                : _v(v), _strict_mode(strict_mode) {
+            if (is_static) {
+                _v.remove_prefix(2);
+            }
+            if (is_compound) {
+                read_current();
+            } else {
+                _current = component_view(_v, eoc::none);
+                _v.remove_prefix(_v.size());
+            }
+        }
+
+        iterator(end_iterator_tag) : _v(nullptr, 0) {}
+
+    public:
+        iterator() : iterator(end_iterator_tag()) {}
+        iterator& operator++() {
+            read_current();
+            return *this;
+        }
+
+        iterator operator++(int) {
+            iterator i(*this);
+            ++(*this);
+            return i;
+        }
+
+        const value_type& operator*() const { return _current; }
+        const value_type* operator->() const { return &_current; }
+        bool operator==(const iterator& i) const { return _v.begin() == i._v.begin(); }
+
+        friend class composite;
+        friend class composite_view;
+    };
+
+    iterator begin() const {
+        return iterator(_bytes, _is_compound, is_static());
+    }
+
+    iterator end() const {
+        return iterator(iterator::end_iterator_tag());
+    }
+
+    boost::iterator_range<iterator> components() const & {
+        return { begin(), end() };
+    }
+
+    auto values() const & {
+        return components() | boost::adaptors::transformed([](auto&& c) { return c.first; });
+    }
+
+    std::vector<component> components() const && {
+        std::vector<component> result;
+        std::transform(begin(), end(), std::back_inserter(result), [](auto&& p) {
+            return component(bytes(p.first.begin(), p.first.end()), p.second);
+        });
+        return result;
+    }
+
+    std::vector<bytes> values() const && {
+        std::vector<bytes> result;
+        boost::copy(components() | boost::adaptors::transformed([](auto&& c) { return to_bytes(c.first); }), std::back_inserter(result));
+        return result;
+    }
+
+    const bytes& get_bytes() const {
+        return _bytes;
+    }
+
+    bytes release_bytes() && {
+        return std::move(_bytes);
+    }
+
+    size_t size() const {
+        return _bytes.size();
+    }
+
+    bool empty() const {
+        return _bytes.empty();
+    }
+
+    static bool is_static(bytes_view bytes, bool is_compound) {
+        return is_compound && bytes.size() > 2 && (bytes[0] & bytes[1] & 0xff) == 0xff;
+    }
+
+    bool is_static() const {
+        return is_static(_bytes, _is_compound);
+    }
+
+    bool is_compound() const {
+        return _is_compound;
+    }
+
+    template <typename ClusteringElement>
+    static composite from_clustering_element(const schema& s, const ClusteringElement& ce) {
+        return serialize_value(ce.components(s), s.is_compound());
+    }
+
+    static composite from_exploded(const std::vector<bytes_view>& v, bool is_compound, eoc marker = eoc::none) {
+        if (v.size() == 0) {
+            return composite(bytes(size_t(1), bytes::value_type(marker)), is_compound);
+        }
+        return serialize_value(v, is_compound, marker);
+    }
+
+    static composite static_prefix(const schema& s) {
+        return serialize_static(s, std::vector<bytes_view>());
+    }
+
+    explicit operator bytes_view() const {
+        return _bytes;
+    }
+
+    template <typename Component>
+    friend inline std::ostream& operator<<(std::ostream& os, const std::pair<Component, eoc>& c) {
+        fmt::print(os, "{}", c);
+        return os;
+    }
+
+    struct tri_compare {
+        const std::vector<data_type>& _types;
+        tri_compare(const std::vector<data_type>& types) : _types(types) {}
+        std::strong_ordering operator()(const composite&, const composite&) const;
+        std::strong_ordering operator()(composite_view, composite_view) const;
+    };
+};
+
+template <typename Component>
+struct fmt::formatter<std::pair<Component, composite::eoc>> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const std::pair<Component, composite::eoc>& c, FormatContext& ctx) const {
+        if constexpr (std::same_as<Component, bytes_view>) {
+            return fmt::format_to(ctx.out(), "{{value={}; eoc={:#02x}}}",
+                                  fmt_hex(c.first), composite::eoc_type(c.second) & 0xff);
+        } else {
+            return fmt::format_to(ctx.out(), "{{value={}; eoc={:#02x}}}",
+                                  c.first, composite::eoc_type(c.second) & 0xff);
+        }
+    }
+};
+
+class composite_view final {
+    friend class composite;
+    bytes_view _bytes;
+    bool _is_compound;
+public:
+    composite_view(bytes_view b, bool is_compound = true)
+            : _bytes(b)
+            , _is_compound(is_compound)
+    { }
+
+    composite_view(const composite& c)
+            : composite_view(static_cast<bytes_view>(c), c.is_compound())
+    { }
+
+    composite_view()
+            : _bytes(nullptr, 0)
+            , _is_compound(true)
+    { }
+
+    std::vector<bytes_view> explode() const {
+        if (!_is_compound) {
+            return { _bytes };
+        }
+
+        std::vector<bytes_view> ret;
+        ret.reserve(8);
+        for (auto it = begin(), e = end(); it != e; ) {
+            ret.push_back(it->first);
+            auto marker = it->second;
+            ++it;
+            if (it != e && marker != composite::eoc::none) {
+                throw runtime_exception(format("non-zero component divider found ({:d}) mid", format("0x{:02x}", composite::eoc_type(marker) & 0xff)));
+            }
+        }
+        return ret;
+    }
+
+    composite::iterator begin() const {
+        return composite::iterator(_bytes, _is_compound, is_static());
+    }
+
+    composite::iterator end() const {
+        return composite::iterator(composite::iterator::end_iterator_tag());
+    }
+
+    boost::iterator_range<composite::iterator> components() const {
+        return { begin(), end() };
+    }
+
+    composite::eoc last_eoc() const {
+        if (!_is_compound || _bytes.empty()) {
+            return composite::eoc::none;
+        }
+        bytes_view v(_bytes);
+        v.remove_prefix(v.size() - 1);
+        return composite::to_eoc(read_simple<composite::eoc_type>(v));
+    }
+
+    auto values() const {
+        return components() | boost::adaptors::transformed([](auto&& c) { return c.first; });
+    }
+
+    size_t size() const {
+        return _bytes.size();
+    }
+
+    bool empty() const {
+        return _bytes.empty();
+    }
+
+    bool is_static() const {
+        return composite::is_static(_bytes, _is_compound);
+    }
+
+    bool is_valid() const {
+        try {
+            auto it = composite::iterator(_bytes, _is_compound, is_static(), false);
+            const auto end = composite::iterator(composite::iterator::end_iterator_tag());
+            size_t s = 0;
+            for (; it != end; ++it) {
+                auto& c = *it;
+                s += c.first.size() + sizeof(composite::size_type) + sizeof(composite::eoc_type);
+            }
+            return s == _bytes.size();
+        } catch (marshal_exception&) {
+            return false;
+        }
+    }
+
+    explicit operator bytes_view() const {
+        return _bytes;
+    }
+
+    bool operator==(const composite_view& k) const { return k._bytes == _bytes && k._is_compound == _is_compound; }
+
+    friend fmt::formatter<composite_view>;
+};
+
+template <>
+struct fmt::formatter<composite_view> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const composite_view& v, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{{{}, compound={}, static={}}}",
+                              fmt::join(v.components(), ", "), v._is_compound, v.is_static());
+    }
+};
+
+inline
+composite::composite(const composite_view& v)
+    : composite(bytes(v._bytes), v._is_compound)
+{ }
+
+template <>
+struct fmt::formatter<composite> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const composite& v, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}", composite_view(v));
+    }
+};
+
+inline
+std::strong_ordering composite::tri_compare::operator()(const composite& v1, const composite& v2) const {
+    return (*this)(composite_view(v1), composite_view(v2));
+}
+
+inline
+std::strong_ordering composite::tri_compare::operator()(composite_view v1, composite_view v2) const {
+    // See org.apache.cassandra.db.composites.AbstractCType#compare
+    if (v1.empty()) {
+        return v2.empty() ? std::strong_ordering::equal : std::strong_ordering::less;
+    }
+    if (v2.empty()) {
+        return std::strong_ordering::greater;
+    }
+    if (v1.is_static() != v2.is_static()) {
+        return v1.is_static() ? std::strong_ordering::less : std::strong_ordering::greater;
+    }
+    auto a_values = v1.components();
+    auto b_values = v2.components();
+    auto cmp = [&](const data_type& t, component_view c1, component_view c2) {
+        // First by value, then by EOC
+        auto r = t->compare(c1.first, c2.first);
+        if (r != 0) {
+            return r;
+        }
+        return (static_cast<int>(c1.second) - static_cast<int>(c2.second)) <=> 0;
+    };
+    return lexicographical_tri_compare(_types.begin(), _types.end(),
+        a_values.begin(), a_values.end(),
+        b_values.begin(), b_values.end(),
+        cmp);
+}
+
+
+
+#include <cstdint>
+
+namespace utils {
+
+namespace utf8 {
+
+namespace internal {
+
+struct partial_validation_results {
+    bool error;
+    size_t unvalidated_tail;
+    size_t bytes_needed_for_tail;
+};
+
+partial_validation_results validate_partial(const uint8_t* data, size_t len);
+
+}
+
+
+bool validate(const uint8_t *data, size_t len);
+
+inline bool validate(bytes_view string) {
+    const uint8_t *data = reinterpret_cast<const uint8_t*>(string.data());
+    size_t len = string.size();
+
+    return validate(data, len);
+}
+
+// If data represents a correct UTF-8 string, return std::nullopt,
+// otherwise return a position of first error byte.
+std::optional<size_t> validate_with_error_position(const uint8_t *data, size_t len);
+
+inline std::optional<size_t> validate_with_error_position(bytes_view string) {
+    const uint8_t *data = reinterpret_cast<const uint8_t*>(string.data());
+    size_t len = string.size();
+
+    return validate_with_error_position(data, len);	
+}
+
+inline std::optional<size_t> validate_with_error_position_fragmented(single_fragmented_view fv) {
+    return validate_with_error_position(fv.current_fragment());
+}
+
+std::optional<size_t> validate_with_error_position_fragmented(FragmentedView auto fv) {
+    uint8_t partial_codepoint[4];
+    size_t partial_filled = 0;
+    size_t partial_more_needed = 0;
+    size_t bytes_validated = 0;
+    for (bytes_view frag : fragment_range(fv)) {
+        auto data = reinterpret_cast<const uint8_t*>(frag.data());
+        auto len = frag.size();
+        if (partial_more_needed) {
+            // Tiny loop (often zero iterations), don't call memcpy
+            while (partial_more_needed && len) {
+                partial_codepoint[partial_filled++] = *data++;
+                --partial_more_needed;
+                --len;
+            }
+            if (!partial_more_needed) {
+                // We accumulated a codepoint that straddled two or more fragments,
+                // validate it now.
+                auto pvr = internal::validate_partial(partial_codepoint, partial_filled);
+                if (pvr.error) {
+                    return {bytes_validated};
+                }
+                bytes_validated += partial_filled;
+                partial_filled = partial_more_needed = 0;
+            }
+            if (!len) {
+                continue;
+            }
+        }
+        auto pvr = internal::validate_partial(data, len);
+        if (pvr.error) {
+            return bytes_validated + *validate_with_error_position(data, len);
+        }
+        bytes_validated += len - pvr.unvalidated_tail;
+        data += len - pvr.unvalidated_tail;
+        len = pvr.unvalidated_tail;
+        while (len) {
+            partial_codepoint[partial_filled++] = *data++;
+            --len;
+        }
+        partial_more_needed = pvr.bytes_needed_for_tail;
+    }
+    if (partial_more_needed) {
+        return bytes_validated;
+    }
+    return std::nullopt;
+}
+
+} // namespace utf8
+
+} // namespace utils
+
+
+
+namespace replica {
+
+// replica/database.hh
+class database;
+class keyspace;
+class table;
+using column_family = table;
+class memtable_list;
+
+}
+
+
+// mutation.hh
+class mutation;
+class mutation_partition;
+
+// schema/schema.hh
+class schema;
+class column_definition;
+class column_mapping;
+
+// schema_mutations.hh
+class schema_mutations;
+
+// keys.hh
+class exploded_clustering_prefix;
+class partition_key;
+class partition_key_view;
+class clustering_key_prefix;
+class clustering_key_prefix_view;
+using clustering_key = clustering_key_prefix;
+using clustering_key_view = clustering_key_prefix_view;
+
+// memtable.hh
+namespace replica {
+class memtable;
+}
+
+
+#include <boost/iterator/zip_iterator.hpp>
+#include <boost/range/adaptor/transformed.hpp>
+#include <boost/range/iterator_range_core.hpp>
+#include <compare>
+#include <span>
+
+//
+// This header defines type system for primary key holders.
+//
+// We distinguish partition keys and clustering keys. API-wise they are almost
+// the same, but they're separate type hierarchies.
+//
+// Clustering keys are further divided into prefixed and non-prefixed (full).
+// Non-prefixed keys always have full component set, as defined by schema.
+// Prefixed ones can have any number of trailing components missing. They may
+// differ in underlying representation.
+//
+// The main classes are:
+//
+//   partition_key           - full partition key
+//   clustering_key          - full clustering key
+//   clustering_key_prefix   - clustering key prefix
+//
+// These classes wrap only the minimum information required to store the key
+// (the key value itself). Any information which can be inferred from schema
+// is not stored. Therefore accessors need to be provided with a pointer to
+// schema, from which information about structure is extracted.
+
+// Abstracts a view to serialized compound.
+template <typename TopLevelView>
+class compound_view_wrapper {
+protected:
+    managed_bytes_view _bytes;
+protected:
+    compound_view_wrapper(managed_bytes_view v)
+        : _bytes(v)
+    { }
+
+    static inline const auto& get_compound_type(const schema& s) {
+        return TopLevelView::get_compound_type(s);
+    }
+public:
+    std::vector<bytes> explode(const schema& s) const {
+        return get_compound_type(s)->deserialize_value(_bytes);
+    }
+
+    managed_bytes_view representation() const {
+        return _bytes;
+    }
+
+    struct less_compare {
+        typename TopLevelView::compound _t;
+        less_compare(const schema& s) : _t(get_compound_type(s)) {}
+        bool operator()(const TopLevelView& k1, const TopLevelView& k2) const {
+            return _t->less(k1.representation(), k2.representation());
+        }
+    };
+
+    struct tri_compare {
+        typename TopLevelView::compound _t;
+        tri_compare(const schema &s) : _t(get_compound_type(s)) {}
+        std::strong_ordering operator()(const TopLevelView& k1, const TopLevelView& k2) const {
+            return _t->compare(k1.representation(), k2.representation());
+        }
+    };
+
+    struct hashing {
+        typename TopLevelView::compound _t;
+        hashing(const schema& s) : _t(get_compound_type(s)) {}
+        size_t operator()(const TopLevelView& o) const {
+            return _t->hash(o.representation());
+        }
+    };
+
+    struct equality {
+        typename TopLevelView::compound _t;
+        equality(const schema& s) : _t(get_compound_type(s)) {}
+        bool operator()(const TopLevelView& o1, const TopLevelView& o2) const {
+            return _t->equal(o1.representation(), o2.representation());
+        }
+    };
+
+    bool equal(const schema& s, const TopLevelView& other) const {
+        return get_compound_type(s)->equal(representation(), other.representation());
+    }
+
+    // begin() and end() return iterators over components of this compound. The iterator yields a managed_bytes_view to the component.
+    // The iterators satisfy InputIterator concept.
+    auto begin() const {
+        return TopLevelView::compound::element_type::begin(representation());
+    }
+
+    // See begin()
+    auto end() const {
+        return TopLevelView::compound::element_type::end(representation());
+    }
+
+    // begin() and end() return iterators over components of this compound. The iterator yields a managed_bytes_view to the component.
+    // The iterators satisfy InputIterator concept.
+    auto begin(const schema& s) const {
+        return begin();
+    }
+
+    // See begin()
+    auto end(const schema& s) const {
+        return end();
+    }
+
+    // Returns a range of managed_bytes_view
+    auto components() const {
+        return TopLevelView::compound::element_type::components(representation());
+    }
+
+    // Returns a range of managed_bytes_view
+    auto components(const schema& s) const {
+        return components();
+    }
+
+    bool is_empty() const {
+        return _bytes.empty();
+    }
+
+    explicit operator bool() const {
+        return !is_empty();
+    }
+
+    // For backward compatibility with existing code.
+    bool is_empty(const schema& s) const {
+        return is_empty();
+    }
+};
+
+template <typename TopLevel, typename TopLevelView>
+class compound_wrapper {
+protected:
+    managed_bytes _bytes;
+protected:
+    compound_wrapper(managed_bytes&& b) : _bytes(std::move(b)) {}
+
+    static inline const auto& get_compound_type(const schema& s) {
+        return TopLevel::get_compound_type(s);
+    }
+private:
+    static const data_type& get_singular_type(const schema& s) {
+        const auto& ct = get_compound_type(s);
+        if (!ct->is_singular()) {
+            throw std::invalid_argument("compound is not singular");
+        }
+        return ct->types()[0];
+    }
+public:
+    struct with_schema_wrapper {
+        with_schema_wrapper(const schema& s, const TopLevel& key) : s(s), key(key) {}
+        const schema& s;
+        const TopLevel& key;
+    };
+
+    with_schema_wrapper with_schema(const schema& s) const {
+        return with_schema_wrapper(s, *static_cast<const TopLevel*>(this));
+    }
+
+    static TopLevel make_empty() {
+        return from_exploded(std::vector<bytes>());
+    }
+
+    static TopLevel make_empty(const schema&) {
+        return make_empty();
+    }
+
+    template<typename RangeOfSerializedComponents>
+    static TopLevel from_exploded(RangeOfSerializedComponents&& v) {
+        return TopLevel::from_range(std::forward<RangeOfSerializedComponents>(v));
+    }
+
+    static TopLevel from_exploded(const schema& s, const std::vector<bytes>& v) {
+        return from_exploded(v);
+    }
+    static TopLevel from_exploded(const schema& s, const std::vector<managed_bytes>& v) {
+        return from_exploded(v);
+    }
+    static TopLevel from_exploded_view(const std::vector<bytes_view>& v) {
+        return from_exploded(v);
+    }
+
+    // We don't allow optional values, but provide this method as an efficient adaptor
+    static TopLevel from_optional_exploded(const schema& s, std::span<const bytes_opt> v) {
+        return TopLevel::from_bytes(get_compound_type(s)->serialize_optionals(v));
+    }
+    static TopLevel from_optional_exploded(const schema& s, std::span<const managed_bytes_opt> v) {
+        return TopLevel::from_bytes(get_compound_type(s)->serialize_optionals(v));
+    }
+
+    static TopLevel from_deeply_exploded(const schema& s, const std::vector<data_value>& v) {
+        return TopLevel::from_bytes(get_compound_type(s)->serialize_value_deep(v));
+    }
+
+    static TopLevel from_single_value(const schema& s, const bytes& v) {
+        return TopLevel::from_bytes(get_compound_type(s)->serialize_single(v));
+    }
+
+    static TopLevel from_single_value(const schema& s, const managed_bytes& v) {
+        return TopLevel::from_bytes(get_compound_type(s)->serialize_single(v));
+    }
+
+    template <typename T>
+    static
+    TopLevel from_singular(const schema& s, const T& v) {
+        const auto& type = get_singular_type(s);
+        return from_single_value(s, type->decompose(v));
+    }
+
+    static TopLevel from_singular_bytes(const schema& s, const bytes& b) {
+        get_singular_type(s); // validation
+        return from_single_value(s, b);
+    }
+
+    TopLevelView view() const {
+        return TopLevelView::from_bytes(_bytes);
+    }
+
+    operator TopLevelView() const {
+        return view();
+    }
+
+    // FIXME: return views
+    std::vector<bytes> explode(const schema& s) const {
+        return get_compound_type(s)->deserialize_value(_bytes);
+    }
+
+    std::vector<bytes> explode() const {
+        std::vector<bytes> result;
+        for (managed_bytes_view c : components()) {
+            result.emplace_back(to_bytes(c));
+        }
+        return result;
+    }
+
+    std::vector<managed_bytes> explode_fragmented() const {
+        std::vector<managed_bytes> result;
+        for (managed_bytes_view c : components()) {
+            result.emplace_back(managed_bytes(c));
+        }
+        return result;
+    }
+
+    struct tri_compare {
+        typename TopLevel::compound _t;
+        tri_compare(const schema& s) : _t(get_compound_type(s)) {}
+        std::strong_ordering operator()(const TopLevel& k1, const TopLevel& k2) const {
+            return _t->compare(k1.representation(), k2.representation());
+        }
+        std::strong_ordering operator()(const TopLevelView& k1, const TopLevel& k2) const {
+            return _t->compare(k1.representation(), k2.representation());
+        }
+        std::strong_ordering operator()(const TopLevel& k1, const TopLevelView& k2) const {
+            return _t->compare(k1.representation(), k2.representation());
+        }
+    };
+
+    struct less_compare {
+        typename TopLevel::compound _t;
+        less_compare(const schema& s) : _t(get_compound_type(s)) {}
+        bool operator()(const TopLevel& k1, const TopLevel& k2) const {
+            return _t->less(k1.representation(), k2.representation());
+        }
+        bool operator()(const TopLevelView& k1, const TopLevel& k2) const {
+            return _t->less(k1.representation(), k2.representation());
+        }
+        bool operator()(const TopLevel& k1, const TopLevelView& k2) const {
+            return _t->less(k1.representation(), k2.representation());
+        }
+    };
+
+    struct hashing {
+        typename TopLevel::compound _t;
+        hashing(const schema& s) : _t(get_compound_type(s)) {}
+        size_t operator()(const TopLevel& o) const {
+            return _t->hash(o.representation());
+        }
+        size_t operator()(const TopLevelView& o) const {
+            return _t->hash(o.representation());
+        }
+    };
+
+    struct equality {
+        typename TopLevel::compound _t;
+        equality(const schema& s) : _t(get_compound_type(s)) {}
+        bool operator()(const TopLevel& o1, const TopLevel& o2) const {
+            return _t->equal(o1.representation(), o2.representation());
+        }
+        bool operator()(const TopLevelView& o1, const TopLevel& o2) const {
+            return _t->equal(o1.representation(), o2.representation());
+        }
+        bool operator()(const TopLevel& o1, const TopLevelView& o2) const {
+            return _t->equal(o1.representation(), o2.representation());
+        }
+    };
+
+    bool equal(const schema& s, const TopLevel& other) const {
+        return get_compound_type(s)->equal(representation(), other.representation());
+    }
+
+    bool equal(const schema& s, const TopLevelView& other) const {
+        return get_compound_type(s)->equal(representation(), other.representation());
+    }
+
+    operator managed_bytes_view() const
+    {
+        return _bytes;
+    }
+
+    const managed_bytes& representation() const {
+        return _bytes;
+    }
+
+    // begin() and end() return iterators over components of this compound. The iterator yields a managed_bytes_view to the component.
+    // The iterators satisfy InputIterator concept.
+    auto begin(const schema& s) const {
+        return get_compound_type(s)->begin(_bytes);
+    }
+
+    // See begin()
+    auto end(const schema& s) const {
+        return get_compound_type(s)->end(_bytes);
+    }
+
+    bool is_empty() const {
+        return _bytes.empty();
+    }
+
+    explicit operator bool() const {
+        return !is_empty();
+    }
+
+    // For backward compatibility with existing code.
+    bool is_empty(const schema& s) const {
+        return is_empty();
+    }
+
+    // Returns a range of managed_bytes_view
+    auto components() const {
+        return TopLevelView::compound::element_type::components(representation());
+    }
+
+    // Returns a range of managed_bytes_view
+    auto components(const schema& s) const {
+        return components();
+    }
+
+    managed_bytes_view get_component(const schema& s, size_t idx) const {
+        auto it = begin(s);
+        std::advance(it, idx);
+        return *it;
+    }
+
+    // Returns the number of components of this compound.
+    size_t size(const schema& s) const {
+        return std::distance(begin(s), end(s));
+    }
+
+    size_t minimal_external_memory_usage() const {
+        return _bytes.minimal_external_memory_usage();
+    }
+
+    size_t external_memory_usage() const noexcept {
+        return _bytes.external_memory_usage();
+    }
+
+    size_t memory_usage() const noexcept {
+        return sizeof(*this) + external_memory_usage();
+    }
+};
+
+template <typename TopLevel, typename PrefixTopLevel>
+class prefix_view_on_full_compound {
+public:
+    using iterator = typename compound_type<allow_prefixes::no>::iterator;
+private:
+    bytes_view _b;
+    unsigned _prefix_len;
+    iterator _begin;
+    iterator _end;
+public:
+    prefix_view_on_full_compound(const schema& s, bytes_view b, unsigned prefix_len)
+        : _b(b)
+        , _prefix_len(prefix_len)
+        , _begin(TopLevel::get_compound_type(s)->begin(_b))
+        , _end(_begin)
+    {
+        std::advance(_end, prefix_len);
+    }
+
+    iterator begin() const { return _begin; }
+    iterator end() const { return _end; }
+
+    struct less_compare_with_prefix {
+        typename PrefixTopLevel::compound prefix_type;
+
+        less_compare_with_prefix(const schema& s)
+            : prefix_type(PrefixTopLevel::get_compound_type(s))
+        { }
+
+        bool operator()(const prefix_view_on_full_compound& k1, const PrefixTopLevel& k2) const {
+            return lexicographical_tri_compare(
+                prefix_type->types().begin(), prefix_type->types().end(),
+                k1.begin(), k1.end(),
+                prefix_type->begin(k2), prefix_type->end(k2),
+                tri_compare) < 0;
+        }
+
+        bool operator()(const PrefixTopLevel& k1, const prefix_view_on_full_compound& k2) const {
+            return lexicographical_tri_compare(
+                prefix_type->types().begin(), prefix_type->types().end(),
+                prefix_type->begin(k1), prefix_type->end(k1),
+                k2.begin(), k2.end(),
+                tri_compare) < 0;
+        }
+    };
+};
+
+template <typename TopLevel>
+class prefix_view_on_prefix_compound {
+public:
+    using iterator = typename compound_type<allow_prefixes::yes>::iterator;
+private:
+    bytes_view _b;
+    unsigned _prefix_len;
+    iterator _begin;
+    iterator _end;
+public:
+    prefix_view_on_prefix_compound(const schema& s, bytes_view b, unsigned prefix_len)
+        : _b(b)
+        , _prefix_len(prefix_len)
+        , _begin(TopLevel::get_compound_type(s)->begin(_b))
+        , _end(_begin)
+    {
+        std::advance(_end, prefix_len);
+    }
+
+    iterator begin() const { return _begin; }
+    iterator end() const { return _end; }
+
+    struct less_compare_with_prefix {
+        typename TopLevel::compound prefix_type;
+
+        less_compare_with_prefix(const schema& s)
+            : prefix_type(TopLevel::get_compound_type(s))
+        { }
+
+        bool operator()(const prefix_view_on_prefix_compound& k1, const TopLevel& k2) const {
+            return lexicographical_tri_compare(
+                prefix_type->types().begin(), prefix_type->types().end(),
+                k1.begin(), k1.end(),
+                prefix_type->begin(k2), prefix_type->end(k2),
+                tri_compare) < 0;
+        }
+
+        bool operator()(const TopLevel& k1, const prefix_view_on_prefix_compound& k2) const {
+            return lexicographical_tri_compare(
+                prefix_type->types().begin(), prefix_type->types().end(),
+                prefix_type->begin(k1), prefix_type->end(k1),
+                k2.begin(), k2.end(),
+                tri_compare) < 0;
+        }
+    };
+};
+
+template <typename TopLevel, typename TopLevelView, typename PrefixTopLevel>
+class prefixable_full_compound : public compound_wrapper<TopLevel, TopLevelView> {
+    using base = compound_wrapper<TopLevel, TopLevelView>;
+protected:
+    prefixable_full_compound(bytes&& b) : base(std::move(b)) {}
+public:
+    using prefix_view_type = prefix_view_on_full_compound<TopLevel, PrefixTopLevel>;
+
+    bool is_prefixed_by(const schema& s, const PrefixTopLevel& prefix) const {
+        const auto& t = base::get_compound_type(s);
+        const auto& prefix_type = PrefixTopLevel::get_compound_type(s);
+        return ::is_prefixed_by(t->types().begin(),
+            t->begin(*this), t->end(*this),
+            prefix_type->begin(prefix), prefix_type->end(prefix),
+            ::equal);
+    }
+
+    struct less_compare_with_prefix {
+        typename PrefixTopLevel::compound prefix_type;
+        typename TopLevel::compound full_type;
+
+        less_compare_with_prefix(const schema& s)
+            : prefix_type(PrefixTopLevel::get_compound_type(s))
+            , full_type(TopLevel::get_compound_type(s))
+        { }
+
+        bool operator()(const TopLevel& k1, const PrefixTopLevel& k2) const {
+            return lexicographical_tri_compare(
+                prefix_type->types().begin(), prefix_type->types().end(),
+                full_type->begin(k1), full_type->end(k1),
+                prefix_type->begin(k2), prefix_type->end(k2),
+                tri_compare) < 0;
+        }
+
+        bool operator()(const PrefixTopLevel& k1, const TopLevel& k2) const {
+            return lexicographical_tri_compare(
+                prefix_type->types().begin(), prefix_type->types().end(),
+                prefix_type->begin(k1), prefix_type->end(k1),
+                full_type->begin(k2), full_type->end(k2),
+                tri_compare) < 0;
+        }
+    };
+
+    // In prefix equality two sequences are equal if any of them is a prefix
+    // of the other. Otherwise lexicographical ordering is applied.
+    // Note: full compounds sorted according to lexicographical ordering are also
+    // sorted according to prefix equality ordering.
+    struct prefix_equality_less_compare {
+        typename PrefixTopLevel::compound prefix_type;
+        typename TopLevel::compound full_type;
+
+        prefix_equality_less_compare(const schema& s)
+            : prefix_type(PrefixTopLevel::get_compound_type(s))
+            , full_type(TopLevel::get_compound_type(s))
+        { }
+
+        bool operator()(const TopLevel& k1, const PrefixTopLevel& k2) const {
+            return prefix_equality_tri_compare(prefix_type->types().begin(),
+                full_type->begin(k1), full_type->end(k1),
+                prefix_type->begin(k2), prefix_type->end(k2),
+                tri_compare) < 0;
+        }
+
+        bool operator()(const PrefixTopLevel& k1, const TopLevel& k2) const {
+            return prefix_equality_tri_compare(prefix_type->types().begin(),
+                prefix_type->begin(k1), prefix_type->end(k1),
+                full_type->begin(k2), full_type->end(k2),
+                tri_compare) < 0;
+        }
+    };
+
+    prefix_view_type prefix_view(const schema& s, unsigned prefix_len) const {
+        return { s, this->representation(), prefix_len };
+    }
+};
+
+template <typename TopLevel, typename FullTopLevel>
+class prefix_compound_view_wrapper : public compound_view_wrapper<TopLevel> {
+    using base = compound_view_wrapper<TopLevel>;
+protected:
+    prefix_compound_view_wrapper(managed_bytes_view v)
+        : compound_view_wrapper<TopLevel>(v)
+    { }
+
+public:
+    bool is_full(const schema& s) const {
+        return TopLevel::get_compound_type(s)->is_full(base::_bytes);
+    }
+};
+
+template <typename TopLevel, typename TopLevelView, typename FullTopLevel>
+class prefix_compound_wrapper : public compound_wrapper<TopLevel, TopLevelView> {
+    using base = compound_wrapper<TopLevel, TopLevelView>;
+protected:
+    prefix_compound_wrapper(managed_bytes&& b) : base(std::move(b)) {}
+public:
+    using prefix_view_type = prefix_view_on_prefix_compound<TopLevel>;
+
+    prefix_view_type prefix_view(const schema& s, unsigned prefix_len) const {
+        return { s, this->representation(), prefix_len };
+    }
+
+    bool is_full(const schema& s) const {
+        return TopLevel::get_compound_type(s)->is_full(base::_bytes);
+    }
+
+    // Can be called only if is_full()
+    FullTopLevel to_full(const schema& s) const {
+        return FullTopLevel::from_exploded(s, base::explode(s));
+    }
+
+    bool is_prefixed_by(const schema& s, const TopLevel& prefix) const {
+        const auto& t = base::get_compound_type(s);
+        return ::is_prefixed_by(t->types().begin(),
+            t->begin(*this), t->end(*this),
+            t->begin(prefix), t->end(prefix),
+            equal);
+    }
+
+    // In prefix equality two sequences are equal if any of them is a prefix
+    // of the other. Otherwise lexicographical ordering is applied.
+    // Note: full compounds sorted according to lexicographical ordering are also
+    // sorted according to prefix equality ordering.
+    struct prefix_equality_less_compare {
+        typename TopLevel::compound prefix_type;
+
+        prefix_equality_less_compare(const schema& s)
+            : prefix_type(TopLevel::get_compound_type(s))
+        { }
+
+        bool operator()(const TopLevel& k1, const TopLevel& k2) const {
+            return prefix_equality_tri_compare(prefix_type->types().begin(),
+                prefix_type->begin(k1.representation()), prefix_type->end(k1.representation()),
+                prefix_type->begin(k2.representation()), prefix_type->end(k2.representation()),
+                tri_compare) < 0;
+        }
+    };
+
+    // See prefix_equality_less_compare.
+    struct prefix_equal_tri_compare {
+        typename TopLevel::compound prefix_type;
+
+        prefix_equal_tri_compare(const schema& s)
+            : prefix_type(TopLevel::get_compound_type(s))
+        { }
+
+        std::strong_ordering operator()(const TopLevel& k1, const TopLevel& k2) const {
+            return prefix_equality_tri_compare(prefix_type->types().begin(),
+                prefix_type->begin(k1.representation()), prefix_type->end(k1.representation()),
+                prefix_type->begin(k2.representation()), prefix_type->end(k2.representation()),
+                tri_compare);
+        }
+    };
+};
+
+class partition_key_view : public compound_view_wrapper<partition_key_view> {
+public:
+    using c_type = compound_type<allow_prefixes::no>;
+private:
+    partition_key_view(managed_bytes_view v)
+        : compound_view_wrapper<partition_key_view>(v)
+    { }
+public:
+    using compound = lw_shared_ptr<c_type>;
+
+    static partition_key_view from_bytes(managed_bytes_view v) {
+        return { v };
+    }
+
+    static const compound& get_compound_type(const schema& s) {
+        return s.partition_key_type();
+    }
+
+    // Returns key's representation which is compatible with Origin.
+    // The result is valid as long as the schema is live.
+    const legacy_compound_view<c_type> legacy_form(const schema& s) const;
+
+    // A trichotomic comparator for ordering compatible with Origin.
+    std::strong_ordering legacy_tri_compare(const schema& s, partition_key_view o) const;
+
+    // Checks if keys are equal in a way which is compatible with Origin.
+    bool legacy_equal(const schema& s, partition_key_view o) const {
+        return legacy_tri_compare(s, o) == 0;
+    }
+
+    void validate(const schema& s) const {
+        return s.partition_key_type()->validate(representation());
+    }
+
+    // A trichotomic comparator which orders keys according to their ordering on the ring.
+    std::strong_ordering ring_order_tri_compare(const schema& s, partition_key_view o) const;
+};
+
+template <>
+struct fmt::formatter<partition_key_view> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const partition_key_view& pk, FormatContext& ctx) const {
+        return with_linearized(pk.representation(), [&] (bytes_view v) {
+            return fmt::format_to(ctx.out(), "pk{{{}}}", fmt_hex(v));
+        });
+    }
+};
+
+class partition_key : public compound_wrapper<partition_key, partition_key_view> {
+    explicit partition_key(managed_bytes&& b)
+        : compound_wrapper<partition_key, partition_key_view>(std::move(b))
+    { }
+public:
+    using c_type = compound_type<allow_prefixes::no>;
+
+    template<typename RangeOfSerializedComponents>
+    static partition_key from_range(RangeOfSerializedComponents&& v) {
+        return partition_key(managed_bytes(c_type::serialize_value(std::forward<RangeOfSerializedComponents>(v))));
+    }
+
+    /*!
+     * \brief create a partition_key from a nodetool style string
+     * takes a nodetool style string representation of a partition key and returns a partition_key.
+     * With composite keys, columns are concatenate using ':'.
+     * For example if a composite key is has two columns (col1, col2) to get the partition key that
+     * have col1=val1 and col2=val2 use the string 'val1:val2'
+     */
+    static partition_key from_nodetool_style_string(const schema_ptr s, const sstring& key);
+
+    partition_key(std::vector<bytes> v)
+        : compound_wrapper(managed_bytes(c_type::serialize_value(std::move(v))))
+    { }
+    partition_key(std::initializer_list<bytes> v) : partition_key(std::vector(v)) {}    
+
+    partition_key(partition_key&& v) = default;
+    partition_key(const partition_key& v) = default;
+    partition_key(partition_key& v) = default;
+    partition_key& operator=(const partition_key&) = default;
+    partition_key& operator=(partition_key&) = default;
+    partition_key& operator=(partition_key&&) = default;
+
+    partition_key(partition_key_view key)
+        : partition_key(managed_bytes(key.representation()))
+    { }
+
+    using compound = lw_shared_ptr<c_type>;
+
+    static partition_key from_bytes(managed_bytes_view b) {
+        return partition_key(managed_bytes(b));
+    }
+    static partition_key from_bytes(managed_bytes&& b) {
+        return partition_key(std::move(b));
+    }
+    static partition_key from_bytes(bytes_view b) {
+        return partition_key(managed_bytes(b));
+    }
+
+    static const compound& get_compound_type(const schema& s) {
+        return s.partition_key_type();
+    }
+
+    // Returns key's representation which is compatible with Origin.
+    // The result is valid as long as the schema is live.
+    const legacy_compound_view<c_type> legacy_form(const schema& s) const {
+        return view().legacy_form(s);
+    }
+
+    // A trichotomic comparator for ordering compatible with Origin.
+    std::strong_ordering legacy_tri_compare(const schema& s, const partition_key& o) const {
+        return view().legacy_tri_compare(s, o);
+    }
+
+    // Checks if keys are equal in a way which is compatible with Origin.
+    bool legacy_equal(const schema& s, const partition_key& o) const {
+        return view().legacy_equal(s, o);
+    }
+
+    void validate(const schema& s) const {
+        return s.partition_key_type()->validate(representation());
+    }
+};
+
+template <>
+struct fmt::formatter<partition_key> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const partition_key& pk, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "pk{{{}}}", managed_bytes_view(pk.representation()));
+    }
+};
+
+namespace detail {
+
+template <typename WithSchemaWrapper, typename FormatContext>
+auto format_pk(const WithSchemaWrapper& pk, FormatContext& ctx) {
+    const auto& [schema, key] = pk;
+    const auto& types = key.get_compound_type(schema)->types();
+    const auto components = key.components(schema);
+    return fmt::format_to(
+            ctx.out(), "{}",
+            fmt::join(boost::make_iterator_range(
+                          boost::make_zip_iterator(boost::make_tuple(types.begin(),
+                                                                     components.begin())),
+                          boost::make_zip_iterator(boost::make_tuple(types.end(),
+                                                                     components.end()))) |
+                      boost::adaptors::transformed([](const auto& type_and_component) {
+                          auto& [type, component] = type_and_component;
+                          auto key = type->to_string(to_bytes(component));
+                          if (!utils::utf8::validate((const uint8_t *) key.data(), key.size())) {
+                              return sstring("<non-utf8-key>");
+                          }
+                          return key;
+                      }),
+                      ":"));
+
+    }
+} // namespace detail
+
+template <>
+struct fmt::formatter<partition_key::with_schema_wrapper> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const partition_key::with_schema_wrapper& pk, FormatContext& ctx) const {
+        return ::detail::format_pk(pk, ctx);
+    }
+};
+
+class exploded_clustering_prefix {
+    std::vector<bytes> _v;
+public:
+    exploded_clustering_prefix(std::vector<bytes>&& v) : _v(std::move(v)) {}
+    exploded_clustering_prefix() {}
+    size_t size() const {
+        return _v.size();
+    }
+    auto const& components() const {
+        return _v;
+    }
+    explicit operator bool() const {
+        return !_v.empty();
+    }
+    bool is_full(const schema& s) const {
+        return _v.size() == s.clustering_key_size();
+    }
+    friend std::ostream& operator<<(std::ostream& os, const exploded_clustering_prefix& ecp);
+};
+
+class clustering_key_prefix_view : public prefix_compound_view_wrapper<clustering_key_prefix_view, clustering_key> {
+    clustering_key_prefix_view(managed_bytes_view v)
+        : prefix_compound_view_wrapper<clustering_key_prefix_view, clustering_key>(v)
+    { }
+public:
+    static clustering_key_prefix_view from_bytes(const managed_bytes& v) {
+        return { v };
+    }
+    static clustering_key_prefix_view from_bytes(managed_bytes_view v) {
+        return { v };
+    }
+    static clustering_key_prefix_view from_bytes(bytes_view v) {
+        return { v };
+    }
+
+    using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
+
+    static const compound& get_compound_type(const schema& s) {
+        return s.clustering_key_prefix_type();
+    }
+
+    static clustering_key_prefix_view make_empty() {
+        return { bytes_view() };
+    }
+};
+
+class clustering_key_prefix : public prefix_compound_wrapper<clustering_key_prefix, clustering_key_prefix_view, clustering_key> {
+    explicit clustering_key_prefix(managed_bytes&& b)
+            : prefix_compound_wrapper<clustering_key_prefix, clustering_key_prefix_view, clustering_key>(std::move(b))
+    { }
+public:
+    template<typename RangeOfSerializedComponents>
+    static clustering_key_prefix from_range(RangeOfSerializedComponents&& v) {
+        return clustering_key_prefix(compound::element_type::serialize_value(std::forward<RangeOfSerializedComponents>(v)));
+    }
+
+    clustering_key_prefix(std::vector<bytes> v)
+        : prefix_compound_wrapper(compound::element_type::serialize_value(std::move(v)))
+    { }
+    clustering_key_prefix(std::vector<managed_bytes> v)
+        : prefix_compound_wrapper(compound::element_type::serialize_value(std::move(v)))
+    { }
+    clustering_key_prefix(std::initializer_list<bytes> v) : clustering_key_prefix(std::vector(v)) {}
+
+    clustering_key_prefix(clustering_key_prefix&& v) = default;
+    clustering_key_prefix(const clustering_key_prefix& v) = default;
+    clustering_key_prefix(clustering_key_prefix& v) = default;
+    clustering_key_prefix& operator=(const clustering_key_prefix&) = default;
+    clustering_key_prefix& operator=(clustering_key_prefix&) = default;
+    clustering_key_prefix& operator=(clustering_key_prefix&&) = default;
+
+    clustering_key_prefix(clustering_key_prefix_view v)
+        : clustering_key_prefix(managed_bytes(v.representation()))
+    { }
+
+    using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
+
+    static clustering_key_prefix from_bytes(const managed_bytes& b) { return clustering_key_prefix(managed_bytes(b)); }
+    static clustering_key_prefix from_bytes(managed_bytes&& b) { return clustering_key_prefix(std::move(b)); }
+    static clustering_key_prefix from_bytes(managed_bytes_view b) { return clustering_key_prefix(managed_bytes(b)); }
+    static clustering_key_prefix from_bytes(bytes_view b) {
+        return clustering_key_prefix(managed_bytes(b));
+    }
+
+    static const compound& get_compound_type(const schema& s) {
+        return s.clustering_key_prefix_type();
+    }
+
+    static clustering_key_prefix from_clustering_prefix(const schema& s, const exploded_clustering_prefix& prefix) {
+        return from_exploded(s, prefix.components());
+    }
+
+    /* This function makes the passed clustering key full by filling its
+     * missing trailing components with empty values.
+     * This is used to represesent clustering keys of rows in compact tables that may be non-full.
+     * Returns whether a key wasn't full before the call.
+     */
+    static bool make_full(const schema& s, clustering_key_prefix& ck) {
+        if (!ck.is_full(s)) {
+            // TODO: avoid unnecessary copy here
+            auto full_ck_size = s.clustering_key_columns().size();
+            auto exploded = ck.explode(s);
+            exploded.resize(full_ck_size);
+            ck = clustering_key_prefix::from_exploded(std::move(exploded));
+            return true;
+        }
+        return false;
+    }
+};
+
+template <>
+struct fmt::formatter<clustering_key_prefix> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const clustering_key_prefix& ckp, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "ckp{{{}}}", managed_bytes_view(ckp.representation()));
+    }
+};
+
+template <>
+struct fmt::formatter<clustering_key_prefix::with_schema_wrapper> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const clustering_key_prefix::with_schema_wrapper& pk, FormatContext& ctx) const {
+        return ::detail::format_pk(pk, ctx);
+    }
+};
+
+template<>
+struct appending_hash<partition_key_view> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const partition_key_view& pk, const schema& s) const {
+        for (managed_bytes_view v : pk.components(s)) {
+            ::feed_hash(h, v);
+        }
+    }
+};
+
+template<>
+struct appending_hash<partition_key> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const partition_key& pk, const schema& s) const {
+        appending_hash<partition_key_view>()(h, pk.view(), s);
+    }
+};
+
+template<>
+struct appending_hash<clustering_key_prefix_view> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const clustering_key_prefix_view& ck, const schema& s) const {
+        for (managed_bytes_view v : ck.components(s)) {
+            ::feed_hash(h, v);
+        }
+    }
+};
+
+template<>
+struct appending_hash<clustering_key_prefix> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const clustering_key_prefix& ck, const schema& s) const {
+        appending_hash<clustering_key_prefix_view>()(h, ck.view(), s);
+    }
+};
+
+#include <list>
+#include <vector>
+#include <optional>
+#include <iosfwd>
+#include <boost/range/algorithm/copy.hpp>
+#include <boost/range/adaptor/sliced.hpp>
+#include <boost/range/adaptor/transformed.hpp>
+#include <compare>
+#include <fmt/format.h>
+
+template <typename Comparator, typename T>
+concept IntervalComparatorFor = requires (T a, T b, Comparator& cmp) {
+    { cmp(a, b) } -> std::same_as<std::strong_ordering>;
+};
+
+template <typename LessComparator, typename T>
+concept IntervalLessComparatorFor = requires (T a, T b, LessComparator& cmp) {
+    { cmp(a, b) } -> std::same_as<bool>;
+};
+
+inline
+bool
+require_ordering_and_on_equal_return(
+        std::strong_ordering input,
+        std::strong_ordering match_to_return_true,
+        bool return_if_equal) {
+    if (input == match_to_return_true) {
+        return true;
+    } else if (input == std::strong_ordering::equal) {
+        return return_if_equal;
+    } else {
+        return false;
+    }
+}
+
+template<typename T>
+class interval_bound {
+    T _value;
+    bool _inclusive;
+public:
+    interval_bound(T value, bool inclusive = true)
+              : _value(std::move(value))
+              , _inclusive(inclusive)
+    { }
+    const T& value() const & { return _value; }
+    T&& value() && { return std::move(_value); }
+    bool is_inclusive() const { return _inclusive; }
+    bool operator==(const interval_bound& other) const {
+        return (_value == other._value) && (_inclusive == other._inclusive);
+    }
+    bool equal(const interval_bound& other, IntervalComparatorFor<T> auto&& cmp) const {
+        return _inclusive == other._inclusive && cmp(_value, other._value) == 0;
+    }
+};
+
+template<typename T>
+class nonwrapping_interval;
+
+template <typename T>
+using interval = nonwrapping_interval<T>;
+
+// An interval which can have inclusive, exclusive or open-ended bounds on each end.
+// The end bound can be smaller than the start bound.
+template<typename T>
+class wrapping_interval {
+    template <typename U>
+    using optional = std::optional<U>;
+public:
+    using bound = interval_bound<T>;
+
+    template <typename Transformer>
+    using transformed_type = typename std::remove_cv_t<std::remove_reference_t<std::result_of_t<Transformer(T)>>>;
+private:
+    optional<bound> _start;
+    optional<bound> _end;
+    bool _singular;
+public:
+    wrapping_interval(optional<bound> start, optional<bound> end, bool singular = false)
+        : _start(std::move(start))
+        , _singular(singular) {
+        if (!_singular) {
+            _end = std::move(end);
+        }
+    }
+    wrapping_interval(T value)
+        : _start(bound(std::move(value), true))
+        , _end()
+        , _singular(true)
+    { }
+    wrapping_interval() : wrapping_interval({}, {}) { }
+private:
+    // Bound wrappers for compile-time dispatch and safety.
+    struct start_bound_ref { const optional<bound>& b; };
+    struct end_bound_ref { const optional<bound>& b; };
+
+    start_bound_ref start_bound() const { return { start() }; }
+    end_bound_ref end_bound() const { return { end() }; }
+
+    static bool greater_than_or_equal(end_bound_ref end, start_bound_ref start, IntervalComparatorFor<T> auto&& cmp) {
+        return !end.b || !start.b || require_ordering_and_on_equal_return(
+                cmp(end.b->value(), start.b->value()),
+                std::strong_ordering::greater,
+                end.b->is_inclusive() && start.b->is_inclusive());
+    }
+
+    static bool less_than(end_bound_ref end, start_bound_ref start, IntervalComparatorFor<T> auto&& cmp) {
+        return !greater_than_or_equal(end, start, cmp);
+    }
+
+    static bool less_than_or_equal(start_bound_ref first, start_bound_ref second, IntervalComparatorFor<T> auto&& cmp) {
+        return !first.b || (second.b && require_ordering_and_on_equal_return(
+                cmp(first.b->value(), second.b->value()),
+                std::strong_ordering::less,
+                first.b->is_inclusive() || !second.b->is_inclusive()));
+    }
+
+    static bool less_than(start_bound_ref first, start_bound_ref second, IntervalComparatorFor<T> auto&& cmp) {
+        return second.b && (!first.b || require_ordering_and_on_equal_return(
+                cmp(first.b->value(), second.b->value()),
+                std::strong_ordering::less,
+                first.b->is_inclusive() && !second.b->is_inclusive()));
+    }
+
+    static bool greater_than_or_equal(end_bound_ref first, end_bound_ref second, IntervalComparatorFor<T> auto&& cmp) {
+        return !first.b || (second.b && require_ordering_and_on_equal_return(
+                cmp(first.b->value(), second.b->value()),
+                std::strong_ordering::greater,
+                first.b->is_inclusive() || !second.b->is_inclusive()));
+    }
+public:
+    // the point is before the interval (works only for non wrapped intervals)
+    // Comparator must define a total ordering on T.
+    bool before(const T& point, IntervalComparatorFor<T> auto&& cmp) const {
+        assert(!is_wrap_around(cmp));
+        if (!start()) {
+            return false; //open start, no points before
+        }
+        auto r = cmp(point, start()->value());
+        if (r < 0) {
+            return true;
+        }
+        if (!start()->is_inclusive() && r == 0) {
+            return true;
+        }
+        return false;
+    }
+    // the point is after the interval (works only for non wrapped intervals)
+    // Comparator must define a total ordering on T.
+    bool after(const T& point, IntervalComparatorFor<T> auto&& cmp) const {
+        assert(!is_wrap_around(cmp));
+        if (!end()) {
+            return false; //open end, no points after
+        }
+        auto r = cmp(end()->value(), point);
+        if (r < 0) {
+            return true;
+        }
+        if (!end()->is_inclusive() && r == 0) {
+            return true;
+        }
+        return false;
+    }
+    // check if two intervals overlap.
+    // Comparator must define a total ordering on T.
+    bool overlaps(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
+        bool this_wraps = is_wrap_around(cmp);
+        bool other_wraps = other.is_wrap_around(cmp);
+
+        if (this_wraps && other_wraps) {
+            return true;
+        } else if (this_wraps) {
+            auto unwrapped = unwrap();
+            return other.overlaps(unwrapped.first, cmp) || other.overlaps(unwrapped.second, cmp);
+        } else if (other_wraps) {
+            auto unwrapped = other.unwrap();
+            return overlaps(unwrapped.first, cmp) || overlaps(unwrapped.second, cmp);
+        }
+
+        // No interval should reach this point as wrap around.
+        assert(!this_wraps);
+        assert(!other_wraps);
+
+        // if both this and other have an open start, the two intervals will overlap.
+        if (!start() && !other.start()) {
+            return true;
+        }
+
+        return greater_than_or_equal(end_bound(), other.start_bound(), cmp)
+            && greater_than_or_equal(other.end_bound(), start_bound(), cmp);
+    }
+    static wrapping_interval make(bound start, bound end) {
+        return wrapping_interval({std::move(start)}, {std::move(end)});
+    }
+    static wrapping_interval make_open_ended_both_sides() {
+        return {{}, {}};
+    }
+    static wrapping_interval make_singular(T value) {
+        return {std::move(value)};
+    }
+    static wrapping_interval make_starting_with(bound b) {
+        return {{std::move(b)}, {}};
+    }
+    static wrapping_interval make_ending_with(bound b) {
+        return {{}, {std::move(b)}};
+    }
+    bool is_singular() const {
+        return _singular;
+    }
+    bool is_full() const {
+        return !_start && !_end;
+    }
+    void reverse() {
+        if (!_singular) {
+            std::swap(_start, _end);
+        }
+    }
+    const optional<bound>& start() const {
+        return _start;
+    }
+    const optional<bound>& end() const {
+        return _singular ? _start : _end;
+    }
+    // Range is a wrap around if end value is smaller than the start value
+    // or they're equal and at least one bound is not inclusive.
+    // Comparator must define a total ordering on T.
+    bool is_wrap_around(IntervalComparatorFor<T> auto&& cmp) const {
+        if (_end && _start) {
+            auto r = cmp(end()->value(), start()->value());
+            return r < 0
+                   || (r == 0 && (!start()->is_inclusive() || !end()->is_inclusive()));
+        } else {
+            return false; // open ended interval or singular interval don't wrap around
+        }
+    }
+    // Converts a wrap-around interval to two non-wrap-around intervals.
+    // The returned intervals are not overlapping and ordered.
+    // Call only when is_wrap_around().
+    std::pair<wrapping_interval, wrapping_interval> unwrap() const {
+        return {
+            { {}, end() },
+            { start(), {} }
+        };
+    }
+    // the point is inside the interval
+    // Comparator must define a total ordering on T.
+    bool contains(const T& point, IntervalComparatorFor<T> auto&& cmp) const {
+        if (is_wrap_around(cmp)) {
+            auto unwrapped = unwrap();
+            return unwrapped.first.contains(point, cmp)
+                   || unwrapped.second.contains(point, cmp);
+        } else {
+            return !before(point, cmp) && !after(point, cmp);
+        }
+    }
+    // Returns true iff all values contained by other are also contained by this.
+    // Comparator must define a total ordering on T.
+    bool contains(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
+        bool this_wraps = is_wrap_around(cmp);
+        bool other_wraps = other.is_wrap_around(cmp);
+
+        if (this_wraps && other_wraps) {
+            return require_ordering_and_on_equal_return(
+                            cmp(start()->value(), other.start()->value()),
+                            std::strong_ordering::less,
+                            start()->is_inclusive() || !other.start()->is_inclusive())
+                && require_ordering_and_on_equal_return(
+                            cmp(end()->value(), other.end()->value()),
+                            std::strong_ordering::greater,
+                            end()->is_inclusive() || !other.end()->is_inclusive());
+        }
+
+        if (!this_wraps && !other_wraps) {
+            return less_than_or_equal(start_bound(), other.start_bound(), cmp)
+                    && greater_than_or_equal(end_bound(), other.end_bound(), cmp);
+        }
+
+        if (other_wraps) { // && !this_wraps
+            return !start() && !end();
+        }
+
+        // !other_wraps && this_wraps
+        return (other.start() && require_ordering_and_on_equal_return(
+                                    cmp(start()->value(), other.start()->value()),
+                                    std::strong_ordering::less,
+                                    start()->is_inclusive() || !other.start()->is_inclusive()))
+                || (other.end() && (require_ordering_and_on_equal_return(
+                                        cmp(end()->value(), other.end()->value()),
+                                        std::strong_ordering::greater,
+                                        end()->is_inclusive() || !other.end()->is_inclusive())));
+    }
+    // Returns intervals which cover all values covered by this interval but not covered by the other interval.
+    // Ranges are not overlapping and ordered.
+    // Comparator must define a total ordering on T.
+    std::vector<wrapping_interval> subtract(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
+        std::vector<wrapping_interval> result;
+        std::list<wrapping_interval> left;
+        std::list<wrapping_interval> right;
+
+        if (is_wrap_around(cmp)) {
+            auto u = unwrap();
+            left.emplace_back(std::move(u.first));
+            left.emplace_back(std::move(u.second));
+        } else {
+            left.push_back(*this);
+        }
+
+        if (other.is_wrap_around(cmp)) {
+            auto u = other.unwrap();
+            right.emplace_back(std::move(u.first));
+            right.emplace_back(std::move(u.second));
+        } else {
+            right.push_back(other);
+        }
+
+        // left and right contain now non-overlapping, ordered intervals
+
+        while (!left.empty() && !right.empty()) {
+            auto& r1 = left.front();
+            auto& r2 = right.front();
+            if (less_than(r2.end_bound(), r1.start_bound(), cmp)) {
+                right.pop_front();
+            } else if (less_than(r1.end_bound(), r2.start_bound(), cmp)) {
+                result.emplace_back(std::move(r1));
+                left.pop_front();
+            } else { // Overlap
+                auto tmp = std::move(r1);
+                left.pop_front();
+                if (!greater_than_or_equal(r2.end_bound(), tmp.end_bound(), cmp)) {
+                    left.push_front({bound(r2.end()->value(), !r2.end()->is_inclusive()), tmp.end()});
+                }
+                if (!less_than_or_equal(r2.start_bound(), tmp.start_bound(), cmp)) {
+                    left.push_front({tmp.start(), bound(r2.start()->value(), !r2.start()->is_inclusive())});
+                }
+            }
+        }
+
+        boost::copy(left, std::back_inserter(result));
+
+        // TODO: Merge adjacent intervals (optimization)
+        return result;
+    }
+    // split interval in two around a split_point. split_point has to be inside the interval
+    // split_point will belong to first interval
+    // Comparator must define a total ordering on T.
+    std::pair<wrapping_interval<T>, wrapping_interval<T>> split(const T& split_point, IntervalComparatorFor<T> auto&& cmp) const {
+        assert(contains(split_point, std::forward<decltype(cmp)>(cmp)));
+        wrapping_interval left(start(), bound(split_point));
+        wrapping_interval right(bound(split_point, false), end());
+        return std::make_pair(std::move(left), std::move(right));
+    }
+    // Create a sub-interval including values greater than the split_point. Returns std::nullopt if
+    // split_point is after the end (but not included in the interval, in case of wraparound intervals)
+    // Comparator must define a total ordering on T.
+    std::optional<wrapping_interval<T>> split_after(const T& split_point, IntervalComparatorFor<T> auto&& cmp) const {
+        if (contains(split_point, std::forward<decltype(cmp)>(cmp))
+                && (!end() || cmp(split_point, end()->value()) != 0)) {
+            return wrapping_interval(bound(split_point, false), end());
+        } else if (end() && cmp(split_point, end()->value()) >= 0) {
+            // whether to return std::nullopt or the full interval is not
+            // well-defined for wraparound intervals; we return nullopt
+            // if split_point is after the end.
+            return std::nullopt;
+        } else {
+            return *this;
+        }
+    }
+    template<typename Bound, typename Transformer, typename U = transformed_type<Transformer>>
+    static std::optional<typename wrapping_interval<U>::bound> transform_bound(Bound&& b, Transformer&& transformer) {
+        if (b) {
+            return { { transformer(std::forward<Bound>(b).value().value()), b->is_inclusive() } };
+        };
+        return {};
+    }
+    // Transforms this interval into a new interval of a different value type
+    // Supplied transformer should transform value of type T (the old type) into value of type U (the new type).
+    template<typename Transformer, typename U = transformed_type<Transformer>>
+    wrapping_interval<U> transform(Transformer&& transformer) && {
+        return wrapping_interval<U>(transform_bound(std::move(_start), transformer), transform_bound(std::move(_end), transformer), _singular);
+    }
+    template<typename Transformer, typename U = transformed_type<Transformer>>
+    wrapping_interval<U> transform(Transformer&& transformer) const & {
+        return wrapping_interval<U>(transform_bound(_start, transformer), transform_bound(_end, transformer), _singular);
+    }
+    bool equal(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
+        return bool(_start) == bool(other._start)
+               && bool(_end) == bool(other._end)
+               && (!_start || _start->equal(*other._start, cmp))
+               && (!_end || _end->equal(*other._end, cmp))
+               && _singular == other._singular;
+    }
+    bool operator==(const wrapping_interval& other) const {
+        return (_start == other._start) && (_end == other._end) && (_singular == other._singular);
+    }
+
+    template<typename U>
+    friend std::ostream& operator<<(std::ostream& out, const wrapping_interval<U>& r);
+private:
+    friend class nonwrapping_interval<T>;
+};
+
+template<typename U>
+std::ostream& operator<<(std::ostream& out, const wrapping_interval<U>& r) {
+    if (r.is_singular()) {
+        fmt::print(out, "{{{}}}", r.start()->value());
+        return out;
+    }
+
+    if (!r.start()) {
+        out << "(-inf, ";
+    } else {
+        if (r.start()->is_inclusive()) {
+            out << "[";
+        } else {
+            out << "(";
+        }
+        fmt::print(out, "{},", r.start()->value());
+    }
+
+    if (!r.end()) {
+        out << "+inf)";
+    } else {
+        fmt::print(out, "{}", r.end()->value());
+        if (r.end()->is_inclusive()) {
+            out << "]";
+        } else {
+            out << ")";
+        }
+    }
+
+    return out;
+}
+
+// An interval which can have inclusive, exclusive or open-ended bounds on each end.
+// The end bound can never be smaller than the start bound.
+template<typename T>
+class nonwrapping_interval {
+    template <typename U>
+    using optional = std::optional<U>;
+public:
+    using bound = interval_bound<T>;
+
+    template <typename Transformer>
+    using transformed_type = typename wrapping_interval<T>::template transformed_type<Transformer>;
+private:
+    wrapping_interval<T> _interval;
+public:
+    nonwrapping_interval(T value)
+        : _interval(std::move(value))
+    { }
+    nonwrapping_interval() : nonwrapping_interval({}, {}) { }
+    // Can only be called if start <= end. IDL ctor.
+    nonwrapping_interval(optional<bound> start, optional<bound> end, bool singular = false)
+        : _interval(std::move(start), std::move(end), singular)
+    { }
+    // Can only be called if !r.is_wrap_around().
+    explicit nonwrapping_interval(wrapping_interval<T>&& r)
+        : _interval(std::move(r))
+    { }
+    // Can only be called if !r.is_wrap_around().
+    explicit nonwrapping_interval(const wrapping_interval<T>& r)
+        : _interval(r)
+    { }
+    operator wrapping_interval<T>() const & {
+        return _interval;
+    }
+    operator wrapping_interval<T>() && {
+        return std::move(_interval);
+    }
+
+    // the point is before the interval.
+    // Comparator must define a total ordering on T.
+    bool before(const T& point, IntervalComparatorFor<T> auto&& cmp) const {
+        return _interval.before(point, std::forward<decltype(cmp)>(cmp));
+    }
+    // the point is after the interval.
+    // Comparator must define a total ordering on T.
+    bool after(const T& point, IntervalComparatorFor<T> auto&& cmp) const {
+        return _interval.after(point, std::forward<decltype(cmp)>(cmp));
+    }
+    // check if two intervals overlap.
+    // Comparator must define a total ordering on T.
+    bool overlaps(const nonwrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
+        // if both this and other have an open start, the two intervals will overlap.
+        if (!start() && !other.start()) {
+            return true;
+        }
+
+        return wrapping_interval<T>::greater_than_or_equal(_interval.end_bound(), other._interval.start_bound(), cmp)
+            && wrapping_interval<T>::greater_than_or_equal(other._interval.end_bound(), _interval.start_bound(), cmp);
+    }
+    static nonwrapping_interval make(bound start, bound end) {
+        return nonwrapping_interval({std::move(start)}, {std::move(end)});
+    }
+    static nonwrapping_interval make_open_ended_both_sides() {
+        return {{}, {}};
+    }
+    static nonwrapping_interval make_singular(T value) {
+        return {std::move(value)};
+    }
+    static nonwrapping_interval make_starting_with(bound b) {
+        return {{std::move(b)}, {}};
+    }
+    static nonwrapping_interval make_ending_with(bound b) {
+        return {{}, {std::move(b)}};
+    }
+    bool is_singular() const {
+        return _interval.is_singular();
+    }
+    bool is_full() const {
+        return _interval.is_full();
+    }
+    const optional<bound>& start() const {
+        return _interval.start();
+    }
+    const optional<bound>& end() const {
+        return _interval.end();
+    }
+    // the point is inside the interval
+    // Comparator must define a total ordering on T.
+    bool contains(const T& point, IntervalComparatorFor<T> auto&& cmp) const {
+        return !before(point, cmp) && !after(point, cmp);
+    }
+    // Returns true iff all values contained by other are also contained by this.
+    // Comparator must define a total ordering on T.
+    bool contains(const nonwrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
+        return wrapping_interval<T>::less_than_or_equal(_interval.start_bound(), other._interval.start_bound(), cmp)
+                && wrapping_interval<T>::greater_than_or_equal(_interval.end_bound(), other._interval.end_bound(), cmp);
+    }
+    // Returns intervals which cover all values covered by this interval but not covered by the other interval.
+    // Ranges are not overlapping and ordered.
+    // Comparator must define a total ordering on T.
+    std::vector<nonwrapping_interval> subtract(const nonwrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
+        auto subtracted = _interval.subtract(other._interval, std::forward<decltype(cmp)>(cmp));
+        return boost::copy_range<std::vector<nonwrapping_interval>>(subtracted | boost::adaptors::transformed([](auto&& r) {
+            return nonwrapping_interval(std::move(r));
+        }));
+    }
+    // split interval in two around a split_point. split_point has to be inside the interval
+    // split_point will belong to first interval
+    // Comparator must define a total ordering on T.
+    std::pair<nonwrapping_interval<T>, nonwrapping_interval<T>> split(const T& split_point, IntervalComparatorFor<T> auto&& cmp) const {
+        assert(contains(split_point, std::forward<decltype(cmp)>(cmp)));
+        nonwrapping_interval left(start(), bound(split_point));
+        nonwrapping_interval right(bound(split_point, false), end());
+        return std::make_pair(std::move(left), std::move(right));
+    }
+    // Create a sub-interval including values greater than the split_point. If split_point is after
+    // the end, returns std::nullopt.
+    std::optional<nonwrapping_interval> split_after(const T& split_point, IntervalComparatorFor<T> auto&& cmp) const {
+        if (end() && cmp(split_point, end()->value()) >= 0) {
+            return std::nullopt;
+        } else if (start() && cmp(split_point, start()->value()) < 0) {
+            return *this;
+        } else {
+            return nonwrapping_interval(interval_bound<T>(split_point, false), end());
+        }
+    }
+    // Creates a new sub-interval which is the intersection of this interval and an interval starting with "start".
+    // If there is no overlap, returns std::nullopt.
+    std::optional<nonwrapping_interval> trim_front(std::optional<bound>&& start, IntervalComparatorFor<T> auto&& cmp) const {
+        return intersection(nonwrapping_interval(std::move(start), {}), cmp);
+    }
+    // Transforms this interval into a new interval of a different value type
+    // Supplied transformer should transform value of type T (the old type) into value of type U (the new type).
+    template<typename Transformer, typename U = transformed_type<Transformer>>
+    nonwrapping_interval<U> transform(Transformer&& transformer) && {
+        return nonwrapping_interval<U>(std::move(_interval).transform(std::forward<Transformer>(transformer)));
+    }
+    template<typename Transformer, typename U = transformed_type<Transformer>>
+    nonwrapping_interval<U> transform(Transformer&& transformer) const & {
+        return nonwrapping_interval<U>(_interval.transform(std::forward<Transformer>(transformer)));
+    }
+    bool equal(const nonwrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
+        return _interval.equal(other._interval, std::forward<decltype(cmp)>(cmp));
+    }
+    bool operator==(const nonwrapping_interval& other) const {
+        return _interval == other._interval;
+    }
+    // Takes a vector of possibly overlapping intervals and returns a vector containing
+    // a set of non-overlapping intervals covering the same values.
+    template<IntervalComparatorFor<T> Comparator, typename IntervalVec>
+    requires requires (IntervalVec vec) {
+        { vec.begin() } -> std::random_access_iterator;
+        { vec.end() } -> std::random_access_iterator;
+        { vec.reserve(1) };
+        { vec.front() } -> std::same_as<nonwrapping_interval&>;
+    }
+    static IntervalVec deoverlap(IntervalVec intervals, Comparator&& cmp) {
+        auto size = intervals.size();
+        if (size <= 1) {
+            return intervals;
+        }
+
+        std::sort(intervals.begin(), intervals.end(), [&](auto&& r1, auto&& r2) {
+            return wrapping_interval<T>::less_than(r1._interval.start_bound(), r2._interval.start_bound(), cmp);
+        });
+
+        IntervalVec deoverlapped_intervals;
+        deoverlapped_intervals.reserve(size);
+
+        auto&& current = intervals[0];
+        for (auto&& r : intervals | boost::adaptors::sliced(1, intervals.size())) {
+            bool includes_end = wrapping_interval<T>::greater_than_or_equal(r._interval.end_bound(), current._interval.start_bound(), cmp)
+                                && wrapping_interval<T>::greater_than_or_equal(current._interval.end_bound(), r._interval.end_bound(), cmp);
+            if (includes_end) {
+                continue; // last.start <= r.start <= r.end <= last.end
+            }
+            bool includes_start = wrapping_interval<T>::greater_than_or_equal(current._interval.end_bound(), r._interval.start_bound(), cmp);
+            if (includes_start) {
+                current = nonwrapping_interval(std::move(current.start()), std::move(r.end()));
+            } else {
+                deoverlapped_intervals.emplace_back(std::move(current));
+                current = std::move(r);
+            }
+        }
+
+        deoverlapped_intervals.emplace_back(std::move(current));
+        return deoverlapped_intervals;
+    }
+
+private:
+    // These private functions optimize the case where a sequence supports the
+    // lower and upper bound operations more efficiently, as is the case with
+    // some boost containers.
+    struct std_ {};
+    struct built_in_ : std_ {};
+
+    template<typename Range, IntervalLessComparatorFor<T> LessComparator,
+             typename = decltype(std::declval<Range>().lower_bound(std::declval<T>(), std::declval<LessComparator>()))>
+    typename std::remove_reference<Range>::type::const_iterator do_lower_bound(const T& value, Range&& r, LessComparator&& cmp, built_in_) const {
+        return r.lower_bound(value, std::forward<LessComparator>(cmp));
+    }
+
+    template<typename Range, IntervalLessComparatorFor<T> LessComparator,
+             typename = decltype(std::declval<Range>().upper_bound(std::declval<T>(), std::declval<LessComparator>()))>
+    typename std::remove_reference<Range>::type::const_iterator do_upper_bound(const T& value, Range&& r, LessComparator&& cmp, built_in_) const {
+        return r.upper_bound(value, std::forward<LessComparator>(cmp));
+    }
+
+    template<typename Range, IntervalLessComparatorFor<T> LessComparator>
+    typename std::remove_reference<Range>::type::const_iterator do_lower_bound(const T& value, Range&& r, LessComparator&& cmp, std_) const {
+        return std::lower_bound(r.begin(), r.end(), value, std::forward<LessComparator>(cmp));
+    }
+
+    template<typename Range, IntervalLessComparatorFor<T> LessComparator>
+    typename std::remove_reference<Range>::type::const_iterator do_upper_bound(const T& value, Range&& r, LessComparator&& cmp, std_) const {
+        return std::upper_bound(r.begin(), r.end(), value, std::forward<LessComparator>(cmp));
+    }
+public:
+    // Return the lower bound of the specified sequence according to these bounds.
+    template<typename Range, IntervalLessComparatorFor<T> LessComparator>
+    typename std::remove_reference<Range>::type::const_iterator lower_bound(Range&& r, LessComparator&& cmp) const {
+        return start()
+            ? (start()->is_inclusive()
+                ? do_lower_bound(start()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_())
+                : do_upper_bound(start()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_()))
+            : std::cbegin(r);
+    }
+    // Return the upper bound of the specified sequence according to these bounds.
+    template<typename Range, IntervalLessComparatorFor<T> LessComparator>
+    typename std::remove_reference<Range>::type::const_iterator upper_bound(Range&& r, LessComparator&& cmp) const {
+        return end()
+             ? (end()->is_inclusive()
+                ? do_upper_bound(end()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_())
+                : do_lower_bound(end()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_()))
+             : (is_singular()
+                ? do_upper_bound(start()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_())
+                : std::cend(r));
+    }
+    // Returns a subset of the range that is within these bounds.
+    template<typename Range, IntervalLessComparatorFor<T> LessComparator>
+    boost::iterator_range<typename std::remove_reference<Range>::type::const_iterator>
+    slice(Range&& range, LessComparator&& cmp) const {
+        return boost::make_iterator_range(lower_bound(range, cmp), upper_bound(range, cmp));
+    }
+
+    // Returns the intersection between this interval and other.
+    std::optional<nonwrapping_interval> intersection(const nonwrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
+        auto p = std::minmax(_interval, other._interval, [&cmp] (auto&& a, auto&& b) {
+            return wrapping_interval<T>::less_than(a.start_bound(), b.start_bound(), cmp);
+        });
+        if (wrapping_interval<T>::greater_than_or_equal(p.first.end_bound(), p.second.start_bound(), cmp)) {
+            auto end = std::min(p.first.end_bound(), p.second.end_bound(), [&cmp] (auto&& a, auto&& b) {
+                return !wrapping_interval<T>::greater_than_or_equal(a, b, cmp);
+            });
+            return nonwrapping_interval(p.second.start(), end.b);
+        }
+        return {};
+    }
+
+    template<typename U>
+    friend std::ostream& operator<<(std::ostream& out, const nonwrapping_interval<U>& r);
+};
+
+template<typename U>
+std::ostream& operator<<(std::ostream& out, const nonwrapping_interval<U>& r) {
+    return out << r._interval;
+}
+
+template<template<typename> typename T, typename U>
+concept Interval = std::is_same<T<U>, wrapping_interval<U>>::value || std::is_same<T<U>, nonwrapping_interval<U>>::value;
+
+// Allow using interval<T> in a hash table. The hash function 31 * left +
+// right is the same one used by Cassandra's AbstractBounds.hashCode().
+namespace std {
+
+template<typename T>
+struct hash<wrapping_interval<T>> {
+    using argument_type = wrapping_interval<T>;
+    using result_type = decltype(std::hash<T>()(std::declval<T>()));
+    result_type operator()(argument_type const& s) const {
+        auto hash = std::hash<T>();
+        auto left = s.start() ? hash(s.start()->value()) : 0;
+        auto right = s.end() ? hash(s.end()->value()) : 0;
+        return 31 * left + right;
+    }
+};
+
+template<typename T>
+struct hash<nonwrapping_interval<T>> {
+    using argument_type = nonwrapping_interval<T>;
+    using result_type = decltype(std::hash<T>()(std::declval<T>()));
+    result_type operator()(argument_type const& s) const {
+        return hash<wrapping_interval<T>>()(s);
+    }
+};
+
+}
+
+
+// range.hh is deprecated and should be replaced with interval.hh
+
+
+template <typename T>
+using range_bound = interval_bound<T>;
+
+template <typename T>
+using nonwrapping_range = interval<T>;
+
+template <typename T>
+using wrapping_range = wrapping_interval<T>;
+
+template <typename T>
+using range = wrapping_interval<T>;
+
+template <template<typename> typename T, typename U>
+concept Range = Interval<T, U>;
+
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/util/optimized_optional.hh>
+#include <memory>
+#include <random>
+#include <utility>
+#include <vector>
+#include <compare>
+#include <byteswap.h>
+#include "dht/token.hh"
+#include "dht/token-sharding.hh"
+#include "utils/maybe_yield.hh"
+
+namespace sstables {
+
+class key_view;
+class decorated_key_view;
+
+}
+
+namespace dht {
+
+//
+// Origin uses a complex class hierarchy where Token is an abstract class,
+// and various subclasses use different implementations (LongToken vs.
+// BigIntegerToken vs. StringToken), plus other variants to to signify the
+// the beginning of the token space etc.
+//
+// We'll fold all of that into the token class and push all of the variations
+// into its users.
+
+class decorated_key;
+class ring_position;
+
+using partition_range = nonwrapping_range<ring_position>;
+using token_range = nonwrapping_range<token>;
+
+using partition_range_vector = std::vector<partition_range>;
+using token_range_vector = std::vector<token_range>;
+
+// Wraps partition_key with its corresponding token.
+//
+// Total ordering defined by comparators is compatible with Origin's ordering.
+class decorated_key {
+public:
+    dht::token _token;
+    partition_key _key;
+
+    decorated_key(dht::token t, partition_key k)
+        : _token(std::move(t))
+        , _key(std::move(k)) {
+    }
+
+    struct less_comparator {
+        schema_ptr s;
+        less_comparator(schema_ptr s);
+        bool operator()(const decorated_key& k1, const decorated_key& k2) const;
+        bool operator()(const decorated_key& k1, const ring_position& k2) const;
+        bool operator()(const ring_position& k1, const decorated_key& k2) const;
+    };
+
+    bool equal(const schema& s, const decorated_key& other) const;
+
+    bool less_compare(const schema& s, const decorated_key& other) const;
+    bool less_compare(const schema& s, const ring_position& other) const;
+
+    // Trichotomic comparators defining total ordering on the union of
+    // decorated_key and ring_position objects.
+    std::strong_ordering tri_compare(const schema& s, const decorated_key& other) const;
+    std::strong_ordering tri_compare(const schema& s, const ring_position& other) const;
+
+    const dht::token& token() const noexcept {
+        return _token;
+    }
+
+    const partition_key& key() const {
+        return _key;
+    }
+
+    size_t external_memory_usage() const {
+        return _key.external_memory_usage() + _token.external_memory_usage();
+    }
+
+    size_t memory_usage() const {
+        return sizeof(decorated_key) + external_memory_usage();
+    }
+};
+
+
+class decorated_key_equals_comparator {
+    const schema& _schema;
+public:
+    explicit decorated_key_equals_comparator(const schema& schema) : _schema(schema) {}
+    bool operator()(const dht::decorated_key& k1, const dht::decorated_key& k2) const {
+        return k1.equal(_schema, k2);
+    }
+};
+
+using decorated_key_opt = std::optional<decorated_key>;
+
+class i_partitioner {
+public:
+    using ptr_type = std::unique_ptr<i_partitioner>;
+
+    i_partitioner() = default;
+    virtual ~i_partitioner() {}
+
+    /**
+     * Transform key to object representation of the on-disk format.
+     *
+     * @param key the raw, client-facing key
+     * @return decorated version of key
+     */
+    decorated_key decorate_key(const schema& s, const partition_key& key) const {
+        return { get_token(s, key), key };
+    }
+
+    /**
+     * Transform key to object representation of the on-disk format.
+     *
+     * @param key the raw, client-facing key
+     * @return decorated version of key
+     */
+    decorated_key decorate_key(const schema& s, partition_key&& key) const {
+        auto token = get_token(s, key);
+        return { std::move(token), std::move(key) };
+    }
+
+    /**
+     * @return a token that can be used to route a given key
+     * (This is NOT a method to create a token from its string representation;
+     * for that, use tokenFactory.fromString.)
+     */
+    virtual token get_token(const schema& s, partition_key_view key) const = 0;
+    virtual token get_token(const sstables::key_view& key) const = 0;
+
+    // FIXME: token.tokenFactory
+    //virtual token.tokenFactory gettokenFactory() = 0;
+
+    /**
+     * @return name of partitioner.
+     */
+    virtual const sstring name() const = 0;
+
+    bool operator==(const i_partitioner& o) const {
+        return name() == o.name();
+    }
+};
+
+//
+// Represents position in the ring of partitions, where partitions are ordered
+// according to decorated_key ordering (first by token, then by key value).
+// Intended to be used for defining partition ranges.
+//
+// The 'key' part is optional. When it's absent, this object represents a position
+// which is either before or after all keys sharing given token. That's determined
+// by relation_to_keys().
+//
+// For example for the following data:
+//
+//   tokens: |    t1   | t2 |
+//           +----+----+----+
+//   keys:   | k1 | k2 | k3 |
+//
+// The ordering is:
+//
+//   ring_position(t1, token_bound::start) < ring_position(k1)
+//   ring_position(k1)                     < ring_position(k2)
+//   ring_position(k1)                     == decorated_key(k1)
+//   ring_position(k2)                     == decorated_key(k2)
+//   ring_position(k2)                     < ring_position(t1, token_bound::end)
+//   ring_position(k2)                     < ring_position(k3)
+//   ring_position(t1, token_bound::end)   < ring_position(t2, token_bound::start)
+//
+// Maps to org.apache.cassandra.db.RowPosition and its derivatives in Origin.
+//
+class ring_position {
+public:
+    enum class token_bound : int8_t { start = -1, end = 1 };
+private:
+    friend class ring_position_comparator;
+    friend class ring_position_ext;
+    dht::token _token;
+    token_bound _token_bound{}; // valid when !_key
+    std::optional<partition_key> _key;
+public:
+    static ring_position min() noexcept {
+        return { minimum_token(), token_bound::start };
+    }
+
+    static ring_position max() noexcept {
+        return { maximum_token(), token_bound::end };
+    }
+
+    bool is_min() const noexcept {
+        return _token.is_minimum();
+    }
+
+    bool is_max() const noexcept {
+        return _token.is_maximum();
+    }
+
+    static ring_position starting_at(dht::token token) {
+        return { std::move(token), token_bound::start };
+    }
+
+    static ring_position ending_at(dht::token token) {
+        return { std::move(token), token_bound::end };
+    }
+
+    ring_position(dht::token token, token_bound bound)
+        : _token(std::move(token))
+        , _token_bound(bound)
+    { }
+
+    ring_position(dht::token token, partition_key key)
+        : _token(std::move(token))
+        , _key(std::make_optional(std::move(key)))
+    { }
+
+    ring_position(dht::token token, token_bound bound, std::optional<partition_key> key)
+        : _token(std::move(token))
+        , _token_bound(bound)
+        , _key(std::move(key))
+    { }
+
+    ring_position(const dht::decorated_key& dk)
+        : _token(dk._token)
+        , _key(std::make_optional(dk._key))
+    { }
+
+    ring_position(dht::decorated_key&& dk)
+        : _token(std::move(dk._token))
+        , _key(std::make_optional(std::move(dk._key)))
+    { }
+
+    const dht::token& token() const noexcept {
+        return _token;
+    }
+
+    // Valid when !has_key()
+    token_bound bound() const {
+        return _token_bound;
+    }
+
+    // Returns -1 if smaller than keys with the same token, +1 if greater.
+    int relation_to_keys() const {
+        return _key ? 0 : static_cast<int>(_token_bound);
+    }
+
+    const std::optional<partition_key>& key() const {
+        return _key;
+    }
+
+    bool has_key() const {
+        return bool(_key);
+    }
+
+    // Call only when has_key()
+    dht::decorated_key as_decorated_key() const {
+        return { _token, *_key };
+    }
+
+    bool equal(const schema&, const ring_position&) const;
+
+    // Trichotomic comparator defining a total ordering on ring_position objects
+    std::strong_ordering tri_compare(const schema&, const ring_position&) const;
+
+    // "less" comparator corresponding to tri_compare()
+    bool less_compare(const schema&, const ring_position&) const;
+
+    friend std::ostream& operator<<(std::ostream&, const ring_position&);
+};
+
+// Non-owning version of ring_position and ring_position_ext.
+//
+// Unlike ring_position, it can express positions which are right after and right before the keys.
+// ring_position still can not because it is sent between nodes and such a position
+// would not be (yet) properly interpreted by old nodes. That's why any ring_position
+// can be converted to ring_position_view, but not the other way.
+//
+// It is possible to express a partition_range using a pair of two ring_position_views v1 and v2,
+// where v1 = ring_position_view::for_range_start(r) and v2 = ring_position_view::for_range_end(r).
+// Such range includes all keys k such that v1 <= k < v2, with order defined by ring_position_comparator.
+//
+class ring_position_view {
+    friend std::strong_ordering ring_position_tri_compare(const schema& s, ring_position_view lh, ring_position_view rh);
+    friend class ring_position_comparator;
+    friend class ring_position_comparator_for_sstables;
+    friend class ring_position_ext;
+
+    // Order is lexicographical on (_token, _key) tuples, where _key part may be missing, and
+    // _weight affecting order between tuples if one is a prefix of the other (including being equal).
+    // A positive weight puts the position after all strictly prefixed by it, while a non-positive
+    // weight puts it before them. If tuples are equal, the order is further determined by _weight.
+    //
+    // For example {_token=t1, _key=nullptr, _weight=1} is ordered after {_token=t1, _key=k1, _weight=0},
+    // but {_token=t1, _key=nullptr, _weight=-1} is ordered before it.
+    //
+    const dht::token* _token; // always not nullptr
+    const partition_key* _key; // Can be nullptr
+    int8_t _weight;
+private:
+    ring_position_view() noexcept : _token(nullptr), _key(nullptr), _weight(0) { }
+    explicit operator bool() const noexcept { return bool(_token); }
+public:
+    using token_bound = ring_position::token_bound;
+    struct after_key_tag {};
+    using after_key = bool_class<after_key_tag>;
+
+    static ring_position_view min() noexcept {
+        return { minimum_token(), nullptr, -1 };
+    }
+
+    static ring_position_view max() noexcept {
+        return { maximum_token(), nullptr, 1 };
+    }
+
+    bool is_min() const noexcept {
+        return _token->is_minimum();
+    }
+
+    bool is_max() const noexcept {
+        return _token->is_maximum();
+    }
+
+    static ring_position_view for_range_start(const partition_range& r) {
+        return r.start() ? ring_position_view(r.start()->value(), after_key(!r.start()->is_inclusive())) : min();
+    }
+
+    static ring_position_view for_range_end(const partition_range& r) {
+        return r.end() ? ring_position_view(r.end()->value(), after_key(r.end()->is_inclusive())) : max();
+    }
+
+    static ring_position_view for_after_key(const dht::decorated_key& dk) {
+        return ring_position_view(dk, after_key::yes);
+    }
+
+    static ring_position_view for_after_key(dht::ring_position_view view) {
+        return ring_position_view(after_key_tag(), view);
+    }
+
+    static ring_position_view starting_at(const dht::token& t) {
+        return ring_position_view(t, token_bound::start);
+    }
+
+    static ring_position_view ending_at(const dht::token& t) {
+        return ring_position_view(t, token_bound::end);
+    }
+
+    ring_position_view(const dht::ring_position& pos, after_key after = after_key::no)
+        : _token(&pos.token())
+        , _key(pos.has_key() ? &*pos.key() : nullptr)
+        , _weight(pos.has_key() ? bool(after) : pos.relation_to_keys())
+    { }
+
+    ring_position_view(const ring_position_view& pos) = default;
+    ring_position_view& operator=(const ring_position_view& other) = default;
+
+    ring_position_view(after_key_tag, const ring_position_view& v)
+        : _token(v._token)
+        , _key(v._key)
+        , _weight(v._key ? 1 : v._weight)
+    { }
+
+    ring_position_view(const dht::decorated_key& key, after_key after_key = after_key::no)
+        : _token(&key.token())
+        , _key(&key.key())
+        , _weight(bool(after_key))
+    { }
+
+    ring_position_view(const dht::token& token, const partition_key* key, int8_t weight)
+        : _token(&token)
+        , _key(key)
+        , _weight(weight)
+    { }
+
+    explicit ring_position_view(const dht::token& token, token_bound bound = token_bound::start)
+        : _token(&token)
+        , _key(nullptr)
+        , _weight(static_cast<std::underlying_type_t<token_bound>>(bound))
+    { }
+
+    const dht::token& token() const noexcept { return *_token; }
+    const partition_key* key() const { return _key; }
+
+    // Only when key() == nullptr
+    token_bound get_token_bound() const { return token_bound(_weight); }
+    // Only when key() != nullptr
+    after_key is_after_key() const { return after_key(_weight == 1); }
+
+    friend std::ostream& operator<<(std::ostream&, ring_position_view);
+    friend class optimized_optional<ring_position_view>;
+};
+
+using ring_position_ext_view = ring_position_view;
+using ring_position_view_opt = optimized_optional<ring_position_view>;
+
+//
+// Represents position in the ring of partitions, where partitions are ordered
+// according to decorated_key ordering (first by token, then by key value).
+// Intended to be used for defining partition ranges.
+//
+// Unlike ring_position, it can express positions which are right after and right before the keys.
+// ring_position still can not because it is sent between nodes and such a position
+// would not be (yet) properly interpreted by old nodes. That's why any ring_position
+// can be converted to ring_position_ext, but not the other way.
+//
+// It is possible to express a partition_range using a pair of two ring_position_exts v1 and v2,
+// where v1 = ring_position_ext::for_range_start(r) and v2 = ring_position_ext::for_range_end(r).
+// Such range includes all keys k such that v1 <= k < v2, with order defined by ring_position_comparator.
+//
+class ring_position_ext {
+    // Order is lexicographical on (_token, _key) tuples, where _key part may be missing, and
+    // _weight affecting order between tuples if one is a prefix of the other (including being equal).
+    // A positive weight puts the position after all strictly prefixed by it, while a non-positive
+    // weight puts it before them. If tuples are equal, the order is further determined by _weight.
+    //
+    // For example {_token=t1, _key=nullptr, _weight=1} is ordered after {_token=t1, _key=k1, _weight=0},
+    // but {_token=t1, _key=nullptr, _weight=-1} is ordered before it.
+    //
+    dht::token _token;
+    std::optional<partition_key> _key;
+    int8_t _weight;
+public:
+    using token_bound = ring_position::token_bound;
+    struct after_key_tag {};
+    using after_key = bool_class<after_key_tag>;
+
+    static ring_position_ext min() noexcept {
+        return { minimum_token(), std::nullopt, -1 };
+    }
+
+    static ring_position_ext max() noexcept {
+        return { maximum_token(), std::nullopt, 1 };
+    }
+
+    bool is_min() const noexcept {
+        return _token.is_minimum();
+    }
+
+    bool is_max() const noexcept {
+        return _token.is_maximum();
+    }
+
+    static ring_position_ext for_range_start(const partition_range& r) {
+        return r.start() ? ring_position_ext(r.start()->value(), after_key(!r.start()->is_inclusive())) : min();
+    }
+
+    static ring_position_ext for_range_end(const partition_range& r) {
+        return r.end() ? ring_position_ext(r.end()->value(), after_key(r.end()->is_inclusive())) : max();
+    }
+
+    static ring_position_ext for_after_key(const dht::decorated_key& dk) {
+        return ring_position_ext(dk, after_key::yes);
+    }
+
+    static ring_position_ext for_after_key(dht::ring_position_ext view) {
+        return ring_position_ext(after_key_tag(), view);
+    }
+
+    static ring_position_ext starting_at(const dht::token& t) {
+        return ring_position_ext(t, token_bound::start);
+    }
+
+    static ring_position_ext ending_at(const dht::token& t) {
+        return ring_position_ext(t, token_bound::end);
+    }
+
+    ring_position_ext(const dht::ring_position& pos, after_key after = after_key::no)
+        : _token(pos.token())
+        , _key(pos.key())
+        , _weight(pos.has_key() ? bool(after) : pos.relation_to_keys())
+    { }
+
+    ring_position_ext(const ring_position_ext& pos) = default;
+    ring_position_ext& operator=(const ring_position_ext& other) = default;
+
+    ring_position_ext(ring_position_view v)
+        : _token(*v._token)
+        , _key(v._key ? std::make_optional(*v._key) : std::nullopt)
+        , _weight(v._weight)
+    { }
+
+    ring_position_ext(after_key_tag, const ring_position_ext& v)
+        : _token(v._token)
+        , _key(v._key)
+        , _weight(v._key ? 1 : v._weight)
+    { }
+
+    ring_position_ext(const dht::decorated_key& key, after_key after_key = after_key::no)
+        : _token(key.token())
+        , _key(key.key())
+        , _weight(bool(after_key))
+    { }
+
+    ring_position_ext(dht::token token, std::optional<partition_key> key, int8_t weight) noexcept
+        : _token(std::move(token))
+        , _key(std::move(key))
+        , _weight(weight)
+    { }
+
+    ring_position_ext(ring_position&& pos) noexcept
+        : _token(std::move(pos._token))
+        , _key(std::move(pos._key))
+        , _weight(pos.relation_to_keys())
+    { }
+
+    explicit ring_position_ext(const dht::token& token, token_bound bound = token_bound::start)
+        : _token(token)
+        , _key(std::nullopt)
+        , _weight(static_cast<std::underlying_type_t<token_bound>>(bound))
+    { }
+
+    const dht::token& token() const noexcept { return _token; }
+    const std::optional<partition_key>& key() const { return _key; }
+    int8_t weight() const { return _weight; }
+
+    // Only when key() == std::nullopt
+    token_bound get_token_bound() const { return token_bound(_weight); }
+
+    // Only when key() != std::nullopt
+    after_key is_after_key() const { return after_key(_weight == 1); }
+
+    operator ring_position_view() const { return { _token, _key ? &*_key : nullptr, _weight }; }
+
+    friend std::ostream& operator<<(std::ostream&, const ring_position_ext&);
+};
+
+std::strong_ordering ring_position_tri_compare(const schema& s, ring_position_view lh, ring_position_view rh);
+
+template <typename T>
+requires std::is_convertible<T, ring_position_view>::value
+ring_position_view ring_position_view_to_compare(const T& val) {
+    return val;
+}
+
+// Trichotomic comparator for ring order
+struct ring_position_comparator {
+    const schema& s;
+    ring_position_comparator(const schema& s_) : s(s_) {}
+
+    std::strong_ordering operator()(ring_position_view lh, ring_position_view rh) const {
+        return ring_position_tri_compare(s, lh, rh);
+    }
+
+    template <typename T>
+    std::strong_ordering operator()(const T& lh, ring_position_view rh) const {
+        return ring_position_tri_compare(s, ring_position_view_to_compare(lh), rh);
+    }
+
+    template <typename T>
+    std::strong_ordering operator()(ring_position_view lh, const T& rh) const {
+        return ring_position_tri_compare(s, lh, ring_position_view_to_compare(rh));
+    }
+
+    template <typename T1, typename T2>
+    std::strong_ordering operator()(const T1& lh, const T2& rh) const {
+        return ring_position_tri_compare(s, ring_position_view_to_compare(lh), ring_position_view_to_compare(rh));
+    }
+};
+
+struct ring_position_comparator_for_sstables {
+    const schema& s;
+    ring_position_comparator_for_sstables(const schema& s_) : s(s_) {}
+    std::strong_ordering operator()(ring_position_view, sstables::decorated_key_view) const;
+    std::strong_ordering operator()(sstables::decorated_key_view, ring_position_view) const;
+};
+
+// "less" comparator giving the same order as ring_position_comparator
+struct ring_position_less_comparator {
+    ring_position_comparator tri;
+
+    ring_position_less_comparator(const schema& s) : tri(s) {}
+
+    template<typename T, typename U>
+    bool operator()(const T& lh, const U& rh) const {
+        return tri(lh, rh) < 0;
+    }
+};
+
+struct token_comparator {
+    // Return values are those of a trichotomic comparison.
+    std::strong_ordering operator()(const token& t1, const token& t2) const;
+};
+
+std::ostream& operator<<(std::ostream& out, const decorated_key& t);
+
+std::ostream& operator<<(std::ostream& out, const i_partitioner& p);
+
+class partition_ranges_view {
+    const dht::partition_range* _data = nullptr;
+    size_t _size = 0;
+
+public:
+    partition_ranges_view() = default;
+    partition_ranges_view(const dht::partition_range& range) : _data(&range), _size(1) {}
+    partition_ranges_view(const dht::partition_range_vector& ranges) : _data(ranges.data()), _size(ranges.size()) {}
+    bool empty() const { return _size == 0; }
+    size_t size() const { return _size; }
+    const dht::partition_range& front() const { return *_data; }
+    const dht::partition_range& back() const { return *(_data + _size - 1); }
+    const dht::partition_range* begin() const { return _data; }
+    const dht::partition_range* end() const { return _data + _size; }
+};
+std::ostream& operator<<(std::ostream& out, partition_ranges_view v);
+
+unsigned shard_of(const schema&, const token&);
+inline decorated_key decorate_key(const schema& s, const partition_key& key) {
+    return s.get_partitioner().decorate_key(s, key);
+}
+inline decorated_key decorate_key(const schema& s, partition_key&& key) {
+    return s.get_partitioner().decorate_key(s, std::move(key));
+}
+
+inline token get_token(const schema& s, partition_key_view key) {
+    return s.get_partitioner().get_token(s, key);
+}
+
+dht::partition_range to_partition_range(dht::token_range);
+dht::partition_range_vector to_partition_ranges(const dht::token_range_vector& ranges, utils::can_yield can_yield = utils::can_yield::no);
+
+// Each shard gets a sorted, disjoint vector of ranges
+std::map<unsigned, dht::partition_range_vector>
+split_range_to_shards(dht::partition_range pr, const schema& s);
+
+// Intersect a partition_range with a shard and return the the resulting sub-ranges, in sorted order
+future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const schema& s, const dht::partition_range& pr, shard_id shard);
+
+std::unique_ptr<dht::i_partitioner> make_partitioner(sstring name);
+
+// Returns a sorted and deoverlapped list of ranges that are
+// the result of subtracting all ranges from ranges_to_subtract.
+// ranges_to_subtract must be sorted and deoverlapped.
+future<dht::partition_range_vector> subtract_ranges(const schema& schema, const dht::partition_range_vector& ranges, dht::partition_range_vector ranges_to_subtract);
+
+// Returns a token_range vector split based on the given number of most-significant bits
+dht::token_range_vector split_token_range_msb(unsigned most_significant_bits);
+
+} // dht
+
+namespace std {
+template<>
+struct hash<dht::token> {
+    size_t operator()(const dht::token& t) const {
+        // We have to reverse the bytes here to keep compatibility with
+        // the behaviour that was here when tokens were represented as
+        // sequence of bytes.
+        return bswap_64(t._data);
+    }
+};
+
+template <>
+struct hash<dht::decorated_key> {
+    size_t operator()(const dht::decorated_key& k) const {
+        auto h_token = hash<dht::token>();
+        return h_token(k.token());
+    }
+};
+
+
+}
+
+#include <seastar/net/ipv4_address.hh>
+#include <seastar/net/inet_address.hh>
+#include <seastar/net/socket_defs.hh>
+#include <iosfwd>
+#include <optional>
+#include <functional>
+
+
+namespace gms {
+
+class inet_address {
+private:
+    net::inet_address _addr;
+public:
+    inet_address() = default;
+    inet_address(int32_t ip) noexcept
+        : inet_address(uint32_t(ip)) {
+    }
+    explicit inet_address(uint32_t ip) noexcept
+        : _addr(net::ipv4_address(ip)) {
+    }
+    inet_address(const net::inet_address& addr) noexcept : _addr(addr) {}
+    inet_address(const socket_address& sa) noexcept
+        : inet_address(sa.addr())
+    {}
+    const net::inet_address& addr() const noexcept {
+        return _addr;
+    }
+
+    inet_address(const inet_address&) = default;
+
+    operator const seastar::net::inet_address&() const noexcept {
+        return _addr;
+    }
+
+    // throws std::invalid_argument if sstring is invalid
+    inet_address(const sstring& addr) {
+        // FIXME: We need a real DNS resolver
+        if (addr == "localhost") {
+            _addr = net::ipv4_address("127.0.0.1");
+        } else {
+            _addr = net::inet_address(addr);
+        }
+    }
+    bytes_view bytes() const noexcept {
+        return bytes_view(reinterpret_cast<const int8_t*>(_addr.data()), _addr.size());
+    }
+    // TODO remove
+    uint32_t raw_addr() const {
+        return addr().as_ipv4_address().ip;
+    }
+    sstring to_sstring() const;
+    friend inline bool operator==(const inet_address& x, const inet_address& y) noexcept = default;
+    friend inline bool operator<(const inet_address& x, const inet_address& y) noexcept {
+        return x.bytes() < y.bytes();
+    }
+    friend struct std::hash<inet_address>;
+
+    using opt_family = std::optional<net::inet_address::family>;
+
+    static future<inet_address> lookup(sstring, opt_family family = {}, opt_family preferred = {});
+};
+
+std::ostream& operator<<(std::ostream& os, const inet_address& x);
+
+}
+
+namespace std {
+template<>
+struct hash<gms::inet_address> {
+    size_t operator()(gms::inet_address a) const noexcept { return std::hash<net::inet_address>()(a._addr); }
+};
+}
+
+template <>
+struct fmt::formatter<gms::inet_address> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const ::gms::inet_address& x, FormatContext& ctx) const {
+        if (x.addr().is_ipv4()) {
+            return fmt::format_to(ctx.out(), "{}", x.addr());
+        }
+        // print 2 bytes in a group, and use ':' as the delimeter
+        fmt::format_to(ctx.out(), "{:2:}", fmt_hex(x.bytes()));
+        if (x.addr().scope() != seastar::net::inet_address::invalid_scope) {
+            return fmt::format_to(ctx.out(), "%{}", x.addr().scope());
+        }
+        return ctx.out();
+    }
+};
+
+
+#include <vector>
+#include <atomic>
+#include <random>
+#include <seastar/core/sharded.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/metrics_registration.hh>
+
+namespace cql3 { class query_processor; }
+
+namespace tracing {
+
+using elapsed_clock = std::chrono::steady_clock;
+
+class trace_state_ptr;
+class tracing;
+
+enum class trace_type : uint8_t {
+    NONE,
+    QUERY,
+    REPAIR,
+};
+
+extern std::vector<sstring> trace_type_names;
+
+inline const sstring& type_to_string(trace_type t) {
+    return trace_type_names.at(static_cast<int>(t));
+}
+
+/**
+ * Returns a TTL for a given trace type
+ * @param t trace type
+ *
+ * @return TTL
+ */
+inline std::chrono::seconds ttl_by_type(const trace_type t) {
+    switch (t) {
+    case trace_type::NONE:
+    case trace_type::QUERY:
+        return std::chrono::seconds(86400);  // 1 day
+    case trace_type::REPAIR:
+        return std::chrono::seconds(604800); // 7 days
+    default:
+        // unknown type value - must be a SW bug
+        throw std::invalid_argument("unknown trace type: " + std::to_string(int(t)));
+    }
+}
+
+/**
+ * @brief represents an ID of a single tracing span.
+ *
+ * Currently span ID is a random 64-bit integer.
+ */
+class span_id {
+private:
+    uint64_t _id = illegal_id;
+
+public:
+    static constexpr uint64_t illegal_id = 0;
+
+public:
+    span_id() = default;
+    uint64_t get_id() const { return _id; }
+    span_id(uint64_t id) : _id(id) {}
+
+    /**
+     * @return New span_id with a random legal value
+     */
+    static span_id make_span_id();
+};
+
+std::ostream& operator<<(std::ostream& os, const span_id& id);
+
+// !!!!IMPORTANT!!!!
+//
+// The enum_set based on this enum is serialized using IDL, therefore new items
+// should always be added to the end of this enum - never before the existing
+// ones.
+//
+// Otherwise this may break IDL's backward compatibility.
+enum class trace_state_props {
+    write_on_close, primary, log_slow_query, full_tracing, ignore_events
+};
+
+using trace_state_props_set = enum_set<super_enum<trace_state_props,
+    trace_state_props::write_on_close,
+    trace_state_props::primary,
+    trace_state_props::log_slow_query,
+    trace_state_props::full_tracing,
+    trace_state_props::ignore_events>>;
+
+class trace_info {
+public:
+    utils::UUID session_id;
+    trace_type type;
+    bool write_on_close;
+    trace_state_props_set state_props;
+    uint32_t slow_query_threshold_us; // in microseconds
+    uint32_t slow_query_ttl_sec; // in seconds
+    span_id parent_id;
+    uint64_t start_ts_us = 0u; // sentinel value (== "unset")
+
+public:
+    trace_info(utils::UUID sid, trace_type t, bool w_o_c, trace_state_props_set s_p, uint32_t slow_query_threshold, uint32_t slow_query_ttl, span_id p_id, uint64_t s_t_u)
+        : session_id(std::move(sid))
+        , type(t)
+        , write_on_close(w_o_c)
+        , state_props(s_p)
+        , slow_query_threshold_us(slow_query_threshold)
+        , slow_query_ttl_sec(slow_query_ttl)
+        , parent_id(std::move(p_id))
+        , start_ts_us(s_t_u)
+    {
+        state_props.set_if<trace_state_props::write_on_close>(write_on_close);
+    }
+};
+
+struct one_session_records;
+using records_bulk = std::deque<lw_shared_ptr<one_session_records>>;
+
+struct backend_session_state_base {
+    virtual ~backend_session_state_base() {};
+};
+
+struct i_tracing_backend_helper {
+    using wall_clock = std::chrono::system_clock;
+
+protected:
+    tracing& _local_tracing;
+
+public:
+    using ptr_type = std::unique_ptr<i_tracing_backend_helper>;
+
+    i_tracing_backend_helper(tracing& tr) : _local_tracing(tr) {}
+    virtual ~i_tracing_backend_helper() {}
+    virtual future<> start(cql3::query_processor& qp) = 0;
+    virtual future<> stop() = 0;
+
+    /**
+     * Write a bulk of tracing records.
+     *
+     * This function has to clear a scheduled state of each one_session_records object
+     * in the @param bulk after it has been actually passed to the backend for writing.
+     *
+     * @param bulk a bulk of records
+     */
+    virtual void write_records_bulk(records_bulk& bulk) = 0;
+
+    virtual std::unique_ptr<backend_session_state_base> allocate_session_state() const = 0;
+
+private:
+    friend class tracing;
+};
+
+struct event_record {
+    sstring message;
+    elapsed_clock::duration elapsed;
+    i_tracing_backend_helper::wall_clock::time_point event_time_point;
+
+    event_record(sstring message_, elapsed_clock::duration elapsed_, i_tracing_backend_helper::wall_clock::time_point event_time_point_)
+        : message(std::move(message_))
+        , elapsed(elapsed_)
+        , event_time_point(event_time_point_) {}
+};
+
+struct session_record {
+    gms::inet_address client;
+    // Keep the containers below sorted since some backends require that and
+    // it's very cheap to always do that because the amount of elements in a
+    // container is very small.
+    std::map<sstring, sstring> parameters;
+    std::set<sstring> tables;
+    sstring username;
+    sstring request;
+    size_t request_size = 0;
+    size_t response_size = 0;
+    std::chrono::system_clock::time_point started_at;
+    trace_type command = trace_type::NONE;
+    elapsed_clock::duration elapsed;
+    std::chrono::seconds slow_query_record_ttl;
+
+private:
+    bool _consumed = false;
+
+public:
+    session_record(trace_type cmd, std::chrono::seconds ttl)
+        : username("<unauthenticated request>")
+        , command(cmd)
+        , elapsed(-1)
+        , slow_query_record_ttl(ttl)
+    {}
+
+    bool ready() const {
+        return elapsed.count() >= 0 && !_consumed;
+    }
+
+    void set_consumed() {
+        _consumed = true;
+    }
+};
+
+class one_session_records {
+private:
+    shared_ptr<tracing> _local_tracing_ptr;
+public:
+    utils::UUID session_id;
+    session_record session_rec;
+    std::chrono::seconds ttl;
+    std::deque<event_record> events_recs;
+    std::unique_ptr<backend_session_state_base> backend_state_ptr;
+    bool do_log_slow_query = false;
+
+    // A pointer to the records counter of the corresponding state new records
+    // of this tracing session should consume from (e.g. "cached" or "pending
+    // for write").
+    uint64_t* budget_ptr;
+
+    // Each tracing session object represents a single tracing span.
+    //
+    // Each span has a span ID. In order to be able to build a full tree of all
+    // spans of the same query we need a parent span ID as well.
+    span_id parent_id;
+    span_id my_span_id;
+
+    one_session_records(trace_type type, std::chrono::seconds slow_query_ttl, std::chrono::seconds slow_query_rec_ttl,
+            std::optional<utils::UUID> session_id = std::nullopt, span_id parent_id = span_id::illegal_id);
+
+    /**
+     * Consume a single record from the per-shard budget.
+     */
+    void consume_from_budget() {
+        ++(*budget_ptr);
+    }
+
+    /**
+     * Drop all pending records and return the budget.
+     */
+    void drop_records() {
+        (*budget_ptr) -= size();
+        events_recs.clear();
+        session_rec.set_consumed();
+    }
+
+    /**
+     * Should be called when a record is scheduled for write.
+     * From that point till data_consumed() call all new records will be written
+     * in the next write event.
+     */
+    inline void set_pending_for_write();
+
+    /**
+     * Should be called after all data pending to be written in this record has
+     * been processed.
+     * From that point on new records are cached internally and have to be
+     * explicitly committed for write in order to be written during the write event.
+     */
+    inline void data_consumed();
+
+    bool is_pending_for_write() const {
+        return _is_pending_for_write;
+    }
+
+    uint64_t size() const {
+        return events_recs.size() + session_rec.ready();
+    }
+
+private:
+    bool _is_pending_for_write = false;
+};
+
+class tracing : public seastar::async_sharded_service<tracing> {
+public:
+    static const gc_clock::duration write_period;
+    // maximum number of sessions pending for write per shard
+    static constexpr int max_pending_sessions = 1000;
+    // expectation of an average number of trace records per session
+    static constexpr int exp_trace_events_per_session = 10;
+    // maximum allowed pending records per-shard
+    static constexpr int max_pending_trace_records = max_pending_sessions * exp_trace_events_per_session;
+    // number of pending sessions that would trigger a write event
+    static constexpr int write_event_sessions_threshold = 100;
+    // number of pending records that would trigger a write event
+    static constexpr int write_event_records_threshold = write_event_sessions_threshold * exp_trace_events_per_session;
+    // Number of events when an info message is printed
+    static constexpr int log_warning_period = 10000;
+
+    static const std::chrono::microseconds default_slow_query_duraion_threshold;
+    static const std::chrono::seconds default_slow_query_record_ttl;
+
+    struct stats {
+        uint64_t dropped_sessions = 0;
+        uint64_t dropped_records = 0;
+        uint64_t trace_records_count = 0;
+        uint64_t trace_errors = 0;
+    } stats;
+
+private:
+    // A number of currently active tracing sessions
+    uint64_t _active_sessions = 0;
+
+    // Below are 3 counters that describe the total amount of tracing records on
+    // this shard. Each counter describes a state in which a record may be.
+    //
+    // Each record may only be in a specific state at every point of time and
+    // thereby it must be accounted only in one and only one of the three
+    // counters below at any given time.
+    //
+    // The sum of all three counters should not be greater than
+    // (max_pending_trace_records + write_event_records_threshold) at any time
+    // (actually it can get as high as a value above plus (max_pending_sessions)
+    // if all sessions are primary but we won't take this into an account for
+    // simplicity).
+    //
+    // The same is about the number of outstanding sessions: it may not be
+    // greater than (max_pending_sessions + write_event_sessions_threshold) at
+    // any time.
+    //
+    // If total number of tracing records is greater or equal to the limit
+    // above, the new trace point is going to be dropped.
+    //
+    // If current number or records plus the expected number of trace records
+    // per session (exp_trace_events_per_session) is greater than the limit
+    // above new sessions will be dropped. A new session will also be dropped if
+    // there are too many active sessions.
+    //
+    // When the record or a session is dropped the appropriate statistics
+    // counters are updated and there is a rate-limited warning message printed
+    // to the log.
+    //
+    // Every time a number of records pending for write is greater or equal to
+    // (write_event_records_threshold) or a number of sessions pending for
+    // write is greater or equal to (write_event_sessions_threshold) a write
+    // event is issued.
+    //
+    // Every 2 seconds a timer would write all pending for write records
+    // available so far.
+
+    // Total number of records cached in the active sessions that are not going
+    // to be written in the next write event
+    uint64_t _cached_records = 0;
+    // Total number of records that are currently being written to I/O
+    uint64_t _flushing_records = 0;
+    // Total number of records in the _pending_for_write_records_bulk. All of
+    // them are going to be written to the I/O during the next write event.
+    uint64_t _pending_for_write_records_count = 0;
+
+    records_bulk _pending_for_write_records_bulk;
+    timer<lowres_clock> _write_timer;
+    // _down becomes FALSE after the local service is fully initialized and
+    // tracing records are allowed to be created and collected. It becomes TRUE
+    // after the shutdown() call and prevents further write attempts to I/O
+    // backend.
+    bool _down = true;
+    // If _slow_query_logging_enabled is enabled, a query processor keeps all
+    // trace events related to the query until in the end it can decide
+    // if the query was slow to be saved.
+    bool _slow_query_logging_enabled = false;
+    // If _ignore_trace_events is enabled, tracing::trace ignores all tracing
+    // events as well as creating trace_state descendants with trace_info to
+    // track tracing sessions only. This is used to implement lightweight
+    // slow query tracing.
+    bool _ignore_trace_events = false;
+    std::unique_ptr<i_tracing_backend_helper> _tracing_backend_helper_ptr;
+    sstring _thread_name;
+    sstring _tracing_backend_helper_class_name;
+    seastar::metrics::metric_groups _metrics;
+    double _trace_probability = 0.0; // keep this one for querying purposes
+    uint64_t _normalized_trace_probability = 0;
+    std::ranlux48_base _gen;
+    std::chrono::microseconds _slow_query_duration_threshold;
+    std::chrono::seconds _slow_query_record_ttl;
+
+public:
+    uint64_t get_next_rand_uint64() {
+        return _gen();
+    }
+
+    i_tracing_backend_helper& backend_helper() {
+        return *_tracing_backend_helper_ptr;
+    }
+
+    const sstring& get_thread_name() const {
+        return _thread_name;
+    }
+
+    static seastar::sharded<tracing>& tracing_instance() {
+        // FIXME: leaked intentionally to avoid shutdown problems, see #293
+        static seastar::sharded<tracing>* tracing_inst = new seastar::sharded<tracing>();
+
+        return *tracing_inst;
+    }
+
+    static tracing& get_local_tracing_instance() {
+        return tracing_instance().local();
+    }
+
+    bool started() const {
+        return !_down;
+    }
+
+    static future<> create_tracing(sstring tracing_backend_helper_class_name);
+    static future<> start_tracing(sharded<cql3::query_processor>& qp);
+    static future<> stop_tracing();
+    tracing(sstring tracing_backend_helper_class_name);
+
+    // Initialize a tracing backend (e.g. tracing_keyspace or logstash)
+    future<> start(cql3::query_processor& qp);
+
+    future<> stop();
+
+    /**
+     * Waits until all pending tracing records are flushed to the backend an
+     * shuts down the backend. The following calls to
+     * write_session_record()/write_event_record() methods of a backend instance
+     * should be a NOOP.
+     *
+     * @return a ready future when the shutdown is complete
+     */
+    future<> shutdown();
+
+    void write_pending_records() {
+        if (_pending_for_write_records_bulk.size()) {
+            _flushing_records += _pending_for_write_records_count;
+            stats.trace_records_count += _pending_for_write_records_count;
+            _pending_for_write_records_count = 0;
+            _tracing_backend_helper_ptr->write_records_bulk(_pending_for_write_records_bulk);
+            _pending_for_write_records_bulk.clear();
+        }
+    }
+
+    void write_complete(uint64_t nr = 1) {
+        if (nr > _flushing_records) {
+            throw std::logic_error(seastar::format("completing more records ({:d}) than there are pending ({:d})", nr, _flushing_records));
+        }
+        _flushing_records -= nr;
+    }
+
+
+    void write_maybe() {
+        if (_pending_for_write_records_count >= write_event_records_threshold || _pending_for_write_records_bulk.size() >= write_event_sessions_threshold) {
+            write_pending_records();
+        }
+    }
+
+    void end_session() {
+        --_active_sessions;
+    }
+
+    void write_session_records(lw_shared_ptr<one_session_records> records, bool write_now) {
+        // if service is down - drop the records and return
+        if (_down) {
+            return;
+        }
+
+        try {
+            schedule_for_write(std::move(records));
+        } catch (...) {
+            // OOM: bump up the error counter and ignore
+            ++stats.trace_errors;
+            return;
+        }
+
+        if (write_now) {
+            write_pending_records();
+        } else {
+            write_maybe();
+        }
+    }
+
+    /**
+     * Sets a probability for tracing a CQL request.
+     *
+     * @param p a new tracing probability - a floating point value in a [0,1]
+     *          range. It would effectively define a portion of CQL requests
+     *          initiated on the current Node that will be traced.
+     * @throw std::invalid_argument if @ref p is out of range
+     */
+    void set_trace_probability(double p);
+    double get_trace_probability() const {
+        return _trace_probability;
+    }
+
+    bool trace_next_query() {
+        return _normalized_trace_probability != 0 && _gen() < _normalized_trace_probability;
+    }
+
+    std::unique_ptr<backend_session_state_base> allocate_backend_session_state() const {
+        return _tracing_backend_helper_ptr->allocate_session_state();
+    }
+
+    /**
+     * Checks if there is enough budget for the @param nr new records
+     * @param nr number of new records
+     *
+     * @return TRUE if there is enough budget, FLASE otherwise
+     */
+    bool have_records_budget(uint64_t nr = 1) {
+        // We don't want the total amount of pending, active and flushing records to
+        // bypass the maximum number of pending records plus the number of
+        // records that are possibly being written write now.
+        //
+        // If either records are being created too fast or a backend doesn't
+        // keep up we want to start dropping records.
+        // In any case, this should be rare.
+        if (_pending_for_write_records_count + _cached_records + _flushing_records + nr > max_pending_trace_records + write_event_records_threshold) {
+            return false;
+        }
+
+        return true;
+    }
+
+    uint64_t* get_pending_records_ptr() {
+        return &_pending_for_write_records_count;
+    }
+
+    uint64_t* get_cached_records_ptr() {
+        return &_cached_records;
+    }
+
+    void schedule_for_write(lw_shared_ptr<one_session_records> records) {
+        if (records->is_pending_for_write()) {
+            return;
+        }
+
+        _pending_for_write_records_bulk.emplace_back(records);
+        records->set_pending_for_write();
+
+        // move the current records from a "cached" to "pending for write" state
+        auto current_records_num = records->size();
+        _cached_records -= current_records_num;
+        _pending_for_write_records_count += current_records_num;
+    }
+
+    void set_slow_query_enabled(bool enable = true) {
+        _slow_query_logging_enabled = enable;
+    }
+
+    bool slow_query_tracing_enabled() const {
+        return _slow_query_logging_enabled;
+    }
+
+    void set_ignore_trace_events(bool enable = true) {
+        _ignore_trace_events = enable;
+    }
+
+    bool ignore_trace_events_enabled() const {
+        return _ignore_trace_events;
+    }
+
+    /**
+     * Set the slow query threshold
+     *
+     * We limit the number of microseconds in the threshold by a maximal unsigned 32-bit
+     * integer.
+     *
+     * If a new threshold value exceeds the above limitation we will override it
+     * with the value based on a limit above.
+     *
+     * @param new_threshold new threshold value
+     */
+    void set_slow_query_threshold(std::chrono::microseconds new_threshold) {
+        if (new_threshold.count() > std::numeric_limits<uint32_t>::max()) {
+            _slow_query_duration_threshold = std::chrono::microseconds(std::numeric_limits<uint32_t>::max());
+            return;
+        }
+
+        _slow_query_duration_threshold = new_threshold;
+    }
+
+    std::chrono::microseconds slow_query_threshold() const {
+        return _slow_query_duration_threshold;
+    }
+
+    /**
+     * Set the slow query record TTL
+     *
+     * We limit the number of seconds in the TTL by a maximal signed 32-bit
+     * integer.
+     *
+     * If a new TTL value exceeds the above limitation we will override it
+     * with the value based on a limit above.
+     *
+     * @param new_ttl new TTL
+     */
+    void set_slow_query_record_ttl(std::chrono::seconds new_ttl) {
+        if (new_ttl.count() > std::numeric_limits<int32_t>::max()) {
+            _slow_query_record_ttl = std::chrono::seconds(std::numeric_limits<int32_t>::max());
+            return;
+        }
+
+        _slow_query_record_ttl = new_ttl;
+    }
+
+    std::chrono::seconds slow_query_record_ttl() const {
+        return _slow_query_record_ttl;
+    }
+
+private:
+    void write_timer_callback();
+
+    /**
+     * Check if we may create a new tracing session.
+     *
+     * @return TRUE if conditions are allowing creating a new tracing session
+     */
+    bool may_create_new_session(const std::optional<utils::UUID>& session_id = std::nullopt);
+};
+
+void one_session_records::set_pending_for_write() {
+    _is_pending_for_write = true;
+    budget_ptr = _local_tracing_ptr->get_pending_records_ptr();
+}
+
+void one_session_records::data_consumed() {
+    if (session_rec.ready()) {
+        session_rec.set_consumed();
+    }
+
+    _is_pending_for_write = false;
+    budget_ptr = _local_tracing_ptr->get_cached_records_ptr();
+}
+
+inline span_id span_id::make_span_id() {
+    // make sure the value is always greater than 0
+    return 1 + (tracing::get_local_tracing_instance().get_next_rand_uint64() << 1);
+}
+}
+
+#include <cinttypes>
+
+namespace ser {
+
+template <typename T>
+class serializer;
+
+};
+
+
+namespace query {
+
+/*
+ * This struct is used in two incompatible ways.
+ *
+ * SEPARATE_PAGE_SIZE_AND_SAFETY_LIMIT cluster feature determines which way is
+ * used.
+ *
+ * 1. If SEPARATE_PAGE_SIZE_AND_SAFETY_LIMIT is not enabled on the cluster then
+ *    `page_size` field is ignored. Depending on the query type the meaning of
+ *    the remaining two fields is:
+ *
+ *    a. For unpaged queries or for reverse queries:
+ *
+ *          * `soft_limit` is used to warn about queries that result exceeds
+ *            this limit. If the limit is exceeded, a warning will be written to
+ *            the log.
+ *
+ *          * `hard_limit` is used to terminate a query which result exceeds
+ *            this limit. If the limit is exceeded, the operation will end with
+ *            an exception.
+ *
+ *    b. For all other queries, `soft_limit` == `hard_limit` and their value is
+ *       really a page_size in bytes. If the page is not previously cut by the
+ *       page row limit then reaching the size of `soft_limit`/`hard_limit`
+ *       bytes will cause a page to be finished.
+ *
+ * 2. If SEPARATE_PAGE_SIZE_AND_SAFETY_LIMIT is enabled on the cluster then all
+ *    three fields are always set. They are used in different places:
+ *
+ *    a. `soft_limit` and `hard_limit` are used for unpaged queries and in a
+ *       reversing reader used for reading KA/LA sstables. Their meaning is the
+ *       same as in (1.a) above.
+ *
+ *    b. all other queries use `page_size` field only and the meaning of the
+ *       field is the same ase in (1.b) above.
+ *
+ * Two interpretations of the `max_result_size` struct are not compatible so we
+ * need to take care of handling a mixed clusters.
+ *
+ * As long as SEPARATE_PAGE_SIZE_AND_SAFETY_LIMIT cluster feature is not
+ * supported by all nodes in the clustser, new nodes will always use the
+ * interpretation described in the point (1). `soft_limit` and `hard_limit`
+ * fields will be set appropriately to the query type and `page_size` field
+ * will be set to 0. Old nodes will ignare `page_size` anyways and new nodes
+ * will know to ignore it as well when it's set to 0. Old nodes will never set
+ * `page_size` and that means new nodes will give it a default value of 0 and
+ * ignore it for messages that miss this field.
+ *
+ * Once SEPARATE_PAGE_SIZE_AND_SAFETY_LIMIT cluster feature becomes supported by
+ * the whole cluster, new nodes will start to set `page_size` to the right value
+ * according to the interpretation described in the point (2).
+ *
+ * For each request, only the coordinator looks at
+ * SEPARATE_PAGE_SIZE_AND_SAFETY_LIMIT and based on it decides for this request
+ * whether it will be handled with interpretation (1) or (2). Then all the
+ * replicas can check the decision based only on the message they receive.
+ * If page_size is set to 0 or not set at all then the request will be handled
+ * using the interpretation (1). Otherwise, interpretation (2) will be used.
+ */
+struct max_result_size {
+    uint64_t soft_limit;
+    uint64_t hard_limit;
+private:
+    uint64_t page_size = 0;
+public:
+
+    max_result_size() = delete;
+    explicit max_result_size(uint64_t max_size) : soft_limit(max_size), hard_limit(max_size) { }
+    explicit max_result_size(uint64_t soft_limit, uint64_t hard_limit) : soft_limit(soft_limit), hard_limit(hard_limit) { }
+    max_result_size(uint64_t soft_limit, uint64_t hard_limit, uint64_t page_size)
+            : soft_limit(soft_limit)
+            , hard_limit(hard_limit)
+            , page_size(page_size)
+    { }
+    uint64_t get_page_size() const {
+        return page_size == 0 ? hard_limit : page_size;
+    }
+    friend bool operator==(const max_result_size&, const max_result_size&);
+    friend class ser::serializer<query::max_result_size>;
+};
+
+inline bool operator==(const max_result_size& a, const max_result_size& b) {
+    return a.soft_limit == b.soft_limit && a.hard_limit == b.hard_limit && a.page_size == b.page_size;
+}
+
+}
+
+#include <cstdint>
+#include <variant>
+#include <seastar/util/bool_class.hh>
+
+namespace db {
+
+using allow_per_partition_rate_limit = seastar::bool_class<class allow_per_partition_rate_limit_tag>;
+
+namespace per_partition_rate_limit {
+
+// Tells the replica to account the operation (increase the corresponding counter)
+// and accept it regardless from the value of the counter.
+//
+// Used when the coordinator IS a replica (correct node and shard).
+struct account_only {};
+
+// Tells the replica to account the operation and decide whether to reject
+// or not, based on the random variable sent by the coordinator.
+//
+// Used when the coordinator IS NOT a replica (wrong node or shard).
+struct account_and_enforce {
+    // A random 32-bit number generated by the coordinator.
+    // Replicas are supposed to use it in order to decide whether
+    // to accept or reject.
+    uint32_t random_variable;
+
+    inline double get_random_variable_as_double() const {
+        return double(random_variable) / double(1LL << 32);
+    }
+};
+
+// std::monostate -> do not count to the rate limit and never reject
+// account_and_enforce -> account to the rate limit and optionally reject
+using info = std::variant<std::monostate, account_only, account_and_enforce>;
+
+} // namespace per_partition_rate_limit
+
+} // namespace db
+
+
+
+using query_id = utils::tagged_uuid<struct query_id_tag>;
+
+#include <iostream>
+#include <cstdint>
+#include <exception>
+
+using cql_protocol_version_type = uint8_t;
+
+// Abstraction of transport protocol-dependent serialization format
+// Protocols v1, v2 used 16 bits for collection sizes, while v3 and
+// above use 32 bits.  But letting every bit of the code know what
+// transport protocol we're using (and in some cases, we aren't using
+// any transport -- it's for internal storage) is bad, so abstract it
+// away here.
+
+class cql_serialization_format {
+    cql_protocol_version_type _version;
+public:
+    static constexpr cql_protocol_version_type latest_version = 4;
+    explicit cql_serialization_format(cql_protocol_version_type version) : _version(version) {}
+    static cql_serialization_format latest() { return cql_serialization_format{latest_version}; }
+    cql_protocol_version_type protocol_version() const { return _version; }
+    void ensure_supported() const {
+        if (_version < 3) {
+            throw std::runtime_error("cql protocol version must be 3 or later");
+        }
+    }
+};
+
+
+#include <memory>
+#include <optional>
+
+
+class position_in_partition_view;
+class position_in_partition;
+class partition_slice_builder;
+
+namespace query {
+
+using column_id_vector = utils::small_vector<column_id, 8>;
+
+template <typename T>
+using range = wrapping_range<T>;
+
+using ring_position = dht::ring_position;
+
+// Note: the bounds of a  clustering range don't necessarily satisfy `rb.end()->value() >= lb.end()->value()`,
+// where `lb`, `rb` are the left and right bound respectively, if the bounds use non-full clustering
+// key prefixes. Inclusiveness of the range's bounds must be taken into account during comparisons.
+// For example, consider clustering key type consisting of two ints. Then [0:1, 0:] is a valid non-empty range
+// (e.g. it includes the key 0:2) even though 0: < 0:1 w.r.t the clustering prefix order.
+using clustering_range = nonwrapping_range<clustering_key_prefix>;
+
+// If `range` was supposed to be used with a comparator `cmp`, then
+// `reverse(range)` is supposed to be used with a reversed comparator `c`.
+// For instance, if it does make sense to do
+//   range.contains(point, cmp);
+// then it also makes sense to do
+//   reversed(range).contains(point, [](auto x, auto y) { return cmp(y, x); });
+// but it doesn't make sense to do
+//   reversed(range).contains(point, cmp);
+clustering_range reverse(const clustering_range& range);
+
+extern const dht::partition_range full_partition_range;
+extern const clustering_range full_clustering_range;
+
+inline
+bool is_single_partition(const dht::partition_range& range) {
+    return range.is_singular() && range.start()->value().has_key();
+}
+
+inline
+bool is_single_row(const schema& s, const query::clustering_range& range) {
+    return range.is_singular() && range.start()->value().is_full(s);
+}
+
+typedef std::vector<clustering_range> clustering_row_ranges;
+
+/// Trim the clustering ranges.
+///
+/// Equivalent of intersecting each clustering range with [pos, +inf) position
+/// in partition range, or (-inf, pos] position in partition range if
+/// reversed == true. Ranges that do not intersect are dropped. Ranges that
+/// partially overlap are trimmed.
+/// Result: each range will overlap fully with [pos, +inf), or (-int, pos] if
+/// reversed is true.
+void trim_clustering_row_ranges_to(const schema& s, clustering_row_ranges& ranges, position_in_partition pos, bool reversed = false);
+
+/// Trim the clustering ranges.
+///
+/// Equivalent of intersecting each clustering range with (key, +inf) clustering
+/// range, or (-inf, key) clustering range if reversed == true. Ranges that do
+/// not intersect are dropped. Ranges that partially overlap are trimmed.
+/// Result: each range will overlap fully with (key, +inf), or (-int, key) if
+/// reversed is true.
+void trim_clustering_row_ranges_to(const schema& s, clustering_row_ranges& ranges, const clustering_key& key, bool reversed = false);
+
+class specific_ranges {
+public:
+    specific_ranges(partition_key pk, clustering_row_ranges ranges)
+            : _pk(std::move(pk)), _ranges(std::move(ranges)) {
+    }
+    specific_ranges(const specific_ranges&) = default;
+
+    void add(const schema& s, partition_key pk, clustering_row_ranges ranges) {
+        if (!_pk.equal(s, pk)) {
+            throw std::runtime_error("Only single specific range supported currently");
+        }
+        _pk = std::move(pk);
+        _ranges = std::move(ranges);
+    }
+    bool contains(const schema& s, const partition_key& pk) {
+        return _pk.equal(s, pk);
+    }
+    size_t size() const {
+        return 1;
+    }
+    const clustering_row_ranges* range_for(const schema& s, const partition_key& key) const {
+        if (_pk.equal(s, key)) {
+            return &_ranges;
+        }
+        return nullptr;
+    }
+    const partition_key& pk() const {
+        return _pk;
+    }
+    const clustering_row_ranges& ranges() const {
+        return _ranges;
+    }
+    clustering_row_ranges& ranges() {
+        return _ranges;
+    }
+private:
+    friend std::ostream& operator<<(std::ostream& out, const specific_ranges& r);
+
+    partition_key _pk;
+    clustering_row_ranges _ranges;
+};
+
+constexpr auto max_rows = std::numeric_limits<uint64_t>::max();
+constexpr auto partition_max_rows = std::numeric_limits<uint64_t>::max();
+constexpr auto max_rows_if_set = std::numeric_limits<uint32_t>::max();
+
+// Specifies subset of rows, columns and cell attributes to be returned in a query.
+// Can be accessed across cores.
+// Schema-dependent.
+//
+// COMPATIBILITY NOTE: the partition-slice for reverse queries has two different
+// format:
+// * legacy format
+// * native format
+// The wire format uses the legacy format. See docs/dev/reverse-reads.md
+// for more details on the formats.
+class partition_slice {
+    friend class ::partition_slice_builder;
+public:
+    enum class option {
+        send_clustering_key,
+        send_partition_key,
+        send_timestamp,
+        send_expiry,
+        reversed,
+        distinct,
+        collections_as_maps,
+        send_ttl,
+        allow_short_read,
+        with_digest,
+        bypass_cache,
+        // Normally, we don't return static row if the request has clustering
+        // key restrictions and the partition doesn't have any rows matching
+        // the restrictions, see #589. This flag overrides this behavior.
+        always_return_static_content,
+        // Use the new data range scan variant, which builds query::result
+        // directly, bypassing the intermediate reconcilable_result format used
+        // in pre 4.5 range scans.
+        range_scan_data_variant,
+    };
+    using option_set = enum_set<super_enum<option,
+        option::send_clustering_key,
+        option::send_partition_key,
+        option::send_timestamp,
+        option::send_expiry,
+        option::reversed,
+        option::distinct,
+        option::collections_as_maps,
+        option::send_ttl,
+        option::allow_short_read,
+        option::with_digest,
+        option::bypass_cache,
+        option::always_return_static_content,
+        option::range_scan_data_variant>>;
+    clustering_row_ranges _row_ranges;
+public:
+    column_id_vector static_columns; // TODO: consider using bitmap
+    column_id_vector regular_columns;  // TODO: consider using bitmap
+    option_set options;
+private:
+    std::unique_ptr<specific_ranges> _specific_ranges;
+    uint32_t _partition_row_limit_low_bits;
+    uint32_t _partition_row_limit_high_bits;
+public:
+    partition_slice(clustering_row_ranges row_ranges, column_id_vector static_columns,
+        column_id_vector regular_columns, option_set options,
+        std::unique_ptr<specific_ranges> specific_ranges,
+        cql_serialization_format,
+        uint32_t partition_row_limit_low_bits,
+        uint32_t partition_row_limit_high_bits);
+    partition_slice(clustering_row_ranges row_ranges, column_id_vector static_columns,
+        column_id_vector regular_columns, option_set options,
+        std::unique_ptr<specific_ranges> specific_ranges = nullptr,
+        uint64_t partition_row_limit = partition_max_rows);
+    partition_slice(clustering_row_ranges ranges, const schema& schema, const column_set& mask, option_set options);
+    partition_slice(const partition_slice&);
+    partition_slice(partition_slice&&);
+    ~partition_slice();
+
+    partition_slice& operator=(partition_slice&& other) noexcept;
+
+    const clustering_row_ranges& row_ranges(const schema&, const partition_key&) const;
+    void set_range(const schema&, const partition_key&, clustering_row_ranges);
+    void clear_range(const schema&, const partition_key&);
+    void clear_ranges() {
+        _specific_ranges = nullptr;
+    }
+    // FIXME: possibly make this function return a const ref instead.
+    clustering_row_ranges get_all_ranges() const;
+
+    const clustering_row_ranges& default_row_ranges() const {
+        return _row_ranges;
+    }
+    const std::unique_ptr<specific_ranges>& get_specific_ranges() const {
+        return _specific_ranges;
+    }
+    const cql_serialization_format cql_format() const {
+        return cql_serialization_format(4); // For IDL compatibility
+    }
+    const uint32_t partition_row_limit_low_bits() const {
+        return _partition_row_limit_low_bits;
+    }
+    const uint32_t partition_row_limit_high_bits() const {
+        return _partition_row_limit_high_bits;
+    }
+    const uint64_t partition_row_limit() const {
+        return (static_cast<uint64_t>(_partition_row_limit_high_bits) << 32) | _partition_row_limit_low_bits;
+    }
+    void set_partition_row_limit(uint64_t limit) {
+        _partition_row_limit_low_bits = static_cast<uint64_t>(limit);
+        _partition_row_limit_high_bits = static_cast<uint64_t>(limit >> 32);
+    }
+
+    [[nodiscard]]
+    bool is_reversed() const {
+        return options.contains<query::partition_slice::option::reversed>();
+    }
+
+    friend std::ostream& operator<<(std::ostream& out, const partition_slice& ps);
+    friend std::ostream& operator<<(std::ostream& out, const specific_ranges& ps);
+};
+
+// See docs/dev/reverse-reads.md
+// In the following functions, `schema` may be reversed or not (both work).
+partition_slice legacy_reverse_slice_to_native_reverse_slice(const schema& schema, partition_slice slice);
+partition_slice native_reverse_slice_to_legacy_reverse_slice(const schema& schema, partition_slice slice);
+// Fully reverse slice (forward to native reverse or native reverse to forward).
+// Also toggles the reversed bit in `partition_slice::options`.
+partition_slice reverse_slice(const schema& schema, partition_slice slice);
+// Half reverse slice (forwad to legacy reverse or legacy reverse to forward).
+// Also toggles the reversed bit in `partition_slice::options`.
+partition_slice half_reverse_slice(const schema&, partition_slice);
+
+constexpr auto max_partitions = std::numeric_limits<uint32_t>::max();
+constexpr auto max_tombstones = std::numeric_limits<uint64_t>::max();
+
+// Tagged integers to disambiguate constructor arguments.
+enum class row_limit : uint64_t { max = max_rows };
+enum class partition_limit : uint32_t { max = max_partitions };
+enum class tombstone_limit : uint64_t { max = max_tombstones };
+
+using is_first_page = bool_class<class is_first_page_tag>;
+
+// Full specification of a query to the database.
+// Intended for passing across replicas.
+// Can be accessed across cores.
+class read_command {
+public:
+    table_id cf_id;
+    table_schema_version schema_version; // TODO: This should be enough, drop cf_id
+    partition_slice slice;
+    uint32_t row_limit_low_bits;
+    gc_clock::time_point timestamp;
+    std::optional<tracing::trace_info> trace_info;
+    uint32_t partition_limit; // The maximum number of live partitions to return.
+    // The "query_uuid" field is useful in pages queries: It tells the replica
+    // that when it finishes the read request prematurely, i.e., reached the
+    // desired number of rows per page, it should not destroy the reader object,
+    // rather it should keep it alive - at its current position - and save it
+    // under the unique key "query_uuid". Later, when we want to resume
+    // the read at exactly the same position (i.e., to request the next page)
+    // we can pass this same unique id in that query's "query_uuid" field.
+    query_id query_uuid;
+    // Signal to the replica that this is the first page of a (maybe) paged
+    // read request as far the replica is concerned. Can be used by the replica
+    // to avoid doing work normally done on paged requests, e.g. attempting to
+    // reused suspended readers.
+    query::is_first_page is_first_page;
+    // The maximum size of the query result, for all queries.
+    // We use the entire value range, so we need an optional for the case when
+    // the remote doesn't send it.
+    std::optional<query::max_result_size> max_result_size;
+    uint32_t row_limit_high_bits;
+    // Cut the page after processing this many tombstones (even if the page is empty).
+    uint64_t tombstone_limit;
+    api::timestamp_type read_timestamp; // not serialized
+    db::allow_per_partition_rate_limit allow_limit; // not serialized
+public:
+    // IDL constructor
+    read_command(table_id cf_id,
+                 table_schema_version schema_version,
+                 partition_slice slice,
+                 uint32_t row_limit_low_bits,
+                 gc_clock::time_point now,
+                 std::optional<tracing::trace_info> ti,
+                 uint32_t partition_limit,
+                 query_id query_uuid,
+                 query::is_first_page is_first_page,
+                 std::optional<query::max_result_size> max_result_size,
+                 uint32_t row_limit_high_bits,
+                 uint64_t tombstone_limit)
+        : cf_id(std::move(cf_id))
+        , schema_version(std::move(schema_version))
+        , slice(std::move(slice))
+        , row_limit_low_bits(row_limit_low_bits)
+        , timestamp(now)
+        , trace_info(std::move(ti))
+        , partition_limit(partition_limit)
+        , query_uuid(query_uuid)
+        , is_first_page(is_first_page)
+        , max_result_size(max_result_size)
+        , row_limit_high_bits(row_limit_high_bits)
+        , tombstone_limit(tombstone_limit)
+        , read_timestamp(api::new_timestamp())
+        , allow_limit(db::allow_per_partition_rate_limit::no)
+    { }
+
+    read_command(table_id cf_id,
+            table_schema_version schema_version,
+            partition_slice slice,
+            query::max_result_size max_result_size,
+            query::tombstone_limit tombstone_limit,
+            query::row_limit row_limit = query::row_limit::max,
+            query::partition_limit partition_limit = query::partition_limit::max,
+            gc_clock::time_point now = gc_clock::now(),
+            std::optional<tracing::trace_info> ti = std::nullopt,
+            query_id query_uuid = query_id::create_null_id(),
+            query::is_first_page is_first_page = query::is_first_page::no,
+            api::timestamp_type rt = api::new_timestamp(),
+            db::allow_per_partition_rate_limit allow_limit = db::allow_per_partition_rate_limit::no)
+        : cf_id(std::move(cf_id))
+        , schema_version(std::move(schema_version))
+        , slice(std::move(slice))
+        , row_limit_low_bits(static_cast<uint32_t>(row_limit))
+        , timestamp(now)
+        , trace_info(std::move(ti))
+        , partition_limit(static_cast<uint32_t>(partition_limit))
+        , query_uuid(query_uuid)
+        , is_first_page(is_first_page)
+        , max_result_size(max_result_size)
+        , row_limit_high_bits(static_cast<uint32_t>(static_cast<uint64_t>(row_limit) >> 32))
+        , tombstone_limit(static_cast<uint64_t>(tombstone_limit))
+        , read_timestamp(rt)
+        , allow_limit(allow_limit)
+    { }
+
+
+    uint64_t get_row_limit() const {
+        return (static_cast<uint64_t>(row_limit_high_bits) << 32) | row_limit_low_bits;
+    }
+    void set_row_limit(uint64_t new_row_limit) {
+        row_limit_low_bits = static_cast<uint32_t>(new_row_limit);
+        row_limit_high_bits = static_cast<uint32_t>(new_row_limit >> 32);
+    }
+    friend std::ostream& operator<<(std::ostream& out, const read_command& r);
+};
+
+struct forward_request {
+    enum class reduction_type {
+        count,
+        aggregate
+    };
+    struct aggregation_info {
+        db::functions::function_name name;
+        std::vector<sstring> column_names;
+    };
+    struct reductions_info { 
+        // Used by selector_factries to prepare reductions information
+        std::vector<reduction_type> types;
+        std::vector<aggregation_info> infos;
+    };
+
+    std::vector<reduction_type> reduction_types;
+
+    query::read_command cmd;
+    dht::partition_range_vector pr;
+
+    db::consistency_level cl;
+    lowres_system_clock::time_point timeout;
+    std::optional<std::vector<aggregation_info>> aggregation_infos;
+};
+
+std::ostream& operator<<(std::ostream& out, const forward_request& r);
+std::ostream& operator<<(std::ostream& out, const forward_request::reduction_type& r);
+std::ostream& operator<<(std::ostream& out, const forward_request::aggregation_info& a);
+
+struct forward_result {
+    // vector storing query result for each selected column
+    std::vector<bytes_opt> query_results;
+
+    struct printer {
+        const std::vector<::shared_ptr<db::functions::aggregate_function>> functions;
+        const query::forward_result& res;
+    };
+};
+
+std::ostream& operator<<(std::ostream& out, const query::forward_result::printer&);
+}
+
+
 
 namespace query {
 

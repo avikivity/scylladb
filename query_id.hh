@@ -3,6 +3,3 @@
 
 #pragma once
 
-#include "utils/UUID.hh"
-
-using query_id = utils::tagged_uuid<struct query_id_tag>;
