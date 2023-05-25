@@ -3580,30 +3580,18 @@ public:
         explicit output_iterator(bytes_ostream& os) : _ostream(&os) { }
     public:
         reference operator*() const { return *_ostream->write_place_holder(1); }
-        output_iterator& operator++() { return *this; }
-        output_iterator operator++(int) { return *this; }
+        output_iterator& operator++() ;
+        output_iterator operator++(int) ;
     };
 private:
-    inline size_type current_space_left() const {
-        if (!_current) {
-            return 0;
-        }
-        return _current->size - _current->frag_size;
-    }
+     size_type current_space_left() const ;
     // Figure out next chunk size.
     //   - must be enough for data_size + sizeof(chunk)
     //   - must be at least _initial_chunk_size
     //   - try to double each time to prevent too many allocations
     //   - should not exceed max_alloc_size, unless data_size requires so
     //   - will be power-of-two so the allocated memory can be fully utilized.
-    size_type next_alloc_size(size_t data_size) const {
-        auto next_size = _current
-                ? _current->size * 2
-                : _initial_chunk_size;
-        next_size = std::min(next_size, max_alloc_size());
-        auto r = std::max<size_type>(next_size, data_size + sizeof(chunk));
-        return std::bit_ceil(r);
-    }
+    size_type next_alloc_size(size_t data_size) const ;
     // Makes room for a contiguous region of given size.
     // The region is accounted for as already written.
     // size must not be zero.
@@ -3692,11 +3680,9 @@ public:
     };
     // Returns a place holder for a value to be written later.
     template <std::integral T>
-    inline
+    
     place_holder<T>
-    write_place_holder() {
-        return place_holder<T>{alloc(sizeof(T))};
-    }
+    write_place_holder() ;
     [[gnu::always_inline]]
     value_type* write_place_holder(size_type size) {
         return alloc(size);
@@ -3724,203 +3710,56 @@ public:
     void write(const char* ptr, size_t size) {
         write(bytes_view(reinterpret_cast<const signed char*>(ptr), size));
     }
-    bool is_linearized() const {
-        return !_begin || !_begin->next;
-    }
+    bool is_linearized() const ;
     // Call only when is_linearized()
-    bytes_view view() const {
-        assert(is_linearized());
-        if (!_current) {
-            return bytes_view();
-        }
-        return bytes_view(_current->data, _size);
-    }
+    bytes_view view() const ;
     // Makes the underlying storage contiguous and returns a view to it.
     // Invalidates all previously created placeholders.
-    bytes_view linearize() {
-        if (is_linearized()) {
-            return view();
-        }
-        auto space = malloc(_size + sizeof(chunk));
-        if (!space) {
-            throw std::bad_alloc();
-        }
-        auto old_begin = _begin;
-        auto new_chunk = new (space) chunk(&_begin, _size, _size);
-        auto dst = new_chunk->data;
-        auto r = old_begin.ptr;
-        while (r) {
-            auto next = r->next;
-            dst = std::copy_n(r->data, r->frag_size, dst);
-            r->~chunk();
-            ::free(r);
-            r = next;
-        }
-        _current = new_chunk;
-        _begin = std::move(new_chunk);
-        return bytes_view(_current->data, _size);
-    }
+    bytes_view linearize() ;
     // Returns the amount of bytes written so far
-    size_type size() const {
-        return _size;
-    }
+    size_type size() const ;
     // For the FragmentRange concept
-    size_type size_bytes() const {
-        return _size;
-    }
-    bool empty() const {
-        return _size == 0;
-    }
-    void reserve(size_t size) {
-        // FIXME: implement
-    }
-    void append(const bytes_ostream& o) {
-        for (auto&& bv : o.fragments()) {
-            write(bv);
-        }
-    }
+    size_type size_bytes() const ;
+    bool empty() const ;
+    void reserve(size_t size) ;
+    void append(const bytes_ostream& o) ;
     // Removes n bytes from the end of the bytes_ostream.
     // Beware of O(n) algorithm.
-    void remove_suffix(size_t n) {
-        _size -= n;
-        auto left = _size;
-        auto current = _begin.ptr;
-        while (current) {
-            if (current->frag_size >= left) {
-                current->frag_size = left;
-                _current = current;
-                free_chain(current->next);
-                current->next = nullptr;
-                return;
-            }
-            left -= current->frag_size;
-            current = current->next;
-        }
-    }
+    void remove_suffix(size_t n) ;
     // begin() and end() form an input range to bytes_view representing fragments.
     // Any modification of this instance invalidates iterators.
-    fragment_iterator begin() const { return { _begin.ptr }; }
-    fragment_iterator end() const { return { nullptr }; }
-    output_iterator write_begin() { return output_iterator(*this); }
-    boost::iterator_range<fragment_iterator> fragments() const {
-        return { begin(), end() };
-    }
+    fragment_iterator begin() const ;
+    fragment_iterator end() const ;
+    output_iterator write_begin() ;
+    boost::iterator_range<fragment_iterator> fragments() const ;
     struct position {
         chunk* _chunk;
         size_type _offset;
     };
-    position pos() const {
-        return { _current, _current ? _current->frag_size : 0 };
-    }
+    position pos() const ;
     // Returns the amount of bytes written since given position.
     // "pos" must be valid.
-    size_type written_since(position pos) {
-        chunk* c = pos._chunk;
-        if (!c) {
-            return _size;
-        }
-        size_type total = c->frag_size - pos._offset;
-        c = c->next;
-        while (c) {
-            total += c->frag_size;
-            c = c->next;
-        }
-        return total;
-    }
+    size_type written_since(position pos) ;
     // Rollbacks all data written after "pos".
     // Invalidates all placeholders and positions created after "pos".
-    void retract(position pos) {
-        if (!pos._chunk) {
-            *this = {};
-            return;
-        }
-        _size -= written_since(pos);
-        _current = pos._chunk;
-        free_chain(_current->next);
-        _current->next = nullptr;
-        _current->frag_size = pos._offset;
-    }
-    void reduce_chunk_count() {
-        // FIXME: This is a simplified version. It linearizes the whole buffer
-        // if its size is below max_chunk_size. We probably could also gain
-        // some read performance by doing "real" reduction, i.e. merging
-        // all chunks until all but the last one is max_chunk_size.
-        if (size() < max_chunk_size()) {
-            linearize();
-        }
-    }
-    bool operator==(const bytes_ostream& other) const {
-        auto as = fragments().begin();
-        auto as_end = fragments().end();
-        auto bs = other.fragments().begin();
-        auto bs_end = other.fragments().end();
-        auto a = *as++;
-        auto b = *bs++;
-        while (!a.empty() || !b.empty()) {
-            auto now = std::min(a.size(), b.size());
-            if (!std::equal(a.begin(), a.begin() + now, b.begin(), b.begin() + now)) {
-                return false;
-            }
-            a.remove_prefix(now);
-            if (a.empty() && as != as_end) {
-                a = *as++;
-            }
-            b.remove_prefix(now);
-            if (b.empty() && bs != bs_end) {
-                b = *bs++;
-            }
-        }
-        return true;
-    }
+    void retract(position pos) ;
+    void reduce_chunk_count() ;
+    bool operator==(const bytes_ostream& other) const ;
     // Makes this instance empty.
     //
     // The first buffer is not deallocated, so callers may rely on the
     // fact that if they write less than the initial chunk size between
     // the clear() calls then writes will not involve any memory allocations,
     // except for the first write made on this instance.
-    void clear() {
-        if (_begin.ptr) {
-            _begin.ptr->frag_size = 0;
-            _size = 0;
-            free_chain(_begin.ptr->next);
-            _begin.ptr->next = nullptr;
-            _current = _begin.ptr;
-        }
-    }
-    managed_bytes to_managed_bytes() && {
-        if (_size) {
-            _begin.ptr->size = _size;
-            _current = nullptr;
-            _size = 0;
-            auto begin_ptr = _begin.ptr;
-            _begin.ptr = nullptr;
-            return managed_bytes(begin_ptr);
-        } else {
-            return managed_bytes();
-        }
-    }
+    void clear() ;
+    managed_bytes to_managed_bytes() && ;
     // Makes this instance empty using async continuations, while allowing yielding.
     //
     // The first buffer is not deallocated, so callers may rely on the
     // fact that if they write less than the initial chunk size between
     // the clear() calls then writes will not involve any memory allocations,
     // except for the first write made on this instance.
-    future<> clear_gently() noexcept {
-        if (!_begin.ptr) {
-            return make_ready_future<>();
-        }
-        _begin->frag_size = 0;
-        _current = _begin.ptr;
-        _size = 0;
-        return do_until([this] { return !_begin.ptr->next; }, [this] {
-            auto second_chunk = _begin.ptr->next;
-            auto next = second_chunk->next;
-            second_chunk->~chunk();
-            ::free(second_chunk);
-            _begin->next = std::move(next);
-            return make_ready_future<>();
-        });
-    }
+    future<> clear_gently() noexcept ;
 };
 namespace utils {
 using input_stream = seastar::memory_input_stream<bytes_ostream::fragment_iterator>;
@@ -3956,11 +3795,8 @@ public:
         using reference = const bytes_view&;
         using difference_type = std::ptrdiff_t;
         iterator() = default;
-        iterator(bytes_view current, size_t left, FragmentIterator next)
-            : _current(current), _left(left), _next(next) { }
-        bytes_view operator*() const {
-            return _current;
-        }
+        iterator(bytes_view current, size_t left, FragmentIterator next)  ;
+        bytes_view operator*() const ;
         const bytes_view* operator->() const {
             return &_current;
         }
@@ -7048,24 +6884,14 @@ class collection_column_computation final : public column_computation {
             std::invocable<collection_kv*, collection_kv*, tombstone> auto&& old_and_new_row_func, const schema& schema,
             const partition_key& key, const db::view::clustering_or_static_row& update, const std::optional<db::view::clustering_or_static_row>& existing) const;
 public:
-    static collection_column_computation for_keys(const bytes& collection_name) {
-        return {collection_name, kind::keys};
-    }
-    static collection_column_computation for_values(const bytes& collection_name) {
-        return {collection_name, kind::values};
-    }
-    static collection_column_computation for_entries(const bytes& collection_name) {
-        return {collection_name, kind::entries};
-    }
+    static collection_column_computation for_keys(const bytes& collection_name) ;
+    static collection_column_computation for_values(const bytes& collection_name) ;
+    static collection_column_computation for_entries(const bytes& collection_name) ;
     static column_computation_ptr for_target_type(std::string_view type, const bytes& collection_name);
     virtual bytes serialize() const override;
     virtual bytes compute_value(const schema& schema, const partition_key& key) const override;
-    virtual column_computation_ptr clone() const override {
-        return std::make_unique<collection_column_computation>(*this);
-    }
-    virtual bool depends_on_non_primary_key_column() const override {
-        return true;
-    }
+    virtual column_computation_ptr clone() const override ;
+    virtual bool depends_on_non_primary_key_column() const override ;
     std::vector<db::view::view_key_and_action> compute_values_with_action(const schema& schema, const partition_key& key,
             const db::view::clustering_or_static_row& row, const std::optional<db::view::clustering_or_static_row>& existing) const;
 };
@@ -7085,14 +6911,10 @@ public:
     using period = typename duration::period;
     using time_point = std::chrono::time_point<timestamp_clock, duration>;
     static constexpr bool is_steady = base::is_steady;
-    static time_point now() {
-        return time_point(std::chrono::duration_cast<duration>(base::now().time_since_epoch())) + get_clocks_offset();
-    }
+    static time_point now() ;
 };
-static inline
-timestamp_type new_timestamp() {
-    return timestamp_clock::now().time_since_epoch().count();
-}
+static
+timestamp_type new_timestamp() ;
 }
 std::string format_timestamp(api::timestamp_type);
 enum class tombstone_gc_mode : uint8_t { timeout, disabled, immediate, repair };
@@ -7102,11 +6924,9 @@ private:
     std::chrono::seconds _propagation_delay_in_seconds = std::chrono::seconds(3600);
 public:
     tombstone_gc_options() = default;
-    const tombstone_gc_mode& mode() const { return _mode; }
+    const tombstone_gc_mode& mode() const ;
     explicit tombstone_gc_options(const std::map<seastar::sstring, seastar::sstring>& map);
-    const std::chrono::seconds& propagation_delay_in_seconds() const {
-        return _propagation_delay_in_seconds;
-    }
+    const std::chrono::seconds& propagation_delay_in_seconds() const ;
     std::map<seastar::sstring, seastar::sstring> to_map() const;
     seastar::sstring to_sstring() const;
     bool operator==(const tombstone_gc_options&) const = default;
@@ -7125,27 +6945,11 @@ public:
     per_partition_rate_limit_options() = default;
     per_partition_rate_limit_options(std::map<sstring, sstring> map);
     std::map<sstring, sstring> to_map() const;
-    inline std::optional<uint32_t> get_max_ops_per_second(operation_type op_type) const {
-        switch (op_type) {
-        case operation_type::write:
-            return _max_writes_per_second;
-        case operation_type::read:
-            return _max_reads_per_second;
-        }
-        std::abort(); // compiler will error before we reach here
-    }
-    inline void set_max_writes_per_second(std::optional<uint32_t> v) {
-        _max_writes_per_second = v;
-    }
-    inline std::optional<uint32_t> get_max_writes_per_second() const {
-        return _max_writes_per_second;
-    }
-    inline void set_max_reads_per_second(std::optional<uint32_t> v) {
-        _max_reads_per_second = v;
-    }
-    inline std::optional<uint32_t> get_max_reads_per_second() const {
-        return _max_reads_per_second;
-    }
+     std::optional<uint32_t> get_max_ops_per_second(operation_type op_type) const ;
+     void set_max_writes_per_second(std::optional<uint32_t> v) ;
+     std::optional<uint32_t> get_max_writes_per_second() const ;
+     void set_max_reads_per_second(std::optional<uint32_t> v) ;
+     std::optional<uint32_t> get_max_reads_per_second() const ;
 };
 }
 namespace replica {
@@ -7794,52 +7598,23 @@ public:
     bool is_super() const {
         return _raw._type == cf_type::super;
     }
-    gc_clock::duration gc_grace_seconds() const {
-        auto seconds = std::chrono::seconds(_raw._gc_grace_seconds);
-        return std::chrono::duration_cast<gc_clock::duration>(seconds);
-    }
+    gc_clock::duration gc_grace_seconds() const ;
     gc_clock::duration paxos_grace_seconds() const;
-    double dc_local_read_repair_chance() const {
-        return _raw._dc_local_read_repair_chance;
-    }
-    double read_repair_chance() const {
-        return _raw._read_repair_chance;
-    }
-    double crc_check_chance() const {
-        return _raw._crc_check_chance;
-    }
-    int32_t min_compaction_threshold() const {
-        return _raw._min_compaction_threshold;
-    }
-    int32_t max_compaction_threshold() const {
-        return _raw._max_compaction_threshold;
-    }
-    int32_t min_index_interval() const {
-        return _raw._min_index_interval;
-    }
-    int32_t max_index_interval() const {
-        return _raw._max_index_interval;
-    }
-    int32_t memtable_flush_period() const {
-        return _raw._memtable_flush_period;
-    }
-    sstables::compaction_strategy_type configured_compaction_strategy() const {
-        return _raw._compaction_strategy;
-    }
-    sstables::compaction_strategy_type compaction_strategy() const {
-        return _raw._compaction_enabled ? _raw._compaction_strategy : sstables::compaction_strategy_type::null;
-    }
-    const std::map<sstring, sstring>& compaction_strategy_options() const {
-        return _raw._compaction_strategy_options;
-    }
-    bool compaction_enabled() const {
-        return _raw._compaction_enabled;
-    }
+    double dc_local_read_repair_chance() const ;
+    double read_repair_chance() const ;
+    double crc_check_chance() const ;
+    int32_t min_compaction_threshold() const ;
+    int32_t max_compaction_threshold() const ;
+    int32_t min_index_interval() const ;
+    int32_t max_index_interval() const ;
+    int32_t memtable_flush_period() const ;
+    sstables::compaction_strategy_type configured_compaction_strategy() const ;
+    sstables::compaction_strategy_type compaction_strategy() const ;
+    const std::map<sstring, sstring>& compaction_strategy_options() const ;
+    bool compaction_enabled() const ;
     const cdc::options& cdc_options() const;
     const ::tombstone_gc_options& tombstone_gc_options() const;
-    const db::per_partition_rate_limit_options& per_partition_rate_limit_options() const {
-        return _raw._per_partition_rate_limit_options;
-    }
+    const db::per_partition_rate_limit_options& per_partition_rate_limit_options() const ;
     const ::speculative_retry& speculative_retry() const {
         return _raw._speculative_retry;
     }
@@ -8553,9 +8328,7 @@ bytes_ostream deserialize(Input& in, boost::type<bytes_ostream>) {
 }
 template<typename Output, typename FragmentedBuffer>
 requires FragmentRange<FragmentedBuffer>
-void serialize_fragmented(Output& out, FragmentedBuffer&& v) {
-    serializer<bytes>::write_fragmented(out, std::forward<FragmentedBuffer>(v));
-}
+void serialize_fragmented(Output& out, FragmentedBuffer&& v) ;
 template<typename T>
 struct serializer<std::optional<T>> {
     template<typename Input>
@@ -8650,17 +8423,11 @@ struct serializer<std::unique_ptr<T>> {
 template<typename Enum>
 struct serializer<enum_set<Enum>> {
     template<typename Input>
-    static enum_set<Enum> read(Input& in) {
-        return enum_set<Enum>::from_mask(deserialize(in, boost::type<uint64_t>()));
-    }
+    static enum_set<Enum> read(Input& in) ;
     template<typename Output>
-    static void write(Output& out, enum_set<Enum> v) {
-        serialize(out, uint64_t(v.mask()));
-    }
+    static void write(Output& out, enum_set<Enum> v) ;
     template<typename Input>
-    static void skip(Input& in) {
-        read(in);
-    }
+    static void skip(Input& in) ;
 };
 template<>
 struct serializer<std::monostate> {
@@ -8675,66 +8442,25 @@ struct serializer<std::monostate> {
     }
 };
 template<typename T>
-size_type get_sizeof(const T& obj) {
-    seastar::measuring_output_stream ms;
-    serialize(ms, obj);
-    auto size = ms.size();
-    if (size > std::numeric_limits<size_type>::max()) {
-        throw std::runtime_error("Object is too big for get_sizeof");
-    }
-    return size;
-}
+size_type get_sizeof(const T& obj) ;
 template<typename Buffer, typename T>
-Buffer serialize_to_buffer(const T& v, size_t head_space) {
-    seastar::measuring_output_stream measure;
-    ser::serialize(measure, v);
-    Buffer ret(typename Buffer::initialized_later(), measure.size() + head_space);
-    seastar::simple_output_stream out(reinterpret_cast<char*>(ret.begin()), ret.size(), head_space);
-    ser::serialize(out, v);
-    return ret;
-}
+Buffer serialize_to_buffer(const T& v, size_t head_space) ;
 template<typename T, typename Buffer>
-T deserialize_from_buffer(const Buffer& buf, boost::type<T> type, size_t head_space) {
-    seastar::simple_input_stream in(reinterpret_cast<const char*>(buf.begin() + head_space), buf.size() - head_space);
-    return deserialize(in, std::move(type));
-}
-inline
-utils::input_stream as_input_stream(bytes_view b) {
-    return utils::input_stream::simple(reinterpret_cast<const char*>(b.begin()), b.size());
-}
-inline
-utils::input_stream as_input_stream(const bytes_ostream& b) {
-    if (b.is_linearized()) {
-        return as_input_stream(b.view());
-    }
-    return utils::input_stream::fragmented(b.fragments().begin(), b.size());
-}
+T deserialize_from_buffer(const Buffer& buf, boost::type<T> type, size_t head_space) ;
+
+utils::input_stream as_input_stream(bytes_view b) ;
+
+utils::input_stream as_input_stream(const bytes_ostream& b) ;
 template<typename Output, typename ...T>
-void serialize(Output& out, const boost::variant<T...>& v) {}
+void serialize(Output& out, const boost::variant<T...>& v) ;
 template<typename Input, typename ...T>
-boost::variant<T...> deserialize(Input& in, boost::type<boost::variant<T...>>) {
-    return boost::variant<T...>();
-}
+boost::variant<T...> deserialize(Input& in, boost::type<boost::variant<T...>>) ;
 template<typename Output, typename ...T>
-void serialize(Output& out, const std::variant<T...>& v) {
-    static_assert(std::variant_size_v<std::variant<T...>> < 256);
-    size_t type_index = v.index();
-    serialize(out, uint8_t(type_index));
-    std::visit([&out] (const auto& member) {
-        serialize(out, member);
-    }, v);
-}
+void serialize(Output& out, const std::variant<T...>& v) ;
 template<typename Input, typename T, size_t... I>
-T deserialize_std_variant(Input& in, boost::type<T> t,  size_t idx, std::index_sequence<I...>) {
-    T v;
-    (void)((I == idx ? v.template emplace<I>(deserialize(in, boost::type<std::variant_alternative_t<I, T>>())), true : false) || ...);
-    return v;
-}
+T deserialize_std_variant(Input& in, boost::type<T> t,  size_t idx, std::index_sequence<I...>) ;
 template<typename Input, typename ...T>
-std::variant<T...> deserialize(Input& in, boost::type<std::variant<T...>> v) {
-    size_t idx = deserialize(in, boost::type<uint8_t>());
-    return deserialize_std_variant(in, v, idx, std::make_index_sequence<sizeof...(T)>());
-}
+std::variant<T...> deserialize(Input& in, boost::type<std::variant<T...>> v) ;
 template<typename Output>
 void serialize(Output& out, const unknown_variant_type& v) {
     out.write(v.data.begin(), v.data.size());
@@ -11663,12 +11389,12 @@ public:
         , _key(nullptr)
         , _weight(static_cast<std::underlying_type_t<token_bound>>(bound))
     { }
-    const dht::token& token() const noexcept { return *_token; }
-    const partition_key* key() const { return _key; }
+    const dht::token& token() const noexcept ;
+    const partition_key* key() const ;
     // Only when key() == nullptr
-    token_bound get_token_bound() const { return token_bound(_weight); }
+    token_bound get_token_bound() const ;
     // Only when key() != nullptr
-    after_key is_after_key() const { return after_key(_weight == 1); }
+    after_key is_after_key() const ;
     friend std::ostream& operator<<(std::ostream&, ring_position_view);
     friend class optimized_optional<ring_position_view>;
 };
@@ -11704,36 +11430,16 @@ public:
     using token_bound = ring_position::token_bound;
     struct after_key_tag {};
     using after_key = bool_class<after_key_tag>;
-    static ring_position_ext min() noexcept {
-        return { minimum_token(), std::nullopt, -1 };
-    }
-    static ring_position_ext max() noexcept {
-        return { maximum_token(), std::nullopt, 1 };
-    }
-    bool is_min() const noexcept {
-        return _token.is_minimum();
-    }
-    bool is_max() const noexcept {
-        return _token.is_maximum();
-    }
-    static ring_position_ext for_range_start(const partition_range& r) {
-        return r.start() ? ring_position_ext(r.start()->value(), after_key(!r.start()->is_inclusive())) : min();
-    }
-    static ring_position_ext for_range_end(const partition_range& r) {
-        return r.end() ? ring_position_ext(r.end()->value(), after_key(r.end()->is_inclusive())) : max();
-    }
-    static ring_position_ext for_after_key(const dht::decorated_key& dk) {
-        return ring_position_ext(dk, after_key::yes);
-    }
-    static ring_position_ext for_after_key(dht::ring_position_ext view) {
-        return ring_position_ext(after_key_tag(), view);
-    }
-    static ring_position_ext starting_at(const dht::token& t) {
-        return ring_position_ext(t, token_bound::start);
-    }
-    static ring_position_ext ending_at(const dht::token& t) {
-        return ring_position_ext(t, token_bound::end);
-    }
+    static ring_position_ext min() noexcept ;
+    static ring_position_ext max() noexcept ;
+    bool is_min() const noexcept ;
+    bool is_max() const noexcept ;
+    static ring_position_ext for_range_start(const partition_range& r) ;
+    static ring_position_ext for_range_end(const partition_range& r) ;
+    static ring_position_ext for_after_key(const dht::decorated_key& dk) ;
+    static ring_position_ext for_after_key(dht::ring_position_ext view) ;
+    static ring_position_ext starting_at(const dht::token& t) ;
+    static ring_position_ext ending_at(const dht::token& t) ;
     ring_position_ext(const dht::ring_position& pos, after_key after = after_key::no)
         : _token(pos.token())
         , _key(pos.key())
@@ -12269,87 +11975,21 @@ public:
             _pending_for_write_records_bulk.clear();
         }
     }
-    void write_complete(uint64_t nr = 1) {
-        if (nr > _flushing_records) {
-            throw std::logic_error(seastar::format("completing more records ({:d}) than there are pending ({:d})", nr, _flushing_records));
-        }
-        _flushing_records -= nr;
-    }
-    void write_maybe() {
-        if (_pending_for_write_records_count >= write_event_records_threshold || _pending_for_write_records_bulk.size() >= write_event_sessions_threshold) {
-            write_pending_records();
-        }
-    }
-    void end_session() {
-        --_active_sessions;
-    }
-    void write_session_records(lw_shared_ptr<one_session_records> records, bool write_now) {
-        // if service is down - drop the records and return
-        if (_down) {
-            return;
-        }
-        try {
-            schedule_for_write(std::move(records));
-        } catch (...) {
-            // OOM: bump up the error counter and ignore
-            ++stats.trace_errors;
-            return;
-        }
-        if (write_now) {
-            write_pending_records();
-        } else {
-            write_maybe();
-        }
-    }
+    void write_complete(uint64_t nr = 1) ;
+    void write_maybe() ;
+    void end_session() ;
+    void write_session_records(lw_shared_ptr<one_session_records> records, bool write_now) ;
     void set_trace_probability(double p);
-    double get_trace_probability() const {
-        return _trace_probability;
-    }
-    bool trace_next_query() {
-        return _normalized_trace_probability != 0 && _gen() < _normalized_trace_probability;
-    }
-    std::unique_ptr<backend_session_state_base> allocate_backend_session_state() const {
-        return _tracing_backend_helper_ptr->allocate_session_state();
-    }
-    bool have_records_budget(uint64_t nr = 1) {
-        // We don't want the total amount of pending, active and flushing records to
-        // bypass the maximum number of pending records plus the number of
-        // records that are possibly being written write now.
-        //
-        // If either records are being created too fast or a backend doesn't
-        // keep up we want to start dropping records.
-        // In any case, this should be rare.
-        if (_pending_for_write_records_count + _cached_records + _flushing_records + nr > max_pending_trace_records + write_event_records_threshold) {
-            return false;
-        }
-        return true;
-    }
-    uint64_t* get_pending_records_ptr() {
-        return &_pending_for_write_records_count;
-    }
-    uint64_t* get_cached_records_ptr() {
-        return &_cached_records;
-    }
-    void schedule_for_write(lw_shared_ptr<one_session_records> records) {
-        if (records->is_pending_for_write()) {
-            return;
-        }
-        _pending_for_write_records_bulk.emplace_back(records);
-        records->set_pending_for_write();
-        // move the current records from a "cached" to "pending for write" state
-        auto current_records_num = records->size();
-        _cached_records -= current_records_num;
-        _pending_for_write_records_count += current_records_num;
-    }
-    void set_slow_query_enabled(bool enable = true) {
-        _slow_query_logging_enabled = enable;
-    }
-    bool slow_query_tracing_enabled() const {
-        return _slow_query_logging_enabled;
-    }
-    void set_ignore_trace_events(bool enable = true) {
-        _ignore_trace_events = enable;
-    }
+    double get_trace_probability() const ;
+    bool trace_next_query() ;
+    std::unique_ptr<backend_session_state_base> allocate_backend_session_state() const ;
+    bool have_records_budget(uint64_t nr = 1) ;
+    uint64_t* get_pending_records_ptr() ;
+    uint64_t* get_cached_records_ptr() ;
+    void schedule_for_write(lw_shared_ptr<one_session_records> records) ;
+    void set_slow_query_enabled(bool enable = true) ;
+    bool slow_query_tracing_enabled() const ;
+    void set_ignore_trace_events(bool enable = true) ;
     bool ignore_trace_events_enabled() const {
         return _ignore_trace_events;
     }
@@ -17840,72 +17480,22 @@ public:
     bool full_tracing() const {
         return _state_props.contains(trace_state_props::full_tracing);
     }
-    bool log_slow_query() const {
-        return _state_props.contains(trace_state_props::log_slow_query);
-    }
-    bool ignore_events() const {
-        return _state_props.contains(trace_state_props::ignore_events);
-    }
-    trace_state_props_set raw_props() const {
-        return _state_props;
-    }
-    uint64_t start_ts_us() const {
-        // `elapsed_clock` has undefined epoch, so we use the POSIX TS to expose times outside
-        const std::chrono::system_clock::time_point start_system_time_point = std::chrono::system_clock::now()
-                + (_start - elapsed_clock::now());
-        return std::chrono::duration_cast<std::chrono::microseconds>(start_system_time_point.time_since_epoch()).count();
-    }
-    uint32_t slow_query_threshold_us() const {
-        return _slow_query_threshold.count();
-    }
-    uint32_t slow_query_ttl_sec() const {
-        return _records->session_rec.slow_query_record_ttl.count();
-    }
-    span_id my_span_id() const {
-        return _records->my_span_id;
-    }
-    uint64_t events_size() const {
-        return _records->events_recs.size();
-    }
+    bool log_slow_query() const ;
+    bool ignore_events() const ;
+    trace_state_props_set raw_props() const ;
+    uint64_t start_ts_us() const ;
+    uint32_t slow_query_threshold_us() const ;
+    uint32_t slow_query_ttl_sec() const ;
+    span_id my_span_id() const ;
+    uint64_t events_size() const ;
 private:
     void stop_foreground_and_write() noexcept;
-    bool should_log_slow_query(elapsed_clock::duration e) const {
-        return log_slow_query() && e > _slow_query_threshold;
-    }
-    std::chrono::seconds ttl_by_type(trace_type type, std::chrono::seconds slow_query_ttl) noexcept {
-        if (full_tracing()) {
-            if (!log_slow_query()) {
-                return ::tracing::ttl_by_type(type);
-            } else {
-                return std::max(::tracing::ttl_by_type(type), slow_query_ttl);
-            }
-        } else {
-            return slow_query_ttl;
-        }
-    }
-    bool should_write_records() const {
-        return full_tracing() || _records->do_log_slow_query;
-    }
+    bool should_log_slow_query(elapsed_clock::duration e) const ;
+    std::chrono::seconds ttl_by_type(trace_type type, std::chrono::seconds slow_query_ttl) noexcept ;
+    bool should_write_records() const ;
     elapsed_clock::duration elapsed();
-    void begin() {
-        std::atomic_signal_fence(std::memory_order_seq_cst);
-        if (_supplied_start_ts_us) {
-            // Shorten `_slow_query_threshold` by the time spent since starting the parent span.
-            _slow_query_threshold -= std::chrono::duration_cast<std::chrono::microseconds>(
-                    std::chrono::system_clock::now().time_since_epoch() - std::chrono::microseconds(*_supplied_start_ts_us));
-            // And do not let it be negative
-            _slow_query_threshold = std::max(std::chrono::microseconds::zero(), _slow_query_threshold);
-        }
-        _start = elapsed_clock::now();
-        std::atomic_signal_fence(std::memory_order_seq_cst);
-        set_state(state::foreground);
-    }
-    void begin(sstring request, gms::inet_address client) {
-        begin();
-        _records->session_rec.client = client;
-        _records->session_rec.request = std::move(request);
-        _records->session_rec.started_at = std::chrono::system_clock::now();
-    }
+    void begin() ;
+    void begin(sstring request, gms::inet_address client) ;
     template <typename Func>
     requires std::is_invocable_r_v<sstring, Func>
     void begin(const seastar::lazy_eval<Func>& lf, gms::inet_address client) {
@@ -17922,11 +17512,7 @@ private:
     void add_session_param(sstring_view key, sstring_view val);
     void set_user_timestamp(api::timestamp_type val);
     void add_prepared_statement(prepared_checked_weak_ptr& prepared);
-    void set_username(const std::optional<auth::authenticated_user>& user) {
-        if (user) {
-            _records->session_rec.username = format("{}", *user);
-        }
-    }
+    void set_username(const std::optional<auth::authenticated_user>& user) ;
     void add_table_name(sstring full_table_name) {
         _records->session_rec.tables.emplace(std::move(full_table_name));
     }
@@ -70182,7 +69768,7 @@ template<typename RangeOfPrintable> static auto prefixed(const sstring& prefix, 
  const atomic_cell_or_collection* row::find_cell(column_id id) const {     auto c_a_h = find_cell_and_hash(id);     return c_a_h ? &c_a_h->cell : nullptr; }
  size_t row::external_memory_usage(const schema& s, column_kind kind) const {     return _cells.memory_usage([&] (column_id id, const cell_and_hash& cah) noexcept {             auto& cdef = s.column_at(kind, id);             return cah.cell.external_memory_usage(*cdef.type);     }); }
  size_t rows_entry::memory_usage(const schema& s) const {     size_t size = 0;     if (!dummy()) {         size += key().external_memory_usage();     }     return size +            row().cells().external_memory_usage(s, column_kind::regular_column) +            sizeof(rows_entry); }
- size_t mutation_partition::external_memory_usage(const schema& s) const {     check_schema(s);     size_t sum = 0;     sum += static_row().external_memory_usage(s, column_kind::static_column);     sum += clustered_rows().external_memory_usage();     for (auto& clr : clustered_rows()) {         sum += clr.memory_usage(s);     }     sum += row_tombstones().external_memory_usage(s);     return sum; }
+ 
  template<bool reversed, typename Func> requires std::is_invocable_r_v<stop_iteration, Func, rows_entry&> void mutation_partition::trim_rows(const schema& s,     const std::vector<query::clustering_range>& row_ranges,     Func&& func) {     check_schema(s);     stop_iteration stop = stop_iteration::no;     auto last = reversal_traits<reversed>::begin(_rows);     auto deleter = current_deleter<rows_entry>();     auto range_begin = [this, &s] (const query::clustering_range& range) {         return reversed ? upper_bound(s, range) : lower_bound(s, range);     };     auto range_end = [this, &s] (const query::clustering_range& range) {         return reversed ? lower_bound(s, range) : upper_bound(s, range);     };     for (auto&& row_range : row_ranges) {         if (stop) {             break;         }         last = reversal_traits<reversed>::erase_and_dispose(_rows, last,             reversal_traits<reversed>::maybe_reverse(_rows, range_begin(row_range)), deleter);         auto end = reversal_traits<reversed>::maybe_reverse(_rows, range_end(row_range));         while (last != end && !stop) {             rows_entry& e = *last;             stop = func(e);             if (e.empty()) {                 last = reversal_traits<reversed>::erase_dispose_and_update_end(_rows, last, deleter, end);             } else {                 ++last;             }         }     }     reversal_traits<reversed>::erase_and_dispose(_rows, last, reversal_traits<reversed>::end(_rows), deleter); }
  uint32_t mutation_partition::do_compact(const schema& s,     const dht::decorated_key& dk,     gc_clock::time_point query_time,     const std::vector<query::clustering_range>& row_ranges,     bool always_return_static_content,     bool reverse,     uint64_t row_limit,     can_gc_fn& can_gc,     bool drop_tombstones_unconditionally,     const tombstone_gc_state& gc_state) {     check_schema(s);     assert(row_limit > 0);     auto gc_before = drop_tombstones_unconditionally ? gc_clock::time_point::max() :         gc_state.get_gc_before_for_key(s.shared_from_this(), dk, query_time);     auto should_purge_tombstone = [&] (const tombstone& t) {         return t.deletion_time < gc_before && can_gc(t);     };     bool static_row_live = _static_row.compact_and_expire(s, column_kind::static_column, row_tombstone(_tombstone),         query_time, can_gc, gc_before);     uint64_t row_count = 0;     auto row_callback = [&] (rows_entry& e) {         if (e.dummy()) {             return stop_iteration::no;         }         deletable_row& row = e.row();         tombstone tomb = range_tombstone_for_row(s, e.key());         bool is_live = row.compact_and_expire(s, tomb, query_time, can_gc, gc_before, nullptr);         return stop_iteration(is_live && ++row_count == row_limit);     };     if (reverse) {         trim_rows<true>(s, row_ranges, row_callback);     } else {         trim_rows<false>(s, row_ranges, row_callback);     }     // #589 - Do not add extra row for statics unless we did a CK range-less query.
     // See comment in query
@@ -70286,119 +69872,38 @@ static bool dead_marker_shadows_row(const schema& s, column_kind kind, const row
     if (reverse == consume_in_reverse::no) {         frozen_mutation_consumer_adaptor adaptor(s, consumer);         for (const partition& p : r.partitions()) {             const auto res = co_await p.mut().consume_gently(s, adaptor);             if (res.stop == stop_iteration::yes) {                 break;             }         }     } else {         for (const partition& p : r.partitions()) {             auto m = co_await p.mut().unfreeze_gently(s);             const auto res = co_await std::move(m).consume_gently(consumer, reverse);             if (res.stop == stop_iteration::yes) {                 break;             }         }     }     if (r.is_short_read()) {         builder.mark_as_short_read();     }     co_return builder.build(compaction_state->current_full_position()); }
  query::result query_mutation(mutation&& m, const query::partition_slice& slice, uint64_t row_limit, gc_clock::time_point now, query::result_options opts) {     query::result::builder builder(slice, opts, query::result_memory_accounter{ query::result_memory_limiter::unlimited_result_size }, query::max_tombstones);     auto consumer = compact_for_query_v2<query_result_builder>(*m.schema(), now, slice, row_limit,             query::max_partitions, query_result_builder(*m.schema(), builder));     auto compaction_state = consumer.get_state();     const auto reverse = slice.options.contains(query::partition_slice::option::reversed) ? consume_in_reverse::yes : consume_in_reverse::no;     std::move(m).consume(consumer, reverse);     return builder.build(compaction_state->current_full_position()); }
  class counter_write_query_result_builder {     const schema& _schema;     mutation_opt _mutation; public:     counter_write_query_result_builder(const schema& s) : _schema(s) { }     void consume_new_partition(const dht::decorated_key& dk) {         _mutation = mutation(_schema.shared_from_this(), dk);     }     void consume(tombstone) { }     stop_iteration consume(static_row&& sr, tombstone, bool is_live) {         if (!is_live) {             return stop_iteration::no;         }         _mutation->partition().static_row().maybe_create() = std::move(sr.cells());         return stop_iteration::no;     }     stop_iteration consume(clustering_row&& cr, row_tombstone,  bool is_live) {         if (!is_live) {             return stop_iteration::no;         }         _mutation->partition().insert_row(_schema, cr.key(), std::move(cr).as_deletable_row());         return stop_iteration::no;     }     stop_iteration consume(range_tombstone_change&& rtc) {         return stop_iteration::no;     }     stop_iteration consume_end_of_partition() {         return stop_iteration::no;     }     mutation_opt consume_end_of_stream() {         return std::move(_mutation);     } };
- mutation_partition::mutation_partition(mutation_partition::incomplete_tag, const schema& s, tombstone t)     : _tombstone(t)     , _static_row_continuous(!s.has_static_columns())     , _rows()     , _row_tombstones(s) {     auto e = alloc_strategy_unique_ptr<rows_entry>(             current_allocator().construct<rows_entry>(s, rows_entry::last_dummy_tag(), is_continuous::no));     _rows.insert_before(_rows.end(), std::move(e)); }
- bool mutation_partition::is_fully_continuous() const {     if (!_static_row_continuous) {         return false;     }     for (auto&& row : _rows) {         if (!row.continuous()) {             return false;         }     }     return true; }
- void mutation_partition::make_fully_continuous() {     _static_row_continuous = true;     auto i = _rows.begin();     while (i != _rows.end()) {         if (i->dummy()) {             i = _rows.erase_and_dispose(i, alloc_strategy_deleter<rows_entry>());         } else {             i->set_continuous(true);             ++i;         }     } }
- void mutation_partition::set_continuity(const schema& s, const position_range& pr, is_continuous cont) {     auto cmp = rows_entry::tri_compare(s);     if (cmp(pr.start(), pr.end()) >= 0) {         return; // empty range
-    }     auto end = _rows.lower_bound(pr.end(), cmp);     if (end == _rows.end() || cmp(pr.end(), end->position()) < 0) {         auto e = alloc_strategy_unique_ptr<rows_entry>(                 current_allocator().construct<rows_entry>(s, pr.end(), is_dummy::yes,                     end == _rows.end() ? is_continuous::yes : end->continuous()));         end = _rows.insert_before(end, std::move(e));     }     auto i = _rows.lower_bound(pr.start(), cmp);     if (cmp(pr.start(), i->position()) < 0) {         auto e = alloc_strategy_unique_ptr<rows_entry>(                 current_allocator().construct<rows_entry>(s, pr.start(), is_dummy::yes, i->continuous()));         i = _rows.insert_before(i, std::move(e));     }     assert(i != end);     ++i;     while (1) {         i->set_continuous(cont);         if (i == end) {             break;         }         if (i->dummy()) {             i = _rows.erase_and_dispose(i, alloc_strategy_deleter<rows_entry>());         } else {             ++i;         }     } }
- clustering_interval_set mutation_partition::get_continuity(const schema& s, is_continuous cont) const {     check_schema(s);     clustering_interval_set result;     auto i = _rows.begin();     auto prev_pos = position_in_partition::before_all_clustered_rows();     while (i != _rows.end()) {         if (i->continuous() == cont) {             result.add(s, position_range(std::move(prev_pos), position_in_partition(i->position())));         }         if (i->position().is_clustering_row() && bool(i->dummy()) == !bool(cont)) {             result.add(s, position_range(position_in_partition(i->position()),                 position_in_partition::after_key(s, i->position().key())));         }         prev_pos = i->position().is_clustering_row()             ? position_in_partition::after_key(s, i->position().key())             : position_in_partition(i->position());         ++i;     }     if (cont) {         result.add(s, position_range(std::move(prev_pos), position_in_partition::after_all_clustered_rows()));     }     return result; }
- stop_iteration mutation_partition::clear_gently(cache_tracker* tracker) noexcept {     if (_row_tombstones.clear_gently() == stop_iteration::no) {         return stop_iteration::no;     }     auto del = current_deleter<rows_entry>();     auto i = _rows.begin();     auto end = _rows.end();     while (i != end) {         if (tracker) {             tracker->remove(*i);         }         i = _rows.erase_and_dispose(i, del);         // The iterator comparison below is to not defer destruction of now empty
-        // mutation_partition objects. Not doing this would cause eviction to leave garbage
-        // versions behind unnecessarily.
-        if (need_preempt() && i != end) {             return stop_iteration::no;         }     }     return stop_iteration::yes; }
- bool mutation_partition::check_continuity(const schema& s, const position_range& r, is_continuous cont) const {     check_schema(s);     auto cmp = rows_entry::tri_compare(s);     auto i = _rows.lower_bound(r.start(), cmp);     auto end = _rows.lower_bound(r.end(), cmp);     if (cmp(r.start(), r.end()) >= 0) {         return bool(cont);     }     if (i != end) {         if (no_clustering_row_between(s, r.start(), i->position())) {             ++i;         }         while (i != end) {             if (i->continuous() != cont) {                 return false;             }             ++i;         }         if (end != _rows.begin() && no_clustering_row_between(s, std::prev(end)->position(), r.end())) {             return true;         }     }     return (end == _rows.end() ? is_continuous::yes : end->continuous()) == cont; }
- bool mutation_partition::fully_continuous(const schema& s, const position_range& r) {     return check_continuity(s, r, is_continuous::yes); }
- bool mutation_partition::fully_discontinuous(const schema& s, const position_range& r) {     return check_continuity(s, r, is_continuous::no); }
-  mutation_cleaner_impl::~mutation_cleaner_impl() {     _worker_state->done = true;     _worker_state->cv.signal();     _worker_state->snapshots.clear_and_dispose(typename lw_shared_ptr<partition_snapshot>::disposer());     with_allocator(_region.allocator(), [this] {         clear();     }); }
- void mutation_cleaner_impl::clear() noexcept {     while (clear_gently() == stop_iteration::no) ; }
- stop_iteration mutation_cleaner_impl::clear_gently() noexcept {     while (clear_some() == memory::reclaiming_result::reclaimed_something) {         if (need_preempt()) {             return stop_iteration::no;         }     }     return stop_iteration::yes; }
- memory::reclaiming_result mutation_cleaner_impl::clear_some() noexcept {     if (_versions.empty()) {         return memory::reclaiming_result::reclaimed_nothing;     }     auto&& alloc = current_allocator();     partition_version& pv = _versions.front();     if (pv.clear_gently(_tracker) == stop_iteration::yes) {         _versions.pop_front();         alloc.destroy(&pv);     }     return memory::reclaiming_result::reclaimed_something; }
- void mutation_cleaner_impl::merge(mutation_cleaner_impl& r) noexcept {     _versions.splice(r._versions);     for (partition_snapshot& snp : r._worker_state->snapshots) {         snp.migrate(&_region, _cleaner);     }     _worker_state->snapshots.splice(_worker_state->snapshots.end(), r._worker_state->snapshots);     if (!_worker_state->snapshots.empty()) {         _worker_state->cv.signal();     } }
- void mutation_cleaner_impl::start_worker() {     auto f = repeat([w = _worker_state, this] () mutable noexcept {       if (w->done) {           return make_ready_future<stop_iteration>(stop_iteration::yes);       }       return with_scheduling_group(_scheduling_group, [w, this] {         return w->cv.wait([w] {             return w->done || !w->snapshots.empty();         }).then([this, w] () noexcept {             if (w->done) {                 return stop_iteration::yes;             }             merge_some();             return stop_iteration::no;         });       });     });     if (f.failed()) {         f.get();     } }
- stop_iteration mutation_cleaner_impl::merge_some(partition_snapshot& snp) noexcept {     auto&& region = snp.region();     return with_allocator(region.allocator(), [&] {         {             // Allocating sections require the region to be reclaimable
-            // which means that they cannot be nested.
-            // It is, however, possible, that if the snapshot is taken
-            // inside an allocating section and then an exception is thrown
-            // this function will be called to clean up even though we
-            // still will be in the context of the allocating section.
-            if (!region.reclaiming_enabled()) {                 return stop_iteration::no;             }             try {                 auto dirty_guard = make_region_space_guard();                 return _worker_state->alloc_section(region, [&] {                     return snp.merge_partition_versions(_app_stats);                 });             } catch (...) {                 // Merging failed, give up as there is no guarantee of forward progress.
-                return stop_iteration::yes;             }         }     }); }
- stop_iteration mutation_cleaner_impl::merge_some() noexcept {     if (_worker_state->snapshots.empty()) {         return stop_iteration::yes;     }     partition_snapshot& snp = _worker_state->snapshots.front();     if (merge_some(snp) == stop_iteration::yes) {         _worker_state->snapshots.pop_front();         lw_shared_ptr<partition_snapshot>::dispose(&snp);     }     return stop_iteration::no; }
- future<> mutation_cleaner_impl::drain() {     return repeat([this] {         return merge_some();     }).then([this] {         return repeat([this] {             return with_allocator(_region.allocator(), [this] {                 return clear_gently();             });         });     }); }
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
  can_gc_fn always_gc = [] (tombstone) { return true; };
  logging::logger compound_logger("compound");
  extern logging::logger mplog;
- mutation_partition_v2::mutation_partition_v2(const schema& s, const mutation_partition_v2& x)         : _tombstone(x._tombstone)         , _static_row(s, column_kind::static_column, x._static_row)         , _static_row_continuous(x._static_row_continuous)         , _rows() {     auto cloner = [&s] (const rows_entry* x) -> rows_entry* {         return current_allocator().construct<rows_entry>(s, *x);     };     _rows.clone_from(x._rows, cloner, current_deleter<rows_entry>()); }
- mutation_partition_v2::mutation_partition_v2(const schema& s, mutation_partition&& x)     : _tombstone(x.partition_tombstone())     , _static_row(std::move(x.static_row()))     , _static_row_continuous(x.static_row_continuous())     , _rows(std::move(x.mutable_clustered_rows())) {     auto&& tombstones = x.mutable_row_tombstones();     if (!tombstones.empty()) {         try {             mutation_partition_v2 p(s.shared_from_this());             for (auto&& t: tombstones) {                 range_tombstone & rt = t.tombstone();                 p.clustered_rows_entry(s, rt.position(), is_dummy::yes, is_continuous::no);                 p.clustered_rows_entry(s, rt.end_position(), is_dummy::yes, is_continuous::yes)                         .set_range_tombstone(rt.tomb);             }             mutation_application_stats app_stats;             apply_monotonically(s, std::move(p), s, app_stats);         } catch (...) {             _rows.clear_and_dispose(current_deleter<rows_entry>());             throw;         }     } }
- mutation_partition_v2::mutation_partition_v2(const schema& s, const mutation_partition& x)     : mutation_partition_v2(s, mutation_partition(s, x)) { }
- mutation_partition_v2::~mutation_partition_v2() {     _rows.clear_and_dispose(current_deleter<rows_entry>()); }
- mutation_partition_v2& mutation_partition_v2::operator=(mutation_partition_v2&& x) noexcept {     if (this != &x) {         this->~mutation_partition_v2();         new (this) mutation_partition_v2(std::move(x));     }     return *this; }
- void mutation_partition_v2::ensure_last_dummy(const schema& s) {     check_schema(s);     if (_rows.empty() || !_rows.rbegin()->is_last_dummy()) {         auto e = alloc_strategy_unique_ptr<rows_entry>(                 current_allocator().construct<rows_entry>(s, rows_entry::last_dummy_tag(), is_continuous::yes));         _rows.insert_before(_rows.end(), std::move(e));     } }
+ 
+ 
+ 
+ 
+ 
+ 
  template <> struct fmt::formatter<apply_resume> : fmt::formatter<std::string_view> {     template <typename FormatContext>     auto format(const apply_resume& res, FormatContext& ctx) const {         return fmt::format_to(ctx.out(), "{{{}, {}}}", int(res._stage), res._pos);     } };
- stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutation_partition_v2&& p, cache_tracker* tracker,         mutation_application_stats& app_stats, is_preemptible preemptible, apply_resume& res, is_evictable evictable) {     return apply_monotonically(s, std::move(p), tracker, app_stats,         preemptible ? default_preemption_check() : never_preempt(), res, evictable); }
- stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutation_partition_v2&& p, cache_tracker* tracker,         mutation_application_stats& app_stats, preemption_check need_preempt, apply_resume& res, is_evictable evictable) {     _tombstone.apply(p._tombstone);     _static_row.apply_monotonically(s, column_kind::static_column, std::move(p._static_row));     _static_row_continuous |= p._static_row_continuous;     rows_entry::tri_compare cmp(s);     position_in_partition::equal_compare eq(s);     auto del = current_deleter<rows_entry>();     auto compact = [&] (rows_entry& e) {         ++app_stats.rows_compacted_with_tombstones;         e.compact(s, _tombstone);     };     if (p._tombstone) {         rows_type::iterator i;         if (res._stage == apply_resume::stage::partition_tombstone_compaction) {             i = _rows.upper_bound(res._pos, cmp);         } else {             i = _rows.begin();         }         auto prev_i = (i == _rows.begin()) ? rows_type::iterator() : std::prev(i);         while (i != _rows.end()) {             compact(*i);             if (prev_i) {                 maybe_drop(s, tracker, prev_i, app_stats);             }             if (need_preempt() && i != _rows.end()) {                 res = apply_resume(apply_resume::stage::partition_tombstone_compaction, i->position());                 return stop_iteration::no;             }             prev_i = i;             ++i;         }         if (prev_i != _rows.end()) {             maybe_drop(s, tracker, prev_i, app_stats);         }         // TODO: Drop redundant range tombstones
-        p._tombstone = {};     }     // Inserting new entries into LRU here is generally unsafe because
-    // it may violate the "older versions are evicted first" rule (see row_cache.md).
-    // It could happen, that there are newer versions in the MVCC chain with the same
-    // key, not involved in this merge. Inserting an entry here would put this
-    // entry ahead in the LRU, and the newer entry could get evicted earlier leading
-    // to apparent loss of writes.
-    // To avoid this, when inserting sentinels we must use lru::add_before() so that
-    // they are put right before in the same place in the LRU.
-    // Note: This procedure is not violating the "older versions are evicted first" rule.
-    // It may move some entries from the newer version into the old version,
-    // so the older version may have entries while the new version is already experiencing
-    // eviction. However, the original information which was there in the old version
-    // is guaranteed to be evicted prior to that, so there is no way for old information
-    // to be exposed by such eviction.
-    auto p_i = p._rows.begin();     auto i = _rows.begin();     rows_type::iterator lb_i; // iterator into _rows for previously inserted entry.
-    // When resuming, the predecessor of the sentinel may have been compacted.
-    bool prev_compacted = true;     if (res._stage < apply_resume::stage::merging_rows) {         prev_compacted = false;         res = apply_resume::merging_rows();     }     bool made_progress = false;     // Engaged p_sentinel indicates that information in p up to sentinel->position() was
-    // merged into this instance and that flags on the entry pointed to by p_i are
-    // only valid for the key range up to sentinel->position().
-    // We should insert the sentinel back before returning so that the sum of p and this instance
-    // remains consistent, and attributes like continuity and range_tombstone do not
-    // extend to before_all_clustering_keys() in p.
-    // If this_sentinel is engaged then it will be inserted into this instance at
-    // the same position as p_sentinel, and reflects information about the interval
-    // preceding the sentinel.
-    // We need two sentinels so that there is no gap in continuity in case there is no entry
-    // in this instance at the position of p_sentinel.
-    // The sentinel never has a clustering key position, so it carries no row information.
-    alloc_strategy_unique_ptr<rows_entry> p_sentinel;     alloc_strategy_unique_ptr<rows_entry> this_sentinel;     auto insert_sentinel_back = defer([&] {         // Insert this_sentinel before sentinel so that the former lands before the latter in LRU.
-        if (this_sentinel) {             assert(p_i != p._rows.end());             auto rt = this_sentinel->range_tombstone();             auto insert_result = _rows.insert_before_hint(i, std::move(this_sentinel), cmp);             auto i2 = insert_result.first;             if (insert_result.second) {                 mplog.trace("{}: inserting sentinel at {}", fmt::ptr(this), i2->position());                 if (tracker) {                     tracker->insert(*std::prev(i2), *i2);                 }             } else {                 mplog.trace("{}: merging sentinel at {}", fmt::ptr(this), i2->position());                 i2->set_continuous(true);                 i2->set_range_tombstone(rt);             }         }         if (p_sentinel) {             assert(p_i != p._rows.end());             if (cmp(p_i->position(), p_sentinel->position()) == 0) {                 mplog.trace("{}: clearing attributes on {}", fmt::ptr(&p), p_i->position());                 assert(p_i->dummy());                 p_i->set_continuous(false);                 p_i->set_range_tombstone({});             } else {                 mplog.trace("{}: inserting sentinel at {}", fmt::ptr(&p), p_sentinel->position());                 auto insert_result = p._rows.insert_before_hint(p_i, std::move(p_sentinel), cmp);                 if (tracker) {                     tracker->insert(*p_i, *insert_result.first);                 }             }         }     });     while (p_i != p._rows.end()) {         rows_entry& src_e = *p_i;         bool miss = true;         if (i != _rows.end()) {             auto x = cmp(*i, src_e);             if (x < 0) {                 bool match;                 i = _rows.lower_bound(src_e, match, cmp);                 miss = !match;             } else {                 miss = x > 0;             }         }         // Invariants:
-        //   i->position() >= p_i->position()
-        // The block below reflects the information from interval (lb_i->position(), p_i->position()) to _rows,
-        // up to the last entry in _rows which has position() < p_i->position(). The remainder is reflected by the act of
-        // moving p_i itself.
-        bool prev_interval_loaded = (evictable && src_e.continuous()) || (!evictable && src_e.range_tombstone());         if (prev_interval_loaded) {             // lb_i is only valid if prev_interval_loaded.
-            rows_type::iterator prev_lb_i;             if (lb_i) {                 // If there is lb_i, it means the interval starts exactly at lb_i->position() in p.
-                // Increment is needed, we don't want to set attributes on the lower bound of the interval.
-                prev_lb_i = lb_i;                 ++lb_i;             } else {                 lb_i = _rows.begin();             }             while (lb_i != i) {                 bool compaction_worthwhile = src_e.range_tombstone() > lb_i->range_tombstone();                 // This works for both evictable and non-evictable snapshots.
-                // For evictable snapshots we could replace the tombstone with newer, but due to
-                // the "information monotonicity" rule, adding tombstone works too.
-                lb_i->set_range_tombstone(lb_i->range_tombstone() + src_e.range_tombstone());                 lb_i->set_continuous(true);                 if (prev_compacted && prev_lb_i) {                     maybe_drop(s, tracker, prev_lb_i, app_stats);                 }                 prev_compacted = false;                 if (lb_i->dummy()) {                     prev_compacted = true;                 } else if (compaction_worthwhile) {                     compact(*lb_i);                     prev_compacted = true;                 }                 if (need_preempt()) {                     auto s1 = alloc_strategy_unique_ptr<rows_entry>(                             current_allocator().construct<rows_entry>(s,                                  position_in_partition::after_key(s, lb_i->position()), is_dummy::yes, is_continuous::no));                     alloc_strategy_unique_ptr<rows_entry> s2;                     if (lb_i->position().is_clustering_row()) {                         s2 = alloc_strategy_unique_ptr<rows_entry>(                                 current_allocator().construct<rows_entry>(s, s1->position(), is_dummy::yes, is_continuous::yes));                         auto lb_i_next = std::next(lb_i);                         if (lb_i_next != _rows.end() && lb_i_next->continuous()) {                             s2->set_range_tombstone(lb_i_next->range_tombstone() + src_e.range_tombstone());                         } else {                             s2->set_range_tombstone(src_e.range_tombstone());                         }                     }                     p_sentinel = std::move(s1);                     this_sentinel = std::move(s2);                     mplog.trace("preempted, res={}", res);                     return stop_iteration::no;                 }                 prev_lb_i = lb_i;                 ++lb_i;             }         }         auto next_p_i = std::next(p_i);         // next_interval_loaded is true iff there are attributes on next_p_i which apply
-        // to the interval (p_i->position(), next_p_i->position), and we
-        // have to prepare a sentinel when removing p_i from p in case merging
-        // needs to stop before next_p_i is moved.
-        bool next_interval_loaded = next_p_i != p._rows.end()                 && ((evictable && next_p_i->continuous()) || (!evictable && next_p_i->range_tombstone()));         bool do_compact = false;         if (miss) {             alloc_strategy_unique_ptr<rows_entry> s1;             alloc_strategy_unique_ptr<rows_entry> s2;             if (next_interval_loaded) {                 // FIXME: Avoid reallocation
-                s1 = alloc_strategy_unique_ptr<rows_entry>(                     current_allocator().construct<rows_entry>(s,                         position_in_partition::after_key(s, src_e.position()), is_dummy::yes, is_continuous::no));                 if (src_e.position().is_clustering_row()) {                     s2 = alloc_strategy_unique_ptr<rows_entry>(                             current_allocator().construct<rows_entry>(s,                                 s1->position(), is_dummy::yes, is_continuous::yes));                     if (i != _rows.end() && i->continuous()) {                         s2->set_range_tombstone(i->range_tombstone() + src_e.range_tombstone());                     } else {                         s2->set_range_tombstone(src_e.range_tombstone());                     }                 }             }             rows_type::key_grabber pi_kg(p_i);             lb_i = _rows.insert_before(i, std::move(pi_kg));             p_sentinel = std::move(s1);             this_sentinel = std::move(s2);             // Check if src_e falls into a continuous range.
-            // The range past the last entry is also always implicitly continuous.
-            if (i == _rows.end() || i->continuous()) {                 tombstone i_rt = i != _rows.end() ? i->range_tombstone() : tombstone();                 // Cannot apply only-row range tombstone falling into a continuous range without inserting extra entry.
-                // Should not occur in practice due to the "older versions are evicted first" rule.
-                // Never occurs in non-evictable snapshots because they are continuous.
-                if (!src_e.continuous() && src_e.range_tombstone() > i_rt) {                     if (src_e.dummy()) {                         lb_i->set_range_tombstone(i_rt);                     } else {                         position_in_partition_view i_pos = i != _rows.end() ? i->position()                                 : position_in_partition_view::after_all_clustered_rows();                         // See the "no singular tombstones" rule.
-                        mplog.error("Cannot merge entry {} with rt={}, cont=0 into continuous range before {} with rt={}",                                 src_e.position(), src_e.range_tombstone(), i_pos, i_rt);                         abort();                     }                 } else {                     lb_i->set_range_tombstone(src_e.range_tombstone() + i_rt);                 }                 lb_i->set_continuous(true);             }         } else {             assert(i->dummy() == src_e.dummy());             alloc_strategy_unique_ptr<rows_entry> s1;             alloc_strategy_unique_ptr<rows_entry> s2;             if (next_interval_loaded) {                 // FIXME: Avoid reallocation
-                s1 = alloc_strategy_unique_ptr<rows_entry>(                         current_allocator().construct<rows_entry>(s,                             position_in_partition::after_key(s, src_e.position()), is_dummy::yes, is_continuous::no));                 if (src_e.position().is_clustering_row()) {                     s2 = alloc_strategy_unique_ptr<rows_entry>(                             current_allocator().construct<rows_entry>(s, s1->position(), is_dummy::yes, is_continuous::yes));                     auto next_i = std::next(i);                     if (next_i != _rows.end() && next_i->continuous()) {                         s2->set_range_tombstone(next_i->range_tombstone() + src_e.range_tombstone());                     } else {                         s2->set_range_tombstone(src_e.range_tombstone());                     }                 }             }             {                 // FIXME: This can be an evictable snapshot even if !tracker, see partition_entry::squashed()
-                // So we need to handle continuity as if it was an evictable snapshot.
-                if (i->continuous()) {                     if (src_e.range_tombstone() > i->range_tombstone()) {                         // Cannot apply range tombstone in such a case.
-                        // Should not occur in practice due to the "older versions are evicted first" rule.
-                        if (!src_e.continuous()) {                             // range tombstone on a discontinuous dummy does not matter
-                            if (!src_e.dummy()) {                                 // See the "no singular tombstones" rule.
-                                mplog.error("Cannot merge entry {} with rt={}, cont=0 into an entry which has rt={}, cont=1",                                         src_e.position(), src_e.range_tombstone(), i->range_tombstone());                                 abort();                             }                         } else {                             i->set_range_tombstone(i->range_tombstone() + src_e.range_tombstone());                         }                     }                 } else {                     i->set_continuous(src_e.continuous());                     i->set_range_tombstone(i->range_tombstone() + src_e.range_tombstone());                 }             }             if (tracker) {                 // Newer evictable versions store complete rows
-                i->row() = std::move(src_e.row());                 // Need to preserve the LRU link of the later version in case it's
-                // the last dummy entry which holds the partition entry linked in LRU.
-                i->swap(src_e);                 tracker->remove(src_e);             } else {                 // Avoid row compaction if no newer range tombstone.
-                do_compact = (src_e.range_tombstone() + src_e.row().deleted_at().regular()) >                             (i->range_tombstone() + i->row().deleted_at().regular());                 memory::on_alloc_point();                 i->apply_monotonically(s, std::move(src_e));             }             ++app_stats.row_hits;             p_i = p._rows.erase_and_dispose(p_i, del);             lb_i = i;             ++i;             p_sentinel = std::move(s1);             this_sentinel = std::move(s2);         }         // All operations above up to each insert_before() must be noexcept.
-        if (prev_compacted && lb_i != _rows.begin()) {             maybe_drop(s, tracker, std::prev(lb_i), app_stats);         }         if (lb_i->dummy()) {             prev_compacted = true;         } else if (do_compact) {             compact(*lb_i);             prev_compacted = true;         } else {             prev_compacted = false;         }         if (prev_compacted && !next_interval_loaded) {             // next_p_i will not see prev_interval_loaded so will not attempt to drop predecessors.
-            // We have to do it now.
-            maybe_drop(s, tracker, lb_i, app_stats);             lb_i = {};         }         ++app_stats.row_writes;         // We must not return stop_iteration::no if we removed the last element from p._rows.
-        // Otherwise, p_i will be left empty, and thus fully continuous, violating the
-        // invariant that the sum of this and p has the same continuity as before merging.
-        if (made_progress && need_preempt() && p_i != p._rows.end()) {             return stop_iteration::no;         }         made_progress = true;     }     if (prev_compacted && lb_i != _rows.end()) {         maybe_drop(s, tracker, lb_i, app_stats);     }     return stop_iteration::yes; }
- stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutation_partition_v2&& p, const schema& p_schema,         mutation_application_stats& app_stats, is_preemptible preemptible, apply_resume& res, is_evictable evictable) {     if (s.version() == p_schema.version()) {         return apply_monotonically(s, std::move(p), no_cache_tracker, app_stats,                                    preemptible ? default_preemption_check() : never_preempt(), res, evictable);     } else {         mutation_partition_v2 p2(s, p);         p2.upgrade(p_schema, s);         return apply_monotonically(s, std::move(p2), no_cache_tracker, app_stats, never_preempt(), res, evictable); // FIXME: make preemptible
-    } }
- stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutation_partition_v2&& p, cache_tracker *tracker,                                                        mutation_application_stats& app_stats, is_evictable evictable) {     apply_resume res;     return apply_monotonically(s, std::move(p), tracker, app_stats, is_preemptible::no, res, evictable); }
+ 
+ 
+ 
+ 
  stop_iteration mutation_partition_v2::apply_monotonically(const schema& s, mutation_partition_v2&& p, const schema& p_schema,                                                        mutation_application_stats& app_stats) {     apply_resume res;     return apply_monotonically(s, std::move(p), p_schema, app_stats, is_preemptible::no, res, is_evictable::no); }
  void mutation_partition_v2::apply(const schema& s, const mutation_partition_v2& p, const schema& p_schema,                                mutation_application_stats& app_stats) {     apply_monotonically(s, mutation_partition_v2(p_schema, std::move(p)), p_schema, app_stats); }
  void mutation_partition_v2::apply(const schema& s, mutation_partition_v2&& p, mutation_application_stats& app_stats) {     apply_monotonically(s, mutation_partition_v2(s, std::move(p)), no_cache_tracker, app_stats, is_evictable::no); }
@@ -71263,33 +70768,7 @@ class chunked_content_stream { private:     chunked_content _content;     chunke
         // as protected instead of private, so that this class can access it.
         auto dummy_generator = [](handler_base&){return true;};         handler_base::Populate(dummy_generator);     }     void Parse(const char* str, size_t length) {         rapidjson::MemoryStream ms(static_cast<const char*>(str), length * sizeof(typename encoding::Ch));         rapidjson::EncodedInputStream<encoding, rapidjson::MemoryStream> is(ms);         Parse(is);     }     void Parse(chunked_content&& content) {         // Note that content was moved into this function. The intention is
         // that we free every chunk we are done with.
-        chunked_content_stream is(std::move(content));         Parse(is);     }     bool StartObject() {         ++_nested_level;         check_nested_level();         maybe_yield();         return handler_base::StartObject();     }     bool EndObject(rapidjson::SizeType elements_count = 0) {         --_nested_level;         return handler_base::EndObject(elements_count);     }     bool StartArray() {         ++_nested_level;         check_nested_level();         maybe_yield();         return handler_base::StartArray();     }     bool EndArray(rapidjson::SizeType elements_count = 0) {         --_nested_level;         return handler_base::EndArray(elements_count);     }     bool Null()                 { maybe_yield(); return handler_base::Null(); }     bool Bool(bool b)           { maybe_yield(); return handler_base::Bool(b); }     bool Int(int i)             { maybe_yield(); return handler_base::Int(i); }     bool Uint(unsigned u)       { maybe_yield(); return handler_base::Uint(u); }     bool Int64(int64_t i64)     { maybe_yield(); return handler_base::Int64(i64); }     bool Uint64(uint64_t u64)   { maybe_yield(); return handler_base::Uint64(u64); }     bool Double(double d)       { maybe_yield(); return handler_base::Double(d); }     bool String(const value::Ch* str, size_t length, bool copy = false) { maybe_yield(); return handler_base::String(str, length, copy); }     bool Key(const value::Ch* str, size_t length, bool copy = false) { maybe_yield(); return handler_base::Key(str, length, copy); } protected:     static void maybe_yield() {         if constexpr (EnableYield) {             thread::maybe_yield();         }     }     void check_nested_level() const {         if (RAPIDJSON_UNLIKELY(_nested_level > _max_nested_level)) {             throw rjson::error(format("Max nested level reached: {}", _max_nested_level));         }     } }; void* internal::throwing_allocator::Malloc(size_t size) {     // For bypassing the address sanitizer failure in debug mode - allocating
-    // too much memory results in an abort
-    if (size > memory::stats().total_memory()) {         throw rjson::error(format("Failed to allocate {} bytes", size));     }     void* ret = base::Malloc(size);     if (size > 0 && !ret) {         throw rjson::error(format("Failed to allocate {} bytes", size));     }     return ret; } void* internal::throwing_allocator::Realloc(void* orig_ptr, size_t orig_size, size_t new_size) {     // For bypassing the address sanitizer failure in debug mode - allocating
-    // too much memory results in an abort
-    if (new_size > memory::stats().total_memory()) {         throw rjson::error(format("Failed to allocate {} bytes", new_size));     }     void* ret = base::Realloc(orig_ptr, orig_size, new_size);     if (new_size > 0 && !ret) {         throw rjson::error(format("Failed to reallocate {} bytes to {} bytes from {}", orig_size, new_size, orig_ptr));     }     return ret; } void internal::throwing_allocator::Free(void* ptr) {     base::Free(ptr); } std::string print(const rjson::value& value, size_t max_nested_level) {     string_buffer buffer;     guarded_yieldable_json_handler<writer, false> writer(buffer, max_nested_level);     value.Accept(writer);     return std::string(buffer.GetString()); } future<> print(const rjson::value& value, seastar::output_stream<char>& os, size_t max_nested_level) {     struct os_buffer {         seastar::output_stream<char>& _os;         temporary_buffer<char> _buf;         size_t _pos = 0;         future<> _f = make_ready_future<>();         
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-local-typedefs"
-        using Ch = char;         
-#pragma GCC diagnostic pop
-        void send(bool try_reuse = true) {             if (_f.failed()) {                 _f.get0();             }             if (!_buf.empty() && _pos > 0) {                 _buf.trim(_pos);                 _pos = 0;                 // Note: we're assuming we're writing to a buffered output_stream (hello http server).
-                // If we were not, or if (http) output_stream supported mixed buffered/packed content
-                // it might be a good idea to instead send our buffer as a packet directly. If so, the
-                // buffer size should probably increase (at least after first send()).
-                _f = _f.then([this, buf = std::move(_buf), &os = _os, try_reuse]() mutable -> future<> {                     return os.write(buf.get(), buf.size()).then([this, buf = std::move(buf), try_reuse]() mutable {                         // Chances are high we just copied this to output_stream buffer, and got here
-                        // immediately. If so, reuse the buffer.
-                        if (try_reuse && _buf.empty() && _pos == 0) {                             _buf = std::move(buf);                         }                     });                 });             }         }         void Put(char c) {             if (_pos == _buf.size()) {                 send();                 if (_buf.empty()) {                     _buf = temporary_buffer<char>(512);                 }             }             // Second note: Should consider writing directly to the buffer in output_stream
-            // instead of double buffering. But output_stream for a single char has higher
-            // overhead than the above check + once we hit a non-completed future, we'd have
-            // to revert to this method anyway...
-            *(_buf.get_write() + _pos) = c;             ++_pos;         }         void Flush() {             send();         }         future<> finish()&& {             send(false);             return std::move(_f);         }     };     os_buffer osb{ os };     using streamer = rapidjson::Writer<os_buffer, encoding, encoding, allocator>;     guarded_yieldable_json_handler<streamer, false, os_buffer> writer(osb, max_nested_level);     value.Accept(writer);     co_return co_await std::move(osb).finish(); } rjson::malformed_value::malformed_value(std::string_view name, const rjson::value& value)     : malformed_value(name, print(value)) {} rjson::malformed_value::malformed_value(std::string_view name, std::string_view value)     : error(format("Malformed value {} : {}", name, value)) {} rjson::missing_value::missing_value(std::string_view name)      // TODO: using old message here, but as pointed out. 
-    // "parameter" is not really a JSON concept. It is a value
-    // missing according to (implicit) schema. 
-    : error(format("JSON parameter {} not found", name)) {} rjson::value copy(const rjson::value& value) {     return rjson::value(value, the_allocator); } rjson::value parse(std::string_view str, size_t max_nested_level) {     guarded_yieldable_json_handler<document, false> d(max_nested_level);     d.Parse(str.data(), str.size());     if (d.HasParseError()) {         throw rjson::error(format("Parsing JSON failed: {}", GetParseError_En(d.GetParseError())));     }     rjson::value& v = d;     return std::move(v); } rjson::value parse(chunked_content&& content, size_t max_nested_level) {     guarded_yieldable_json_handler<document, false> d(max_nested_level);     d.Parse(std::move(content));     if (d.HasParseError()) {         throw rjson::error(format("Parsing JSON failed: {}", GetParseError_En(d.GetParseError())));     }     rjson::value& v = d;     return std::move(v); } std::optional<rjson::value> try_parse(std::string_view str, size_t max_nested_level) {     guarded_yieldable_json_handler<document, false> d(max_nested_level);     try {         d.Parse(str.data(), str.size());     } catch (const rjson::error&) {         return std::nullopt;     }     if (d.HasParseError()) {         return std::nullopt;         }     rjson::value& v = d;     return std::move(v); } rjson::value parse_yieldable(std::string_view str, size_t max_nested_level) {     guarded_yieldable_json_handler<document, true> d(max_nested_level);     d.Parse(str.data(), str.size());     if (d.HasParseError()) {         throw rjson::error(format("Parsing JSON failed: {}", GetParseError_En(d.GetParseError())));     }     rjson::value& v = d;     return std::move(v); } rjson::value parse_yieldable(chunked_content&& content, size_t max_nested_level) {     guarded_yieldable_json_handler<document, true> d(max_nested_level);     d.Parse(std::move(content));     if (d.HasParseError()) {         throw rjson::error(format("Parsing JSON failed: {}", GetParseError_En(d.GetParseError())));     }     rjson::value& v = d;     return std::move(v); } rjson::value& get(rjson::value& value, std::string_view name) {     // Although FindMember() has a variant taking a StringRef, it ignores the
-    // given length (see https://github.com/Tencent/rapidjson/issues/1649).
-    // Luckily, the variant taking a GenericValue doesn't share this bug,
-    // and we can create a string GenericValue without copying the string.
-    auto member_it = value.FindMember(rjson::value(name.data(), name.size()));     if (member_it != value.MemberEnd()) {         return member_it->value;     }     throw missing_value(name); } const rjson::value& get(const rjson::value& value, std::string_view name) {     auto member_it = value.FindMember(rjson::value(name.data(), name.size()));     if (member_it != value.MemberEnd()) {         return member_it->value;     }     throw missing_value(name); } rjson::value from_string(const std::string& str) {     return rjson::value(str.c_str(), str.size(), the_allocator); } rjson::value from_string(const sstring& str) {     return rjson::value(str.c_str(), str.size(), the_allocator); } rjson::value from_string(const char* str, size_t size) {     return rjson::value(str, size, the_allocator); } rjson::value from_string(std::string_view view) {     return rjson::value(view.data(), view.size(), the_allocator); } const rjson::value* find(const rjson::value& value, std::string_view name) {     // Although FindMember() has a variant taking a StringRef, it ignores the
+        chunked_content_stream is(std::move(content));         Parse(is);     }     bool StartObject() {         ++_nested_level;         check_nested_level();         maybe_yield();         return handler_base::StartObject();     }     bool EndObject(rapidjson::SizeType elements_count = 0) {         --_nested_level;         return handler_base::EndObject(elements_count);     }     bool StartArray() {         ++_nested_level;         check_nested_level();         maybe_yield();         return handler_base::StartArray();     }     bool EndArray(rapidjson::SizeType elements_count = 0) {         --_nested_level;         return handler_base::EndArray(elements_count);     }     bool Null()                 { maybe_yield(); return handler_base::Null(); }     bool Bool(bool b)           ;     bool Int(int i)             ;     bool Uint(unsigned u)       ;     bool Int64(int64_t i64)     ;     bool Uint64(uint64_t u64)   ;     bool Double(double d)       ;     bool String(const value::Ch* str, size_t length, bool copy = false) ;     bool Key(const value::Ch* str, size_t length, bool copy = false) ; protected:     static void maybe_yield() ;     void check_nested_level() const ; };    std::string print(const rjson::value& value, size_t max_nested_level) ; future<> print(const rjson::value& value, seastar::output_stream<char>& os, size_t max_nested_level) ;    rjson::value copy(const rjson::value& value) ; rjson::value parse(std::string_view str, size_t max_nested_level) ; rjson::value parse(chunked_content&& content, size_t max_nested_level) ; std::optional<rjson::value> try_parse(std::string_view str, size_t max_nested_level) ; rjson::value parse_yieldable(std::string_view str, size_t max_nested_level) ; rjson::value parse_yieldable(chunked_content&& content, size_t max_nested_level) ; rjson::value& get(rjson::value& value, std::string_view name) ; const rjson::value& get(const rjson::value& value, std::string_view name) ; rjson::value from_string(const std::string& str) ; rjson::value from_string(const sstring& str) ; rjson::value from_string(const char* str, size_t size) ; rjson::value from_string(std::string_view view) {     return rjson::value(view.data(), view.size(), the_allocator); } const rjson::value* find(const rjson::value& value, std::string_view name) {     // Although FindMember() has a variant taking a StringRef, it ignores the
     // given length (see https://github.com/Tencent/rapidjson/issues/1649).
     // Luckily, the variant taking a GenericValue doesn't share this bug,
     // and we can create a string GenericValue without copying the string.
@@ -71304,33 +70783,30 @@ class chunked_content_stream { private:     chunked_content _content;     chunke
    case rjson::type::kTrueType:        return r1_type < r2_type;    case rjson::type::kObjectType:        throw rjson::error("Object type comparison is not supported");    case rjson::type::kArrayType:        throw rjson::error("Array type comparison is not supported");    case rjson::type::kStringType: {        const size_t r1_len = r1.GetStringLength();        const size_t r2_len = r2.GetStringLength();        size_t len = std::min(r1_len, r2_len);        int result = std::strncmp(r1.GetString(), r2.GetString(), len);        return result < 0 || (result == 0 && r1_len < r2_len);    }    case rjson::type::kNumberType: {        if (r1.IsInt() && r2.IsInt()) {            return r1.GetInt() < r2.GetInt();        } else if (r1.IsUint() && r2.IsUint()) {            return r1.GetUint() < r2.GetUint();        } else if (r1.IsInt64() && r2.IsInt64()) {            return r1.GetInt64() < r2.GetInt64();        } else if (r1.IsUint64() && r2.IsUint64()) {            return r1.GetUint64() < r2.GetUint64();        } else {            // it's safe to call GetDouble() on any number type
            return r1.GetDouble() < r2.GetDouble();        }    }    default:        return false;    } } rjson::value from_string_map(const std::map<sstring, sstring>& map) {     rjson::value v = rjson::empty_object();     for (auto& entry : map) {         rjson::add_with_string_name(v, std::string_view(entry.first), rjson::from_string(entry.second));     }     return v; } static inline bool is_control_char(char c) {     return c >= 0 && c <= 0x1F; } static inline bool needs_escaping(const sstring& s) {     return std::any_of(s.begin(), s.end(), [](char c) {return is_control_char(c) || c == '"' || c == '\\';}); } sstring quote_json_string(const sstring& value) {     if (!needs_escaping(value)) {         return format("\"{}\"", value);     }     std::ostringstream oss;     oss << std::hex << std::uppercase << std::setfill('0');     oss.put('"');     for (char c : value) {         switch (c) {         case '"':             oss.put('\\').put('"');             break;         case '\\':             oss.put('\\').put('\\');             break;         case '\b':             oss.put('\\').put('b');             break;         case '\f':             oss.put('\\').put('f');             break;         case '\n':             oss.put('\\').put('n');             break;         case '\r':             oss.put('\\').put('r');             break;         case '\t':             oss.put('\\').put('t');             break;         default:             if (is_control_char(c)) {                 oss.put('\\').put('u') << std::setw(4) << static_cast<int>(c);             } else {                 oss.put(c);             }             break;         }     }     oss.put('"');     return oss.str(); } }
  // end namespace rjson
-std::ostream& std::operator<<(std::ostream& os, const rjson::value& v) {     return os << rjson::print(v); }
- namespace utils { std::ostream& operator<<(std::ostream& os, const human_readable_value& val) {     os << val.value;     if (val.suffix) {         os << val.suffix;     }     return os; } static human_readable_value to_human_readable_value(uint64_t value, uint64_t step, uint64_t precision, const std::array<char, 5>& suffixes) {     if (!value) {         return {0, suffixes[0]};     }     uint64_t result = value;     uint64_t remainder = 0;     unsigned i = 0;     // If there is no remainder we go below precision because we don't loose any.
-    while (((!remainder && result >= step) || result >= precision)) {         remainder = result % step;         result /= step;         if (i == suffixes.size()) {             break;         } else {             ++i;         }     }     return {uint16_t(remainder < (step / 2) ? result : result + 1), suffixes[i]}; } human_readable_value to_hr_size(uint64_t size) {     const std::array<char, 5> suffixes = {'B', 'K', 'M', 'G', 'T'};     return to_human_readable_value(size, 1024, 8192, suffixes); } }
+std::ostream& std::operator<<(std::ostream& os, const rjson::value& v) ;
+ namespace utils { std::ostream& operator<<(std::ostream& os, const human_readable_value& val) ; static human_readable_value to_human_readable_value(uint64_t value, uint64_t step, uint64_t precision, const std::array<char, 5>& suffixes) ; human_readable_value to_hr_size(uint64_t size) ; }
  // namespace utils
-seastar::metrics::histogram to_metrics_summary(const utils::summary_calculator& summary) noexcept {     seastar::metrics::histogram res;     res.buckets.resize(summary.quantiles().size());     res.sample_count = summary.histogram().count();     for (size_t i = 0; i < summary.quantiles().size(); i++) {         res.buckets[i].count = summary.summary()[i];         res.buckets[i].upper_bound = summary.quantiles()[i];     }     return res; }
- bool converting_mutation_partition_applier::is_compatible(const column_definition& new_def, const abstract_type& old_type, column_kind kind) {     return ::is_compatible(new_def.kind, kind) && new_def.type->is_value_compatible_with(old_type); }
- atomic_cell converting_mutation_partition_applier::upgrade_cell(const abstract_type& new_type, const abstract_type& old_type, atomic_cell_view cell,                                 atomic_cell::collection_member cm) {     if (cell.is_live() && !old_type.is_counter()) {         if (cell.is_live_and_has_ttl()) {             return atomic_cell::make_live(new_type, cell.timestamp(), cell.value(), cell.expiry(), cell.ttl(), cm);         }         return atomic_cell::make_live(new_type, cell.timestamp(), cell.value(), cm);     } else {         return atomic_cell(new_type, cell);     } }
- void converting_mutation_partition_applier::accept_cell(row& dst, column_kind kind, const column_definition& new_def, const abstract_type& old_type, atomic_cell_view cell) {     if (!is_compatible(new_def, old_type, kind) || cell.timestamp() <= new_def.dropped_at()) {         return;     }     dst.apply(new_def, upgrade_cell(*new_def.type, old_type, cell)); }
- void converting_mutation_partition_applier::accept_cell(row& dst, column_kind kind, const column_definition& new_def, const abstract_type& old_type, collection_mutation_view cell) {     if (!is_compatible(new_def, old_type, kind)) {         return;     }   cell.with_deserialized(old_type, [&] (collection_mutation_view_description old_view) {     collection_mutation_description new_view;     if (old_view.tomb.timestamp > new_def.dropped_at()) {         new_view.tomb = old_view.tomb;     }     visit(old_type, make_visitor(         [&] (const collection_type_impl& old_ctype) {             assert(new_def.type->is_collection()); // because is_compatible
-            auto& new_ctype = static_cast<const collection_type_impl&>(*new_def.type);             auto& new_value_type = *new_ctype.value_comparator();             auto& old_value_type = *old_ctype.value_comparator();             for (auto& c : old_view.cells) {                 if (c.second.timestamp() > new_def.dropped_at()) {                     new_view.cells.emplace_back(c.first, upgrade_cell(                             new_value_type, old_value_type, c.second, atomic_cell::collection_member::yes));                 }             }         },         [&] (const user_type_impl& old_utype) {             assert(new_def.type->is_user_type()); // because is_compatible
-            auto& new_utype = static_cast<const user_type_impl&>(*new_def.type);             for (auto& c : old_view.cells) {                 if (c.second.timestamp() > new_def.dropped_at()) {                     auto idx = deserialize_field_index(c.first);                     assert(idx < new_utype.size() && idx < old_utype.size());                     new_view.cells.emplace_back(c.first, upgrade_cell(                             *new_utype.type(idx), *old_utype.type(idx), c.second, atomic_cell::collection_member::yes));                 }             }         },         [&] (const abstract_type& o) {             throw std::runtime_error(format("not a multi-cell type: {}", o.name()));         }     ));     if (new_view.tomb || !new_view.cells.empty()) {         dst.apply(new_def, new_view.serialize(*new_def.type));     }   }); }
- converting_mutation_partition_applier::converting_mutation_partition_applier(         const column_mapping& visited_column_mapping,         const schema& target_schema,         mutation_partition& target)     : _p_schema(target_schema)     , _p(target)     , _visited_column_mapping(visited_column_mapping) { }
- void converting_mutation_partition_applier::accept_partition_tombstone(tombstone t) {     _p.apply(t); }
- void converting_mutation_partition_applier::accept_static_cell(column_id id, atomic_cell cell) {     return accept_static_cell(id, atomic_cell_view(cell)); }
- void converting_mutation_partition_applier::accept_static_cell(column_id id, atomic_cell_view cell) {     const column_mapping_entry& col = _visited_column_mapping.static_column_at(id);     const column_definition* def = _p_schema.get_column_definition(col.name());     if (def) {         accept_cell(_p._static_row.maybe_create(), column_kind::static_column, *def, *col.type(), cell);     } }
- void converting_mutation_partition_applier::accept_static_cell(column_id id, collection_mutation_view collection) {     const column_mapping_entry& col = _visited_column_mapping.static_column_at(id);     const column_definition* def = _p_schema.get_column_definition(col.name());     if (def) {         accept_cell(_p._static_row.maybe_create(), column_kind::static_column, *def, *col.type(), collection);     } }
- void converting_mutation_partition_applier::accept_row_tombstone(const range_tombstone& rt) {     _p.apply_row_tombstone(_p_schema, rt); }
- void converting_mutation_partition_applier::accept_row(position_in_partition_view key, const row_tombstone& deleted_at, const row_marker& rm, is_dummy dummy, is_continuous continuous) {     deletable_row& r = _p.clustered_row(_p_schema, key, dummy, continuous);     r.apply(rm);     r.apply(deleted_at);     _current_row = &r; }
- void converting_mutation_partition_applier::accept_row_cell(column_id id, atomic_cell cell) {     return accept_row_cell(id, atomic_cell_view(cell)); }
- void converting_mutation_partition_applier::accept_row_cell(column_id id, atomic_cell_view cell) {     const column_mapping_entry& col = _visited_column_mapping.regular_column_at(id);     const column_definition* def = _p_schema.get_column_definition(col.name());     if (def) {         accept_cell(_current_row->cells(), column_kind::regular_column, *def, *col.type(), cell);     } }
- void converting_mutation_partition_applier::accept_row_cell(column_id id, collection_mutation_view collection) {     const column_mapping_entry& col = _visited_column_mapping.regular_column_at(id);     const column_definition* def = _p_schema.get_column_definition(col.name());     if (def) {         accept_cell(_current_row->cells(), column_kind::regular_column, *def, *col.type(), collection);     } }
- void converting_mutation_partition_applier::append_cell(row& dst, column_kind kind, const column_definition& new_def, const column_definition& old_def, const atomic_cell_or_collection& cell) {     if (new_def.is_atomic()) {         accept_cell(dst, kind, new_def, *old_def.type, cell.as_atomic_cell(old_def));     } else {         accept_cell(dst, kind, new_def, *old_def.type, cell.as_collection_mutation());     } }
- reconcilable_result::~reconcilable_result() {}
- reconcilable_result::reconcilable_result()     : _row_count_low_bits(0)     , _row_count_high_bits(0) { }
- reconcilable_result::reconcilable_result(uint32_t row_count_low_bits, utils::chunked_vector<partition> p, query::short_read short_read,                                          uint32_t row_count_high_bits, query::result_memory_tracker memory_tracker)     : _row_count_low_bits(row_count_low_bits)     , _short_read(short_read)     , _memory_tracker(std::move(memory_tracker))     , _partitions(std::move(p))     , _row_count_high_bits(row_count_high_bits) { }
- reconcilable_result::reconcilable_result(uint64_t row_count, utils::chunked_vector<partition> p, query::short_read short_read,                                          query::result_memory_tracker memory_tracker)     : reconcilable_result(static_cast<uint32_t>(row_count), std::move(p), short_read, static_cast<uint32_t>(row_count >> 32), std::move(memory_tracker)) { }
- const utils::chunked_vector<partition>& reconcilable_result::partitions() const {     return _partitions; }
+seastar::metrics::histogram to_metrics_summary(const utils::summary_calculator& summary) noexcept ;
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
  utils::chunked_vector<partition>& reconcilable_result::partitions() {     return _partitions; }
  bool reconcilable_result::operator==(const reconcilable_result& other) const {     return boost::equal(_partitions, other._partitions); }
  std::ostream& operator<<(std::ostream& out, const reconcilable_result::printer& pr) {     out << "{rows=" << pr.self.row_count() << ", short_read="         << pr.self.is_short_read() << ", [";     bool first = true;     for (const partition& p : pr.self.partitions()) {         if (!first) {             out << ", ";         }         first = false;         out << "{rows=" << p.row_count() << ", ";         out << p._m.pretty_printer(pr.schema);         out << "}";     }     out << "]}";     return out; }
