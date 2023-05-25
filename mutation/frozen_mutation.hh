@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "dht/i_partitioner.hh"
-#include "replica/database_fwd.hh"
+#include "readers/flat_mutation_reader_v2.hh"
 #include "mutation_fragment.hh"
 #include "mutation_fragment_v2.hh"
 #include "mutation_partition_view.hh"

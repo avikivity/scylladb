@@ -8,11 +8,6 @@
 
 #pragma once
 
-#include "dht/i_partitioner.hh"
-#include "gc_clock.hh"
-#include "query-request.hh"
-#include "schema/schema_fwd.hh"
-#include "readers/flat_mutation_reader_v2.hh"
 #include "mutation/frozen_mutation.hh"
 #include "data_dictionary/data_dictionary.hh"
 

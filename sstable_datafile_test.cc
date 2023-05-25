@@ -41826,6 +41826,162 @@ future<> drop_column_mapping(table_id table_id, table_schema_version version);
 
 
 
+
+ /*
+  * The generate code should be included in a header file after
+  * The object definition
+  */
+    
+#include "idl/uuid.dist.hh"
+#include "idl/keys.dist.hh"
+namespace ser {
+
+template <>
+struct serializer<counter_id> {
+  template <typename Output>
+  static void write(Output& buf, const counter_id& v);
+
+  template <typename Input>
+  static counter_id read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const counter_id> : public serializer<counter_id>
+{};
+
+
+template <>
+struct serializer<counter_shard> {
+  template <typename Output>
+  static void write(Output& buf, const counter_shard& v);
+
+  template <typename Input>
+  static counter_shard read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const counter_shard> : public serializer<counter_shard>
+{};
+
+
+template <>
+struct serializer<tombstone> {
+  template <typename Output>
+  static void write(Output& buf, const tombstone& v);
+
+  template <typename Input>
+  static tombstone read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const tombstone> : public serializer<tombstone>
+{};
+
+
+template <>
+struct serializer<bound_kind> {
+  template <typename Output>
+  static void write(Output& buf, const bound_kind& v);
+
+  template <typename Input>
+  static bound_kind read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const bound_kind> : public serializer<bound_kind>
+{};
+
+
+template <>
+struct serializer<range_tombstone> {
+  template <typename Output>
+  static void write(Output& buf, const range_tombstone& v);
+
+  template <typename Input>
+  static range_tombstone read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const range_tombstone> : public serializer<range_tombstone>
+{};
+
+
+template <>
+struct serializer<column_mapping_entry> {
+  template <typename Output>
+  static void write(Output& buf, const column_mapping_entry& v);
+
+  template <typename Input>
+  static column_mapping_entry read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const column_mapping_entry> : public serializer<column_mapping_entry>
+{};
+
+
+template <>
+struct serializer<column_mapping> {
+  template <typename Output>
+  static void write(Output& buf, const column_mapping& v);
+
+  template <typename Input>
+  static column_mapping read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const column_mapping> : public serializer<column_mapping>
+{};
+
+
+template <>
+struct serializer<partition_end> {
+  template <typename Output>
+  static void write(Output& buf, const partition_end& v);
+
+  template <typename Input>
+  static partition_end read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const partition_end> : public serializer<partition_end>
+{};
+
+} // ser
+
+
 #include "db/view/view.hh"
 #include <deque>
 #include "dht/boot_strapper.hh"
