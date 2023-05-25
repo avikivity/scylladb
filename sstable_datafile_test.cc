@@ -56082,6 +56082,950 @@ public:
 } // namespace streaming
 
 
+#include <seastar/core/sstring.hh>
+
+namespace streaming {
+
+/**
+ * ProgressInfo contains file transfer progress.
+ */
+class progress_info {
+public:
+    using inet_address = gms::inet_address;
+    /**
+     * Direction of the stream.
+     */
+    enum class direction { OUT, IN };
+
+    inet_address peer;
+    sstring file_name;
+    direction dir;
+    long current_bytes;
+    long total_bytes;
+
+    progress_info() = default;
+    progress_info(inet_address _peer, sstring _file_name, direction _dir, long _current_bytes, long _total_bytes)
+        : peer(_peer)
+        , file_name(_file_name)
+        , dir(_dir)
+        , current_bytes(_current_bytes)
+        , total_bytes(_total_bytes) {
+    }
+
+    /**
+     * @return true if file transfer is completed
+     */
+    bool is_completed() const {
+        return current_bytes >= total_bytes;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const progress_info& x);
+};
+
+} // namespace streaming
+
+
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/distributed.hh>
+#include <seastar/core/semaphore.hh>
+#include <seastar/core/metrics_registration.hh>
+#include <map>
+
+namespace db {
+class config;
+class system_distributed_keyspace;
+namespace view {
+class view_update_generator;
+}
+}
+
+namespace service {
+class migration_manager;
+};
+
+namespace netw {
+class messaging_service;
+};
+
+namespace gms {
+class gossiper;
+}
+
+namespace streaming {
+
+struct stream_bytes {
+    int64_t bytes_sent = 0;
+    int64_t bytes_received = 0;
+    friend stream_bytes operator+(const stream_bytes& x, const stream_bytes& y) {
+        stream_bytes ret(x);
+        ret += y;
+        return ret;
+    }
+    stream_bytes& operator+=(const stream_bytes& x) {
+        bytes_sent += x.bytes_sent;
+        bytes_received += x.bytes_received;
+        return *this;
+    }
+};
+
+/**
+ * StreamManager manages currently running {@link StreamResultFuture}s and provides status of all operation invoked.
+ *
+ * All stream operation should be created through this class to track streaming status and progress.
+ */
+class stream_manager : public gms::i_endpoint_state_change_subscriber, public enable_shared_from_this<stream_manager>, public peering_sharded_service<stream_manager> {
+    using inet_address = gms::inet_address;
+    using endpoint_state = gms::endpoint_state;
+    using application_state = gms::application_state;
+    using versioned_value = gms::versioned_value;
+    /*
+     * Currently running streams. Removed after completion/failure.
+     * We manage them in two different maps to distinguish plan from initiated ones to
+     * receiving ones withing the same JVM.
+     */
+private:
+    sharded<replica::database>& _db;
+    sharded<db::system_distributed_keyspace>& _sys_dist_ks;
+    sharded<db::view::view_update_generator>& _view_update_generator;
+    sharded<netw::messaging_service>& _ms;
+    sharded<service::migration_manager>& _mm;
+    gms::gossiper& _gossiper;
+
+    std::unordered_map<plan_id, shared_ptr<stream_result_future>> _initiated_streams;
+    std::unordered_map<plan_id, shared_ptr<stream_result_future>> _receiving_streams;
+    std::unordered_map<plan_id, std::unordered_map<gms::inet_address, stream_bytes>> _stream_bytes;
+    uint64_t _total_incoming_bytes{0};
+    uint64_t _total_outgoing_bytes{0};
+    semaphore _mutation_send_limiter{256};
+    seastar::metrics::metric_groups _metrics;
+    std::unordered_map<streaming::stream_reason, float> _finished_percentage;
+
+    utils::updateable_value<uint32_t> _io_throughput_mbs;
+    serialized_action _io_throughput_updater = serialized_action([this] { return update_io_throughput(_io_throughput_mbs()); });
+    std::optional<utils::observer<uint32_t>> _io_throughput_option_observer;
+
+public:
+    stream_manager(db::config& cfg, sharded<replica::database>& db,
+            sharded<db::system_distributed_keyspace>& sys_dist_ks,
+            sharded<db::view::view_update_generator>& view_update_generator,
+            sharded<netw::messaging_service>& ms,
+            sharded<service::migration_manager>& mm,
+            gms::gossiper& gossiper);
+
+    future<> start(abort_source& as);
+    future<> stop();
+
+    semaphore& mutation_send_limiter() { return _mutation_send_limiter; }
+
+    void register_sending(shared_ptr<stream_result_future> result);
+
+    void register_receiving(shared_ptr<stream_result_future> result);
+
+    shared_ptr<stream_result_future> get_sending_stream(streaming::plan_id plan_id) const;
+
+    shared_ptr<stream_result_future> get_receiving_stream(streaming::plan_id plan_id) const;
+
+    std::vector<shared_ptr<stream_result_future>> get_all_streams() const;
+
+    replica::database& db() noexcept { return _db.local(); }
+    netw::messaging_service& ms() noexcept { return _ms.local(); }
+
+    const std::unordered_map<plan_id, shared_ptr<stream_result_future>>& get_initiated_streams() const {
+        return _initiated_streams;
+    }
+
+    const std::unordered_map<plan_id, shared_ptr<stream_result_future>>& get_receiving_streams() const {
+        return _receiving_streams;
+    }
+
+    void remove_stream(streaming::plan_id plan_id);
+
+    void show_streams() const;
+
+    future<> shutdown() {
+        fail_all_sessions();
+        return make_ready_future<>();
+    }
+
+    void update_progress(streaming::plan_id plan_id, gms::inet_address peer, progress_info::direction dir, size_t fm_size);
+    future<> update_all_progress_info();
+
+    void remove_progress(streaming::plan_id plan_id);
+
+    stream_bytes get_progress(streaming::plan_id plan_id, gms::inet_address peer) const;
+
+    stream_bytes get_progress(streaming::plan_id plan_id) const;
+
+    future<> remove_progress_on_all_shards(streaming::plan_id plan_id);
+
+    future<stream_bytes> get_progress_on_all_shards(streaming::plan_id plan_id, gms::inet_address peer) const;
+
+    future<stream_bytes> get_progress_on_all_shards(streaming::plan_id plan_id) const;
+
+    future<stream_bytes> get_progress_on_all_shards(gms::inet_address peer) const;
+
+    future<stream_bytes> get_progress_on_all_shards() const;
+
+    stream_bytes get_progress_on_local_shard() const;
+
+    shared_ptr<stream_session> get_session(streaming::plan_id plan_id, gms::inet_address from, const char* verb, std::optional<table_id> cf_id = {});
+
+public:
+    virtual future<> on_join(inet_address endpoint, endpoint_state ep_state) override { return make_ready_future(); }
+    virtual future<> before_change(inet_address endpoint, endpoint_state current_state, application_state new_state_key, const versioned_value& new_value) override { return make_ready_future(); }
+    virtual future<> on_change(inet_address endpoint, application_state state, const versioned_value& value) override { return make_ready_future(); }
+    virtual future<> on_alive(inet_address endpoint, endpoint_state state) override { return make_ready_future(); }
+    virtual future<> on_dead(inet_address endpoint, endpoint_state state) override;
+    virtual future<> on_remove(inet_address endpoint) override;
+    virtual future<> on_restart(inet_address endpoint, endpoint_state ep_state) override;
+
+private:
+    void fail_all_sessions();
+    void fail_sessions(inet_address endpoint);
+    bool has_peer(inet_address endpoint) const;
+
+    void init_messaging_service_handler(abort_source& as);
+    future<> uninit_messaging_service_handler();
+    future<> update_io_throughput(uint32_t value_mbs);
+
+public:
+    void update_finished_percentage(streaming::stream_reason reason, float percentage);
+};
+
+} // namespace streaming
+
+
+#include <vector>
+#include <map>
+
+namespace streaming {
+
+/**
+ * Stream session info.
+ */
+class session_info {
+public:
+    using inet_address = gms::inet_address;
+    inet_address peer;
+    /** Immutable collection of receiving summaries */
+    std::vector<stream_summary> receiving_summaries;
+    /** Immutable collection of sending summaries*/
+    std::vector<stream_summary> sending_summaries;
+    /** Current session state */
+    stream_session_state state;
+
+    std::map<sstring, progress_info> receiving_files;
+    std::map<sstring, progress_info> sending_files;
+
+    session_info() = default;
+    session_info(inet_address peer_,
+                 std::vector<stream_summary> receiving_summaries_,
+                 std::vector<stream_summary> sending_summaries_,
+                 stream_session_state state_)
+        : peer(peer_)
+        , receiving_summaries(std::move(receiving_summaries_))
+        , sending_summaries(std::move(sending_summaries_))
+        , state(state_) {
+    }
+
+    bool is_failed() const {
+        return state == stream_session_state::FAILED;
+    }
+
+    /**
+     * Update progress of receiving/sending file.
+     *
+     * @param newProgress new progress info
+     */
+    void update_progress(progress_info new_progress);
+
+    std::vector<progress_info> get_receiving_files() const;
+
+    std::vector<progress_info> get_sending_files() const;
+
+    /**
+     * @return total number of files already received.
+     */
+    long get_total_files_received() const {
+        return get_total_files_completed(get_receiving_files());
+    }
+
+    /**
+     * @return total number of files already sent.
+     */
+    long get_total_files_sent() const {
+        return get_total_files_completed(get_sending_files());
+    }
+
+    /**
+     * @return total size(in bytes) already received.
+     */
+    long get_total_size_received() const {
+        return get_total_size_in_progress(get_receiving_files());
+    }
+
+    /**
+     * @return total size(in bytes) already sent.
+     */
+    long get_total_size_sent() const {
+        return get_total_size_in_progress(get_sending_files());
+    }
+
+    /**
+     * @return total number of files to receive in the session
+     */
+    long get_total_files_to_receive() const {
+        return get_total_files(receiving_summaries);
+    }
+
+    /**
+     * @return total number of files to send in the session
+     */
+    long get_total_files_to_send() const {
+        return get_total_files(sending_summaries);
+    }
+
+    /**
+     * @return total size(in bytes) to receive in the session
+     */
+    long get_total_size_to_receive() const {
+        return get_total_sizes(receiving_summaries);
+    }
+
+    /**
+     * @return total size(in bytes) to send in the session
+     */
+    long get_total_size_to_send() const {
+        return get_total_sizes(sending_summaries);
+    }
+
+private:
+    long get_total_size_in_progress(std::vector<progress_info> files) const;
+
+    long get_total_files(std::vector<stream_summary> const& summaries) const;
+
+    long get_total_sizes(std::vector<stream_summary> const& summaries) const;
+
+    long get_total_files_completed(std::vector<progress_info> files) const;
+};
+
+} // namespace streaming
+
+
+#include <seastar/core/distributed.hh>
+#include <map>
+#include <vector>
+#include <memory>
+
+namespace db {
+
+class system_distributed_keyspace;
+
+}
+
+namespace service {
+class migration_manager;
+}
+
+namespace db::view {
+
+class view_update_generator;
+
+}
+
+namespace streaming {
+
+class stream_result_future;
+
+/**
+ * Handles the streaming a one or more section of one of more sstables to and from a specific
+ * remote node.
+ *
+ * Both this node and the remote one will create a similar symmetrical StreamSession. A streaming
+ * session has the following life-cycle:
+ *
+ * 1. Connections Initialization
+ *
+ *   (a) A node (the initiator in the following) create a new StreamSession, initialize it (init())
+ *       and then start it (start()). Start will create a {@link ConnectionHandler} that will create
+ *       two connections to the remote node (the follower in the following) with whom to stream and send
+ *       a StreamInit message. The first connection will be the incoming connection for the
+ *       initiator, and the second connection will be the outgoing.
+ *   (b) Upon reception of that StreamInit message, the follower creates its own StreamSession,
+ *       initialize it if it still does not exist, and attach connecting socket to its ConnectionHandler
+ *       according to StreamInit message's isForOutgoing flag.
+ *   (d) When the both incoming and outgoing connections are established, StreamSession calls
+ *       StreamSession#onInitializationComplete method to start the streaming prepare phase
+ *       (StreamResultFuture.startStreaming()).
+ *
+ * 2. Streaming preparation phase
+ *
+ *   (a) This phase is started when the initiator onInitializationComplete() method is called. This method sends a
+ *       PrepareMessage that includes what files/sections this node will stream to the follower
+ *       (stored in a StreamTransferTask, each column family has it's own transfer task) and what
+ *       the follower needs to stream back (StreamReceiveTask, same as above). If the initiator has
+ *       nothing to receive from the follower, it goes directly to its Streaming phase. Otherwise,
+ *       it waits for the follower PrepareMessage.
+ *   (b) Upon reception of the PrepareMessage, the follower records which files/sections it will receive
+ *       and send back its own PrepareMessage with a summary of the files/sections that will be sent to
+ *       the initiator (prepare()). After having sent that message, the follower goes to its Streamning
+ *       phase.
+ *   (c) When the initiator receives the follower PrepareMessage, it records which files/sections it will
+ *       receive and then goes to his own Streaming phase.
+ *
+ * 3. Streaming phase
+ *
+ *   (a) The streaming phase is started by each node (the sender in the follower, but note that each side
+ *       of the StreamSession may be sender for some of the files) involved by calling startStreamingFiles().
+ *       This will sequentially send a FileMessage for each file of each SteamTransferTask. Each FileMessage
+ *       consists of a FileMessageHeader that indicates which file is coming and then start streaming the
+ *       content for that file (StreamWriter in FileMessage.serialize()). When a file is fully sent, the
+ *       fileSent() method is called for that file. If all the files for a StreamTransferTask are sent
+ *       (StreamTransferTask.complete()), the task is marked complete (taskCompleted()).
+ *   (b) On the receiving side, a SSTable will be written for the incoming file (StreamReader in
+ *       FileMessage.deserialize()) and once the FileMessage is fully received, the file will be marked as
+ *       complete (received()). When all files for the StreamReceiveTask have been received, the sstables
+ *       are added to the CFS (and 2ndary index are built, StreamReceiveTask.complete()) and the task
+ *       is marked complete (taskCompleted())
+ *   (b) If during the streaming of a particular file an I/O error occurs on the receiving end of a stream
+ *       (FileMessage.deserialize), the node will retry the file (up to DatabaseDescriptor.getMaxStreamingRetries())
+ *       by sending a RetryMessage to the sender. On receiving a RetryMessage, the sender simply issue a new
+ *       FileMessage for that file.
+ *   (c) When all transfer and receive tasks for a session are complete, the move to the Completion phase
+ *       (maybeCompleted()).
+ *
+ * 4. Completion phase
+ *
+ *   (a) When a node has finished all transfer and receive task, it enter the completion phase (maybeCompleted()).
+ *       If it had already received a CompleteMessage from the other side (it is in the WAIT_COMPLETE state), that
+ *       session is done is is closed (closeSession()). Otherwise, the node switch to the WAIT_COMPLETE state and
+ *       send a CompleteMessage to the other side.
+ */
+class stream_session : public enable_shared_from_this<stream_session> {
+private:
+    using messaging_verb = netw::messaging_verb;
+    using messaging_service = netw::messaging_service;
+    using msg_addr = netw::msg_addr;
+    using inet_address = gms::inet_address;
+    using token = dht::token;
+    using ring_position = dht::ring_position;
+
+public:
+    /**
+     * Streaming endpoint.
+     *
+     * Each {@code StreamSession} is identified by this InetAddress which is broadcast address of the node streaming.
+     */
+    inet_address peer;
+    unsigned dst_cpu_id = 0;
+private:
+    stream_manager& _mgr;
+    // should not be null when session is started
+    shared_ptr<stream_result_future> _stream_result;
+
+    // stream requests to send to the peer
+    std::vector<stream_request> _requests;
+    // streaming tasks are created and managed per ColumnFamily ID
+    std::map<table_id, stream_transfer_task> _transfers;
+    // data receivers, filled after receiving prepare message
+    std::map<table_id, stream_receive_task> _receivers;
+    //private final StreamingMetrics metrics;
+    /* can be null when session is created in remote */
+    //private final StreamConnectionFactory factory;
+
+    int64_t _bytes_sent = 0;
+    int64_t _bytes_received = 0;
+
+    int _retries;
+    bool _is_aborted =  false;
+
+    stream_session_state _state = stream_session_state::INITIALIZED;
+    bool _complete_sent = false;
+    bool _received_failed_complete_message = false;
+
+    session_info _session_info;
+
+    stream_reason _reason = stream_reason::unspecified;
+public:
+    stream_reason get_reason() const {
+        return _reason;
+    }
+    void set_reason(stream_reason reason) {
+        _reason = reason;
+    }
+
+    void add_bytes_sent(int64_t bytes) {
+        _bytes_sent += bytes;
+    }
+
+    void add_bytes_received(int64_t bytes) {
+        _bytes_received += bytes;
+    }
+
+    int64_t get_bytes_sent() const {
+        return _bytes_sent;
+    }
+
+    int64_t get_bytes_received() const {
+        return _bytes_received;
+    }
+public:
+    /**
+     * Create new streaming session with the peer.
+     *
+     * @param peer Address of streaming peer
+     * @param connecting Actual connecting address
+     * @param factory is used for establishing connection
+     */
+    stream_session(stream_manager& mgr, inet_address peer_);
+    ~stream_session();
+
+    streaming::plan_id plan_id() const;
+
+    sstring description() const;
+
+public:
+    /**
+     * Bind this session to report to specific {@link StreamResultFuture} and
+     * perform pre-streaming initialization.
+     *
+     * @param streamResult result to report to
+     */
+    void init(shared_ptr<stream_result_future> stream_result_);
+
+    void start();
+
+    bool is_initialized() const;
+
+    /**
+     * Request data fetch task to this session.
+     *
+     * @param keyspace Requesting keyspace
+     * @param ranges Ranges to retrieve data
+     * @param columnFamilies ColumnFamily names. Can be empty if requesting all CF under the keyspace.
+     */
+    void add_stream_request(sstring keyspace, dht::token_range_vector ranges, std::vector<sstring> column_families) {
+        _requests.emplace_back(std::move(keyspace), std::move(ranges), std::move(column_families));
+    }
+
+    /**
+     * Set up transfer for specific keyspace/ranges/CFs
+     *
+     * Used in repair - a streamed sstable in repair will be marked with the given repairedAt time
+     *
+     * @param keyspace Transfer keyspace
+     * @param ranges Transfer ranges
+     * @param columnFamilies Transfer ColumnFamilies
+     * @param flushTables flush tables?
+     * @param repairedAt the time the repair started.
+     */
+    void add_transfer_ranges(sstring keyspace, dht::token_range_vector ranges, std::vector<sstring> column_families);
+
+    std::vector<replica::column_family*> get_column_family_stores(const sstring& keyspace, const std::vector<sstring>& column_families);
+
+    void close_session(stream_session_state final_state);
+
+public:
+    /**
+     * Set current state to {@code newState}.
+     *
+     * @param newState new state to set
+     */
+    void set_state(stream_session_state new_state) {
+        _state = new_state;
+    }
+
+    /**
+     * @return current state
+     */
+    stream_session_state get_state() const {
+        return _state;
+    }
+
+    /**
+     * Return if this session completed successfully.
+     *
+     * @return true if session completed successfully.
+     */
+    bool is_success() const {
+        return _state == stream_session_state::COMPLETE;
+    }
+
+    future<> initiate();
+
+    /**
+     * Call back when connection initialization is complete to start the prepare phase.
+     */
+    future<> on_initialization_complete();
+
+    /**l
+     * Call back for handling exception during streaming.
+     *
+     * @param e thrown exception
+     */
+    void on_error();
+
+    void abort();
+
+    void received_failed_complete_message();
+
+    /**
+     * Prepare this session for sending/receiving files.
+     */
+    future<prepare_message> prepare(std::vector<stream_request> requests, std::vector<stream_summary> summaries);
+
+    void follower_start_sent();
+
+    /**
+     * Check if session is completed on receiving {@code StreamMessage.Type.COMPLETE} message.
+     */
+    void complete();
+
+    /**
+     * @return Current snapshot of this session info.
+     */
+    session_info make_session_info();
+
+    session_info& get_session_info() {
+        return _session_info;
+    }
+
+    const session_info& get_session_info() const {
+        return _session_info;
+    }
+
+    stream_manager& manager() noexcept { return _mgr; }
+    const stream_manager& manager() const noexcept { return _mgr; }
+
+    future<> update_progress();
+
+    void receive_task_completed(table_id cf_id);
+    void transfer_task_completed(table_id cf_id);
+    void transfer_task_completed_all();
+private:
+    void send_failed_complete_message();
+    bool maybe_completed();
+    void prepare_receiving(stream_summary& summary);
+    void start_streaming_files();
+    future<> receiving_failed(table_id cf_id);
+};
+
+} // namespace streaming
+
+#include <map>
+#include <algorithm>
+
+namespace streaming {
+
+/**
+ * {@link StreamCoordinator} is a helper class that abstracts away maintaining multiple
+ * StreamSession and ProgressInfo instances per peer.
+ *
+ * This class coordinates multiple SessionStreams per peer in both the outgoing StreamPlan context and on the
+ * inbound StreamResultFuture context.
+ */
+class stream_coordinator {
+public:
+    using inet_address = gms::inet_address;
+
+private:
+    class host_streaming_data;
+    std::map<inet_address, shared_ptr<stream_session>> _peer_sessions;
+    bool _is_receiving;
+
+public:
+    stream_coordinator(bool is_receiving = false)
+        : _is_receiving(is_receiving) {
+    }
+public:
+    /**
+     * @return true if any stream session is active
+     */
+    bool has_active_sessions() const;
+
+    std::vector<shared_ptr<stream_session>> get_all_stream_sessions() const;
+
+    bool is_receiving() const;
+
+    void connect_all_stream_sessions();
+    std::set<inet_address> get_peers() const;
+
+public:
+    shared_ptr<stream_session> get_or_create_session(stream_manager& mgr, inet_address peer) {
+        auto& session = _peer_sessions[peer];
+        if (!session) {
+            session = make_shared<stream_session>(mgr, peer);
+        }
+        return session;
+    }
+
+    std::vector<session_info> get_all_session_info() const;
+    std::vector<session_info> get_peer_session_info(inet_address peer) const;
+
+    void abort_all_stream_sessions();
+};
+
+} // namespace streaming
+
+#include <seastar/core/sstring.hh>
+#include <vector>
+
+namespace streaming {
+
+/**
+ * {@link StreamPlan} is a helper class that builds StreamOperation of given configuration.
+ *
+ * This is the class you want to use for building streaming plan and starting streaming.
+ */
+class stream_plan {
+private:
+    using inet_address = gms::inet_address;
+    using token = dht::token;
+    stream_manager& _mgr;
+    plan_id _plan_id;
+    sstring _description;
+    stream_reason _reason;
+    std::vector<stream_event_handler*> _handlers;
+    shared_ptr<stream_coordinator> _coordinator;
+    bool _range_added = false;
+    bool _aborted = false;
+public:
+
+    /**
+     * Start building stream plan.
+     *
+     * @param description Stream type that describes this StreamPlan
+     */
+    stream_plan(stream_manager& mgr, sstring description, stream_reason reason = stream_reason::unspecified)
+        : _mgr(mgr)
+        , _plan_id(plan_id{utils::UUID_gen::get_time_UUID()})
+        , _description(description)
+        , _reason(reason)
+        , _coordinator(make_shared<stream_coordinator>())
+    {
+    }
+
+    /**
+     * Request data in {@code keyspace} and {@code ranges} from specific node.
+     *
+     * @param from endpoint address to fetch data from.
+     * @param connecting Actual connecting address for the endpoint
+     * @param keyspace name of keyspace
+     * @param ranges ranges to fetch
+     * @return this object for chaining
+     */
+    stream_plan& request_ranges(inet_address from, sstring keyspace, dht::token_range_vector ranges);
+
+    /**
+     * Request data in {@code columnFamilies} under {@code keyspace} and {@code ranges} from specific node.
+     *
+     * @param from endpoint address to fetch data from.
+     * @param connecting Actual connecting address for the endpoint
+     * @param keyspace name of keyspace
+     * @param ranges ranges to fetch
+     * @param columnFamilies specific column families
+     * @return this object for chaining
+     */
+    stream_plan& request_ranges(inet_address from, sstring keyspace, dht::token_range_vector ranges, std::vector<sstring> column_families);
+
+    /**
+     * Add transfer task to send data of specific keyspace and ranges.
+     *
+     * @param to endpoint address of receiver
+     * @param connecting Actual connecting address of the endpoint
+     * @param keyspace name of keyspace
+     * @param ranges ranges to send
+     * @return this object for chaining
+     */
+    stream_plan& transfer_ranges(inet_address to, sstring keyspace, dht::token_range_vector ranges);
+
+    /**
+     * Add transfer task to send data of specific {@code columnFamilies} under {@code keyspace} and {@code ranges}.
+     *
+     * @param to endpoint address of receiver
+     * @param connecting Actual connecting address of the endpoint
+     * @param keyspace name of keyspace
+     * @param ranges ranges to send
+     * @param columnFamilies specific column families
+     * @return this object for chaining
+     */
+    stream_plan& transfer_ranges(inet_address to, sstring keyspace, dht::token_range_vector ranges, std::vector<sstring> column_families);
+
+    stream_plan& listeners(std::vector<stream_event_handler*> handlers);
+public:
+    /**
+     * @return true if this plan has no plan to execute
+     */
+    bool is_empty() const {
+        return !_coordinator->has_active_sessions();
+    }
+
+    /**
+     * Execute this {@link StreamPlan} asynchronously.
+     *
+     * @return Future {@link StreamState} that you can use to listen on progress of streaming.
+     */
+    future<stream_state> execute();
+
+    void abort() noexcept;
+    void do_abort();
+};
+
+} // namespace streaming
+
+#include <seastar/core/distributed.hh>
+#include <seastar/core/abort_source.hh>
+#include <unordered_map>
+#include <memory>
+
+namespace replica {
+class database;
+}
+
+namespace gms { class gossiper; }
+namespace locator { class topology; }
+
+namespace dht {
+/**
+ * Assists in streaming ranges to a node.
+ */
+class range_streamer {
+public:
+    using inet_address = gms::inet_address;
+    using token_metadata = locator::token_metadata;
+    using token_metadata_ptr = locator::token_metadata_ptr;
+    using stream_plan = streaming::stream_plan;
+    using stream_state = streaming::stream_state;
+public:
+    /**
+     * A filter applied to sources to stream from when constructing a fetch map.
+     */
+    class i_source_filter {
+    public:
+        virtual bool should_include(const locator::topology&, inet_address endpoint) = 0;
+        virtual ~i_source_filter() {}
+    };
+
+    /**
+     * Source filter which excludes any endpoints that are not alive according to a
+     * failure detector.
+     */
+    class failure_detector_source_filter : public i_source_filter {
+    private:
+        std::set<gms::inet_address> _down_nodes;
+    public:
+        failure_detector_source_filter(std::set<gms::inet_address> down_nodes) : _down_nodes(std::move(down_nodes)) { }
+        virtual bool should_include(const locator::topology&, inet_address endpoint) override { return !_down_nodes.contains(endpoint); }
+    };
+
+    /**
+     * Source filter which excludes any endpoints that are not in a specific data center.
+     */
+    class single_datacenter_filter : public i_source_filter {
+    private:
+        sstring _source_dc;
+    public:
+        single_datacenter_filter(const sstring& source_dc)
+            : _source_dc(source_dc) {
+        }
+        virtual bool should_include(const locator::topology& topo, inet_address endpoint) override {
+            return topo.get_datacenter(endpoint) == _source_dc;
+        }
+    };
+
+    range_streamer(distributed<replica::database>& db, sharded<streaming::stream_manager>& sm, const token_metadata_ptr tmptr, abort_source& abort_source, std::unordered_set<token> tokens,
+            inet_address address, locator::endpoint_dc_rack dr, sstring description, streaming::stream_reason reason)
+        : _db(db)
+        , _stream_manager(sm)
+        , _token_metadata_ptr(std::move(tmptr))
+        , _abort_source(abort_source)
+        , _tokens(std::move(tokens))
+        , _address(address)
+        , _dr(std::move(dr))
+        , _description(std::move(description))
+        , _reason(reason)
+    {
+        _abort_source.check();
+    }
+
+    range_streamer(distributed<replica::database>& db, sharded<streaming::stream_manager>& sm, const token_metadata_ptr tmptr, abort_source& abort_source,
+            inet_address address, locator::endpoint_dc_rack dr, sstring description, streaming::stream_reason reason)
+        : range_streamer(db, sm, std::move(tmptr), abort_source, std::unordered_set<token>(), address, std::move(dr), description, reason) {
+    }
+
+    void add_source_filter(std::unique_ptr<i_source_filter> filter) {
+        _source_filters.emplace(std::move(filter));
+    }
+
+    future<> add_ranges(const sstring& keyspace_name, locator::vnode_effective_replication_map_ptr erm, dht::token_range_vector ranges, gms::gossiper& gossiper, bool is_replacing);
+    void add_tx_ranges(const sstring& keyspace_name, std::unordered_map<inet_address, dht::token_range_vector> ranges_per_endpoint);
+    void add_rx_ranges(const sstring& keyspace_name, std::unordered_map<inet_address, dht::token_range_vector> ranges_per_endpoint);
+private:
+    bool use_strict_sources_for_ranges(const sstring& keyspace_name, const locator::vnode_effective_replication_map_ptr& erm);
+    /**
+     * Get a map of all ranges and their respective sources that are candidates for streaming the given ranges
+     * to us. For each range, the list of sources is sorted by proximity relative to the given destAddress.
+     */
+    std::unordered_map<dht::token_range, std::vector<inet_address>>
+    get_all_ranges_with_sources_for(const sstring& keyspace_name, locator::vnode_effective_replication_map_ptr erm, dht::token_range_vector desired_ranges);
+    /**
+     * Get a map of all ranges and the source that will be cleaned up once this bootstrapped node is added for the given ranges.
+     * For each range, the list should only contain a single source. This allows us to consistently migrate data without violating
+     * consistency.
+     */
+    std::unordered_map<dht::token_range, std::vector<inet_address>>
+    get_all_ranges_with_strict_sources_for(const sstring& keyspace_name, locator::vnode_effective_replication_map_ptr erm, dht::token_range_vector desired_ranges, gms::gossiper& gossiper);
+private:
+    /**
+     * @param rangesWithSources The ranges we want to fetch (key) and their potential sources (value)
+     * @param sourceFilters A (possibly empty) collection of source filters to apply. In addition to any filters given
+     *                      here, we always exclude ourselves.
+     * @return
+     */
+    std::unordered_map<inet_address, dht::token_range_vector>
+    get_range_fetch_map(const std::unordered_map<dht::token_range, std::vector<inet_address>>& ranges_with_sources,
+                        const std::unordered_set<std::unique_ptr<i_source_filter>>& source_filters,
+                        const sstring& keyspace);
+
+#if 0
+
+    // For testing purposes
+    Multimap<String, Map.Entry<InetAddress, Collection<Range<Token>>>> toFetch()
+    {
+        return toFetch;
+    }
+#endif
+
+    const token_metadata& get_token_metadata() {
+        return *_token_metadata_ptr;
+    }
+public:
+    future<> stream_async();
+    size_t nr_ranges_to_stream();
+private:
+    distributed<replica::database>& _db;
+    sharded<streaming::stream_manager>& _stream_manager;
+    const token_metadata_ptr _token_metadata_ptr;
+    abort_source& _abort_source;
+    std::unordered_set<token> _tokens;
+    inet_address _address;
+    locator::endpoint_dc_rack _dr;
+    sstring _description;
+    streaming::stream_reason _reason;
+    std::unordered_multimap<sstring, std::unordered_map<inet_address, dht::token_range_vector>> _to_stream;
+    std::unordered_set<std::unique_ptr<i_source_filter>> _source_filters;
+    // Number of tx and rx ranges added
+    unsigned _nr_tx_added = 0;
+    unsigned _nr_rx_added = 0;
+    // Limit the number of nodes to stream in parallel to reduce memory pressure with large cluster.
+    seastar::semaphore _limiter{16};
+    size_t _nr_total_ranges = 0;
+    size_t _nr_ranges_remaining = 0;
+};
+
+} // dht
+
+
 
 
 
