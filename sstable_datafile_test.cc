@@ -59460,11 +59460,310 @@ seastar::metrics::histogram to_metrics_summary(const utils::summary_calculator& 
 
 
 
+namespace db {
+class schema_ctxt;
+}
 
-#include "idl/frozen_schema.dist.hh"
-#include "idl/frozen_schema.dist.impl.hh"
-#include "idl/mutation.dist.hh"
-#include "idl/mutation.dist.impl.hh"
+// Transport for schema_ptr across shards/nodes.
+// It's safe to access from another shard by const&.
+class frozen_schema {
+    bytes_ostream _data;
+public:
+    explicit frozen_schema(bytes_ostream);
+    frozen_schema(const schema_ptr&);
+    frozen_schema(frozen_schema&&) = default;
+    frozen_schema(const frozen_schema&) = default;
+    frozen_schema& operator=(const frozen_schema&) = default;
+    frozen_schema& operator=(frozen_schema&&) = default;
+    schema_ptr unfreeze(const db::schema_ctxt&) const;
+    const bytes_ostream& representation() const;
+};
+
+
+ /*
+  * The generate code should be included in a header file after
+  * The object definition
+  */
+    
+namespace ser {
+
+template <>
+struct serializer<canonical_mutation> {
+  template <typename Output>
+  static void write(Output& buf, const canonical_mutation& v);
+
+  template <typename Input>
+  static canonical_mutation read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const canonical_mutation> : public serializer<canonical_mutation>
+{};
+
+
+template <>
+struct serializer<schema_mutations> {
+  template <typename Output>
+  static void write(Output& buf, const schema_mutations& v);
+
+  template <typename Input>
+  static schema_mutations read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const schema_mutations> : public serializer<schema_mutations>
+{};
+
+
+template <>
+struct serializer<frozen_schema> {
+  template <typename Output>
+  static void write(Output& buf, const frozen_schema& v);
+
+  template <typename Input>
+  static frozen_schema read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const frozen_schema> : public serializer<frozen_schema>
+{};
+
+} // ser
+
+
+namespace ser {
+
+
+template <typename Output>
+void serializer<canonical_mutation>::write(Output& buf, const canonical_mutation& obj) {
+  static_assert(is_equivalent<decltype(obj.representation()), bytes>::value, "member value has a wrong type");
+  serialize(buf, obj.representation());
+}
+
+
+template <typename Input>
+canonical_mutation serializer<canonical_mutation>::read(Input& buf) {
+ return seastar::with_serialized_stream(buf, [] (auto& buf) {
+  auto& in = buf;
+  auto __local_0 = deserialize(in, boost::type<bytes>());
+
+  canonical_mutation res {std::move(__local_0)};
+  return res;
+ });
+}
+
+
+template <typename Input>
+void serializer<canonical_mutation>::skip(Input& buf) {
+ seastar::with_serialized_stream(buf, [] (auto& buf) {
+  ser::skip(buf, boost::type<bytes>());
+ });
+}
+
+
+template <typename Output>
+void serializer<schema_mutations>::write(Output& buf, const schema_mutations& obj) {
+  set_size(buf, obj);
+  static_assert(is_equivalent<decltype(obj.columnfamilies_canonical_mutation()), canonical_mutation>::value, "member value has a wrong type");
+  serialize(buf, obj.columnfamilies_canonical_mutation());
+  static_assert(is_equivalent<decltype(obj.columns_canonical_mutation()), canonical_mutation>::value, "member value has a wrong type");
+  serialize(buf, obj.columns_canonical_mutation());
+  static_assert(is_equivalent<decltype(obj.is_view()), bool>::value, "member value has a wrong type");
+  serialize(buf, obj.is_view());
+  static_assert(is_equivalent<decltype(obj.indices_canonical_mutation()), std::optional<canonical_mutation>>::value, "member value has a wrong type");
+  serialize(buf, obj.indices_canonical_mutation());
+  static_assert(is_equivalent<decltype(obj.dropped_columns_canonical_mutation()), std::optional<canonical_mutation>>::value, "member value has a wrong type");
+  serialize(buf, obj.dropped_columns_canonical_mutation());
+  static_assert(is_equivalent<decltype(obj.scylla_tables_canonical_mutation()), std::optional<canonical_mutation>>::value, "member value has a wrong type");
+  serialize(buf, obj.scylla_tables_canonical_mutation());
+  static_assert(is_equivalent<decltype(obj.view_virtual_columns_canonical_mutation()), std::optional<canonical_mutation>>::value, "member value has a wrong type");
+  serialize(buf, obj.view_virtual_columns_canonical_mutation());
+  static_assert(is_equivalent<decltype(obj.computed_columns_canonical_mutation()), std::optional<canonical_mutation>>::value, "member value has a wrong type");
+  serialize(buf, obj.computed_columns_canonical_mutation());
+}
+
+
+template <typename Input>
+schema_mutations serializer<schema_mutations>::read(Input& buf) {
+ return seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  auto in = buf.read_substream(size - sizeof(size_type));
+  auto __local_0 = deserialize(in, boost::type<canonical_mutation>());
+  auto __local_1 = deserialize(in, boost::type<canonical_mutation>());
+  auto __local_2 = (in.size()>0) ?
+    deserialize(in, boost::type<bool>()) : bool();
+  auto __local_3 = (in.size()>0) ?
+    deserialize(in, boost::type<std::optional<canonical_mutation>>()) : std::optional<canonical_mutation>();
+  auto __local_4 = (in.size()>0) ?
+    deserialize(in, boost::type<std::optional<canonical_mutation>>()) : std::optional<canonical_mutation>();
+  auto __local_5 = (in.size()>0) ?
+    deserialize(in, boost::type<std::optional<canonical_mutation>>()) : std::optional<canonical_mutation>();
+  auto __local_6 = (in.size()>0) ?
+    deserialize(in, boost::type<std::optional<canonical_mutation>>()) : std::optional<canonical_mutation>();
+  auto __local_7 = (in.size()>0) ?
+    deserialize(in, boost::type<std::optional<canonical_mutation>>()) : std::optional<canonical_mutation>();
+
+  schema_mutations res {std::move(__local_0), std::move(__local_1), std::move(__local_2), std::move(__local_3), std::move(__local_4), std::move(__local_5), std::move(__local_6), std::move(__local_7)};
+  return res;
+ });
+}
+
+
+template <typename Input>
+void serializer<schema_mutations>::skip(Input& buf) {
+ seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  buf.skip(size - sizeof(size_type));
+ });
+}
+
+
+template <typename Output>
+void serializer<frozen_schema>::write(Output& buf, const frozen_schema& obj) {
+  static_assert(is_equivalent<decltype(obj.representation()), bytes>::value, "member value has a wrong type");
+  serialize(buf, obj.representation());
+}
+
+
+template <typename Input>
+frozen_schema serializer<frozen_schema>::read(Input& buf) {
+ return seastar::with_serialized_stream(buf, [] (auto& buf) {
+  auto& in = buf;
+  auto __local_0 = deserialize(in, boost::type<bytes>());
+
+  frozen_schema res {std::move(__local_0)};
+  return res;
+ });
+}
+
+
+template <typename Input>
+void serializer<frozen_schema>::skip(Input& buf) {
+ seastar::with_serialized_stream(buf, [] (auto& buf) {
+  ser::skip(buf, boost::type<bytes>());
+ });
+}
+struct schema_view {
+    utils::input_stream v;
+    
+
+    auto version() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<table_schema_version>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<table_schema_version>());
+      });
+    }
+
+
+    auto mutations() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<schema_mutations>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<table_schema_version>());
+       return deserialize(in, boost::type<schema_mutations>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<schema_view> {
+    template<typename Input>
+    static schema_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return schema_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, schema_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+
+////// State holders
+
+template<typename Output>
+struct state_of_schema {
+    frame<Output> f;
+};
+
+////// Nodes
+
+template<typename Output>
+struct after_schema__mutations {
+    Output& _out;
+    state_of_schema<Output> _state;
+    
+    
+    
+    void  end_schema() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_schema__version {
+    Output& _out;
+    state_of_schema<Output> _state;
+    
+    
+    
+    after_schema__mutations<Output> write_mutations(const schema_mutations& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_schema {
+    Output& _out;
+    state_of_schema<Output> _state;
+    
+    writer_of_schema(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_schema__version<Output> write_version(const table_schema_version& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+} // ser
+
+
 #include "i_filter.hh"
 #include "init.hh"
 #include <iostream>
