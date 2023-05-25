@@ -10,8 +10,6 @@
 #ifndef SERVICE_QUERY_STATE_HH
 #define SERVICE_QUERY_STATE_HH
 
-#include "service/client_state.hh"
-#include "tracing/tracing.hh"
 #include "service_permit.hh"
 
 namespace qos {

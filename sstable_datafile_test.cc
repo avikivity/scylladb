@@ -22811,6 +22811,875 @@ public:
 };
 }
 
+#include <seastar/core/sstring.hh>
+
+#include <map>
+
+namespace cql_transport {
+
+/**
+ * CQL Protocol extensions. They can be viewed as an opportunity to provide
+ * some vendor-specific extensions to the CQL protocol without changing
+ * the version of the protocol itself (i.e. when the changes introduced by
+ * extensions are binary-compatible with the current version of the protocol).
+ * 
+ * Extensions are meant to be passed between client and server in terms of
+ * SUPPORTED/STARTUP messages in order to negotiate compatible set of features
+ * to be used in a connection.
+ * 
+ * The negotiation procedure and extensions themselves are documented in the
+ * `docs/dev/protocol-extensions.md`. 
+ */
+enum class cql_protocol_extension {
+    LWT_ADD_METADATA_MARK,
+    RATE_LIMIT_ERROR
+};
+
+using cql_protocol_extension_enum = super_enum<cql_protocol_extension,
+    cql_protocol_extension::LWT_ADD_METADATA_MARK,
+    cql_protocol_extension::RATE_LIMIT_ERROR>;
+
+using cql_protocol_extension_enum_set = enum_set<cql_protocol_extension_enum>;
+
+cql_protocol_extension_enum_set supported_cql_protocol_extensions();
+
+/**
+ * Returns the name of extension to be used in SUPPORTED/STARTUP feature negotiation.
+ */
+const seastar::sstring& protocol_extension_name(cql_protocol_extension ext);
+
+/**
+ * Returns a list of additional key-value pairs (in the form of "ARG=VALUE" string)
+ * that belong to a particular extension and provide some additional capabilities
+ * to be used by the client driver in order to support this extension.
+ */
+std::vector<seastar::sstring> additional_options_for_proto_ext(cql_protocol_extension ext);
+
+} // namespace cql_transport
+
+
+#include <seastar/core/sstring.hh>
+#include <seastar/core/print.hh>
+#include <map>
+#include <stdexcept>
+#include <variant>
+#include <seastar/core/lowres_clock.hh>
+
+namespace qos {
+
+/**
+ *  a structure that holds the configuration for
+ *  a service level.
+ */
+struct service_level_options {
+    struct unset_marker {
+        bool operator==(const unset_marker&) const { return true; };
+    };
+    struct delete_marker {
+        bool operator==(const delete_marker&) const { return true; };
+    };
+
+    enum class workload_type {
+        unspecified, batch, interactive, delete_marker
+    };
+
+    using timeout_type = std::variant<unset_marker, delete_marker, lowres_clock::duration>;
+    timeout_type timeout = unset_marker{};
+    workload_type workload = workload_type::unspecified;
+
+    service_level_options replace_defaults(const service_level_options& other) const;
+    // Merges the values of two service level options. The semantics depends
+    // on the type of the parameter - e.g. for timeouts, a min value is preferred.
+    service_level_options merge_with(const service_level_options& other) const;
+
+    bool operator==(const service_level_options& other) const = default;
+
+    static std::string_view to_string(const workload_type& wt);
+    static std::optional<workload_type> parse_workload_type(std::string_view sv);
+};
+
+std::ostream& operator<<(std::ostream& os, const service_level_options::workload_type&);
+
+using service_levels_info = std::map<sstring, service_level_options>;
+
+///
+/// A logical argument error for a service_level statement operation.
+///
+class service_level_argument_exception : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+///
+/// An exception to indicate that the service level given as parameter doesn't exist.
+///
+class nonexistant_service_level_exception : public service_level_argument_exception {
+public:
+    nonexistant_service_level_exception(sstring service_level_name)
+            : service_level_argument_exception(format("Service Level {} doesn't exists.", service_level_name)) {
+    }
+};
+
+}
+
+#include <seastar/core/rwlock.hh>
+#include <seastar/util/defer.hh>
+#include <seastar/util/noncopyable_function.hh>
+#include <seastar/core/coroutine.hh>
+
+#include <vector>
+
+// This class supports atomic removes (by using a lock and returning a
+// future) and non atomic insert and iteration (by using indexes).
+template <typename T>
+class atomic_vector {
+    std::vector<T> _vec;
+    seastar::rwlock _vec_lock;
+
+public:
+    void add(const T& value) {
+        _vec.push_back(value);
+    }
+    seastar::future<> remove(const T& value) {
+        return with_lock(_vec_lock.for_write(), [this, value] {
+            _vec.erase(std::remove(_vec.begin(), _vec.end(), value), _vec.end());
+        });
+    }
+
+    // This must be called on a thread. The callback function must not
+    // call remove.
+    //
+    // We would take callbacks that take a T&, but we had bugs in the
+    // past with some of those callbacks holding that reference past a
+    // preemption.
+    void thread_for_each(seastar::noncopyable_function<void(T)> func) {
+        _vec_lock.for_read().lock().get();
+        auto unlock = seastar::defer([this] {
+            _vec_lock.for_read().unlock();
+        });
+        // We grab a lock in remove(), but not in add(), so we
+        // iterate using indexes to guard against the vector being
+        // reallocated.
+        for (size_t i = 0, n = _vec.size(); i < n; ++i) {
+            func(_vec[i]);
+        }
+    }
+
+    // The callback function must not call remove.
+    //
+    // We would take callbacks that take a T&, but we had bugs in the
+    // past with some of those callbacks holding that reference past a
+    // preemption.
+    seastar::future<> for_each(seastar::noncopyable_function<seastar::future<>(T)> func) {
+        auto holder = co_await _vec_lock.hold_read_lock();
+        // We grab a lock in remove(), but not in add(), so we
+        // iterate using indexes to guard against the vector being
+        // reallocated.
+        for (size_t i = 0, n = _vec.size(); i < n; ++i) {
+            co_await func(_vec[i]);
+        }
+    }
+};
+
+
+
+namespace service {
+
+/**
+ * Interface on which interested parties can be notified of high level endpoint
+ * state changes.
+ *
+ * Note that while IEndpointStateChangeSubscriber notify about gossip related
+ * changes (IEndpointStateChangeSubscriber.onJoin() is called when a node join
+ * gossip), this interface allows to be notified about higher level events.
+ */
+class endpoint_lifecycle_subscriber {
+public:
+    virtual ~endpoint_lifecycle_subscriber()
+    { }
+
+    /**
+     * Called when a new node joins the cluster, i.e. either has just been
+     * bootstrapped or "instajoins".
+     *
+     * @param endpoint the newly added endpoint.
+     */
+    virtual void on_join_cluster(const gms::inet_address& endpoint) = 0;
+
+    /**
+     * Called when a new node leave the cluster (decommission or removeToken).
+     *
+     * @param endpoint the endpoint that is leaving.
+     */
+    virtual void on_leave_cluster(const gms::inet_address& endpoint) = 0;
+
+    /**
+     * Called when a node is marked UP.
+     *
+     * @param endpoint the endpoint marked UP.
+     */
+    virtual void on_up(const gms::inet_address& endpoint) = 0;
+
+    /**
+     * Called when a node is marked DOWN.
+     *
+     * @param endpoint the endpoint marked DOWN.
+     */
+    virtual void on_down(const gms::inet_address& endpoint) = 0;
+};
+
+class endpoint_lifecycle_notifier {
+    atomic_vector<endpoint_lifecycle_subscriber*> _subscribers;
+
+public:
+    void register_subscriber(endpoint_lifecycle_subscriber* subscriber);
+    future<> unregister_subscriber(endpoint_lifecycle_subscriber* subscriber) noexcept;
+
+    future<> notify_down(gms::inet_address endpoint);
+    future<> notify_left(gms::inet_address endpoint);
+    future<> notify_up(gms::inet_address endpoint);
+    future<> notify_joined(gms::inet_address endpoint);
+};
+
+}
+
+
+
+namespace qos {
+
+    struct service_level_info {
+        sstring name;
+    };
+    class qos_configuration_change_subscriber {
+    public:
+        /** This callback is going to be called just before the service level is available **/
+        virtual future<> on_before_service_level_add(service_level_options slo, service_level_info sl_info) = 0;
+        /** This callback is going to be called just after the service level is removed **/
+        virtual future<> on_after_service_level_remove(service_level_info sl_info) = 0;
+        /** This callback is going to be called just before the service level is changed **/
+        virtual future<> on_before_service_level_change(service_level_options slo_before, service_level_options slo_after, service_level_info sl_info) = 0;
+
+        virtual ~qos_configuration_change_subscriber() {};
+    };
+}
+
+#include <seastar/core/sstring.hh>
+#include <seastar/core/distributed.hh>
+#include <seastar/core/abort_source.hh>
+#include <map>
+#include <unordered_set>
+
+namespace db {
+    class system_distributed_keyspace;
+}
+namespace qos {
+/**
+ *  a structure to hold a service level
+ *  data and configuration.
+ */
+struct service_level {
+     service_level_options slo;
+     bool marked_for_deletion;
+     bool is_static;
+};
+
+/**
+ *  The service_level_controller class is an implementation of the service level
+ *  controller design.
+ *  It is logically divided into 2 parts:
+ *      1. Global controller which is responsible for all of the data and plumbing
+ *      manipulation.
+ *      2. Local controllers that act upon the data and facilitates execution in
+ *      the service level context
+ */
+class service_level_controller : public peering_sharded_service<service_level_controller>, public service::endpoint_lifecycle_subscriber {
+public:
+    class service_level_distributed_data_accessor {
+    public:
+        virtual future<qos::service_levels_info> get_service_levels() const = 0;
+        virtual future<qos::service_levels_info> get_service_level(sstring service_level_name) const = 0;
+        virtual future<> set_service_level(sstring service_level_name, qos::service_level_options slo) const = 0;
+        virtual future<> drop_service_level(sstring service_level_name) const = 0;
+    };
+    using service_level_distributed_data_accessor_ptr = ::shared_ptr<service_level_distributed_data_accessor>;
+
+private:
+    struct global_controller_data {
+        service_levels_info  static_configurations{};
+        int schedg_group_cnt = 0;
+        int io_priority_cnt = 0;
+        service_level_options default_service_level_config;
+        // The below future is used to serialize work so no reordering can occur.
+        // This is needed so for example: delete(x), add(x) will not reverse yielding
+        // a completely different result than the one intended.
+        future<> work_future = make_ready_future();
+        semaphore notifications_serializer = semaphore(1);
+        future<> distributed_data_update = make_ready_future();
+        abort_source dist_data_update_aborter;
+    };
+
+    std::unique_ptr<global_controller_data> _global_controller_db;
+
+    static constexpr shard_id global_controller = 0;
+
+    std::map<sstring, service_level> _service_levels_db;
+    std::unordered_map<sstring, sstring> _role_to_service_level;
+    service_level _default_service_level;
+    service_level_distributed_data_accessor_ptr _sl_data_accessor;
+    sharded<auth::service>& _auth_service;
+    std::chrono::time_point<seastar::lowres_clock> _last_successful_config_update;
+    unsigned _logged_intervals;
+    atomic_vector<qos_configuration_change_subscriber*> _subscribers;
+public:
+    service_level_controller(sharded<auth::service>& auth_service, service_level_options default_service_level_config);
+
+    /**
+     * this function must be called *once* from any shard before any other functions are called.
+     * No other function should be called before the future returned by the function is resolved.
+     * @return a future that resolves when the initialization is over.
+     */
+    future<> start();
+
+    void set_distributed_data_accessor(service_level_distributed_data_accessor_ptr sl_data_accessor);
+
+    /**
+     *  Adds a service level configuration if it doesn't exists, and updates
+     *  an the existing one if it does exist.
+     *  Handles both, static and non static service level configurations.
+     * @param name - the service level name.
+     * @param slo - the service level configuration
+     * @param is_static - is this configuration static or not
+     */
+    future<> add_service_level(sstring name, service_level_options slo, bool is_static = false);
+
+    /**
+     *  Removes a service level configuration if it exists.
+     *  Handles both, static and non static service level configurations.
+     * @param name - the service level name.
+     * @param remove_static - indicates if it is a removal of a static configuration
+     * or not.
+     */
+    future<> remove_service_level(sstring name, bool remove_static);
+
+    /**
+     * stops the distributed updater
+     * @return a future that is resolved when the updates stopped
+     */
+    future<> drain();
+
+    /**
+     * stops all ongoing operations if exists
+     * @return a future that is resolved when all operations has stopped
+     */
+    future<> stop();
+
+    /**
+     * Chack the distributed data for changes in a constant interval and updates
+     * the service_levels configuration in accordance (adds, removes, or updates
+     * service levels as necessairy).
+     * @param interval - the interval is seconds to check the distributed data.
+     * @return a future that is resolved when the update loop stops.
+     */
+    void update_from_distributed_data(std::chrono::duration<float> interval);
+
+    /**
+     * Updates the service level data from the distributed data store.
+     * @return a future that is resolved when the update is done
+     */
+    future<> update_service_levels_from_distributed_data();
+
+
+    future<> add_distributed_service_level(sstring name, service_level_options slo, bool if_not_exsists);
+    future<> alter_distributed_service_level(sstring name, service_level_options slo);
+    future<> drop_distributed_service_level(sstring name, bool if_exists);
+    future<service_levels_info> get_distributed_service_levels();
+    future<service_levels_info> get_distributed_service_level(sstring service_level_name);
+
+    /**
+     * Returns the service level options **in effect** for a user having the given
+     * collection of roles.
+     * @param roles - the collection of roles to consider
+     * @return the effective service level options - they may in particular be a combination
+     *         of options from multiple service levels
+     */
+    future<std::optional<service_level_options>> find_service_level(auth::role_set roles);
+
+    /**
+     * Gets the service level data by name.
+     * @param service_level_name - the name of the requested service level
+     * @return the service level data if it exists (in the local controller) or
+     * get_service_level("default") otherwise.
+     */
+    service_level& get_service_level(sstring service_level_name) {
+        auto sl_it = _service_levels_db.find(service_level_name);
+        if (sl_it == _service_levels_db.end() || sl_it->second.marked_for_deletion) {
+            sl_it = _service_levels_db.find(default_service_level_name);
+        }
+        return sl_it->second;
+    }
+
+private:
+    /**
+     *  Adds a service level configuration if it doesn't exists, and updates
+     *  an the existing one if it does exist.
+     *  Handles both, static and non static service level configurations.
+     * @param name - the service level name.
+     * @param slo - the service level configuration
+     * @param is_static - is this configuration static or not
+     */
+    future<> do_add_service_level(sstring name, service_level_options slo, bool is_static = false);
+
+    /**
+     *  Removes a service level configuration if it exists.
+     *  Handles both, static and non static service level configurations.
+     * @param name - the service level name.
+     * @param remove_static - indicates if it is a removal of a static configuration
+     * or not.
+     */
+    future<> do_remove_service_level(sstring name, bool remove_static);
+
+    /**
+     * The notify functions are used by the global service level controller
+     * to propagate configuration changes to the local controllers.
+     * the returned future is resolved when the local controller is done acting
+     * on the notification. updates are done in sequence so their meaning will not
+     * change due to execution reordering.
+     */
+    future<> notify_service_level_added(sstring name, service_level sl_data);
+    future<> notify_service_level_updated(sstring name, service_level_options slo);
+    future<> notify_service_level_removed(sstring name);
+
+    enum class  set_service_level_op_type {
+        add_if_not_exists,
+        add,
+        alter
+    };
+
+    future<> set_distributed_service_level(sstring name, service_level_options slo, set_service_level_op_type op_type);
+public:
+
+    /**
+     *  Register a subscriber for service level configuration changes
+     *  notifications
+     * @param subscriber - a pointer to the subscriber.
+     *
+     * Note: the caller is responsible to keep the pointed to object alive until performing
+     * a call to service_level_controller::unregister_subscriber()).
+     *
+     * Note 2: the subscription is per shard.
+     */
+    void register_subscriber(qos_configuration_change_subscriber* subscriber);
+    future<> unregister_subscriber(qos_configuration_change_subscriber* subscriber);
+
+    static sstring default_service_level_name;
+
+    virtual void on_join_cluster(const gms::inet_address& endpoint) override;
+    virtual void on_leave_cluster(const gms::inet_address& endpoint) override;
+    virtual void on_up(const gms::inet_address& endpoint) override;
+    virtual void on_down(const gms::inet_address& endpoint) override;
+};
+}
+
+
+
+namespace auth {
+class resource;
+}
+
+namespace data_dictionary {
+class database;
+}
+
+namespace service {
+
+/**
+ * State related to a client connection.
+ */
+class client_state {
+public:
+    enum class auth_state : uint8_t {
+        UNINITIALIZED, AUTHENTICATION, READY
+    };
+    using workload_type = qos::service_level_options::workload_type;
+
+    // This class is used to move client_state between shards
+    // It is created on a shard that owns client_state than passed
+    // to a target shard where client_state_for_another_shard::get()
+    // can be called to obtain a shard local copy.
+    class client_state_for_another_shard {
+    private:
+        const client_state* _cs;
+        seastar::sharded<auth::service>* _auth_service;
+        client_state_for_another_shard(const client_state* cs, seastar::sharded<auth::service>* auth_service) : _cs(cs), _auth_service(auth_service) {}
+        friend client_state;
+    public:
+        client_state get() const {
+            return client_state(_cs, _auth_service);
+        }
+    };
+private:
+    client_state(const client_state* cs, seastar::sharded<auth::service>* auth_service)
+            : _keyspace(cs->_keyspace)
+            , _user(cs->_user)
+            , _auth_state(cs->_auth_state)
+            , _is_internal(cs->_is_internal)
+            , _is_thrift(cs->_is_thrift)
+            , _remote_address(cs->_remote_address)
+            , _auth_service(auth_service ? &auth_service->local() : nullptr)
+            , _default_timeout_config(cs->_default_timeout_config)
+            , _timeout_config(cs->_timeout_config)
+            , _enabled_protocol_extensions(cs->_enabled_protocol_extensions)
+    {}
+    friend client_state_for_another_shard;
+private:
+    sstring _keyspace;
+#if 0
+    private static final Logger logger = LoggerFactory.getLogger(ClientState.class);
+    public static final SemanticVersion DEFAULT_CQL_VERSION = org.apache.cassandra.cql3.QueryProcessor.CQL_VERSION;
+
+    private static final Set<IResource> READABLE_SYSTEM_RESOURCES = new HashSet<>();
+    private static final Set<IResource> PROTECTED_AUTH_RESOURCES = new HashSet<>();
+
+    static
+    {
+        // We want these system cfs to be always readable to authenticated users since many tools rely on them
+        // (nodetool, cqlsh, bulkloader, etc.)
+        for (String cf : Iterables.concat(Arrays.asList(SystemKeyspace.LOCAL, SystemKeyspace.PEERS), LegacySchemaTables.ALL))
+            READABLE_SYSTEM_RESOURCES.add(DataResource.columnFamily(SystemKeyspace.NAME, cf));
+
+        PROTECTED_AUTH_RESOURCES.addAll(DatabaseDescriptor.getAuthenticator().protectedResources());
+        PROTECTED_AUTH_RESOURCES.addAll(DatabaseDescriptor.getAuthorizer().protectedResources());
+    }
+
+    // Current user for the session
+    private volatile AuthenticatedUser user;
+    private volatile String keyspace;
+#endif
+    std::optional<auth::authenticated_user> _user;
+    std::optional<sstring> _driver_name, _driver_version;
+
+    auth_state _auth_state = auth_state::UNINITIALIZED;
+
+    // isInternal is used to mark ClientState as used by some internal component
+    // that should have an ability to modify system keyspace.
+    bool _is_internal;
+    bool _is_thrift;
+
+    // The biggest timestamp that was returned by getTimestamp/assigned to a query
+    static thread_local api::timestamp_type _last_timestamp_micros;
+
+    // Address of a client
+    socket_address _remote_address;
+
+    // Only populated for external client state.
+    auth::service* _auth_service{nullptr};
+    qos::service_level_controller* _sl_controller{nullptr};
+
+    // For restoring default values in the timeout config
+    timeout_config _default_timeout_config;
+    timeout_config _timeout_config;
+
+    workload_type _workload_type = workload_type::unspecified;
+
+public:
+    struct internal_tag {};
+    struct external_tag {};
+
+    workload_type get_workload_type() const noexcept {
+        return _workload_type;
+    }
+
+    auth_state get_auth_state() const noexcept {
+        return _auth_state;
+    }
+
+    void set_auth_state(auth_state new_state) noexcept {
+        _auth_state = new_state;
+    }
+
+    std::optional<sstring> get_driver_name() const {
+        return _driver_name;
+    }
+    void set_driver_name(sstring driver_name) {
+        _driver_name = std::move(driver_name);
+    }
+
+    std::optional<sstring> get_driver_version() const {
+        return _driver_version;
+    }
+    void set_driver_version(sstring driver_version) {
+        _driver_version = std::move(driver_version);
+    }
+
+    client_state(external_tag,
+                 auth::service& auth_service,
+                 qos::service_level_controller* sl_controller,
+                 timeout_config timeout_config,
+                 const socket_address& remote_address = socket_address(),
+                 bool thrift = false)
+            : _is_internal(false)
+            , _is_thrift(thrift)
+            , _remote_address(remote_address)
+            , _auth_service(&auth_service)
+            , _sl_controller(sl_controller)
+            , _default_timeout_config(timeout_config)
+            , _timeout_config(timeout_config) {
+        if (!auth_service.underlying_authenticator().require_authentication()) {
+            _user = auth::authenticated_user();
+        }
+    }
+
+    gms::inet_address get_client_address() const {
+        return gms::inet_address(_remote_address);
+    }
+    
+    ::in_port_t get_client_port() const {
+        return _remote_address.port();
+    }
+
+    const socket_address& get_remote_address() const {
+        return _remote_address;
+    }
+
+    const timeout_config& get_timeout_config() const {
+        return _timeout_config;
+    }
+
+    qos::service_level_controller& get_service_level_controller() const {
+        return *_sl_controller;
+    }
+
+    client_state(internal_tag) : client_state(internal_tag{}, infinite_timeout_config)
+    {}
+
+    client_state(internal_tag, const timeout_config& config)
+            : _keyspace("system")
+            , _is_internal(true)
+            , _is_thrift(false)
+            , _default_timeout_config(config)
+            , _timeout_config(config)
+    {}
+
+    client_state(internal_tag, auth::service& auth_service, qos::service_level_controller& sl_controller, sstring username)
+        : _user(auth::authenticated_user(username))
+        , _auth_state(auth_state::READY)
+        , _is_internal(true)
+        , _is_thrift(false)
+        , _auth_service(&auth_service)
+        , _sl_controller(&sl_controller)
+    {}
+
+    client_state(const client_state&) = delete;
+    client_state(client_state&&) = default;
+
+    ///
+    /// `nullptr` for internal instances.
+    ///
+    const auth::service* get_auth_service() const {
+        return _auth_service;
+    }
+
+    bool is_thrift() const {
+        return _is_thrift;
+    }
+
+    bool is_internal() const {
+        return _is_internal;
+    }
+
+    /**
+     * @return a ClientState object for internal C* calls (not limited by any kind of auth).
+     */
+    static client_state& for_internal_calls() {
+        static thread_local client_state s(internal_tag{});
+        return s;
+    }
+
+    /**
+     * This clock guarantees that updates for the same ClientState will be ordered
+     * in the sequence seen, even if multiple updates happen in the same millisecond.
+     */
+    api::timestamp_type get_timestamp() {
+        auto current = api::new_timestamp();
+        auto last = _last_timestamp_micros;
+        auto result = last >= current ? last + 1 : current;
+        _last_timestamp_micros = result;
+        return result;
+    }
+
+    /**
+     * Returns a timestamp suitable for paxos given the timestamp of the last known commit (or in progress update).
+     *
+     * Paxos ensures that the timestamp it uses for commits respects the serial order of those commits. It does so
+     * by having each replica reject any proposal whose timestamp is not strictly greater than the last proposal it
+     * accepted. So in practice, which timestamp we use for a given proposal doesn't affect correctness but it does
+     * affect the chance of making progress (if we pick a timestamp lower than what has been proposed before, our
+     * new proposal will just get rejected).
+     *
+     * As during the prepared phase replica send us the last propose they accepted, a first option would be to take
+     * the maximum of those last accepted proposal timestamp plus 1 (and use a default value, say 0, if it's the
+     * first known proposal for the partition). This would mostly work (giving commits the timestamp 0, 1, 2, ...
+     * in the order they are commited) but with 2 important caveats:
+     *   1) it would give a very poor experience when Paxos and non-Paxos updates are mixed in the same partition,
+     *      since paxos operations wouldn't be using microseconds timestamps. And while you shouldn't theoretically
+     *      mix the 2 kind of operations, this would still be pretty nonintuitive. And what if you started writing
+     *      normal updates and realize later you should switch to Paxos to enforce a property you want?
+     *   2) this wouldn't actually be safe due to the expiration set on the Paxos state table.
+     *
+     * So instead, we initially chose to use the current time in microseconds as for normal update. Which works in
+     * general but mean that clock skew creates unavailability periods for Paxos updates (either a node has his clock
+     * in the past and he may no be able to get commit accepted until its clock catch up, or a node has his clock in
+     * the future and then once one of its commit his accepted, other nodes ones won't be until they catch up). This
+     * is ok for small clock skew (few ms) but can be pretty bad for large one.
+     *
+     * Hence our current solution: we mix both approaches. That is, we compare the timestamp of the last known
+     * accepted proposal and the local time. If the local time is greater, we use it, thus keeping paxos timestamps
+     * locked to the current time in general (making mixing Paxos and non-Paxos more friendly, and behaving correctly
+     * when the paxos state expire (as long as your maximum clock skew is lower than the Paxos state expiration
+     * time)). Otherwise (the local time is lower than the last proposal, meaning that this last proposal was done
+     * with a clock in the future compared to the local one), we use the last proposal timestamp plus 1, ensuring
+     * progress.
+     *
+     * @param min_timestamp_to_use the max timestamp of the last proposal accepted by replica having responded
+     * to the prepare phase of the paxos round this is for. In practice, that's the minimum timestamp this method
+     * may return.
+     * @return a timestamp suitable for a Paxos proposal (using the reasoning described above). Note that
+     * contrary to the get_timestamp() method, the return value is not guaranteed to be unique (nor
+     * monotonic) across calls since it can return it's argument (so if the same argument is passed multiple times,
+     * it may be returned multiple times). Note that we still ensure Paxos "ballot" are unique (for different
+     * proposal) by (securely) randomizing the non-timestamp part of the UUID.
+     */
+    api::timestamp_type get_timestamp_for_paxos(api::timestamp_type min_timestamp_to_use) {
+        api::timestamp_type current = std::max(api::new_timestamp(), min_timestamp_to_use);
+        _last_timestamp_micros = _last_timestamp_micros >= current ? _last_timestamp_micros + 1 : current;
+        return _last_timestamp_micros;
+    }
+
+#if 0
+    public SocketAddress getRemoteAddress()
+    {
+        return remoteAddress;
+    }
+#endif
+
+    const sstring& get_raw_keyspace() const noexcept {
+        return _keyspace;
+    }
+
+    sstring& get_raw_keyspace() noexcept {
+        return _keyspace;
+    }
+
+public:
+    void set_keyspace(replica::database& db, std::string_view keyspace);
+
+    void set_raw_keyspace(sstring new_keyspace) noexcept {
+        _keyspace = std::move(new_keyspace);
+    }
+
+    const sstring& get_keyspace() const {
+        if (_keyspace.empty()) {
+            throw exceptions::invalid_request_exception("No keyspace has been specified. USE a keyspace, or explicitly specify keyspace.tablename");
+        }
+        return _keyspace;
+    }
+
+    /**
+     * Sets active user. Does _not_ validate anything
+     */
+    void set_login(auth::authenticated_user);
+
+    /// \brief A user can login if it's anonymous, or if it exists and the `LOGIN` option for the user is `true`.
+    future<> check_user_can_login();
+
+    future<> has_all_keyspaces_access(auth::permission) const;
+    future<> has_keyspace_access(data_dictionary::database db, const sstring&, auth::permission) const;
+    future<> has_column_family_access(data_dictionary::database db, const sstring&, const sstring&, auth::permission,
+                                      auth::command_desc::type = auth::command_desc::type::OTHER) const;
+    future<> has_schema_access(data_dictionary::database db, const schema& s, auth::permission p) const;
+    future<> has_schema_access(data_dictionary::database db, const sstring&, const sstring&, auth::permission p) const;
+
+    future<> has_functions_access(data_dictionary::database db, auth::permission p) const;
+    future<> has_functions_access(data_dictionary::database db, const sstring& ks, auth::permission p) const;
+    future<> has_function_access(data_dictionary::database db, const sstring& ks, const sstring& function_signature, auth::permission p) const;
+private:
+    future<> has_access(data_dictionary::database db, const sstring& keyspace, auth::command_desc) const;
+
+public:
+    future<bool> check_has_permission(auth::command_desc) const;
+    future<> ensure_has_permission(auth::command_desc) const;
+    future<> maybe_update_per_service_level_params();
+
+    /**
+     * Returns an exceptional future with \ref exceptions::invalid_request_exception if the resource does not exist.
+     */
+    future<> ensure_exists(const auth::resource&) const;
+
+    void validate_login() const;
+    void ensure_not_anonymous() const; // unauthorized_exception on error
+
+#if 0
+    public void ensureIsSuper(String message) throws UnauthorizedException
+    {
+        if (DatabaseDescriptor.getAuthenticator().requireAuthentication() && (user == null || !user.isSuper()))
+            throw new UnauthorizedException(message);
+    }
+
+    private static void validateKeyspace(String keyspace) throws InvalidRequestException
+    {
+        if (keyspace == null)
+            throw new InvalidRequestException("You have not set a keyspace for this session");
+    }
+#endif
+
+    const std::optional<auth::authenticated_user>& user() const {
+        return _user;
+    }
+
+    client_state_for_another_shard move_to_other_shard() {
+        return client_state_for_another_shard(this, _auth_service ? &_auth_service->container() : nullptr);
+    }
+
+#if 0
+    public static SemanticVersion[] getCQLSupportedVersion()
+    {
+        return new SemanticVersion[]{ QueryProcessor.CQL_VERSION };
+    }
+
+    private Set<Permission> authorize(IResource resource)
+    {
+        // AllowAllAuthorizer or manually disabled caching.
+        if (Auth.permissionsCache == null)
+            return DatabaseDescriptor.getAuthorizer().authorize(user, resource);
+
+        try
+        {
+            return Auth.permissionsCache.get(Pair.create(user, resource));
+        }
+        catch (ExecutionException e)
+        {
+            throw new RuntimeException(e);
+        }
+    }
+#endif
+
+private:
+
+    cql_transport::cql_protocol_extension_enum_set _enabled_protocol_extensions;
+
+public:
+
+    bool is_protocol_extension_set(cql_transport::cql_protocol_extension ext) const {
+        return _enabled_protocol_extensions.contains(ext);
+    }
+
+    void set_protocol_extensions(cql_transport::cql_protocol_extension_enum_set exts) {
+        _enabled_protocol_extensions = std::move(exts);
+    }
+};
+
+}
+
 
 
 //#include "cql3/CqlParser.hpp"
