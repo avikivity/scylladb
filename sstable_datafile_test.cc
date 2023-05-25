@@ -24735,8 +24735,12 @@ bool position_range::is_all_clustered_rows(const schema& s) const {
 std::optional<query::clustering_range> position_range_to_clustering_range(const position_range& r, const schema&);
 
 
-#include "mutation/position_in_partition.hh"
-#include "locator/host_id.hh"
+namespace locator {
+
+using host_id = utils::tagged_uuid<struct host_id_tag>;
+
+}
+
 
 namespace service {
 
@@ -25486,9 +25490,6 @@ enum class digest_algorithm : uint8_t {
 };
 
 }
-
-#include "keys.hh"
-#include "mutation/position_in_partition.hh"
 
 struct full_position;
 

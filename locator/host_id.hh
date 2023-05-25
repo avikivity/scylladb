@@ -11,9 +11,3 @@
 
 #include "utils/UUID.hh"
 
-namespace locator {
-
-using host_id = utils::tagged_uuid<struct host_id_tag>;
-
-}
-
