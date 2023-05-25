@@ -24529,6 +24529,1892 @@ query_options::query_options(query_options&& o, std::vector<Values> values_range
 
 }
 
+#include <cstdint>
+
+namespace query {
+
+enum class digest_algorithm : uint8_t {
+    none = 0,  // digest not required
+    MD5 = 1,
+    legacy_xxHash_without_null_digest = 2,
+    xxHash = 3, // default algorithm
+};
+
+}
+
+#include "keys.hh"
+#include "mutation/position_in_partition.hh"
+
+struct full_position;
+
+struct full_position_view {
+    const partition_key_view partition;
+    const position_in_partition_view position;
+
+    full_position_view(const full_position&);
+    full_position_view(const partition_key&, const position_in_partition_view);
+};
+
+struct full_position {
+    partition_key partition;
+    position_in_partition position;
+
+    full_position(full_position_view);
+    full_position(partition_key, position_in_partition);
+
+    operator full_position_view() {
+        return full_position_view(partition, position);
+    }
+
+    static std::strong_ordering cmp(const schema& s, const full_position& a, const full_position& b) {
+        partition_key::tri_compare pk_cmp(s);
+        if (auto res = pk_cmp(a.partition, b.partition); res != 0) {
+            return res;
+        }
+        position_in_partition::tri_compare pos_cmp(s);
+        return pos_cmp(a.position, b.position);
+    }
+};
+
+inline full_position_view::full_position_view(const full_position& fp) : partition(fp.partition), position(fp.position) { }
+inline full_position_view::full_position_view(const partition_key& pk, const position_in_partition_view pos) : partition(pk), position(pos) { }
+
+inline full_position::full_position(full_position_view fpv) : partition(fpv.partition), position(fpv.position) { }
+inline full_position::full_position(partition_key pk, position_in_partition pos) : partition(std::move(pk)), position(pos) { }
+
+
+#include <optional>
+#include <seastar/util/bool_class.hh>
+
+namespace query {
+
+struct short_read_tag { };
+using short_read = bool_class<short_read_tag>;
+
+// result_memory_limiter, result_memory_accounter and result_memory_tracker
+// form an infrastructure for limiting size of query results.
+//
+// result_memory_limiter is a shard-local object which ensures that all results
+// combined do not use more than 10% of the shard memory.
+//
+// result_memory_accounter is used by result producers, updates the shard-local
+// limits as well as keeps track of the individual maximum result size limit
+// which is 1 MB.
+//
+// result_memory_tracker is just an object that makes sure the
+// result_memory_limiter is notified when memory is released (but not sooner).
+
+class result_memory_accounter;
+
+class result_memory_limiter {
+    const size_t _maximum_total_result_memory;
+    semaphore _memory_limiter;
+public:
+    static constexpr size_t minimum_result_size = 4 * 1024;
+    static constexpr size_t maximum_result_size = 1 * 1024 * 1024;
+    static constexpr size_t unlimited_result_size = std::numeric_limits<size_t>::max();
+public:
+    explicit result_memory_limiter(size_t maximum_total_result_memory)
+        : _maximum_total_result_memory(maximum_total_result_memory)
+        , _memory_limiter(_maximum_total_result_memory)
+    { }
+
+    result_memory_limiter(const result_memory_limiter&) = delete;
+    result_memory_limiter(result_memory_limiter&&) = delete;
+
+    ssize_t total_used_memory() const {
+        return _maximum_total_result_memory - _memory_limiter.available_units();
+    }
+
+    // Reserves minimum_result_size and creates new memory accounter for
+    // mutation query. Uses the specified maximum result size and may be
+    // stopped before reaching it due to memory pressure on shard.
+    future<result_memory_accounter> new_mutation_read(query::max_result_size max_result_size, short_read short_read_allowed);
+
+    // Reserves minimum_result_size and creates new memory accounter for
+    // data query. Uses the specified maximum result size, result will *not*
+    // be stopped due to on shard memory pressure in order to avoid digest
+    // mismatches.
+    future<result_memory_accounter> new_data_read(query::max_result_size max_result_size, short_read short_read_allowed);
+
+    // Creates a memory accounter for digest reads. Such accounter doesn't
+    // contribute to the shard memory usage, but still stops producing the
+    // result after individual limit has been reached.
+    future<result_memory_accounter> new_digest_read(query::max_result_size max_result_size, short_read short_read_allowed);
+
+    // Checks whether the result can grow any more, takes into account only
+    // the per shard limit.
+    stop_iteration check() const {
+        return stop_iteration(_memory_limiter.current() <= 0);
+    }
+
+    // Consumes n bytes from memory limiter and checks whether the result
+    // can grow any more (considering just the per-shard limit).
+    stop_iteration update_and_check(size_t n) {
+        _memory_limiter.consume(n);
+        return check();
+    }
+
+    void release(size_t n) noexcept {
+        _memory_limiter.signal(n);
+    }
+
+    semaphore& sem() noexcept { return _memory_limiter; }
+};
+
+
+class result_memory_tracker {
+    semaphore_units<> _units;
+    size_t _used_memory;
+private:
+    static thread_local semaphore _dummy;
+public:
+    result_memory_tracker() noexcept : _units(_dummy, 0), _used_memory(0) { }
+    result_memory_tracker(semaphore& sem, size_t blocked, size_t used) noexcept
+        : _units(sem, blocked), _used_memory(used) { }
+    size_t used_memory() const { return _used_memory; }
+};
+
+class result_memory_accounter {
+    result_memory_limiter* _limiter = nullptr;
+    size_t _blocked_bytes = 0;
+    size_t _used_memory = 0;
+    size_t _total_used_memory = 0;
+    query::max_result_size _maximum_result_size;
+    stop_iteration _stop_on_global_limit;
+    short_read _short_read_allowed;
+    mutable bool _below_soft_limit = true;
+private:
+    // Mutation query accounter. Uses provided individual result size limit and
+    // will stop when shard memory pressure grows too high.
+    struct mutation_query_tag { };
+    explicit result_memory_accounter(mutation_query_tag, result_memory_limiter& limiter, query::max_result_size max_size, short_read short_read_allowed) noexcept
+        : _limiter(&limiter)
+        , _blocked_bytes(result_memory_limiter::minimum_result_size)
+        , _maximum_result_size(max_size)
+        , _stop_on_global_limit(true)
+        , _short_read_allowed(short_read_allowed)
+    { }
+
+    // Data query accounter. Uses provided individual result size limit and
+    // will *not* stop even though shard memory pressure grows too high.
+    struct data_query_tag { };
+    explicit result_memory_accounter(data_query_tag, result_memory_limiter& limiter, query::max_result_size max_size, short_read short_read_allowed) noexcept
+        : _limiter(&limiter)
+        , _blocked_bytes(result_memory_limiter::minimum_result_size)
+        , _maximum_result_size(max_size)
+        , _short_read_allowed(short_read_allowed)
+    { }
+
+    // Digest query accounter. Uses provided individual result size limit and
+    // will *not* stop even though shard memory pressure grows too high. This
+    // accounter does not contribute to the shard memory limits.
+    struct digest_query_tag { };
+    explicit result_memory_accounter(digest_query_tag, result_memory_limiter&, query::max_result_size max_size, short_read short_read_allowed) noexcept
+        : _blocked_bytes(0)
+        , _maximum_result_size(max_size)
+        , _short_read_allowed(short_read_allowed)
+    { }
+
+    stop_iteration check_local_limit() const;
+
+    friend class result_memory_limiter;
+public:
+    explicit result_memory_accounter(size_t max_size) noexcept
+        : _blocked_bytes(0)
+        , _maximum_result_size(max_size) {
+    }
+
+    result_memory_accounter(result_memory_accounter&& other) noexcept
+        : _limiter(std::exchange(other._limiter, nullptr))
+        , _blocked_bytes(other._blocked_bytes)
+        , _used_memory(other._used_memory)
+        , _total_used_memory(other._total_used_memory)
+        , _maximum_result_size(other._maximum_result_size)
+        , _stop_on_global_limit(other._stop_on_global_limit)
+        , _short_read_allowed(other._short_read_allowed)
+        , _below_soft_limit(other._below_soft_limit)
+    { }
+
+    result_memory_accounter& operator=(result_memory_accounter&& other) noexcept {
+        if (this != &other) {
+            this->~result_memory_accounter();
+            new (this) result_memory_accounter(std::move(other));
+        }
+        return *this;
+    }
+
+    ~result_memory_accounter() {
+        if (_limiter) {
+            _limiter->release(_blocked_bytes);
+        }
+    }
+
+    size_t used_memory() const { return _used_memory; }
+
+    // Consume n more bytes for the result. Returns stop_iteration::yes if
+    // the result cannot grow any more (taking into account both individual
+    // and per-shard limits).
+    stop_iteration update_and_check(size_t n) {
+        _used_memory += n;
+        _total_used_memory += n;
+        auto stop = check_local_limit();
+        if (_limiter && _used_memory > _blocked_bytes) {
+            auto to_block = std::min(_used_memory - _blocked_bytes, n);
+            _blocked_bytes += to_block;
+            stop = (_limiter->update_and_check(to_block) && _stop_on_global_limit) || stop;
+            if (stop && !_short_read_allowed) {
+                // If we are here we stopped because of the global limit.
+                throw std::runtime_error("Maximum amount of memory for building query results is exhausted, unpaged query cannot be finished");
+            }
+        }
+        return stop;
+    }
+
+    // Checks whether the result can grow any more.
+    stop_iteration check() const {
+        auto stop = check_local_limit();
+        if (!stop && _used_memory >= _blocked_bytes && _limiter) {
+            return _limiter->check() && _stop_on_global_limit;
+        }
+        return stop;
+    }
+
+    // Consume n more bytes for the result.
+    void update(size_t n) {
+        update_and_check(n);
+    }
+
+    result_memory_tracker done() && {
+        if (!_limiter) {
+            return { };
+        }
+        auto& sem = std::exchange(_limiter, nullptr)->sem();
+        return result_memory_tracker(sem, _blocked_bytes, _used_memory);
+    }
+};
+
+inline future<result_memory_accounter> result_memory_limiter::new_mutation_read(query::max_result_size max_size, short_read short_read_allowed) {
+    return _memory_limiter.wait(minimum_result_size).then([this, max_size, short_read_allowed] {
+        return result_memory_accounter(result_memory_accounter::mutation_query_tag(), *this, max_size, short_read_allowed);
+    });
+}
+
+inline future<result_memory_accounter> result_memory_limiter::new_data_read(query::max_result_size max_size, short_read short_read_allowed) {
+    return _memory_limiter.wait(minimum_result_size).then([this, max_size, short_read_allowed] {
+        return result_memory_accounter(result_memory_accounter::data_query_tag(), *this, max_size, short_read_allowed);
+    });
+}
+
+inline future<result_memory_accounter> result_memory_limiter::new_digest_read(query::max_result_size max_size, short_read short_read_allowed) {
+    return make_ready_future<result_memory_accounter>(result_memory_accounter(result_memory_accounter::digest_query_tag(), *this, max_size, short_read_allowed));
+}
+
+enum class result_request {
+    only_result,
+    only_digest,
+    result_and_digest,
+};
+
+struct result_options {
+    result_request request = result_request::only_result;
+    digest_algorithm digest_algo = query::digest_algorithm::none;
+
+    static result_options only_result() {
+        return result_options{};
+    }
+
+    static result_options only_digest(digest_algorithm da) {
+        return {result_request::only_digest, da};
+    }
+};
+
+class result_digest {
+public:
+    using type = std::array<uint8_t, 16>;
+private:
+    type _digest;
+public:
+    result_digest() = default;
+    result_digest(type&& digest) : _digest(std::move(digest)) {}
+    const type& get() const { return _digest; }
+    bool operator==(const result_digest& rh) const = default;
+};
+
+//
+// The query results are stored in a serialized form. This is in order to
+// address the following problems, which a structured format has:
+//
+//   - high level of indirection (vector of vectors of vectors of blobs), which
+//     is not CPU cache friendly
+//
+//   - high allocation rate due to fine-grained object structure
+//
+// On replica side, the query results are probably going to be serialized in
+// the transport layer anyway, so serializing the results up-front doesn't add
+// net work. There is no processing of the query results on replica other than
+// concatenation in case of range queries and checksum calculation. If query
+// results are collected in serialized form from different cores, we can
+// concatenate them without copying by simply appending the fragments into the
+// packet.
+//
+// On coordinator side, the query results would have to be parsed from the
+// transport layer buffers anyway, so the fact that iterators parse it also
+// doesn't add net work, but again saves allocations and copying. The CQL
+// server doesn't need complex data structures to process the results, it just
+// goes over it linearly consuming it.
+//
+// The coordinator side could be optimized even further for CQL queries which
+// do not need processing (eg. select * from cf where ...). We could make the
+// replica send the query results in the format which is expected by the CQL
+// binary protocol client. So in the typical case the coordinator would just
+// pass the data using zero-copy to the client, prepending a header.
+//
+// Users which need more complex structure of query results can convert this
+// to query::result_set.
+//
+// Related headers:
+//  - query-result-reader.hh
+//  - query-result-writer.hh
+
+class result {
+    bytes_ostream _w;
+    std::optional<result_digest> _digest;
+    std::optional<uint32_t> _row_count_low_bits;
+    api::timestamp_type _last_modified = api::missing_timestamp;
+    short_read _short_read;
+    query::result_memory_tracker _memory_tracker;
+    std::optional<uint32_t> _partition_count;
+    std::optional<uint32_t> _row_count_high_bits;
+    std::optional<full_position> _last_position;
+public:
+    class builder;
+    class partition_writer;
+    friend class result_merger;
+
+    result();
+    result(bytes_ostream&& w, short_read sr, std::optional<uint32_t> c_low_bits, std::optional<uint32_t> pc,
+           std::optional<uint32_t> c_high_bits, std::optional<full_position> last_position, result_memory_tracker memory_tracker = { })
+        : _w(std::move(w))
+        , _row_count_low_bits(c_low_bits)
+        , _short_read(sr)
+        , _memory_tracker(std::move(memory_tracker))
+        , _partition_count(pc)
+        , _row_count_high_bits(c_high_bits)
+        , _last_position(std::move(last_position))
+    {
+        w.reduce_chunk_count();
+    }
+    result(bytes_ostream&& w, std::optional<result_digest> d, api::timestamp_type last_modified,
+           short_read sr, std::optional<uint32_t> c_low_bits, std::optional<uint32_t> pc, std::optional<uint32_t> c_high_bits,
+           std::optional<full_position> last_position, result_memory_tracker memory_tracker = { })
+        : _w(std::move(w))
+        , _digest(d)
+        , _row_count_low_bits(c_low_bits)
+        , _last_modified(last_modified)
+        , _short_read(sr)
+        , _memory_tracker(std::move(memory_tracker))
+        , _partition_count(pc)
+        , _row_count_high_bits(c_high_bits)
+        , _last_position(std::move(last_position))
+    {
+        w.reduce_chunk_count();
+    }
+    result(bytes_ostream&& w, short_read sr, uint64_t c, std::optional<uint32_t> pc,
+           std::optional<full_position> last_position, result_memory_tracker memory_tracker = { })
+        : _w(std::move(w))
+        , _row_count_low_bits(static_cast<uint32_t>(c))
+        , _short_read(sr)
+        , _memory_tracker(std::move(memory_tracker))
+        , _partition_count(pc)
+        , _row_count_high_bits(static_cast<uint32_t>(c >> 32))
+        , _last_position(std::move(last_position))
+    {
+        w.reduce_chunk_count();
+    }
+    result(bytes_ostream&& w, std::optional<result_digest> d, api::timestamp_type last_modified,
+           short_read sr, uint64_t c, std::optional<uint32_t> pc, std::optional<full_position> last_position, result_memory_tracker memory_tracker = { })
+        : _w(std::move(w))
+        , _digest(d)
+        , _row_count_low_bits(static_cast<uint32_t>(c))
+        , _last_modified(last_modified)
+        , _short_read(sr)
+        , _memory_tracker(std::move(memory_tracker))
+        , _partition_count(pc)
+        , _row_count_high_bits(static_cast<uint32_t>(c >> 32))
+        , _last_position(std::move(last_position))
+    {
+        w.reduce_chunk_count();
+    }
+    result(result&&) = default;
+    result& operator=(result&&) = default;
+
+    const bytes_ostream& buf() const {
+        return _w;
+    }
+
+    const std::optional<result_digest>& digest() const {
+        return _digest;
+    }
+
+    const std::optional<uint32_t> row_count_low_bits() const {
+        return _row_count_low_bits;
+    }
+
+    const std::optional<uint32_t> row_count_high_bits() const {
+        return _row_count_high_bits;
+    }
+
+    const std::optional<uint64_t> row_count() const {
+        if (!_row_count_low_bits) {
+            return _row_count_low_bits;
+        }
+        return (static_cast<uint64_t>(_row_count_high_bits.value_or(0)) << 32) | _row_count_low_bits.value();
+    }
+
+    void set_row_count(std::optional<uint64_t> row_count) {
+        if (!row_count) {
+            _row_count_low_bits = std::nullopt;
+            _row_count_high_bits = std::nullopt;
+        } else {
+            _row_count_low_bits = std::make_optional(static_cast<uint32_t>(row_count.value()));
+            _row_count_high_bits = std::make_optional(static_cast<uint32_t>(row_count.value() >> 32));
+        }
+    }
+
+    const api::timestamp_type last_modified() const {
+        return _last_modified;
+    }
+
+    short_read is_short_read() const {
+        return _short_read;
+    }
+
+    const std::optional<uint32_t>& partition_count() const {
+        return _partition_count;
+    }
+
+    void ensure_counts();
+
+    const std::optional<full_position>& last_position() const {
+        return _last_position;
+    }
+
+    void set_last_position(std::optional<full_position> last_position) {
+        _last_position = std::move(last_position);
+    }
+
+    // Return _last_position if replica filled it, otherwise calculate it based
+    // on the content (by looking up the last row in the last partition).
+    full_position get_or_calculate_last_position() const;
+
+    struct printer {
+        schema_ptr s;
+        const query::partition_slice& slice;
+        const query::result& res;
+    };
+
+    sstring pretty_print(schema_ptr, const query::partition_slice&) const;
+    printer pretty_printer(schema_ptr, const query::partition_slice&) const;
+};
+
+std::ostream& operator<<(std::ostream& os, const query::result::printer&);
+}
+
+ /*
+  * The generate code should be included in a header file after
+  * The object definition
+  */
+    
+
+namespace ser {
+
+template <>
+struct serializer<clustering_key_prefix> {
+  template <typename Output>
+  static void write(Output& buf, const clustering_key_prefix& v);
+
+  template <typename Input>
+  static clustering_key_prefix read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const clustering_key_prefix> : public serializer<clustering_key_prefix>
+{};
+
+
+template <>
+struct serializer<partition_key> {
+  template <typename Output>
+  static void write(Output& buf, const partition_key& v);
+
+  template <typename Input>
+  static partition_key read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const partition_key> : public serializer<partition_key>
+{};
+
+} // ser
+
+
+ 
+
+ /*
+  * The generate code should be included in a header file after
+  * The object definition
+  */
+    
+
+namespace ser {
+
+template <>
+struct serializer<query::digest_algorithm> {
+  template <typename Output>
+  static void write(Output& buf, const query::digest_algorithm& v);
+
+  template <typename Input>
+  static query::digest_algorithm read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const query::digest_algorithm> : public serializer<query::digest_algorithm>
+{};
+
+} // ser
+
+
+namespace ser {
+
+// frame represents a place holder for object size which will be known later
+
+template<typename Output>
+struct place_holder { };
+
+template<typename Output>
+struct frame { };
+
+template<>
+struct place_holder<bytes_ostream> {
+    bytes_ostream::place_holder<size_type> ph;
+
+    place_holder(bytes_ostream::place_holder<size_type> ph) : ph(ph) { }
+
+    void set(bytes_ostream& out, size_type v) {
+        auto stream = ph.get_stream();
+        serialize(stream, v);
+    }
+};
+
+template<>
+struct frame<bytes_ostream> : public place_holder<bytes_ostream> {
+    bytes_ostream::size_type offset;
+
+    frame(bytes_ostream::place_holder<size_type> ph, bytes_ostream::size_type offset)
+        : place_holder(ph), offset(offset) { }
+
+    void end(bytes_ostream& out) {
+        set(out, out.size() - offset);
+    }
+};
+
+struct vector_position {
+    bytes_ostream::position pos;
+    size_type count;
+};
+
+//empty frame, behave like a place holder, but is used when no place holder is needed
+template<typename Output>
+struct empty_frame {
+    void end(Output&) {}
+    empty_frame() = default;
+    empty_frame(const frame<Output>&){}
+};
+
+inline place_holder<bytes_ostream> start_place_holder(bytes_ostream& out) {
+    auto size_ph = out.write_place_holder<size_type>();
+    return { size_ph};
+}
+
+inline frame<bytes_ostream> start_frame(bytes_ostream& out) {
+    auto offset = out.size();
+    auto size_ph = out.write_place_holder<size_type>();
+    {
+        auto out = size_ph.get_stream();
+        serialize(out, (size_type)0);
+    }
+    return frame<bytes_ostream> { size_ph, offset };
+}
+
+template<typename Input>
+size_type read_frame_size(Input& in) {
+    auto sz = deserialize(in, boost::type<size_type>());
+    if (sz < sizeof(size_type)) {
+        throw std::runtime_error(fmt::format("IDL frame truncated: expected to have at least {} bytes, got {}", sizeof(size_type), sz));
+    }
+    return sz - sizeof(size_type);
+}
+
+
+template<>
+struct place_holder<seastar::measuring_output_stream> {
+    void set(seastar::measuring_output_stream&, size_type) { }
+};
+
+template<>
+struct frame<seastar::measuring_output_stream> : public place_holder<seastar::measuring_output_stream> {
+    void end(seastar::measuring_output_stream& out) { }
+};
+
+inline place_holder<seastar::measuring_output_stream> start_place_holder(seastar::measuring_output_stream& out) {
+    serialize(out, size_type());
+    return { };
+}
+
+inline frame<seastar::measuring_output_stream> start_frame(seastar::measuring_output_stream& out) {
+    serialize(out, size_type());
+    return { };
+}
+
+template<>
+class place_holder<seastar::simple_output_stream> {
+    seastar::simple_output_stream _substream;
+public:
+    place_holder(seastar::simple_output_stream substream)
+        : _substream(substream) { }
+
+    void set(seastar::simple_output_stream& out, size_type v) {
+        serialize(_substream, v);
+    }
+};
+
+template<>
+class frame<seastar::simple_output_stream> : public place_holder<seastar::simple_output_stream> {
+    char* _start;
+public:
+    frame(seastar::simple_output_stream ph, char* start)
+        : place_holder(ph), _start(start) { }
+
+    void end(seastar::simple_output_stream& out) {
+        set(out, out.begin() - _start);
+    }
+};
+
+inline place_holder<seastar::simple_output_stream> start_place_holder(seastar::simple_output_stream& out) {
+    return { out.write_substream(sizeof(size_type)) };
+}
+
+inline frame<seastar::simple_output_stream> start_frame(seastar::simple_output_stream& out) {
+    auto start = out.begin();
+    auto substream = out.write_substream(sizeof(size_type));
+    {
+        auto sstr = substream;
+        serialize(sstr, size_type(0));
+    }
+    return frame<seastar::simple_output_stream>(substream, start);
+}
+
+template<typename Iterator>
+class place_holder<seastar::memory_output_stream<Iterator>> {
+    seastar::memory_output_stream<Iterator> _substream;
+public:
+    place_holder(seastar::memory_output_stream<Iterator> substream)
+        : _substream(substream) { }
+
+    void set(seastar::memory_output_stream<Iterator>& out, size_type v) {
+        serialize(_substream, v);
+    }
+};
+
+template<typename Iterator>
+class frame<seastar::memory_output_stream<Iterator>> : public place_holder<seastar::memory_output_stream<Iterator>> {
+    size_t _start_left;
+public:
+    frame(seastar::memory_output_stream<Iterator> ph, size_t start_left)
+        : place_holder<seastar::memory_output_stream<Iterator>>(ph), _start_left(start_left) { }
+
+    void end(seastar::memory_output_stream<Iterator>& out) {
+        this->set(out, _start_left - out.size());
+    }
+};
+
+template<typename Iterator>
+inline place_holder<seastar::memory_output_stream<Iterator>> start_place_holder(seastar::memory_output_stream<Iterator>& out) {
+    return { out.write_substream(sizeof(size_type)) };
+}
+
+template<typename Iterator>
+inline frame<seastar::memory_output_stream<Iterator>> start_frame(seastar::memory_output_stream<Iterator>& out) {
+    auto start_left = out.size();
+    auto substream = out.write_substream(sizeof(size_type));
+    {
+        auto sstr = substream;
+        serialize(sstr, size_type(0));
+    }
+    return frame<seastar::memory_output_stream<Iterator>>(substream, start_left);
+}
+
+}
+
+namespace ser {
+
+
+template <typename Output>
+void serializer<clustering_key_prefix>::write(Output& buf, const clustering_key_prefix& obj) {
+  set_size(buf, obj);
+  static_assert(is_equivalent<decltype(obj.explode()), std::vector<bytes>>::value, "member value has a wrong type");
+  serialize(buf, obj.explode());
+}
+
+
+template <typename Input>
+clustering_key_prefix serializer<clustering_key_prefix>::read(Input& buf) {
+ return seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  auto in = buf.read_substream(size - sizeof(size_type));
+  auto __local_0 = deserialize(in, boost::type<std::vector<bytes>>());
+
+  clustering_key_prefix res {std::move(__local_0)};
+  return res;
+ });
+}
+
+
+template <typename Input>
+void serializer<clustering_key_prefix>::skip(Input& buf) {
+ seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  buf.skip(size - sizeof(size_type));
+ });
+}
+
+
+template <typename Output>
+void serializer<partition_key>::write(Output& buf, const partition_key& obj) {
+  set_size(buf, obj);
+  static_assert(is_equivalent<decltype(obj.explode()), std::vector<bytes>>::value, "member value has a wrong type");
+  serialize(buf, obj.explode());
+}
+
+
+template <typename Input>
+partition_key serializer<partition_key>::read(Input& buf) {
+ return seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  auto in = buf.read_substream(size - sizeof(size_type));
+  auto __local_0 = deserialize(in, boost::type<std::vector<bytes>>());
+
+  partition_key res {std::move(__local_0)};
+  return res;
+ });
+}
+
+
+template <typename Input>
+void serializer<partition_key>::skip(Input& buf) {
+ seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  buf.skip(size - sizeof(size_type));
+ });
+}
+} // ser
+
+
+namespace ser {
+
+
+template <typename Output>
+void serializer<query::digest_algorithm>::write(Output& buf, const query::digest_algorithm& v) {
+  serialize(buf, static_cast<uint8_t>(v));
+}
+
+
+template<typename Input>
+query::digest_algorithm serializer<query::digest_algorithm>::read(Input& buf) {
+  return static_cast<query::digest_algorithm>(deserialize(buf, boost::type<uint8_t>()));
+}
+struct qr_cell_view {
+    utils::input_stream v;
+    
+
+    auto timestamp() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<std::optional<api::timestamp_type>>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<std::optional<api::timestamp_type>>());
+      });
+    }
+
+
+    auto expiry() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<std::optional<gc_clock::time_point>>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<std::optional<api::timestamp_type>>());
+       return deserialize(in, boost::type<std::optional<gc_clock::time_point>>());
+      });
+    }
+
+
+    auto value() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<bytes>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<std::optional<api::timestamp_type>>());
+       ser::skip(in, boost::type<std::optional<gc_clock::time_point>>());
+       return deserialize(in, boost::type<bytes>());
+      });
+    }
+
+
+    auto ttl() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<std::optional<gc_clock::duration>>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<std::optional<api::timestamp_type>>());
+       ser::skip(in, boost::type<std::optional<gc_clock::time_point>>());
+       ser::skip(in, boost::type<bytes>());
+       return (in.size()>0) ? deserialize(in, boost::type<std::optional<gc_clock::duration>>()) : std::optional<gc_clock::duration>();
+      });
+    }
+
+};
+
+template<>
+struct serializer<qr_cell_view> {
+    template<typename Input>
+    static qr_cell_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return qr_cell_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, qr_cell_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct qr_row_view {
+    utils::input_stream v;
+    
+
+    auto cells() const {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return vector_deserializer<std::optional<qr_cell_view>>(in);
+      });
+    }
+
+};
+
+template<>
+struct serializer<qr_row_view> {
+    template<typename Input>
+    static qr_row_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return qr_row_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, qr_row_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct qr_clustered_row_view {
+    utils::input_stream v;
+    
+
+    auto key() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<std::optional<clustering_key>>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<std::optional<clustering_key>>());
+      });
+    }
+
+
+    auto cells() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<qr_row_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<std::optional<clustering_key>>());
+       return deserialize(in, boost::type<qr_row_view>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<qr_clustered_row_view> {
+    template<typename Input>
+    static qr_clustered_row_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return qr_clustered_row_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, qr_clustered_row_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct qr_partition_view {
+    utils::input_stream v;
+    
+
+    auto key() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<std::optional<partition_key>>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<std::optional<partition_key>>());
+      });
+    }
+
+
+    auto static_row() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<qr_row_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<std::optional<partition_key>>());
+       return deserialize(in, boost::type<qr_row_view>());
+      });
+    }
+
+
+    auto rows() const {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<std::optional<partition_key>>());
+       ser::skip(in, boost::type<qr_row_view>());
+       return vector_deserializer<qr_clustered_row_view>(in);
+      });
+    }
+
+};
+
+template<>
+struct serializer<qr_partition_view> {
+    template<typename Input>
+    static qr_partition_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return qr_partition_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, qr_partition_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct query_result_view {
+    utils::input_stream v;
+    
+
+    auto partitions() const {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return vector_deserializer<qr_partition_view>(in);
+      });
+    }
+
+};
+
+template<>
+struct serializer<query_result_view> {
+    template<typename Input>
+    static query_result_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return query_result_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, query_result_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+
+////// State holders
+
+template<typename Output>
+struct state_of_qr_cell {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_qr_row {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_qr_clustered_row {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_qr_clustered_row__cells {
+    frame<Output> f;
+    state_of_qr_clustered_row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_qr_partition {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_qr_partition__static_row {
+    frame<Output> f;
+    state_of_qr_partition<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_query_result {
+    frame<Output> f;
+};
+
+////// Nodes
+
+template<typename Output>
+struct after_qr_cell__ttl {
+    Output& _out;
+    state_of_qr_cell<Output> _state;
+    
+    
+    
+    void  end_qr_cell() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_qr_cell__value {
+    Output& _out;
+    state_of_qr_cell<Output> _state;
+    
+    
+    
+    after_qr_cell__ttl<Output> skip_ttl() && {
+        serialize(_out, false);
+        return { _out, std::move(_state) };
+    }
+    after_qr_cell__ttl<Output> write_ttl(const gc_clock::duration& t) && {
+        
+        serialize(_out, true);
+
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_qr_cell__expiry {
+    Output& _out;
+    state_of_qr_cell<Output> _state;
+    
+    
+    
+    after_qr_cell__value<Output> write_value(bytes_view t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+    template<typename FragmentedBuffer>
+    requires FragmentRange<FragmentedBuffer>
+    after_qr_cell__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && {
+        
+        serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_qr_cell__timestamp {
+    Output& _out;
+    state_of_qr_cell<Output> _state;
+    
+    
+    
+    after_qr_cell__expiry<Output> skip_expiry() && {
+        serialize(_out, false);
+        return { _out, std::move(_state) };
+    }
+    after_qr_cell__expiry<Output> write_expiry(const gc_clock::time_point& t) && {
+        
+        serialize(_out, true);
+
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_qr_cell {
+    Output& _out;
+    state_of_qr_cell<Output> _state;
+    
+    writer_of_qr_cell(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_qr_cell__timestamp<Output> skip_timestamp() && {
+        serialize(_out, false);
+        return { _out, std::move(_state) };
+    }
+    after_qr_cell__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        serialize(_out, true);
+
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_qr_row__cells {
+    Output& _out;
+    state_of_qr_row<Output> _state;
+    
+    
+    
+    void  end_qr_row() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct writer_of_std__optional__qr_cell {
+    Output& _out;
+
+    void skip()  {
+        serialize(_out, false);
+    }
+    void write(const qr_cell_view& obj) {
+        serialize(_out, true);
+        serialize(_out, obj);
+    }
+    writer_of_qr_cell<Output> write() {
+        serialize(_out, true);
+        return {_out};
+    }
+};
+
+template<typename Output>
+struct qr_row__cells {
+    Output& _out;
+    state_of_qr_row<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    qr_row__cells(Output& out, state_of_qr_row<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_std__optional__qr_cell<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(std::optional<qr_cell_view> v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_qr_row__cells<Output> end_cells() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct writer_of_qr_row {
+    Output& _out;
+    state_of_qr_row<Output> _state;
+    
+    writer_of_qr_row(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    qr_row__cells<Output> start_cells() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_qr_row__cells<Output> skip_cells() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_qr_clustered_row__cells {
+    Output& _out;
+    state_of_qr_clustered_row<Output> _state;
+    
+    
+    
+    void  end_qr_clustered_row() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_qr_clustered_row__cells__cells {
+    Output& _out;
+    state_of_qr_clustered_row__cells<Output> _state;
+    
+    
+    
+    after_qr_clustered_row__cells<Output>  end_cells() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct qr_clustered_row__cells__cells {
+    Output& _out;
+    state_of_qr_clustered_row__cells<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    qr_clustered_row__cells__cells(Output& out, state_of_qr_clustered_row__cells<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_std__optional__qr_cell<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(std::optional<qr_cell_view> v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_qr_clustered_row__cells__cells<Output> end_cells() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct qr_clustered_row__cells {
+    Output& _out;
+    state_of_qr_clustered_row__cells<Output> _state;
+    
+    qr_clustered_row__cells(Output& out, state_of_qr_clustered_row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    qr_clustered_row__cells__cells<Output> start_cells() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_qr_clustered_row__cells__cells<Output> skip_cells() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_qr_clustered_row__key {
+    Output& _out;
+    state_of_qr_clustered_row<Output> _state;
+    
+    
+    
+    qr_clustered_row__cells<Output> start_cells() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_qr_clustered_row__cells<Output> cells(Serializer&& f) && {
+        
+        f(writer_of_qr_row<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_qr_clustered_row {
+    Output& _out;
+    state_of_qr_clustered_row<Output> _state;
+    
+    writer_of_qr_clustered_row(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_qr_clustered_row__key<Output> skip_key() && {
+        serialize(_out, false);
+        return { _out, std::move(_state) };
+    }
+    after_qr_clustered_row__key<Output> write_key(const clustering_key& t) && {
+        
+        serialize(_out, true);
+
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_qr_partition__rows {
+    Output& _out;
+    state_of_qr_partition<Output> _state;
+    
+    
+    
+    void  end_qr_partition() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct qr_partition__rows {
+    Output& _out;
+    state_of_qr_partition<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    qr_partition__rows(Output& out, state_of_qr_partition<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_qr_clustered_row<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(qr_clustered_row_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_qr_partition__rows<Output> end_rows() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct after_qr_partition__static_row {
+    Output& _out;
+    state_of_qr_partition<Output> _state;
+    
+    
+    
+    qr_partition__rows<Output> start_rows() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_qr_partition__rows<Output> skip_rows() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_qr_partition__static_row__cells {
+    Output& _out;
+    state_of_qr_partition__static_row<Output> _state;
+    
+    
+    
+    after_qr_partition__static_row<Output>  end_static_row() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct qr_partition__static_row__cells {
+    Output& _out;
+    state_of_qr_partition__static_row<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    qr_partition__static_row__cells(Output& out, state_of_qr_partition__static_row<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_std__optional__qr_cell<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(std::optional<qr_cell_view> v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_qr_partition__static_row__cells<Output> end_cells() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct qr_partition__static_row {
+    Output& _out;
+    state_of_qr_partition__static_row<Output> _state;
+    
+    qr_partition__static_row(Output& out, state_of_qr_partition<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    qr_partition__static_row__cells<Output> start_cells() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_qr_partition__static_row__cells<Output> skip_cells() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_qr_partition__key {
+    Output& _out;
+    state_of_qr_partition<Output> _state;
+    
+    
+    
+    qr_partition__static_row<Output> start_static_row() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_qr_partition__static_row<Output> static_row(Serializer&& f) && {
+        
+        f(writer_of_qr_row<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_qr_partition {
+    Output& _out;
+    state_of_qr_partition<Output> _state;
+    
+    writer_of_qr_partition(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_qr_partition__key<Output> skip_key() && {
+        serialize(_out, false);
+        return { _out, std::move(_state) };
+    }
+    after_qr_partition__key<Output> write_key(const partition_key& t) && {
+        
+        serialize(_out, true);
+
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_query_result__partitions {
+    Output& _out;
+    state_of_query_result<Output> _state;
+    
+    
+    
+    void  end_query_result() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct query_result__partitions {
+    Output& _out;
+    state_of_query_result<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    query_result__partitions(Output& out, state_of_query_result<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_qr_partition<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(qr_partition_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_query_result__partitions<Output> end_partitions() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct writer_of_query_result {
+    Output& _out;
+    state_of_query_result<Output> _state;
+    
+    writer_of_query_result(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    query_result__partitions<Output> start_partitions() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_query_result__partitions<Output> skip_partitions() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+} // ser
+
+
+#include <boost/range/adaptor/transformed.hpp>
+#include <boost/range/numeric.hpp>
+
+
+
+namespace query {
+
+using result_bytes_view = ser::buffer_view<bytes_ostream::fragment_iterator>;
+
+class result_atomic_cell_view {
+    ser::qr_cell_view _view;
+public:
+    result_atomic_cell_view(ser::qr_cell_view view)
+        : _view(view) { }
+
+    api::timestamp_type timestamp() const {
+        return _view.timestamp().value_or(api::missing_timestamp);
+    }
+
+    expiry_opt expiry() const {
+        return _view.expiry();
+    }
+
+    ttl_opt ttl() const {
+        return _view.ttl();
+    }
+
+    result_bytes_view value() const {
+        return _view.value().view();
+    }
+};
+
+// Contains cells in the same order as requested by partition_slice.
+// Contains only live cells.
+class result_row_view {
+    ser::qr_row_view _v;
+public:
+    result_row_view(ser::qr_row_view v) : _v(v) {}
+
+    class iterator_type {
+        using cells_deserializer = ser::vector_deserializer<std::optional<ser::qr_cell_view>>;
+        cells_deserializer _cells;
+        cells_deserializer::iterator _i;
+    public:
+        iterator_type(const ser::qr_row_view& v)
+            : _cells(v.cells())
+            , _i(_cells.begin())
+        { }
+        std::optional<result_atomic_cell_view> next_atomic_cell() {
+            auto cell_opt = *_i++;
+            if (!cell_opt) {
+                return {};
+            }
+            return {result_atomic_cell_view(*cell_opt)};
+        }
+        std::optional<result_bytes_view> next_collection_cell() {
+            auto cell_opt = *_i++;
+            if (!cell_opt) {
+                return {};
+            }
+            ser::qr_cell_view v = *cell_opt;
+            return {v.value().view()};
+        };
+        void skip(const column_definition& def) {
+            ++_i;
+        }
+    };
+
+    iterator_type iterator() const {
+        return iterator_type(_v);
+    }
+};
+
+// Describes expectations about the ResultVisitor concept.
+//
+// Interaction flow:
+//   -> accept_new_partition()
+//   -> accept_new_row()
+//   -> accept_new_row()
+//   -> accept_partition_end()
+//   -> accept_new_partition()
+//   -> accept_new_row()
+//   -> accept_new_row()
+//   -> accept_new_row()
+//   -> accept_partition_end()
+//   ...
+//
+struct result_visitor {
+    void accept_new_partition(
+        const partition_key& key, // FIXME: use view for the key
+        uint64_t row_count) {}
+
+    void accept_new_partition(uint64_t row_count) {}
+
+    void accept_new_row(
+        const clustering_key& key, // FIXME: use view for the key
+        const result_row_view& static_row,
+        const result_row_view& row) {}
+
+    void accept_new_row(const result_row_view& static_row, const result_row_view& row) {}
+
+    void accept_partition_end(const result_row_view& static_row) {}
+};
+
+template<typename Visitor>
+concept ResultVisitor = requires(Visitor visitor, const partition_key& pkey,
+                                      uint64_t row_count, const clustering_key& ckey,
+                                      const result_row_view& static_row, const result_row_view& row)
+{
+    visitor.accept_new_partition(pkey, row_count);
+    visitor.accept_new_partition(row_count);
+    visitor.accept_new_row(ckey, static_row, row);
+    visitor.accept_new_row(static_row, row);
+    visitor.accept_partition_end(static_row);
+};
+
+class result_view {
+    ser::query_result_view _v;
+    friend class result_merger;
+public:
+    result_view(const bytes_ostream& v) : _v(ser::query_result_view{ser::as_input_stream(v)}) {}
+    result_view(ser::query_result_view v) : _v(v) {}
+    explicit result_view(const query::result& res) : result_view(res.buf()) { }
+
+    template <typename Func>
+    static auto do_with(const query::result& res, Func&& func) {
+        result_view view(res.buf());
+        return func(view);
+    }
+
+    template <typename ResultVisitor>
+    static void consume(const query::result& res, const partition_slice& slice, ResultVisitor&& visitor) {
+        result_view(res).consume(slice, visitor);
+    }
+
+    template <typename Visitor>
+    requires ResultVisitor<Visitor>
+    void consume(const partition_slice& slice, Visitor&& visitor) const {
+        for (auto&& p : _v.partitions()) {
+            auto rows = p.rows();
+            auto row_count = rows.size();
+            if (slice.options.contains<partition_slice::option::send_partition_key>()) {
+                auto key = *p.key();
+                visitor.accept_new_partition(key, row_count);
+            } else {
+                visitor.accept_new_partition(row_count);
+            }
+
+            result_row_view static_row(p.static_row());
+
+            for (auto&& row : rows) {
+                result_row_view view(row.cells());
+                if (slice.options.contains<partition_slice::option::send_clustering_key>()) {
+                    visitor.accept_new_row(*row.key(), static_row, view);
+                } else {
+                    visitor.accept_new_row(static_row, view);
+                }
+            }
+
+            visitor.accept_partition_end(static_row);
+        }
+    }
+
+    std::tuple<uint32_t, uint64_t> count_partitions_and_rows() const {
+        auto ps = _v.partitions();
+        uint64_t rows = 0;
+        for (auto p : ps) {
+            rows += std::max(p.rows().size(), size_t(1));
+        }
+        return std::make_tuple(ps.size(), rows);
+    }
+
+    full_position calculate_last_position() const {
+        auto ps = _v.partitions();
+        assert(!ps.empty());
+        auto pit = ps.begin();
+        auto pnext = pit;
+        while (++pnext != ps.end()) {
+            pit = pnext;
+        }
+        auto p = *pit;
+        auto rs = p.rows();
+        auto pos = position_in_partition::for_partition_start();
+        if (!rs.empty()) {
+            auto rit = rs.begin();
+            auto rnext = rit;
+            while (++rnext != rs.end()) {
+                rit = rnext;
+            }
+            const auto& key_opt = (*rit).key();
+            if (key_opt) {
+                pos = position_in_partition::for_key(*key_opt);
+            }
+        }
+        return { p.key().value(), std::move(pos) };
+    }
+};
+
+}
 
 
 //#include "cql3/CqlParser.hpp"
