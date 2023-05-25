@@ -41945,7 +41945,6 @@ struct serializer<const locator::host_id> : public serializer<locator::host_id>
 
 
 
-#include "idl/keys.dist.hh"
 namespace ser {
 
 template <>
