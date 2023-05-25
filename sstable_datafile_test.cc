@@ -68593,9 +68593,2366 @@ public:
 }
 
 
+#include <functional>
+#include <limits>
+#include <optional>
 
-#include "readers/flat_mutation_reader_v2.hh"
-#include "readers/mutation_source.hh"
+namespace detail {
+
+template<typename T, typename Comparator>
+requires std::is_nothrow_copy_constructible_v<T> && std::is_nothrow_move_constructible_v<T>
+class extremum_tracker {
+    T _default_value;
+    std::optional<T> _value;
+public:
+    explicit extremum_tracker(const T& default_value) noexcept
+        : _default_value(default_value)
+    {}
+
+    void update(const T& value) noexcept {
+        if (!_value || Comparator{}(value, *_value)) {
+            _value = value;
+        }
+    }
+
+    void update(const extremum_tracker& other) noexcept {
+        if (other._value) {
+            update(*other._value);
+        }
+    }
+
+    const T& get() const noexcept {
+        return _value ? *_value : _default_value;
+    }
+};
+
+} // namespace detail
+
+template <typename T>
+using min_tracker = detail::extremum_tracker<T, std::less<T>>;
+
+template <typename T>
+using max_tracker = detail::extremum_tracker<T, std::greater<T>>;
+
+template <typename T>
+requires std::is_nothrow_copy_constructible_v<T> && std::is_nothrow_move_constructible_v<T>
+class min_max_tracker {
+    min_tracker<T> _min_tracker;
+    max_tracker<T> _max_tracker;
+public:
+    min_max_tracker() noexcept
+        : _min_tracker(std::numeric_limits<T>::min())
+        , _max_tracker(std::numeric_limits<T>::max())
+    {}
+
+    min_max_tracker(const T& default_min, const T& default_max) noexcept
+        : _min_tracker(default_min)
+        , _max_tracker(default_max)
+    {}
+
+    void update(const T& value) noexcept {
+        _min_tracker.update(value);
+        _max_tracker.update(value);
+    }
+
+    void update(const min_max_tracker<T>& other) noexcept {
+        _min_tracker.update(other._min_tracker);
+        _max_tracker.update(other._max_tracker);
+    }
+
+    const T& min() const noexcept {
+        return _min_tracker.get();
+    }
+
+    const T& max() const noexcept {
+        return _max_tracker.get();
+    }
+};
+
+// Stores statistics on all the updates done to a memtable
+// The collected statistics are used for flushing memtable to the disk
+struct encoding_stats {
+
+    // The fixed epoch corresponds to the one used by Origin - 22/09/2015, 00:00:00, GMT-0:
+    //        Calendar c = Calendar.getInstance(TimeZone.getTimeZone("GMT-0"), Locale.US);
+    //        c.set(Calendar.YEAR, 2015);
+    //        c.set(Calendar.MONTH, Calendar.SEPTEMBER);
+    //        c.set(Calendar.DAY_OF_MONTH, 22);
+    //        c.set(Calendar.HOUR_OF_DAY, 0);
+    //        c.set(Calendar.MINUTE, 0);
+    //        c.set(Calendar.SECOND, 0);
+    //        c.set(Calendar.MILLISECOND, 0);
+    //
+    //        long TIMESTAMP_EPOCH = c.getTimeInMillis() * 1000; // timestamps should be in microseconds by convention
+    //        int DELETION_TIME_EPOCH = (int)(c.getTimeInMillis() / 1000); // local deletion times are in seconds
+    // Encoding stats are used for delta-encoding, so we want some default values
+    // that are just good enough so we take some recent date in the past
+    static constexpr int32_t deletion_time_epoch = 1442880000;
+    static constexpr api::timestamp_type timestamp_epoch = api::timestamp_type(deletion_time_epoch) * 1000 * 1000;
+    static constexpr int32_t ttl_epoch = 0;
+
+    api::timestamp_type min_timestamp = timestamp_epoch;
+    gc_clock::time_point min_local_deletion_time = gc_clock::time_point(gc_clock::duration(deletion_time_epoch));
+    gc_clock::duration min_ttl = gc_clock::duration(ttl_epoch);
+};
+
+class encoding_stats_collector {
+private:
+    min_tracker<api::timestamp_type> min_timestamp;
+    min_tracker<gc_clock::time_point> min_local_deletion_time;
+    min_tracker<gc_clock::duration> min_ttl;
+
+public:
+    encoding_stats_collector() noexcept
+        : min_timestamp(api::max_timestamp)
+        , min_local_deletion_time(gc_clock::time_point::max())
+        , min_ttl(gc_clock::duration::max())
+    {}
+
+    void update_timestamp(api::timestamp_type ts) noexcept {
+        min_timestamp.update(ts);
+    }
+
+    void update_local_deletion_time(gc_clock::time_point local_deletion_time) noexcept {
+        min_local_deletion_time.update(local_deletion_time);
+    }
+
+    void update_ttl(gc_clock::duration ttl) noexcept {
+        min_ttl.update(ttl);
+    }
+
+    void update(const encoding_stats& other) noexcept {
+        update_timestamp(other.min_timestamp);
+        update_local_deletion_time(other.min_local_deletion_time);
+        update_ttl(other.min_ttl);
+    }
+
+    encoding_stats get() const noexcept {
+        return { min_timestamp.get(), min_local_deletion_time.get(), min_ttl.get() };
+    }
+};
+
+#include <boost/intrusive/parent_from_member.hpp>
+#include <boost/heap/binomial_heap.hpp>
+#include <seastar/core/condition-variable.hh>
+#include <seastar/core/future.hh>
+#include <seastar/core/metrics_registration.hh>
+#include <seastar/core/semaphore.hh>
+
+class test_region_group;
+
+namespace replica {
+
+// Code previously under logalloc namespace
+namespace dirty_memory_manager_logalloc {
+
+class size_tracked_region;
+
+struct region_evictable_occupancy_ascending_less_comparator {
+    bool operator()(size_tracked_region* r1, size_tracked_region* r2) const;
+};
+
+using region_heap = boost::heap::binomial_heap<size_tracked_region*,
+        boost::heap::compare<region_evictable_occupancy_ascending_less_comparator>,
+        boost::heap::allocator<std::allocator<size_tracked_region*>>,
+        //constant_time_size<true> causes corruption with boost < 1.60
+        boost::heap::constant_time_size<false>>;
+
+class size_tracked_region : public logalloc::region {
+public:
+    std::optional<region_heap::handle_type> _heap_handle;
+};
+
+// The region_group class keeps track of two memory use counts:
+//
+//  - real memory: this is LSA memory used by memtables, whether active or being
+//            flushed. 
+//  - spooled memory: this is LSA memory used by memtables undergoing a flush
+//            that has been copied to an sstable. It a subset of
+//            real memory. Once a flushing memtable is sealed, its spooled memory
+//            drops to zero and real memory drops by the size of the memtable.
+//
+// Since the control loop is interested in (real memory) - (spooled memory), we keep
+// track of the difference as unspooled memory.
+//
+// real memory and unspooled memory react to events in this way:
+//   - data added to memtable: both real memory and unspooled memory increase by the same amount
+//            (spooled memory does not change). Note the increase can actually be a decrease if
+//            data was deleted or overwritten.
+//   - part of the memtable was flushed to disk: unspooled memory decreases (spooled memory
+//            increases)
+//
+// Users of a region_group configure reclaim with an unspooled memory soft limit (where
+// sstable flush starts, but allocation can still continue), an unspooled memory hard limit (where
+// allocation cannot proceed until sstable flush makes progress),
+// and callbacks that are called when reclaiming is required and no longer necessary.
+// There is also a real memory hard limit.
+
+//
+// These callbacks will be called when the dirty memory manager
+// see relevant changes in the memory pressure conditions for this region_group. By specializing
+// those methods - which are a nop by default - the callers initiate memtable flusing to
+// free real and unspooled memory.
+
+// The following restrictions apply to implementations of start_reclaiming() and stop_reclaiming():
+//
+//  - must not use any region or region_group objects, because they're invoked synchronously
+//    with operations on those.
+//
+//  - must be noexcept, because they're called on the free path.
+//
+//  - the implementation may be called synchronously with any operation
+//    which allocates memory, because these are called by memory reclaimer.
+//    In particular, the implementation should not depend on memory allocation
+//    because that may fail when in reclaiming context.
+//
+
+using reclaim_start_callback = noncopyable_function<void () noexcept>;
+using reclaim_stop_callback = noncopyable_function<void () noexcept>;
+
+struct reclaim_config {
+    size_t unspooled_hard_limit = std::numeric_limits<size_t>::max();
+    size_t unspooled_soft_limit = unspooled_hard_limit;
+    size_t real_hard_limit = std::numeric_limits<size_t>::max();
+    reclaim_start_callback start_reclaiming = [] () noexcept {};
+    reclaim_stop_callback stop_reclaiming = [] () noexcept {};
+};
+
+// A container for memtables. Called "region_group" for historical
+// reasons. Receives updates about memtable size change via the
+// LSA region_listener interface.
+class region_group : public logalloc::region_listener {
+    using region_heap = dirty_memory_manager_logalloc::region_heap;
+public:
+    struct allocating_function {
+        virtual ~allocating_function() = default;
+        virtual void allocate() = 0;
+        virtual void fail(std::exception_ptr) = 0;
+    };
+private:
+    template <typename Func>
+    struct concrete_allocating_function : public allocating_function {
+        using futurator = futurize<std::result_of_t<Func()>>;
+        typename futurator::promise_type pr;
+        Func func;
+    public:
+        void allocate() override {
+            futurator::invoke(func).forward_to(std::move(pr));
+        }
+        void fail(std::exception_ptr e) override {
+            pr.set_exception(e);
+        }
+        concrete_allocating_function(Func&& func) : func(std::forward<Func>(func)) {}
+        typename futurator::type get_future() {
+            return pr.get_future();
+        }
+    };
+
+    class on_request_expiry {
+        class blocked_requests_timed_out_error : public timed_out_error {
+            const sstring _msg;
+        public:
+            explicit blocked_requests_timed_out_error(sstring name)
+                : _msg(std::move(name) + ": timed out") {}
+            virtual const char* what() const noexcept override {
+                return _msg.c_str();
+            }
+        };
+
+        sstring _name;
+    public:
+        explicit on_request_expiry(sstring name) : _name(std::move(name)) {}
+        void operator()(std::unique_ptr<allocating_function>&) noexcept;
+    };
+private:
+    reclaim_config _cfg;
+
+    bool _under_unspooled_pressure = false;
+    bool _under_unspooled_soft_pressure = false;
+
+    region_group* _subgroup = nullptr;
+
+    size_t _real_total_memory = 0;
+
+    bool _under_real_pressure = false;
+
+    // It is a more common idiom to just hold the promises in the circular buffer and make them
+    // ready. However, in the time between the promise being made ready and the function execution,
+    // it could be that our memory usage went up again. To protect against that, we have to recheck
+    // if memory is still available after the future resolves.
+    //
+    // But we can greatly simplify it if we store the function itself in the circular_buffer, and
+    // execute it synchronously in release_requests() when we are sure memory is available.
+    //
+    // This allows us to easily provide strong execution guarantees while keeping all re-check
+    // complication in release_requests and keep the main request execution path simpler.
+    expiring_fifo<std::unique_ptr<allocating_function>, on_request_expiry, db::timeout_clock> _blocked_requests;
+
+    uint64_t _blocked_requests_counter = 0;
+
+    size_t _unspooled_total_memory = 0;
+
+    region_heap _regions;
+
+    condition_variable _relief;
+    bool _shutdown_requested = false;
+    future<> _releaser;
+
+private:
+    size_t real_throttle_threshold() const noexcept {
+        return _cfg.real_hard_limit;
+    }
+public:
+    void update_real(ssize_t delta);
+
+    size_t real_memory_used() const noexcept {
+        return _real_total_memory;
+    }
+
+private:
+    bool do_update_real_and_check_relief(ssize_t delta);
+
+public:
+    bool under_unspooled_pressure() const noexcept {
+        return _under_unspooled_pressure;
+    }
+
+    bool over_unspooled_soft_limit() const noexcept {
+        return _under_unspooled_soft_pressure;
+    }
+
+    void notify_unspooled_soft_pressure() noexcept {
+        if (!_under_unspooled_soft_pressure) {
+            _under_unspooled_soft_pressure = true;
+            _cfg.start_reclaiming();
+        }
+    }
+
+private:
+    void notify_unspooled_soft_relief() noexcept {
+        if (_under_unspooled_soft_pressure) {
+            _under_unspooled_soft_pressure = false;
+            _cfg.stop_reclaiming();
+        }
+    }
+
+    void notify_unspooled_pressure() noexcept {
+        _under_unspooled_pressure = true;
+    }
+
+    void notify_unspooled_relief() noexcept {
+        _under_unspooled_pressure = false;
+    }
+
+    void execute_one();
+public:
+    size_t unspooled_throttle_threshold() const noexcept {
+        return _cfg.unspooled_hard_limit;
+    }
+private:
+    size_t unspooled_soft_limit_threshold() const noexcept {
+        return _cfg.unspooled_soft_limit;
+    }
+
+    bool reclaimer_can_block() const;
+    future<> start_releaser(scheduling_group deferered_work_sg);
+    future<> release_queued_allocations();
+    void notify_unspooled_pressure_relieved();
+    friend void region_group_binomial_group_sanity_check(const region_group::region_heap& bh);
+private: // from region_listener
+    virtual void moved(logalloc::region* old_address, logalloc::region* new_address) override;
+public:
+    // When creating a region_group, one can specify an optional throttle_threshold parameter. This
+    // parameter won't affect normal allocations, but an API is provided, through the region_group's
+    // method run_when_memory_available(), to make sure that a given function is only executed when
+    // the total memory for the region group (and all of its parents) is lower or equal to the
+    // region_group's throttle_treshold (and respectively for its parents).
+    //
+    // The deferred_work_sg parameter specifies a scheduling group in which to run allocations
+    // (given to run_when_memory_available()) when they must be deferred due to lack of memory
+    // at the time the call to run_when_memory_available() was made.
+    region_group(sstring name = "(unnamed region group)", reclaim_config cfg = {},
+            scheduling_group deferred_work_sg = default_scheduling_group());
+    region_group(region_group&& o) = delete;
+    region_group(const region_group&) = delete;
+    ~region_group() {
+        // If we set a throttle threshold, we'd be postponing many operations. So shutdown must be
+        // called.
+        if (reclaimer_can_block()) {
+            assert(_shutdown_requested);
+        }
+    }
+    region_group& operator=(const region_group&) = delete;
+    region_group& operator=(region_group&&) = delete;
+    size_t unspooled_memory_used() const noexcept {
+        return _unspooled_total_memory;
+    }
+    void update_unspooled(ssize_t delta);
+
+    // It would be easier to call update, but it is unfortunately broken in boost versions up to at
+    // least 1.59.
+    //
+    // One possibility would be to just test for delta sigdness, but we adopt an explicit call for
+    // two reasons:
+    //
+    // 1) it save us a branch
+    // 2) some callers would like to pass delta = 0. For instance, when we are making a region
+    //    evictable / non-evictable. Because the evictable occupancy changes, we would like to call
+    //    the full update cycle even then.
+    virtual void increase_usage(logalloc::region* r, ssize_t delta) override { // From region_listener
+        _regions.increase(*static_cast<size_tracked_region*>(r)->_heap_handle);
+        update_unspooled(delta);
+    }
+
+    virtual void decrease_evictable_usage(logalloc::region* r) override { // From region_listener
+        _regions.decrease(*static_cast<size_tracked_region*>(r)->_heap_handle);
+    }
+
+    virtual void decrease_usage(logalloc::region* r, ssize_t delta) override { // From region_listener
+        decrease_evictable_usage(r);
+        update_unspooled(delta);
+    }
+
+    //
+    // Make sure that the function specified by the parameter func only runs when this region_group,
+    // as well as each of its ancestors have a memory_used() amount of memory that is lesser or
+    // equal the throttle_threshold, as specified in the region_group's constructor.
+    //
+    // region_groups that did not specify a throttle_threshold will always allow for execution.
+    //
+    // In case current memory_used() is over the threshold, a non-ready future is returned and it
+    // will be made ready at some point in the future, at which memory usage in the offending
+    // region_group (either this or an ancestor) falls below the threshold.
+    //
+    // Requests that are not allowed for execution are queued and released in FIFO order within the
+    // same region_group, but no guarantees are made regarding release ordering across different
+    // region_groups.
+    //
+    // When timeout is reached first, the returned future is resolved with timed_out_error exception.
+    template <typename Func>
+    // We disallow future-returning functions here, because otherwise memory may be available
+    // when we start executing it, but no longer available in the middle of the execution.
+    requires (!is_future<std::invoke_result_t<Func>>::value)
+    futurize_t<std::result_of_t<Func()>> run_when_memory_available(Func&& func, db::timeout_clock::time_point timeout);
+
+    // returns a pointer to the largest region (in terms of memory usage) that sits below this
+    // region group. This includes the regions owned by this region group as well as all of its
+    // children.
+    size_tracked_region* get_largest_region() noexcept;
+
+    // Shutdown is mandatory for every user who has set a threshold
+    // Can be called at most once.
+    future<> shutdown() noexcept;
+
+    size_t blocked_requests() const noexcept;
+
+    uint64_t blocked_requests_counter() const noexcept;
+private:
+    // Returns true if and only if constraints of this group are not violated.
+    // That's taking into account any constraints imposed by enclosing (parent) groups.
+    bool execution_permitted() noexcept;
+
+    uint64_t top_region_evictable_space() const noexcept;
+
+    virtual void add(logalloc::region* child) override; // from region_listener
+    virtual void del(logalloc::region* child) override; // from region_listener
+
+    friend class ::test_region_group;
+};
+
+}
+
+class dirty_memory_manager;
+
+class sstable_write_permit final {
+    friend class dirty_memory_manager;
+    std::optional<semaphore_units<>> _permit;
+
+    sstable_write_permit() noexcept = default;
+    explicit sstable_write_permit(semaphore_units<>&& units) noexcept
+            : _permit(std::move(units)) {
+    }
+
+public:
+    sstable_write_permit(sstable_write_permit&&) noexcept = default;
+    sstable_write_permit& operator=(sstable_write_permit&&) noexcept = default;
+
+    static sstable_write_permit unconditional() {
+        return sstable_write_permit();
+    }
+};
+
+class flush_permit {
+    friend class dirty_memory_manager;
+    dirty_memory_manager* _manager;
+    std::optional<sstable_write_permit> _sstable_write_permit;
+    semaphore_units<> _background_permit;
+
+    flush_permit(dirty_memory_manager* manager, sstable_write_permit&& sstable_write_permit, semaphore_units<>&& background_permit)
+            : _manager(manager)
+            , _sstable_write_permit(std::move(sstable_write_permit))
+            , _background_permit(std::move(background_permit)) {
+    }
+public:
+    flush_permit(flush_permit&&) noexcept = default;
+    flush_permit& operator=(flush_permit&&) noexcept = default;
+
+    sstable_write_permit release_sstable_write_permit() noexcept {
+        return std::exchange(_sstable_write_permit, std::nullopt).value();
+    }
+
+    bool has_sstable_write_permit() const noexcept {
+        return _sstable_write_permit.has_value();
+    }
+
+    future<flush_permit> reacquire_sstable_write_permit() &&;
+};
+
+class dirty_memory_manager {
+    // We need a separate boolean, because from the LSA point of view, pressure may still be
+    // mounting, in which case the pressure flag could be set back on if we force it off.
+    bool _db_shutdown_requested = false;
+
+    replica::database* _db;
+    // The _region_group accounts for unspooled memory usage. It is defined as the real dirty
+    // memory usage minus bytes that were already written to disk.
+    dirty_memory_manager_logalloc::region_group _region_group;
+
+    // We would like to serialize the flushing of memtables. While flushing many memtables
+    // simultaneously can sustain high levels of throughput, the memory is not freed until the
+    // memtable is totally gone. That means that if we have throttled requests, they will stay
+    // throttled for a long time. Even when we have unspooled dirty, that only provides a rough
+    // estimate, and we can't release requests that early.
+    semaphore _flush_serializer;
+    // We will accept a new flush before another one ends, once it is done with the data write.
+    // That is so we can keep the disk always busy. But there is still some background work that is
+    // left to be done. Mostly, update the caches and seal the auxiliary components of the SSTable.
+    // This semaphore will cap the amount of background work that we have. Note that we're not
+    // overly concerned about memtable memory, because dirty memory will put a limit to that. This
+    // is mostly about dangling continuations. So that doesn't have to be a small number.
+    static constexpr unsigned _max_background_work = 20;
+    semaphore _background_work_flush_serializer = { _max_background_work };
+    condition_variable _should_flush;
+    int64_t _dirty_bytes_released_pre_accounted = 0;
+
+    future<> flush_when_needed();
+
+    future<> _waiting_flush;
+    void start_reclaiming() noexcept;
+
+    bool has_pressure() const noexcept {
+        return _region_group.over_unspooled_soft_limit();
+    }
+
+    unsigned _extraneous_flushes = 0;
+
+    seastar::metrics::metric_groups _metrics;
+public:
+    void setup_collectd(sstring namestr);
+
+    future<> shutdown();
+
+    // Limits and pressure conditions:
+    // ===============================
+    //
+    // Unspooled Dirty
+    // -------------
+    // We can't free memory until the whole memtable is flushed because we need to keep it in memory
+    // until the end, but we can fake freeing memory. When we are done with an element of the
+    // memtable, we will update the region group pretending memory just went down by that amount.
+    //
+    // Because the amount of memory that we pretend to free should be close enough to the actual
+    // memory used by the memtables, that effectively creates two sub-regions inside the dirty
+    // region group, of equal size. In the worst case, we will have <memtable_total_space> dirty
+    // bytes used, and half of that already spooled.
+    //
+    // Hard Limit
+    // ----------
+    // The total space that can be used by memtables in each group is defined by the threshold, but
+    // we will only allow the region_group to grow to half of that. This is because of unspooled_dirty
+    // as explained above. Because unspooled dirty is implemented by reducing the usage in the
+    // region_group directly on partition written, we want to throttle every time half of the memory
+    // as seen by the region_group. To achieve that we need to set the hard limit (first parameter
+    // of the region_group_reclaimer) to 1/2 of the user-supplied threshold
+    //
+    // Soft Limit
+    // ----------
+    // When the soft limit is hit, no throttle happens. The soft limit exists because we don't want
+    // to start flushing only when the limit is hit, but a bit earlier instead. If we were to start
+    // flushing only when the hard limit is hit, workloads in which the disk is fast enough to cope
+    // would see latency added to some requests unnecessarily.
+    //
+    // We then set the soft limit to 80 % of the unspooled dirty hard limit, which is equal to 40 % of
+    // the user-supplied threshold.
+    dirty_memory_manager(replica::database& db, size_t threshold, double soft_limit, scheduling_group deferred_work_sg);
+    dirty_memory_manager()
+        : _db(nullptr)
+        , _region_group("memtable (unspooled)",
+                dirty_memory_manager_logalloc::reclaim_config{
+                    .start_reclaiming = std::bind_front(&dirty_memory_manager::start_reclaiming, this),
+                })
+        , _flush_serializer(1)
+        , _waiting_flush(make_ready_future<>()) {}
+
+    static dirty_memory_manager& from_region_group(dirty_memory_manager_logalloc::region_group *rg) noexcept {
+        return *(boost::intrusive::get_parent_from_member(rg, &dirty_memory_manager::_region_group));
+    }
+
+    dirty_memory_manager_logalloc::region_group& region_group() noexcept {
+        return _region_group;
+    }
+
+    const dirty_memory_manager_logalloc::region_group& region_group() const noexcept {
+        return _region_group;
+    }
+
+    void revert_potentially_cleaned_up_memory(logalloc::region* from, int64_t delta) {
+        _region_group.update_real(-delta);
+        _region_group.update_unspooled(delta);
+        _dirty_bytes_released_pre_accounted -= delta;
+    }
+
+    void account_potentially_cleaned_up_memory(logalloc::region* from, int64_t delta) {
+        _region_group.update_real(delta);
+        _region_group.update_unspooled(-delta);
+        _dirty_bytes_released_pre_accounted += delta;
+    }
+
+    void pin_real_dirty_memory(int64_t delta) {
+        _region_group.update_real(delta);
+    }
+
+    void unpin_real_dirty_memory(int64_t delta) {
+        _region_group.update_real(-delta);
+    }
+
+    size_t real_dirty_memory() const noexcept {
+        return _region_group.real_memory_used();
+    }
+
+    size_t unspooled_dirty_memory() const noexcept {
+        return _region_group.unspooled_memory_used();
+    }
+
+    void notify_soft_pressure() {
+        _region_group.notify_unspooled_soft_pressure();
+    }
+
+    size_t throttle_threshold() const {
+        return _region_group.unspooled_throttle_threshold();
+    }
+
+    future<> flush_one(replica::memtable_list& cf, flush_permit&& permit) noexcept;
+
+    future<flush_permit> get_flush_permit() noexcept {
+        return get_units(_background_work_flush_serializer, 1).then([this] (auto&& units) {
+            return this->get_flush_permit(std::move(units));
+        });
+    }
+
+    future<flush_permit> get_all_flush_permits() noexcept {
+        return get_units(_background_work_flush_serializer, _max_background_work).then([this] (auto&& units) {
+            return this->get_flush_permit(std::move(units));
+        });
+    }
+
+    bool has_extraneous_flushes_requested() const noexcept {
+        return _extraneous_flushes > 0;
+    }
+
+    void start_extraneous_flush() noexcept {
+        ++_extraneous_flushes;
+    }
+
+    void finish_extraneous_flush() noexcept {
+        --_extraneous_flushes;
+    }
+private:
+    future<flush_permit> get_flush_permit(semaphore_units<>&& background_permit) noexcept {
+        return get_units(_flush_serializer, 1).then([this, background_permit = std::move(background_permit)] (auto&& units) mutable {
+            return flush_permit(this, sstable_write_permit(std::move(units)), std::move(background_permit));
+        });
+    }
+
+    friend class flush_permit;
+};
+
+namespace dirty_memory_manager_logalloc {
+
+template <typename Func>
+// We disallow future-returning functions here, because otherwise memory may be available
+// when we start executing it, but no longer available in the middle of the execution.
+requires (!is_future<std::invoke_result_t<Func>>::value)
+futurize_t<std::result_of_t<Func()>>
+region_group::run_when_memory_available(Func&& func, db::timeout_clock::time_point timeout) {
+    bool blocked = 
+        !_blocked_requests.empty()
+        || under_unspooled_pressure()
+        || _under_real_pressure;
+
+    if (!blocked) {
+        return futurize_invoke(func);
+    }
+
+    auto fn = std::make_unique<concrete_allocating_function<Func>>(std::forward<Func>(func));
+    auto fut = fn->get_future();
+    _blocked_requests.push_back(std::move(fn), timeout);
+    ++_blocked_requests_counter;
+
+    return fut;
+}
+
+inline
+size_t
+region_group::blocked_requests() const noexcept {
+    return _blocked_requests.size();
+}
+
+inline
+uint64_t
+region_group::blocked_requests_counter() const noexcept {
+    return _blocked_requests_counter;
+}
+
+}
+
+extern thread_local dirty_memory_manager default_dirty_memory_manager;
+
+}
+
+
+#include <unordered_map>
+
+
+namespace db {
+
+class rp_set {
+public:
+    typedef std::unordered_map<segment_id_type, uint64_t> usage_map;
+
+    rp_set()
+    {}
+    rp_set(const replay_position & rp)
+    {
+        put(rp);
+    }
+    rp_set(rp_set&&) = default;
+
+    rp_set& operator=(rp_set&&) = default;
+
+    void put(const replay_position& rp) {
+        _usage[rp.id]++;
+    }
+    void put(rp_handle && h) {
+        if (h) {
+            put(h.rp());
+        }
+        h.release();
+    }
+
+    size_t size() const {
+        return _usage.size();
+    }
+    bool empty() const {
+        return _usage.empty();
+    }
+
+    const usage_map& usage() const {
+        return _usage;
+    }
+private:
+    usage_map _usage;
+};
+
+}
+
+#include <seastar/core/enum.hh>
+#include <boost/variant/variant.hpp>
+#include <boost/variant/get.hpp>
+#include <unordered_map>
+#include <type_traits>
+#include <deque>
+
+namespace sstables {
+
+// Some in-disk structures have an associated integer (of varying sizes) that
+// represents how large they are. They can be a byte-length, in the case of a
+// string, number of elements, in the case of an array, etc.
+//
+// For those elements, we encapsulate the underlying type in an outter
+// structure that embeds how large is the in-disk size. It is a lot more
+// convenient to embed it in the size than explicitly writing it in the parser.
+// This way, we don't need to encode this information in multiple places at
+// once - it is already part of the type.
+template <typename Size>
+struct disk_string {
+    bytes value;
+    explicit operator bytes_view() const {
+        return value;
+    }
+    bool operator==(const disk_string& rhs) const {
+        return value == rhs.value;
+    }
+};
+
+struct disk_string_vint_size {
+    bytes value;
+    explicit operator bytes_view() const {
+        return value;
+    }
+    bool operator==(const disk_string_vint_size& rhs) const {
+        return value == rhs.value;
+    }
+};
+
+template <typename Size>
+struct disk_string_view {
+    bytes_view value;
+};
+
+template<typename SizeType>
+struct disk_data_value_view {
+    atomic_cell_value_view value;
+};
+
+template <typename Size, typename Members>
+requires std::is_integral_v<Size>
+struct disk_array {
+    utils::chunked_vector<Members> elements;
+};
+
+// A wrapper struct for integers to be written using variable-length encoding
+template <typename T>
+requires std::is_integral_v<T>
+struct vint {
+    T value;
+};
+
+// Same as disk_array but with its size serialized as variable-length integer
+template <typename Members>
+struct disk_array_vint_size {
+    utils::chunked_vector<Members> elements;
+};
+
+template <typename Size, typename Members>
+requires std::is_integral_v<Size>
+struct disk_array_ref {
+    const utils::chunked_vector<Members>& elements;
+    disk_array_ref(const utils::chunked_vector<Members>& elements) : elements(elements) {}
+};
+
+template <typename Size, typename Key, typename Value>
+struct disk_hash {
+    std::unordered_map<Key, Value, std::hash<Key>> map;
+};
+
+template <typename TagType, TagType Tag, typename T>
+struct disk_tagged_union_member {
+    // stored as: tag, value-size-on-disk, value
+    using tag_type = TagType;
+    static constexpr tag_type tag() { return Tag; }
+    using type = T;
+    T value;
+};
+
+template <typename TagType, typename... Members>
+struct disk_tagged_union {
+    using variant_type = boost::variant<Members...>;
+    variant_type data;
+};
+
+// Each element of Members... is a disk_tagged_union_member<>
+template <typename TagType, typename... Members>
+struct disk_set_of_tagged_union {
+    using tag_type = TagType;
+    using key_type = std::conditional_t<std::is_enum<TagType>::value, std::underlying_type_t<TagType>, TagType>;
+    using hash_type = std::conditional_t<std::is_enum<TagType>::value, enum_hash<TagType>, TagType>;
+    using value_type = boost::variant<Members...>;
+    std::unordered_map<tag_type, value_type, hash_type> data;
+
+    template <TagType Tag, typename T>
+    T* get() {
+        // FIXME: static_assert that <Tag, T> is a member
+        auto i = data.find(Tag);
+        if (i == data.end()) {
+            return nullptr;
+        } else {
+            return &boost::get<disk_tagged_union_member<TagType, Tag, T>>(i->second).value;
+        }
+    }
+    template <TagType Tag, typename T>
+    const T* get() const {
+        return const_cast<disk_set_of_tagged_union*>(this)->get<Tag, T>();
+    }
+    template <TagType Tag, typename T>
+    void set(T&& value) {
+        data[Tag] = disk_tagged_union_member<TagType, Tag, T>{std::forward<T>(value)};
+    }
+    struct serdes;
+    static struct serdes s_serdes;
+};
+
+}
+
+namespace std {
+template <typename Size>
+struct hash<sstables::disk_string<Size>> {
+    size_t operator()(const sstables::disk_string<Size>& s) const {
+        return std::hash<bytes>()(s.value);
+    }
+};
+
+}
+
+
+#include <cstdint>
+#include <map>
+
+namespace utils {
+
+/**
+ * Histogram that can be constructed from streaming of data.
+ *
+ * The algorithm is taken from following paper:
+ * Yael Ben-Haim and Elad Tom-Tov, "A Streaming Parallel Decision Tree Algorithm" (2010)
+ * http://jmlr.csail.mit.edu/papers/volume11/ben-haim10a/ben-haim10a.pdf
+ */
+struct streaming_histogram {
+    // TreeMap to hold bins of histogram.
+    std::map<double, uint64_t> bin;
+
+    // maximum bin size for this histogram
+    uint32_t max_bin_size;
+
+    /**
+     * Creates a new histogram with max bin size of maxBinSize
+     * @param maxBinSize maximum number of bins this histogram can have
+     */
+    streaming_histogram(int max_bin_size = 0)
+        : max_bin_size(max_bin_size) {
+    }
+
+    streaming_histogram(int max_bin_size, std::map<double, uint64_t>&& bin)
+        : bin(std::move(bin))
+        , max_bin_size(max_bin_size) {
+    }
+
+    /**
+     * Adds new point p to this histogram.
+     * @param p
+     */
+    void update(double p) {
+        update(p, 1);
+    }
+
+    /**
+     * Adds new point p with value m to this histogram.
+     * @param p
+     * @param m
+     */
+    void update(double p, uint64_t m) {
+        auto it = bin.find(p);
+        if (it != bin.end()) {
+            bin[p] = it->second + m;
+        } else {
+            bin[p] = m;
+            // if bin size exceeds maximum bin size then trim down to max size
+            while (bin.size() > max_bin_size) {
+                // find points p1, p2 which have smallest difference
+                auto it = bin.begin();
+                double p1 = it->first;
+                it++;
+                double p2 = it->first;
+                it++;
+                double smallestDiff = p2 - p1;
+                double q1 = p1, q2 = p2;
+                while(it != bin.end()) {
+                    p1 = p2;
+                    p2 = it->first;
+                    it++;
+                    double diff = p2 - p1;
+                    if (diff < smallestDiff)
+                    {
+                        smallestDiff = diff;
+                        q1 = p1;
+                        q2 = p2;
+                    }
+                }
+                // merge those two
+                uint64_t k1 = bin.at(q1);
+                uint64_t k2 = bin.at(q2);
+                bin.erase(q1);
+                bin.erase(q2);
+                bin.insert({(q1 * k1 + q2 * k2) / (k1 + k2), k1 + k2});
+            }
+        }
+    }
+
+
+    /**
+     * Merges given histogram with this histogram.
+     *
+     * @param other histogram to merge
+     */
+    void merge(streaming_histogram& other) {
+        if (!other.bin.size()) {
+            return;
+        }
+
+        for (auto& it : other.bin) {
+            update(it.first, it.second);
+        }
+    }
+
+    /**
+     * Calculates estimated number of points in interval [-inf,b].
+     *
+     * @param b upper bound of a interval to calculate sum
+     * @return estimated number of points in a interval [-inf,b].
+     */
+    double sum(double b) const {
+        double sum = 0;
+        // find the points pi, pnext which satisfy pi <= b < pnext
+        auto pnext = bin.upper_bound(b);
+        if (pnext == bin.end()) {
+            // if b is greater than any key in this histogram,
+            // just count all appearance and return
+            for (auto& e : bin) {
+                sum += e.second;
+            }
+        } else {
+            // return key-value mapping associated with the greatest key less than or equal to the given key
+            auto pi = bin.lower_bound(b);
+            if (pi == bin.end() || (pi == bin.begin() && b < pi->first)) {
+                return 0;
+            }
+            if (pi->first != b) {
+                --pi;
+            }
+
+            // calculate estimated count mb for point b
+            double weight = (b - pi->first) / (pnext->first - pi->first);
+            double mb = pi->second + (int64_t(pnext->second) - int64_t(pi->second)) * weight;
+            sum += (pi->second + mb) * weight / 2;
+
+            sum += pi->second / 2.0;
+            // iterate through portion of map whose keys are less than pi->first
+            auto it_end = bin.lower_bound(pi->first);
+            for (auto it = bin.begin(); it != it_end; it++) {
+                sum += it->second;
+            }
+        }
+        return sum;
+    }
+
+    // FIXME: convert Java code below.
+#if 0
+    public Map<Double, Long> getAsMap()
+    {
+        return Collections.unmodifiableMap(bin);
+    }
+
+    public static class StreamingHistogramSerializer implements ISerializer<StreamingHistogram>
+    {
+        public void serialize(StreamingHistogram histogram, DataOutputPlus out) throws IOException
+        {
+            out.writeInt(histogram.maxBinSize);
+            Map<Double, Long> entries = histogram.getAsMap();
+            out.writeInt(entries.size());
+            for (Map.Entry<Double, Long> entry : entries.entrySet())
+            {
+                out.writeDouble(entry.getKey());
+                out.writeLong(entry.getValue());
+            }
+        }
+
+        public StreamingHistogram deserialize(DataInput in) throws IOException
+        {
+            int maxBinSize = in.readInt();
+            int size = in.readInt();
+            Map<Double, Long> tmp = new HashMap<>(size);
+            for (int i = 0; i < size; i++)
+            {
+                tmp.put(in.readDouble(), in.readLong());
+            }
+
+            return new StreamingHistogram(maxBinSize, tmp);
+        }
+
+        public long serializedSize(StreamingHistogram histogram, TypeSizes typeSizes)
+        {
+            long size = typeSizes.sizeof(histogram.maxBinSize);
+            Map<Double, Long> entries = histogram.getAsMap();
+            size += typeSizes.sizeof(entries.size());
+            // size of entries = size * (8(double) + 8(long))
+            size += entries.size() * (8 + 8);
+            return size;
+        }
+    }
+
+    @Override
+    public boolean equals(Object o)
+    {
+        if (this == o)
+            return true;
+
+        if (!(o instanceof StreamingHistogram))
+            return false;
+
+        StreamingHistogram that = (StreamingHistogram) o;
+        return maxBinSize == that.maxBinSize && bin.equals(that.bin);
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return Objects.hashCode(bin.hashCode(), maxBinSize);
+    }
+#endif
+};
+
+}
+#include <seastar/core/future.hh>
+
+namespace sstables {
+
+class key_view {
+    managed_bytes_view _bytes;
+public:
+    explicit key_view(managed_bytes_view b) : _bytes(b) {}
+    explicit key_view(bytes_view b) : _bytes(b) {}
+    key_view() : _bytes() {}
+
+    template <std::invocable<bytes_view> Func>
+    std::invoke_result_t<Func, bytes_view> with_linearized(Func&& func) const {
+        return ::with_linearized(_bytes, func);
+    }
+
+    std::vector<bytes_view> explode(const schema& s) const {
+        return with_linearized([&] (bytes_view v) {
+            return composite_view(v, s.partition_key_size() > 1).explode();
+        });
+    }
+
+    partition_key to_partition_key(const schema& s) const {
+        return partition_key::from_exploded_view(explode(s));
+    }
+
+    bool operator==(const key_view& k) const = default;
+
+    bool empty() const { return _bytes.empty(); }
+
+    std::strong_ordering tri_compare(key_view other) const {
+        return compare_unsigned(_bytes, other._bytes);
+    }
+
+    std::strong_ordering tri_compare(const schema& s, partition_key_view other) const {
+        return with_linearized([&] (bytes_view v) {
+            auto lf = other.legacy_form(s);
+            return std::lexicographical_compare_three_way(
+                    v.begin(), v.end(), lf.begin(), lf.end(),
+                    [](uint8_t b1, uint8_t b2) { return  b1 <=> b2; });
+        });
+    }
+};
+
+// Our internal representation differs slightly (in the way it serializes) from Origin.
+// In order to be able to achieve read and write compatibility for sstables - so they can
+// be imported and exported - we need to always convert a key to this representation.
+class key {
+public:
+    enum class kind {
+        before_all_keys,
+        regular,
+        after_all_keys,
+    };
+private:
+    kind _kind;
+    bytes _bytes;
+
+    static bool is_compound(const schema& s) {
+        return s.partition_key_size() > 1;
+    }
+public:
+    key(bytes&& b) : _kind(kind::regular), _bytes(std::move(b)) {}
+    key(kind k) : _kind(k) {}
+    static key from_bytes(bytes b) {
+        return key(std::move(b));
+    }
+    template <typename RangeOfSerializedComponents>
+    static key make_key(const schema& s, RangeOfSerializedComponents&& values) {
+        return key(composite::serialize_value(std::forward<decltype(values)>(values), is_compound(s)).release_bytes());
+    }
+    static key from_deeply_exploded(const schema& s, const std::vector<data_value>& v) {
+        return make_key(s, v);
+    }
+    static key from_exploded(const schema& s, std::vector<bytes>& v) {
+        return make_key(s, v);
+    }
+    static key from_exploded(const schema& s, std::vector<bytes>&& v) {
+        return make_key(s, std::move(v));
+    }
+    // Unfortunately, the _bytes field for the partition_key are not public. We can't move.
+    static key from_partition_key(const schema& s, partition_key_view pk) {
+        return make_key(s, pk);
+    }
+    partition_key to_partition_key(const schema& s) const {
+        return partition_key::from_exploded_view(explode(s));
+    }
+
+    std::vector<bytes_view> explode(const schema& s) const {
+        return composite_view(_bytes, is_compound(s)).explode();
+    }
+
+    std::strong_ordering tri_compare(key_view k) const {
+        if (_kind == kind::before_all_keys) {
+            return std::strong_ordering::less;
+        }
+        if (_kind == kind::after_all_keys) {
+            return std::strong_ordering::greater;
+        }
+        return key_view(_bytes).tri_compare(k);
+    }
+    operator key_view() const {
+        return key_view(_bytes);
+    }
+    explicit operator bytes_view() const {
+        return _bytes;
+    }
+    const bytes& get_bytes() const {
+        return _bytes;
+    }
+    friend key minimum_key();
+    friend key maximum_key();
+};
+
+inline key minimum_key() {
+    return key(key::kind::before_all_keys);
+};
+
+inline key maximum_key() {
+    return key(key::kind::after_all_keys);
+};
+
+class decorated_key_view {
+    dht::token _token;
+    key_view _partition_key;
+public:
+    decorated_key_view(dht::token token, key_view partition_key) noexcept
+        : _token(token), _partition_key(partition_key) { }
+
+    dht::token token() const {
+        return _token;
+    }
+
+    key_view key() const {
+        return _partition_key;
+    }
+};
+
+}
+
+#include <utility>
+#include <functional>
+#include <unordered_set>
+
+#include <fmt/format.h>
+
+#include <seastar/core/shared_ptr.hh>
+
+namespace sstables {
+
+class sstable;
+
+};
+
+// Customize deleter so that lw_shared_ptr can work with an incomplete sstable class
+namespace seastar {
+
+template <>
+struct lw_shared_ptr_deleter<sstables::sstable> {
+    static void dispose(sstables::sstable* sst);
+};
+
+}
+
+namespace sstables {
+
+using shared_sstable = seastar::lw_shared_ptr<sstable>;
+using sstable_list = std::unordered_set<shared_sstable>;
+
+std::string to_string(const shared_sstable& sst, bool include_origin = true);
+
+} // namespace sstables
+
+template <>
+struct fmt::formatter<sstables::shared_sstable> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const sstables::shared_sstable& sst, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}", sstables::to_string(sst));
+    }
+};
+
+namespace std {
+
+inline std::ostream& operator<<(std::ostream& os, const sstables::shared_sstable& sst) {
+    return os << fmt::format("{}", sst);
+}
+
+} // namespace std
+
+namespace sstables {
+
+using run_id = utils::tagged_uuid<struct run_id_tag>;
+
+} // namespace sstables
+
+
+
+#include <seastar/core/enum.hh>
+#include <vector>
+#include <unordered_map>
+#include <type_traits>
+#include <concepts>
+
+// While the sstable code works with char, bytes_view works with int8_t
+// (signed char). Rather than change all the code, let's do a cast.
+static inline bytes_view to_bytes_view(const temporary_buffer<char>& b) {
+    using byte = bytes_view::value_type;
+    return bytes_view(reinterpret_cast<const byte*>(b.get()), b.size());
+}
+
+namespace sstables {
+
+template<typename T>
+concept Writer =
+    requires(T& wr, const char* data, size_t size) {
+        { wr.write(data, size) } -> std::same_as<void>;
+    };
+
+struct sample_describer_for_self_describing_concept {
+    // A describer can return any type, but we can't check any type in a concept.
+    // Pick "long" arbitrarily and check that describe_type returns long too in that case.
+    long operator()(auto&&...) const;
+};
+
+template <typename T>
+concept self_describing = requires (T& obj, sstable_version_types v, sample_describer_for_self_describing_concept d) {
+    { obj.describe_type(v, d) } -> std::same_as<long>;
+};
+
+struct commitlog_interval {
+    db::replay_position start;
+    db::replay_position end;
+};
+
+struct deletion_time {
+    int32_t local_deletion_time;
+    int64_t marked_for_delete_at;
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(local_deletion_time, marked_for_delete_at); }
+
+    bool live() const {
+        return (local_deletion_time == std::numeric_limits<int32_t>::max()) &&
+               (marked_for_delete_at == std::numeric_limits<int64_t>::min());
+    }
+
+    bool operator==(const deletion_time& d) const = default;
+    explicit operator tombstone() {
+        return !live() ? tombstone(marked_for_delete_at, gc_clock::time_point(gc_clock::duration(local_deletion_time))) : tombstone();
+    }
+    friend std::ostream& operator<<(std::ostream&, const deletion_time&);
+};
+
+struct option {
+    disk_string<uint16_t> key;
+    disk_string<uint16_t> value;
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(key, value); }
+};
+
+struct filter {
+    uint32_t hashes;
+    disk_array<uint32_t, uint64_t> buckets;
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(hashes, buckets); }
+
+    // Create an always positive filter if nothing else is specified.
+    filter() : hashes(0), buckets({}) {}
+    explicit filter(int hashes, utils::chunked_vector<uint64_t> buckets) : hashes(hashes), buckets({std::move(buckets)}) {}
+};
+
+// Do this so we don't have to copy on write time. We can just keep a reference.
+struct filter_ref {
+    uint32_t hashes;
+    disk_array_ref<uint32_t, uint64_t> buckets;
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(hashes, buckets); }
+    explicit filter_ref(int hashes, const utils::chunked_vector<uint64_t>& buckets) : hashes(hashes), buckets(buckets) {}
+};
+
+enum class indexable_element {
+    partition,
+    cell
+};
+
+inline std::ostream& operator<<(std::ostream& o, indexable_element e) {
+    o << static_cast<std::underlying_type_t<indexable_element>>(e);
+    return o;
+}
+
+class summary_entry {
+public:
+    int64_t raw_token;
+    bytes_view key;
+    uint64_t position;
+
+    explicit summary_entry(dht::token token, bytes_view key, uint64_t position)
+            : raw_token(dht::token::to_int64(token))
+            , key(key)
+            , position(position) {
+    }
+
+    key_view get_key() const {
+        return key_view{key};
+    }
+
+    dht::token get_token() const {
+        return dht::token::from_int64(raw_token);
+    }
+
+    decorated_key_view get_decorated_key() const {
+        return decorated_key_view(get_token(), get_key());
+    }
+
+    bool operator==(const summary_entry& x) const {
+        return position ==  x.position && key == x.key;
+    }
+};
+
+// Note: Sampling level is present in versions ka and higher. We ATM only support ka,
+// so it's always there. But we need to make this conditional if we ever want to support
+// other formats.
+struct summary_ka {
+    struct header {
+        // The minimum possible amount of indexes per group (sampling level)
+        uint32_t min_index_interval;
+        // The number of entries in the Summary File
+        uint32_t size;
+        // The memory to be consumed to map the whole Summary into memory.
+        uint64_t memory_size;
+        // The actual sampling level.
+        uint32_t sampling_level;
+        // The number of entries the Summary *would* have if the sampling
+        // level would be equal to min_index_interval.
+        uint32_t size_at_full_sampling;
+    } header;
+    // The position in the Summary file for each of the indexes.
+    // NOTE1 that its actual size is determined by the "size" parameter, not
+    // by its preceding size_at_full_sampling
+    // NOTE2: They are laid out in *MEMORY* order, not BE.
+    // NOTE3: The sizes in this array represent positions in the memory stream,
+    // not the file. The memory stream effectively begins after the header,
+    // so every position here has to be added of sizeof(header).
+    utils::chunked_vector<uint32_t> positions;   // can be large, so use a deque instead of a vector
+    utils::chunked_vector<summary_entry> entries;
+
+    disk_string<uint32_t> first_key;
+    disk_string<uint32_t> last_key;
+
+    // NOTE4: There is a structure written by Cassandra into the end of the Summary
+    // file, after the field last_key, that we haven't understand yet, but we know
+    // that its content isn't related to the summary itself.
+    // The structure is basically as follow:
+    // struct { disk_string<uint16_t>; uint32_t; uint64_t; disk_string<uint16_t>; }
+    // Another interesting fact about this structure is that it is apparently always
+    // filled with the same data. It's too early to judge that the data is useless.
+    // However, it was tested that Cassandra loads successfully a Summary file with
+    // this structure removed from it. Anyway, let's pay attention to it.
+
+    /*
+     * Returns total amount of memory used by the summary
+     * Similar to origin off heap size
+     */
+    uint64_t memory_footprint() const {
+        auto sz = sizeof(summary_entry) * entries.size() + sizeof(uint32_t) * positions.size() + sizeof(*this);
+        sz += first_key.value.size() + last_key.value.size();
+        for (auto& sd : _summary_data) {
+            sz += sd.size();
+        }
+        return sz;
+    }
+
+    explicit operator bool() const {
+        return entries.size();
+    }
+
+    bytes_view add_summary_data(bytes_view data) {
+        if (_summary_data.empty() || (_summary_index_pos + data.size() > _buffer_size)) {
+            _buffer_size = std::min(_buffer_size << 1, 128u << 10);
+            // Keys are 64kB max, so it might be one key may not fit in a buffer
+            _buffer_size = std::max(_buffer_size, unsigned(data.size()));
+            _summary_data.emplace_back(_buffer_size);
+            _summary_index_pos = 0;
+        }
+
+        auto ret = _summary_data.back().store_at(_summary_index_pos, data);
+        _summary_index_pos += data.size();
+        return ret;
+    }
+private:
+    class summary_data_memory {
+        unsigned _size;
+        std::unique_ptr<bytes::value_type[]> _data;
+    public:
+        summary_data_memory(unsigned size) : _size(size), _data(std::make_unique<bytes::value_type[]>(size)) {}
+        bytes_view store_at(unsigned pos, bytes_view src) {
+            auto addr = _data.get() + pos;
+            std::copy_n(src.data(), src.size(), addr);
+            return bytes_view(addr, src.size());
+        }
+        unsigned size() const {
+            return _size;
+        }
+    };
+    unsigned _buffer_size = 1 << 10;
+    std::vector<summary_data_memory> _summary_data = {};
+    unsigned _summary_index_pos = 0;
+};
+using summary = summary_ka;
+
+class file_writer;
+
+struct metadata {
+    virtual ~metadata() {}
+    virtual uint64_t serialized_size(sstable_version_types v) const = 0;
+    virtual void write(sstable_version_types v, file_writer& write) const = 0;
+};
+
+template <typename T>
+uint64_t serialized_size(sstable_version_types v, const T& object);
+
+template <self_describing T, Writer W>
+void
+write(sstable_version_types v, W& out, const T& t);
+
+// serialized_size() implementation for metadata class
+template <typename Component>
+class metadata_base : public metadata {
+public:
+    virtual uint64_t serialized_size(sstable_version_types v) const override {
+        return sstables::serialized_size(v, static_cast<const Component&>(*this));
+    }
+    virtual void write(sstable_version_types v, file_writer& writer) const override {
+        return sstables::write(v, writer, static_cast<const Component&>(*this));
+    }
+};
+
+struct validation_metadata : public metadata_base<validation_metadata> {
+    disk_string<uint16_t> partitioner;
+    double filter_chance;
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(partitioner, filter_chance); }
+};
+
+struct compaction_metadata : public metadata_base<compaction_metadata> {
+    disk_array<uint32_t, uint32_t> ancestors; // DEPRECATED, not available in sstable format mc.
+    disk_array<uint32_t, uint8_t> cardinality;
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) {
+        switch (v) {
+        case sstable_version_types::mc:
+        case sstable_version_types::md:
+        case sstable_version_types::me:
+            return f(
+                cardinality
+            );
+        case sstable_version_types::ka:
+        case sstable_version_types::la:
+            return f(
+                ancestors,
+                cardinality
+            );
+        }
+        // Should never reach here - compiler will complain if switch above does not cover all sstable versions
+        abort();
+    }
+};
+
+struct stats_metadata : public metadata_base<stats_metadata> {
+    utils::estimated_histogram estimated_partition_size;
+    utils::estimated_histogram estimated_cells_count;
+    db::replay_position position;
+    int64_t min_timestamp;
+    int64_t max_timestamp;
+    int32_t min_local_deletion_time; // 3_x only
+    int32_t max_local_deletion_time;
+    int32_t min_ttl; // 3_x only
+    int32_t max_ttl; // 3_x only
+    double compression_ratio;
+    utils::streaming_histogram estimated_tombstone_drop_time;
+    uint32_t sstable_level;
+    uint64_t repaired_at;
+    disk_array<uint32_t, disk_string<uint16_t>> min_column_names;
+    disk_array<uint32_t, disk_string<uint16_t>> max_column_names;
+    bool has_legacy_counter_shards;
+    int64_t columns_count; // 3_x only
+    int64_t rows_count; // 3_x only
+    db::replay_position commitlog_lower_bound; // 3_x only
+    disk_array<uint32_t, commitlog_interval> commitlog_intervals; // 3_x only
+    std::optional<locator::host_id> originating_host_id; // 3_11_11 and later (me format)
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) {
+        switch (v) {
+        case sstable_version_types::me:
+            return f(
+                estimated_partition_size,
+                estimated_cells_count,
+                position,
+                min_timestamp,
+                max_timestamp,
+                min_local_deletion_time,
+                max_local_deletion_time,
+                min_ttl,
+                max_ttl,
+                compression_ratio,
+                estimated_tombstone_drop_time,
+                sstable_level,
+                repaired_at,
+                min_column_names,
+                max_column_names,
+                has_legacy_counter_shards,
+                columns_count,
+                rows_count,
+                commitlog_lower_bound,
+                commitlog_intervals,
+                originating_host_id
+            );
+        case sstable_version_types::mc:
+        case sstable_version_types::md:
+            return f(
+                estimated_partition_size,
+                estimated_cells_count,
+                position,
+                min_timestamp,
+                max_timestamp,
+                min_local_deletion_time,
+                max_local_deletion_time,
+                min_ttl,
+                max_ttl,
+                compression_ratio,
+                estimated_tombstone_drop_time,
+                sstable_level,
+                repaired_at,
+                min_column_names,
+                max_column_names,
+                has_legacy_counter_shards,
+                columns_count,
+                rows_count,
+                commitlog_lower_bound,
+                commitlog_intervals
+            );
+        case sstable_version_types::ka:
+        case sstable_version_types::la:
+            return f(
+                estimated_partition_size,
+                estimated_cells_count,
+                position,
+                min_timestamp,
+                max_timestamp,
+                max_local_deletion_time,
+                compression_ratio,
+                estimated_tombstone_drop_time,
+                sstable_level,
+                repaired_at,
+                min_column_names,
+                max_column_names,
+                has_legacy_counter_shards
+            );
+        }
+        // Should never reach here - compiler will complain if switch above does not cover all sstable versions
+        abort();
+    }
+};
+
+using bytes_array_vint_size = disk_string_vint_size;
+
+struct serialization_header : public metadata_base<serialization_header> {
+    vint<uint64_t> min_timestamp_base;
+    vint<uint64_t> min_local_deletion_time_base;
+    vint<uint64_t> min_ttl_base;
+    bytes_array_vint_size pk_type_name;
+    disk_array_vint_size<bytes_array_vint_size> clustering_key_types_names;
+    struct column_desc {
+        bytes_array_vint_size name;
+        bytes_array_vint_size type_name;
+        template <typename Describer>
+        auto describe_type(sstable_version_types v, Describer f) {
+            return f(
+                name,
+                type_name
+            );
+        }
+    };
+    disk_array_vint_size<column_desc> static_columns;
+    disk_array_vint_size<column_desc> regular_columns;
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) {
+        switch (v) {
+        case sstable_version_types::mc:
+        case sstable_version_types::md:
+        case sstable_version_types::me:
+            return f(
+                min_timestamp_base,
+                min_local_deletion_time_base,
+                min_ttl_base,
+                pk_type_name,
+                clustering_key_types_names,
+                static_columns,
+                regular_columns
+            );
+        case sstable_version_types::ka:
+        case sstable_version_types::la:
+            throw std::runtime_error(
+                "Statistics is malformed: SSTable is in 2.x format but contains serialization header.");
+        }
+        // Should never reach here - compiler will complain if switch above does not cover all sstable versions
+        abort();
+    }
+
+    // mc serialization header minimum values are delta-encoded based on the default timestamp epoch times
+    // Note: following conversions rely on min_*_base.value being unsigned to prevent signed integer overflow
+    api::timestamp_type get_min_timestamp() const {
+        return static_cast<api::timestamp_type>(min_timestamp_base.value + encoding_stats::timestamp_epoch);
+    }
+
+    int64_t get_min_ttl() const {
+        return static_cast<int64_t>(min_ttl_base.value + encoding_stats::ttl_epoch);
+    }
+
+    int64_t get_min_local_deletion_time() const {
+        return static_cast<int64_t>(min_local_deletion_time_base.value + encoding_stats::deletion_time_epoch);
+    }
+};
+
+struct disk_token_bound {
+    uint8_t exclusive; // really a boolean
+    disk_string<uint16_t> token;
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(exclusive, token); }
+};
+
+struct disk_token_range {
+    disk_token_bound left;
+    disk_token_bound right;
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(left, right); }
+};
+
+// Scylla-specific sharding information.  This is a set of token
+// ranges that are spanned by this sstable.  When loading the
+// sstable, we can see which shards own data in the sstable by
+// checking each such range.
+struct sharding_metadata {
+    disk_array<uint32_t, disk_token_range> token_ranges;
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(token_ranges); }
+};
+
+// Scylla-specific list of features an sstable supports.
+enum sstable_feature : uint8_t {
+    NonCompoundPIEntries = 0,       // See #2993
+    NonCompoundRangeTombstones = 1, // See #2986
+    ShadowableTombstones = 2, // See #3885
+    CorrectStaticCompact = 3, // See #4139
+    CorrectEmptyCounters = 4, // See #4363
+    CorrectUDTsInCollections = 5, // See #6130
+    End = 6,
+};
+
+// Scylla-specific features enabled for a particular sstable.
+struct sstable_enabled_features {
+    uint64_t enabled_features;
+
+    bool is_enabled(sstable_feature f) const {
+        return enabled_features & (1 << f);
+    }
+
+    void disable(sstable_feature f) {
+        enabled_features &= ~(1<< f);
+    }
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(enabled_features); }
+
+    static sstable_enabled_features all() {
+        return sstable_enabled_features{(1 << sstable_feature::End) - 1};
+    }
+};
+
+// Numbers are found on disk, so they do matter. Also, setting their sizes of
+// that of an uint32_t is a bit wasteful, but it simplifies the code a lot
+// since we can now still use a strongly typed enum without introducing a
+// notion of "disk-size" vs "memory-size".
+enum class metadata_type : uint32_t {
+    Validation = 0,
+    Compaction = 1,
+    Stats = 2,
+    Serialization = 3,
+};
+
+enum class scylla_metadata_type : uint32_t {
+    Sharding = 1,
+    Features = 2,
+    ExtensionAttributes = 3,
+    RunIdentifier = 4,
+    LargeDataStats = 5,
+    SSTableOrigin = 6,
+    ScyllaBuildId = 7,
+    ScyllaVersion = 8,
+};
+
+// UUID is used for uniqueness across nodes, such that an imported sstable
+// will not have its run identifier conflicted with the one of a local sstable.
+struct run_identifier {
+    // UUID is used for uniqueness across nodes, such that an imported sstable
+    // will not have its run identifier conflicted with the one of a local sstable.
+    run_id id;
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(id); }
+};
+
+// Types of large data statistics.
+//
+// Note: For extensibility, never reuse an identifier,
+// only add new ones, since these are stored on stable storage.
+enum class large_data_type : uint32_t {
+    partition_size = 1,     // partition size, in bytes
+    row_size = 2,           // row size, in bytes
+    cell_size = 3,          // cell size, in bytes
+    rows_in_partition = 4,  // number of rows in a partition
+    elements_in_collection = 5,// number of elements in a collection
+};
+
+struct large_data_stats_entry {
+    uint64_t max_value;
+    uint64_t threshold;
+    uint32_t above_threshold;
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(max_value, threshold, above_threshold); }
+};
+
+struct scylla_metadata {
+    using extension_attributes = disk_hash<uint32_t, disk_string<uint32_t>, disk_string<uint32_t>>;
+    using large_data_stats = disk_hash<uint32_t, large_data_type, large_data_stats_entry>;
+    using sstable_origin = disk_string<uint32_t>;
+    using scylla_build_id = disk_string<uint32_t>;
+    using scylla_version = disk_string<uint32_t>;
+
+    disk_set_of_tagged_union<scylla_metadata_type,
+            disk_tagged_union_member<scylla_metadata_type, scylla_metadata_type::Sharding, sharding_metadata>,
+            disk_tagged_union_member<scylla_metadata_type, scylla_metadata_type::Features, sstable_enabled_features>,
+            disk_tagged_union_member<scylla_metadata_type, scylla_metadata_type::ExtensionAttributes, extension_attributes>,
+            disk_tagged_union_member<scylla_metadata_type, scylla_metadata_type::RunIdentifier, run_identifier>,
+            disk_tagged_union_member<scylla_metadata_type, scylla_metadata_type::LargeDataStats, large_data_stats>,
+            disk_tagged_union_member<scylla_metadata_type, scylla_metadata_type::SSTableOrigin, sstable_origin>,
+            disk_tagged_union_member<scylla_metadata_type, scylla_metadata_type::ScyllaBuildId, scylla_build_id>,
+            disk_tagged_union_member<scylla_metadata_type, scylla_metadata_type::ScyllaVersion, scylla_version>
+            > data;
+
+    sstable_enabled_features get_features() const {
+        auto features = data.get<scylla_metadata_type::Features, sstable_enabled_features>();
+        if (!features) {
+            return sstable_enabled_features{};
+        }
+        return *features;
+    }
+    bool has_feature(sstable_feature f) const {
+        return get_features().is_enabled(f);
+    }
+    const extension_attributes* get_extension_attributes() const {
+        return data.get<scylla_metadata_type::ExtensionAttributes, extension_attributes>();
+    }
+    extension_attributes& get_or_create_extension_attributes() {
+        auto* ext = data.get<scylla_metadata_type::ExtensionAttributes, extension_attributes>();
+        if (ext == nullptr) {
+            data.set<scylla_metadata_type::ExtensionAttributes>(extension_attributes{});
+            ext = data.get<scylla_metadata_type::ExtensionAttributes, extension_attributes>();
+        }
+        return *ext;
+    }
+    std::optional<run_id> get_optional_run_identifier() const {
+        auto* m = data.get<scylla_metadata_type::RunIdentifier, run_identifier>();
+        return m ? std::make_optional(m->id) : std::nullopt;
+    }
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(data); }
+};
+
+static constexpr int DEFAULT_CHUNK_SIZE = 65536;
+
+// checksums are generated using adler32 algorithm.
+struct checksum {
+    uint32_t chunk_size;
+    utils::chunked_vector<uint32_t> checksums;
+
+    template <typename Describer>
+    auto describe_type(sstable_version_types v, Describer f) { return f(chunk_size, checksums); }
+};
+
+}
+
+namespace std {
+
+template <>
+struct hash<sstables::metadata_type> : enum_hash<sstables::metadata_type> {};
+
+}
+
+namespace sstables {
+
+// Special value to represent expired (i.e., 'dead') liveness info
+constexpr static int64_t expired_liveness_ttl = std::numeric_limits<int32_t>::max();
+
+inline bool is_expired_liveness_ttl(int64_t ttl) {
+    return ttl == expired_liveness_ttl;
+}
+
+inline bool is_expired_liveness_ttl(gc_clock::duration ttl) {
+    return is_expired_liveness_ttl(ttl.count());
+}
+
+// Corresponding to Cassandra's NO_DELETION_TIME
+constexpr static int64_t no_deletion_time = std::numeric_limits<int32_t>::max();
+
+// Corresponding to Cassandra's MAX_DELETION_TIME
+constexpr static int64_t max_deletion_time = std::numeric_limits<int32_t>::max() - 1;
+
+inline int32_t adjusted_local_deletion_time(gc_clock::time_point local_deletion_time, bool& capped) {
+    int64_t ldt = local_deletion_time.time_since_epoch().count();
+    if (ldt <= max_deletion_time) {
+        capped = false;
+        return static_cast<int32_t>(ldt);
+    }
+    capped = true;
+    return static_cast<int32_t>(max_deletion_time);
+}
+
+struct statistics {
+    disk_array<uint32_t, std::pair<metadata_type, uint32_t>> offsets; // ordered by metadata_type
+    std::unordered_map<metadata_type, std::unique_ptr<metadata>> contents;
+};
+
+enum class column_mask : uint8_t {
+    none = 0x0,
+    deletion = 0x01,
+    expiration = 0x02,
+    counter = 0x04,
+    counter_update = 0x08,
+    range_tombstone = 0x10,
+    shadowable = 0x40
+};
+
+inline column_mask operator&(column_mask m1, column_mask m2) {
+    return column_mask(static_cast<uint8_t>(m1) & static_cast<uint8_t>(m2));
+}
+
+inline column_mask operator|(column_mask m1, column_mask m2) {
+    return column_mask(static_cast<uint8_t>(m1) | static_cast<uint8_t>(m2));
+}
+
+class unfiltered_flags_m final {
+    static constexpr uint8_t END_OF_PARTITION = 0x01u;
+    static constexpr uint8_t IS_MARKER = 0x02u;
+    static constexpr uint8_t HAS_TIMESTAMP = 0x04u;
+    static constexpr uint8_t HAS_TTL = 0x08u;
+    static constexpr uint8_t HAS_DELETION = 0x10u;
+    static constexpr uint8_t HAS_ALL_COLUMNS = 0x20u;
+    static constexpr uint8_t HAS_COMPLEX_DELETION = 0x40u;
+    static constexpr uint8_t HAS_EXTENDED_FLAGS = 0x80u;
+    uint8_t _flags;
+    bool check_flag(const uint8_t flag) const {
+        return (_flags & flag) != 0u;
+    }
+public:
+    explicit unfiltered_flags_m(uint8_t flags) : _flags(flags) { }
+    bool is_end_of_partition() const {
+        return check_flag(END_OF_PARTITION);
+    }
+    bool is_range_tombstone() const {
+        return check_flag(IS_MARKER);
+    }
+    bool has_extended_flags() const {
+        return check_flag(HAS_EXTENDED_FLAGS);
+    }
+    bool has_timestamp() const {
+        return check_flag(HAS_TIMESTAMP);
+    }
+    bool has_ttl() const {
+        return check_flag(HAS_TTL);
+    }
+    bool has_deletion() const {
+        return check_flag(HAS_DELETION);
+    }
+    bool has_all_columns() const {
+        return check_flag(HAS_ALL_COLUMNS);
+    }
+    bool has_complex_deletion() const {
+        return check_flag(HAS_COMPLEX_DELETION);
+    }
+};
+
+class unfiltered_extended_flags_m final {
+    static const uint8_t IS_STATIC = 0x01u;
+    // This flag is used by Cassandra but not supported by Scylla because
+    // Scylla's representation of shadowable tombstones is different.
+    // We only check it on reading and error out if set but never set ourselves.
+    static const uint8_t HAS_CASSANDRA_SHADOWABLE_DELETION = 0x02u;
+    // This flag is Scylla-specific and used for writing shadowable tombstones.
+    static const uint8_t HAS_SCYLLA_SHADOWABLE_DELETION = 0x80u;
+    uint8_t _flags;
+    bool check_flag(const uint8_t flag) const {
+        return (_flags & flag) != 0u;
+    }
+public:
+    explicit unfiltered_extended_flags_m(uint8_t flags) : _flags(flags) { }
+    bool is_static() const {
+        return check_flag(IS_STATIC);
+    }
+    bool has_cassandra_shadowable_deletion() const {
+        return check_flag(HAS_CASSANDRA_SHADOWABLE_DELETION);
+    }
+    bool has_scylla_shadowable_deletion() const {
+        return check_flag(HAS_SCYLLA_SHADOWABLE_DELETION);
+    }
+};
+
+class column_flags_m final {
+    static const uint8_t IS_DELETED = 0x01u;
+    static const uint8_t IS_EXPIRING = 0x02u;
+    static const uint8_t HAS_EMPTY_VALUE = 0x04u;
+    static const uint8_t USE_ROW_TIMESTAMP = 0x08u;
+    static const uint8_t USE_ROW_TTL = 0x10u;
+    uint8_t _flags;
+    bool check_flag(const uint8_t flag) const {
+        return (_flags & flag) != 0u;
+    }
+public:
+    explicit column_flags_m(uint8_t flags) : _flags(flags) { }
+    bool use_row_timestamp() const {
+        return check_flag(USE_ROW_TIMESTAMP);
+    }
+    bool use_row_ttl() const {
+        return check_flag(USE_ROW_TTL);
+    }
+    bool is_deleted() const {
+        return check_flag(IS_DELETED);
+    }
+    bool is_expiring() const {
+        return check_flag(IS_EXPIRING);
+    }
+    bool has_value() const {
+        return !check_flag(HAS_EMPTY_VALUE);
+    }
+};
+}
+
+#include <map>
+#include <memory>
+#include <iosfwd>
+
+class frozen_mutation;
+class row_cache;
+
+namespace bi = boost::intrusive;
+
+namespace replica {
+
+class memtable_entry {
+    schema_ptr _schema;
+    dht::decorated_key _key;
+    partition_entry _pe;
+    struct {
+        bool _head : 1;
+        bool _tail : 1;
+        bool _train : 1;
+    } _flags{};
+public:
+    bool is_head() const noexcept { return _flags._head; }
+    void set_head(bool v) noexcept { _flags._head = v; }
+    bool is_tail() const noexcept { return _flags._tail; }
+    void set_tail(bool v) noexcept { _flags._tail = v; }
+    bool with_train() const noexcept { return _flags._train; }
+    void set_train(bool v) noexcept { _flags._train = v; }
+
+    friend class memtable;
+
+    memtable_entry(schema_ptr s, dht::decorated_key key, mutation_partition p)
+        : _schema(std::move(s))
+        , _key(std::move(key))
+        , _pe(*_schema, std::move(p))
+    { }
+
+    memtable_entry(memtable_entry&& o) noexcept;
+    // Frees elements of the entry in batches.
+    // Returns stop_iteration::yes iff there are no more elements to free.
+    stop_iteration clear_gently() noexcept;
+    const dht::decorated_key& key() const { return _key; }
+    dht::decorated_key& key() { return _key; }
+    const partition_entry& partition() const { return _pe; }
+    partition_entry& partition() { return _pe; }
+    const schema_ptr& schema() const { return _schema; }
+    schema_ptr& schema() { return _schema; }
+    partition_snapshot_ptr snapshot(memtable& mtbl);
+
+    // Makes the entry conform to given schema.
+    // Must be called under allocating section of the region which owns the entry.
+    void upgrade_schema(const schema_ptr&, mutation_cleaner&);
+
+    size_t external_memory_usage_without_rows() const {
+        return _key.key().external_memory_usage();
+    }
+
+    size_t object_memory_size(allocation_strategy& allocator);
+
+    size_t size_in_allocator_without_rows(allocation_strategy& allocator) {
+        return object_memory_size(allocator) + external_memory_usage_without_rows();
+    }
+
+    size_t size_in_allocator(allocation_strategy& allocator) {
+        auto size = size_in_allocator_without_rows(allocator);
+        for (auto&& v : _pe.versions()) {
+            size += v.size_in_allocator(*_schema, allocator);
+        }
+        return size;
+    }
+
+    friend dht::ring_position_view ring_position_view_to_compare(const memtable_entry& mt) { return mt._key; }
+    friend std::ostream& operator<<(std::ostream&, const memtable_entry&);
+};
+
+}
+
+namespace replica {
+
+class dirty_memory_manager;
+
+struct table_stats;
+
+// Managed by lw_shared_ptr<>.
+class memtable final : public enable_lw_shared_from_this<memtable>, private dirty_memory_manager_logalloc::size_tracked_region {
+public:
+    using partitions_type = double_decker<int64_t, memtable_entry,
+                            dht::raw_token_less_comparator, dht::ring_position_comparator,
+                            16, bplus::key_search::linear>;
+private:
+    dirty_memory_manager& _dirty_mgr;
+    mutation_cleaner _cleaner;
+    memtable_list *_memtable_list;
+    schema_ptr _schema;
+    logalloc::allocating_section _read_section;
+    logalloc::allocating_section _allocating_section;
+    partitions_type partitions;
+    size_t nr_partitions = 0;
+    db::replay_position _replay_position;
+    db::rp_set _rp_set;
+    // mutation source to which reads fall-back after mark_flushed()
+    // so that memtable contents can be moved away while there are
+    // still active readers. This is needed for this mutation_source
+    // to be monotonic (not loose writes). Monotonicity of each
+    // mutation_source is necessary for the combined mutation source to be
+    // monotonic. That combined source in this case is cache + memtable.
+    mutation_source_opt _underlying;
+    uint64_t _flushed_memory = 0;
+    bool _merged_into_cache = false;
+    replica::table_stats& _table_stats;
+
+    class memtable_encoding_stats_collector : public encoding_stats_collector {
+    private:
+        min_max_tracker<api::timestamp_type> min_max_timestamp;
+
+        void update_timestamp(api::timestamp_type ts) noexcept;
+
+    public:
+        memtable_encoding_stats_collector() noexcept;
+        void update(atomic_cell_view cell) noexcept;
+
+        void update(tombstone tomb) noexcept;
+
+        void update(const ::schema& s, const row& r, column_kind kind);
+        void update(const range_tombstone& rt) noexcept;
+        void update(const row_marker& marker) noexcept;
+        void update(const ::schema& s, const deletable_row& dr);
+        void update(const ::schema& s, const mutation_partition& mp);
+
+        api::timestamp_type get_min_timestamp() const noexcept {
+            return min_max_timestamp.min();
+        }
+
+        api::timestamp_type get_max_timestamp() const noexcept {
+            return min_max_timestamp.max();
+        }
+    } _stats_collector;
+
+    void update(db::rp_handle&&);
+    friend class ::row_cache;
+    friend class memtable_entry;
+    friend class flush_reader;
+    friend class flush_memory_accounter;
+    friend class partition_snapshot_read_accounter;
+private:
+    boost::iterator_range<partitions_type::const_iterator> slice(const dht::partition_range& r) const;
+    partition_entry& find_or_create_partition(const dht::decorated_key& key);
+    partition_entry& find_or_create_partition_slow(partition_key_view key);
+    void upgrade_entry(memtable_entry&);
+    void add_flushed_memory(uint64_t);
+    void remove_flushed_memory(uint64_t);
+    void clear() noexcept;
+    uint64_t dirty_size() const;
+public:
+    explicit memtable(schema_ptr schema, dirty_memory_manager&, replica::table_stats& table_stats, memtable_list *memtable_list = nullptr,
+            seastar::scheduling_group compaction_scheduling_group = seastar::current_scheduling_group());
+    // Used for testing that want to control the flush process.
+    explicit memtable(schema_ptr schema);
+    ~memtable();
+    // Clears this memtable gradually without consuming the whole CPU.
+    // Never resolves with a failed future.
+    future<> clear_gently() noexcept;
+    schema_ptr schema() const noexcept { return _schema; }
+    void set_schema(schema_ptr) noexcept;
+    future<> apply(memtable&, reader_permit);
+    // Applies mutation to this memtable.
+    // The mutation is upgraded to current schema.
+    void apply(const mutation& m, db::rp_handle&& = {});
+    // The mutation is upgraded to current schema.
+    void apply(const frozen_mutation& m, const schema_ptr& m_schema, db::rp_handle&& = {});
+    void evict_entry(memtable_entry& e, mutation_cleaner& cleaner) noexcept;
+
+    static memtable& from_region(logalloc::region& r) noexcept {
+        return static_cast<memtable&>(r);
+    }
+
+    const logalloc::region& region() const noexcept {
+        return *this;
+    }
+
+    logalloc::region& region() noexcept {
+        return *this;
+    }
+
+    encoding_stats get_encoding_stats() const noexcept {
+        return _stats_collector.get();
+    }
+
+    api::timestamp_type get_min_timestamp() const noexcept {
+        return _stats_collector.get_min_timestamp();
+    }
+
+    api::timestamp_type get_max_timestamp() const noexcept {
+        return _stats_collector.get_max_timestamp();
+    }
+
+    mutation_cleaner& cleaner() noexcept {
+        return _cleaner;
+    }
+public:
+    memtable_list* get_memtable_list() noexcept {
+        return _memtable_list;
+    }
+
+    size_t partition_count() const noexcept { return nr_partitions; }
+    logalloc::occupancy_stats occupancy() const noexcept;
+
+    // Creates a reader of data in this memtable for given partition range.
+    //
+    // Live readers share ownership of the memtable instance, so caller
+    // doesn't need to ensure that memtable remains live.
+    //
+    // The 'range' parameter must be live as long as the reader is being used
+    //
+    // Mutations returned by the reader will all have given schema.
+    flat_mutation_reader_v2 make_flat_reader(schema_ptr s,
+                                             reader_permit permit,
+                                             const dht::partition_range& range,
+                                             const query::partition_slice& slice,
+                                             const io_priority_class& pc = default_priority_class(),
+                                             tracing::trace_state_ptr trace_state_ptr = nullptr,
+                                             streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
+                                             mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes) {
+        if (auto reader_opt = make_flat_reader_opt(s, permit, range, slice, pc, std::move(trace_state_ptr), fwd, fwd_mr)) {
+            return std::move(*reader_opt);
+        }
+        [[unlikely]] return make_empty_flat_reader_v2(std::move(s), std::move(permit));
+    }
+    // Same as make_flat_reader, but returns an empty optional instead of a no-op reader when there is nothing to
+    // read. This is an optimization.
+    flat_mutation_reader_v2_opt make_flat_reader_opt(schema_ptr,
+                                          reader_permit permit,
+                                          const dht::partition_range& range,
+                                          const query::partition_slice& slice,
+                                          const io_priority_class& pc = default_priority_class(),
+                                          tracing::trace_state_ptr trace_state_ptr = nullptr,
+                                          streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
+                                          mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes);
+
+    flat_mutation_reader_v2 make_flat_reader(schema_ptr s,
+                                             reader_permit permit,
+                                             const dht::partition_range& range = query::full_partition_range) {
+        auto& full_slice = s->full_slice();
+        return make_flat_reader(s, std::move(permit), range, full_slice);
+    }
+
+    flat_mutation_reader_v2 make_flush_reader(schema_ptr, reader_permit permit, const io_priority_class& pc);
+
+    mutation_source as_data_source();
+
+    bool empty() const noexcept { return partitions.empty(); }
+    void mark_flushed(mutation_source) noexcept;
+    bool is_flushed() const noexcept;
+    void on_detach_from_region_group() noexcept;
+    void revert_flushed_memory() noexcept;
+
+    const db::replay_position& replay_position() const noexcept {
+        return _replay_position;
+    }
+    /**
+     * Returns the current rp_set, and resets the
+     * stored one to empty. Only used for flushing
+     * purposes, to one-shot report discarded rp:s
+     * to commitlog
+     */
+    db::rp_set get_and_discard_rp_set() noexcept {
+        return std::exchange(_rp_set, {});
+    }
+    friend class iterator_reader;
+
+    dirty_memory_manager& get_dirty_memory_manager() noexcept {
+        return _dirty_mgr;
+    }
+
+    friend std::ostream& operator<<(std::ostream&, memtable&);
+};
+
+}
+
+
+
+
+
+
 #include "real_dirty_memory_accounter.hh"
 #include "replica/database.hh"
 #include "reversibly_mergeable.hh"

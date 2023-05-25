@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "replica/memtable.hh"
 #include "row_cache.hh"
 #include "replica/dirty_memory_manager.hh"
 
