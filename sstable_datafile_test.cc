@@ -63254,12 +63254,4748 @@ future<mutation_opt> counter_write_query(schema_ptr, const mutation_source&, rea
 #include <net/if.h>
 #include <optional>
 #include <ostream>
-#include "partition_builder.hh"
-#include "partition_slice_builder.hh"
-#include "partition_snapshot_row_cursor.hh"
-#include "partition_version.hh"
-#include "query-request.hh"
-#include "query-result.hh"
+
+
+// Partition visitor which builds mutation_partition corresponding to the data its fed with.
+class partition_builder final : public mutation_partition_visitor {
+private:
+    const schema& _schema;
+    mutation_partition& _partition;
+    deletable_row* _current_row;
+public:
+    // @p will hold the result of building.
+    // @p must be empty.
+    partition_builder(const schema& s, mutation_partition& p)
+        : _schema(s)
+        , _partition(p)
+    { }
+
+    virtual void accept_partition_tombstone(tombstone t) override {
+        _partition.apply(t);
+    }
+
+    virtual void accept_static_cell(column_id id, atomic_cell_view cell) override {
+        auto& cdef = _schema.static_column_at(id);
+        accept_static_cell(id, atomic_cell(*cdef.type, cell));
+    }
+
+    void accept_static_cell(column_id id, atomic_cell&& cell) {
+        row& r = _partition.static_row().maybe_create();
+        r.append_cell(id, atomic_cell_or_collection(std::move(cell)));
+    }
+
+    virtual void accept_static_cell(column_id id, collection_mutation_view collection) override {
+        row& r = _partition.static_row().maybe_create();
+        r.append_cell(id, collection_mutation(*_schema.static_column_at(id).type, std::move(collection)));
+    }
+
+    virtual void accept_row_tombstone(const range_tombstone& rt) override {
+        _partition.apply_row_tombstone(_schema, rt);
+    }
+
+    virtual void accept_row(position_in_partition_view key, const row_tombstone& deleted_at, const row_marker& rm, is_dummy dummy, is_continuous continuous) override {
+        deletable_row& r = _partition.append_clustered_row(_schema, key, dummy, continuous);
+        r.apply(rm);
+        r.apply(deleted_at);
+        _current_row = &r;
+    }
+
+    virtual void accept_row_cell(column_id id, atomic_cell_view cell) override {
+        auto& cdef = _schema.regular_column_at(id);
+        accept_row_cell(id, atomic_cell(*cdef.type, cell));
+    }
+
+    void accept_row_cell(column_id id, atomic_cell&& cell) {
+        row& r = _current_row->cells();
+        r.append_cell(id, std::move(cell));
+    }
+
+    virtual void accept_row_cell(column_id id, collection_mutation_view collection) override {
+        row& r = _current_row->cells();
+        r.append_cell(id, collection_mutation(*_schema.regular_column_at(id).type, std::move(collection)));
+    }
+};
+
+
+
+//
+// Fluent builder for query::partition_slice.
+//
+// Selects everything by default, unless restricted. Each property can be
+// restricted separately. For example, by default all static columns are
+// selected, but if with_static_column() is called then only that column will
+// be included. Still, all regular columns and the whole clustering range will
+// be selected (unless restricted).
+//
+class partition_slice_builder {
+    std::optional<query::column_id_vector> _regular_columns;
+    std::optional<query::column_id_vector> _static_columns;
+    std::optional<std::vector<query::clustering_range>> _row_ranges;
+    std::unique_ptr<query::specific_ranges> _specific_ranges;
+    const schema& _schema;
+    query::partition_slice::option_set _options;
+    uint64_t _partition_row_limit = query::partition_max_rows;
+public:
+    partition_slice_builder(const schema& schema);
+    partition_slice_builder(const schema& schema, query::partition_slice slice);
+
+    partition_slice_builder& with_static_column(bytes name);
+    partition_slice_builder& with_no_static_columns();
+    partition_slice_builder& with_regular_column(bytes name);
+    partition_slice_builder& with_no_regular_columns();
+    partition_slice_builder& with_range(query::clustering_range range);
+    partition_slice_builder& with_ranges(std::vector<query::clustering_range>);
+    // noop if no ranges have been set yet
+    partition_slice_builder& mutate_ranges(std::function<void(std::vector<query::clustering_range>&)>);
+    // noop if no specific ranges have been set yet
+    partition_slice_builder& mutate_specific_ranges(std::function<void(query::specific_ranges&)>);
+    partition_slice_builder& without_partition_key_columns();
+    partition_slice_builder& without_clustering_key_columns();
+    partition_slice_builder& reversed();
+    template <query::partition_slice::option OPTION>
+    partition_slice_builder& with_option() {
+        _options.set<OPTION>();
+        return *this;
+    }
+    template <query::partition_slice::option OPTION>
+    partition_slice_builder& with_option_toggled() {
+        _options.toggle<OPTION>();
+        return *this;
+    }
+
+    partition_slice_builder& with_partition_row_limit(uint64_t limit);
+
+    query::partition_slice build();
+};
+
+
+#include <seastar/core/future.hh>
+#include <seastar/core/gate.hh>
+#include <seastar/core/shared_ptr.hh>
+
+namespace utils {
+
+// Synchronizer which allows to track and wait for asynchronous operations
+// which were in progress at the time of wait initiation.
+class phased_barrier {
+public:
+    using phase_type = uint64_t;
+private:
+    using gate = seastar::gate;
+    lw_shared_ptr<gate> _gate;
+    phase_type _phase;
+public:
+    phased_barrier()
+        : _gate(make_lw_shared<gate>())
+        , _phase(0)
+    { }
+
+    class operation {
+        lw_shared_ptr<gate> _gate;
+    public:
+        operation() : _gate() {}
+        operation(lw_shared_ptr<gate> g) : _gate(std::move(g)) {}
+        operation(const operation&) = delete;
+        operation(operation&&) = default;
+        operation& operator=(operation&& o) noexcept {
+            if (this != &o) {
+                this->~operation();
+                new (this) operation(std::move(o));
+            }
+            return *this;
+        }
+        ~operation() {
+            if (_gate) {
+                _gate->leave();
+            }
+        }
+    };
+
+    // Starts new operation. The operation ends when the "operation" object is destroyed.
+    // The operation may last longer than the life time of the phased_barrier.
+    operation start() {
+        _gate->enter();
+        return { _gate };
+    }
+
+    // Starts a new phase and waits for all operations started in any of the earlier phases.
+    // It is fine to start multiple awaits in parallel.
+    // Cannot fail.
+    future<> advance_and_await() noexcept {
+        auto new_gate = [] {
+            seastar::memory::scoped_critical_alloc_section _;
+            return make_lw_shared<gate>();
+        }();
+        ++_phase;
+        auto old_gate = std::exchange(_gate, std::move(new_gate));
+        return old_gate->close().then([old_gate, op = start()] {});
+    }
+
+    // Returns current phase number. The smallest value returned is 0.
+    phase_type phase() const {
+        return _phase;
+    }
+
+    // Number of operations in current phase.
+    size_t operations_in_progress() const {
+        return _gate->get_count();
+    }
+};
+
+}
+
+#include <boost/intrusive/parent_from_member.hpp>
+#include <seastar/util/defer.hh>
+#include <cassert>
+
+namespace bplus {
+
+enum class with_debug { no, yes };
+
+/*
+ * Linear search in a sorted array of keys slightly beats the
+ * binary one on small sizes. For debugging purposes both methods
+ * should be used (and the result must coincide).
+ */
+enum class key_search { linear, binary, both };
+
+/*
+ * The less-comparator can be any, but in trivial case when it is
+ * literally 'a < b' it may define the conversion of a lookup Key
+ * into a 64-bit integer type. Then the intra-node keys scan will
+ * use simd instructions.
+ */
+
+template <typename Key, typename Less>
+concept SimpleLessCompare = requires (Less l, Key k) {
+    { l.simplify_key(k) } noexcept -> std::same_as<int64_t>;
+};
+
+/*
+ * This wrapper prevents the value from being default-constructed
+ * when its container is created. The intended usage is to wrap
+ * elements of static arrays or containers with .emplace() methods
+ * that can live some time without the value in it.
+ *
+ * Similarly, the value is _not_ automatically destructed when this
+ * thing is, so ~Value() must be called by hand. For this there is the
+ * .remove() method and two helpers for common cases -- std::move-ing
+ * the value into another maybe-location (.emplace(maybe&&)) and
+ * constructing the new in place of the existing one (.replace(args...))
+ */
+template <typename Value, typename Less>
+union maybe_key {
+    Value v;
+
+    /*
+     * When using simple lesser the avx searcher needs the unused keys
+     * to be set to minimal value (see comment in array_search_gt() why),
+     * so the default constructor and reset() need special implementation
+     * for this case
+     */
+
+    template <typename L = Less>
+    requires (!SimpleLessCompare<Value, L>)
+    maybe_key() noexcept {}
+
+    template <typename L = Less>
+    requires (!SimpleLessCompare<Value, L>)
+    void reset() noexcept { v.~Value(); }
+
+    template <typename L = Less>
+    requires (SimpleLessCompare<Value, L>)
+    maybe_key() noexcept : v(utils::simple_key_unused_value) {}
+
+    template <typename L = Less>
+    requires (SimpleLessCompare<Value, L>)
+    void reset() noexcept { v = utils::simple_key_unused_value; }
+
+    ~maybe_key() {}
+    maybe_key(const maybe_key&) = delete;
+    maybe_key(maybe_key&&) = delete;
+
+    /*
+     * Constructs the value inside the empty maybe wrapper.
+     */
+    template <typename... Args>
+    void emplace(Args&&... args) noexcept {
+        new (&v) Value (std::forward<Args>(args)...);
+    }
+
+    /*
+     * The special-case handling of moving some other alive maybe-value.
+     * Calls the source destructor after the move.
+     */
+    void emplace(maybe_key&& other) noexcept {
+        new (&v) Value(std::move(other.v));
+        other.reset();
+    }
+
+    /*
+     * Similar to emplace, but to be used on the alive maybe.
+     * Calls the destructor on it before constructing the new value.
+     */
+    template <typename... Args>
+    void replace(Args&&... args) noexcept {
+        reset();
+        emplace(std::forward<Args>(args)...);
+    }
+
+    void replace(maybe_key&& other) = delete; // not to be called by chance
+};
+
+// For .{do_something_with_data}_and_dispose methods below
+template <typename T>
+void default_dispose(T* value) noexcept { }
+
+/*
+ * Helper to explicitly capture all keys copying.
+ * Check test_key for more information.
+ */
+template <typename Key>
+requires std::is_nothrow_copy_constructible_v<Key>
+Key copy_key(const Key& other) noexcept {
+    return Key(other);
+}
+
+/*
+ * Consider a small 2-level tree like this
+ *
+ *        [ . 5 . ]
+ *          |   |
+ *   +------+   +-----+
+ *   |                |
+ *   [ 1 . 2 . 3 . ]  [ 5 . 6 . 7 . ]
+ *
+ * And we remove key 5 from it. First -- the key is removed
+ * from the leaf entry
+ *
+ *        [ . 5 . ]
+ *          |   |
+ *   +------+   +-----+
+ *   |                |
+ *   [ 1 . 2 . 3 . ]  [ 6 . 7. ]
+ *
+ * At this point we have a choice -- whether or not to update
+ * the separation key on the parent (root). Strictly speaking,
+ * the whole tree is correct now -- all the keys on the right
+ * are greater-or-equal than their separation key, though the
+ * "equal" never happens.
+ *
+ * This can be problematic if the keys are stored on data nodes
+ * and are referenced from the (non-)leaf nodes. In this case
+ * the separation key must be updated to point to some real key
+ * in its sub-tree.
+ *
+ *        [ . 6 . ]  <--- this key updated
+ *          |   |
+ *   +------+   +-----+
+ *   |                |
+ *   [ 1 . 2 . 3 . ]  [ 6 . 7. ]
+ *
+ * As this update takes some time, this behaviour is tunable.
+ *
+ */
+constexpr bool strict_separation_key = true;
+
+/*
+ * This is for testing, validator will be everybody's friend
+ * to have rights to check if the tree is internally correct.
+ */
+template <typename Key, typename T, typename Less, size_t NodeSize> class validator;
+template <with_debug Debug> class statistics;
+
+template <typename Key, typename T, typename Less, size_t NodeSize, key_search Search, with_debug Debug> class node;
+template <typename Key, typename T, typename Less, size_t NodeSize, key_search Search, with_debug Debug> class data;
+
+/*
+ * The tree itself.
+ * Equipped with O(1) (with little constant) begin() and end()
+ * and the iterator, that scans through sorted keys and is not
+ * invalidated on insert/remove.
+ *
+ * The NodeSize parameter describes the amount of keys to be
+ * held on each node. Inner nodes will thus have N+1 sub-trees,
+ * leaf nodes will have N data pointers.
+ */
+
+template <typename T, typename Key>
+concept CanGetKeyFromValue = requires (T val) {
+    { val.key() } -> std::same_as<Key>;
+};
+
+struct stats {
+    unsigned long nodes;
+    std::vector<unsigned long> nodes_filled;
+    unsigned long leaves;
+    std::vector<unsigned long> leaves_filled;
+    unsigned long datas;
+};
+
+template <typename Key, typename T, typename Less, size_t NodeSize,
+            key_search Search = key_search::binary, with_debug Debug = with_debug::no>
+requires LessNothrowComparable<Key, Key, Less> &&
+        std::is_nothrow_move_constructible_v<Key> &&
+        std::is_nothrow_move_constructible_v<T>
+class tree {
+public:
+    class iterator;
+    class const_iterator;
+
+    friend class validator<Key, T, Less, NodeSize>;
+    friend class node<Key, T, Less, NodeSize, Search, Debug>;
+
+    // Sanity not to allow slow key-search in non-debug mode
+    static_assert(Debug == with_debug::yes || Search != key_search::both);
+
+    using node = class node<Key, T, Less, NodeSize, Search, Debug>;
+    using data = class data<Key, T, Less, NodeSize, Search, Debug>;
+    using kid_index = typename node::kid_index;
+
+private:
+
+    node* _root = nullptr;
+    node* _left = nullptr;
+    node* _right = nullptr;
+    [[no_unique_address]] Less _less;
+
+    template <typename K>
+    node& find_leaf_for(const K& k) const noexcept {
+        node* cur = _root;
+
+        while (!cur->is_leaf()) {
+            kid_index i = cur->index_for(k, _less);
+            cur = cur->_kids[i].n;
+        }
+
+        return *cur;
+    }
+
+    void maybe_init_empty_tree() {
+        if (_root != nullptr) {
+            return;
+        }
+
+        node* n = node::create();
+        n->_flags |= node::NODE_LEAF | node::NODE_ROOT | node::NODE_RIGHTMOST | node::NODE_LEFTMOST;
+        do_set_root(n);
+        do_set_left(n);
+        do_set_right(n);
+    }
+
+    node* left_leaf_slow() const noexcept {
+        node* cur = _root;
+        while (!cur->is_leaf()) {
+            cur = cur->_kids[0].n;
+        }
+        return cur;
+    }
+
+    node* right_leaf_slow() const noexcept {
+        node* cur = _root;
+        while (!cur->is_leaf()) {
+            cur = cur->_kids[cur->_num_keys].n;
+        }
+        return cur;
+    }
+
+    template <typename K>
+    requires LessNothrowComparable<K, Key, Less>
+    const_iterator get_bound(const K& k, bool upper, bool& match) const noexcept {
+        match = false;
+        if (empty()) {
+            return end();
+        }
+
+        node& n = find_leaf_for(k);
+        kid_index i = n.index_for(k, _less);
+
+        /*
+         * Element at i (key at i - 1) is less or equal to the k,
+         * the next element is greater. Mind corner cases.
+         */
+
+        if (i == 0) {
+            assert(n.is_leftmost());
+            return begin();
+        } else if (i <= n._num_keys) {
+            const_iterator cur = const_iterator(n._kids[i].d, i);
+            if (upper || _less(n._keys[i - 1].v, k)) {
+                cur++;
+            } else {
+                match = true;
+            }
+
+            return cur;
+        } else {
+            assert(n.is_rightmost());
+            return end();
+        }
+    }
+
+    template <typename K>
+    iterator get_bound(const K& k, bool upper, bool& match) noexcept {
+        return iterator(const_cast<const tree*>(this)->get_bound(k, upper, match));
+    }
+
+public:
+
+    tree(const tree& other) = delete;
+    const tree& operator=(const tree& other) = delete;
+    tree& operator=(tree&& other) = delete;
+
+    explicit tree(Less less) noexcept : _less(less) { }
+    ~tree() { clear(); }
+
+    Less less() const noexcept { return _less; }
+
+    tree(tree&& other) noexcept : _less(std::move(other._less)) {
+        if (other._root) {
+            do_set_root(other._root);
+            do_set_left(other._left);
+            do_set_right(other._right);
+
+            other._root = nullptr;
+            other._left = nullptr;
+            other._right = nullptr;
+        }
+    }
+
+    // XXX -- this uses linear scan over the leaf nodes
+    size_t size_slow() const noexcept {
+        if (_root == nullptr) {
+            return 0;
+        }
+
+        size_t ret = 0;
+        const node* leaf = _left;
+        while (1) {
+            assert(leaf->is_leaf());
+            ret += leaf->_num_keys;
+            if (leaf == _right) {
+                break;
+            }
+            leaf = leaf->get_next();
+        }
+
+        return ret;
+    }
+
+    // Returns result that is equal (both not less than each other)
+    template <typename K = Key>
+    requires LessNothrowComparable<K, Key, Less>
+    const_iterator find(const K& k) const noexcept {
+        if (empty()) {
+            return end();
+        }
+
+        node& n = find_leaf_for(k);
+        kid_index i = n.index_for(k, _less);
+
+        if (i >= 1 && !_less(n._keys[i - 1].v, k)) {
+            return const_iterator(n._kids[i].d, i);
+        } else {
+            return end();
+        }
+    }
+
+    template <typename K = Key>
+    requires LessNothrowComparable<K, Key, Less>
+    iterator find(const K& k) noexcept {
+        return iterator(const_cast<const tree*>(this)->find(k));
+    }
+
+    // Returns the least x out of those !less(x, k)
+    template <typename K = Key>
+    iterator lower_bound(const K& k) noexcept {
+        bool match;
+        return get_bound(k, false, match);
+    }
+
+    template <typename K = Key>
+    const_iterator lower_bound(const K& k) const noexcept {
+        bool match;
+        return get_bound(k, false, match);
+    }
+
+    template <typename K = Key>
+    iterator lower_bound(const K& k, bool& match) noexcept {
+        return get_bound(k, false, match);
+    }
+
+    template <typename K = Key>
+    const_iterator lower_bound(const K& k, bool& match) const noexcept {
+        return get_bound(k, false, match);
+    }
+
+    // Returns the least x out of those less(k, x)
+    template <typename K = Key>
+    iterator upper_bound(const K& k) noexcept {
+        bool match;
+        return get_bound(k, true, match);
+    }
+
+    template <typename K = Key>
+    const_iterator upper_bound(const K& k) const noexcept {
+        bool match;
+        return get_bound(k, true, match);
+    }
+
+    /*
+     * Constructs the element with key k inside the tree and returns
+     * iterator on it. If the key already exists -- just returns the
+     * iterator on it and sets the .second to false.
+     */
+    template <typename... Args>
+    std::pair<iterator, bool> emplace(Key k, Args&&... args) {
+        maybe_init_empty_tree();
+
+        node& n = find_leaf_for(k);
+        kid_index i = n.index_for(k, _less);
+
+        if (i >= 1 && !_less(n._keys[i - 1].v, k)) {
+            // Direct hit
+            return std::pair(iterator(n._kids[i].d, i), false);
+        }
+
+        data* d = data::create(std::forward<Args>(args)...);
+        auto x = seastar::defer([&d] { data::destroy(*d, default_dispose<T>); });
+        n.insert(i, std::move(k), d, _less);
+        assert(d->attached());
+        x.cancel();
+        return std::pair(iterator(d, i + 1), true);
+    }
+
+    template <typename Func>
+    requires Disposer<Func, T>
+    iterator erase_and_dispose(const Key& k, Func&& disp) noexcept {
+        maybe_init_empty_tree();
+
+        node& n = find_leaf_for(k);
+
+        data* d;
+        kid_index i = n.index_for(k, _less);
+
+        if (i == 0) {
+            return end();
+        }
+
+        assert(n._num_keys > 0);
+
+        if (_less(n._keys[i - 1].v, k)) {
+            return end();
+        }
+
+        d = n._kids[i].d;
+        iterator it(d, i);
+        it++;
+
+        n.remove(i, _less);
+
+        data::destroy(*d, disp);
+        return it;
+    }
+
+    template <typename Func>
+    requires Disposer<Func, T>
+    iterator erase_and_dispose(iterator from, iterator to, Func&& disp) noexcept {
+        /*
+         * FIXME this is dog slow k*logN algo, need k+logN one
+         */
+        while (from != to) {
+            from = from.erase_and_dispose(disp, _less);
+        }
+
+        return to;
+    }
+
+    template <typename... Args>
+    iterator erase(Args&&... args) noexcept { return erase_and_dispose(std::forward<Args>(args)..., default_dispose<T>); }
+
+    template <typename Func>
+    requires Disposer<Func, T>
+    void clear_and_dispose(Func&& disp) noexcept {
+        if (_root != nullptr) {
+            _root->clear(
+                [&disp] (data* d) noexcept { data::destroy(*d, disp); },
+                [] (node* n) noexcept { node::destroy(*n); }
+            );
+
+            node::destroy(*_root);
+            _root = nullptr;
+            _left = nullptr;
+            _right = nullptr;
+        }
+    }
+
+    void clear() noexcept { clear_and_dispose(default_dispose<T>); }
+
+private:
+    void do_set_left(node *n) noexcept {
+        assert(n->is_leftmost());
+        _left = n;
+        n->_kids[0]._leftmost_tree = this;
+    }
+
+    void do_set_right(node *n) noexcept {
+        assert(n->is_rightmost());
+        _right = n;
+        n->_rightmost_tree = this;
+    }
+
+    void do_set_root(node *n) noexcept {
+        assert(n->is_root());
+        n->_root_tree = this;
+        _root = n;
+    }
+
+public:
+    /*
+     * Iterator. Scans the datas in the sorted-by-key order.
+     * Is not invalidated by emplace/erase-s of other elements.
+     * Move constructors may turn the _idx invalid, but the
+     * .revalidate() method makes it good again.
+     */
+    template <bool Const>
+    class iterator_base {
+    protected:
+        using tree_ptr = std::conditional_t<Const, const tree*, tree*>;
+        using data_ptr = std::conditional_t<Const, const data*, data*>;
+        using node_ptr = std::conditional_t<Const, const node*, node*>;
+
+        /*
+         * When the iterator gets to the end the _data is
+         * replaced with the _tree obtained from the right
+         * leaf, and the _idx is set to npos
+         */
+        union {
+            tree_ptr    _tree;
+            data_ptr    _data;
+        };
+        kid_index _idx; // Index in leaf's _kids array pointing to _data
+
+        /*
+         * Leaf nodes cannot have kids (data nodes) at 0 position, so
+         * 0 is good for unsigned undefined position.
+         */
+        static constexpr kid_index npos = 0;
+
+        bool is_end() const noexcept { return _idx == npos; }
+
+        explicit iterator_base(tree_ptr t) noexcept : _tree(t), _idx(npos) { }
+        iterator_base(data_ptr d, kid_index idx) noexcept : _data(d), _idx(idx) {
+            assert(!is_end());
+        }
+        iterator_base() noexcept : iterator_base(static_cast<tree_ptr>(nullptr)) {}
+
+        /*
+         * The routine makes sure the iterator's index is valid
+         * and returns back the leaf that points to it.
+         */
+        node_ptr revalidate() noexcept {
+            assert(!is_end());
+
+            node_ptr leaf = _data->_leaf;
+
+            /*
+             * The data._leaf pointer is always valid (it's updated
+             * on insert/remove operations), the datas do not move
+             * as well, so if the leaf still points at us, it is valid.
+             */
+            if (_idx > leaf->_num_keys || leaf->_kids[_idx].d != _data) {
+                _idx = leaf->index_for(_data);
+            }
+
+            return leaf;
+        }
+
+    public:
+        using iterator_category = std::bidirectional_iterator_tag;
+        using value_type = std::conditional_t<Const, const T, T>;
+        using difference_type = ssize_t;
+        using pointer = value_type*;
+        using reference = value_type&;
+
+        reference operator*() const noexcept { return _data->value; }
+        pointer operator->() const noexcept { return &_data->value; }
+
+        iterator_base& operator++() noexcept {
+            node_ptr leaf = revalidate();
+            if (_idx < leaf->_num_keys) {
+                _idx++;
+            } else {
+                if (leaf->is_rightmost()) {
+                    _idx = npos;
+                    _tree = leaf->_rightmost_tree;
+                    return *this;
+                }
+
+                leaf = leaf->get_next();
+                _idx = 1;
+            }
+            _data = leaf->_kids[_idx].d;
+            return *this;
+        }
+
+        iterator_base& operator--() noexcept {
+            if (is_end()) {
+                node* n = _tree->_right;
+                assert(n->_num_keys > 0);
+                _data = n->_kids[n->_num_keys].d;
+                _idx = n->_num_keys;
+                return *this;
+            }
+
+            node_ptr leaf = revalidate();
+            if (_idx > 1) {
+                _idx--;
+            } else {
+                leaf = leaf->get_prev();
+                _idx = leaf->_num_keys;
+            }
+            _data = leaf->_kids[_idx].d;
+            return *this;
+        }
+
+        iterator_base operator++(int) noexcept {
+            iterator_base cur = *this;
+            operator++();
+            return cur;
+        }
+
+        iterator_base operator--(int) noexcept {
+            iterator_base cur = *this;
+            operator--();
+            return cur;
+        }
+
+        bool operator==(const iterator_base& o) const noexcept { return is_end() ? o.is_end() : _data == o._data; }
+    };
+
+    using iterator_base_const = iterator_base<true>;
+    using iterator_base_nonconst = iterator_base<false>;
+
+    class const_iterator final : public iterator_base_const {
+        friend class tree;
+        using super = iterator_base_const;
+
+        explicit const_iterator(const tree* t) noexcept : super(t) {}
+        const_iterator(const data* d, kid_index idx) noexcept : super(d, idx) {}
+
+    public:
+        const_iterator() noexcept : super() {}
+    };
+
+    class iterator final : public iterator_base_nonconst {
+        friend class tree;
+        using super = iterator_base_nonconst;
+
+        explicit iterator(tree* t) noexcept : super(t) {}
+        iterator(data* d, kid_index idx) noexcept : super(d, idx) {}
+
+    public:
+        iterator(const const_iterator&& other) noexcept {
+            if (other.is_end()) {
+                super::_idx = super::npos;
+                super::_tree = const_cast<tree *>(other._tree);
+            } else {
+                super::_idx = other._idx;
+                super::_data = const_cast<data *>(other._data);
+            }
+        }
+
+        iterator() noexcept : super() {}
+
+        /*
+         * Special constructor for the case when there's the need for an
+         * iterator to the given value poiter. In this case we need to
+         * get three things:
+         *  - pointer on class data: we assume that the value pointer
+         *    is indeed embedded into the data and do the "container_of"
+         *    maneuver
+         *  - index at which the data is seen on the leaf: use the
+         *    standard revalidation. Note, that we start with index 1
+         *    which gives us 1/NodeSize chance of hitting the right index
+         *    right at once :)
+         *  - the tree itself: the worst thing here, creating an iterator
+         *    like this is logN operation
+         */
+        explicit iterator(T* value) noexcept
+                : super(boost::intrusive::get_parent_from_member(value, &data::value), 1) {
+            super::revalidate();
+        }
+
+        /*
+         * The key _MUST_ be in order and not exist,
+         * neither of those is checked
+         */
+        template <typename KeyFn, typename... Args>
+        iterator emplace_before(KeyFn key, Less less, Args&&... args) {
+            node* leaf;
+            kid_index i;
+
+            if (!super::is_end()) {
+                leaf = super::revalidate();
+                i = super::_idx - 1;
+
+                if (i == 0 && !leaf->is_leftmost()) {
+                    /*
+                     * If we're about to insert a key before the 0th one, then
+                     * we must make sure the separation keys from upper layers
+                     * will separate the new key as well. If they won't then we
+                     * should select the left sibling for insertion.
+                     *
+                     * For !strict_separation_key the solution is simple -- the
+                     * upper level separation keys match the current 0th one, so
+                     * we always switch to the left sibling.
+                     *
+                     * If we're already on the left-most leaf -- just insert, as
+                     * there's no separatio key above it.
+                     */
+                    if (!strict_separation_key) {
+                        assert(false && "Not implemented");
+                    }
+                    leaf = leaf->get_prev();
+                    i = leaf->_num_keys;
+                }
+            } else {
+                super::_tree->maybe_init_empty_tree();
+                leaf = super::_tree->_right;
+                i = leaf->_num_keys;
+            }
+
+            assert(i >= 0);
+
+            data* d = data::create(std::forward<Args>(args)...);
+            auto x = seastar::defer([&d] { data::destroy(*d, default_dispose<T>); });
+            leaf->insert(i, std::move(key(d)), d, less);
+            assert(d->attached());
+            x.cancel();
+            /*
+             * XXX -- if the node was not split we can ++ it index
+             * and keep iterator valid :)
+             */
+            return iterator(d, i + 1);
+        }
+
+        template <typename... Args>
+        iterator emplace_before(Key k, Less less, Args&&... args) {
+            return emplace_before([&k] (data*) -> Key { return std::move(k); },
+                    less, std::forward<Args>(args)...);
+        }
+
+        template <typename... Args>
+        requires CanGetKeyFromValue<T, Key>
+        iterator emplace_before(Less less, Args&&... args) {
+            return emplace_before([] (data* d) -> Key { return d->value.key(); },
+                    less, std::forward<Args>(args)...);
+        }
+
+    private:
+        /*
+         * Prepare a likely valid iterator for the next element.
+         * Likely means, that unless removal starts rebalancing
+         * datas the _idx will be for the correct pointer.
+         *
+         * This is just like the operator++, with the exception
+         * that staying on the leaf doesn't increase the _idx, as
+         * in this case the next element will be shifted left to
+         * the current position.
+         */
+        iterator next_after_erase(node* leaf) const noexcept {
+            if (super::_idx < leaf->_num_keys) {
+                return iterator(leaf->_kids[super::_idx + 1].d, super::_idx);
+            }
+
+            if (leaf->is_rightmost()) {
+                return iterator(leaf->_rightmost_tree);
+            }
+
+            leaf = leaf->get_next();
+            return iterator(leaf->_kids[1].d, 1);
+        }
+
+    public:
+        template <typename Func>
+        requires Disposer<Func, T>
+        iterator erase_and_dispose(Func&& disp, Less less) noexcept {
+            node* leaf = super::revalidate();
+            iterator cur = next_after_erase(leaf);
+
+            leaf->remove(super::_idx, less);
+            data::destroy(*super::_data, disp);
+
+            return cur;
+        }
+
+        iterator erase(Less less) { return erase_and_dispose(default_dispose<T>, less); }
+
+        template <typename... Args>
+        requires DynamicObject<T>
+        void reconstruct(size_t new_payload_size, Args&&... args) {
+            size_t new_size = super::_data->storage_size(new_payload_size);
+
+            node* leaf = super::revalidate();
+            auto ptr = current_allocator().alloc<data>(new_size);
+            data *dat, *cur = super::_data;
+
+            try {
+                dat = new (ptr) data(std::forward<Args>(args)...);
+            } catch(...) {
+                current_allocator().free(ptr, new_size);
+                throw;
+            }
+
+            dat->_leaf = leaf;
+            cur->_leaf = nullptr;
+
+            super::_data = dat;
+            leaf->_kids[super::_idx].d = dat;
+
+            current_allocator().destroy(cur);
+        }
+    };
+
+    const_iterator begin() const noexcept {
+        if (empty()) {
+            return end();
+        }
+
+        assert(_left->_num_keys > 0);
+        // Leaf nodes have data pointers starting from index 1
+        return const_iterator(_left->_kids[1].d, 1);
+    }
+    const_iterator end() const noexcept { return const_iterator(this); }
+
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+    const_reverse_iterator rbegin() const noexcept { return std::make_reverse_iterator(end()); }
+    const_reverse_iterator rend() const noexcept { return std::make_reverse_iterator(begin()); }
+
+    iterator begin() noexcept { return iterator(const_cast<const tree*>(this)->begin()); }
+    iterator end() noexcept { return iterator(this); }
+
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    reverse_iterator rbegin() noexcept { return std::make_reverse_iterator(end()); }
+    reverse_iterator rend() noexcept { return std::make_reverse_iterator(begin()); }
+
+    bool empty() const noexcept { return _root == nullptr || _root->_num_keys == 0; }
+
+    struct stats get_stats() const noexcept {
+        struct stats st;
+
+        st.nodes = 0;
+        st.leaves = 0;
+        st.datas = 0;
+
+        if (_root != nullptr) {
+            st.nodes_filled.resize(NodeSize + 1);
+            st.leaves_filled.resize(NodeSize + 1);
+            _root->fill_stats(st);
+        }
+
+        return st;
+    }
+};
+
+/*
+ * Algorithms for searching a key in array.
+ *
+ * The gt() method accepts sorted array of keys and searches the index of the
+ * upper-bound element of the given key.
+ */
+
+template <typename K, typename Key, typename Less, size_t Size, key_search Search>
+struct searcher { };
+
+template <typename K, typename Key, typename Less, size_t Size>
+struct searcher<K, Key, Less, Size, key_search::linear> {
+    static size_t gt(const K& k, const maybe_key<Key, Less>* keys, size_t nr, Less less) noexcept {
+        size_t i;
+
+        for (i = 0; i < nr; i++) {
+            if (less(k, keys[i].v)) {
+                break;
+            }
+        }
+
+        return i;
+    };
+};
+
+template <typename K, typename Less, size_t Size>
+requires SimpleLessCompare<K, Less>
+struct searcher<K, int64_t, Less, Size, key_search::linear> {
+    static_assert(sizeof(maybe_key<int64_t, Less>) == sizeof(int64_t));
+    static size_t gt(const K& k, const maybe_key<int64_t, Less>* keys, size_t nr, Less less) noexcept {
+        return utils::array_search_gt(less.simplify_key(k), reinterpret_cast<const int64_t*>(keys), Size, nr);
+    }
+};
+
+template <typename K, typename Key, typename Less, size_t Size>
+struct searcher<K, Key, Less, Size, key_search::binary> {
+    static size_t gt(const K& k, const maybe_key<Key, Less>* keys, size_t nr, Less less) noexcept {
+        ssize_t s = 0, e = nr - 1; // signed for below s <= e corner cases
+
+        while (s <= e) {
+            size_t i = (s + e) / 2;
+            if (less(k, keys[i].v)) {
+                e = i - 1;
+            } else {
+                s = i + 1;
+            }
+        }
+
+        return s;
+    }
+};
+
+template <typename K, typename Key, typename Less, size_t Size>
+struct searcher<K, Key, Less, Size, key_search::both> {
+    static size_t gt(const K& k, const maybe_key<Key, Less>* keys, size_t nr, Less less) noexcept {
+        size_t rl = searcher<K, Key, Less, Size, key_search::linear>::gt(k, keys, nr, less);
+        size_t rb = searcher<K, Key, Less, Size, key_search::binary>::gt(k, keys, nr, less);
+        assert(rl == rb);
+        assert(rl <= nr);
+        return rl;
+    }
+};
+
+/*
+ * A node describes both, inner and leaf nodes.
+ */
+template <typename Key, typename T, typename Less, size_t NodeSize, key_search Search, with_debug Debug>
+class node final {
+    friend class validator<Key, T, Less, NodeSize>;
+    friend class tree<Key, T, Less, NodeSize, Search, Debug>;
+    friend class data<Key, T, Less, NodeSize, Search, Debug>;
+
+    using tree = class tree<Key, T, Less, NodeSize, Search, Debug>;
+    using data = class data<Key, T, Less, NodeSize, Search, Debug>;
+
+    class prealloc;
+
+    /*
+     * The NodeHalf is the level at which the node is considered
+     * to be underflown and should be re-filled. This slightly
+     * differs for even and odd sizes.
+     *
+     * For odd sizes the node will stand until it contains literally
+     * more than 1/2 of it's size (e.g. for size 5 keeping 3 keys
+     * is OK). For even cases this barrier is less than the actual
+     * half (e.g. for size 4 keeping 2 is still OK).
+     */
+    static constexpr size_t NodeHalf = ((NodeSize - 1) / 2);
+    static_assert(NodeHalf >= 1);
+
+    union node_or_data_or_tree {
+        node* n;
+        data* d;
+
+        tree* _leftmost_tree; // See comment near node::__next about this
+    };
+
+    using node_or_data = node_or_data_or_tree;
+
+    [[no_unique_address]] utils::neat_id<Debug == with_debug::yes> id;
+
+    unsigned short _num_keys;
+    unsigned short _flags;
+
+    static const unsigned short NODE_ROOT       = 0x1;
+    static const unsigned short NODE_LEAF       = 0x2;
+    static const unsigned short NODE_LEFTMOST   = 0x4; // leaf with smallest keys in the tree
+    static const unsigned short NODE_RIGHTMOST  = 0x8; // leaf with greatest keys in the tree
+
+    bool is_leaf() const noexcept { return _flags & NODE_LEAF; }
+    bool is_root() const noexcept { return _flags & NODE_ROOT; }
+    bool is_rightmost() const noexcept { return _flags & NODE_RIGHTMOST; }
+    bool is_leftmost() const noexcept { return _flags & NODE_LEFTMOST; }
+
+    /*
+     * separation keys
+     *   non-leaf nodes:
+     *     keys in kids[i] < keys[i] <= keys in kids[i+1], i in [0, NodeSize)
+     *   leaf nodes:
+     *     kids[i + 1] is the data for keys[i]
+     *     kids[0] is unused
+     *
+     * In the examples below the leaf nodes will be shown like
+     *
+     *  keys: [012]
+     * datas: [-012]
+     *
+     * and the non-leaf ones like
+     *
+     *  keys: [012]
+     *  kids: [A012]
+     *
+     * to have digits correspond to different elements and staying
+     * in its correct positions. And the A kid is this left-most one
+     * at index 0 for the non-leaf node.
+     */
+
+    maybe_key<Key, Less> _keys[NodeSize];
+    node_or_data _kids[NodeSize + 1];
+
+    // Type-aliases for code-reading convenience
+    using key_index = size_t;
+    using kid_index = size_t;
+
+    /*
+     * The root node uses this to point to the tree object. This is
+     * needed to update tree->_root on node move.
+     */
+    union {
+        node* _parent;
+        tree* _root_tree;
+    };
+
+    /*
+     * Leaf nodes are linked in a list, since leaf nodes do
+     * not use the _kids[0] pointer we re-use it. Respectively,
+     * non-leaf nodes don't use the __next one.
+     *
+     * Also, leftmost and rightmost respectively have prev and
+     * next pointing to the tree object itsef. This is done for
+     * _left/_right update on node move.
+     */
+    union {
+        node* __next;
+        tree* _rightmost_tree;
+    };
+
+    node* get_next() const noexcept {
+        assert(is_leaf());
+        return __next;
+    }
+
+    void set_next(node *n) noexcept {
+        assert(is_leaf());
+        __next = n;
+    }
+
+    node* get_prev() const noexcept {
+        assert(is_leaf());
+        return _kids[0].n;
+    }
+
+    void set_prev(node* n) noexcept {
+        assert(is_leaf());
+        _kids[0].n = n;
+    }
+
+    // Links the new node n right after the current one
+    void link(node& n) noexcept {
+        if (is_rightmost()) {
+            _flags &= ~NODE_RIGHTMOST;
+            n._flags |= node::NODE_RIGHTMOST;
+            tree* t = _rightmost_tree;
+            assert(t->_right == this);
+            t->do_set_right(&n);
+        } else {
+            n.set_next(get_next());
+            get_next()->set_prev(&n);
+        }
+
+        n.set_prev(this);
+        set_next(&n);
+    }
+
+    void unlink() noexcept {
+        node* x;
+        tree* t;
+
+        switch (_flags & (node::NODE_LEFTMOST | node::NODE_RIGHTMOST)) {
+        case node::NODE_LEFTMOST:
+            x = get_next();
+            _flags &= ~node::NODE_LEFTMOST;
+            x->_flags |= node::NODE_LEFTMOST;
+            t = _kids[0]._leftmost_tree;
+            assert(t->_left == this);
+            t->do_set_left(x);
+            break;
+        case node::NODE_RIGHTMOST:
+            x = get_prev();
+            _flags &= ~node::NODE_RIGHTMOST;
+            x->_flags |= node::NODE_RIGHTMOST;
+            t = _rightmost_tree;
+            assert(t->_right == this);
+            t->do_set_right(x);
+            break;
+        case 0:
+            get_prev()->set_next(get_next());
+            get_next()->set_prev(get_prev());
+            break;
+        default:
+            /*
+             * Right- and left-most at the same time can only be root,
+             * otherwise this would mean we have root with 0 keys.
+             */
+            assert(false);
+        }
+
+        set_next(this);
+        set_prev(this);
+    }
+
+    node(const node& other) = delete;
+    const node& operator=(const node& other) = delete;
+    node& operator=(node&& other) = delete;
+
+    /*
+     * There's no pointer/reference from nodes to the tree, neither
+     * there is such from data, because otherwise we'd have to update
+     * all of them inside tree move constructor, which in turn would
+     * make it toooo slow linear operation. Thus we walk up the nodes
+     * ._parent chain up to the root node which has the _root_tree.
+     */
+    tree* tree_slow() const noexcept {
+        const node* cur = this;
+
+        while (!cur->is_root()) {
+            cur = cur->_parent;
+        }
+
+        return cur->_root_tree;
+    }
+
+    /*
+     * For inner node finds the subtree to which k belongs.
+     * For leaf node finds the data that should correspond to the key,
+     * in this case index is not 0 for sure.
+     *
+     * In both cases keys[index - 1] <= k < keys[index].
+     */
+    template <typename K>
+    kid_index index_for(const K& k, Less less) const noexcept {
+        return searcher<K, Key, Less, NodeSize, Search>::gt(k, _keys, _num_keys, less);
+    }
+
+    kid_index index_for(node *n) const noexcept {
+        // Keep index on kid (FIXME?)
+
+        kid_index i;
+
+        for (i = 0; i <= _num_keys; i++) {
+            if (_kids[i].n == n) {
+                break;
+            }
+        }
+        assert(i <= _num_keys);
+        return i;
+    }
+
+    bool need_refill() const noexcept {
+        return _num_keys <= NodeHalf;
+    }
+
+    bool can_grab_from() const noexcept {
+        return _num_keys > NodeHalf + 1;
+    }
+
+    bool can_push_to() const noexcept {
+        return _num_keys < NodeSize;
+    }
+
+    bool can_merge_with(const node& n) const noexcept {
+        return _num_keys + n._num_keys + (is_leaf() ? 0u : 1u) <= NodeSize;
+    }
+
+    void shift_right(size_t s) noexcept {
+        for (size_t i = _num_keys; i > s; i--) {
+            _keys[i].emplace(std::move(_keys[i - 1]));
+            _kids[i + 1] = _kids[i];
+        }
+        _num_keys++;
+    }
+
+    void shift_left(size_t s) noexcept {
+        // The key at s is expected to be .remove()-d !
+        for (size_t i = s + 1; i < _num_keys; i++) {
+            _keys[i - 1].emplace(std::move(_keys[i]));
+            _kids[i] = _kids[i + 1];
+        }
+        _num_keys--;
+    }
+
+    void move_keys_and_kids(size_t foff, node& to, size_t count) noexcept {
+        size_t toff = to._num_keys;
+
+        for (size_t i = 0; i < count; i++) {
+            to._keys[toff + i].emplace(std::move(_keys[foff + i]));
+            to._kids[toff + i + 1] = _kids[foff + i + 1];
+        }
+        _num_keys = foff;
+
+        if (is_leaf()) {
+            for (size_t i = toff; i < toff + count; i++) {
+                to._kids[i + 1].d->reattach(&to);
+            }
+        } else {
+            for (size_t i = toff; i < toff + count; i++) {
+                to._kids[i + 1].n->_parent = &to;
+            }
+        }
+        to._num_keys += count;
+    }
+
+    void move_to(node& to, size_t off) noexcept {
+        assert(off <= _num_keys);
+        to._num_keys = 0;
+        move_keys_and_kids(off, to, _num_keys - off);
+    }
+
+    void grab_from_left(node& from, maybe_key<Key, Less>& sep) noexcept {
+        /*
+         * Grab one element from the left sibling and return
+         * the new separation key for them.
+         *
+         * Leaf: just move the last key (and the last kid) and report
+         * it as new separation key
+         *
+         *  keys: [012]  -> [56]  = [01]  [256]  2 is new separation
+         * datas: [-012] -> [-56] = [-01] [-256]
+         *
+         * Non-leaf is trickier. We need the current separation key
+         * as we're grabbing the last element which has no the right
+         * boundary on the node. So the parent node tells us one.
+         *
+         *  keys: [012]  -> s [56]  = [01]  2 [s56] 2 is new separation
+         *  kids: [A012] ->   [B56] = [A01]   [2B56]
+         */
+
+        assert(from._num_keys > 0);
+        key_index i = from._num_keys - 1;
+
+        shift_right(0);
+        from._num_keys--;
+
+        if (is_leaf()) {
+            _keys[0].emplace(std::move(from._keys[i]));
+            _kids[1] = from._kids[i + 1];
+            _kids[1].d->reattach(this);
+            sep.replace(copy_key(_keys[0].v));
+        } else {
+            _keys[0].emplace(std::move(sep));
+            _kids[1] = _kids[0];
+            _kids[0] = from._kids[i + 1];
+            _kids[0].n->_parent = this;
+            sep.emplace(std::move(from._keys[i]));
+        }
+    }
+
+    void merge_into(node& t, Key key) noexcept {
+        /*
+         * Merge current node into t preparing it for being
+         * killed. This merge is slightly different for leaves
+         * and for non-leaves wrt the 0th element.
+         *
+         * Non-leaves. For those we need the separation key, whic
+         * is passed to us. The caller "knows" that this and t are
+         * two siblings and thus the separation key is the one from
+         * the parent node. For this reason merging two non-leaf
+         * nodes needs one more slot in the target as compared to
+         * the leaf-nodes case.
+         *
+         *   keys: [012]  + K + [456]  = [012K456]
+         *   kids: [A012] +     [B456] = [A012B456]
+         *
+         * Leaves. This is simple -- just go ahead and merge.
+         *
+         *   keys: [012]  + [456]  = [012456]
+         *  datas: [-012] + [-456] = [-012456]
+         */
+
+        if (!t.is_leaf()) {
+            key_index i = t._num_keys;
+            t._keys[i].emplace(std::move(key));
+            t._kids[i + 1] = _kids[0];
+            t._kids[i + 1].n->_parent = &t;
+            t._num_keys++;
+        }
+
+        move_keys_and_kids(0, t, _num_keys);
+    }
+
+    void grab_from_right(node& from, maybe_key<Key, Less>& sep) noexcept {
+        /*
+         * Grab one element from the right sibling and return
+         * the new separation key for them.
+         *
+         * Leaf: just move the 0th key (and 1st kid) and the
+         * new separation key is what becomes 0 in the source.
+         *
+         *  keys: [01]  <- [456]  = [014]  [56]  5 is new separation
+         * datas: [-01] <- [-456] = [-014] [-56]
+         *
+         * Non-leaf is trickier. We need the current separation
+         * key as we're grabbing the kids[0] element which has no
+         * corresponding keys[-1]. So the parent node tells us one.
+         *
+         *  keys: [01]  <- s [456]  = [01s]  4 [56] 4 is new separation
+         *  kids: [A01] <-   [B456] = [A01B]   [456]
+         */
+
+        key_index i = _num_keys;
+
+        if (is_leaf()) {
+            _keys[i].emplace(std::move(from._keys[0]));
+            _kids[i + 1] = from._kids[1];
+            _kids[i + 1].d->reattach(this);
+            sep.replace(copy_key(from._keys[1].v));
+        } else {
+            _kids[i + 1] = from._kids[0];
+            _kids[i + 1].n->_parent = this;
+            _keys[i].emplace(std::move(sep));
+            from._kids[0] = from._kids[1];
+            sep.emplace(std::move(from._keys[0]));
+        }
+
+        _num_keys++;
+        from.shift_left(0);
+    }
+
+    /*
+     * When splitting, the result should be almost equal. The
+     * "almost" depends on the node-size being odd or even and
+     * on the node itself being leaf or inner.
+     */
+    bool equally_split(const node& n2) const noexcept {
+        if (Debug == with_debug::yes) {
+            return (_num_keys == n2._num_keys) ||
+                    (_num_keys == n2._num_keys + 1) ||
+                    (_num_keys + 1 == n2._num_keys);
+        }
+        return true;
+    }
+
+    // Helper for assert(). See comment for do_insert for details.
+    bool left_kid_sorted(const Key& k, Less less) const noexcept {
+        if (Debug == with_debug::yes && !is_leaf() && _num_keys > 0) {
+            node* x = _kids[0].n;
+            if (x != nullptr && less(k, x->_keys[x->_num_keys - 1].v)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    template <typename DFunc, typename NFunc>
+    requires Disposer<DFunc, data> && Disposer<NFunc, node>
+    void clear(DFunc&& ddisp, NFunc&& ndisp) noexcept {
+        if (is_leaf()) {
+            _flags &= ~(node::NODE_LEFTMOST | node::NODE_RIGHTMOST);
+            set_next(this);
+            set_prev(this);
+        } else {
+            node* n = _kids[0].n;
+            n->clear(ddisp, ndisp);
+            ndisp(n);
+        }
+
+        for (key_index i = 0; i < _num_keys; i++) {
+            _keys[i].reset();
+            if (is_leaf()) {
+                ddisp(_kids[i + 1].d);
+            } else {
+                node* n = _kids[i + 1].n;
+                n->clear(ddisp, ndisp);
+                ndisp(n);
+            }
+        }
+
+        _num_keys = 0;
+    }
+
+    static node* create() {
+        return current_allocator().construct<node>();
+    }
+
+    static void destroy(node& n) noexcept {
+        current_allocator().destroy(&n);
+    }
+
+    void drop() noexcept {
+        assert(!is_root());
+        if (is_leaf()) {
+            unlink();
+        }
+        destroy(*this);
+    }
+
+    void insert_into_full(kid_index idx, Key k, node_or_data nd, Less less, prealloc& nodes) noexcept {
+        if (!is_root()) {
+            node& p = *_parent;
+            kid_index i = p.index_for(_keys[0].v, less);
+
+            /*
+             * Try to push left or right existing keys to the respective
+             * siblings. Keep in mind two corner cases:
+             *
+             * 1. Push to left. In this case the new key should not go
+             * to the [0] element, otherwise we'd have to update the p's
+             * separation key one more time.
+             *
+             * 2. Push to right. In this case we must make sure the new
+             * key is not the rightmost itself, otherwise it's _him_ who
+             * must be pushed there.
+             *
+             * Both corner cases are possible to implement though.
+             */
+            if (idx > 1 && i > 0) {
+                node* left = p._kids[i - 1].n;
+                if (left->can_push_to()) {
+                    /*
+                     * We've moved the 0th elemet from this, so the index
+                     * for the new key shifts too
+                     */
+                    idx--;
+                    left->grab_from_right(*this, p._keys[i - 1]);
+                }
+            }
+
+            if (idx < _num_keys && i < p._num_keys) {
+                node* right = p._kids[i + 1].n;
+                if (right->can_push_to()) {
+                    right->grab_from_left(*this, p._keys[i]);
+                }
+            }
+
+            if (_num_keys < NodeSize) {
+                do_insert(idx, std::move(k), nd, less);
+                nodes.drain();
+                return;
+            }
+
+            /*
+             * We can only get here if both ->can_push_to() checks above
+             * had failed. In this case -- go ahead and split this.
+             */
+        }
+
+        split_and_insert(idx, std::move(k), nd, less, nodes);
+    }
+
+    void split_and_insert(kid_index idx, Key k, node_or_data nd, Less less, prealloc& nodes) noexcept {
+        assert(_num_keys == NodeSize);
+
+        node* nn = nodes.pop();
+        maybe_key<Key, Less> sep;
+
+        /*
+         * Insertion with split.
+         * 1. Existing node (this) is split into two. We try a bit harder
+         *    than we might to to make the split equal.
+         * 2. The new element is added to either of the resulting nodes.
+         * 3. The new node nn is inserted into parent one with the help
+         *    of a separation key sep
+         *
+         * First -- find the position in the current node at which the
+         * new element should have appeared.
+         */
+
+        size_t off = NodeHalf + (idx > NodeHalf ? 1 : 0);
+
+        if (is_leaf()) {
+            nn->_flags |= NODE_LEAF;
+            link(*nn);
+
+            /*
+             * Split of leaves. This is simple -- just copy the needed
+             * amount of keys and kids from this to nn, then insert the
+             * new pair into the proper place. When inserting the new
+             * node into parent the separation key is the one latter
+             * starts with.
+             *
+             *  keys: [01234]
+             * datas: [-01234]
+             *
+             * if the new key is below 2, then
+             *  keys: -> [01]  [234]   -> [0n1]  [234]   -> sep is 2
+             * datas: -> [-01] [-234]  -> [-0n1] [-234]
+             *
+             * if the new key is above 2, then
+             *  keys: -> [012]  [34]   -> [012]  [3n4]   -> sep is 3 (or n)
+             * datas: -> [-012] [-34]  -> [-012] [-3n4]
+             */
+            move_to(*nn, off);
+
+            if (idx <= NodeHalf) {
+                do_insert(idx, std::move(k), nd, less);
+            } else {
+                nn->do_insert(idx - off, std::move(k), nd, less);
+            }
+            sep.emplace(std::move(copy_key(nn->_keys[0].v)));
+        } else {
+            /*
+             * Node insertion has one special case -- when the new key
+             * gets directly into the middle.
+             */
+            if (idx == NodeHalf + 1) {
+                /*
+                 * Split of nodes and the new key is in the middle. In this
+                 * we need to split the node into two, but take the k as the
+                 * separation kep. The corresponding data becomes new node's
+                 * 0 kid.
+                 *
+                 *  keys: [012345]  -> [012] k [345]   (and the k goes up)
+                 *  kids: [A012345] -> [A012]  [n345]
+                 */
+                move_to(*nn, off);
+                sep.emplace(std::move(k));
+                nn->_kids[0] = nd;
+                nn->_kids[0].n->_parent = nn;
+            } else {
+                /*
+                 * Split of nodes and the new key gets into either of the
+                 * halves. This is like leaves split, but we need to carefully
+                 * handle the kids[0] for both. The correspoding key is not
+                 * on the node and "has" an index of -1 and thus becomes the
+                 * separation one for the upper layer.
+                 *
+                 *  keys: [012345]
+                 * datas: [A012345]
+                 *
+                 * if the new key goes left then
+                 *  keys: -> [01] 2 [345]   -> [0n1]  2 [345]
+                 * datas: -> [A01]  [2345]  -> [A0n1]   [2345]
+                 *
+                 * if the new key goes right then
+                 *  keys: -> [012]  3 [45]   -> [012]  3 [4n5]
+                 * datas: -> [A012]   [345]  -> [-123]   [34n5]
+                 */
+                move_to(*nn, off + 1);
+                sep.emplace(std::move(_keys[off]));
+                nn->_kids[0] = _kids[off + 1];
+                nn->_kids[0].n->_parent = nn;
+                _num_keys--;
+
+                if (idx <= NodeHalf) {
+                    do_insert(idx, std::move(k), nd, less);
+                } else {
+                    nd.n->_parent = nn;
+                    nn->do_insert(idx - off - 1, std::move(k), nd, less);
+                }
+            }
+        }
+
+        assert(equally_split(*nn));
+
+        if (is_root()) {
+            insert_into_root(*nn, std::move(sep.v), nodes);
+        } else {
+            insert_into_parent(*nn, std::move(sep.v), less, nodes);
+        }
+        sep.reset();
+    }
+
+    void do_insert(kid_index i, Key k, node_or_data nd, Less less) noexcept {
+        assert(_num_keys < NodeSize);
+
+        /*
+         * The new k:nd pair should be put into the given index and
+         * shift offenders to the right. However, if it should be
+         * put left to the non-leaf's left-most node -- it's a BUG,
+         * as there's no corresponding key here.
+         *
+         * Non-leaf nodes get here when their kids are split, and
+         * when they do, if the kid gets into the left-most sub-tree,
+         * it's directly put there, and this helper is not called.
+         * Said that, if we're inserting a new pair, the newbie can
+         * only get to the right of the left-most kid.
+         */
+        assert(i != 0 || left_kid_sorted(k, less));
+
+        shift_right(i);
+
+        /*
+         * The k:nd pair belongs to keys[i-1]:kids[i] subtree, and since
+         * what's already there is less than this newcomer, the latter goes
+         * one step right.
+         */
+        _keys[i].emplace(std::move(k));
+        _kids[i + 1] = nd;
+        if (is_leaf()) {
+            nd.d->attach(*this);
+        }
+    }
+
+    void insert_into_parent(node& nn, Key sep, Less less, prealloc& nodes) noexcept {
+        nn._parent = _parent;
+        _parent->insert_key(std::move(sep), node_or_data{.n = &nn}, less, nodes);
+    }
+
+    void insert_into_root(node& nn, Key sep, prealloc& nodes) noexcept {
+        tree* t = _root_tree;
+
+        node* nr = nodes.pop();
+
+        nr->_num_keys = 1;
+        nr->_keys[0].emplace(std::move(sep));
+        nr->_kids[0].n = this;
+        nr->_kids[1].n = &nn;
+        _flags &= ~node::NODE_ROOT;
+        _parent = nr;
+        nn._parent = nr;
+
+        nr->_flags |= node::NODE_ROOT;
+        t->do_set_root(nr);
+    }
+
+    void insert_key(Key k, node_or_data nd, Less less, prealloc& nodes) noexcept {
+        kid_index i = index_for(k, less);
+        insert(i, std::move(k), nd, less, nodes);
+    }
+
+    void insert(kid_index i, Key k, node_or_data nd, Less less, prealloc& nodes) noexcept {
+        if (_num_keys == NodeSize) {
+            insert_into_full(i, std::move(k), nd, less, nodes);
+        } else {
+            do_insert(i, std::move(k), nd, less);
+        }
+    }
+
+    void insert(kid_index i, Key k, data* d, Less less) {
+        prealloc nodes;
+
+        /*
+         * Prepare the nodes for split in advaice, if the node::create will
+         * start throwing while splitting we'll have troubles "unsplitting"
+         * the nodes back.
+         */
+        node* cur = this;
+        while (cur->_num_keys == NodeSize) {
+            nodes.push();
+            if (cur->is_root()) {
+                nodes.push();
+                break;
+            }
+            cur = cur->_parent;
+        }
+
+        insert(i, std::move(k), node_or_data{.d = d}, less, nodes);
+        assert(nodes.empty());
+    }
+
+    void remove_from(key_index i, Less less) noexcept {
+        _keys[i].reset();
+        shift_left(i);
+
+        if (!is_root()) {
+            if (need_refill()) {
+                refill(less);
+            }
+        } else if (_num_keys == 0 && !is_leaf()) {
+            node* nr;
+            nr = _kids[0].n;
+            nr->_flags |= node::NODE_ROOT;
+            _root_tree->do_set_root(nr);
+
+            _flags &= ~node::NODE_ROOT;
+            _parent = nullptr;
+            drop();
+        }
+    }
+
+    void merge_kids(node& t, node& n, key_index sep_idx, Less less) noexcept {
+        n.merge_into(t, std::move(_keys[sep_idx].v));
+        n.drop();
+        remove_from(sep_idx, less);
+    }
+
+    void refill(Less less) noexcept {
+        node& p = *_parent, *left, *right;
+
+        /*
+         * We need to locate this node's index at parent array by using
+         * the 0th key, so make sure it exists. We can go even without
+         * it, but since we don't let's be on the safe side.
+         */
+        assert(_num_keys > 0);
+        kid_index i = p.index_for(_keys[0].v, less);
+        assert(p._kids[i].n == this);
+
+        /*
+         * The node is "underflown" (see comment near NodeHalf
+         * about what this means), so we try to refill it at the
+         * siblings' expense. Many cases possible, but we go with
+         * only four:
+         *
+         * 1. Left sibling exists and it has at least 1 item
+         *    above being the half-full. -> we grab one element
+         *    from it.
+         *
+         * 2. Left sibling exists and we can merge current with
+         * it. "Can" means the resulting node will not overflow
+         * which, in turn, differs by one for leaf and non-leaf
+         * nodes. For leaves the merge is possible is the total
+         * number of the elements fits the maximum. For non-leaf
+         * we'll need room for one more element, here's why:
+         *
+         *  [012]  + [456]   ->  [012X456]
+         *  [A012] + [B456]  ->  [A012B456]
+         *
+         * The key X in the middle separates B from everything on
+         * the left and this key was not sitting on either of the
+         * wannabe merging nodes. This X is the current separation
+         * of these two nodes taken from their parent.
+         *
+         * And two same cases for the right sibling.
+         */
+
+        left = i > 0 ? p._kids[i - 1].n : nullptr;
+        right = i < p._num_keys ? p._kids[i + 1].n : nullptr;
+
+        if (left != nullptr && left->can_grab_from()) {
+            grab_from_left(*left, p._keys[i - 1]);
+            return;
+        }
+
+        if (right != nullptr && right->can_grab_from()) {
+            grab_from_right(*right, p._keys[i]);
+            return;
+        }
+
+        if (left != nullptr && can_merge_with(*left)) {
+            p.merge_kids(*left, *this, i - 1, less);
+            return;
+        }
+
+        if (right != nullptr && can_merge_with(*right)) {
+            p.merge_kids(*this, *right, i, less);
+            return;
+        }
+
+        /*
+         * Susprisingly, the node in the B+ tree can violate the
+         * "minimally filled" rule for non roots. It _can_ stay with
+         * less than half elements on board. The next remove from
+         * it or either of its siblings will probably refill it.
+         *
+         * Keeping 1 key on the non-root node is possible, but needs
+         * some special care -- if we will remove this last key from
+         * this node, the code will try to refill one and will not
+         * be able to find this node's index at parent (the call for
+         * index_for() above).
+         */
+        assert(_num_keys > 1);
+    }
+
+    void remove(kid_index ki, Less less) noexcept {
+        key_index i = ki - 1;
+
+        /*
+         * Update the matching separation key from above. It
+         * exists only if we're removing the 0th key, but for
+         * the left-most child it doesn't exist.
+         *
+         * Note, that the latter check is crucial for clear()
+         * performance, as it's always removes the left-most
+         * key, without this check each remove() would walk the
+         * tree upwards in vain.
+         */
+        if (strict_separation_key && i == 0 && !is_leftmost()) {
+            const Key& k = _keys[i].v;
+            node* p = this;
+
+            while (!p->is_root()) {
+                p = p->_parent;
+                kid_index j = p->index_for(k, less);
+                if (j > 0) {
+                    p->_keys[j - 1].replace(copy_key(_keys[1].v));
+                    break;
+                }
+            }
+        }
+
+        remove_from(i, less);
+    }
+
+public:
+    explicit node() noexcept : _num_keys(0) , _flags(0) , _parent(nullptr) { }
+
+    ~node() {
+        assert(_num_keys == 0);
+        assert(is_root() || !is_leaf() || (get_prev() == this && get_next() == this));
+    }
+
+    node(node&& other) noexcept : _flags(other._flags) {
+        if (is_leaf()) {
+            if (!is_rightmost()) {
+                set_next(other.get_next());
+                get_next()->set_prev(this);
+            } else {
+                other._rightmost_tree->do_set_right(this);
+            }
+
+            if (!is_leftmost()) {
+                set_prev(other.get_prev());
+                get_prev()->set_next(this);
+            } else {
+                other._kids[0]._leftmost_tree->do_set_left(this);
+            }
+
+            other._flags &= ~(NODE_LEFTMOST | NODE_RIGHTMOST);
+            other.set_next(&other);
+            other.set_prev(&other);
+        } else {
+            _kids[0].n = other._kids[0].n;
+            _kids[0].n->_parent = this;
+        }
+
+        other.move_to(*this, 0);
+
+        if (!is_root()) {
+            _parent = other._parent;
+            kid_index i = _parent->index_for(&other);
+            assert(_parent->_kids[i].n == &other);
+            _parent->_kids[i].n = this;
+        } else {
+            other._root_tree->do_set_root(this);
+        }
+    }
+
+    kid_index index_for(const data *d) const noexcept {
+        /*
+         * We'd could look up the data's new idex with binary search,
+         * but we don't have the key at hands
+         */
+
+        kid_index i;
+
+        for (i = 1; i <= _num_keys; i++) {
+            if (_kids[i].d == d) {
+                break;
+            }
+        }
+        assert(i <= _num_keys);
+        return i;
+    }
+
+private:
+    class prealloc {
+        std::vector<node*> _nodes;
+    public:
+        bool empty() noexcept { return _nodes.empty(); }
+
+        void push() {
+            _nodes.push_back(node::create());
+        }
+
+        node* pop() noexcept {
+            assert(!_nodes.empty());
+            node* ret = _nodes.back();
+            _nodes.pop_back();
+            return ret;
+        }
+
+        void drain() noexcept {
+            while (!empty()) {
+                node::destroy(*pop());
+            }
+        }
+
+        ~prealloc() {
+            drain();
+        }
+    };
+
+    void fill_stats(struct stats& st) const noexcept {
+        if (is_leaf()) {
+            st.leaves_filled[_num_keys]++;
+            st.leaves++;
+            st.datas += _num_keys;
+        } else {
+            st.nodes_filled[_num_keys]++;
+            st.nodes++;
+            for (kid_index i = 0; i <= _num_keys; i++) {
+                _kids[i].n->fill_stats(st);
+            }
+        }
+    }
+};
+
+/*
+ * The data represents data node (the actual data is stored "outside"
+ * of the tree). The tree::emplace() constructs the payload inside the
+ * data before inserting it into the tree.
+ */
+template <typename K, typename T, typename Less, size_t NS, key_search S, with_debug D>
+class data final {
+    friend class validator<K, T, Less, NS>;
+    template <typename c1, typename c2, typename c3, size_t s1, key_search p1, with_debug p2>
+            friend class tree<c1, c2, c3, s1, p1, p2>::iterator;
+    template <typename c1, typename c2, typename c3, size_t s1, key_search p1, with_debug p2>
+            friend class tree<c1, c2, c3, s1, p1, p2>::iterator_base_const;
+    template <typename c1, typename c2, typename c3, size_t s1, key_search p1, with_debug p2>
+            friend class tree<c1, c2, c3, s1, p1, p2>::iterator_base_nonconst;
+
+    using node = class node<K, T, Less, NS, S, D>;
+
+    node* _leaf;
+    T value;
+
+public:
+    template <typename... Args>
+    static data* create(Args&&... args) {
+        return current_allocator().construct<data>(std::forward<Args>(args)...);
+    }
+
+    template <typename Func>
+    requires Disposer<Func, T>
+    static void destroy(data& d, Func&& disp) noexcept {
+        disp(&d.value);
+        d._leaf = nullptr;
+        current_allocator().destroy(&d);
+    }
+
+    template <typename... Args>
+    data(Args&& ... args) : _leaf(nullptr), value(std::forward<Args>(args)...) {}
+
+    data(data&& other) noexcept : _leaf(other._leaf), value(std::move(other.value)) {
+        if (attached()) {
+            auto i = _leaf->index_for(&other);
+            _leaf->_kids[i].d = this;
+            other._leaf = nullptr;
+        }
+    }
+
+    ~data() { assert(!attached()); }
+
+    bool attached() const noexcept { return _leaf != nullptr; }
+
+    void attach(node& to) noexcept {
+        assert(!attached());
+        _leaf = &to;
+    }
+
+    void reattach(node* to) noexcept {
+        assert(attached());
+        _leaf = to;
+    }
+
+private:
+    // Data node may describe a T without fixed size, e.g. an array that grows on
+    // demand. So this helper returns the size of the memory chunk that's required
+    // to carry the node with T of the payload size on board.
+    //
+    // The tree::iterator::reconstruct does this growing (or shrinking).
+    size_t storage_size(size_t payload) const noexcept {
+        return sizeof(data) - sizeof(T) + payload;
+    }
+
+public:
+    size_t storage_size() const noexcept {
+        return storage_size(size_for_allocation_strategy(value));
+    }
+};
+
+} // namespace bplus
+
+#include <array>
+#include <cassert>
+#include <seastar/util/concepts.hh>
+
+
+template <typename T>
+concept BoundsKeeper = requires (T val, bool bit) {
+    { val.is_head() } noexcept -> std::same_as<bool>;
+    { val.set_head(bit) } noexcept -> std::same_as<void>;
+    { val.is_tail() } noexcept -> std::same_as<bool>;
+    { val.set_tail(bit) } noexcept -> std::same_as<void>;
+    { val.with_train() } noexcept -> std::same_as<bool>;
+    { val.set_train(bit) } noexcept -> std::same_as<void>;
+};
+
+/*
+ * A plain array of T-s that grows and shrinks by constructing a new
+ * instances. Holds at least one element. Has facilities for sorting
+ * the elements and for doing "container_of" by the given element
+ * pointer. LSA-compactible.
+ *
+ * Important feature of the array is zero memory overhead -- it doesn't
+ * keep its size/capacity onboard. The size is calculated each time by
+ * walking the array of T-s and checking which one of them is the tail
+ * element. Respectively, the T must keep head/tail flags on itself.
+ */
+template <typename T>
+requires BoundsKeeper<T> && std::is_nothrow_move_constructible_v<T>
+class intrusive_array {
+    // Sanity constant to avoid infinite loops searching for tail
+    static constexpr int max_len = std::numeric_limits<short int>::max();
+
+    union maybe_constructed {
+        maybe_constructed() { }
+        ~maybe_constructed() { }
+        T object;
+
+        /*
+         * Train is 1 or more allocated but unoccupied memory slots after 
+         * the tail one. Being unused, this memory keeps the train length.
+         * An array with the train is marked with the respective flag on 
+         * the 0th element. Train is created by the erase() call and can 
+         * be up to 65535 elements long
+         *
+         * Train length is included into the storage_size() to make 
+         * allocator and compaction work correctly, but is not included 
+         * into the number_of_elements(), so the array behaves just like
+         * there's no train
+         *
+         * Respectively both grow and shrink constructors do not carry 
+         * the train (and drop the bit from 0th element) and don't expect 
+         * the memory for the new array to include one
+         */
+        unsigned short train_len;
+        static_assert(sizeof(T) >= sizeof(unsigned short));
+    };
+
+    maybe_constructed   _data[1];
+
+    size_t number_of_elements() const noexcept {
+        for (int i = 0; i < max_len; i++) {
+            if (_data[i].object.is_tail()) {
+                return i + 1;
+            }
+        }
+
+        std::abort();
+    }
+
+public:
+    size_t storage_size() const noexcept {
+        size_t nr = number_of_elements();
+        if (_data[0].object.with_train()) {
+            nr += _data[nr].train_len;
+        }
+        return nr * sizeof(T);
+    }
+
+    using iterator = T*;
+    using const_iterator = const T*;
+
+    /*
+     * There are 3 constructing options for the array: initial, grow
+     * and shrink.
+     *
+     * * initial just creates a 1-element array
+     * * grow -- makes a new one moving all elements from the original
+     * array and inserting the one (only one) more element at the given
+     * position
+     * * shrink -- also makes a new array skipping the not needed
+     * element while moving them from the original one
+     *
+     * In all cases the enough big memory chunk must be provided by the
+     * caller!
+     *
+     * Note, that none of them calls destructors on T-s, unlike vector.
+     * This is because when the older array is destroyed it has no idea
+     * about whether or not it was grown/shrunk and thus it destroys
+     * T-s itself.
+     */
+
+    // Initial
+    template <typename... Args>
+    intrusive_array(Args&&... args) {
+        new (&_data[0].object) T(std::forward<Args>(args)...);
+        _data[0].object.set_head(true);
+        _data[0].object.set_tail(true);
+    }
+
+    // Growing
+    struct grow_tag {
+        int add_pos;
+    };
+
+    template <typename... Args>
+    intrusive_array(intrusive_array& from, grow_tag grow, Args&&... args) {
+        // The add_pos is strongly _expected_ to be within bounds
+        int i, off = 0;
+        bool tail = false;
+
+        for (i = 0; !tail; i++) {
+            if (i == grow.add_pos) {
+                off = 1;
+                continue;
+            }
+
+            tail = from._data[i - off].object.is_tail();
+            new (&_data[i].object) T(std::move(from._data[i - off].object));
+        }
+
+        assert(grow.add_pos <= i && i < max_len);
+
+        new (&_data[grow.add_pos].object) T(std::forward<Args>(args)...);
+
+        _data[0].object.set_head(true);
+        _data[0].object.set_train(false);
+        if (grow.add_pos == 0) {
+            _data[1].object.set_head(false);
+        }
+        _data[i - off].object.set_tail(true);
+        if (off == 0) {
+            _data[i - 1].object.set_tail(false);
+        }
+    }
+
+    // Shrinking
+    struct shrink_tag {
+        int del_pos;
+    };
+
+    intrusive_array(intrusive_array& from, shrink_tag shrink) {
+        int i, off = 0;
+        bool tail = false;
+
+        for (i = 0; !tail; i++) {
+            tail = from._data[i].object.is_tail();
+            if (i == shrink.del_pos) {
+                off = 1;
+            } else {
+                new (&_data[i - off].object) T(std::move(from._data[i].object));
+            }
+        }
+
+        _data[0].object.set_head(true);
+        _data[0].object.set_train(false);
+        _data[i - off - 1].object.set_tail(true);
+    }
+
+    intrusive_array(const intrusive_array& other) = delete;
+    intrusive_array(intrusive_array&& other) noexcept {
+        bool tail = false;
+        int i;
+
+        for (i = 0; !tail; i++) {
+            tail = other._data[i].object.is_tail();
+
+            new (&_data[i].object) T(std::move(other._data[i].object));
+        }
+
+        if (_data[0].object.with_train()) {
+            _data[i].train_len = other._data[i].train_len;
+        }
+    }
+
+    ~intrusive_array() {
+        bool tail = false;
+
+        for (int i = 0; !tail; i++) {
+            tail = _data[i].object.is_tail();
+            _data[i].object.~T();
+        }
+    }
+
+    /*
+     * Drops the element in-place at position @pos and grows the
+     * "train". To be used in places where reconstruction is not
+     * welcome (e.g. because it throws)
+     *
+     * Single-elemented array cannot be erased from, just drop it
+     * alltogether if needed
+     */
+    void erase(int pos) noexcept {
+        assert(!is_single_element());
+        assert(pos < max_len);
+
+        bool with_train = _data[0].object.with_train();
+        bool tail = _data[pos].object.is_tail();
+        _data[pos].object.~T();
+
+        if (tail) {
+            assert(pos > 0);
+            _data[pos - 1].object.set_tail(true);
+        } else {
+            while (!tail) {
+                new (&_data[pos].object) T(std::move(_data[pos + 1].object));
+                _data[pos + 1].object.~T();
+                tail = _data[pos++].object.is_tail();
+            }
+            _data[0].object.set_head(true);
+        }
+
+        _data[0].object.set_train(true);
+        unsigned short train_len = with_train ? _data[pos + 1].train_len : 0;
+        assert(train_len < max_len);
+        _data[pos].train_len = train_len + 1;
+    }
+
+    T& operator[](int pos) noexcept { return _data[pos].object; }
+    const T& operator[](int pos) const noexcept { return _data[pos].object; }
+
+    iterator begin() noexcept { return &_data[0].object; }
+    const_iterator begin() const noexcept { return &_data[0].object; }
+    const_iterator cbegin() const noexcept { return &_data[0].object; }
+    iterator end() noexcept { return &_data[number_of_elements()].object; }
+    const_iterator end() const noexcept { return &_data[number_of_elements()].object; }
+    const_iterator cend() const noexcept { return &_data[number_of_elements()].object; }
+
+    size_t index_of(iterator i) const noexcept { return i - &_data[0].object; }
+    size_t index_of(const_iterator i) const noexcept { return i - &_data[0].object; }
+    bool is_single_element() const noexcept { return _data[0].object.is_tail(); }
+
+    // A helper for keeping the array sorted
+    template <typename K, typename Compare>
+    requires Comparable<K, T, Compare>
+    const_iterator lower_bound(const K& val, Compare cmp, bool& match) const {
+        int i = 0;
+
+        do {
+            auto x = cmp(_data[i].object, val);
+            if (x >= 0) {
+                match = (x == 0);
+                break;
+            }
+        } while (!_data[i++].object.is_tail());
+
+        return &_data[i].object;
+    }
+
+    template <typename K, typename Compare>
+    requires Comparable<K, T, Compare>
+    iterator lower_bound(const K& val, Compare cmp, bool& match) {
+        return const_cast<iterator>(const_cast<const intrusive_array*>(this)->lower_bound(val, std::move(cmp), match));
+    }
+
+    template <typename K, typename Compare>
+    requires Comparable<K, T, Compare>
+    const_iterator lower_bound(const K& val, Compare cmp) const {
+        bool match = false;
+        return lower_bound(val, cmp, match);
+    }
+
+    template <typename K, typename Compare>
+    requires Comparable<K, T, Compare>
+    iterator lower_bound(const K& val, Compare cmp) {
+        return const_cast<iterator>(const_cast<const intrusive_array*>(this)->lower_bound(val, std::move(cmp)));
+    }
+
+    // And its peer ... just to be used
+    template <typename K, typename Compare>
+    requires Comparable<K, T, Compare>
+    const_iterator upper_bound(const K& val, Compare cmp) const {
+        int i = 0;
+
+        do {
+            if (cmp(_data[i].object, val) > 0) {
+                break;
+            }
+        } while (!_data[i++].object.is_tail());
+
+        return &_data[i].object;
+    }
+
+    template <typename K, typename Compare>
+    requires Comparable<K, T, Compare>
+    iterator upper_bound(const K& val, Compare cmp) {
+        return const_cast<iterator>(const_cast<const intrusive_array*>(this)->upper_bound(val, std::move(cmp)));
+    }
+
+    template <typename Func>
+    requires Disposer<Func, T>
+    void for_each(Func&& fn) noexcept {
+        bool tail = false;
+
+        for (int i = 0; !tail; i++) {
+            tail = _data[i].object.is_tail();
+            fn(&_data[i].object);
+        }
+    }
+
+    size_t size() const noexcept { return number_of_elements(); }
+
+    static intrusive_array& from_element(T* ptr, int& idx) noexcept {
+        idx = 0;
+        while (!ptr->is_head()) {
+            assert(idx < max_len); // may the force be with us...
+            idx++;
+            ptr--;
+        }
+
+        static_assert(offsetof(intrusive_array, _data[0].object) == 0);
+        return *reinterpret_cast<intrusive_array*>(ptr);
+    }
+};
+
+#include <type_traits>
+#include <seastar/util/concepts.hh>
+#include <fmt/core.h>
+
+/*
+ * The double-decker is the ordered keeper of key:value pairs having
+ * the pairs sorted by both key and value (key first).
+ *
+ * The keys collisions are expected to be rare enough to afford holding
+ * the values in a sorted array with the help of linear algorithms.
+ */
+
+template <typename Key, typename T, typename Less, typename Compare, int NodeSize,
+            bplus::key_search Search = bplus::key_search::binary, bplus::with_debug Debug = bplus::with_debug::no>
+requires Comparable<T, T, Compare> && std::is_nothrow_move_constructible_v<T>
+class double_decker {
+public:
+    using inner_array = intrusive_array<T>;
+    using outer_tree = bplus::tree<Key, inner_array, Less, NodeSize, Search, Debug>;
+    using outer_iterator = typename outer_tree::iterator;
+    using outer_const_iterator = typename outer_tree::const_iterator;
+
+private:
+    outer_tree  _tree;
+
+public:
+    template <bool Const>
+    class iterator_base {
+        friend class double_decker;
+        using outer_iterator = std::conditional_t<Const, typename double_decker::outer_const_iterator, typename double_decker::outer_iterator>;
+
+    protected:
+        outer_iterator _bucket;
+        int _idx;
+
+    public:
+        iterator_base() = default;
+        iterator_base(outer_iterator bkt, int idx) noexcept : _bucket(bkt), _idx(idx) {}
+
+        using iterator_category = std::bidirectional_iterator_tag;
+        using difference_type = ssize_t;
+        using value_type = std::conditional_t<Const, const T, T>;
+        using pointer = value_type*;
+        using reference = value_type&;
+
+        reference operator*() const noexcept { return (*_bucket)[_idx]; }
+        pointer operator->() const noexcept { return &((*_bucket)[_idx]); }
+
+        iterator_base& operator++() noexcept {
+            if ((*_bucket)[_idx++].is_tail()) {
+                _bucket++;
+                _idx = 0;
+            }
+
+            return *this;
+        }
+
+        iterator_base operator++(int) noexcept {
+            iterator_base cur = *this;
+            operator++();
+            return cur;
+        }
+
+        iterator_base& operator--() noexcept {
+            if (_idx-- == 0) {
+                _bucket--;
+                _idx = _bucket->index_of(_bucket->end()) - 1;
+            }
+
+            return *this;
+        }
+
+        iterator_base operator--(int) noexcept {
+            iterator_base cur = *this;
+            operator--();
+            return cur;
+        }
+
+        bool operator==(const iterator_base& o) const noexcept = default;
+    };
+
+    using const_iterator = iterator_base<true>;
+
+    class iterator final : public iterator_base<false> {
+        friend class double_decker;
+        using super = iterator_base<false>;
+
+        iterator(const const_iterator&& other) noexcept : super(std::move(other._bucket), other._idx) {}
+
+    public:
+        iterator() noexcept : super() {}
+        iterator(outer_iterator bkt, int idx) noexcept : super(bkt, idx) {}
+
+        iterator(T* ptr) noexcept {
+            inner_array& arr = inner_array::from_element(ptr, super::_idx);
+            super::_bucket = outer_iterator(&arr);
+        }
+
+        template <typename Func>
+        requires Disposer<Func, T>
+        iterator erase_and_dispose(Less less, Func&& disp) noexcept {
+            disp(&**this); // * to deref this, * to call operator*, & to get addr from ref
+
+            if (super::_bucket->is_single_element()) {
+                outer_iterator bkt = super::_bucket.erase(less);
+                return iterator(bkt, 0);
+            }
+
+            bool tail = (*super::_bucket)[super::_idx].is_tail();
+            super::_bucket->erase(super::_idx);
+            if (tail) {
+                super::_bucket++;
+                super::_idx = 0;
+            }
+
+            return *this;
+        }
+
+        iterator erase(Less less) noexcept { return erase_and_dispose(less, bplus::default_dispose<T>); }
+    };
+
+    /*
+     * Structure that shed some more light on how the lower_bound
+     * actually found the bounding elements.
+     */
+    struct bound_hint {
+        /*
+         * Set to true if the element fully matched to the key
+         * according to Compare
+         */
+        bool match;
+        /*
+         * Set to true if the bucket for the given key exists
+         */
+        bool key_match;
+        /*
+         * Set to true if the given key is more than anything
+         * on the bucket and iterator was switched to the next
+         * one (or when the key_match is false)
+         */
+        bool key_tail;
+
+        /*
+         * This helper says whether the emplace will invalidate (some)
+         * iterators or not. Emplacing with !key_match will go and create
+         * new node in B+ which doesn't invalidate iterators. In another
+         * case some existing B+ data node will be reconstructed, so the
+         * iterators on those nodes will become invalid.
+         */
+        bool emplace_keeps_iterators() const noexcept { return !key_match; }
+    };
+
+    iterator begin() noexcept { return iterator(_tree.begin(), 0); }
+    const_iterator begin() const noexcept { return const_iterator(_tree.begin(), 0); }
+    const_iterator cbegin() const noexcept { return const_iterator(_tree.begin(), 0); }
+
+    iterator end() noexcept { return iterator(_tree.end(), 0); }
+    const_iterator end() const noexcept { return const_iterator(_tree.end(), 0); }
+    const_iterator cend() const noexcept { return const_iterator(_tree.end(), 0); }
+
+    explicit double_decker(Less less) noexcept : _tree(less) { }
+
+    double_decker(const double_decker& other) = delete;
+    double_decker(double_decker&& other) noexcept : _tree(std::move(other._tree)) {}
+
+    iterator insert(Key k, T value, Compare cmp) {
+        std::pair<outer_iterator, bool> oip = _tree.emplace(std::move(k), std::move(value));
+        outer_iterator& bkt = oip.first;
+        int idx = 0;
+
+        if (!oip.second) {
+            /*
+             * Unlikely, but in this case we reconstruct the array. The value
+             * must not have been moved by emplace() above.
+             */
+            idx = bkt->index_of(bkt->lower_bound(value, cmp));
+            size_t new_size = (bkt->size() + 1) * sizeof(T);
+            bkt.reconstruct(new_size, *bkt,
+                    typename inner_array::grow_tag{idx}, std::move(value));
+        }
+
+        return iterator(bkt, idx);
+    }
+
+    template <typename... Args>
+    iterator emplace_before(iterator i, Key k, const bound_hint& hint, Args&&... args) {
+        assert(!hint.match);
+        outer_iterator& bucket = i._bucket;
+
+        if (!hint.key_match) {
+            /*
+             * The most expected case -- no key conflict, respectively the
+             * bucket is not found, and i points to the next one. Just go
+             * ahead and emplace the new bucket before the i and push the
+             * 0th element into it.
+             */
+            outer_iterator nb = bucket.emplace_before(std::move(k), _tree.less(), std::forward<Args>(args)...);
+            return iterator(nb, 0);
+        }
+
+        /*
+         * Key conflict, need to expand some inner vector, but still there
+         * are two cases -- whether the bounding element is on k's bucket
+         * or the bound search overflew and switched to the next one.
+         */
+
+        int idx = i._idx;
+
+        if (hint.key_tail) {
+            /*
+             * The latter case -- i points to the next one. Need to shift
+             * back and append the new element to its tail.
+             */
+            bucket--;
+            idx = bucket->index_of(bucket->end());
+        }
+
+        size_t new_size = (bucket->size() + 1) * sizeof(T);
+        bucket.reconstruct(new_size, *bucket,
+                typename inner_array::grow_tag{idx}, std::forward<Args>(args)...);
+        return iterator(bucket, idx);
+    }
+
+    template <typename K = Key>
+    requires Comparable<K, T, Compare>
+    const_iterator find(const K& key, Compare cmp) const {
+        outer_const_iterator bkt = _tree.find(key);
+        int idx = 0;
+
+        if (bkt != _tree.end()) {
+            bool match = false;
+            idx = bkt->index_of(bkt->lower_bound(key, cmp, match));
+            if (!match) {
+                bkt = _tree.end();
+                idx = 0;
+            }
+        }
+
+        return const_iterator(bkt, idx);
+    }
+
+    template <typename K = Key>
+    requires Comparable<K, T, Compare>
+    iterator find(const K& k, Compare cmp) {
+        return iterator(const_cast<const double_decker*>(this)->find(k, std::move(cmp)));
+    }
+
+    template <typename K = Key>
+    requires Comparable<K, T, Compare>
+    const_iterator lower_bound(const K& key, Compare cmp, bound_hint& hint) const {
+        outer_const_iterator bkt = _tree.lower_bound(key, hint.key_match);
+
+        hint.key_tail = false;
+        hint.match = false;
+
+        if (bkt == _tree.end() || !hint.key_match) {
+            return const_iterator(bkt, 0);
+        }
+
+        int i = bkt->index_of(bkt->lower_bound(key, cmp, hint.match));
+
+        if (i != 0 && (*bkt)[i - 1].is_tail()) {
+            /*
+             * The lower_bound is after the last element -- shift
+             * to the net bucket's 0'th one.
+             */
+            bkt++;
+            i = 0;
+            hint.key_tail = true;
+        }
+
+        return const_iterator(bkt, i);
+    }
+
+    template <typename K = Key>
+    requires Comparable<K, T, Compare>
+    iterator lower_bound(const K& key, Compare cmp, bound_hint& hint) {
+        return iterator(const_cast<const double_decker*>(this)->lower_bound(key, std::move(cmp), hint));
+    }
+
+    template <typename K = Key>
+    requires Comparable<K, T, Compare>
+    const_iterator lower_bound(const K& key, Compare cmp) const {
+        bound_hint hint;
+        return lower_bound(key, cmp, hint);
+    }
+
+    template <typename K = Key>
+    requires Comparable<K, T, Compare>
+    iterator lower_bound(const K& key, Compare cmp) {
+        return iterator(const_cast<const double_decker*>(this)->lower_bound(key, std::move(cmp)));
+    }
+
+    template <typename K = Key>
+    requires Comparable<K, T, Compare>
+    const_iterator upper_bound(const K& key, Compare cmp) const {
+        bool key_match;
+        outer_const_iterator bkt = _tree.lower_bound(key, key_match);
+
+        if (bkt == _tree.end() || !key_match) {
+            return const_iterator(bkt, 0);
+        }
+
+        int i = bkt->index_of(bkt->upper_bound(key, cmp));
+
+        if (i != 0 && (*bkt)[i - 1].is_tail()) {
+            // Beyond the end() boundary
+            bkt++;
+            i = 0;
+        }
+
+        return const_iterator(bkt, i);
+    }
+
+    template <typename K = Key>
+    requires Comparable<K, T, Compare>
+    iterator upper_bound(const K& key, Compare cmp) {
+        return iterator(const_cast<const double_decker*>(this)->upper_bound(key, std::move(cmp)));
+    }
+
+    template <typename Func>
+    requires Disposer<Func, T>
+    void clear_and_dispose(Func&& disp) noexcept {
+        _tree.clear_and_dispose([&disp] (inner_array* arr) noexcept {
+            arr->for_each(disp);
+        });
+    }
+
+    void clear() noexcept { clear_and_dispose(bplus::default_dispose<T>); }
+
+    template <typename Func>
+    requires Disposer<Func, T>
+    iterator erase_and_dispose(iterator begin, iterator end, Func&& disp) noexcept {
+        bool same_bucket = begin._bucket == end._bucket;
+
+        // Drop the tail of the starting bucket if it's not fully erased
+        while (begin._idx != 0) {
+            if (same_bucket) {
+                if (begin == end) {
+                    return begin;
+                }
+                end._idx--;
+            }
+
+            begin = begin.erase_and_dispose(_tree.less(), disp);
+        }
+
+        // Drop all the buckets in between
+        outer_iterator nb = _tree.erase_and_dispose(begin._bucket, end._bucket, [&disp] (inner_array* arr) noexcept {
+            arr->for_each(disp);
+        });
+
+        assert(nb == end._bucket);
+
+        /*
+         * Drop the head of the ending bucket. Every erased element is the 0th
+         * one, when erased it will shift the rest left and reconstruct the array,
+         * thus we cannot rely on the end to keep neither _bucket not _idx.
+         *
+         * Said that -- just erase the required number of elements. A corner case
+         * when end points to the tree end is handled, _idx is 0 in this case.
+         */
+        iterator next(nb, 0);
+        while (end._idx-- != 0) {
+            next = next.erase_and_dispose(_tree.less(), disp);
+        }
+
+        return next;
+    }
+
+    iterator erase(iterator begin, iterator end) noexcept {
+        return erase_and_dispose(begin, end, bplus::default_dispose<T>);
+    }
+
+    bool empty() const noexcept { return _tree.empty(); }
+
+    static size_t estimated_object_memory_size_in_allocator(allocation_strategy& allocator, const T* obj) noexcept {
+        /*
+         * The T-s are merged together in array, so getting any run-time
+         * value of a pointer would be wrong. So here's some guessing of
+         * how much memory would this thing occupy in memory
+         */
+        return sizeof(typename outer_tree::data);
+    }
+};
+
+
+#include <seastar/core/metrics_registration.hh>
+
+#include <stdint.h>
+
+class cache_entry;
+
+namespace cache {
+
+class autoupdating_underlying_reader;
+class cache_streamed_mutation;
+class cache_flat_mutation_reader;
+class read_context;
+class lsa_manager;
+
+}
+
+// Tracks accesses and performs eviction of cache entries.
+class cache_tracker final {
+public:
+    friend class row_cache;
+    friend class cache::read_context;
+    friend class cache::autoupdating_underlying_reader;
+    friend class cache::cache_flat_mutation_reader;
+    struct stats {
+        uint64_t partition_hits;
+        uint64_t partition_misses;
+        uint64_t row_hits;
+        uint64_t dummy_row_hits;
+        uint64_t row_misses;
+        uint64_t partition_insertions;
+        uint64_t row_insertions;
+        uint64_t static_row_insertions;
+        uint64_t concurrent_misses_same_key;
+        uint64_t partition_merges;
+        uint64_t rows_processed_from_memtable;
+        uint64_t rows_dropped_from_memtable;
+        uint64_t rows_merged_from_memtable;
+        uint64_t dummy_processed_from_memtable;
+        uint64_t rows_covered_by_range_tombstones_from_memtable;
+        uint64_t partition_evictions;
+        uint64_t partition_removals;
+        uint64_t row_evictions;
+        uint64_t row_removals;
+        uint64_t partitions;
+        uint64_t rows;
+        uint64_t mispopulations;
+        uint64_t underlying_recreations;
+        uint64_t underlying_partition_skips;
+        uint64_t underlying_row_skips;
+        uint64_t reads;
+        uint64_t reads_with_misses;
+        uint64_t reads_done;
+        uint64_t pinned_dirty_memory_overload;
+        uint64_t range_tombstone_reads;
+        uint64_t row_tombstone_reads;
+
+        uint64_t active_reads() const {
+            return reads - reads_done;
+        }
+    };
+private:
+    stats _stats{};
+    seastar::metrics::metric_groups _metrics;
+    logalloc::region _region;
+    lru _lru;
+    mutation_cleaner _garbage;
+    mutation_cleaner _memtable_cleaner;
+    mutation_application_stats& _app_stats;
+private:
+    void setup_metrics();
+public:
+    using register_metrics = bool_class<class register_metrics_tag>;
+    cache_tracker(mutation_application_stats&, register_metrics);
+    cache_tracker(register_metrics = register_metrics::no);
+    ~cache_tracker();
+    void clear();
+    void touch(rows_entry&);
+    void insert(cache_entry&);
+    void insert(partition_entry&) noexcept;
+    void insert(partition_version&) noexcept;
+    void insert(mutation_partition_v2&) noexcept;
+    void insert(rows_entry&) noexcept;
+    void remove(rows_entry&) noexcept;
+    // Inserts e such that it will be evicted right before more_recent in the absence of later touches.
+    void insert(rows_entry& more_recent, rows_entry& e) noexcept;
+    void clear_continuity(cache_entry& ce) noexcept;
+    void on_partition_erase() noexcept;
+    void on_partition_merge() noexcept;
+    void on_partition_hit() noexcept;
+    void on_partition_miss() noexcept;
+    void on_partition_eviction() noexcept;
+    void on_row_eviction() noexcept;
+    void on_row_hit() noexcept;
+    void on_dummy_row_hit() noexcept;
+    void on_row_miss() noexcept;
+    void on_miss_already_populated() noexcept;
+    void on_mispopulate() noexcept;
+    void on_row_processed_from_memtable() noexcept { ++_stats.rows_processed_from_memtable; }
+    void on_row_dropped_from_memtable() noexcept { ++_stats.rows_dropped_from_memtable; }
+    void on_row_merged_from_memtable() noexcept { ++_stats.rows_merged_from_memtable; }
+    void on_range_tombstone_read() noexcept { ++_stats.range_tombstone_reads; }
+    void on_row_tombstone_read() noexcept { ++_stats.row_tombstone_reads; }
+    void pinned_dirty_memory_overload(uint64_t bytes) noexcept;
+    allocation_strategy& allocator() noexcept;
+    logalloc::region& region() noexcept;
+    const logalloc::region& region() const noexcept;
+    mutation_cleaner& cleaner() noexcept { return _garbage; }
+    mutation_cleaner& memtable_cleaner() noexcept { return _memtable_cleaner; }
+    uint64_t partitions() const noexcept { return _stats.partitions; }
+    const stats& get_stats() const noexcept { return _stats; }
+    stats& get_stats() noexcept { return _stats; }
+    void set_compaction_scheduling_group(seastar::scheduling_group);
+    lru& get_lru() { return _lru; }
+    seastar::memory::reclaiming_result evict_from_lru_shallow() noexcept;
+};
+
+inline
+void cache_tracker::remove(rows_entry& entry) noexcept {
+    --_stats.rows;
+    ++_stats.row_removals;
+    if (entry.is_linked()) {
+        _lru.remove(entry);
+    }
+}
+
+inline
+void cache_tracker::insert(rows_entry& entry) noexcept {
+    ++_stats.row_insertions;
+    ++_stats.rows;
+    _lru.add(entry);
+}
+
+inline
+void cache_tracker::insert(rows_entry& more_recent, rows_entry& entry) noexcept {
+    ++_stats.row_insertions;
+    ++_stats.rows;
+    _lru.add_before(more_recent, entry);
+}
+
+inline
+void cache_tracker::insert(partition_version& pv) noexcept {
+    insert(pv.partition());
+}
+
+inline
+void cache_tracker::insert(mutation_partition_v2& p) noexcept {
+    for (rows_entry& row : p.clustered_rows()) {
+        insert(row);
+    }
+}
+
+inline
+void cache_tracker::insert(partition_entry& pe) noexcept {
+    for (partition_version& pv : pe.versions_from_oldest()) {
+        insert(pv);
+    }
+}
+
+
+class flat_mutation_reader_v2;
+class reader_permit;
+
+flat_mutation_reader_v2 make_empty_flat_reader_v2(schema_ptr s, reader_permit permit);
+
+
+
+#include <seastar/util/bool_class.hh>
+
+using namespace seastar;
+
+class mutation_source;
+class position_in_partition;
+class flat_mutation_reader_v2;
+
+namespace streamed_mutation {
+    class forwarding_tag;
+    using forwarding = bool_class<forwarding_tag>;
+}
+
+namespace mutation_reader {
+    class partition_range_forwarding_tag;
+    using forwarding = bool_class<partition_range_forwarding_tag>;
+}
+
+
+
+class mutation_fragment_v1_stream final {
+    flat_mutation_reader_v2 _reader;
+    schema_ptr _schema;
+    reader_permit _permit;
+
+    range_tombstone_assembler _rt_assembler;
+    std::optional<clustering_row> _row;
+
+    friend class mutation_fragment_v2; // so it sees our consumer methods
+    mutation_fragment_opt consume(static_row mf) {
+        return wrap(std::move(mf));
+    }
+    mutation_fragment_opt consume(clustering_row mf) {
+        if (_rt_assembler.needs_flush()) [[unlikely]] {
+            if (auto rt_opt = _rt_assembler.flush(*_schema, position_in_partition::after_key(*_schema, mf.position()))) [[unlikely]] {
+                _row = std::move(mf);
+                return wrap(std::move(*rt_opt));
+            }
+        }
+        return wrap(std::move(mf));
+    }
+    mutation_fragment_opt consume(range_tombstone_change mf) {
+        if (auto rt_opt = _rt_assembler.consume(*_schema, std::move(mf))) {
+            return wrap(std::move(*rt_opt));
+        }
+        return std::nullopt;
+    }
+    mutation_fragment_opt consume(partition_start mf) {
+        _rt_assembler.reset();
+        return wrap(std::move(mf));
+    }
+    mutation_fragment_opt consume(partition_end mf) {
+        _rt_assembler.on_end_of_stream();
+        return wrap(std::move(mf));
+    }
+
+    future<mutation_fragment_opt> read_from_underlying() {
+        auto mfp = co_await _reader();
+        if (!mfp) [[unlikely]] {
+            _rt_assembler.on_end_of_stream();
+            co_return std::nullopt;
+        }
+        auto ret = std::move(*mfp).consume(*this);
+        if (!ret) [[unlikely]] {
+            // swallowed a range tombstone change, have to read more
+            co_return co_await read_from_underlying();
+        }
+        co_return std::move(ret);
+    }
+
+    template<typename Arg>
+    mutation_fragment wrap(Arg arg) const {
+        return {*_schema, _permit, std::move(arg)};
+    }
+
+    void reset_state() {
+        _rt_assembler.reset();
+        _row = std::nullopt;
+    }
+
+    future<> next_partition() {
+        reset_state();
+        return _reader.next_partition();
+    }
+
+public:
+    explicit mutation_fragment_v1_stream(flat_mutation_reader_v2 reader) noexcept
+        : _reader(std::move(reader))
+        , _schema(_reader.schema())
+        , _permit(_reader.permit())
+    { }
+
+    mutation_fragment_v1_stream(const mutation_fragment_v1_stream&) = delete;
+    mutation_fragment_v1_stream(mutation_fragment_v1_stream&&) = default;
+
+    mutation_fragment_v1_stream& operator=(const mutation_fragment_v1_stream&) = delete;
+    mutation_fragment_v1_stream& operator=(mutation_fragment_v1_stream&& o) = default;
+
+    future<> close() noexcept {
+        return _reader.close();
+    }
+
+    void set_timeout(db::timeout_clock::time_point timeout) noexcept {
+        _permit.set_timeout(timeout);
+    }
+
+    const schema_ptr& schema() const noexcept { return _schema; }
+
+    future<mutation_fragment_opt> operator()() {
+        if (_row) [[unlikely]] {
+            co_return wrap(std::move(*std::exchange(_row, std::nullopt)));
+        }
+        if (_reader.is_end_of_stream()) [[unlikely]] {
+            co_return std::nullopt;
+        }
+        co_return co_await read_from_underlying();
+    }
+
+    future<bool> has_more_fragments() {
+        if (_row) [[unlikely]] {
+            co_return true;
+        }
+        if (_reader.is_end_of_stream()) [[unlikely]] {
+            co_return false;
+        }
+        co_return bool(co_await _reader.peek());
+    }
+
+    future<> fast_forward_to(const dht::partition_range& pr) {
+        reset_state();
+        return _reader.fast_forward_to(pr);
+    }
+    future<> fast_forward_to(position_range pr) {
+        reset_state();
+        return _reader.fast_forward_to(std::move(pr));
+    }
+
+    void set_max_buffer_size(size_t size) {
+        _reader.set_max_buffer_size(size);
+    }
+    future<> fill_buffer() {
+        return _reader.fill_buffer();
+    }
+
+private:
+    template<typename Consumer>
+    struct consumer_adapter {
+        mutation_fragment_v1_stream& _reader;
+        std::optional<dht::decorated_key> _decorated_key;
+        Consumer _consumer;
+        consumer_adapter(mutation_fragment_v1_stream& reader, Consumer c)
+            : _reader(reader)
+            , _consumer(std::move(c))
+        { }
+        future<stop_iteration> operator()(mutation_fragment&& mf) {
+            return std::move(mf).consume(*this);
+        }
+        future<stop_iteration> consume(static_row&& sr) {
+            return handle_result(_consumer.consume(std::move(sr)));
+        }
+        future<stop_iteration> consume(clustering_row&& cr) {
+            return handle_result(_consumer.consume(std::move(cr)));
+        }
+        future<stop_iteration> consume(range_tombstone&& rt) {
+            return handle_result(_consumer.consume(std::move(rt)));
+        }
+        future<stop_iteration> consume(partition_start&& ps) {
+            _decorated_key.emplace(std::move(ps.key()));
+            _consumer.consume_new_partition(*_decorated_key);
+            if (ps.partition_tombstone()) {
+                _consumer.consume(ps.partition_tombstone());
+            }
+            co_return stop_iteration::no;
+        }
+        future<stop_iteration> consume(partition_end&& pe) {
+            return futurize_invoke([this] {
+                return _consumer.consume_end_of_partition();
+            });
+        }
+    private:
+        future<stop_iteration> handle_result(stop_iteration si) {
+            if (si) {
+                if (_consumer.consume_end_of_partition()) {
+                    co_return stop_iteration::yes;
+                }
+                co_await _reader.next_partition();
+                co_return stop_iteration::no;
+            }
+            co_return stop_iteration::no;
+        }
+    };
+public:
+
+    template<typename Consumer>
+    requires FlattenedConsumer<Consumer>
+    // Stops when consumer returns stop_iteration::yes from consume_end_of_partition or end of stream is reached.
+    // Next call will receive fragments from the next partition.
+    // When consumer returns stop_iteration::yes from methods other than consume_end_of_partition then the read
+    // of the current partition is ended, consume_end_of_partition is called and if it returns stop_iteration::no
+    // then the read moves to the next partition.
+    // Reference to the decorated key that is passed to consume_new_partition() remains valid until after
+    // the call to consume_end_of_partition().
+    //
+    // This method is useful because most of current consumers use this semantic.
+    //
+    //
+    // This method returns whatever is returned from Consumer::consume_end_of_stream().
+    auto consume(Consumer consumer) {
+        return do_with(consumer_adapter<Consumer>(*this, std::move(consumer)), [this] (consumer_adapter<Consumer>& adapter) {
+            return consume_pausable(std::ref(adapter)).then([&adapter] {
+                return adapter._consumer.consume_end_of_stream();
+            });
+        });
+    }
+
+    template<typename Consumer>
+    requires FlatMutationReaderConsumer<Consumer>
+    // Stops when consumer returns stop_iteration::yes or end of stream is reached.
+    // Next call will start from the next mutation_fragment in the stream.
+    future<> consume_pausable(Consumer consumer) {
+        while (true) {
+            auto mfp = co_await (*this)();
+            if (!mfp) {
+                co_return;
+            }
+            if constexpr (std::is_same_v<future<stop_iteration>, decltype(consumer(wrap(false)))>) {
+                if (co_await consumer(std::move(*mfp)) == stop_iteration::yes) {
+                    co_return;
+                }
+            } else if (consumer(std::move(*mfp)) == stop_iteration::yes) {
+                co_return;
+            }
+        }
+    }
+};
+
+// Reads a single partition from the stream. Returns empty optional if there are no more partitions to be read.
+inline future<mutation_opt> read_mutation_from_flat_mutation_reader(mutation_fragment_v1_stream& s) {
+    return s.consume(mutation_rebuilder(s.schema()));
+}
+
+
+
+/// A partition_presence_checker quickly returns whether a key is known not to exist
+/// in a data source (it may return false positives, but not false negatives).
+enum class partition_presence_checker_result {
+    definitely_doesnt_exist,
+    maybe_exists
+};
+using partition_presence_checker = std::function<partition_presence_checker_result (const dht::decorated_key& key)>;
+
+inline
+partition_presence_checker make_default_partition_presence_checker() {
+    return [] (const dht::decorated_key&) { return partition_presence_checker_result::maybe_exists; };
+}
+
+// mutation_source represents source of data in mutation form. The data source
+// can be queried multiple times and in parallel. For each query it returns
+// independent mutation_reader.
+//
+// The reader returns mutations having all the same schema, the one passed
+// when invoking the source.
+//
+// When reading in reverse, a reverse schema has to be passed (compared to the
+// table's schema), and a half-reverse (legacy) slice.
+// See docs/dev/reverse-reads.md for more details.
+// Partition-range forwarding is not yet supported in reverse mode.
+class mutation_source {
+    using partition_range = const dht::partition_range&;
+    using io_priority = const io_priority_class&;
+    using flat_reader_v2_factory_type = std::function<flat_mutation_reader_v2(schema_ptr,
+                                                                        reader_permit,
+                                                                        partition_range,
+                                                                        const query::partition_slice&,
+                                                                        io_priority,
+                                                                        tracing::trace_state_ptr,
+                                                                        streamed_mutation::forwarding,
+                                                                        mutation_reader::forwarding)>;
+    // We could have our own version of std::function<> that is nothrow
+    // move constructible and save some indirection and allocation.
+    // Probably not worth the effort though.
+    lw_shared_ptr<flat_reader_v2_factory_type> _fn;
+    lw_shared_ptr<std::function<partition_presence_checker()>> _presence_checker_factory;
+private:
+    mutation_source() = default;
+    explicit operator bool() const { return bool(_fn); }
+    friend class optimized_optional<mutation_source>;
+public:
+    mutation_source(flat_reader_v2_factory_type fn, std::function<partition_presence_checker()> pcf = [] { return make_default_partition_presence_checker(); })
+        : _fn(make_lw_shared<flat_reader_v2_factory_type>(std::move(fn)))
+        , _presence_checker_factory(make_lw_shared<std::function<partition_presence_checker()>>(std::move(pcf)))
+    { }
+
+    mutation_source(std::function<flat_mutation_reader_v2(schema_ptr, reader_permit, partition_range, const query::partition_slice&, io_priority,
+                tracing::trace_state_ptr, streamed_mutation::forwarding)> fn)
+        : mutation_source([fn = std::move(fn)] (schema_ptr s,
+                    reader_permit permit,
+                    partition_range range,
+                    const query::partition_slice& slice,
+                    io_priority pc,
+                    tracing::trace_state_ptr tr,
+                    streamed_mutation::forwarding fwd,
+                    mutation_reader::forwarding) {
+        return fn(std::move(s), std::move(permit), range, slice, pc, std::move(tr), fwd);
+    }) {}
+    mutation_source(std::function<flat_mutation_reader_v2(schema_ptr, reader_permit, partition_range, const query::partition_slice&, io_priority)> fn)
+        : mutation_source([fn = std::move(fn)] (schema_ptr s,
+                    reader_permit permit,
+                    partition_range range,
+                    const query::partition_slice& slice,
+                    io_priority pc,
+                    tracing::trace_state_ptr,
+                    streamed_mutation::forwarding fwd,
+                    mutation_reader::forwarding) {
+        assert(!fwd);
+        return fn(std::move(s), std::move(permit), range, slice, pc);
+    }) {}
+    mutation_source(std::function<flat_mutation_reader_v2(schema_ptr, reader_permit, partition_range, const query::partition_slice&)> fn)
+        : mutation_source([fn = std::move(fn)] (schema_ptr s,
+                    reader_permit permit,
+                    partition_range range,
+                    const query::partition_slice& slice,
+                    io_priority,
+                    tracing::trace_state_ptr,
+                    streamed_mutation::forwarding fwd,
+                    mutation_reader::forwarding) {
+        assert(!fwd);
+        return fn(std::move(s), std::move(permit), range, slice);
+    }) {}
+    mutation_source(std::function<flat_mutation_reader_v2(schema_ptr, reader_permit, partition_range range)> fn)
+        : mutation_source([fn = std::move(fn)] (schema_ptr s,
+                    reader_permit permit,
+                    partition_range range,
+                    const query::partition_slice&,
+                    io_priority,
+                    tracing::trace_state_ptr,
+                    streamed_mutation::forwarding fwd,
+                    mutation_reader::forwarding) {
+        assert(!fwd);
+        return fn(std::move(s), std::move(permit), range);
+    }) {}
+
+    mutation_source(const mutation_source& other) = default;
+    mutation_source& operator=(const mutation_source& other) = default;
+    mutation_source(mutation_source&&) = default;
+    mutation_source& operator=(mutation_source&&) = default;
+
+    mutation_fragment_v1_stream
+    make_fragment_v1_stream(
+        schema_ptr s,
+        reader_permit permit,
+        partition_range range,
+        const query::partition_slice& slice,
+        io_priority pc = default_priority_class(),
+        tracing::trace_state_ptr trace_state = nullptr,
+        streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
+        mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes) const
+    {
+        return mutation_fragment_v1_stream(
+                    (*_fn)(std::move(s), std::move(permit), range, slice, pc, std::move(trace_state), fwd, fwd_mr));
+    }
+
+    mutation_fragment_v1_stream
+    make_fragment_v1_stream(
+        schema_ptr s,
+        reader_permit permit,
+        partition_range range = query::full_partition_range) const
+    {
+        auto& full_slice = s->full_slice();
+        return this->make_fragment_v1_stream(std::move(s), std::move(permit), range, full_slice);
+    }
+
+    // Creates a new reader.
+    //
+    // All parameters captured by reference must remain live as long as returned
+    // mutation_reader or streamed_mutation obtained through it are alive.
+    flat_mutation_reader_v2
+    make_reader_v2(
+            schema_ptr s,
+            reader_permit permit,
+            partition_range range,
+            const query::partition_slice& slice,
+            io_priority pc = default_priority_class(),
+            tracing::trace_state_ptr trace_state = nullptr,
+            streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
+            mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes) const
+    {
+        return (*_fn)(std::move(s), std::move(permit), range, slice, pc, std::move(trace_state), fwd, fwd_mr);
+    }
+
+    flat_mutation_reader_v2
+    make_reader_v2(
+            schema_ptr s,
+            reader_permit permit,
+            partition_range range = query::full_partition_range) const
+    {
+        auto& full_slice = s->full_slice();
+        return make_reader_v2(std::move(s), std::move(permit), range, full_slice);
+    }
+
+    partition_presence_checker make_partition_presence_checker() {
+        return (*_presence_checker_factory)();
+    }
+};
+
+// Returns a mutation_source which is the sum of given mutation_sources.
+//
+// Adding two mutation sources gives a mutation source which contains
+// the sum of writes contained in the addends.
+mutation_source make_combined_mutation_source(std::vector<mutation_source>);
+
+// Represent mutation_source which can be snapshotted.
+class snapshot_source {
+private:
+    std::function<mutation_source()> _func;
+public:
+    snapshot_source(std::function<mutation_source()> func)
+        : _func(std::move(func))
+    { }
+
+    // Creates a new snapshot.
+    // The returned mutation_source represents all earlier writes and only those.
+    // Note though that the mutations in the snapshot may get compacted over time.
+    mutation_source operator()() {
+        return _func();
+    }
+};
+
+mutation_source make_empty_mutation_source();
+snapshot_source make_empty_snapshot_source();
+
+using mutation_source_opt = optimized_optional<mutation_source>;
+
+#include <boost/intrusive/list.hpp>
+#include <boost/intrusive/set.hpp>
+#include <boost/intrusive/parent_from_member.hpp>
+
+#include <seastar/core/memory.hh>
+#include <seastar/util/noncopyable_function.hh>
+
+#include <seastar/core/metrics_registration.hh>
+
+namespace bi = boost::intrusive;
+
+class row_cache;
+class cache_tracker;
+class flat_mutation_reader_v2;
+
+namespace replica {
+class memtable_entry;
+}
+
+namespace cache {
+
+class autoupdating_underlying_reader;
+class cache_flat_mutation_reader;
+class read_context;
+class lsa_manager;
+
+}
+
+// Intrusive set entry which holds partition data.
+//
+// TODO: Make memtables use this format too.
+class cache_entry {
+    schema_ptr _schema;
+    dht::decorated_key _key;
+    partition_entry _pe;
+    // True when we know that there is nothing between this entry and the previous one in cache
+    struct {
+        bool _continuous : 1;
+        bool _dummy_entry : 1;
+        bool _head : 1;
+        bool _tail : 1;
+        bool _train : 1;
+    } _flags{};
+    friend class size_calculator;
+
+    flat_mutation_reader_v2 do_read(row_cache&, cache::read_context& ctx);
+    flat_mutation_reader_v2 do_read(row_cache&, std::unique_ptr<cache::read_context> unique_ctx);
+public:
+    friend class row_cache;
+    friend class cache_tracker;
+
+    bool is_head() const noexcept { return _flags._head; }
+    void set_head(bool v) noexcept { _flags._head = v; }
+    bool is_tail() const noexcept { return _flags._tail; }
+    void set_tail(bool v) noexcept { _flags._tail = v; }
+    bool with_train() const noexcept { return _flags._train; }
+    void set_train(bool v) noexcept { _flags._train = v; }
+
+    struct dummy_entry_tag{};
+    struct evictable_tag{};
+
+    cache_entry(dummy_entry_tag)
+        : _key{dht::token(), partition_key::make_empty()}
+    {
+        _flags._dummy_entry = true;
+    }
+
+    cache_entry(schema_ptr s, const dht::decorated_key& key, const mutation_partition& p)
+        : _schema(std::move(s))
+        , _key(key)
+        , _pe(partition_entry::make_evictable(*_schema, mutation_partition(*_schema, p)))
+    { }
+
+    cache_entry(schema_ptr s, dht::decorated_key&& key, mutation_partition&& p)
+        : cache_entry(evictable_tag(), s, std::move(key),
+            partition_entry::make_evictable(*s, std::move(p)))
+    { }
+
+    // It is assumed that pe is fully continuous
+    // pe must be evictable.
+    cache_entry(evictable_tag, schema_ptr s, dht::decorated_key&& key, partition_entry&& pe) noexcept
+        : _schema(std::move(s))
+        , _key(std::move(key))
+        , _pe(std::move(pe))
+    { }
+
+    cache_entry(cache_entry&&) noexcept;
+    ~cache_entry();
+
+    static cache_entry& container_of(partition_entry& pe) {
+        return *boost::intrusive::get_parent_from_member(&pe, &cache_entry::_pe);
+    }
+
+    // Called when all contents have been evicted.
+    // This object should unlink and destroy itself from the container.
+    void on_evicted(cache_tracker&) noexcept;
+    // Evicts contents of this entry.
+    // The caller is still responsible for unlinking and destroying this entry.
+    void evict(cache_tracker&) noexcept;
+
+    const dht::decorated_key& key() const noexcept { return _key; }
+    dht::ring_position_view position() const noexcept {
+        if (is_dummy_entry()) {
+            return dht::ring_position_view::max();
+        }
+        return _key;
+    }
+
+    friend dht::ring_position_view ring_position_view_to_compare(const cache_entry& ce) noexcept { return ce.position(); }
+
+    const partition_entry& partition() const noexcept { return _pe; }
+    partition_entry& partition() { return _pe; }
+    const schema_ptr& schema() const noexcept { return _schema; }
+    schema_ptr& schema() noexcept { return _schema; }
+    flat_mutation_reader_v2 read(row_cache&, cache::read_context&);
+    flat_mutation_reader_v2 read(row_cache&, std::unique_ptr<cache::read_context>);
+    flat_mutation_reader_v2 read(row_cache&, cache::read_context&, utils::phased_barrier::phase_type);
+    flat_mutation_reader_v2 read(row_cache&, std::unique_ptr<cache::read_context>, utils::phased_barrier::phase_type);
+    bool continuous() const noexcept { return _flags._continuous; }
+    void set_continuous(bool value) noexcept { _flags._continuous = value; }
+
+    bool is_dummy_entry() const noexcept { return _flags._dummy_entry; }
+
+    friend std::ostream& operator<<(std::ostream&, const cache_entry&);
+};
+
+//
+// A data source which wraps another data source such that data obtained from the underlying data source
+// is cached in-memory in order to serve queries faster.
+//
+// Cache populates itself automatically during misses.
+//
+// All updates to the underlying mutation source must be performed through one of the synchronizing methods.
+// Those are the methods which accept external_updater, e.g. update(), invalidate().
+// All synchronizers have strong exception guarantees. If they fail, the set of writes represented by
+// cache didn't change.
+// Synchronizers can be invoked concurrently with each other and other operations on cache.
+//
+class row_cache final {
+public:
+    using phase_type = utils::phased_barrier::phase_type;
+    using partitions_type = double_decker<int64_t, cache_entry,
+                            dht::raw_token_less_comparator, dht::ring_position_comparator,
+                            16, bplus::key_search::linear>;
+    static_assert(bplus::SimpleLessCompare<int64_t, dht::raw_token_less_comparator>);
+    friend class cache::autoupdating_underlying_reader;
+    friend class single_partition_populating_reader;
+    friend class cache_entry;
+    friend class cache::cache_flat_mutation_reader;
+    friend class cache::lsa_manager;
+    friend class cache::read_context;
+    friend class partition_range_cursor;
+    friend class cache_tester;
+
+    // A function which adds new writes to the underlying mutation source.
+    // All invocations of external_updater on given cache instance are serialized internally.
+    // Must have strong exception guarantees. If throws, the underlying mutation source
+    // must be left in the state in which it was before the call.
+    class external_updater_impl {
+    public:
+        virtual ~external_updater_impl() {}
+        virtual future<> prepare() { return make_ready_future<>(); }
+        // FIXME: make execute() noexcept, that will require every updater to make execution exception safe,
+        // also change function signature.
+        virtual void execute() = 0;
+    };
+
+    class external_updater {
+        class non_prepared : public external_updater_impl {
+            using Func = seastar::noncopyable_function<void()>;
+            Func _func;
+        public:
+            explicit non_prepared(Func func) : _func(std::move(func)) {}
+            virtual void execute() override {
+                _func();
+            }
+        };
+        std::unique_ptr<external_updater_impl> _impl;
+    public:
+        external_updater(seastar::noncopyable_function<void()> f) : _impl(std::make_unique<non_prepared>(std::move(f))) {}
+        external_updater(std::unique_ptr<external_updater_impl> impl) : _impl(std::move(impl)) {}
+
+        future<> prepare() { return _impl->prepare(); }
+        void execute() { _impl->execute(); }
+    };
+public:
+    struct stats {
+        utils::timed_rate_moving_average hits;
+        utils::timed_rate_moving_average misses;
+        utils::timed_rate_moving_average reads_with_misses;
+        utils::timed_rate_moving_average reads_with_no_misses;
+    };
+private:
+    cache_tracker& _tracker;
+    stats _stats{};
+    schema_ptr _schema;
+    partitions_type _partitions; // Cached partitions are complete.
+
+    // The snapshots used by cache are versioned. The version number of a snapshot is
+    // called the "population phase", or simply "phase". Between updates, cache
+    // represents the same snapshot.
+    //
+    // Update doesn't happen atomically. Before it completes, some entries reflect
+    // the old snapshot, while others reflect the new snapshot. After update
+    // completes, all entries must reflect the new snapshot. There is a race between the
+    // update process and populating reads. Since after the update all entries must
+    // reflect the new snapshot, reads using the old snapshot cannot be allowed to
+    // insert data which will no longer be reached by the update process. The whole
+    // range can be therefore divided into two sub-ranges, one which was already
+    // processed by the update and one which hasn't. Each key can be assigned a
+    // population phase which determines to which range it belongs, as well as which
+    // snapshot it reflects. The methods snapshot_of() and phase_of() can
+    // be used to determine this.
+    //
+    // In general, reads are allowed to populate given range only if the phase
+    // of the snapshot they use matches the phase of all keys in that range
+    // when the population is committed. This guarantees that the range will
+    // be reached by the update process or already has been in its entirety.
+    // In case of phase conflict, current solution is to give up on
+    // population. Since the update process is a scan, it's sufficient to
+    // check when committing the population if the start and end of the range
+    // have the same phases and that it's the same phase as that of the start
+    // of the range at the time when reading began.
+
+    mutation_source _underlying;
+    phase_type _underlying_phase = partition_snapshot::min_phase;
+    mutation_source_opt _prev_snapshot;
+
+    // Positions >= than this are using _prev_snapshot, the rest is using _underlying.
+    std::optional<dht::ring_position_ext> _prev_snapshot_pos;
+
+    snapshot_source _snapshot_source;
+
+    // There can be at most one update in progress.
+    seastar::semaphore _update_sem = {1};
+
+    logalloc::allocating_section _update_section;
+    logalloc::allocating_section _populate_section;
+    logalloc::allocating_section _read_section;
+    flat_mutation_reader_v2 create_underlying_reader(cache::read_context&, mutation_source&, const dht::partition_range&);
+    flat_mutation_reader_v2 make_scanning_reader(const dht::partition_range&, std::unique_ptr<cache::read_context>);
+    void on_partition_hit();
+    void on_partition_miss();
+    void on_row_hit();
+    void on_row_miss();
+    void on_static_row_insert();
+    void on_mispopulate();
+    void upgrade_entry(cache_entry&);
+    void invalidate_locked(const dht::decorated_key&);
+    void clear_now() noexcept;
+
+    struct previous_entry_pointer {
+        std::optional<dht::decorated_key> _key;
+
+        previous_entry_pointer() = default; // Represents dht::ring_position_view::min()
+        previous_entry_pointer(dht::decorated_key key) : _key(std::move(key)) {};
+
+        // TODO: store iterator here to avoid key comparison
+    };
+
+    template<typename CreateEntry, typename VisitEntry>
+    requires requires(CreateEntry create, VisitEntry visit, partitions_type::iterator it, partitions_type::bound_hint hint) {
+        { create(it, hint) } -> std::same_as<partitions_type::iterator>;
+        { visit(it) } -> std::same_as<void>;
+    }
+    // Must be run under reclaim lock
+    cache_entry& do_find_or_create_entry(const dht::decorated_key& key, const previous_entry_pointer* previous,
+                                 CreateEntry&& create_entry, VisitEntry&& visit_entry);
+
+    // Ensures that partition entry for given key exists in cache and returns a reference to it.
+    // Prepares the entry for reading. "phase" must match the current phase of the entry.
+    //
+    // Since currently every entry has to have a complete tombstone, it has to be provided here.
+    // The entry which is returned will have the tombstone applied to it.
+    //
+    // Must be run under reclaim lock
+    cache_entry& find_or_create_incomplete(const partition_start& ps, row_cache::phase_type phase, const previous_entry_pointer* previous = nullptr);
+
+    // Creates (or touches) a cache entry for missing partition so that sstables are not
+    // poked again for it.
+    cache_entry& find_or_create_missing(const dht::decorated_key& key);
+
+    partitions_type::iterator partitions_end() {
+        return std::prev(_partitions.end());
+    }
+
+    // Only active phases are accepted.
+    // Reference valid only until next deferring point.
+    mutation_source& snapshot_for_phase(phase_type);
+
+    // Returns population phase for given position in the ring.
+    // snapshot_for_phase() can be called to obtain mutation_source for given phase, but
+    // only until the next deferring point.
+    // Should be only called outside update().
+    phase_type phase_of(dht::ring_position_view);
+
+    struct snapshot_and_phase {
+        mutation_source& snapshot;
+        phase_type phase;
+    };
+
+    // Optimized version of:
+    //
+    //  { snapshot_for_phase(phase_of(pos)), phase_of(pos) };
+    //
+    snapshot_and_phase snapshot_of(dht::ring_position_view pos);
+
+    // Merges the memtable into cache with configurable logic for handling memtable entries.
+    // The Updater gets invoked for every entry in the memtable with a lower bound iterator
+    // into _partitions (cache_i), and the memtable entry.
+    // It is invoked inside allocating section and in the context of cache's allocator.
+    // All memtable entries will be removed.
+    template <typename Updater>
+    future<> do_update(external_updater, replica::memtable& m, Updater func);
+
+    // Clears given memtable invalidating any affected cache elements.
+    void invalidate_sync(replica::memtable&) noexcept;
+
+    // A function which updates cache to the current snapshot.
+    // It's responsible for advancing _prev_snapshot_pos between deferring points.
+    //
+    // Must have strong failure guarantees. Upon failure, it should still leave the cache
+    // in a state consistent with the update it is performing.
+    using internal_updater = std::function<future<>()>;
+
+    // Atomically updates the underlying mutation source and synchronizes the cache.
+    //
+    // Strong failure guarantees. If returns a failed future, the underlying mutation
+    // source was and cache are not modified.
+    //
+    // internal_updater is only kept alive until its invocation returns.
+    future<> do_update(external_updater eu, internal_updater iu) noexcept;
+
+public:
+    ~row_cache();
+    row_cache(schema_ptr, snapshot_source, cache_tracker&, is_continuous = is_continuous::no);
+    row_cache(row_cache&&) = default;
+    row_cache(const row_cache&) = delete;
+public:
+    // Implements mutation_source for this cache, see mutation_reader.hh
+    // User needs to ensure that the row_cache object stays alive
+    // as long as the reader is used.
+    // The range must not wrap around.
+    flat_mutation_reader_v2 make_reader(schema_ptr s,
+                                     reader_permit permit,
+                                     const dht::partition_range& range,
+                                     const query::partition_slice& slice,
+                                     const io_priority_class& pc = default_priority_class(),
+                                     tracing::trace_state_ptr trace_state = nullptr,
+                                     streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
+                                     mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::no) {
+        if (auto reader_opt = make_reader_opt(s, permit, range, slice, pc, std::move(trace_state), fwd, fwd_mr)) {
+            return std::move(*reader_opt);
+        }
+        [[unlikely]] return make_empty_flat_reader_v2(std::move(s), std::move(permit));
+    }
+    // Same as make_reader, but returns an empty optional instead of a no-op reader when there is nothing to
+    // read. This is an optimization.
+    flat_mutation_reader_v2_opt make_reader_opt(schema_ptr,
+                                     reader_permit permit,
+                                     const dht::partition_range&,
+                                     const query::partition_slice&,
+                                     const io_priority_class& = default_priority_class(),
+                                     tracing::trace_state_ptr trace_state = nullptr,
+                                     streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
+                                     mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::no);
+
+    flat_mutation_reader_v2 make_reader(schema_ptr s, reader_permit permit, const dht::partition_range& range = query::full_partition_range) {
+        auto& full_slice = s->full_slice();
+        return make_reader(std::move(s), std::move(permit), range, full_slice);
+    }
+
+    const stats& stats() const { return _stats; }
+public:
+    // Populate cache from given mutation, which must be fully continuous.
+    // Intended to be used only in tests.
+    // Can only be called prior to any reads.
+    void populate(const mutation& m, const previous_entry_pointer* previous = nullptr);
+
+    // Finds the entry in cache for a given key.
+    // Intended to be used only in tests.
+    cache_entry& lookup(const dht::decorated_key& key);
+
+    // Synchronizes cache with the underlying data source from a memtable which
+    // has just been flushed to the underlying data source.
+    // The memtable can be queried during the process, but must not be written.
+    // After the update is complete, memtable is empty.
+    future<> update(external_updater, replica::memtable&);
+
+    // Like update(), synchronizes cache with an incremental change to the underlying
+    // mutation source, but instead of inserting and merging data, invalidates affected ranges.
+    // Can be thought of as a more fine-grained version of invalidate(), which invalidates
+    // as few elements as possible.
+    future<> update_invalidating(external_updater, replica::memtable&);
+
+    // Refreshes snapshot. Must only be used if logical state in the underlying data
+    // source hasn't changed.
+    void refresh_snapshot();
+
+    // Moves given partition to the front of LRU if present in cache.
+    void touch(const dht::decorated_key&);
+
+    // Detaches current contents of given partition from LRU, so
+    // that they are not evicted by memory reclaimer.
+    void unlink_from_lru(const dht::decorated_key&);
+
+    // Synchronizes cache with the underlying mutation source
+    // by invalidating ranges which were modified. This will force
+    // them to be re-read from the underlying mutation source
+    // during next read overlapping with the invalidated ranges.
+    //
+    // The ranges passed to invalidate() must include all
+    // data which changed since last synchronization. Failure
+    // to do so may result in reads seeing partial writes,
+    // which would violate write atomicity.
+    //
+    // Guarantees that readers created after invalidate()
+    // completes will see all writes from the underlying
+    // mutation source made prior to the call to invalidate().
+    future<> invalidate(external_updater, const dht::decorated_key&);
+    future<> invalidate(external_updater, const dht::partition_range& = query::full_partition_range);
+    future<> invalidate(external_updater, dht::partition_range_vector&&);
+
+    // Evicts entries from cache.
+    //
+    // Note that this does not synchronize with the underlying source,
+    // it is assumed that the underlying source didn't change.
+    // If it did, use invalidate() instead.
+    void evict();
+
+    const cache_tracker& get_cache_tracker() const {
+        return _tracker;
+    }
+    cache_tracker& get_cache_tracker() {
+        return _tracker;
+    }
+
+    void set_schema(schema_ptr) noexcept;
+    const schema_ptr& schema() const;
+
+    friend std::ostream& operator<<(std::ostream&, row_cache&);
+
+    friend class just_cache_scanning_reader;
+    friend class scanning_and_populating_reader;
+    friend class range_populating_reader;
+    friend class cache_tracker;
+    friend class mark_end_as_continuous;
+};
+
+namespace cache {
+
+class lsa_manager {
+    row_cache &_cache;
+public:
+    lsa_manager(row_cache &cache) : _cache(cache) {}
+
+    template<typename Func>
+    decltype(auto) run_in_read_section(const Func &func) {
+        return _cache._read_section(_cache._tracker.region(), [&func]() {
+            return func();
+        });
+    }
+
+    template<typename Func>
+    decltype(auto) run_in_update_section(const Func &func) {
+        return _cache._update_section(_cache._tracker.region(), [&func]() {
+            return func();
+        });
+    }
+
+    template<typename Func>
+    void run_in_update_section_with_allocator(Func &&func) {
+        return _cache._update_section(_cache._tracker.region(), [this, &func]() {
+            return with_allocator(_cache._tracker.region().allocator(), [&func]() mutable {
+                return func();
+            });
+        });
+    }
+
+    logalloc::region &region() { return _cache._tracker.region(); }
+
+    logalloc::allocating_section &read_section() { return _cache._read_section; }
+};
+
+}
+
+#include <boost/algorithm/cxx11/any_of.hpp>
+#include <boost/range/algorithm/heap_algorithm.hpp>
+
+class partition_snapshot_row_cursor;
+
+// A non-owning reference to a row inside partition_snapshot which
+// maintains it's position and thus can be kept across reference invalidation points.
+class partition_snapshot_row_weakref final {
+    mutation_partition::rows_type::iterator _it;
+    partition_snapshot::change_mark _change_mark;
+    position_in_partition _pos = position_in_partition::min();
+    bool _in_latest = false;
+public:
+    partition_snapshot_row_weakref() = default;
+    // Makes this object point to a row pointed to by given partition_snapshot_row_cursor.
+    explicit partition_snapshot_row_weakref(const partition_snapshot_row_cursor&);
+    explicit partition_snapshot_row_weakref(std::nullptr_t) {}
+    partition_snapshot_row_weakref(partition_snapshot& snp, mutation_partition::rows_type::iterator it, bool in_latest)
+        : _it(it)
+        , _change_mark(snp.get_change_mark())
+        , _pos(it->position())
+        , _in_latest(in_latest)
+    { }
+    partition_snapshot_row_weakref& operator=(const partition_snapshot_row_cursor&);
+    partition_snapshot_row_weakref& operator=(std::nullptr_t) noexcept {
+        _change_mark = {};
+        return *this;
+    }
+    // Returns true iff the pointer is pointing at a row.
+    explicit operator bool() const { return _change_mark != partition_snapshot::change_mark(); }
+public:
+    // Sets the iterator in latest version for the current position.
+    void set_latest(mutation_partition::rows_type::iterator it) {
+        _it = std::move(it);
+        _in_latest = true;
+    }
+public:
+    // Returns the position of the row.
+    // Call only when pointing at a row.
+    const position_in_partition& position() const { return _pos; }
+    // Returns true iff the object is valid.
+    bool valid(partition_snapshot& snp) { return snp.get_change_mark() == _change_mark; }
+    // Call only when valid.
+    bool is_in_latest_version() const { return _in_latest; }
+    // Brings the object back to validity and returns true iff the snapshot contains the row.
+    // When not pointing at a row, returns false.
+    bool refresh(partition_snapshot& snp) {
+        auto snp_cm = snp.get_change_mark();
+        if (snp_cm == _change_mark) {
+            return true;
+        }
+        if (!_change_mark) {
+            return false;
+        }
+        _change_mark = snp_cm;
+        rows_entry::tri_compare cmp(*snp.schema());
+        _in_latest = true;
+        for (auto&& v : snp.versions()) {
+            auto rows = v.partition().clustered_rows();
+            _it = rows.find(_pos, cmp);
+            if (_it != rows.end()) {
+                return true;
+            }
+            _in_latest = false;
+        }
+        return false;
+    }
+    rows_entry* operator->() const {
+        return &*_it;
+    }
+    rows_entry& operator*() const {
+        return *_it;
+    }
+};
+
+// Allows iterating over rows of mutation_partition represented by given partition_snapshot.
+//
+// The cursor initially has a position before all rows and is not pointing at any row.
+// To position the cursor, use advance_to().
+//
+// All methods should be called with the region of the snapshot locked. The cursor is invalidated
+// when that lock section is left, or if the snapshot is modified.
+//
+// When the cursor is invalidated, it still maintains its previous position. It can be brought
+// back to validity by calling maybe_refresh(), or advance_to().
+//
+// Insertion of row entries after cursor's position invalidates the cursor.
+// Exceptions thrown from mutators invalidate the cursor.
+//
+// Range tombstone information is accessible via range_tombstone() and range_tombstone_for_row()
+// functions. range_tombstone() returns the tombstone for the interval which strictly precedes
+// the current row, and range_tombstone_for_row() returns the information for the row itself.
+// If the interval which precedes the row is not continuous, then range_tombstone() is empty.
+// If range_tombstone() is not empty then the interval is continuous.
+class partition_snapshot_row_cursor final {
+    friend class partition_snapshot_row_weakref;
+    struct position_in_version {
+        mutation_partition::rows_type::iterator it;
+        utils::immutable_collection<mutation_partition::rows_type> rows;
+        int version_no;
+        bool unique_owner = false;
+        is_continuous continuous = is_continuous::no; // Range continuity in the direction of lower keys (in cursor schema domain).
+
+        // Range tombstone in the direction of lower keys (in cursor schema domain).
+        // Excludes the row. In the reverse mode, the row may have a different range tombstone.
+        tombstone rt;
+    };
+
+    const schema& _schema; // query domain
+    partition_snapshot& _snp;
+
+    // _heap contains iterators which are ahead of the cursor.
+    // _current_row contains iterators which are directly below the cursor.
+    utils::small_vector<position_in_version, 2> _heap; // query domain order
+    utils::small_vector<position_in_version, 2> _current_row;
+
+    // For !_reversed cursors points to the entry which
+    // is the lower_bound() of the current position in table schema order.
+    // For _reversed cursors it can be either lower_bound() in table order
+    // or lower_bound() in cursor's order, so should not be relied upon.
+    // if current entry is in the latest version then _latest_it points to it,
+    // also in _reversed mode.
+    std::optional<mutation_partition::rows_type::iterator> _latest_it;
+
+    // Continuity and range tombstone corresponding to ranges which are not represented in _heap because the cursor
+    // went pass all the entries in those versions.
+    bool _background_continuity = false;
+    tombstone _background_rt;
+
+    bool _continuous{};
+    bool _dummy{};
+    const bool _unique_owner;
+    const bool _reversed;
+    const bool _digest_requested;
+    tombstone _range_tombstone;
+    tombstone _range_tombstone_for_row;
+    position_in_partition _position; // table domain
+    partition_snapshot::change_mark _change_mark;
+
+    position_in_partition_view to_table_domain(position_in_partition_view pos) const {
+        if (_reversed) [[unlikely]] {
+            return pos.reversed();
+        }
+        return pos;
+    }
+
+    position_in_partition_view to_query_domain(position_in_partition_view pos) const {
+        if (_reversed) [[unlikely]] {
+            return pos.reversed();
+        }
+        return pos;
+    }
+
+    struct version_heap_less_compare {
+        rows_entry::tri_compare _cmp;
+        partition_snapshot_row_cursor& _cur;
+    public:
+        explicit version_heap_less_compare(partition_snapshot_row_cursor& cur)
+            : _cmp(cur._schema)
+            , _cur(cur)
+        { }
+
+        bool operator()(const position_in_version& a, const position_in_version& b) {
+            auto res = _cmp(_cur.to_query_domain(a.it->position()), _cur.to_query_domain(b.it->position()));
+            return res > 0 || (res == 0 && a.version_no > b.version_no);
+        }
+    };
+
+    // Removes the next row from _heap and puts it into _current_row
+    bool recreate_current_row() {
+        _current_row.clear();
+        _continuous = _background_continuity;
+        _range_tombstone = _background_rt;
+        _range_tombstone_for_row = _background_rt;
+        _dummy = true;
+        if (_heap.empty()) {
+            if (_reversed) {
+                _position = position_in_partition::before_all_clustered_rows();
+            } else {
+                _position = position_in_partition::after_all_clustered_rows();
+            }
+            return false;
+        }
+        version_heap_less_compare heap_less(*this);
+        position_in_partition::equal_compare eq(*_snp.schema());
+        do {
+            boost::range::pop_heap(_heap, heap_less);
+            memory::on_alloc_point();
+            position_in_version& v = _heap.back();
+            rows_entry& e = *v.it;
+            if (_digest_requested) {
+                e.row().cells().prepare_hash(_schema, column_kind::regular_column);
+            }
+            _dummy &= bool(e.dummy());
+            _continuous |= bool(v.continuous);
+            _range_tombstone_for_row.apply(e.range_tombstone());
+            if (v.continuous) {
+                _range_tombstone.apply(v.rt);
+            }
+            _current_row.push_back(v);
+            _heap.pop_back();
+        } while (!_heap.empty() && eq(_current_row[0].it->position(), _heap[0].it->position()));
+
+        // FIXME: Optimize by dropping dummy() entries.
+        for (position_in_version& v : _heap) {
+            _continuous |= bool(v.continuous);
+            if (v.continuous) {
+                _range_tombstone.apply(v.rt);
+                _range_tombstone_for_row.apply(v.rt);
+            }
+        }
+
+        _position = position_in_partition(_current_row[0].it->position());
+        return true;
+    }
+
+    // lower_bound is in the query schema domain
+    void prepare_heap(position_in_partition_view lower_bound) {
+        lower_bound = to_table_domain(lower_bound);
+        memory::on_alloc_point();
+        rows_entry::tri_compare cmp(*_snp.schema());
+        version_heap_less_compare heap_less(*this);
+        _heap.clear();
+        _latest_it.reset();
+        _background_continuity = false;
+        _background_rt = {};
+        int version_no = 0;
+        bool unique_owner = _unique_owner;
+        bool first = true;
+        for (auto&& v : _snp.versions()) {
+            unique_owner = unique_owner && (first || !v.is_referenced());
+            auto rows = v.partition().clustered_rows();
+            auto pos = rows.lower_bound(lower_bound, cmp);
+            if (first) {
+                _latest_it = pos;
+            }
+            if (pos) {
+                is_continuous cont;
+                tombstone rt;
+                if (_reversed) [[unlikely]] {
+                    if (cmp(pos->position(), lower_bound) != 0) {
+                        cont = pos->continuous();
+                        rt = pos->range_tombstone();
+                        if (pos != rows.begin()) {
+                            --pos;
+                        } else {
+                            _background_continuity |= bool(cont);
+                            if (cont) {
+                                _background_rt = rt;
+                            }
+                            pos = {};
+                        }
+                    } else {
+                        auto next_entry = std::next(pos);
+                        if (next_entry == rows.end()) {
+                            // Positions past last dummy are complete since mutation sources
+                            // can't contain any keys which are larger.
+                            cont = is_continuous::yes;
+                            rt = {};
+                        } else {
+                            cont = next_entry->continuous();
+                            rt = next_entry->range_tombstone();
+                        }
+                    }
+                } else {
+                    cont = pos->continuous();
+                    rt = pos->range_tombstone();
+                }
+                if (pos) [[likely]] {
+                    _heap.emplace_back(position_in_version{pos, std::move(rows), version_no, unique_owner, cont, rt});
+                }
+            } else {
+                if (_reversed) [[unlikely]] {
+                    if (!rows.empty()) {
+                        pos = std::prev(rows.end());
+                    } else {
+                        _background_continuity = true;
+                    }
+                } else {
+                    _background_continuity = true; // Default continuity past the last entry
+                }
+                if (pos) [[likely]] {
+                    _heap.emplace_back(position_in_version{pos, std::move(rows), version_no, unique_owner, is_continuous::yes});
+                }
+            }
+            ++version_no;
+            first = false;
+        }
+        boost::range::make_heap(_heap, heap_less);
+        _change_mark = _snp.get_change_mark();
+    }
+
+    // Advances the cursor to the next row.
+    // The @keep denotes whether the entries should be kept in partition version.
+    // If there is no next row, returns false and the cursor is no longer pointing at a row.
+    // Can be only called on a valid cursor pointing at a row.
+    // When throws, the cursor is invalidated and its position is not changed.
+    bool advance(bool keep) {
+        memory::on_alloc_point();
+        version_heap_less_compare heap_less(*this);
+        assert(iterators_valid());
+        for (auto&& curr : _current_row) {
+            if (!keep && curr.unique_owner) {
+                mutation_partition::rows_type::key_grabber kg(curr.it);
+                kg.release(current_deleter<rows_entry>());
+                if (_reversed && curr.it) [[unlikely]] {
+                    if (curr.rows.begin() == curr.it) {
+                        _background_continuity |= bool(curr.it->continuous());
+                        if (curr.it->continuous()) {
+                            _background_rt.apply(curr.it->range_tombstone());
+                        }
+                        curr.it = {};
+                    } else {
+                        curr.continuous = curr.it->continuous();
+                        curr.rt = curr.it->range_tombstone();
+                        --curr.it;
+                    }
+                }
+            } else {
+                if (_reversed) [[unlikely]] {
+                    if (curr.rows.begin() == curr.it) {
+                        _background_continuity |= bool(curr.it->continuous());
+                        if (curr.it->continuous()) {
+                            _background_rt.apply(curr.it->range_tombstone());
+                        }
+                        curr.it = {};
+                    } else {
+                        curr.continuous = curr.it->continuous();
+                        curr.rt = curr.it->range_tombstone();
+                        --curr.it;
+                    }
+                } else {
+                    ++curr.it;
+                    if (curr.it) {
+                        curr.continuous = curr.it->continuous();
+                        curr.rt = curr.it->range_tombstone();
+                    }
+                }
+            }
+            if (curr.it) {
+                if (curr.version_no == 0) {
+                    _latest_it = curr.it;
+                }
+                _heap.push_back(curr);
+                boost::range::push_heap(_heap, heap_less);
+            }
+        }
+        return recreate_current_row();
+    }
+
+    bool is_in_latest_version() const noexcept { return at_a_row() && _current_row[0].version_no == 0; }
+
+public:
+    // When reversed is true then the cursor will operate in reversed direction.
+    // When reversed, s must be a reversed schema relative to snp->schema()
+    // Positions and fragments accepted and returned by the cursor are from the domain of s.
+    // Iterators are from the table's schema domain.
+    partition_snapshot_row_cursor(const schema& s, partition_snapshot& snp, bool unique_owner = false, bool reversed = false, bool digest_requested = false)
+        : _schema(s)
+        , _snp(snp)
+        , _unique_owner(unique_owner)
+        , _reversed(reversed)
+        , _digest_requested(digest_requested)
+        , _position(position_in_partition::static_row_tag_t{})
+    { }
+
+    // If is_in_latest_version() then this returns an iterator to the entry under cursor in the latest version.
+    mutation_partition::rows_type::iterator get_iterator_in_latest_version() const {
+        assert(_latest_it);
+        return *_latest_it;
+    }
+
+    // Returns true iff the iterators obtained since the cursor was last made valid
+    // are still valid. Note that this doesn't mean that the cursor itself is valid.
+    bool iterators_valid() const {
+        return _snp.get_change_mark() == _change_mark;
+    }
+
+    // Marks the iterators as valid without refreshing them.
+    // Call only when the iterators are known to be valid.
+    void force_valid() {
+        _change_mark = _snp.get_change_mark();
+    }
+
+    // Advances cursor to the first entry with position >= pos, if such entry exists.
+    // If no such entry exists, the cursor is positioned at an extreme position in the direction of
+    // the cursor (min for reversed cursor, max for forward cursor) and not pointing at a row
+    // but still valid.
+    //
+    // continuous() is always valid after the call, even if not pointing at a row.
+    // Returns true iff the cursor is pointing at a row after the call.
+    bool maybe_advance_to(position_in_partition_view pos) {
+        prepare_heap(pos);
+        return recreate_current_row();
+    }
+
+    // Brings back the cursor to validity.
+    // Can be only called when cursor is pointing at a row.
+    //
+    // Semantically equivalent to:
+    //
+    //   advance_to(position());
+    //
+    // but avoids work if not necessary.
+    //
+    // Changes to attributes of the current row (e.g. continuity) don't have to be reflected.
+    bool maybe_refresh() {
+        if (!iterators_valid()) {
+            auto pos = position_in_partition(position()); // advance_to() modifies position() so copy
+            return advance_to(pos);
+        }
+        // Refresh latest version's iterator in case there was an insertion
+        // before it and after cursor's position. There cannot be any
+        // insertions for non-latest versions, so we don't have to update them.
+        if (!is_in_latest_version()) {
+            rows_entry::tri_compare cmp(*_snp.schema());
+            version_heap_less_compare heap_less(*this);
+            auto rows = _snp.version()->partition().clustered_rows();
+            bool match;
+            auto it = rows.lower_bound(_position, match, cmp);
+            _latest_it = it;
+            auto heap_i = boost::find_if(_heap, [](auto&& v) { return v.version_no == 0; });
+
+            is_continuous cont;
+            tombstone rt;
+            if (it) {
+                cont = it->continuous();
+                rt = it->range_tombstone();
+                if (_reversed) [[unlikely]] {
+                    if (!match) {
+                        // lower_bound() in reverse order points to predecessor of it unless the keys are equal.
+                        if (it == rows.begin()) {
+                            if (it->continuous()) {
+                                _background_continuity = true;
+                                _background_rt.apply(it->range_tombstone());
+                            }
+                            it = {};
+                        } else {
+                            --it;
+                        }
+                    } else {
+                        // We can put anything in the match case since this continuity will not be used
+                        // when advancing the cursor. Same applies to rt.
+                        cont = is_continuous::no;
+                        rt = {};
+                    }
+                }
+            } else {
+                _background_continuity = true; // Default continuity
+            }
+
+            if (!it) {
+                if (heap_i != _heap.end()) {
+                    _heap.erase(heap_i);
+                    boost::range::make_heap(_heap, heap_less);
+                }
+            } else if (match) {
+                _current_row.insert(_current_row.begin(), position_in_version{
+                    it, std::move(rows), 0, _unique_owner, cont, rt});
+                if (heap_i != _heap.end()) {
+                    _heap.erase(heap_i);
+                    boost::range::make_heap(_heap, heap_less);
+                }
+            } else {
+                if (heap_i != _heap.end()) {
+                    heap_i->it = it;
+                    heap_i->continuous = cont;
+                    heap_i->rt = rt;
+                    boost::range::make_heap(_heap, heap_less);
+                } else {
+                    _heap.push_back(position_in_version{
+                        it, std::move(rows), 0, _unique_owner, cont, rt});
+                    boost::range::push_heap(_heap, heap_less);
+                }
+            }
+        }
+        return true;
+    }
+
+    // Brings back the cursor to validity, pointing at the first row with position not smaller
+    // than the current position. Returns false iff no such row exists.
+    // Assumes that rows are not inserted into the snapshot (static). They can be removed.
+    bool maybe_refresh_static() {
+        if (!iterators_valid()) {
+            return maybe_advance_to(position());
+        }
+        return true;
+    }
+
+    // Moves the cursor to the first entry with position >= pos.
+    // If no such entry exists, the cursor is still moved, although
+    // it won't be pointing at a row. Still, continuous() will be valid.
+    //
+    // Returns true iff there can't be any clustering row entries
+    // between lower_bound (inclusive) and the position to which the cursor
+    // was advanced.
+    //
+    // May be called when cursor is not valid.
+    // The cursor is valid after the call.
+    // Must be called under reclaim lock.
+    // When throws, the cursor is invalidated and its position is not changed.
+    bool advance_to(position_in_partition_view lower_bound) {
+        maybe_advance_to(lower_bound);
+        return no_clustering_row_between_weak(_schema, lower_bound, position());
+    }
+
+    // Call only when valid.
+    // Returns true iff the cursor is pointing at a row.
+    bool at_a_row() const { return !_current_row.empty(); }
+
+    // Advances to the next row, if any.
+    // If there is no next row, advances to the extreme position in the direction of the cursor
+    // (position_in_partition::before_all_clustering_rows() or position_in_partition::after_all_clustering_rows)
+    // and does not point at a row.
+    // Information about the range, continuous() and range_tombstone(), is still valid in this case.
+    // Call only when valid, not necessarily pointing at a row.
+    bool next() { return advance(true); }
+
+    bool erase_and_advance() { return advance(false); }
+
+    // Can be called when cursor is pointing at a row.
+    // Returns true iff the key range adjacent to the cursor's position from the side of smaller keys
+    // is marked as continuous.
+    bool continuous() const { return _continuous; }
+
+    // Can be called when cursor is valid, not necessarily pointing at a row.
+    // Returns the range tombstone for the key range adjacent to the cursor's position from the side of smaller keys.
+    // Excludes the range for the row itself. That information is returned by range_tombstone_for_row().
+    // It's possible that range_tombstone() is empty and range_tombstone_for_row() is not empty.
+    tombstone range_tombstone() const { return _range_tombstone; }
+
+    // Can be called when cursor is pointing at a row.
+    // Returns the range tombstone covering the row under the cursor.
+    tombstone range_tombstone_for_row() const { return _range_tombstone_for_row; }
+
+    // Can be called when cursor is pointing at a row.
+    bool dummy() const { return _dummy; }
+
+    // Can be called only when cursor is valid and pointing at a row, and !dummy().
+    const clustering_key& key() const { return _position.key(); }
+
+    // Can be called only when cursor is valid and pointing at a row.
+    clustering_row row() const {
+        // Note: if the precondition ("cursor is valid and pointing at a row") is fulfilled
+        // then _current_row is not empty, so the below is valid.
+        clustering_row cr(key(), deletable_row(_schema, _current_row[0].it->row()));
+        for (size_t i = 1; i < _current_row.size(); ++i) {
+            cr.apply(_schema, _current_row[i].it->row());
+        }
+        return cr;
+    }
+
+    // Can be called only when cursor is valid and pointing at a row.
+    deletable_row& latest_row() const noexcept {
+        return _current_row[0].it->row();
+    }
+
+    // Can be called only when cursor is valid and pointing at a row.
+    // Monotonic exception guarantees.
+    template <typename Consumer>
+    requires std::is_invocable_v<Consumer, deletable_row>
+    void consume_row(Consumer&& consumer) {
+        for (position_in_version& v : _current_row) {
+            if (v.unique_owner) {
+                consumer(std::move(v.it->row()));
+            } else {
+                consumer(deletable_row(_schema, v.it->row()));
+            }
+        }
+    }
+
+    // Can be called only when cursor is valid and pointing at a row.
+    template <typename Consumer>
+    requires std::is_invocable_v<Consumer, const deletable_row&>
+    void consume_row(Consumer&& consumer) const {
+        for (const position_in_version& v : _current_row) {
+            consumer(v.it->row());
+        }
+    }
+
+    // Returns memory footprint of row entries under the cursor.
+    // Can be called only when cursor is valid and pointing at a row.
+    size_t memory_usage() const {
+        size_t result = 0;
+        for (const position_in_version& v : _current_row) {
+            result += v.it->memory_usage(_schema);
+        }
+        return result;
+    }
+
+    struct ensure_result {
+        rows_entry& row;
+        mutation_partition_v2::rows_type::iterator it;
+        bool inserted = false;
+    };
+
+    // Makes sure that a rows_entry for the row under the cursor exists in the latest version.
+    // Doesn't change logical value or continuity of the snapshot.
+    // Can be called only when cursor is valid and pointing at a row.
+    // The cursor remains valid after the call and points at the same row as before.
+    // Use only with evictable snapshots.
+    ensure_result ensure_entry_in_latest() {
+        auto&& rows = _snp.version()->partition().mutable_clustered_rows();
+        if (is_in_latest_version()) {
+            auto latest_i = get_iterator_in_latest_version();
+            rows_entry& latest = *latest_i;
+            if (_snp.at_latest_version()) {
+                _snp.tracker()->touch(latest);
+            }
+            return {latest, latest_i, false};
+        } else {
+            // Copy row from older version because rows in evictable versions must
+            // hold values which are independently complete to be consistent on eviction.
+            auto e = [&] {
+                if (!at_a_row()) {
+                    return alloc_strategy_unique_ptr<rows_entry>(
+                            current_allocator().construct<rows_entry>(*_snp.schema(), _position,
+                                                                      is_dummy(!_position.is_clustering_row()), is_continuous::no));
+                } else {
+                    return alloc_strategy_unique_ptr<rows_entry>(
+                            current_allocator().construct<rows_entry>(*_snp.schema(), *_current_row[0].it));
+                }
+            }();
+            rows_entry& re = *e;
+            if (_reversed) { // latest_i is not reliably a successor
+                // FIXME: set continuity when possible. Not that important since cache sets it anyway when populating.
+                re.set_continuous(false);
+                e->set_range_tombstone(range_tombstone_for_row());
+                rows_entry::tri_compare cmp(*_snp.schema());
+                auto res = rows.insert(std::move(e), cmp);
+                if (res.second) {
+                    _snp.tracker()->insert(re);
+                }
+                return {*res.first, res.first, res.second};
+            } else {
+                auto latest_i = get_iterator_in_latest_version();
+                if (latest_i && latest_i->continuous()) {
+                    e->set_continuous(true);
+                    // See the "information monotonicity" rule.
+                    e->set_range_tombstone(latest_i->range_tombstone());
+                } else {
+                    e->set_continuous(false);
+                    e->set_range_tombstone(range_tombstone_for_row());
+                }
+                auto i = rows.insert_before(latest_i, std::move(e));
+                _snp.tracker()->insert(re);
+                return {re, i, true};
+            }
+        }
+    }
+
+    // Returns a pointer to rows_entry with given position in latest version or
+    // creates a neutral one, provided that it belongs to a continuous range.
+    // Otherwise returns nullptr.
+    // Doesn't change logical value of mutation_partition or continuity of the snapshot.
+    // The cursor doesn't have to be valid.
+    // The cursor is invalid after the call.
+    // When returns an engaged optional, the attributes of the cursor: continuous() and range_tombstone()
+    // are valid, as if the cursor was advanced to the requested position.
+    // Assumes the snapshot is evictable and not populated by means other than ensure_entry_if_complete().
+    // Subsequent calls to ensure_entry_if_complete() or advance_to() must be given weakly monotonically increasing
+    // positions unless iterators are invalidated across the calls.
+    // The cursor must not be a reversed-order cursor.
+    // Use only with evictable snapshots.
+    std::optional<ensure_result> ensure_entry_if_complete(position_in_partition_view pos) {
+        if (_reversed) { // latest_i is unreliable
+            throw_with_backtrace<std::logic_error>("ensure_entry_if_complete() called on reverse cursor");
+        }
+        position_in_partition::less_compare less(_schema);
+        if (!iterators_valid() || less(position(), pos)) {
+            auto has_entry = maybe_advance_to(pos);
+            assert(has_entry); // evictable snapshots must have a dummy after all rows.
+        }
+        auto&& rows = _snp.version()->partition().mutable_clustered_rows();
+        auto latest_i = get_iterator_in_latest_version();
+        position_in_partition::equal_compare eq(_schema);
+        if (eq(position(), pos)) {
+            // Check if entry was already inserted by previous call to ensure_entry_if_complete()
+            if (latest_i != rows.begin()) {
+                auto prev_i = std::prev(latest_i);
+                if (eq(prev_i->position(), pos)) {
+                    return ensure_result{*prev_i, prev_i, false};
+                }
+            }
+            return ensure_entry_in_latest();
+        } else if (!continuous()) {
+            return std::nullopt;
+        }
+        // Check if entry was already inserted by previous call to ensure_entry_if_complete()
+        if (latest_i != rows.begin()) {
+            auto prev_i = std::prev(latest_i);
+            if (eq(prev_i->position(), pos)) {
+                return ensure_result{*prev_i, prev_i, false};
+            }
+        }
+        auto e = alloc_strategy_unique_ptr<rows_entry>(
+                current_allocator().construct<rows_entry>(_schema, pos,
+                    is_dummy(!pos.is_clustering_row()),
+                    is_continuous::no));
+        if (latest_i && latest_i->continuous()) {
+            e->set_continuous(true);
+            e->set_range_tombstone(latest_i->range_tombstone()); // See the "information monotonicity" rule.
+        } else {
+            // Even if the range in the latest version is not continuous, the row itself is assumed to be complete,
+            // so it must inherit the current range tombstone.
+            e->set_range_tombstone(range_tombstone());
+        }
+        auto e_i = rows.insert_before(latest_i, std::move(e));
+        _snp.tracker()->insert(*e_i);
+        return ensure_result{*e_i, e_i, true};
+    }
+
+    // Brings the entry pointed to by the cursor to the front of the LRU
+    // Cursor must be valid and pointing at a row.
+    // Use only with evictable snapshots.
+    void touch() {
+        // We cannot bring entries from non-latest versions to the front because that
+        // could result violate ordering invariant for the LRU, which states that older versions
+        // must be evicted first. Needed to keep the snapshot consistent.
+        if (_snp.at_latest_version() && is_in_latest_version()) {
+            _snp.tracker()->touch(*get_iterator_in_latest_version());
+        }
+    }
+
+    // Position of the cursor in the cursor schema domain.
+    // Can be called when cursor is pointing at a row, even when invalid, or when valid.
+    position_in_partition_view position() const {
+        return to_query_domain(_position);
+    }
+
+    // Position of the cursor in the table schema domain.
+    // Can be called when cursor is pointing at a row, even when invalid, or when valid.
+    position_in_partition_view table_position() const {
+        return _position;
+    }
+
+    friend std::ostream& operator<<(std::ostream& out, const partition_snapshot_row_cursor& cur) {
+        fmt::print(out, "{{cursor: position={}, cont={}, rt={}}}",
+                   cur._position, cur.continuous(), cur.range_tombstone());
+        if (cur.range_tombstone() != cur.range_tombstone_for_row()) {
+            fmt::print(out, ", row_rt={}", cur.range_tombstone_for_row());
+        }
+        out << ", ";
+        if (cur._reversed) {
+            out << "reversed, ";
+        }
+        if (!cur.iterators_valid()) {
+            return out << " iterators invalid}";
+        }
+        out << "snp=" << &cur._snp << ", current=[";
+        bool first = true;
+        for (auto&& v : cur._current_row) {
+            if (!first) {
+                out << ", ";
+            }
+            first = false;
+            fmt::print(out, "{{v={}, pos={}, cont={}, rt={}, row_rt={}}}",
+                       v.version_no, v.it->position(), v.continuous, v.rt, v.it->range_tombstone());
+        }
+        out << "], heap=[\n  ";
+        first = true;
+        for (auto&& v : cur._heap) {
+            if (!first) {
+                out << ",\n  ";
+            }
+            first = false;
+            fmt::print(out, "{{v={}, pos={}, cont={}, rt={}, row_rt={}}}",
+                       v.version_no, v.it->position(), v.continuous, v.rt, v.it->range_tombstone());
+        }
+        out << "], latest_iterator=[";
+        if (cur._latest_it) {
+            mutation_partition::rows_type::iterator i = *cur._latest_it;
+            if (!i) {
+                fmt::print(out, "end");
+            } else {
+                fmt::print(out, "{}", i->position());
+            }
+        } else {
+            out << "<none>";
+        }
+        return out << "]}";
+    };
+};
+
+inline
+partition_snapshot_row_weakref::partition_snapshot_row_weakref(const partition_snapshot_row_cursor& c)
+    : _it(c._current_row[0].it)
+    , _change_mark(c._change_mark)
+    , _pos(c._position)
+    , _in_latest(c.is_in_latest_version())
+{ }
+
+inline
+partition_snapshot_row_weakref& partition_snapshot_row_weakref::operator=(const partition_snapshot_row_cursor& c) {
+    auto tmp = partition_snapshot_row_weakref(c);
+    this->~partition_snapshot_row_weakref();
+    new (this) partition_snapshot_row_weakref(std::move(tmp));
+    return *this;
+}
+
+
+
+
+
+
+
+
 #include "query_result_merger.hh"
 #include "query-result-reader.hh"
 #include "query-result-set.hh"
