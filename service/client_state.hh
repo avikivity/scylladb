@@ -10,8 +10,6 @@
 
 #pragma once
 
-#include "tracing/trace_state.hh"
-
 #include "enum_set.hh"
 #include "transport/cql_protocol_extension.hh"
 #include "service/qos/service_level_controller.hh"
