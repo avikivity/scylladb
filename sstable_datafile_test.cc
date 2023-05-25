@@ -57346,6 +57346,225 @@ public:
 #include <fmt/format.h>
 #include <fmt/ostream.h>
 
+#include <seastar/core/sstring.hh>
+
+namespace gms {
+
+/**
+ * Contains information about a specified list of Endpoints and the largest version
+ * of the state they have generated as known by the local endpoint.
+ */
+class gossip_digest { // implements Comparable<GossipDigest>
+private:
+    using inet_address = gms::inet_address;
+    inet_address _endpoint;
+    generation_type _generation;
+    version_type _max_version;
+public:
+    gossip_digest() = default;
+
+    explicit gossip_digest(inet_address ep, generation_type gen = {}, version_type version = {}) noexcept
+        : _endpoint(ep)
+        , _generation(gen)
+        , _max_version(version) {
+    }
+
+    inet_address get_endpoint() const {
+        return _endpoint;
+    }
+
+    generation_type get_generation() const {
+        return _generation;
+    }
+
+    version_type get_max_version() const {
+        return _max_version;
+    }
+
+    friend bool operator<(const gossip_digest& x, const gossip_digest& y) {
+        if (x._generation != y._generation) {
+            return x._generation < y._generation;
+        }
+        return x._max_version <  y._max_version;
+    }
+
+    friend inline std::ostream& operator<<(std::ostream& os, const gossip_digest& d) {
+        fmt::print(os, "{}:{}:{}", d._endpoint, d._generation, d._max_version);
+        return os;
+    }
+}; // class gossip_digest
+
+} // namespace gms
+
+
+#include <seastar/core/sstring.hh>
+
+namespace gms {
+
+/**
+ * This is the first message that gets sent out as a start of the Gossip protocol in a
+ * round.
+ */
+class gossip_digest_syn {
+private:
+    sstring _cluster_id;
+    sstring _partioner;
+    utils::chunked_vector<gossip_digest> _digests;
+public:
+    gossip_digest_syn() {
+    }
+
+    gossip_digest_syn(sstring id, sstring p, utils::chunked_vector<gossip_digest> digests)
+        : _cluster_id(std::move(id))
+        , _partioner(std::move(p))
+        , _digests(std::move(digests)) {
+    }
+
+    sstring cluster_id() const {
+        return _cluster_id;
+    }
+
+    sstring partioner() const {
+        return _partioner;
+    }
+
+    sstring get_cluster_id() const {
+        return cluster_id();
+    }
+
+    sstring get_partioner() const {
+        return partioner();
+    }
+
+    const utils::chunked_vector<gossip_digest>& get_gossip_digests() const {
+        return _digests;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const gossip_digest_syn& syn);
+};
+
+}
+
+#include <boost/range/adaptor/transformed.hpp>
+#include <boost/range/algorithm/copy.hpp>
+
+/**
+ * Adopted from
+ * http://cpptruths.blogspot.se/2013/09/21-ways-of-passing-parameters-plus-one.html#inTidiom
+ *
+ * Helper type to somewhat help bridge std::initializer_list and move semantics
+ *
+ */
+namespace utils {
+
+template <typename T> class in;
+template <typename T> struct is_in {
+    static constexpr bool value = false;
+};
+template <typename T> struct is_in<in<T>> {
+    static constexpr bool value = true;
+};
+template <typename T> struct is_in<const in<T>> {
+    static constexpr bool value = true;
+};
+
+//
+// Allows initializer lists of mixed rvalue/lvalues, where receive can
+// use move semantics on provided value(s).
+// Allows in-place conversion, _BUT_ (warning), a converted value
+// is only valid until end-of-statement (;). So a call like:
+//
+//  void apa(initializer_list<in<std::string>>);
+//  apa({ "ola", "kong" });
+//
+// is ok, but
+//
+//  initializer_list<in<std::string>> apa = { "ola", "kong" };
+//  for (auto&x : apa) ...
+//
+// is not.
+// So again. Only for calls.
+template<typename T>
+class in {
+public:
+    in(const T& l)
+        : _value(l)
+        , _is_rvalue(false)
+    {}
+    in(T&& r)
+        : _value(r)
+        , _is_rvalue(true)
+    {}
+
+    // Support for implicit conversion via perfect forwarding.
+    //
+    struct storage {
+        storage(): created (false) {}
+        ~storage() {
+            if (created) {
+                reinterpret_cast<T*> (&data)->~T ();
+            }
+        }
+
+        bool created;
+        typename std::aligned_storage<sizeof(T), alignof(T)>::type data;
+    };
+
+    // conversion constuctor. See warning above.
+    template<typename T1,
+      typename std::enable_if<std::is_convertible<T1, T>::value
+          && !is_in<typename std::remove_reference<T1>::type>::value,int>::type = 0>
+    in(T1&& x, storage&& s = storage())
+        : _value(*new (&s.data) T (std::forward<T1>(x)))
+        , _is_rvalue(true)
+    {
+        s.created = true;
+    }
+    in(T& l)
+        : _value(l)
+        , _is_rvalue(false)
+    {} // For T1&& becoming T1&.
+
+    // Accessors.
+    //
+    bool lvalue() const { return !_is_rvalue; }
+    bool rvalue() const { return _is_rvalue; }
+
+    operator const T&() const { return get(); }
+    const T& get() const { return _value; }
+    T&& rget() const { return std::move (const_cast<T&> (_value)); }
+
+    // Return a copy if lvalue.
+    //
+    T move() const {
+        if (_is_rvalue) {
+            return rget();
+        }
+        return _value;
+    }
+
+private:
+    const T& _value;
+    bool _is_rvalue;
+};
+
+template<typename T, typename Container>
+Container make_from_in_list(std::initializer_list<in<T>> args) {
+    return boost::copy_range<Container>(args | boost::adaptors::transformed([](const in<T>& v) {
+        return v.move();
+    }));
+}
+
+template<typename T, typename... Args>
+std::vector<T, Args...> make_vector_from_in_list(std::initializer_list<in<T>> args) {
+    return make_from_in_list<T, std::vector<T, Args...>>(args);
+}
+
+}
+
+
+
+
 #include "gms/gossiper.hh"
 #include <gnutls/crypto.h>
 #include "hashing_partition_visitor.hh"
