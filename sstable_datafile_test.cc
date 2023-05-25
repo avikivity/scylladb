@@ -16651,13 +16651,839 @@ collection_mutation difference(const abstract_type&, collection_mutation_view, c
 bytes_ostream serialize_for_cql(const abstract_type&, collection_mutation_view);
 
 
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/sstring.hh>
+#include <vector>
 
-#include "types/list.hh"
-#include "types/map.hh"
-#include "types/set.hh"
-#include "types/tuple.hh"
-#include "types/user.hh"
-#include "utils/big_decimal.hh"
+namespace cql3 {
+
+class column_specification;
+
+}
+
+class collection_type_impl : public abstract_type {
+    static logging::logger _logger;
+public:
+    static constexpr size_t max_elements = 65535;
+
+protected:
+    bool _is_multi_cell;
+    explicit collection_type_impl(kind k, sstring name, bool is_multi_cell)
+            : abstract_type(k, std::move(name), {}), _is_multi_cell(is_multi_cell) {
+                _contains_collection = true;
+            }
+public:
+    bool is_multi_cell() const { return _is_multi_cell; }
+    virtual data_type name_comparator() const = 0;
+    virtual data_type value_comparator() const = 0;
+    lw_shared_ptr<cql3::column_specification> make_collection_receiver(const cql3::column_specification& collection, bool is_key) const;
+    virtual bool is_compatible_with_frozen(const collection_type_impl& previous) const = 0;
+    virtual bool is_value_compatible_with_frozen(const collection_type_impl& previous) const = 0;
+
+    template <typename Iterator>
+    requires requires (Iterator it) { {*it} -> std::convertible_to<bytes_view_opt>; }
+    static bytes pack(Iterator start, Iterator finish, int elements);
+
+    template <typename Iterator>
+    requires requires (Iterator it) { {*it} -> std::convertible_to<managed_bytes_view_opt>; }
+    static managed_bytes pack_fragmented(Iterator start, Iterator finish, int elements);
+
+private:
+    // Explicitly instantiated in types.cc
+    template <FragmentedView View> data_value deserialize_impl(View v) const;
+public:
+    template <FragmentedView View> data_value deserialize_value(View v) const {
+        return deserialize(v);
+    }
+    data_value deserialize_value(bytes_view v) const {
+        return deserialize_impl(single_fragmented_view(v));
+    }
+};
+
+// a list or a set
+class listlike_collection_type_impl : public collection_type_impl {
+protected:
+    data_type _elements;
+    explicit listlike_collection_type_impl(kind k, sstring name, data_type elements,bool is_multi_cell);
+public:
+    const data_type& get_elements_type() const { return _elements; }
+    // A list or set value can be serialized as a vector<pair<timeuuid, data_value>> or
+    // vector<pair<data_value, empty>> respectively. Compare this representation with
+    // vector<data_value> without transforming either of the arguments. Since Cassandra doesn't
+    // allow nested multi-cell collections this representation does not transcend to values, and we
+    // don't need to worry about recursing.
+    // @param this          type of the listlike value represented as vector<data_value>
+    // @param map_type      type of the listlike value represented as vector<pair<data_value, data_value>>
+    // @param list          listlike value, represented as vector<data_value>
+    // @param map           listlike value represented as vector<pair<data_value, data_value>>
+    //
+    // This function is used to compare receiver with a literal or parameter marker during condition
+    // evaluation.
+    std::strong_ordering compare_with_map(const map_type_impl& map_type, bytes_view list, bytes_view map) const;
+    // A list or set value can be represented as a vector<pair<timeuuid, data_value>> or
+    // vector<pair<data_value, empty>> respectively. Serialize this representation
+    // as a vector of values, not as a vector of pairs.
+    bytes serialize_map(const map_type_impl& map_type, const data_value& value) const;
+
+    // Verify that there are no NULL elements. Throws if there are.
+    void validate_for_storage(const FragmentedView auto& value) const;
+};
+
+template <typename Iterator>
+requires requires (Iterator it) { {*it} -> std::convertible_to<bytes_view_opt>; }
+bytes
+collection_type_impl::pack(Iterator start, Iterator finish, int elements) {
+    size_t len = collection_size_len();
+    size_t psz = collection_value_len();
+    for (auto j = start; j != finish; j++) {
+        auto v = bytes_view_opt(*j);
+        len += (v ? v->size() : 0) + psz;
+    }
+    bytes out(bytes::initialized_later(), len);
+    bytes::iterator i = out.begin();
+    write_collection_size(i, elements);
+    while (start != finish) {
+        write_collection_value(i, *start++);
+    }
+    return out;
+}
+
+template <typename Iterator>
+requires requires (Iterator it) { {*it} -> std::convertible_to<managed_bytes_view_opt>; }
+managed_bytes
+collection_type_impl::pack_fragmented(Iterator start, Iterator finish, int elements) {
+    size_t len = collection_size_len();
+    size_t psz = collection_value_len();
+    for (auto j = start; j != finish; j++) {
+        auto v = managed_bytes_view_opt(*j);
+        len += (v ? v->size() : 0) + psz;
+    }
+    managed_bytes out(managed_bytes::initialized_later(), len);
+    managed_bytes_mutable_view v(out);
+    write_collection_size(v, elements);
+    while (start != finish) {
+        write_collection_value(v, *start++);
+    }
+    return out;
+}
+
+extern
+template
+void listlike_collection_type_impl::validate_for_storage(const managed_bytes_view& value) const;
+
+extern
+template
+void listlike_collection_type_impl::validate_for_storage(const fragmented_temporary_buffer::view& value) const;
+
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/sstring.hh>
+#include <vector>
+
+
+class user_type_impl;
+
+namespace Json {
+class Value;
+}
+
+class list_type_impl final : public concrete_type<std::vector<data_value>, listlike_collection_type_impl> {
+    using list_type = shared_ptr<const list_type_impl>;
+    using intern = type_interning_helper<list_type_impl, data_type, bool>;
+public:
+    static list_type get_instance(data_type elements, bool is_multi_cell);
+    list_type_impl(data_type elements, bool is_multi_cell);
+    virtual data_type name_comparator() const override;
+    virtual data_type value_comparator() const override;
+    virtual data_type freeze() const override;
+    virtual bool is_compatible_with_frozen(const collection_type_impl& previous) const override;
+    virtual bool is_value_compatible_with_frozen(const collection_type_impl& previous) const override;
+    using abstract_type::deserialize;
+    using collection_type_impl::deserialize;
+    template <FragmentedView View> data_value deserialize(View v) const;
+};
+
+data_value make_list_value(data_type type, list_type_impl::native_type value);
+
+
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/sstring.hh>
+#include <vector>
+#include <utility>
+
+
+class user_type_impl;
+
+namespace Json {
+class Value;
+}
+
+class map_type_impl final : public concrete_type<std::vector<std::pair<data_value, data_value>>, collection_type_impl> {
+    using map_type = shared_ptr<const map_type_impl>;
+    using intern = type_interning_helper<map_type_impl, data_type, data_type, bool>;
+    data_type _keys;
+    data_type _values;
+    data_type _key_value_pair_type;
+public:
+    static shared_ptr<const map_type_impl> get_instance(data_type keys, data_type values, bool is_multi_cell);
+    map_type_impl(data_type keys, data_type values, bool is_multi_cell);
+    const data_type& get_keys_type() const { return _keys; }
+    const data_type& get_values_type() const { return _values; }
+    virtual data_type name_comparator() const override { return _keys; }
+    virtual data_type value_comparator() const override { return _values; }
+    virtual data_type freeze() const override;
+    virtual bool is_compatible_with_frozen(const collection_type_impl& previous) const override;
+    virtual bool is_value_compatible_with_frozen(const collection_type_impl& previous) const override;
+    static std::strong_ordering compare_maps(data_type keys_comparator, data_type values_comparator,
+                        managed_bytes_view o1, managed_bytes_view o2);
+    using abstract_type::deserialize;
+    using collection_type_impl::deserialize;
+    template <FragmentedView View> data_value deserialize(View v) const;
+    static bytes serialize_partially_deserialized_form(const std::vector<std::pair<bytes_view, bytes_view>>& v);
+    static managed_bytes serialize_partially_deserialized_form_fragmented(const std::vector<std::pair<managed_bytes_view, managed_bytes_view>>& v);
+
+    // Serializes a map using the internal cql serialization format
+    // Takes a range of pair<const bytes, bytes>
+    template <std::ranges::range Range>
+    requires std::convertible_to<std::ranges::range_value_t<Range>, std::pair<const bytes, bytes>>
+    static bytes serialize_to_bytes(const Range& map_range);
+
+    // Serializes a map using the internal cql serialization format
+    // Takes a range of pair<const managed_bytes, managed_bytes>
+    template <std::ranges::range Range>
+    requires std::convertible_to<std::ranges::range_value_t<Range>, std::pair<const managed_bytes, managed_bytes>>
+    static managed_bytes serialize_to_managed_bytes(const Range& map_range);
+};
+
+data_value make_map_value(data_type tuple_type, map_type_impl::native_type value);
+
+template <std::ranges::range Range>
+requires std::convertible_to<std::ranges::range_value_t<Range>, std::pair<const bytes, bytes>>
+bytes map_type_impl::serialize_to_bytes(const Range& map_range) {
+    size_t serialized_len = 4;
+    size_t map_size = 0;
+    for (const std::pair<const bytes, bytes>& elem : map_range) {
+        serialized_len += 4 + elem.first.size() + 4 + elem.second.size();
+        map_size += 1;
+    }
+
+    if (map_size > std::numeric_limits<int32_t>::max()) {
+        throw exceptions::invalid_request_exception(
+            fmt::format("Map size too large: {} > {}", map_size, std::numeric_limits<int32_t>::max()));
+    }
+
+    bytes result(bytes::initialized_later(), serialized_len);
+    bytes::iterator out = result.begin();
+
+    write_collection_size(out, map_size);
+    for (const std::pair<const bytes, bytes>& elem : map_range) {
+        if (elem.first.size() > std::numeric_limits<int32_t>::max()) {
+            throw exceptions::invalid_request_exception(
+                fmt::format("Map key size too large: {} bytes > {}", map_size, std::numeric_limits<int32_t>::max()));
+        }
+
+        if (elem.second.size() > std::numeric_limits<int32_t>::max()) {
+            throw exceptions::invalid_request_exception(
+                fmt::format("Map value size too large: {} bytes > {}", map_size, std::numeric_limits<int32_t>::max()));
+        }
+
+        write_collection_value(out, elem.first);
+        write_collection_value(out, elem.second);
+    }
+
+    return result;
+}
+
+template <std::ranges::range Range>
+requires std::convertible_to<std::ranges::range_value_t<Range>, std::pair<const managed_bytes, managed_bytes>>
+managed_bytes map_type_impl::serialize_to_managed_bytes(const Range& map_range) {
+    size_t serialized_len = 4;
+    size_t map_size = 0;
+    for (const std::pair<const managed_bytes, managed_bytes>& elem : map_range) {
+        serialized_len += 4 + elem.first.size() + 4 + elem.second.size();
+        map_size += 1;
+    }
+
+    if (map_size > std::numeric_limits<int32_t>::max()) {
+        throw exceptions::invalid_request_exception(
+            fmt::format("Map size too large: {} > {}", map_size, std::numeric_limits<int32_t>::max()));
+    }
+
+    managed_bytes result(managed_bytes::initialized_later(), serialized_len);
+    managed_bytes_mutable_view out(result);
+
+    write_collection_size(out, map_size);
+    for (const std::pair<const managed_bytes, managed_bytes>& elem : map_range) {
+        if (elem.first.size() > std::numeric_limits<int32_t>::max()) {
+            throw exceptions::invalid_request_exception(
+                fmt::format("Map key size too large: {} bytes > {}", map_size, std::numeric_limits<int32_t>::max()));
+        }
+
+        if (elem.second.size() > std::numeric_limits<int32_t>::max()) {
+            throw exceptions::invalid_request_exception(
+                fmt::format("Map value size too large: {} bytes > {}", map_size, std::numeric_limits<int32_t>::max()));
+        }
+
+        write_collection_value(out, elem.first);
+        write_collection_value(out, elem.second);
+    }
+
+    return result;
+}
+
+
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/sstring.hh>
+#include <vector>
+
+class user_type_impl;
+
+namespace Json {
+class Value;
+}
+
+class set_type_impl final : public concrete_type<std::vector<data_value>, listlike_collection_type_impl> {
+    using set_type = shared_ptr<const set_type_impl>;
+    using intern = type_interning_helper<set_type_impl, data_type, bool>;
+public:
+    static set_type get_instance(data_type elements, bool is_multi_cell);
+    set_type_impl(data_type elements, bool is_multi_cell);
+    virtual data_type name_comparator() const override { return _elements; }
+    virtual data_type value_comparator() const override;
+    virtual data_type freeze() const override;
+    virtual bool is_compatible_with_frozen(const collection_type_impl& previous) const override;
+    virtual bool is_value_compatible_with_frozen(const collection_type_impl& previous) const override;
+    using abstract_type::deserialize;
+    using collection_type_impl::deserialize;
+    template <FragmentedView View> data_value deserialize(View v) const;
+    static bytes serialize_partially_deserialized_form(
+            const std::vector<bytes_view>& v);
+    static managed_bytes serialize_partially_deserialized_form_fragmented(
+            const std::vector<managed_bytes_view_opt>& v);
+};
+
+data_value make_set_value(data_type tuple_type, set_type_impl::native_type value);
+
+template <typename NativeType>
+data_value::data_value(const std::unordered_set<NativeType>& v)
+    : data_value(new set_type_impl::native_type(v.begin(), v.end()), set_type_impl::get_instance(data_type_for<NativeType>(), true))
+{}
+
+
+#include <iterator>
+#include <vector>
+#include <string>
+
+#include <boost/range/numeric.hpp>
+#include <boost/range/adaptor/transformed.hpp>
+#include <boost/range/algorithm/for_each.hpp>
+
+struct tuple_deserializing_iterator {
+public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = const managed_bytes_view_opt;
+    using difference_type = std::ptrdiff_t;
+    using pointer = const managed_bytes_view_opt*;
+    using reference = const managed_bytes_view_opt&;
+private:
+    managed_bytes_view _v;
+    managed_bytes_view_opt _current;
+public:
+    struct end_tag {};
+    tuple_deserializing_iterator(managed_bytes_view v) : _v(v) {
+        parse();
+    }
+    tuple_deserializing_iterator(end_tag, managed_bytes_view v) : _v(v) {
+        _v.remove_prefix(_v.size());
+    }
+    static tuple_deserializing_iterator start(managed_bytes_view v) {
+        return tuple_deserializing_iterator(v);
+    }
+    static tuple_deserializing_iterator finish(managed_bytes_view v) {
+        return tuple_deserializing_iterator(end_tag(), v);
+    }
+    const managed_bytes_view_opt& operator*() const {
+        return _current;
+    }
+    const managed_bytes_view_opt* operator->() const {
+        return &_current;
+    }
+    tuple_deserializing_iterator& operator++() {
+        skip();
+        parse();
+        return *this;
+    }
+    void operator++(int) {
+        skip();
+        parse();
+    }
+    bool operator==(const tuple_deserializing_iterator& x) const {
+        return _v == x._v;
+    }
+private:
+    void parse() {
+        _current = std::nullopt;
+        if (_v.empty()) {
+            return;
+        }
+        // we don't consume _v, otherwise operator==
+        // or the copy constructor immediately after
+        // parse() yields the wrong results.
+        auto tmp = _v;
+        auto s = read_simple<int32_t>(tmp);
+        if (s < 0) {
+            return;
+        }
+        _current = read_simple_bytes(tmp, s);
+    }
+    void skip() {
+        _v.remove_prefix(4 + (_current ? _current->size() : 0));
+    }
+};
+
+template <FragmentedView View>
+std::optional<View> read_tuple_element(View& v) {
+    auto s = read_simple<int32_t>(v);
+    if (s < 0) {
+        return std::nullopt;
+    }
+    return read_simple_bytes(v, s);
+}
+
+template <FragmentedView View>
+managed_bytes_opt get_nth_tuple_element(View v, size_t n) {
+    for (size_t i = 0; i < n; ++i) {
+        if (v.empty()) {
+            return std::nullopt;
+        }
+        read_tuple_element(v);
+    }
+    if (v.empty()) {
+        return std::nullopt;
+    }
+    auto el = read_tuple_element(v);
+    if (el) {
+        return managed_bytes(*el);
+    }
+    return std::nullopt;
+}
+
+class tuple_type_impl : public concrete_type<std::vector<data_value>> {
+    using intern = type_interning_helper<tuple_type_impl, std::vector<data_type>>;
+protected:
+    std::vector<data_type> _types;
+    static boost::iterator_range<tuple_deserializing_iterator> make_range(managed_bytes_view v) {
+        return { tuple_deserializing_iterator::start(v), tuple_deserializing_iterator::finish(v) };
+    }
+    tuple_type_impl(kind k, sstring name, std::vector<data_type> types, bool freeze_inner);
+    tuple_type_impl(std::vector<data_type> types, bool freze_inner);
+public:
+    tuple_type_impl(std::vector<data_type> types);
+    static shared_ptr<const tuple_type_impl> get_instance(std::vector<data_type> types);
+    data_type type(size_t i) const {
+        return _types[i];
+    }
+    size_t size() const {
+        return _types.size();
+    }
+    const std::vector<data_type>& all_types() const {
+        return _types;
+    }
+    std::vector<bytes_opt> split(FragmentedView auto v) const {
+        std::vector<bytes_opt> elements;
+        while (!v.empty()) {
+            auto fragmented_element_optional = read_tuple_element(v);
+            if (fragmented_element_optional) {
+                elements.push_back(linearized(*fragmented_element_optional));
+            } else {
+                elements.push_back(std::nullopt);
+            }
+        }
+        return elements;
+    }
+    std::vector<managed_bytes_opt> split_fragmented(FragmentedView auto v) const {
+        std::vector<managed_bytes_opt> elements;
+        while (!v.empty()) {
+            auto fragmented_element_optional = read_tuple_element(v);
+            if (fragmented_element_optional) {
+                elements.push_back(managed_bytes(*fragmented_element_optional));
+            } else {
+                elements.push_back(std::nullopt);
+            }
+        }
+        return elements;
+    }
+    template <typename RangeOf_bytes_opt>  // also accepts bytes_view_opt
+    static bytes build_value(RangeOf_bytes_opt&& range) {
+        auto item_size = [] (auto&& v) { return 4 + (v ? v->size() : 0); };
+        auto size = boost::accumulate(range | boost::adaptors::transformed(item_size), 0);
+        auto ret = bytes(bytes::initialized_later(), size);
+        auto out = ret.begin();
+        auto put = [&out] (auto&& v) {
+            if (v) {
+                using val_type = std::remove_cvref_t<decltype(*v)>;
+                if constexpr (FragmentedView<val_type>) {
+                    int32_t size = v->size_bytes();
+                    write(out, size);
+                    read_fragmented(*v, size, out);
+                    out += size;
+                } else {
+                    write(out, int32_t(v->size()));
+                    out = std::copy(v->begin(), v->end(), out);
+                }
+            } else {
+                write(out, int32_t(-1));
+            }
+        };
+        boost::range::for_each(range, put);
+        return ret;
+    }
+    template <typename Range> // range of managed_bytes_opt or managed_bytes_view_opt
+    requires requires (Range it) { {std::begin(it)->value()} -> std::convertible_to<managed_bytes_view>; }
+    static managed_bytes build_value_fragmented(Range&& range) {
+        size_t size = 0;
+        for (auto&& v : range) {
+            size += 4 + (v ? v->size() : 0);
+        }
+        auto ret = managed_bytes(managed_bytes::initialized_later(), size);
+        auto out = managed_bytes_mutable_view(ret);
+        for (auto&& v : range) {
+            if (v) {
+                write<int32_t>(out, v->size());
+                write_fragmented(out, managed_bytes_view(*v));
+            } else {
+                write<int32_t>(out, -1);
+            }
+        }
+        return ret;
+    }
+private:
+    void set_contains_collections();
+    static sstring make_name(const std::vector<data_type>& types);
+    friend abstract_type;
+};
+
+data_value make_tuple_value(data_type tuple_type, tuple_type_impl::native_type value);
+
+
+
+
+class user_type_impl : public tuple_type_impl, public data_dictionary::keyspace_element {
+    using intern = type_interning_helper<user_type_impl, sstring, bytes, std::vector<bytes>, std::vector<data_type>, bool>;
+public:
+    const sstring _keyspace;
+    const bytes _name;
+private:
+    const std::vector<bytes> _field_names;
+    const std::vector<sstring> _string_field_names;
+    const bool _is_multi_cell;
+public:
+    using native_type = std::vector<data_value>;
+    user_type_impl(sstring keyspace, bytes name, std::vector<bytes> field_names, std::vector<data_type> field_types, bool is_multi_cell)
+            : tuple_type_impl(kind::user, make_name(keyspace, name, field_names, field_types, is_multi_cell), field_types, false /* don't freeze inner */)
+            , _keyspace(std::move(keyspace))
+            , _name(std::move(name))
+            , _field_names(std::move(field_names))
+            , _string_field_names(boost::copy_range<std::vector<sstring>>(_field_names | boost::adaptors::transformed(
+                    [] (const bytes& field_name) { return utf8_type->to_string(field_name); })))
+            , _is_multi_cell(is_multi_cell) {
+    }
+    static shared_ptr<const user_type_impl> get_instance(sstring keyspace, bytes name,
+            std::vector<bytes> field_names, std::vector<data_type> field_types, bool multi_cell);
+    data_type field_type(size_t i) const { return type(i); }
+    const std::vector<data_type>& field_types() const { return _types; }
+    bytes_view field_name(size_t i) const { return _field_names[i]; }
+    sstring field_name_as_string(size_t i) const { return _string_field_names[i]; }
+    const std::vector<bytes>& field_names() const { return _field_names; }
+    const std::vector<sstring>& string_field_names() const { return _string_field_names; }
+    std::optional<size_t> idx_of_field(const bytes& name) const;
+    bool is_multi_cell() const { return _is_multi_cell; }
+    virtual data_type freeze() const override;
+    bytes get_name() const { return _name; }
+    sstring get_name_as_string() const;
+    sstring get_name_as_cql_string() const;
+
+    virtual sstring keypace_name() const override { return _keyspace; }
+    virtual sstring element_name() const override { return get_name_as_string(); }
+    virtual sstring element_type() const override { return "type"; }
+    virtual std::ostream& describe(std::ostream& os) const override;
+
+private:
+    static sstring make_name(sstring keyspace,
+                             bytes name,
+                             std::vector<bytes> field_names,
+                             std::vector<data_type> field_types,
+                             bool is_multi_cell);
+};
+
+data_value make_user_value(data_type tuple_type, user_type_impl::native_type value);
+
+constexpr size_t max_udt_fields = std::numeric_limits<int16_t>::max();
+
+// The following two functions are used to translate field indices (used to identify fields inside non-frozen UDTs)
+// from/to a serialized bytes representation to be stored in mutations and sstables.
+// Refer to collection_mutation.hh for a detailed description on how the serialized indices are used inside mutations.
+bytes serialize_field_index(size_t);
+size_t deserialize_field_index(const bytes_view&);
+size_t deserialize_field_index(managed_bytes_view);
+
+
+
+#include <boost/multiprecision/cpp_int.hpp>
+#include <iosfwd>
+#include <compare>
+
+namespace utils {
+
+// multiprecision_int is a thin wrapper around boost::multiprecision::cpp_int.
+// cpp_int is worth about 20,000 lines of header files that are rarely used.
+// Forward-declaring cpp_int is very difficult as it is a complicated template,
+// hence this wrapper.
+//
+// Because cpp_int uses a lot of expression templates, the code below contains
+// many casts since the expression templates defeat regular C++ conversion rules.
+
+class multiprecision_int final {
+public:
+    using cpp_int = boost::multiprecision::cpp_int;
+private:
+    cpp_int _v;
+private:
+    // maybe_unwrap() selectively unwraps multiprecision_int values (leaving
+    // anything else unchanged), so avoid confusing boost::multiprecision.
+    static const cpp_int& maybe_unwrap(const multiprecision_int& x) {
+        return x._v;
+    }
+    template <typename T>
+    static const T& maybe_unwrap(const T& x) {
+        return x;
+    }
+public:
+    multiprecision_int() = default;
+    multiprecision_int(cpp_int x) : _v(std::move(x)) {}
+    explicit multiprecision_int(int x) : _v(x) {}
+    explicit multiprecision_int(unsigned x) : _v(x) {}
+    explicit multiprecision_int(long x) : _v(x) {}
+    explicit multiprecision_int(unsigned long x) : _v(x) {}
+    explicit multiprecision_int(long long x) : _v(x) {}
+    explicit multiprecision_int(unsigned long long x) : _v(x) {}
+    explicit multiprecision_int(float x) : _v(x) {}
+    explicit multiprecision_int(double x) : _v(x) {}
+    explicit multiprecision_int(long double x) : _v(x) {}
+    explicit multiprecision_int(const std::string x) : _v(x) {}
+    explicit multiprecision_int(const char* x) : _v(x) {}
+    operator const cpp_int&() const {
+        return _v;
+    }
+    explicit operator signed char() const {
+        return static_cast<signed char>(_v);
+    }
+    explicit operator unsigned char() const {
+        return static_cast<unsigned char>(_v);
+    }
+    explicit operator short() const {
+        return static_cast<short>(_v);
+    }
+    explicit operator unsigned short() const {
+        return static_cast<unsigned short>(_v);
+    }
+    explicit operator int() const {
+        return static_cast<int>(_v);
+    }
+    explicit operator unsigned() const {
+        return static_cast<unsigned>(_v);
+    }
+    explicit operator long() const {
+        return static_cast<long>(_v);
+    }
+    explicit operator unsigned long() const {
+        return static_cast<unsigned long>(_v);
+    }
+    explicit operator long long() const {
+        return static_cast<long long>(_v);
+    }
+    explicit operator unsigned long long() const {
+        return static_cast<unsigned long long>(_v);
+    }
+    explicit operator float() const {
+        return static_cast<float>(_v);
+    }
+    explicit operator double() const {
+        return static_cast<double>(_v);
+    }
+    explicit operator long double() const {
+        return static_cast<long double>(_v);
+    }
+    template <typename T>
+    multiprecision_int& operator+=(const T& x) {
+        _v += maybe_unwrap(x);
+        return *this;
+    }
+    template <typename T>
+    multiprecision_int& operator-=(const T& x) {
+        _v -= maybe_unwrap(x);
+        return *this;
+    }
+    template <typename T>
+    multiprecision_int& operator*=(const T& x) {
+        _v *= maybe_unwrap(x);
+        return *this;
+    }
+    template <typename T>
+    multiprecision_int& operator/=(const T& x) {
+        _v /= maybe_unwrap(x);
+        return *this;
+    }
+    template <typename T>
+    multiprecision_int& operator%=(const T& x) {
+        _v %= maybe_unwrap(x);
+        return *this;
+    }
+    template <typename T>
+    multiprecision_int& operator<<=(const T& x) {
+        _v <<= maybe_unwrap(x);
+        return *this;
+    }
+    template <typename T>
+    multiprecision_int& operator>>=(const T& x) {
+        _v >>= maybe_unwrap(x);
+        return *this;
+    }
+    multiprecision_int operator-() const {
+        return cpp_int(-_v);
+    }
+    multiprecision_int operator+(const multiprecision_int& x) const {
+        return cpp_int(_v + x._v);
+    }
+    template <typename T>
+    multiprecision_int operator+(const T& x) const {
+        return cpp_int(_v + maybe_unwrap(x));
+    }
+    template <typename T>
+    multiprecision_int operator-(const T& x) const {
+        return cpp_int(_v - maybe_unwrap(x));
+    }
+    template <typename T>
+    multiprecision_int operator*(const T& x) const {
+        return cpp_int(_v * maybe_unwrap(x));
+    }
+    template <typename T>
+    multiprecision_int operator/(const T& x) const {
+        return cpp_int(_v / maybe_unwrap(x));
+    }
+    template <typename T>
+    multiprecision_int operator%(const T& x) const {
+        return cpp_int(_v % maybe_unwrap(x));
+    }
+    template <typename T>
+    multiprecision_int operator<<(const T& x) const {
+        return cpp_int(_v << maybe_unwrap(x));
+    }
+    template <typename T>
+    multiprecision_int operator>>(const T& x) const {
+        return cpp_int(_v >> maybe_unwrap(x));
+    }
+    std::strong_ordering operator<=>(const multiprecision_int& x) const = default;
+    template <typename T>
+    bool operator==(const T& x) const {
+        return _v == maybe_unwrap(x);
+    }
+    template <typename T>
+    bool operator>(const T& x) const {
+        return _v > maybe_unwrap(x);
+    }
+    template <typename T>
+    bool operator>=(const T& x) const {
+        return _v >= maybe_unwrap(x);
+    }
+    template <typename T>
+    bool operator<(const T& x) const {
+        return _v < maybe_unwrap(x);
+    }
+    template <typename T>
+    bool operator<=(const T& x) const {
+        return _v <= maybe_unwrap(x);
+    }
+    template <typename T>
+    friend multiprecision_int operator+(const T& x, const multiprecision_int& y) {
+        return cpp_int(maybe_unwrap(x) + y._v);
+    }
+    template <typename T>
+    friend multiprecision_int operator-(const T& x, const multiprecision_int& y) {
+        return cpp_int(maybe_unwrap(x) - y._v);
+    }
+    template <typename T>
+    friend multiprecision_int operator*(const T& x, const multiprecision_int& y) {
+        return cpp_int(maybe_unwrap(x) * y._v);
+    }
+    template <typename T>
+    friend multiprecision_int operator/(const T& x, const multiprecision_int& y) {
+        return cpp_int(maybe_unwrap(x) / y._v);
+    }
+    template <typename T>
+    friend multiprecision_int operator%(const T& x, const multiprecision_int& y) {
+        return cpp_int(maybe_unwrap(x) % y._v);
+    }
+    template <typename T>
+    friend multiprecision_int operator<<(const T& x, const multiprecision_int& y) {
+        return cpp_int(maybe_unwrap(x) << y._v);
+    }
+    template <typename T>
+    friend multiprecision_int operator>>(const T& x, const multiprecision_int& y) {
+        return cpp_int(maybe_unwrap(x) >> y._v);
+    }
+    std::string str() const;
+    friend std::ostream& operator<<(std::ostream& os, const multiprecision_int& x);
+};
+
+
+}
+
+#include <boost/multiprecision/cpp_int.hpp>
+#include <ostream>
+#include <compare>
+#include <concepts>
+
+
+uint64_t from_varint_to_integer(const utils::multiprecision_int& varint);
+
+class big_decimal {
+private:
+    int32_t _scale;
+    boost::multiprecision::cpp_int _unscaled_value;
+public:
+    enum class rounding_mode {
+        HALF_EVEN,
+    };
+
+    explicit big_decimal(sstring_view text);
+    big_decimal();
+    big_decimal(int32_t scale, boost::multiprecision::cpp_int unscaled_value);
+    big_decimal(std::integral auto v) : big_decimal(0, v) {}
+
+    int32_t scale() const { return _scale; }
+    const boost::multiprecision::cpp_int& unscaled_value() const { return _unscaled_value; }
+    boost::multiprecision::cpp_rational as_rational() const;
+
+    sstring to_string() const;
+
+    std::strong_ordering operator<=>(const big_decimal& other) const;
+
+    big_decimal& operator+=(const big_decimal& other);
+    big_decimal& operator-=(const big_decimal& other);
+    big_decimal operator+(const big_decimal& other) const;
+    big_decimal operator-(const big_decimal& other) const;
+    big_decimal div(const ::uint64_t y, const rounding_mode mode) const;
+};
+
+template <>
+struct fmt::formatter<big_decimal> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const big_decimal& v, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}", v.to_string());
+    }
+};
+
+
 
 struct empty_type_impl final : public abstract_type {
     using native_type = empty_type_representation;
