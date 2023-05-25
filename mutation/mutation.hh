@@ -10,7 +10,6 @@
 
 #include <iosfwd>
 
-#include "mutation_partition.hh"
 #include "keys.hh"
 #include "schema/schema_fwd.hh"
 #include "dht/i_partitioner.hh"

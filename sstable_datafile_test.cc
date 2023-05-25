@@ -32949,6 +32949,3956 @@ private:
 } // namespace
 
 
+#include <boost/intrusive/list.hpp>
+#include <seastar/core/memory.hh>
+
+class evictable {
+    friend class lru;
+    // For bookkeeping, we want the unlinking of evictables to be explicit.
+    // E.g. if the cache's internal data structure consists of multiple lists, we would
+    // like to know which list is an element being removed from.
+    // Therefore, we are using auto_unlink only to be able to call unlink() in the move constructor
+    // and we do NOT rely on automatic unlinking in _lru_link's destructor.
+    // It's the programmer's responsibility. to call lru::remove on the evictable before its destruction.
+    // Failure to do so is a bug, and it will trigger an assertion in the destructor.
+    using lru_link_type = boost::intrusive::list_member_hook<
+        boost::intrusive::link_mode<boost::intrusive::auto_unlink>>;
+    lru_link_type _lru_link;
+protected:
+    // Prevent destruction via evictable pointer. LRU is not aware of allocation strategy.
+    // Prevent destruction of a linked evictable. While we could unlink the evictable here
+    // in the destructor, we can't perform proper accounting for that without access to the
+    // head of the containing list.
+    ~evictable() {
+        assert(!_lru_link.is_linked());
+    }
+public:
+    evictable() = default;
+    evictable(evictable&& o) noexcept;
+    evictable& operator=(evictable&&) noexcept = default;
+
+    virtual void on_evicted() noexcept = 0;
+
+    // Used for testing to avoid cascading eviction of the containing object.
+    virtual void on_evicted_shallow() noexcept { on_evicted(); }
+
+    bool is_linked() const {
+        return _lru_link.is_linked();
+    }
+
+    void swap(evictable& o) noexcept {
+        _lru_link.swap_nodes(o._lru_link);
+    }
+};
+
+class lru {
+private:
+    friend class evictable;
+    using lru_type = boost::intrusive::list<evictable,
+        boost::intrusive::member_hook<evictable, evictable::lru_link_type, &evictable::_lru_link>,
+        boost::intrusive::constant_time_size<false>>; // we need this to have bi::auto_unlink on hooks.
+    lru_type _list;
+public:
+    using reclaiming_result = seastar::memory::reclaiming_result;
+
+    ~lru() {
+        _list.clear_and_dispose([] (evictable* e) {
+            e->on_evicted();
+        });
+    }
+
+    void remove(evictable& e) noexcept {
+        _list.erase(_list.iterator_to(e));
+    }
+
+    void add(evictable& e) noexcept {
+        _list.push_back(e);
+    }
+
+    // Like add(e) but makes sure that e is evicted right before "more_recent" in the absence of later touches.
+    void add_before(evictable& more_recent, evictable& e) noexcept {
+        _list.insert(_list.iterator_to(more_recent), e);
+    }
+
+    void touch(evictable& e) noexcept {
+        remove(e);
+        add(e);
+    }
+
+    // Evicts a single element from the LRU
+    template <bool Shallow = false>
+    reclaiming_result do_evict() noexcept {
+        if (_list.empty()) {
+            return reclaiming_result::reclaimed_nothing;
+        }
+        evictable& e = _list.front();
+        _list.pop_front();
+        if constexpr (!Shallow) {
+            e.on_evicted();
+        } else {
+            e.on_evicted_shallow();
+        }
+        return reclaiming_result::reclaimed_something;
+    }
+
+    // Evicts a single element from the LRU.
+    reclaiming_result evict() noexcept {
+        return do_evict<false>();
+    }
+
+    // Evicts a single element from the LRU.
+    // Will call on_evicted_shallow() instead of on_evicted().
+    reclaiming_result evict_shallow() noexcept {
+        return do_evict<true>();
+    }
+
+    // Evicts all elements.
+    // May stall the reactor, use only in tests.
+    void evict_all() {
+        while (evict() == reclaiming_result::reclaimed_something) {}
+    }
+};
+
+inline
+evictable::evictable(evictable&& o) noexcept {
+    if (o._lru_link.is_linked()) {
+        auto prev = o._lru_link.prev_;
+        o._lru_link.unlink();
+        lru::lru_type::node_algorithms::link_after(prev, _lru_link.this_ptr());
+    }
+}
+
+
+template<typename T>
+requires std::is_nothrow_move_constructible_v<T>
+class managed;
+
+//
+// Similar to std::unique_ptr<>, but for LSA-allocated objects. Remains
+// valid across deferring points. See make_managed().
+//
+// std::unique_ptr<> can't be used with LSA-allocated objects because
+// it assumes that the object doesn't move after being allocated. This
+// is not true for LSA, which moves objects during compaction.
+//
+// Also works for objects allocated using standard allocators, though
+// there the extra space overhead of a pointer is not justified.
+// It still make sense to use it in places which are meant to work
+// with either kind of allocator.
+//
+template<typename T>
+struct managed_ref {
+    managed<T>* _ptr;
+
+    managed_ref() : _ptr(nullptr) {}
+
+    managed_ref(const managed_ref&) = delete;
+
+    managed_ref(managed_ref&& other) noexcept
+        : _ptr(other._ptr)
+    {
+        other._ptr = nullptr;
+        if (_ptr) {
+            _ptr->_backref = &_ptr;
+        }
+    }
+
+    ~managed_ref() {
+        if (_ptr) {
+            current_allocator().destroy(_ptr);
+        }
+    }
+
+    managed_ref& operator=(managed_ref&& o) {
+        this->~managed_ref();
+        new (this) managed_ref(std::move(o));
+        return *this;
+    }
+
+    T* get() {
+        return _ptr ? &_ptr->_value : nullptr;
+    }
+
+    const T* get() const {
+        return _ptr ? &_ptr->_value : nullptr;
+    }
+
+    T& operator*() {
+        return _ptr->_value;
+    }
+
+    const T& operator*() const {
+        return _ptr->_value;
+    }
+
+    T* operator->() {
+        return &_ptr->_value;
+    }
+
+    const T* operator->() const {
+        return &_ptr->_value;
+    }
+
+    explicit operator bool() const {
+        return _ptr != nullptr;
+    }
+
+    size_t external_memory_usage() const {
+        return _ptr ? current_allocator().object_memory_size_in_allocator(_ptr) : 0;
+    }
+};
+
+template<typename T>
+requires std::is_nothrow_move_constructible_v<T>
+class managed {
+    managed<T>** _backref;
+    T _value;
+
+    template<typename T_>
+    friend struct managed_ref;
+public:
+    managed(managed<T>** backref, T&& v) noexcept
+        : _backref(backref)
+        , _value(std::move(v))
+    {
+        *_backref = this;
+    }
+
+    managed(managed&& other) noexcept
+        : _backref(other._backref)
+        , _value(std::move(other._value))
+    {
+        *_backref = this;
+    }
+};
+
+//
+// Allocates T using given AllocationStrategy and returns a managed_ref owning the
+// allocated object.
+//
+template<typename T, typename... Args>
+managed_ref<T>
+make_managed(Args&&... args) {
+    managed_ref<T> ref;
+    current_allocator().construct<managed<T>>(&ref._ptr, T(std::forward<Args>(args)...));
+    return ref;
+}
+
+
+#include <cstdint>
+#include <limits>
+
+namespace utils {
+
+static constexpr int64_t simple_key_unused_value = std::numeric_limits<int64_t>::min();
+
+/*
+ * array_search_gt(value, array, capacity, size)
+ *
+ * Returns the index of the first element in the array that's greater
+ * than the given value.
+ *
+ * To accomodate the single-instruction-multiple-data variant, observe
+ * the following:
+ *  - capacity must be a multiple of 4
+ *  - any items with indexes in [size, capacity) must be initialized
+ *    to std::numeric_limits<int64_t>::min()
+ */
+int array_search_gt(int64_t val, const int64_t* array, const int capacity, const int size);
+
+static inline unsigned array_search_4_eq(uint8_t val, const uint8_t* array) {
+    // Unrolled loop is few %s faster
+    if (array[0] == val) {
+        return 0;
+    } else if (array[1] == val) {
+        return 1;
+    } else if (array[2] == val) {
+        return 2;
+    } else if (array[3] == val) {
+        return 3;
+    } else {
+        return 4;
+    }
+}
+
+static inline unsigned array_search_8_eq(uint8_t val, const uint8_t* array) {
+    for (unsigned i = 0; i < 8; i++) {
+        if (array[i] == val) {
+            return i;
+        }
+    }
+    return 8;
+}
+
+unsigned array_search_16_eq(uint8_t val, const uint8_t* array);
+unsigned array_search_32_eq(uint8_t val, const uint8_t* array);
+unsigned array_search_x32_eq(uint8_t val, const uint8_t* array, int nr);
+
+}
+
+
+#include <cassert>
+#include <algorithm>
+#include <bitset>
+#include <fmt/core.h>
+#include <boost/intrusive/parent_from_member.hpp>
+
+class size_calculator;
+
+namespace compact_radix_tree {
+
+template <typename T, typename Idx> class printer;
+
+template <unsigned Size>
+inline unsigned find_in_array(uint8_t val, const uint8_t* arr);
+
+template <>
+inline unsigned find_in_array<4>(uint8_t val, const uint8_t* arr) {
+    return utils::array_search_4_eq(val, arr);
+}
+
+template <>
+inline unsigned find_in_array<8>(uint8_t val, const uint8_t* arr) {
+    return utils::array_search_8_eq(val, arr);
+}
+
+template <>
+inline unsigned find_in_array<16>(uint8_t val, const uint8_t* arr) {
+    return utils::array_search_16_eq(val, arr);
+}
+
+template <>
+inline unsigned find_in_array<32>(uint8_t val, const uint8_t* arr) {
+    return utils::array_search_32_eq(val, arr);
+}
+
+template <>
+inline unsigned find_in_array<64>(uint8_t val, const uint8_t* arr) {
+    return utils::array_search_x32_eq(val, arr, 2);
+}
+
+// A union of any number of types.
+
+template <typename... Ts>
+struct variadic_union;
+
+template <typename Tx>
+struct variadic_union<Tx> {
+    union {
+        Tx _this;
+    };
+
+    variadic_union() noexcept {}
+    ~variadic_union() {}
+};
+
+template <typename Tx, typename Ty, typename... Ts>
+struct variadic_union<Tx, Ty, Ts...> {
+    union {
+        Tx _this;
+        variadic_union<Ty, Ts...> _other;
+    };
+
+    variadic_union() noexcept {}
+    ~variadic_union() {}
+};
+
+/*
+ * Radix tree implementation for the key being an integer type.
+ * The search key is split into equal-size pieces to find the
+ * next node in each level. The pieces are defined compile-time
+ * so the tree is compile-time limited in ints depth.
+ *
+ * Uses 3 memory optimizations:
+ * - a node dynamically grows in size depending on the range of
+ *   keys it carries
+ * - additionally, if the set of keys on a node is very sparse the
+ *   node may become "indirect" thus keeping only the actual set
+ *   of keys
+ * - if a node has 1 child it's removed from the tree and this
+ *   loneley kid is attached directly to its (former) grandfather
+ */
+
+template <typename T, typename Index = unsigned int>
+requires std::is_nothrow_move_constructible_v<T> && std::is_integral_v<Index>
+class tree {
+    friend class ::size_calculator;
+    template <typename A, typename I> friend class printer;
+
+    class leaf_node;
+    class inner_node;
+    struct node_head;
+    class node_head_ptr;
+
+public:
+    /*
+     * The search key in the tree is an integer, the whole
+     * logic below is optimized for that.
+     */
+    using key_t = std::make_unsigned_t<Index>;
+
+    /*
+     * The lookup uses 7-bit pieces from the key to search on
+     * each level. Thus all levels but the last one keep pointers
+     * on lower levels, the last one is the leaf node that keeps
+     * values on board.
+     *
+     * The 8th bit in the node index byte is used to denote an
+     * unused index which is quite helpful.
+     */
+    using node_index_t = uint8_t;
+    static constexpr unsigned radix_bits = 7;
+    static constexpr key_t  radix_mask = (1 << radix_bits) - 1;
+    static constexpr unsigned leaf_depth = (8 * sizeof(key_t) + radix_bits - 1) / radix_bits - 1;
+    static constexpr unsigned node_index_limit = 1 << radix_bits;
+    static_assert(node_index_limit != 0);
+    static constexpr node_index_t unused_node_index = node_index_limit;
+
+private:
+    /*
+     * Nodes can be of 2 kinds -- direct and indirect.
+     *
+     * Direct nodes are arrays of elements. Getting a value from
+     * this node is simple indexing. There are 2 of them -- static
+     * and dynamic. Static nodes have fixed size capable to keep all
+     * the possible indices, dynamic work like a vector growing in
+     * size. Former occupy more space, but work a bit faster because
+     * of * missing boundary checks.
+     *
+     * Indirect nodes keep map of indices on board and perform lookup
+     * rather than direct indexing to get a value. They also grow in
+     * size, but unlike dynamic direct nodes by converting between each
+     * other.
+     *
+     * When a node is tried to push a new index over its current
+     * capacity it grows into some other node, that can fit all its
+     * keys plus at least one.
+     *
+     * When a key is removed from an indirect node and it becomes
+     * less that some threshold, it's shrunk into smaller node.
+     *
+     * The nil is a placeholder for non-existing empty node.
+     */
+    enum class layout : uint8_t { nil,
+        indirect_tiny, indirect_small, indirect_medium, indirect_large,
+        direct_dynamic, direct_static, };
+
+    /*
+     * When a node has only one child, the former is removed from
+     * the tree and its parent is set up to directly point to this
+     * only kid. The kid, in turn, carries a "prefix" on board
+     * denoting the index that might have been skipped by this cut.
+     *
+     * The lower 7 bits are the prefix length, the rest is the
+     * prefix itself.
+     */
+    static constexpr key_t prefix_len_mask = radix_mask;
+    static constexpr key_t prefix_mask = ~prefix_len_mask;
+
+    static key_t make_prefix(key_t key, unsigned len) noexcept {
+        return (key & prefix_mask) + len;
+    }
+
+    /*
+     * Mask to check node's prefix (mis-)match
+     */
+    static key_t prefix_mask_at(unsigned depth) noexcept {
+        return prefix_mask << (radix_bits * (leaf_depth - depth));
+    }
+
+    /*
+     * Finds the number of leading elements that coinside for two
+     * indices. Needed on insertion, when a short-cut node gets
+     * expanded back.
+     */
+    static unsigned common_prefix_len(key_t k1, key_t k2) noexcept {
+        static constexpr unsigned trailing_bits = (8 * sizeof(key_t)) % radix_bits;
+        static constexpr unsigned round_up_delta = trailing_bits == 0 ? 0 : radix_bits - trailing_bits;
+        /*
+         * This won't work if k1 == k2 (clz is undefined for full
+         * zeroes value), but we don't get here in this case
+         */
+        return (__builtin_clz(k1 ^ k2) + round_up_delta) / radix_bits;
+    }
+
+    /*
+     * Gets the depth's radix_bits-len index from the whole key, that's
+     * used in intra-node search.
+     */
+    static node_index_t node_index(key_t key, unsigned depth) noexcept {
+        return (key >> (radix_bits * (leaf_depth - depth))) & radix_mask;
+    }
+
+    enum class erase_mode { real, cleanup, };
+
+    /*
+     * When removing an index from a node it may end-up in one of 4
+     * states:
+     *
+     * - empty  -- the last index was removed, the parent node is
+     *             welcome to drop the slot and mark it as unused
+     *             (and maybe get shrunk/squashed after that)
+     * - squash -- only one index left, the parent node is welcome
+     *             to remove this node and replace it with its only
+     *             child (tuning it's prefix respectively)
+     * - shrink -- current layout contains few indices, so parent
+     *             node should shrink the slot into smaller node
+     * - nothing - just nothing
+     */
+    enum class erase_result { nothing, empty, shrink, squash, };
+
+    template <unsigned Threshold>
+    static erase_result after_drop(unsigned count) noexcept {
+        if (count == 0) {
+            return erase_result::empty;
+        }
+        if (count == 1) {
+            return erase_result::squash;
+        }
+
+        if constexpr (Threshold != 0) {
+            if (count <= Threshold) {
+                return erase_result::shrink;
+            }
+        }
+
+        return erase_result::nothing;
+    }
+
+    /*
+     * Lower-bound calls return back pointer on the value and the leaf
+     * node_head on which the value was found. The latter is needed
+     * for iterator's ++ optimization.
+     */
+    struct lower_bound_res {
+        const T* elem;
+        const node_head* leaf;
+        key_t key;
+
+        lower_bound_res(const T* e, const node_head& l, key_t k) noexcept : elem(e), leaf(&l), key(k) {}
+        lower_bound_res() noexcept : elem(nullptr), leaf(nullptr), key(0) {}
+    };
+
+    /*
+     * Allocation returns a slot pointer and a boolean denoting
+     * if the allocation really took place (false if the slot
+     * is aleady occupied)
+     */
+    using allocate_res = std::pair<T*, bool>;
+
+    using clone_res = std::pair<node_head*, std::exception_ptr>;
+
+    /*
+     * A header all nodes start with. The type of a node (inner/leaf)
+     * is evaluated (fingers-crossed) from the depth argument, so the
+     * header doesn't have this bit.
+     */
+    struct node_head {
+        node_head_ptr* _backref;
+        // Prefix for squashed nodes
+        key_t _prefix;
+        const layout _base_layout;
+        // Number of keys on the node
+        uint8_t _size;
+        // How many slots are there. Used only by direct dynamic nodes
+        const uint8_t _capacity;
+
+        node_head() noexcept : _backref(nullptr), _prefix(0), _base_layout(layout::nil), _size(0), _capacity(0) {}
+
+        node_head(key_t prefix, layout lt, uint8_t capacity) noexcept
+                : _backref(nullptr)
+                , _prefix(prefix)
+                , _base_layout(lt)
+                , _size(0)
+                , _capacity(capacity) {}
+
+        node_head(node_head&& o) noexcept
+                : _backref(std::exchange(o._backref, nullptr))
+                , _prefix(o._prefix)
+                , _base_layout(o._base_layout)
+                , _size(std::exchange(o._size, 0))
+                , _capacity(o._capacity) {
+            if (_backref != nullptr) {
+                *_backref = this;
+            }
+        }
+
+        node_head(const node_head&) = delete;
+        ~node_head() { assert(_size == 0); }
+
+        /*
+         * Helpers to cast header to the actual node class or to the
+         * node's base class (see below).
+         */
+
+        template <typename NBT>
+        NBT& as_base() noexcept {
+            return *boost::intrusive::get_parent_from_member(this, &NBT::_head);
+        }
+
+        template <typename NBT>
+        const NBT& as_base() const noexcept {
+            return *boost::intrusive::get_parent_from_member(this, &NBT::_head);
+        }
+
+        template <typename NT>
+        typename NT::node_type& as_base_of() noexcept {
+            return as_base<typename NT::node_type>();
+        }
+
+        template <typename NT>
+        const typename NT::node_type& as_base_of() const noexcept {
+            return as_base<typename NT::node_type>();
+        }
+
+        template <typename NT>
+        NT& as_node() noexcept {
+            return *boost::intrusive::get_parent_from_member(&as_base_of<NT>(), &NT::_base);
+        }
+
+        template <typename NT>
+        const NT& as_node() const noexcept {
+            return *boost::intrusive::get_parent_from_member(&as_base_of<NT>(), &NT::_base);
+        }
+
+        // Construct a key from leaf node prefix and index
+        key_t key_of(node_index_t ni) const noexcept {
+            return (_prefix & prefix_mask) + ni;
+        }
+
+        // Prefix manipulations
+        unsigned prefix_len() const noexcept { return _prefix & prefix_len_mask; }
+        void trim_prefix(unsigned v) noexcept { _prefix -= v; }
+        void bump_prefix(unsigned v) noexcept { _prefix += v; }
+
+        bool check_prefix(key_t key, unsigned& depth) const noexcept {
+            unsigned real_depth = depth + prefix_len();
+            key_t mask = prefix_mask_at(real_depth);
+            if ((key & mask) != (_prefix & mask)) {
+                return false;
+            }
+
+            depth = real_depth;
+            return true;
+        }
+
+        /*
+         * A bunch of "polymorphic" API wrappers that selects leaf/inner
+         * node to call the method on.
+         *
+         * The node_base below provides the same set, but ploymorphs
+         * the calls into the actual node layout.
+         */
+
+        /*
+         * Finds the element by the given key
+         */
+
+        const T* get(key_t key, unsigned depth) const noexcept {
+            if (depth == leaf_depth) {
+                return as_base_of<leaf_node>().get(key, depth);
+            } else {
+                return as_base_of<inner_node>().get(key, depth);
+            }
+        }
+
+        /*
+         * Finds the element whose key is not greater than the given one
+         */
+
+        lower_bound_res lower_bound(key_t key, unsigned depth) const noexcept {
+            unsigned real_depth = depth + prefix_len();
+            key_t mask = prefix_mask_at(real_depth);
+            if ((key & mask) > (_prefix & mask)) {
+                return lower_bound_res();
+            }
+
+            depth = real_depth;
+            if (depth == leaf_depth) {
+                return as_base_of<leaf_node>().lower_bound(key, depth);
+            } else {
+                return as_base_of<inner_node>().lower_bound(key, depth);
+            }
+        }
+
+        /*
+         * Allocates a new slot for the value. The caller is given the
+         * pointer to the slot and the sign if it's now busy or not,
+         * so that it can destruct it and construct a new element.
+         */
+
+        allocate_res alloc(key_t key, unsigned depth) {
+            if (depth == leaf_depth) {
+                return as_base_of<leaf_node>().alloc(key, depth);
+            } else {
+                return as_base_of<inner_node>().alloc(key, depth);
+            }
+        }
+
+        /*
+         * Erase the element with the given key, if present.
+         */
+
+        erase_result erase(key_t key, unsigned depth, erase_mode erm) noexcept {
+            if (depth == leaf_depth) {
+                return as_base_of<leaf_node>().erase(key, depth, erm);
+            } else {
+                return as_base_of<inner_node>().erase(key, depth, erm);
+            }
+        }
+
+        /*
+         * Weed walks the tree and removes the elements for which
+         * the filter() returns true.
+         */
+
+        template <typename Fn>
+        erase_result weed(Fn&& filter, unsigned depth) {
+            if (depth == leaf_depth) {
+                return as_base_of<leaf_node>().weed(filter, depth);
+            } else {
+                return as_base_of<inner_node>().weed(filter, depth);
+            }
+        }
+
+        /*
+         * Grow the current node and return the new one
+         */
+
+        node_head* grow(key_t key, unsigned depth) {
+            node_index_t ni = node_index(key, depth);
+            if (depth == leaf_depth) {
+                return as_base_of<leaf_node>().template grow<leaf_node>(ni);
+            } else {
+                return as_base_of<inner_node>().template grow<inner_node>(ni);
+            }
+        }
+
+        /*
+         * Shrink the current node and return the new one
+         */
+
+        node_head* shrink(unsigned depth) {
+            if (depth == leaf_depth) {
+                return as_base_of<leaf_node>().template shrink<leaf_node>();
+            } else {
+                return as_base_of<inner_node>().template shrink<inner_node>();
+            }
+        }
+
+        /*
+         * Walk the tree without modifying it (however, the elements
+         * themselves can be modified)
+         */
+
+        template <typename Visitor>
+        bool visit(Visitor&& v, unsigned depth) const {
+            bool ret = true;
+            depth += prefix_len();
+            if (v(*this, depth, true)) {
+                if (depth == leaf_depth) {
+                    ret = as_base_of<leaf_node>().visit(v, depth);
+                } else {
+                    ret = as_base_of<inner_node>().visit(v, depth);
+                }
+                v(*this, depth, false);
+            }
+            return ret;
+        }
+
+        template <typename Fn>
+        clone_res clone(Fn&& cloner, unsigned depth) const noexcept {
+            depth += prefix_len();
+            if (depth == leaf_depth) {
+                return as_base_of<leaf_node>().template clone<leaf_node, Fn>(cloner, depth);
+            } else {
+                return as_base_of<inner_node>().template clone<inner_node, Fn>(cloner, depth);
+            }
+        }
+
+        void free(unsigned depth) noexcept {
+            if (depth == leaf_depth) {
+                leaf_node::free(as_node<leaf_node>());
+            } else {
+                inner_node::free(as_node<inner_node>());
+            }
+        }
+
+        size_t node_size(unsigned depth) const noexcept {
+            if (depth == leaf_depth) {
+                return as_base_of<leaf_node>().node_size();
+            } else {
+                return as_base_of<inner_node>().node_size();
+            }
+        }
+
+        /*
+         * A leaf-node specific helper for iterator
+         */
+        lower_bound_res lower_bound(key_t key) const noexcept {
+            return as_base_of<leaf_node>().lower_bound(key, leaf_depth);
+        }
+
+        /*
+         * And two inner-node specific calls for nodes
+         * squashing/expanding
+         */
+
+        void set_lower(node_index_t ni, node_head* n) noexcept {
+            as_node<inner_node>().set_lower(ni, n);
+        }
+
+        node_head_ptr pop_lower() noexcept {
+            return as_node<inner_node>().pop_lower();
+        }
+    };
+
+    /*
+     * Pointer to node head. Inner nodes keep these, tree root pointer
+     * is the one as well.
+     */
+    class node_head_ptr {
+        node_head* _v;
+
+    public:
+        node_head_ptr(node_head* v) noexcept : _v(v) {}
+        node_head_ptr(const node_head_ptr&) = delete;
+        node_head_ptr(node_head_ptr&& o) noexcept : _v(std::exchange(o._v, nullptr)) {
+            if (_v != nullptr) {
+                _v->_backref = this;
+            }
+        }
+
+        node_head& operator*() const noexcept { return *_v; }
+        node_head* operator->() const noexcept { return _v; }
+        node_head* raw() const noexcept { return _v; }
+
+        operator bool() const noexcept { return _v != nullptr; }
+        bool is(const node_head& n) const noexcept { return _v == &n; }
+
+        node_head_ptr& operator=(node_head* v) noexcept {
+            _v = v;
+            // Checking (_v != &nil_root) is not needed for correctness, since
+            // nil_root's _backref is never read anyway. But we do this check for
+            // performance reasons: since nil_root is shared between shards,
+            // writing to it would cause serious cache contention.
+            if (_v != nullptr && _v != &nil_root) {
+                _v->_backref = this;
+            }
+            return *this;
+        }
+    };
+
+    /*
+     * This helper wraps several layouts into one and preceeds them with
+     * the header. It does nothing but provides a polymorphic calls to the
+     * lower/inner layouts depending on the head.base_layout value.
+     */
+    template <typename Slot, typename... Layouts>
+    struct node_base {
+        node_head _head;
+        variadic_union<Layouts...> _layouts;
+
+        template <typename Tx>
+        static size_t node_size(layout lt, uint8_t capacity) noexcept {
+            return sizeof(node_head) + Tx::layout_size(capacity);
+        }
+
+        template <typename Tx, typename Ty, typename... Ts>
+        static size_t node_size(layout lt, uint8_t capacity) noexcept {
+            return lt == Tx::this_layout ? sizeof(node_head) + Tx::layout_size(capacity) : node_size<Ty, Ts...>(lt, capacity);
+        }
+
+        static size_t node_size(layout lt, uint8_t capacity) noexcept {
+            return node_size<Layouts...>(lt, capacity);
+        }
+
+        size_t node_size() const noexcept {
+            return node_size(_head._base_layout, _head._capacity);
+        }
+
+        // construct
+
+        template <typename Tx>
+        void construct(variadic_union<Tx>& cur) noexcept {
+            new (&cur._this) Tx(_head);
+        }
+
+        template <typename Tx, typename Ty, typename... Ts>
+        void construct(variadic_union<Tx, Ty, Ts...>& cur) noexcept {
+            if (_head._base_layout == Tx::this_layout) {
+                new (&cur._this) Tx(_head);
+                return;
+            }
+
+            construct<Ty, Ts...>(cur._other);
+        }
+
+        node_base(key_t prefix, layout lt, uint8_t capacity) noexcept
+                : _head(prefix, lt, capacity) {
+            construct<Layouts...>(_layouts);
+        }
+
+        node_base(const node_base&) = delete;
+
+        template <typename Tx>
+        void move_construct(variadic_union<Tx>& cur, variadic_union<Tx>&& o) noexcept {
+            new (&cur._this) Tx(std::move(o._this), _head);
+        }
+
+        template <typename Tx, typename Ty, typename... Ts>
+        void move_construct(variadic_union<Tx, Ty, Ts...>& cur, variadic_union<Tx, Ty, Ts...>&& o) noexcept {
+            if (_head._base_layout == Tx::this_layout) {
+                new (&cur._this) Tx(std::move(o._this), _head);
+                return;
+            }
+
+            move_construct<Ty, Ts...>(cur._other, std::move(o._other));
+        }
+
+        node_base(node_base&& o) noexcept
+                : _head(std::move(o._head)) {
+            move_construct<Layouts...>(_layouts, std::move(o._layouts));
+        }
+
+        ~node_base() { }
+
+        // get value by key
+
+        template <typename Tx>
+        const T* get(const variadic_union<Tx>& cur, key_t key, unsigned depth) const noexcept {
+            if (_head._base_layout == Tx::this_layout) {
+                return cur._this.get(_head, key, depth);
+            }
+
+            return (const T*)nullptr;
+        }
+
+        template <typename Tx, typename Ty, typename... Ts>
+        const T* get(const variadic_union<Tx, Ty, Ts...>& cur, key_t key, unsigned depth) const noexcept {
+            if (_head._base_layout == Tx::this_layout) {
+                return cur._this.get(_head, key, depth);
+            }
+
+            return get<Ty, Ts...>(cur._other, key, depth);
+        }
+
+        const T* get(key_t key, unsigned depth) const noexcept {
+            return get<Layouts...>(_layouts, key, depth);
+        }
+
+        // finds a lowed-bound element
+
+        template <typename Tx>
+        lower_bound_res lower_bound(const variadic_union<Tx>& cur, key_t key, unsigned depth) const noexcept {
+            if (_head._base_layout == Tx::this_layout) {
+                return cur._this.lower_bound(_head, key, depth);
+            }
+
+            return lower_bound_res();
+        }
+
+        template <typename Tx, typename Ty, typename... Ts>
+        lower_bound_res lower_bound(const variadic_union<Tx, Ty, Ts...>& cur, key_t key, unsigned depth) const noexcept {
+            if (_head._base_layout == Tx::this_layout) {
+                return cur._this.lower_bound(_head, key, depth);
+            }
+
+            return lower_bound<Ty, Ts...>(cur._other, key, depth);
+        }
+
+        lower_bound_res lower_bound(key_t key, unsigned depth) const noexcept {
+            return lower_bound<Layouts...>(_layouts, key, depth);
+        }
+
+        // erase by key
+
+        template <typename Tx>
+        erase_result erase(variadic_union<Tx>& cur, key_t key, unsigned depth, erase_mode erm) noexcept {
+            return cur._this.erase(_head, key, depth, erm);
+        }
+
+        template <typename Tx, typename Ty, typename... Ts>
+        erase_result erase(variadic_union<Tx, Ty, Ts...>& cur, key_t key, unsigned depth, erase_mode erm) noexcept {
+            if (_head._base_layout == Tx::this_layout) {
+                return cur._this.erase(_head, key, depth, erm);
+            }
+
+            return erase<Ty, Ts...>(cur._other, key, depth, erm);
+        }
+
+        erase_result erase(key_t key, unsigned depth, erase_mode erm) noexcept {
+            return erase<Layouts...>(_layouts, key, depth, erm);
+        }
+
+        // weed values with filter
+
+        template <typename Fn, typename Tx>
+        erase_result weed(variadic_union<Tx>& cur, Fn&& filter, unsigned depth) {
+            return cur._this.weed(_head, filter, _head._prefix, depth);
+        }
+
+        template <typename Fn, typename Tx, typename Ty, typename... Ts>
+        erase_result weed(variadic_union<Tx, Ty, Ts...>& cur, Fn&& filter, unsigned depth) {
+            if (_head._base_layout == Tx::this_layout) {
+                return cur._this.weed(_head, filter, _head._prefix, depth);
+            }
+
+            return weed<Fn, Ty, Ts...>(cur._other, filter, depth);
+        }
+
+        template <typename Fn>
+        erase_result weed(Fn&& filter, unsigned depth) {
+            return weed<Fn, Layouts...>(_layouts, filter, depth);
+        }
+
+        // allocate new slot
+
+        template <typename Tx>
+        allocate_res alloc(variadic_union<Tx>& cur, key_t key, unsigned depth) {
+            return cur._this.alloc(_head, key, depth);
+        }
+
+        template <typename Tx, typename Ty, typename... Ts>
+        allocate_res alloc(variadic_union<Tx, Ty, Ts...>& cur, key_t key, unsigned depth) {
+            if (_head._base_layout == Tx::this_layout) {
+                return cur._this.alloc(_head, key, depth);
+            }
+
+            return alloc<Ty, Ts...>(cur._other, key, depth);
+        }
+
+        allocate_res alloc(key_t key, unsigned depth) {
+            return alloc<Layouts...>(_layouts, key, depth);
+        }
+
+        // append slot to node
+
+        template <typename Tx>
+        void append(variadic_union<Tx>& cur, node_index_t ni, Slot&& val) noexcept {
+            cur._this.append(_head, ni, std::move(val));
+        }
+
+        template <typename Tx, typename Ty, typename... Ts>
+        void append(variadic_union<Tx, Ty, Ts...>& cur, node_index_t ni, Slot&& val) noexcept {
+            if (_head._base_layout == Tx::this_layout) {
+                cur._this.append(_head, ni, std::move(val));
+                return;
+            }
+
+            append<Ty, Ts...>(cur._other, ni, std::move(val));
+        }
+
+        void append(node_index_t ni, Slot&& val) noexcept {
+            return append<Layouts...>(_layouts, ni, std::move(val));
+        }
+
+        // find and remove some element (usually the last one)
+
+        template <typename Tx>
+        Slot pop(variadic_union<Tx>& cur) noexcept {
+            return cur._this.pop(_head);
+        }
+
+        template <typename Tx, typename Ty, typename... Ts>
+        Slot pop(variadic_union<Tx, Ty, Ts...>& cur) noexcept {
+            if (_head._base_layout == Tx::this_layout) {
+                return cur._this.pop(_head);
+            }
+
+            return pop<Ty, Ts...>(cur._other);
+        }
+
+        Slot pop() noexcept {
+            return pop<Layouts...>(_layouts);
+        }
+
+        // visiting
+
+        template <typename Visitor, typename Tx>
+        bool visit(const variadic_union<Tx>& cur, Visitor&& v, unsigned depth) const {
+            return cur._this.visit(_head, v, depth);
+        }
+
+        template <typename Visitor, typename Tx, typename Ty, typename... Ts>
+        bool visit(const variadic_union<Tx, Ty, Ts...>& cur, Visitor&& v, unsigned depth) const {
+            if (_head._base_layout == Tx::this_layout) {
+                return cur._this.visit(_head, v, depth);
+            }
+
+            return visit<Visitor, Ty, Ts...>(cur._other, v, depth);
+        }
+
+        template <typename Visitor>
+        bool visit(Visitor&& v, unsigned depth) const {
+            return visit<Visitor, Layouts...>(_layouts, v, depth);
+        }
+
+        // cloning
+
+        template <typename NT, typename Fn, typename Tx>
+        clone_res clone(const variadic_union<Tx>& cur, Fn&& cloner, unsigned depth) const noexcept {
+            return cur._this.template clone<NT, Fn>(_head, cloner, depth);
+        }
+
+        template <typename NT, typename Fn, typename Tx, typename Ty, typename... Ts>
+        clone_res clone(const variadic_union<Tx, Ty, Ts...>& cur, Fn&& cloner, unsigned depth) const noexcept {
+            if (_head._base_layout == Tx::this_layout) {
+                return cur._this.template clone<NT, Fn>(_head, cloner, depth);
+            }
+
+            return clone<NT, Fn, Ty, Ts...>(cur._other, cloner, depth);
+        }
+
+        template <typename NT, typename Fn>
+        clone_res clone(Fn&& cloner, unsigned depth) const noexcept {
+            return clone<NT, Fn, Layouts...>(_layouts, cloner, depth);
+        }
+
+        // growing into larger layout
+
+        template <typename NT, typename Tx>
+        node_head* grow(variadic_union<Tx>& cur, node_index_t want_ni) {
+            if constexpr (Tx::growable) {
+                return cur._this.template grow<NT>(_head, want_ni);
+            }
+
+            std::abort();
+        }
+
+        template <typename NT, typename Tx, typename Ty, typename... Ts>
+        node_head* grow(variadic_union<Tx, Ty, Ts...>& cur, node_index_t want_ni) {
+            if constexpr (Tx::growable) {
+                if (_head._base_layout == Tx::this_layout) {
+                    return cur._this.template grow<NT>(_head, want_ni);
+                }
+            }
+
+            return grow<NT, Ty, Ts...>(cur._other, want_ni);
+        }
+
+        template <typename NT>
+        node_head* grow(node_index_t want_ni) {
+            return grow<NT, Layouts...>(_layouts, want_ni);
+        }
+
+        // shrinking into smaller layout
+
+        template <typename NT, typename Tx>
+        node_head* shrink(variadic_union<Tx>& cur) {
+            if constexpr (Tx::shrinkable) {
+                return cur._this.template shrink<NT>(_head);
+            }
+
+            std::abort();
+        }
+
+        template <typename NT, typename Tx, typename Ty, typename... Ts>
+        node_head* shrink(variadic_union<Tx, Ty, Ts...>& cur) {
+            if constexpr (Tx::shrinkable) {
+                if (_head._base_layout == Tx::this_layout) {
+                    return cur._this.template shrink<NT>(_head);
+                }
+            }
+
+            return shrink<NT, Ty, Ts...>(cur._other);
+        }
+
+        template <typename NT>
+        node_head* shrink() {
+            return shrink<NT, Layouts...>(_layouts);
+        }
+    };
+
+    /*
+     * Node layouts. Define the way indices and payloads are stored on the node
+     */
+
+    /*
+     * Direct layout is just an array of data.
+     *
+     * It makes a difference between inner slots, that are pointers to other nodes,
+     * and leaf slots, which are of user type. The former can be nullptr denoting
+     * the missing slot, while the latter may not have this sign, so the layout
+     * uses a bitmask to check if a slot is occupiued or not.
+     */
+    template <typename Slot, layout Layout, layout GrowInto, unsigned GrowThreshold, layout ShrinkInto, unsigned ShrinkThreshold>
+    struct direct_layout {
+        static constexpr bool shrinkable = ShrinkInto != layout::nil;
+        static constexpr bool growable = GrowInto != layout::nil;
+        static constexpr layout this_layout = Layout;
+
+        static bool check_capacity(const node_head& head, node_index_t ni) noexcept {
+            if constexpr (this_layout == layout::direct_static) {
+                return true;
+            } else {
+                return ni < head._capacity;
+            }
+        }
+
+        static unsigned capacity(const node_head& head) noexcept {
+            if constexpr (this_layout == layout::direct_static) {
+                return node_index_limit;
+            } else {
+                return head._capacity;
+            }
+        }
+
+        struct array_of_non_node_head_ptr {
+            /*
+             * This bismask is the maximum possible, while the array of slots
+             * is dynamic. This is to make sure all direct layouts have the
+             * slots at the same offset, so we may not introduce new layouts
+             * for it, and to avoid some capacity if-s in the code below
+             */
+            std::bitset<node_index_limit> _present;
+            Slot _slots[0];
+
+            array_of_non_node_head_ptr(const node_head& head) noexcept {
+                _present.reset();
+            }
+
+            array_of_non_node_head_ptr(array_of_non_node_head_ptr&& o, const node_head& head) noexcept
+                    : _present(std::move(o._present)) {
+                for (unsigned i = 0; i < capacity(head); i++) {
+                    if (o.has(i)) {
+                        new (&_slots[i]) Slot(std::move(o._slots[i]));
+                        o._slots[i].~Slot();
+                    }
+                }
+            }
+
+            array_of_non_node_head_ptr(const array_of_non_node_head_ptr&) = delete;
+
+            bool has(unsigned i) const noexcept { return _present.test(i); }
+            bool has(const node_head& h, unsigned i) const noexcept { return has(i); }
+            void add(node_head& head, unsigned i) noexcept { _present.set(i); }
+            void del(node_head& head, unsigned i) noexcept { _present.set(i, false); }
+            unsigned count(const node_head& head) const noexcept { return _present.count(); }
+        };
+
+        struct array_of_node_head_ptr {
+            Slot _slots[0];
+
+            array_of_node_head_ptr(const node_head& head) noexcept {
+                for (unsigned i = 0; i < capacity(head); i++) {
+                    new (&_slots[i]) node_head_ptr(nullptr);
+                }
+            }
+
+            array_of_node_head_ptr(array_of_node_head_ptr&& o, const node_head& head) noexcept {
+                for (unsigned i = 0; i < capacity(head); i++) {
+                    new (&_slots[i]) Slot(std::move(o._slots[i]));
+                    o._slots[i].~Slot();
+                }
+            }
+
+            array_of_node_head_ptr(const array_of_node_head_ptr&) = delete;
+
+            bool has(unsigned i) const noexcept { return _slots[i]; }
+            bool has(const node_head& h, unsigned i) const noexcept { return check_capacity(h, i) && _slots[i]; }
+            void add(node_head& head, unsigned i) noexcept { head._size++; }
+            void del(node_head& head, unsigned i) noexcept { head._size--; }
+            unsigned count(const node_head& head) const noexcept { return head._size; }
+        };
+
+        using array_of_slot = std::conditional_t<std::is_same_v<Slot, node_head_ptr>, array_of_node_head_ptr, array_of_non_node_head_ptr>;
+
+        array_of_slot _data;
+
+        direct_layout(const node_head& head) noexcept : _data(head) {}
+        direct_layout(direct_layout&& o, const node_head& head) noexcept : _data(std::move(o._data), head) {}
+        direct_layout(const direct_layout&) = delete;
+
+        const T* get(const node_head& head, key_t key, unsigned depth) const noexcept {
+            node_index_t ni = node_index(key, depth);
+            if (!_data.has(head, ni)) {
+                return nullptr;
+            }
+            return get_at(_data._slots[ni], key, depth + 1);
+        }
+
+        Slot pop(node_head& head) noexcept {
+            for (unsigned i = 0; i < capacity(head); i++) {
+                if (_data.has(i)) {
+                    Slot ret = std::move(_data._slots[i]);
+                    _data.del(head, i);
+                    _data._slots[i].~Slot();
+                    return ret;
+                }
+            }
+
+            return nullptr;
+        }
+
+        allocate_res alloc(node_head& head, key_t key, unsigned depth) {
+            node_index_t ni = node_index(key, depth);
+
+            if (!check_capacity(head, ni)) {
+                return allocate_res(nullptr, false);
+            }
+
+            bool exists = _data.has(ni);
+
+            if (!exists) {
+                populate_slot(_data._slots[ni], key, depth + 1);
+                _data.add(head, ni);
+            }
+
+            return allocate_on(_data._slots[ni], key, depth + 1, !exists);
+        }
+
+        void append(node_head& head, node_index_t ni, Slot&& val) noexcept {
+            assert(check_capacity(head, ni));
+            assert(!_data.has(ni));
+            _data.add(head, ni);
+            new (&_data._slots[ni]) Slot(std::move(val));
+        }
+
+        erase_result erase(node_head& head, key_t key, unsigned depth, erase_mode erm) noexcept {
+            node_index_t ni = node_index(key, depth);
+
+            if (_data.has(head, ni)) {
+                if (erase_from_slot(&_data._slots[ni], key, depth + 1, erm)) {
+                    _data.del(head, ni);
+                    return after_drop<ShrinkThreshold>(_data.count(head));
+                }
+            }
+
+            return erase_result::nothing;
+        }
+
+        template <typename Fn>
+        erase_result weed(node_head& head, Fn&& filter, key_t pfx, unsigned depth) {
+            bool removed_something = false;
+
+            for (unsigned i = 0; i < capacity(head); i++) {
+                if (_data.has(i)) {
+                    if (weed_from_slot(head, i, &_data._slots[i], filter, depth + 1)) {
+                        _data.del(head, i);
+                        removed_something = true;
+                    }
+                }
+            }
+
+            return removed_something ? after_drop<ShrinkThreshold>(_data.count(head)) : erase_result::nothing;
+        }
+
+        template <typename NT, typename Cloner>
+        clone_res clone(const node_head& head, Cloner&& clone, unsigned depth) const noexcept {
+            NT* nn;
+            try {
+                nn = NT::allocate(head._prefix, head._base_layout, head._capacity);
+            } catch (...) {
+                return clone_res(nullptr, std::current_exception());
+            }
+
+            auto ex = copy_slots(head, _data._slots, capacity(head), depth, nn->_base,
+                        [this] (unsigned i) noexcept { return _data.has(i) ? i : unused_node_index; }, clone);
+            return std::make_pair(&nn->_base._head, std::move(ex));
+        }
+
+        template <typename NT>
+        node_head* grow(node_head& head, node_index_t want_ni) {
+            static_assert(GrowInto == layout::direct_dynamic && GrowThreshold == 0);
+
+            uint8_t next_cap = head._capacity << 1;
+            while (want_ni >= next_cap) {
+                next_cap <<= 1;
+            }
+            assert(next_cap > head._capacity);
+
+            NT* nn = NT::allocate(head._prefix, layout::direct_dynamic, next_cap);
+            move_slots(_data._slots, head._capacity, head._capacity + 1, nn->_base,
+                    [this] (unsigned i) noexcept { return _data.has(i) ? i : unused_node_index; });
+            head._size = 0;
+            return &nn->_base._head;
+        }
+
+        template <typename NT>
+        node_head* shrink(node_head& head) {
+            static_assert(shrinkable && ShrinkThreshold != 0);
+
+            NT* nn = NT::allocate(head._prefix, ShrinkInto);
+            move_slots(_data._slots, node_index_limit, ShrinkThreshold, nn->_base,
+                    [this] (unsigned i) noexcept { return _data.has(i) ? i : unused_node_index; });
+            head._size = 0;
+            return &nn->_base._head;
+        }
+
+        lower_bound_res lower_bound(const node_head& head, key_t key, unsigned depth) const noexcept {
+            node_index_t ni = node_index(key, depth);
+
+            if (_data.has(head, ni)) {
+                lower_bound_res ret = lower_bound_at(&_data._slots[ni], head, ni, key, depth);
+                if (ret.elem != nullptr) {
+                    return ret;
+                }
+            }
+
+            for (unsigned i = ni + 1; i < capacity(head); i++) {
+                if (_data.has(i)) {
+                    /*
+                     * Nothing was found on the slot, that matches the
+                     * given index. We need to move to the next one, but
+                     * zero-out all key's bits related to lower levels.
+                     *
+                     * Fortunately, leaf nodes will rewrite the whole
+                     * thing on match, so put 0 into the whole key.
+                     *
+                     * Also note, that short-cut iterator++ assumes that
+                     * index is NOT 0-ed in case of mismatch!
+                     */
+                    return lower_bound_at(&_data._slots[i], head, i, 0, depth);
+                }
+            }
+
+            return lower_bound_res();
+        }
+
+        template <typename Visitor>
+        bool visit(const node_head& head, Visitor&& v, unsigned depth) const {
+            for (unsigned i = 0; i < capacity(head); i++) {
+                if (_data.has(i)) {
+                    if (!visit_slot(v, head, i, &_data._slots[i], depth)) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        static size_t layout_size(uint8_t capacity) noexcept {
+            if constexpr (this_layout == layout::direct_static) {
+                return sizeof(direct_layout) + node_index_limit * sizeof(Slot);
+            } else {
+                assert(capacity != 0);
+                return sizeof(direct_layout) + capacity * sizeof(Slot);
+            }
+        }
+    };
+
+    /*
+     * The indirect layout is used to keep small number of sparse keys on
+     * small node. To do that it keeps an array of indices and when is
+     * asked to get an element searches in this array. This map additionally
+     * works as a presense bitmask from direct layout.
+     *
+     * Since indirect layouts of different sizes have slots starting at
+     * different addresses in memory, they cannot grow dynamically, but are
+     * converted (by moving data) into each other.
+     */
+    template <typename Slot, layout Layout, unsigned Size, layout GrowInto, unsigned GrowThreshold, layout ShrinkInto, unsigned ShrinkThreshold>
+    struct indirect_layout {
+        static constexpr bool shrinkable = ShrinkInto != layout::nil;
+        static constexpr bool growable = GrowInto != layout::nil;
+        static constexpr unsigned size = Size;
+        static constexpr layout this_layout = Layout;
+
+        node_index_t _idx[Size];
+        Slot _slots[0];
+
+        bool has(unsigned i) const noexcept { return _idx[i] != unused_node_index; }
+        void unset(unsigned i) noexcept { _idx[i] = unused_node_index; }
+
+        indirect_layout(const node_head& head) noexcept {
+            for (unsigned i = 0; i < Size; i++) {
+                _idx[i] = unused_node_index;
+            }
+        }
+
+        indirect_layout(indirect_layout&& o, const node_head& head) noexcept {
+            for (unsigned i = 0; i < Size; i++) {
+                _idx[i] = o._idx[i];
+                if (o.has(i)) {
+                    new (&_slots[i]) Slot(std::move(o._slots[i]));
+                    o._slots[i].~Slot();
+                }
+            }
+        }
+
+        indirect_layout(const indirect_layout&) = delete;
+
+        const T* get(const node_head& head, key_t key, unsigned depth) const noexcept {
+            node_index_t ni = node_index(key, depth);
+            unsigned i = find_in_array<Size>(ni, _idx);
+            if (i >= Size) {
+                return nullptr;
+            }
+            return get_at(_slots[i], key, depth + 1);
+        }
+
+        Slot pop(node_head& head) noexcept {
+            for (unsigned i = 0; i < Size; i++) {
+                if (has(i)) {
+                    Slot ret = std::move(_slots[i]);
+                    head._size--;
+                    _slots[i].~Slot();
+                    return ret;
+                }
+            }
+
+            return nullptr;
+        }
+
+        allocate_res alloc(node_head& head, key_t key, unsigned depth) {
+            node_index_t ni = node_index(key, depth);
+            bool new_slot = false;
+            unsigned i = find_in_array<Size>(ni, _idx);
+            if (i >= Size) {
+                i = find_in_array<Size>(unused_node_index, _idx);
+                if (i >= Size) {
+                    return allocate_res(nullptr, false);
+                }
+
+                populate_slot(_slots[i], key, depth + 1);
+                _idx[i] = ni;
+                head._size++;
+                new_slot = true;
+            }
+
+            return allocate_on(_slots[i], key, depth + 1, new_slot);
+        }
+
+        void append(node_head& head, node_index_t ni, Slot&& val) noexcept {
+            unsigned i = head._size++;
+            assert(i < Size);
+            assert(_idx[i] == unused_node_index);
+            _idx[i] = ni;
+            new (&_slots[i]) Slot(std::move(val));
+        }
+
+        erase_result erase(node_head& head, key_t key, unsigned depth, erase_mode erm) noexcept {
+            node_index_t ni = node_index(key, depth);
+            unsigned i = find_in_array<Size>(ni, _idx);
+            if (i < Size) {
+                if (erase_from_slot(&_slots[i], key, depth + 1, erm)) {
+                    unset(i);
+                    head._size--;
+                    return after_drop<ShrinkThreshold>(head._size);
+                }
+            }
+
+            return erase_result::nothing;
+        }
+
+        template <typename Fn>
+        erase_result weed(node_head& head, Fn&& filter, key_t pfx, unsigned depth) {
+            bool removed_something = false;
+
+            for (unsigned i = 0; i < Size; i++) {
+                if (has(i)) {
+                    if (weed_from_slot(head, _idx[i], &_slots[i], filter, depth + 1)) {
+                        unset(i);
+                        head._size--;
+                        removed_something = true;
+                    }
+                }
+            }
+
+            return removed_something ? after_drop<ShrinkThreshold>(head._size) : erase_result::nothing;
+        }
+
+        template <typename NT, typename Cloner>
+        clone_res clone(const node_head& head, Cloner&& clone, unsigned depth) const noexcept {
+            NT* nn;
+            try {
+                nn = NT::allocate(head._prefix, head._base_layout, head._capacity);
+            } catch (...) {
+                return clone_res(nullptr, std::current_exception());
+            }
+
+            auto ex = copy_slots(head, _slots, Size, depth, nn->_base, [this] (unsigned i) noexcept { return _idx[i]; }, clone);
+            return std::make_pair(&nn->_base._head, std::move(ex));
+        }
+
+        template <typename NT>
+        node_head* grow(node_head& head, node_index_t want_ni) {
+            static_assert(growable && GrowThreshold == 0);
+
+            NT* nn = NT::allocate(head._prefix, GrowInto);
+            move_slots(_slots, Size, Size + 1, nn->_base, [this] (unsigned i) noexcept { return _idx[i]; });
+            head._size = 0;
+            return &nn->_base._head;
+        }
+
+        template <typename NT>
+        node_head* shrink(node_head& head) {
+            static_assert(shrinkable && ShrinkThreshold != 0);
+
+            NT* nn = NT::allocate(head._prefix, ShrinkInto);
+            move_slots(_slots, Size, ShrinkThreshold, nn->_base, [this] (unsigned i) noexcept { return _idx[i]; });
+            head._size = 0;
+            return &nn->_base._head;
+        }
+
+        lower_bound_res lower_bound(const node_head& head, key_t key, unsigned depth) const noexcept {
+            node_index_t ni = node_index(key, depth);
+            unsigned i = find_in_array<Size>(ni, _idx);
+            if (i < Size) {
+                lower_bound_res ret = lower_bound_at(&_slots[i], head, _idx[i], key, depth);
+                if (ret.elem != nullptr) {
+                    return ret;
+                }
+            }
+
+            unsigned ui = Size;
+            for (unsigned i = 0; i < Size; i++) {
+                if (has(i) && _idx[i] > ni && (ui == Size || _idx[i] < _idx[ui])) {
+                    ui = i;
+                }
+            }
+
+            if (ui == Size) {
+                return lower_bound_res();
+            }
+
+            // See comment in direct_layout about the zero key argument
+            return lower_bound_at(&_slots[ui], head, _idx[ui], 0, depth);
+        }
+
+        template <typename Visitor>
+        bool visit(const node_head& head, Visitor&& v, unsigned depth) const {
+            /*
+             * Two common-case fast paths that save notable amount
+             * of instructions from below.
+             */
+            if (head._size == 0) {
+                return true;
+            }
+
+            if (head._size == 1 && has(0)) {
+                return visit_slot(v, head, _idx[0], &_slots[0], depth);
+            }
+
+            unsigned indices[Size];
+            unsigned sz = 0;
+
+            for (unsigned i = 0; i < Size; i++) {
+                if (has(i)) {
+                    indices[sz++] = i;
+                }
+            }
+
+            if (v.sorted) {
+                std::sort(indices, indices + sz, [this] (int a, int b) {
+                    return _idx[a] < _idx[b];
+                });
+            }
+
+            for (unsigned i = 0; i < sz; i++) {
+                unsigned pos = indices[i];
+                if (!visit_slot(v, head, _idx[pos], &_slots[pos], depth)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        static size_t layout_size(uint8_t capacity) noexcept { return sizeof(indirect_layout) + size * sizeof(Slot); }
+    };
+
+
+    template <typename SlotType, typename FN>
+    static void move_slots(SlotType* slots, unsigned nr, unsigned thresh, auto& into, FN&& node_index_of) noexcept {
+        unsigned count = 0;
+        for (unsigned i = 0; i < nr; i++) {
+            node_index_t ni = node_index_of(i);
+            if (ni != unused_node_index) {
+                into.append(ni, std::move(slots[i]));
+                slots[i].~SlotType();
+                if (++count >= thresh) {
+                    break;
+                }
+            }
+        }
+    }
+
+    template <typename FN, typename Cloner>
+    static std::exception_ptr copy_slots(const node_head& h, const T* slots, unsigned nr, unsigned depth, auto& into, FN&& node_index_of, Cloner&& cloner) noexcept {
+        for (unsigned i = 0; i < nr; i++) {
+            node_index_t ni = node_index_of(i);
+            if (ni != unused_node_index) {
+                try {
+                    into.append(ni, cloner(h.key_of(ni), slots[i]));
+                } catch (...) {
+                    return std::current_exception();
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    template <typename FN, typename Cloner>
+    static std::exception_ptr copy_slots(const node_head& h, const node_head_ptr* slots, unsigned nr, unsigned depth, auto& into, FN&& node_index_of, Cloner&& cloner) noexcept {
+        for (unsigned i = 0; i < nr; i++) {
+            node_index_t ni = node_index_of(i);
+            if (ni != unused_node_index) {
+                clone_res res = slots[i]->clone(cloner, depth + 1);
+                if (res.first != nullptr) {
+                    /*
+                     * Append the slot anyway. It may happen that this inner node
+                     * has some entries on board, so rather than clearing them
+                     * here -- propagate the exception back and let the top-level
+                     * code call clear() on everything, including this half-cloned
+                     * node.
+                     */
+                    into.append(ni, std::move(res.first));
+                }
+                if (res.second) {
+                    return res.second;
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    /*
+     * Expand a node that failed prefix check.
+     * Turns a node with non-zero prefix on which parent tries to allocate
+     * an index beyond its limits. For this:
+     * - the inner node is allocated on the level, that's enough to fit
+     *   both -- current node and the desired index
+     * - the given node is placed into this new inner one at the index it's
+     *   expected to be found there (the prefix value)
+     * - the allocation continues on this new inner (with fixed depth)
+     */
+    static node_head* expand(node_head& n, key_t key, unsigned& depth) {
+        key_t n_prefix = n._prefix;
+
+        /*
+         * The plen is the level at which current node and desired
+         * index still coinside
+         */
+        unsigned plen = common_prefix_len(key, n_prefix);
+        assert(plen >= depth);
+        plen -= depth;
+        depth += plen;
+        assert(n.prefix_len() > plen);
+
+        node_index_t ni = node_index(n_prefix, depth);
+        node_head* nn = inner_node::allocate_initial(make_prefix(key, plen), ni);
+        // Trim all common nodes + nn one from n
+        n.trim_prefix(plen + 1);
+        nn->set_lower(ni, &n);
+
+        return nn;
+    }
+
+    /*
+     * Pop one the single lower node and prepare it to replace the
+     * current one. This preparation is purely increasing its prefix
+     * len, as the prefix value itself is already correct
+     */
+    static node_head* squash(node_head* n, unsigned depth) noexcept {
+        const node_head_ptr np = n->pop_lower();
+        node_head* kid = np.raw();
+        assert(kid != nullptr);
+        // Kid has n and it's prefix squashed
+        kid->bump_prefix(n->prefix_len() + 1);
+        return kid;
+    }
+
+    static bool maybe_drop_from(node_head_ptr* np, erase_result res, unsigned depth) noexcept {
+        node_head* n = np->raw();
+
+        switch (res) {
+        case erase_result::empty:
+            n->free(depth);
+            *np = nullptr;
+            return true;
+
+        case erase_result::squash:
+            if (depth != leaf_depth) {
+                *np = squash(n, depth);
+                n->free(depth);
+            }
+            break;
+        case erase_result::shrink:
+            try {
+                *np = n->shrink(depth);
+                n->free(depth);
+            } catch(...) {
+                /*
+                 * The node tried to shrink but failed to
+                 * allocate memory for the new layout. This
+                 * is not that bad, it can survive in current
+                 * layout and be shrunk (or squashed or even
+                 * dropped) later.
+                 */
+            }
+            break;
+        case erase_result::nothing: ; // make compiler happy
+        }
+
+        return false;
+    }
+
+    static const T* get_at(const T& val, key_t key, unsigned depth) noexcept { return &val; }
+
+    static const T* get_at(const node_head_ptr& np, key_t key, unsigned depth = 0) noexcept {
+        if (!np->check_prefix(key, depth)) {
+            return nullptr;
+        }
+
+        return np->get(key, depth);
+    }
+
+    static allocate_res allocate_on(T& val, key_t key, unsigned depth, bool allocated) noexcept {
+        return allocate_res(&val, allocated);
+    }
+
+    static allocate_res allocate_on(node_head_ptr& n, key_t key, unsigned depth = 0, bool _ = false) {
+        if (!n->check_prefix(key, depth)) {
+            n = expand(*n, key, depth);
+        }
+
+        allocate_res ret = n->alloc(key, depth);
+        if (ret.first == nullptr) {
+            /*
+             * The nullptr ret means the n has run out of
+             * free slots. Grow one into bigger layout and
+             * try again
+             */
+            node_head* nn = n->grow(key, depth);
+            n->free(depth);
+            n = nn;
+            ret = nn->alloc(key, depth);
+            assert(ret.first != nullptr);
+        }
+        return ret;
+    }
+
+    // Populating value slot happens in tree::emplace
+    static void populate_slot(T& val, key_t key, unsigned depth) noexcept { }
+
+    static void populate_slot(node_head_ptr& np, key_t key, unsigned depth) {
+        /*
+         * Allocate leaf immediatelly with the prefix
+         * len big enough to cover all skipped node
+         * up to the current depth
+         */
+        assert(leaf_depth >= depth);
+        np = leaf_node::allocate_initial(make_prefix(key, leaf_depth - depth));
+    }
+
+    template <typename Visitor>
+    static bool visit_slot(Visitor&& v, const node_head& n, node_index_t ni, const T* val, unsigned depth) {
+        return v(n.key_of(ni), *val);
+    }
+
+    template <typename Visitor>
+    static bool visit_slot(Visitor&& v, const node_head& n, node_index_t, const node_head_ptr* ptr, unsigned depth) {
+        return (*ptr)->visit(v, depth + 1);
+    }
+
+    static lower_bound_res lower_bound_at(const T* val, const node_head& n, node_index_t ni, key_t, unsigned) noexcept {
+        return lower_bound_res(val, n, n.key_of(ni));
+    }
+
+    static lower_bound_res lower_bound_at(const node_head_ptr* ptr, const node_head&, node_index_t, key_t key, unsigned depth) noexcept {
+        return (*ptr)->lower_bound(key, depth + 1);
+    }
+
+    template <typename Fn>
+    static bool weed_from_slot(node_head& n, node_index_t ni, T* val, Fn&& filter, unsigned depth) {
+        if (!filter(n.key_of(ni), *val)) {
+            return false;
+        }
+
+        val->~T();
+        return true;
+    }
+
+    template <typename Fn>
+    static bool weed_from_slot(node_head&, node_index_t, node_head_ptr* np, Fn&& filter, unsigned depth) {
+        return weed_from_slot(np, filter, depth);
+    }
+
+    template <typename Fn>
+    static bool weed_from_slot(node_head_ptr* np, Fn&& filter, unsigned depth) {
+        node_head* n = np->raw();
+        depth += n->prefix_len();
+
+        erase_result er = n->weed(filter, depth);
+
+        // FIXME -- after weed the node might want to shrink into
+        // even smaller, than just previous, layout
+        return maybe_drop_from(np, er, depth);
+    }
+
+    static bool erase_from_slot(T* val, key_t key, unsigned depth, erase_mode erm) noexcept {
+        if (erm == erase_mode::real) {
+            val->~T();
+        }
+
+        return true;
+    }
+
+    static bool erase_from_slot(node_head_ptr* np, key_t key, unsigned depth, erase_mode erm) noexcept {
+        node_head* n = np->raw();
+        assert(n->check_prefix(key, depth));
+
+        erase_result er = n->erase(key, depth, erm);
+        if (erm == erase_mode::cleanup) {
+            return false;
+        }
+
+        return maybe_drop_from(np, er, depth);
+    }
+
+    template <typename Visitor>
+    void visit(Visitor&& v) const {
+        if (!_root.is(nil_root)) {
+            _root->visit(std::move(v), 0);
+        }
+    }
+
+    template <typename Visitor>
+    void visit(Visitor&& v) {
+        struct adaptor {
+            Visitor&& v;
+            bool sorted;
+
+            bool operator()(key_t key, const T& val) {
+                return v(key, const_cast<T&>(val));
+            }
+
+            bool operator()(const node_head& n, unsigned depth, bool enter) {
+                return v(const_cast<node_head&>(n), depth, enter);
+            }
+        };
+
+        const_cast<const tree*>(this)->visit(adaptor{std::move(v), v.sorted});
+    }
+
+    /*
+     * Actual types that define inner and leaf nodes.
+     *
+     * Leaf nodes are the most numerous inhabitant of the tree and
+     * they must be as small as possible for the tree to be memory
+     * efficient. Opposite to this, inner nodes are ~1% of the tree,
+     * so it's not that important to keep them small.
+     *
+     * At the same time ...
+     *
+     * When looking up a value leaf node is the last in a row and
+     * makes a single lookup, while there can be several inner ones,
+     * on which several lookups will be done.
+     *
+     * Said that ...
+     *
+     * Leaf nodes are optimized for size, but not for speed, so they
+     * have several layouts to grow (and shrink) strictly on demand.
+     *
+     * Inner nodes are optimized for speed, and just a little-but for
+     * size, so they are of direct dynamic size only.
+     */
+
+    class leaf_node {
+        template <typename A, typename B> friend class printer;
+        friend class tree;
+        friend class node_head;
+        template <typename A, layout L, unsigned S, layout GL, unsigned GT, layout SL, unsigned ST> friend class indirect_layout;
+        template <typename A, layout L, layout GL, unsigned GT, layout SL, unsigned ST> friend class direct_layout;
+
+        using tiny_node = indirect_layout<T, layout::indirect_tiny, 4, layout::indirect_small, 0, layout::nil, 0>;
+        using small_node = indirect_layout<T, layout::indirect_small, 8, layout::indirect_medium, 0, layout::indirect_tiny, 4>;
+        using medium_node = indirect_layout<T, layout::indirect_medium, 16, layout::indirect_large, 0, layout::indirect_small, 8>;
+        using large_node = indirect_layout<T, layout::indirect_large, 32, layout::direct_static, 0, layout::indirect_medium, 16>;
+        using direct_node = direct_layout<T, layout::direct_static, layout::nil, 0, layout::indirect_large, 32>;
+
+    public:
+        using node_type = node_base<T, tiny_node, small_node, medium_node, large_node, direct_node>;
+
+        leaf_node(leaf_node&& other) noexcept : _base(std::move(other._base)) {}
+        ~leaf_node() { }
+
+        size_t storage_size() const noexcept {
+            return _base.node_size();
+        }
+
+    private:
+        node_type _base;
+
+        leaf_node(key_t prefix, layout lt, uint8_t capacity) noexcept : _base(prefix, lt, capacity) { }
+        leaf_node(const leaf_node&) = delete;
+
+        static node_head* allocate_initial(key_t prefix) {
+            return &allocate(prefix, layout::indirect_tiny)->_base._head;
+        }
+
+        static leaf_node* allocate(key_t prefix, layout lt, uint8_t capacity = 0) {
+            void* mem = current_allocator().alloc<leaf_node>(node_type::node_size(lt, capacity));
+            return new (mem) leaf_node(prefix, lt, capacity);
+        }
+
+        static void free(leaf_node& node) noexcept {
+            node.~leaf_node();
+            current_allocator().free(&node, node._base.node_size());
+        }
+    };
+
+    class inner_node {
+        template <typename A, typename B> friend class printer;
+        friend class tree;
+        friend class node_head;
+        template <typename A, layout L, unsigned S, layout GL, unsigned GT, layout SL, unsigned ST> friend class indirect_layout;
+        template <typename A, layout L, layout GL, unsigned GT, layout SL, unsigned ST> friend class direct_layout;
+
+        static constexpr uint8_t initial_capacity = 4;
+
+        using dynamic_node = direct_layout<node_head_ptr, layout::direct_dynamic, layout::direct_dynamic, 0, layout::nil, 0>;
+
+    public:
+        using node_type = node_base<node_head_ptr, dynamic_node>;
+
+        inner_node(inner_node&& other) noexcept : _base(std::move(other._base)) {}
+        ~inner_node() {}
+
+        size_t storage_size() const noexcept {
+            return _base.node_size();
+        }
+
+    private:
+        node_type _base;
+
+        inner_node(key_t prefix, layout lt, uint8_t capacity) noexcept : _base(prefix, lt, capacity) {}
+        inner_node(const inner_node&) = delete;
+
+        static node_head* allocate_initial(key_t prefix, node_index_t want_ni) {
+            uint8_t capacity = initial_capacity;
+            while (want_ni >= capacity) {
+                capacity <<= 1;
+            }
+            return &allocate(prefix, layout::direct_dynamic, capacity)->_base._head;
+        }
+
+        static inner_node* allocate(key_t prefix, layout lt, uint8_t capacity = 0) {
+            void* mem = current_allocator().alloc<inner_node>(node_type::node_size(lt, capacity));
+            return new (mem) inner_node(prefix, lt, capacity);
+        }
+
+        static void free(inner_node& node) noexcept {
+            node.~inner_node();
+            current_allocator().free(&node, node._base.node_size());
+        }
+
+        node_head_ptr pop_lower() noexcept {
+            return _base.pop();
+        }
+
+        void set_lower(node_index_t ni, node_head* n) noexcept {
+            _base.append(ni, node_head_ptr(n));
+        }
+    };
+
+    node_head_ptr _root;
+    static inline node_head nil_root;
+
+public:
+    tree() noexcept : _root(&nil_root) {}
+    ~tree() {
+        clear();
+    }
+
+    tree(const tree&) = delete;
+    tree(tree&& o) noexcept : _root(std::exchange(o._root, &nil_root)) {}
+
+    const T* get(key_t key) const noexcept {
+        return get_at(_root, key);
+    }
+
+    T* get(key_t key) noexcept {
+        return const_cast<T*>(get_at(_root, key));
+    }
+
+    const T* lower_bound(key_t key) const noexcept {
+        return _root->lower_bound(key, 0).elem;
+    }
+
+    T* lower_bound(key_t key) noexcept {
+        return const_cast<T*>(const_cast<const tree*>(this)->lower_bound(key));
+    }
+
+    template <typename... Args>
+    void emplace(key_t key, Args&&... args) {
+        if (_root.is(nil_root)) {
+            populate_slot(_root, key, 0);
+        }
+
+        allocate_res v = allocate_on(_root, key);
+        if (!v.second) {
+            v.first->~T();
+        }
+
+        try {
+            new (v.first) T(std::forward<Args>(args)...);
+        } catch (...) {
+            erase_from_slot(&_root, key, 0, erase_mode::cleanup);
+            throw;
+        }
+    }
+
+    void erase(key_t key) noexcept {
+        if (!_root.is(nil_root)) {
+            erase_from_slot(&_root, key, 0, erase_mode::real);
+            if (!_root) {
+                _root = &nil_root;
+            }
+        }
+    }
+
+    void clear() noexcept {
+        struct clearing_visitor {
+            bool sorted = false;
+
+            bool operator()(key_t key, T& val) noexcept {
+                val.~T();
+                return true;
+            }
+            bool operator()(node_head& n, unsigned depth, bool enter) noexcept {
+                if (!enter) {
+                    n._size = 0;
+                    n.free(depth);
+                }
+                return true;
+            }
+        };
+
+        visit(clearing_visitor{});
+        _root = &nil_root;
+    }
+
+    template <typename Cloner>
+    requires std::is_invocable_r<T, Cloner, key_t, const T&>::value
+    void clone_from(const tree& tree, Cloner&& cloner) {
+        assert(_root.is(nil_root));
+        if (!tree._root.is(nil_root)) {
+            clone_res cres = tree._root->clone(cloner, 0);
+            if (cres.first != nullptr) {
+                _root = cres.first;
+            }
+            if (cres.second) {
+                clear();
+                std::rethrow_exception(cres.second);
+            }
+        }
+    }
+
+    /*
+     * Weed walks the tree and removes the elements for which the
+     * fn returns true.
+     */
+
+    template <typename Fn>
+    requires std::is_invocable_r<bool, Fn, key_t, T&>::value
+    void weed(Fn&& filter) {
+        if (!_root.is(nil_root)) {
+            weed_from_slot(&_root, filter, 0);
+            if (!_root) {
+                _root = &nil_root;
+            }
+        }
+    }
+
+private:
+    template <typename Fn, bool Const>
+    struct walking_visitor {
+            Fn&& fn;
+            bool sorted;
+
+            using value_t = std::conditional_t<Const, const T, T>;
+            using node_t = std::conditional_t<Const, const node_head, node_head>;
+
+            bool operator()(key_t key, value_t& val) {
+                return fn(key, val);
+            }
+            bool operator()(node_t& n, unsigned depth, bool enter) noexcept {
+                return true;
+            }
+    };
+
+public:
+
+    /*
+     * Walking the tree element-by-element. The called function Fn
+     * may return false to stop the walking and return.
+     *
+     * The \sorted value specifies if the walk should call Fn on
+     * keys in ascending order. If it's false keys will be called
+     * randomly, because indirect nodes store the slots without
+     * sorting
+     */
+    template <typename Fn>
+    requires std::is_invocable_r<bool, Fn, key_t, const T&>::value
+    void walk(Fn&& fn, bool sorted = true) const {
+        visit(walking_visitor<Fn, true>{std::move(fn), sorted});
+    }
+
+    template <typename Fn>
+    requires std::is_invocable_r<bool, Fn, key_t, T&>::value
+    void walk(Fn&& fn, bool sorted = true) {
+        visit(walking_visitor<Fn, false>{std::move(fn), sorted});
+    }
+
+    template <bool Const>
+    class iterator_base {
+    public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = std::conditional_t<Const, const T, T>;
+        using difference_type = ssize_t;
+        using pointer = value_type*;
+        using reference = value_type&;
+
+    private:
+        key_t _key = 0;
+        pointer _value = nullptr;
+        const tree* _tree = nullptr;
+        const node_head* _leaf = nullptr;
+
+    public:
+        key_t key() const noexcept { return _key; }
+
+        iterator_base() noexcept = default;
+        iterator_base(const tree* t) noexcept : _tree(t) {
+            lower_bound_res res = _tree->_root->lower_bound(_key, 0);
+            _leaf = res.leaf;
+            _value = const_cast<pointer>(res.elem);
+            _key = res.key;
+        }
+
+        iterator_base& operator++() noexcept {
+            if (_value == nullptr) {
+                _value = nullptr;
+                return *this;
+            }
+
+            _key++;
+            if (node_index(_key, leaf_depth) != 0) {
+                /*
+                 * Short-cut. If we're still inside the leaf,
+                 * then it's worth trying to shift forward on
+                 * it without messing with upper levels
+                 */
+                lower_bound_res res = _leaf->lower_bound(_key);
+                _value = const_cast<pointer>(res.elem);
+                if (_value != nullptr) {
+                    _key = res.key;
+                    return *this;
+                }
+
+                /*
+                 * No luck. Go ahead and scan the tree from top
+                 * again. It's only leaf_depth levels though. Also
+                 * not to make the call below visit this leaf one
+                 * more time, bump up the index to move out of the
+                 * current leaf and keep the leaf's part zero.
+                 */
+
+                 _key += node_index_limit;
+                 _key &= ~radix_mask;
+            }
+
+            lower_bound_res res = _tree->_root->lower_bound(_key, 0);
+            _leaf = res.leaf;
+            _value = const_cast<pointer>(res.elem);
+            _key = res.key;
+
+            return *this;
+        }
+
+        iterator_base operator++(int) noexcept {
+            iterator_base cur = *this;
+            operator++();
+            return cur;
+        }
+
+        pointer operator->() const noexcept { return _value; }
+        reference operator*() const noexcept { return *_value; }
+
+        bool operator==(const iterator_base& o) const noexcept { return _value == o._value; }
+    };
+
+    using iterator = iterator_base<false>;
+    using const_iterator = iterator_base<true>;
+
+    iterator begin() noexcept { return iterator(this); }
+    iterator end() noexcept { return iterator(); }
+    const_iterator cbegin() const noexcept { return const_iterator(this); }
+    const_iterator cend() const noexcept { return const_iterator(); }
+    const_iterator begin() const noexcept { return cbegin(); }
+    const_iterator end() const noexcept { return cend(); }
+
+    bool empty() const noexcept { return _root.is(nil_root); }
+
+    template <typename Fn>
+    requires std::is_nothrow_invocable_r<size_t, Fn, key_t, const T&>::value
+    size_t memory_usage(Fn&& entry_mem_usage) const noexcept {
+        struct counting_visitor {
+                Fn&& entry_mem_usage;
+                bool sorted = false;
+                size_t mem = 0;
+
+                bool operator()(key_t key, const T& val) {
+                    mem += entry_mem_usage(key, val);
+                    return true;
+                }
+                bool operator()(const node_head& n, unsigned depth, bool enter) noexcept {
+                    if (enter) {
+                        mem += n.node_size(depth);
+                    }
+                    return true;
+                }
+        };
+
+        counting_visitor v{std::move(entry_mem_usage)};
+        visit(v);
+
+        return v.mem;
+    }
+
+    struct stats {
+        struct node_stats {
+            unsigned long indirect_tiny = 0;
+            unsigned long indirect_small = 0;
+            unsigned long indirect_medium = 0;
+            unsigned long indirect_large = 0;
+            unsigned long direct_static = 0;
+            unsigned long direct_dynamic = 0;
+        };
+
+        node_stats inners;
+        node_stats leaves;
+    };
+
+    stats get_stats() const noexcept {
+        struct counting_visitor {
+            bool sorted = false;
+            stats st;
+
+            bool operator()(key_t key, const T& val) noexcept { std::abort(); }
+
+            void update(typename stats::node_stats& ns, const node_head& n) const noexcept {
+                switch (n._base_layout) {
+                case layout::indirect_tiny: ns.indirect_tiny++; break;
+                case layout::indirect_small: ns.indirect_small++; break;
+                case layout::indirect_medium: ns.indirect_medium++; break;
+                case layout::indirect_large: ns.indirect_large++; break;
+                case layout::direct_static: ns.direct_static++; break;
+                case layout::direct_dynamic: ns.direct_dynamic++; break;
+                default: break;
+                }
+            }
+
+            bool operator()(const node_head& n, unsigned depth, bool enter) noexcept {
+                if (!enter) {
+                    return true;
+                }
+
+                if (depth == leaf_depth) {
+                    update(st.leaves, n);
+                    return false; // don't visit elements
+                } else {
+                    update(st.inners, n);
+                    return true;
+                }
+            }
+        };
+
+        counting_visitor v;
+        visit(v);
+        return v.st;
+    }
+};
+
+} // namespace
+
+
+
+#include <type_traits>
+#include <seastar/util/concepts.hh>
+#include <utility>
+
+namespace utils {
+
+/*
+ * Wraps a collection into immutable form.
+ *
+ * Immutability here means that the collection itself cannot be modified,
+ * i.e. adding or removing elements is not possible. Read-only methods such
+ * as find(), begin()/end(), lower_bound(), etc. are available and are
+ * transparently forwarded to the underlying collection. Return values from
+ * those methods are also returned as-is so it's pretty much like a const
+ * reference on the collection.
+ *
+ * The important difference from the const reference is that obtained
+ * elements or iterators are not necessarily const too, so it's possible
+ * to modify the found or iterated over elements.
+ */
+
+template <typename Collection>
+class immutable_collection {
+    Collection* _col;
+
+public:
+    immutable_collection(Collection& col) noexcept : _col(&col) {}
+
+#define DO_WRAP_METHOD(method, is_const)                                                                           \
+    template <typename... Args>                                                                                    \
+    auto method(Args&&... args) is_const noexcept(noexcept(std::declval<is_const Collection>().method(args...))) { \
+        return _col->method(std::forward<Args>(args)...);                                                           \
+    }
+
+#define WRAP_CONST_METHOD(method)    \
+    DO_WRAP_METHOD(method, const)
+
+#define WRAP_METHOD(method)          \
+    WRAP_CONST_METHOD(method)        \
+    DO_WRAP_METHOD(method, )
+
+    WRAP_METHOD(find)
+    WRAP_METHOD(lower_bound)
+    WRAP_METHOD(upper_bound)
+    WRAP_METHOD(slice)
+    WRAP_METHOD(lower_slice)
+    WRAP_METHOD(upper_slice)
+
+    WRAP_CONST_METHOD(empty)
+    WRAP_CONST_METHOD(size)
+    WRAP_CONST_METHOD(calculate_size)
+    WRAP_CONST_METHOD(external_memory_usage)
+
+    WRAP_METHOD(begin)
+    WRAP_METHOD(end)
+    WRAP_METHOD(rbegin)
+    WRAP_METHOD(rend)
+    WRAP_CONST_METHOD(cbegin)
+    WRAP_CONST_METHOD(cend)
+    WRAP_CONST_METHOD(crbegin)
+    WRAP_CONST_METHOD(crend)
+
+#undef WRAP_METHOD
+#undef WRAP_CONST_METHOD
+#undef DO_WRAP_METHOD
+};
+
+} // namespace utils
+
+
+
+#include <seastar/core/shared_ptr.hh>
+
+namespace dht {
+
+class decorated_key;
+
+using token_range = nonwrapping_interval<token>;
+
+}
+
+namespace data_dictionary {
+
+class database;
+
+}
+
+class repair_history_map;
+using per_table_history_maps = std::unordered_map<table_id, seastar::lw_shared_ptr<repair_history_map>>;
+
+class tombstone_gc_options;
+
+class tombstone_gc_state {
+    per_table_history_maps* _repair_history_maps;
+public:
+    tombstone_gc_state() = delete;
+    tombstone_gc_state(per_table_history_maps* maps) noexcept : _repair_history_maps(maps) {}
+
+    explicit operator bool() const noexcept {
+        return _repair_history_maps != nullptr;
+    }
+
+    seastar::lw_shared_ptr<repair_history_map> get_repair_history_map_for_table(const table_id& id) const;
+    seastar::lw_shared_ptr<repair_history_map> get_or_create_repair_history_map_for_table(const table_id& id);
+    void drop_repair_history_map_for_table(const table_id& id);
+
+    struct get_gc_before_for_range_result {
+        gc_clock::time_point min_gc_before;
+        gc_clock::time_point max_gc_before;
+        bool knows_entire_range;
+    };
+
+    get_gc_before_for_range_result get_gc_before_for_range(schema_ptr s, const dht::token_range& range, const gc_clock::time_point& query_time) const;
+
+    gc_clock::time_point get_gc_before_for_key(schema_ptr s, const dht::decorated_key& dk, const gc_clock::time_point& query_time) const;
+
+    void update_repair_time(table_id id, const dht::token_range& range, gc_clock::time_point repair_time);
+};
+
+void validate_tombstone_gc_options(const tombstone_gc_options* options, data_dictionary::database db, sstring ks_name);
+
+
+
+#include <iosfwd>
+#include <map>
+#include <boost/intrusive/set.hpp>
+#include <boost/range/iterator_range.hpp>
+#include <boost/range/adaptor/filtered.hpp>
+#include <boost/intrusive/parent_from_member.hpp>
+
+#include <seastar/core/bitset-iter.hh>
+#include <seastar/util/optimized_optional.hh>
+
+
+class mutation_fragment;
+class mutation_partition_view;
+class mutation_partition_visitor;
+
+namespace query {
+    class clustering_key_filter_ranges;
+} // namespace query
+
+struct cell_hash {
+    using size_type = uint64_t;
+    static constexpr size_type no_hash = 0;
+
+    size_type hash = no_hash;
+
+    explicit operator bool() const noexcept {
+        return hash != no_hash;
+    }
+};
+
+template<>
+struct appending_hash<cell_hash> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const cell_hash& ch) const {
+        feed_hash(h, ch.hash);
+    }
+};
+
+using cell_hash_opt = seastar::optimized_optional<cell_hash>;
+
+struct cell_and_hash {
+    atomic_cell_or_collection cell;
+    mutable cell_hash_opt hash;
+
+    cell_and_hash() = default;
+    cell_and_hash(cell_and_hash&&) noexcept = default;
+    cell_and_hash& operator=(cell_and_hash&&) noexcept = default;
+
+    cell_and_hash(atomic_cell_or_collection&& cell, cell_hash_opt hash)
+        : cell(std::move(cell))
+        , hash(hash)
+    { }
+};
+
+class compaction_garbage_collector;
+
+//
+// Container for cells of a row. Cells are identified by column_id.
+//
+// All cells must belong to a single column_kind. The kind is not stored
+// for space-efficiency reasons. Whenever a method accepts a column_kind,
+// the caller must always supply the same column_kind.
+//
+//
+class row {
+    friend class size_calculator;
+    using size_type = std::make_unsigned_t<column_id>;
+    size_type _size = 0;
+    using sparse_array_type = compact_radix_tree::tree<cell_and_hash, column_id>;
+    sparse_array_type _cells;
+public:
+    row();
+    ~row();
+    row(const schema&, column_kind, const row&);
+    row(row&& other) noexcept;
+    row& operator=(row&& other) noexcept;
+    size_t size() const { return _size; }
+    bool empty() const { return _size == 0; }
+
+    const atomic_cell_or_collection& cell_at(column_id id) const;
+
+    // Returns a pointer to cell's value or nullptr if column is not set.
+    const atomic_cell_or_collection* find_cell(column_id id) const;
+    // Returns a pointer to cell's value and hash or nullptr if column is not set.
+    const cell_and_hash* find_cell_and_hash(column_id id) const;
+
+    template<typename Func>
+    void remove_if(Func&& func) {
+        _cells.weed([func, this] (column_id id, cell_and_hash& cah) {
+            if (!func(id, cah.cell)) {
+                return false;
+            }
+
+            _size--;
+            return true;
+        });
+    }
+
+private:
+    template<typename Func>
+    void consume_with(Func&&);
+
+    // Func obeys the same requirements as for for_each_cell below.
+    template<typename Func, typename MaybeConstCellAndHash>
+    static constexpr auto maybe_invoke_with_hash(Func& func, column_id id, MaybeConstCellAndHash& c_a_h) {
+        if constexpr (std::is_invocable_v<Func, column_id, const cell_and_hash&>) {
+            return func(id, c_a_h);
+        } else {
+            return func(id, c_a_h.cell);
+        }
+    }
+
+public:
+    // Calls Func(column_id, cell_and_hash&) or Func(column_id, atomic_cell_and_collection&)
+    // for each cell in this row, depending on the concrete Func type.
+    // noexcept if Func doesn't throw.
+    template<typename Func>
+    void for_each_cell(Func&& func) {
+        _cells.walk([func] (column_id id, cell_and_hash& cah) {
+            maybe_invoke_with_hash(func, id, cah);
+            return true;
+        });
+    }
+
+    template<typename Func>
+    void for_each_cell(Func&& func) const {
+        _cells.walk([func] (column_id id, const cell_and_hash& cah) {
+            maybe_invoke_with_hash(func, id, cah);
+            return true;
+        });
+    }
+
+    template<typename Func>
+    void for_each_cell_until(Func&& func) const {
+        _cells.walk([func] (column_id id, const cell_and_hash& cah) {
+            return maybe_invoke_with_hash(func, id, cah) != stop_iteration::yes;
+        });
+    }
+
+    // Merges cell's value into the row.
+    // Weak exception guarantees.
+    void apply(const column_definition& column, const atomic_cell_or_collection& cell, cell_hash_opt hash = cell_hash_opt());
+
+    // Merges cell's value into the row.
+    // Weak exception guarantees.
+    void apply(const column_definition& column, atomic_cell_or_collection&& cell, cell_hash_opt hash = cell_hash_opt());
+
+    // Monotonic exception guarantees. In case of exception the sum of cell and this remains the same as before the exception.
+    void apply_monotonically(const column_definition& column, atomic_cell_or_collection&& cell, cell_hash_opt hash = cell_hash_opt());
+
+    // Adds cell to the row. The column must not be already set.
+    void append_cell(column_id id, atomic_cell_or_collection cell);
+
+    // Weak exception guarantees
+    void apply(const schema&, column_kind, const row& src);
+    // Weak exception guarantees
+    void apply(const schema&, column_kind, row&& src);
+    // Monotonic exception guarantees
+    void apply_monotonically(const schema&, column_kind, row&& src);
+
+    // Expires cells based on query_time. Expires tombstones based on gc_before
+    // and max_purgeable. Removes cells covered by tomb.
+    // Returns true iff there are any live cells left.
+    bool compact_and_expire(
+            const schema& s,
+            column_kind kind,
+            row_tombstone tomb,
+            gc_clock::time_point query_time,
+            can_gc_fn&,
+            gc_clock::time_point gc_before,
+            const row_marker& marker,
+            compaction_garbage_collector* collector = nullptr);
+
+    bool compact_and_expire(
+            const schema& s,
+            column_kind kind,
+            row_tombstone tomb,
+            gc_clock::time_point query_time,
+            can_gc_fn&,
+            gc_clock::time_point gc_before,
+            compaction_garbage_collector* collector = nullptr);
+
+    row difference(const schema&, column_kind, const row& other) const;
+
+    bool equal(column_kind kind, const schema& this_schema, const row& other, const schema& other_schema) const;
+
+    size_t external_memory_usage(const schema&, column_kind) const;
+
+    cell_hash_opt cell_hash_for(column_id id) const;
+
+    void prepare_hash(const schema& s, column_kind kind) const;
+    void clear_hash() const;
+
+    bool is_live(const schema&, column_kind kind, tombstone tomb = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const;
+
+    class printer {
+        const schema& _schema;
+        column_kind _kind;
+        const row& _row;
+    public:
+        printer(const schema& s, column_kind k, const row& r) : _schema(s), _kind(k), _row(r) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+};
+
+// Like row, but optimized for the case where the row doesn't exist (e.g. static rows)
+class lazy_row {
+    managed_ref<row> _row;
+    static inline const row _empty_row;
+public:
+    lazy_row() = default;
+    explicit lazy_row(row&& r) {
+        if (!r.empty()) {
+            _row = make_managed<row>(std::move(r));
+        }
+    }
+
+    lazy_row(const schema& s, column_kind kind, const lazy_row& r) {
+        if (!r.empty()) {
+            _row = make_managed<row>(s, kind, *r._row);
+        }
+    }
+
+    lazy_row(const schema& s, column_kind kind, const row& r) {
+        if (!r.empty()) {
+            _row = make_managed<row>(s, kind, r);
+        }
+    }
+
+    row& maybe_create() {
+        if (!_row) {
+            _row = make_managed<row>();
+        }
+        return *_row;
+    }
+
+    const row& get_existing() const & {
+        return *_row;
+    }
+
+    row& get_existing() & {
+        return *_row;
+    }
+
+    row&& get_existing() && {
+        return std::move(*_row);
+    }
+
+    const row& get() const {
+        return _row ? *_row : _empty_row;
+    }
+
+    size_t size() const {
+        if (!_row) {
+            return 0;
+        }
+        return _row->size();
+    }
+
+    bool empty() const {
+        if (!_row) {
+            return true;
+        }
+        return _row->empty();
+    }
+
+    void reserve(column_id nr) {
+        if (nr) {
+            maybe_create();
+        }
+    }
+
+    const atomic_cell_or_collection& cell_at(column_id id) const {
+        if (!_row) {
+            throw_with_backtrace<std::out_of_range>(format("Column not found for id = {:d}", id));
+        } else {
+            return _row->cell_at(id);
+        }
+    }
+
+    // Returns a pointer to cell's value or nullptr if column is not set.
+    const atomic_cell_or_collection* find_cell(column_id id) const {
+        if (!_row) {
+            return nullptr;
+        }
+        return _row->find_cell(id);
+    }
+
+    // Returns a pointer to cell's value and hash or nullptr if column is not set.
+    const cell_and_hash* find_cell_and_hash(column_id id) const {
+        if (!_row) {
+            return nullptr;
+        }
+        return _row->find_cell_and_hash(id);
+    }
+
+    // Calls Func(column_id, cell_and_hash&) or Func(column_id, atomic_cell_and_collection&)
+    // for each cell in this row, depending on the concrete Func type.
+    // noexcept if Func doesn't throw.
+    template<typename Func>
+    void for_each_cell(Func&& func) {
+        if (!_row) {
+            return;
+        }
+        _row->for_each_cell(std::forward<Func>(func));
+    }
+
+    template<typename Func>
+    void for_each_cell(Func&& func) const {
+        if (!_row) {
+            return;
+        }
+        _row->for_each_cell(std::forward<Func>(func));
+    }
+
+    template<typename Func>
+    void for_each_cell_until(Func&& func) const {
+        if (!_row) {
+            return;
+        }
+        _row->for_each_cell_until(std::forward<Func>(func));
+    }
+
+    // Merges cell's value into the row.
+    // Weak exception guarantees.
+    void apply(const column_definition& column, const atomic_cell_or_collection& cell, cell_hash_opt hash = cell_hash_opt()) {
+        maybe_create().apply(column, cell, std::move(hash));
+    }
+
+    // Merges cell's value into the row.
+    // Weak exception guarantees.
+    void apply(const column_definition& column, atomic_cell_or_collection&& cell, cell_hash_opt hash = cell_hash_opt()) {
+        maybe_create().apply(column, std::move(cell), std::move(hash));
+    }
+
+    // Monotonic exception guarantees. In case of exception the sum of cell and this remains the same as before the exception.
+    void apply_monotonically(const column_definition& column, atomic_cell_or_collection&& cell, cell_hash_opt hash = cell_hash_opt()) {
+        maybe_create().apply_monotonically(column, std::move(cell), std::move(hash));
+    }
+
+    // Adds cell to the row. The column must not be already set.
+    void append_cell(column_id id, atomic_cell_or_collection cell) {
+        maybe_create().append_cell(id, std::move(cell));
+    }
+
+    // Weak exception guarantees
+    void apply(const schema& s, column_kind kind, const row& src) {
+        if (src.empty()) {
+            return;
+        }
+        maybe_create().apply(s, kind, src);
+    }
+
+    // Weak exception guarantees
+    void apply(const schema& s, column_kind kind, const lazy_row& src) {
+        if (src.empty()) {
+            return;
+        }
+        maybe_create().apply(s, kind, src.get_existing());
+    }
+
+    // Weak exception guarantees
+    void apply(const schema& s, column_kind kind, row&& src) {
+        if (src.empty()) {
+            return;
+        }
+        maybe_create().apply(s, kind, std::move(src));
+    }
+
+    // Monotonic exception guarantees
+    void apply_monotonically(const schema& s, column_kind kind, row&& src) {
+        if (src.empty()) {
+            return;
+        }
+        maybe_create().apply_monotonically(s, kind, std::move(src));
+    }
+
+    // Monotonic exception guarantees
+    void apply_monotonically(const schema& s, column_kind kind, lazy_row&& src) {
+        if (src.empty()) {
+            return;
+        }
+        if (!_row) {
+            _row = std::move(src._row);
+            return;
+        }
+        get_existing().apply_monotonically(s, kind, std::move(src.get_existing()));
+    }
+
+    // Expires cells based on query_time. Expires tombstones based on gc_before
+    // and max_purgeable. Removes cells covered by tomb.
+    // Returns true iff there are any live cells left.
+    bool compact_and_expire(
+            const schema& s,
+            column_kind kind,
+            row_tombstone tomb,
+            gc_clock::time_point query_time,
+            can_gc_fn& can_gc,
+            gc_clock::time_point gc_before,
+            const row_marker& marker,
+            compaction_garbage_collector* collector = nullptr);
+
+    bool compact_and_expire(
+            const schema& s,
+            column_kind kind,
+            row_tombstone tomb,
+            gc_clock::time_point query_time,
+            can_gc_fn& can_gc,
+            gc_clock::time_point gc_before,
+            compaction_garbage_collector* collector = nullptr);
+
+    lazy_row difference(const schema& s, column_kind kind, const lazy_row& other) const {
+        if (!_row) {
+            return lazy_row();
+        }
+        if (!other._row) {
+            return lazy_row(s, kind, *_row);
+        }
+        return lazy_row(_row->difference(s, kind, *other._row));
+    }
+
+    bool equal(column_kind kind, const schema& this_schema, const lazy_row& other, const schema& other_schema) const {
+        bool e1 = empty();
+        bool e2 = other.empty();
+        if (e1 && e2) {
+            return true;
+        }
+        if (e1 != e2) {
+            return false;
+        }
+        // both non-empty
+        return _row->equal(kind, this_schema, *other._row, other_schema);
+    }
+
+    size_t external_memory_usage(const schema& s, column_kind kind) const {
+        if (!_row) {
+            return 0;
+        }
+        return _row.external_memory_usage() + _row->external_memory_usage(s, kind);
+    }
+
+    cell_hash_opt cell_hash_for(column_id id) const {
+        if (!_row) {
+            return cell_hash_opt{};
+        }
+        return _row->cell_hash_for(id);
+    }
+
+    void prepare_hash(const schema& s, column_kind kind) const {
+        if (!_row) {
+            return;
+        }
+        _row->prepare_hash(s, kind);
+    }
+
+    void clear_hash() const {
+        if (!_row) {
+            return;
+        }
+        _row->clear_hash();
+    }
+
+    bool is_live(const schema& s, column_kind kind, tombstone tomb = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const {
+        if (!_row) {
+            return false;
+        }
+        return _row->is_live(s, kind, tomb, now);
+    }
+
+    class printer {
+        const schema& _schema;
+        column_kind _kind;
+        const lazy_row& _row;
+    public:
+        printer(const schema& s, column_kind k, const lazy_row& r) : _schema(s), _kind(k), _row(r) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+};
+
+// Used to return the timestamp of the latest update to the row
+struct max_timestamp {
+    api::timestamp_type max = api::missing_timestamp;
+
+    void update(api::timestamp_type ts) {
+        max = std::max(max, ts);
+    }
+};
+
+template<>
+struct appending_hash<row> {
+    static constexpr int null_hash_value = 0xbeefcafe;
+    template<typename Hasher>
+    void operator()(Hasher& h, const row& cells, const schema& s, column_kind kind, const query::column_id_vector& columns, max_timestamp& max_ts) const;
+};
+
+class row_marker;
+int compare_row_marker_for_merge(const row_marker& left, const row_marker& right) noexcept;
+
+class row_marker {
+    static constexpr gc_clock::duration no_ttl { 0 };
+    static constexpr gc_clock::duration dead { -1 };
+    static constexpr gc_clock::time_point no_expiry { gc_clock::duration(0) };
+    api::timestamp_type _timestamp = api::missing_timestamp;
+    gc_clock::duration _ttl = no_ttl;
+    gc_clock::time_point _expiry = no_expiry;
+public:
+    row_marker() = default;
+    explicit row_marker(api::timestamp_type created_at) : _timestamp(created_at) { }
+    row_marker(api::timestamp_type created_at, gc_clock::duration ttl, gc_clock::time_point expiry)
+        : _timestamp(created_at), _ttl(ttl), _expiry(expiry)
+    { }
+    explicit row_marker(tombstone deleted_at)
+        : _timestamp(deleted_at.timestamp), _ttl(dead), _expiry(deleted_at.deletion_time)
+    { }
+    bool is_missing() const {
+        return _timestamp == api::missing_timestamp;
+    }
+    bool is_live() const {
+        return !is_missing() && _ttl != dead;
+    }
+    bool is_live(tombstone t, gc_clock::time_point now) const {
+        if (is_missing() || _ttl == dead) {
+            return false;
+        }
+        if (_ttl != no_ttl && _expiry <= now) {
+            return false;
+        }
+        return _timestamp > t.timestamp;
+    }
+    // Can be called only when !is_missing().
+    bool is_dead(gc_clock::time_point now) const {
+        if (_ttl == dead) {
+            return true;
+        }
+        return _ttl != no_ttl && _expiry <= now;
+    }
+    // Can be called only when is_live().
+    bool is_expiring() const {
+        return _ttl != no_ttl;
+    }
+    // Can be called only when is_expiring().
+    gc_clock::duration ttl() const {
+        return _ttl;
+    }
+    // Can be called only when is_expiring().
+    gc_clock::time_point expiry() const {
+        return _expiry;
+    }
+    // Should be called when is_dead() or is_expiring().
+    // Safe to be called when is_missing().
+    // When is_expiring(), returns the the deletion time of the marker when it finally expires.
+    gc_clock::time_point deletion_time() const {
+        return _ttl == dead ? _expiry : _expiry - _ttl;
+    }
+    api::timestamp_type timestamp() const {
+        return _timestamp;
+    }
+    void apply(const row_marker& rm) {
+        if (compare_row_marker_for_merge(*this, rm) < 0) {
+            *this = rm;
+        }
+    }
+    // Expires cells and tombstones. Removes items covered by higher level
+    // tombstones.
+    // Returns true if row marker is live.
+    bool compact_and_expire(tombstone tomb, gc_clock::time_point now,
+            can_gc_fn& can_gc, gc_clock::time_point gc_before, compaction_garbage_collector* collector = nullptr);
+    // Consistent with feed_hash()
+    bool operator==(const row_marker& other) const {
+        if (_timestamp != other._timestamp) {
+            return false;
+        }
+        if (is_missing()) {
+            return true;
+        }
+        if (_ttl != other._ttl) {
+            return false;
+        }
+        return _ttl == no_ttl || _expiry == other._expiry;
+    }
+    // Consistent with operator==()
+    template<typename Hasher>
+    void feed_hash(Hasher& h) const {
+        ::feed_hash(h, _timestamp);
+        if (!is_missing()) {
+            ::feed_hash(h, _ttl);
+            if (_ttl != no_ttl) {
+                ::feed_hash(h, _expiry);
+            }
+        }
+    }
+    friend std::ostream& operator<<(std::ostream& os, const row_marker& rm);
+};
+
+template<>
+struct appending_hash<row_marker> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const row_marker& m) const {
+        m.feed_hash(h);
+    }
+};
+
+class shadowable_tombstone {
+    tombstone _tomb;
+public:
+
+    explicit shadowable_tombstone(api::timestamp_type timestamp, gc_clock::time_point deletion_time)
+            : _tomb(timestamp, deletion_time) {
+    }
+
+    explicit shadowable_tombstone(tombstone tomb = tombstone())
+            : _tomb(std::move(tomb)) {
+    }
+
+    std::strong_ordering operator<=>(const shadowable_tombstone& t) const {
+        return _tomb <=> t._tomb;
+    }
+
+    bool operator==(const shadowable_tombstone&) const = default;
+
+    explicit operator bool() const {
+        return bool(_tomb);
+    }
+
+    const tombstone& tomb() const {
+        return _tomb;
+    }
+
+    // A shadowable row tombstone is valid only if the row has no live marker. In other words,
+    // the row tombstone is only valid as long as no newer insert is done (thus setting a
+    // live row marker; note that if the row timestamp set is lower than the tombstone's,
+    // then the tombstone remains in effect as usual). If a row has a shadowable tombstone
+    // with timestamp Ti and that row is updated with a timestamp Tj, such that Tj > Ti
+    // (and that update sets the row marker), then the shadowable tombstone is shadowed by
+    // that update. A concrete consequence is that if the update has cells with timestamp
+    // lower than Ti, then those cells are preserved (since the deletion is removed), and
+    // this is contrary to a regular, non-shadowable row tombstone where the tombstone is
+    // preserved and such cells are removed.
+    bool is_shadowed_by(const row_marker& marker) const {
+        return marker.is_live() && marker.timestamp() > _tomb.timestamp;
+    }
+
+    void maybe_shadow(tombstone t, row_marker marker) noexcept {
+        if (is_shadowed_by(marker)) {
+            _tomb = std::move(t);
+        }
+    }
+
+    void apply(tombstone t) noexcept {
+        _tomb.apply(t);
+    }
+
+    void apply(shadowable_tombstone t) noexcept {
+        _tomb.apply(t._tomb);
+    }
+};
+
+template <>
+struct fmt::formatter<shadowable_tombstone> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const shadowable_tombstone& t, FormatContext& ctx) const {
+        if (t) {
+            return fmt::format_to(ctx.out(),
+                                  "{{shadowable tombstone: timestamp={}, deletion_time={}}}",
+                                  t.tomb().timestamp, t.tomb(), t.tomb().deletion_time.time_since_epoch().count());
+        } else {
+            return fmt::format_to(ctx.out(),
+                                  "{{shadowable tombstone: none}}");
+        }
+     }
+};
+
+template<>
+struct appending_hash<shadowable_tombstone> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const shadowable_tombstone& t) const {
+        feed_hash(h, t.tomb());
+    }
+};
+
+/*
+The rules for row_tombstones are as follows:
+  - The shadowable tombstone is always >= than the regular one;
+  - The regular tombstone works as expected;
+  - The shadowable tombstone doesn't erase or compact away the regular
+    row tombstone, nor dead cells;
+  - The shadowable tombstone can erase live cells, but only provided they
+    can be recovered (e.g., by including all cells in a MV update, both
+    updated cells and pre-existing ones);
+  - The shadowable tombstone can be erased or compacted away by a newer
+    row marker.
+*/
+class row_tombstone {
+    tombstone _regular;
+    shadowable_tombstone _shadowable; // _shadowable is always >= _regular
+public:
+    explicit row_tombstone(tombstone regular, shadowable_tombstone shadowable)
+            : _regular(std::move(regular))
+            , _shadowable(std::move(shadowable)) {
+    }
+
+    explicit row_tombstone(tombstone regular)
+            : row_tombstone(regular, shadowable_tombstone(regular)) {
+    }
+
+    row_tombstone() = default;
+
+    std::strong_ordering operator<=>(const row_tombstone& t) const {
+        return _shadowable <=> t._shadowable;
+    }
+    bool operator==(const row_tombstone& t) const {
+        return _shadowable == t._shadowable;
+    }
+
+    explicit operator bool() const {
+        return bool(_shadowable);
+    }
+
+    const tombstone& tomb() const {
+        return _shadowable.tomb();
+    }
+
+    const gc_clock::time_point max_deletion_time() const {
+        return std::max(_regular.deletion_time, _shadowable.tomb().deletion_time);
+    }
+
+    const tombstone& regular() const {
+        return _regular;
+    }
+
+    const shadowable_tombstone& shadowable() const {
+        return _shadowable;
+    }
+
+    bool is_shadowable() const {
+        return _shadowable.tomb() > _regular;
+    }
+
+    void maybe_shadow(const row_marker& marker) noexcept {
+        _shadowable.maybe_shadow(_regular, marker);
+    }
+
+    void apply(tombstone regular) noexcept {
+        _shadowable.apply(regular);
+        _regular.apply(regular);
+    }
+
+    void apply(shadowable_tombstone shadowable, row_marker marker) noexcept {
+        _shadowable.apply(shadowable.tomb());
+        _shadowable.maybe_shadow(_regular, marker);
+    }
+
+    void apply(row_tombstone t, row_marker marker) noexcept {
+        _regular.apply(t._regular);
+        _shadowable.apply(t._shadowable);
+        _shadowable.maybe_shadow(_regular, marker);
+    }
+
+    friend std::ostream& operator<<(std::ostream& out, const row_tombstone& t) {
+        if (t) {
+            fmt::print(out, "{{row_tombstone: {}{}}}",  t._regular, t.is_shadowable() ? t._shadowable : shadowable_tombstone());
+        } else {
+            fmt::print(out, "{{row_tombstone: none}}");
+        }
+        return out;
+    }
+};
+
+template<>
+struct appending_hash<row_tombstone> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const row_tombstone& t) const {
+        feed_hash(h, t.regular());
+        if (t.is_shadowable()) {
+            feed_hash(h, t.shadowable());
+        }
+    }
+};
+
+class deletable_row final {
+    row_tombstone _deleted_at;
+    row_marker _marker;
+    row _cells;
+public:
+    deletable_row() {}
+    deletable_row(const schema& s, const deletable_row& other)
+        : _deleted_at(other._deleted_at)
+        , _marker(other._marker)
+        , _cells(s, column_kind::regular_column, other._cells)
+    { }
+    deletable_row(row_tombstone&& tomb, row_marker&& marker, row&& cells)
+        : _deleted_at(std::move(tomb)), _marker(std::move(marker)), _cells(std::move(cells))
+    {}
+
+    void apply(tombstone deleted_at) {
+        _deleted_at.apply(deleted_at);
+        maybe_shadow();
+    }
+
+    void apply(shadowable_tombstone deleted_at) {
+        _deleted_at.apply(deleted_at, _marker);
+    }
+
+    void apply(row_tombstone deleted_at) {
+        _deleted_at.apply(deleted_at, _marker);
+    }
+
+    void apply(const row_marker& rm) {
+        _marker.apply(rm);
+        maybe_shadow();
+    }
+
+    void remove_tombstone() {
+        _deleted_at = {};
+    }
+
+    void maybe_shadow() {
+        _deleted_at.maybe_shadow(_marker);
+    }
+
+    // Weak exception guarantees. After exception, both src and this will commute to the same value as
+    // they would should the exception not happen.
+    void apply(const schema& s, const deletable_row& src);
+    void apply(const schema& s, deletable_row&& src);
+    void apply_monotonically(const schema& s, const deletable_row& src);
+    void apply_monotonically(const schema& s, deletable_row&& src);
+public:
+    row_tombstone deleted_at() const { return _deleted_at; }
+    api::timestamp_type created_at() const { return _marker.timestamp(); }
+    // Call `maybe_shadow()` if the marker's timestamp is mutated.
+    row_marker& marker() { return _marker; }
+    const row_marker& marker() const { return _marker; }
+    const row& cells() const { return _cells; }
+    row& cells() { return _cells; }
+    bool equal(column_kind, const schema& s, const deletable_row& other, const schema& other_schema) const;
+    bool is_live(const schema& s, column_kind kind, tombstone base_tombstone = tombstone(), gc_clock::time_point query_time = gc_clock::time_point::min()) const;
+    bool empty() const { return !_deleted_at && _marker.is_missing() && !_cells.size(); }
+    deletable_row difference(const schema&, column_kind, const deletable_row& other) const;
+
+    // Expires cells and tombstones. Removes items covered by higher level
+    // tombstones.
+    // Returns true iff the row is still alive.
+    // When empty() after the call, the row can be removed without losing writes
+    // given that tomb will be still in effect for the row after it is removed,
+    // as a range tombstone, partition tombstone, etc.
+    bool compact_and_expire(const schema&,
+                            tombstone tomb,
+                            gc_clock::time_point query_time,
+                            can_gc_fn& can_gc,
+                            gc_clock::time_point gc_before,
+                            compaction_garbage_collector* collector = nullptr);
+
+    class printer {
+        const schema& _schema;
+        const deletable_row& _deletable_row;
+    public:
+        printer(const schema& s, const deletable_row& r) : _schema(s), _deletable_row(r) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+};
+
+class cache_tracker;
+
+class rows_entry final : public evictable {
+    friend class size_calculator;
+    intrusive_b::member_hook _link;
+    clustering_key _key;
+    deletable_row _row;
+
+    // Given p is the preceding rows_entry&,
+    // this tombstone applies to the range (p.position(), position()] if continuous()
+    // and to [position(), position()] if !continuous().
+    // So the tombstone applies only to the continuous interval, to the left.
+    // On top of that, _row.deleted_at() may still apply new information.
+    // So it's not deoverlapped with the row tombstone.
+    // Set only when in mutation_partition_v2.
+    tombstone _range_tombstone;
+
+    struct flags {
+        // _before_ck and _after_ck encode position_in_partition::weight
+        bool _before_ck : 1;
+        bool _after_ck : 1;
+        bool _continuous : 1; // See doc of is_continuous.
+        bool _dummy : 1;
+        // Marks a dummy entry which is after_all_clustered_rows() position.
+        // Needed so that eviction, which can't use comparators, can check if it's dealing with it.
+        bool _last_dummy : 1;
+        flags() : _before_ck(0), _after_ck(0), _continuous(true), _dummy(false), _last_dummy(false) { }
+    } _flags{};
+public:
+    struct last_dummy_tag {};
+    explicit rows_entry(clustering_key&& key)
+        : _key(std::move(key))
+    { }
+    explicit rows_entry(const clustering_key& key)
+        : _key(key)
+    { }
+    rows_entry(const schema& s, position_in_partition_view pos, is_dummy dummy, is_continuous continuous)
+        : _key(pos.key())
+    {
+        _flags._last_dummy = bool(dummy) && pos.is_after_all_clustered_rows(s);
+        _flags._dummy = bool(dummy);
+        _flags._continuous = bool(continuous);
+        _flags._before_ck = pos.is_before_key();
+        _flags._after_ck = pos.is_after_key();
+    }
+    rows_entry(const schema& s, last_dummy_tag, is_continuous continuous)
+        : rows_entry(s, position_in_partition_view::after_all_clustered_rows(), is_dummy::yes, continuous)
+    { }
+    rows_entry(const clustering_key& key, deletable_row&& row)
+        : _key(key), _row(std::move(row))
+    { }
+    rows_entry(const schema& s, const clustering_key& key, const deletable_row& row)
+        : _key(key), _row(s, row)
+    { }
+    rows_entry(rows_entry&& o) noexcept;
+    rows_entry(const schema& s, const rows_entry& e)
+        : _key(e._key)
+        , _row(s, e._row)
+        , _range_tombstone(e._range_tombstone)
+        , _flags(e._flags)
+    { }
+    // Valid only if !dummy()
+    clustering_key& key() {
+        return _key;
+    }
+    // Valid only if !dummy()
+    const clustering_key& key() const {
+        return _key;
+    }
+    deletable_row& row() {
+        return _row;
+    }
+    const deletable_row& row() const {
+        return _row;
+    }
+    position_in_partition_view position() const {
+        return position_in_partition_view(partition_region::clustered, bound_weight(_flags._after_ck - _flags._before_ck), &_key);
+    }
+
+    is_continuous continuous() const { return is_continuous(_flags._continuous); }
+    void set_continuous(bool value) { _flags._continuous = value; }
+    void set_continuous(is_continuous value) { set_continuous(bool(value)); }
+    void set_range_tombstone(tombstone t) { _range_tombstone = t; }
+    tombstone range_tombstone() const { return _range_tombstone; }
+    is_dummy dummy() const { return is_dummy(_flags._dummy); }
+    bool is_last_dummy() const { return _flags._last_dummy; }
+    void set_dummy(bool value) { _flags._dummy = value; }
+    void set_dummy(is_dummy value) { _flags._dummy = bool(value); }
+    void replace_with(rows_entry&& other) noexcept;
+
+    void apply(row_tombstone t) {
+        _row.apply(t);
+    }
+    void apply_monotonically(const schema& s, rows_entry&& e) {
+        _row.apply(s, std::move(e._row));
+    }
+    bool empty() const {
+        return _row.empty();
+    }
+    struct tri_compare {
+        position_in_partition::tri_compare _c;
+        explicit tri_compare(const schema& s) : _c(s) {}
+
+        std::strong_ordering operator()(const rows_entry& e1, const rows_entry& e2) const {
+            return _c(e1.position(), e2.position());
+        }
+        std::strong_ordering operator()(const clustering_key& key, const rows_entry& e) const {
+            return _c(position_in_partition_view::for_key(key), e.position());
+        }
+        std::strong_ordering operator()(const rows_entry& e, const clustering_key& key) const {
+            return _c(e.position(), position_in_partition_view::for_key(key));
+        }
+        std::strong_ordering operator()(const rows_entry& e, position_in_partition_view p) const {
+            return _c(e.position(), p);
+        }
+        std::strong_ordering operator()(position_in_partition_view p, const rows_entry& e) const {
+            return _c(p, e.position());
+        }
+        std::strong_ordering operator()(position_in_partition_view p1, position_in_partition_view p2) const {
+            return _c(p1, p2);
+        }
+    };
+    struct compare {
+        tri_compare _c;
+        explicit compare(const schema& s) : _c(s) {}
+
+        template <typename K1, typename K2>
+        bool operator()(const K1& k1, const K2& k2) const { return _c(k1, k2) < 0; }
+    };
+    bool equal(const schema& s, const rows_entry& other) const;
+    bool equal(const schema& s, const rows_entry& other, const schema& other_schema) const;
+
+    size_t memory_usage(const schema&) const;
+
+    // Handles eviction of the row, but doesn't attempt to handle eviction
+    // of the containing partition_entry in case this is the last row.
+    // Used by tests which don't keep the partition_entry inside a row_cache instance.
+    void on_evicted_shallow() noexcept override {}
+
+    void on_evicted(cache_tracker&) noexcept {}
+    void on_evicted() noexcept override {}
+
+    void compact(const schema&, tombstone);
+
+    class printer {
+        const schema& _schema;
+        const rows_entry& _rows_entry;
+    public:
+        printer(const schema& s, const rows_entry& r) : _schema(s), _rows_entry(r) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+
+    using container_type = intrusive_b::tree<rows_entry, &rows_entry::_link, rows_entry::tri_compare, 12, 20, intrusive_b::key_search::linear>;
+};
+
+struct mutation_application_stats {
+    uint64_t row_hits = 0;
+    uint64_t row_writes = 0;
+    uint64_t rows_compacted_with_tombstones = 0;
+    uint64_t rows_dropped_by_tombstones = 0;
+
+    mutation_application_stats& operator+=(const mutation_application_stats& other) {
+        row_hits += other.row_hits;
+        row_writes += other.row_writes;
+        rows_compacted_with_tombstones += other.rows_compacted_with_tombstones;
+        rows_dropped_by_tombstones += other.rows_dropped_by_tombstones;
+        return *this;
+    }
+};
+
+struct apply_resume {
+    enum class stage {
+        start,
+        range_tombstone_compaction,
+        merging_range_tombstones,
+        partition_tombstone_compaction,
+        merging_rows,
+        done
+    };
+
+    position_in_partition _pos;
+    stage _stage;
+
+    apply_resume()
+        : _pos(position_in_partition::for_partition_start())
+        , _stage(stage::start)
+    { }
+
+    apply_resume(stage s, position_in_partition_view pos)
+        : _pos(with_allocator(standard_allocator(), [&] {
+                return position_in_partition(pos);
+            }))
+        , _stage(s)
+    { }
+
+    ~apply_resume() {
+        with_allocator(standard_allocator(), [&] {
+           auto pos = std::move(_pos);
+        });
+    }
+
+    apply_resume(apply_resume&&) noexcept = default;
+
+    apply_resume& operator=(apply_resume&& o) noexcept {
+        if (this != &o) {
+            this->~apply_resume();
+            new (this) apply_resume(std::move(o));
+        }
+        return *this;
+    }
+
+    explicit operator bool() const { return _stage != stage::done; }
+
+    static apply_resume merging_rows() {
+        return {stage::merging_rows, position_in_partition::for_partition_start()};
+    }
+
+    static apply_resume merging_range_tombstones() {
+        return {stage::merging_range_tombstones, position_in_partition::for_partition_start()};
+    }
+
+    static apply_resume done() {
+        return {stage::done, position_in_partition::for_partition_start()};
+    }
+
+    void set_position(position_in_partition_view pos) {
+        with_allocator(standard_allocator(), [&] {
+            _pos = position_in_partition(pos);
+        });
+    }
+};
+
+// Represents a set of writes made to a single partition.
+//
+// The object is schema-dependent. Each instance is governed by some
+// specific schema version. Accessors require a reference to the schema object
+// of that version.
+//
+// There is an operation of addition defined on mutation_partition objects
+// (also called "apply"), which gives as a result an object representing the
+// sum of writes contained in the addends. For instances governed by the same
+// schema, addition is commutative and associative.
+//
+// In addition to representing writes, the object supports specifying a set of
+// partition elements called "continuity". This set can be used to represent
+// lack of information about certain parts of the partition. It can be
+// specified which ranges of clustering keys belong to that set. We say that a
+// key range is continuous if all keys in that range belong to the continuity
+// set, and discontinuous otherwise. By default everything is continuous.
+// The static row may be also continuous or not.
+// Partition tombstone is always continuous.
+//
+// Continuity is ignored by instance equality. It's also transient, not
+// preserved by serialization.
+//
+// Continuity is represented internally using flags on row entries. The key
+// range between two consecutive entries (both ends exclusive) is continuous
+// if and only if rows_entry::continuous() is true for the later entry. The
+// range starting after the last entry is assumed to be continuous. The range
+// corresponding to the key of the entry is continuous if and only if
+// rows_entry::dummy() is false.
+//
+// Adding two fully-continuous instances gives a fully-continuous instance.
+// Continuity doesn't affect how the write part is added.
+//
+// Addition of continuity is not commutative in general, but is associative.
+// The default continuity merging rules are those required by MVCC to
+// preserve its invariants. For details, refer to "Continuity merging rules" section
+// in the doc in partition_version.hh.
+class mutation_partition final {
+public:
+    using rows_type = rows_entry::container_type;
+    friend class size_calculator;
+private:
+    tombstone _tombstone;
+    lazy_row _static_row;
+    bool _static_row_continuous = true;
+    rows_type _rows;
+    // Contains only strict prefixes so that we don't have to lookup full keys
+    // in both _row_tombstones and _rows.
+    range_tombstone_list _row_tombstones;
+#ifdef SEASTAR_DEBUG
+    table_schema_version _schema_version;
+#endif
+
+    friend class converting_mutation_partition_applier;
+public:
+    struct copy_comparators_only {};
+    struct incomplete_tag {};
+    // Constructs an empty instance which is fully discontinuous except for the partition tombstone.
+    mutation_partition(incomplete_tag, const schema& s, tombstone);
+    static mutation_partition make_incomplete(const schema& s, tombstone t = {}) {
+        return mutation_partition(incomplete_tag(), s, t);
+    }
+    mutation_partition(schema_ptr s)
+        : _rows()
+        , _row_tombstones(*s)
+#ifdef SEASTAR_DEBUG
+        , _schema_version(s->version())
+#endif
+    { }
+    mutation_partition(mutation_partition& other, copy_comparators_only)
+        : _rows()
+        , _row_tombstones(other._row_tombstones, range_tombstone_list::copy_comparator_only())
+#ifdef SEASTAR_DEBUG
+        , _schema_version(other._schema_version)
+#endif
+    { }
+    mutation_partition(mutation_partition&&) = default;
+    mutation_partition(const schema& s, const mutation_partition&);
+    mutation_partition(const mutation_partition&, const schema&, query::clustering_key_filter_ranges);
+    mutation_partition(mutation_partition&&, const schema&, query::clustering_key_filter_ranges);
+    ~mutation_partition();
+    static mutation_partition& container_of(rows_type&);
+    mutation_partition& operator=(mutation_partition&& x) noexcept;
+    bool equal(const schema&, const mutation_partition&) const;
+    bool equal(const schema& this_schema, const mutation_partition& p, const schema& p_schema) const;
+    bool equal_continuity(const schema&, const mutation_partition&) const;
+    // Consistent with equal()
+    template<typename Hasher>
+    void feed_hash(Hasher& h, const schema& s) const {
+        hashing_partition_visitor<Hasher> v(h, s);
+        accept(s, v);
+    }
+
+    class printer {
+        const schema& _schema;
+        const mutation_partition& _mutation_partition;
+    public:
+        printer(const schema& s, const mutation_partition& mp) : _schema(s), _mutation_partition(mp) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+public:
+    // Makes sure there is a dummy entry after all clustered rows. Doesn't affect continuity.
+    // Doesn't invalidate iterators.
+    void ensure_last_dummy(const schema&);
+    bool static_row_continuous() const { return _static_row_continuous; }
+    void set_static_row_continuous(bool value) { _static_row_continuous = value; }
+    bool is_fully_continuous() const;
+    void make_fully_continuous();
+    // Sets or clears continuity of clustering ranges between existing rows.
+    void set_continuity(const schema&, const position_range& pr, is_continuous);
+    // Returns clustering row ranges which have continuity matching the is_continuous argument.
+    clustering_interval_set get_continuity(const schema&, is_continuous = is_continuous::yes) const;
+    // Returns true iff all keys from given range are marked as continuous, or range is empty.
+    bool fully_continuous(const schema&, const position_range&);
+    // Returns true iff all keys from given range are marked as not continuous and range is not empty.
+    bool fully_discontinuous(const schema&, const position_range&);
+    // Returns true iff all keys from given range have continuity membership as specified by is_continuous.
+    bool check_continuity(const schema&, const position_range&, is_continuous) const;
+    // Frees elements of the partition in batches.
+    // Returns stop_iteration::yes iff there are no more elements to free.
+    // Continuity is unspecified after this.
+    stop_iteration clear_gently(cache_tracker*) noexcept;
+    // Applies mutation_fragment.
+    // The fragment must be goverened by the same schema as this object.
+    void apply(const schema& s, const mutation_fragment&);
+    void apply(tombstone t) { _tombstone.apply(t); }
+    void apply_delete(const schema& schema, const clustering_key_prefix& prefix, tombstone t);
+    void apply_delete(const schema& schema, range_tombstone rt);
+    void apply_delete(const schema& schema, clustering_key_prefix&& prefix, tombstone t);
+    void apply_delete(const schema& schema, clustering_key_prefix_view prefix, tombstone t);
+    // Equivalent to applying a mutation with an empty row, created with given timestamp
+    void apply_insert(const schema& s, clustering_key_view, api::timestamp_type created_at);
+    void apply_insert(const schema& s, clustering_key_view, api::timestamp_type created_at,
+                      gc_clock::duration ttl, gc_clock::time_point expiry);
+    // prefix must not be full
+    void apply_row_tombstone(const schema& schema, clustering_key_prefix prefix, tombstone t);
+    void apply_row_tombstone(const schema& schema, range_tombstone rt);
+    //
+    // Applies p to current object.
+    //
+    // Commutative when this_schema == p_schema. If schemas differ, data in p which
+    // is not representable in this_schema is dropped, thus apply() loses commutativity.
+    //
+    // Weak exception guarantees.
+    void apply(const schema& this_schema, const mutation_partition& p, const schema& p_schema,
+            mutation_application_stats& app_stats);
+    // Use in case this instance and p share the same schema.
+    // Same guarantees as apply(const schema&, mutation_partition&&, const schema&);
+    void apply(const schema& s, mutation_partition&& p, mutation_application_stats& app_stats);
+    // Same guarantees and constraints as for apply(const schema&, const mutation_partition&, const schema&).
+    void apply(const schema& this_schema, mutation_partition_view p, const schema& p_schema,
+            mutation_application_stats& app_stats);
+
+    // Applies p to this instance.
+    //
+    // Monotonic exception guarantees. In case of exception the sum of p and this remains the same as before the exception.
+    // This instance and p are governed by the same schema.
+    //
+    // Must be provided with a pointer to the cache_tracker, which owns both this and p.
+    //
+    // Returns stop_iteration::no if the operation was preempted before finished, and stop_iteration::yes otherwise.
+    // On preemption the sum of this and p stays the same (represents the same set of writes), and the state of this
+    // object contains at least all the writes it contained before the call (monotonicity). It may contain partial writes.
+    // Also, some progress is always guaranteed (liveness).
+    //
+    // If returns stop_iteration::yes, then the sum of this and p is NO LONGER the same as before the call,
+    // the state of p is undefined and should not be used for reading.
+    //
+    // The operation can be driven to completion like this:
+    //
+    //   apply_resume res;
+    //   while (apply_monotonically(..., is_preemtable::yes, &res) == stop_iteration::no) { }
+    //
+    // If is_preemptible::no is passed as argument then stop_iteration::no is never returned.
+    //
+    // If is_preemptible::yes is passed, apply_resume must also be passed,
+    // same instance each time until stop_iteration::yes is returned.
+    stop_iteration apply_monotonically(const schema& s, mutation_partition&& p, cache_tracker*,
+            mutation_application_stats& app_stats, is_preemptible, apply_resume&);
+    stop_iteration apply_monotonically(const schema& s, mutation_partition&& p, const schema& p_schema,
+            mutation_application_stats& app_stats, is_preemptible, apply_resume&);
+    stop_iteration apply_monotonically(const schema& s, mutation_partition&& p, cache_tracker* tracker,
+            mutation_application_stats& app_stats);
+    stop_iteration apply_monotonically(const schema& s, mutation_partition&& p, const schema& p_schema,
+            mutation_application_stats& app_stats);
+
+    // Weak exception guarantees.
+    // Assumes this and p are not owned by a cache_tracker.
+    void apply_weak(const schema& s, const mutation_partition& p, const schema& p_schema,
+            mutation_application_stats& app_stats);
+    void apply_weak(const schema& s, mutation_partition&&,
+            mutation_application_stats& app_stats);
+    void apply_weak(const schema& s, mutation_partition_view p, const schema& p_schema,
+            mutation_application_stats& app_stats);
+
+    // Converts partition to the new schema. When succeeds the partition should only be accessed
+    // using the new schema.
+    //
+    // Strong exception guarantees.
+    void upgrade(const schema& old_schema, const schema& new_schema);
+private:
+    void insert_row(const schema& s, const clustering_key& key, deletable_row&& row);
+    void insert_row(const schema& s, const clustering_key& key, const deletable_row& row);
+
+    uint32_t do_compact(const schema& s,
+        const dht::decorated_key& dk,
+        gc_clock::time_point now,
+        const std::vector<query::clustering_range>& row_ranges,
+        bool always_return_static_content,
+        bool reverse,
+        uint64_t row_limit,
+        can_gc_fn&,
+        bool drop_tombstones_unconditionally,
+        const tombstone_gc_state& gc_state);
+
+    // Calls func for each row entry inside row_ranges until func returns stop_iteration::yes.
+    // Removes all entries for which func didn't return stop_iteration::no or wasn't called at all.
+    // Removes all entries that are empty, check rows_entry::empty().
+    // If reversed is true, func will be called on entries in reverse order. In that case row_ranges
+    // must be already in reverse order.
+    template<bool reversed, typename Func>
+    requires std::is_invocable_r_v<stop_iteration, Func, rows_entry&>
+    void trim_rows(const schema& s,
+        const std::vector<query::clustering_range>& row_ranges,
+        Func&& func);
+public:
+    // Performs the following:
+    //   - throws out data which doesn't belong to row_ranges
+    //   - expires cells and tombstones based on query_time
+    //   - drops cells covered by higher-level tombstones (compaction)
+    //   - leaves at most row_limit live rows
+    //
+    // Note: a partition with a static row which has any cell live but no
+    // clustered rows still counts as one row, according to the CQL row
+    // counting rules.
+    //
+    // Returns the count of CQL rows which remained. If the returned number is
+    // smaller than the row_limit it means that there was no more data
+    // satisfying the query left.
+    //
+    // The row_limit parameter must be > 0.
+    //
+    uint64_t compact_for_query(const schema& s, const dht::decorated_key& dk, gc_clock::time_point query_time,
+        const std::vector<query::clustering_range>& row_ranges, bool always_return_static_content,
+        bool reversed, uint64_t row_limit);
+
+    // Performs the following:
+    //   - expires cells based on compaction_time
+    //   - drops cells covered by higher-level tombstones
+    //   - drops expired tombstones which timestamp is before max_purgeable
+    void compact_for_compaction(const schema& s, can_gc_fn&,
+        const dht::decorated_key& dk,
+        gc_clock::time_point compaction_time,
+        const tombstone_gc_state& gc_state);
+
+    // Like compact_for_compaction but drop tombstones unconditionally
+    void compact_for_compaction_drop_tombstones_unconditionally(const schema& s,
+            const dht::decorated_key& dk);
+
+    // Returns the minimal mutation_partition that when applied to "other" will
+    // create a mutation_partition equal to the sum of other and this one.
+    // This and other must both be governed by the same schema s.
+    mutation_partition difference(schema_ptr s, const mutation_partition& other) const;
+
+    // Returns a subset of this mutation holding only information relevant for given clustering ranges.
+    // Range tombstones will be trimmed to the boundaries of the clustering ranges.
+    mutation_partition sliced(const schema& s, const query::clustering_row_ranges&) const;
+
+    // Returns true if the mutation_partition represents no writes.
+    bool empty() const;
+public:
+    deletable_row& clustered_row(const schema& s, const clustering_key& key);
+    deletable_row& clustered_row(const schema& s, clustering_key&& key);
+    deletable_row& clustered_row(const schema& s, clustering_key_view key);
+    deletable_row& clustered_row(const schema& s, position_in_partition_view pos, is_dummy, is_continuous);
+    rows_entry& clustered_rows_entry(const schema& s, position_in_partition_view pos, is_dummy, is_continuous);
+    // Throws if the row already exists or if the row was not inserted to the
+    // last position (one or more greater row already exists).
+    // Weak exception guarantees.
+    deletable_row& append_clustered_row(const schema& s, position_in_partition_view pos, is_dummy, is_continuous);
+public:
+    tombstone partition_tombstone() const { return _tombstone; }
+    lazy_row& static_row() { return _static_row; }
+    const lazy_row& static_row() const { return _static_row; }
+
+    // return a set of rows_entry where each entry represents a CQL row sharing the same clustering key.
+    const rows_type& clustered_rows() const noexcept { return _rows; }
+    utils::immutable_collection<rows_type> clustered_rows() noexcept { return _rows; }
+    rows_type& mutable_clustered_rows() noexcept { return _rows; }
+
+    const range_tombstone_list& row_tombstones() const noexcept { return _row_tombstones; }
+    utils::immutable_collection<range_tombstone_list> row_tombstones() noexcept { return _row_tombstones; }
+    range_tombstone_list& mutable_row_tombstones() noexcept { return _row_tombstones; }
+
+    const row* find_row(const schema& s, const clustering_key& key) const;
+    tombstone range_tombstone_for_row(const schema& schema, const clustering_key& key) const;
+    row_tombstone tombstone_for_row(const schema& schema, const clustering_key& key) const;
+    // Can be called only for non-dummy entries
+    row_tombstone tombstone_for_row(const schema& schema, const rows_entry& e) const;
+    boost::iterator_range<rows_type::const_iterator> range(const schema& schema, const query::clustering_range& r) const;
+    rows_type::const_iterator lower_bound(const schema& schema, const query::clustering_range& r) const;
+    rows_type::const_iterator upper_bound(const schema& schema, const query::clustering_range& r) const;
+    rows_type::iterator lower_bound(const schema& schema, const query::clustering_range& r);
+    rows_type::iterator upper_bound(const schema& schema, const query::clustering_range& r);
+    boost::iterator_range<rows_type::iterator> range(const schema& schema, const query::clustering_range& r);
+    // Returns an iterator range of rows_entry, with only non-dummy entries.
+    auto non_dummy_rows() const {
+        return boost::make_iterator_range(_rows.begin(), _rows.end())
+            | boost::adaptors::filtered([] (const rows_entry& e) { return bool(!e.dummy()); });
+    }
+    void accept(const schema&, mutation_partition_visitor&) const;
+
+    // Returns the number of live CQL rows in this partition.
+    //
+    // Note: If no regular rows are live, but there's something live in the
+    // static row, the static row counts as one row. If there is at least one
+    // regular row live, static row doesn't count.
+    //
+    uint64_t live_row_count(const schema&,
+        gc_clock::time_point query_time = gc_clock::time_point::min()) const;
+
+    bool is_static_row_live(const schema&,
+        gc_clock::time_point query_time = gc_clock::time_point::min()) const;
+
+    uint64_t row_count() const;
+
+    size_t external_memory_usage(const schema&) const;
+private:
+    template<typename Func>
+    void for_each_row(const schema& schema, const query::clustering_range& row_range, bool reversed, Func&& func) const;
+    friend class counter_write_query_result_builder;
+
+    void check_schema(const schema& s) const {
+#ifdef SEASTAR_DEBUG
+        assert(s.version() == _schema_version);
+#endif
+    }
+};
+
+inline
+mutation_partition& mutation_partition::container_of(rows_type& rows) {
+    return *boost::intrusive::get_parent_from_member(&rows, &mutation_partition::_rows);
+}
+
+bool has_any_live_data(const schema& s, column_kind kind, const row& cells, tombstone tomb = tombstone(),
+                       gc_clock::time_point now = gc_clock::time_point::min());
+
+
 
 
 #include "cql3/maps.hh"
