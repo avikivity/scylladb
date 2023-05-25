@@ -57562,13 +57562,1905 @@ std::vector<T, Args...> make_vector_from_in_list(std::initializer_list<in<T>> ar
 
 }
 
+#include <seastar/core/distributed.hh>
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/gate.hh>
+#include <seastar/core/print.hh>
+#include <seastar/rpc/rpc_types.hh>
+#include <optional>
+#include <algorithm>
+#include <chrono>
+#include <set>
+#include <seastar/core/condition-variable.hh>
+#include <seastar/core/metrics_registration.hh>
+#include <seastar/core/abort_source.hh>
+#include <seastar/core/scheduling.hh>
+
+namespace db {
+class config;
+class system_keyspace;
+}
+
+namespace gms {
+
+class gossip_digest_syn;
+class gossip_digest_ack;
+class gossip_digest_ack2;
+class gossip_digest;
+class inet_address;
+class i_endpoint_state_change_subscriber;
+class gossip_get_endpoint_states_request;
+class gossip_get_endpoint_states_response;
+
+class feature_service;
+
+using advertise_myself = bool_class<class advertise_myself_tag>;
+
+struct syn_msg_pending {
+    bool pending = false;
+    std::optional<gossip_digest_syn> syn_msg;
+};
+
+struct ack_msg_pending {
+    bool pending = false;
+    std::optional<utils::chunked_vector<gossip_digest>> ack_msg_digest;
+};
+
+struct gossip_config {
+    seastar::scheduling_group gossip_scheduling_group = seastar::scheduling_group();
+    sstring cluster_name;
+    std::set<inet_address> seeds;
+    sstring partitioner;
+    uint32_t ring_delay_ms = 30 * 1000;
+    uint32_t shadow_round_ms = 300 * 1000;
+    uint32_t shutdown_announce_ms = 2 * 1000;
+    uint32_t skip_wait_for_gossip_to_settle = -1;
+};
+
+/**
+ * This module is responsible for Gossiping information for the local endpoint. This abstraction
+ * maintains the list of live and dead endpoints. Periodically i.e. every 1 second this module
+ * chooses a random node and initiates a round of Gossip with it. A round of Gossip involves 3
+ * rounds of messaging. For instance if node A wants to initiate a round of Gossip with node B
+ * it starts off by sending node B a GossipDigestSynMessage. Node B on receipt of this message
+ * sends node A a GossipDigestAckMessage. On receipt of this message node A sends node B a
+ * GossipDigestAck2Message which completes a round of Gossip. This module as and when it hears one
+ * of the three above mentioned messages updates the Failure Detector with the liveness information.
+ * Upon hearing a GossipShutdownMessage, this module will instantly mark the remote node as down in
+ * the Failure Detector.
+ */
+class gossiper : public seastar::async_sharded_service<gossiper>, public seastar::peering_sharded_service<gossiper> {
+public:
+    using clk = seastar::lowres_system_clock;
+    using ignore_features_of_local_node = bool_class<class ignore_features_of_local_node_tag>;
+    using generation_for_nodes = std::unordered_map<gms::inet_address, generation_type>;
+private:
+    using messaging_verb = netw::messaging_verb;
+    using messaging_service = netw::messaging_service;
+    using msg_addr = netw::msg_addr;
+
+    void init_messaging_service_handler();
+    future<> uninit_messaging_service_handler();
+    future<> handle_syn_msg(msg_addr from, gossip_digest_syn syn_msg);
+    future<> handle_ack_msg(msg_addr from, gossip_digest_ack ack_msg);
+    future<> handle_ack2_msg(msg_addr from, gossip_digest_ack2 msg);
+    future<> handle_echo_msg(inet_address from, std::optional<int64_t> generation_number_opt);
+    future<> handle_shutdown_msg(inet_address from, std::optional<int64_t> generation_number_opt);
+    future<> do_send_ack_msg(msg_addr from, gossip_digest_syn syn_msg);
+    future<> do_send_ack2_msg(msg_addr from, utils::chunked_vector<gossip_digest> ack_msg_digest);
+    future<gossip_get_endpoint_states_response> handle_get_endpoint_states_msg(gossip_get_endpoint_states_request request);
+    static constexpr uint32_t _default_cpuid = 0;
+    msg_addr get_msg_addr(inet_address to) const noexcept;
+    void do_sort(utils::chunked_vector<gossip_digest>& g_digest_list);
+    timer<lowres_clock> _scheduled_gossip_task;
+    bool _enabled = false;
+    semaphore _callback_running{1};
+    semaphore _apply_state_locally_semaphore{100};
+    seastar::gate _background_msg;
+    std::unordered_map<gms::inet_address, syn_msg_pending> _syn_handlers;
+    std::unordered_map<gms::inet_address, ack_msg_pending> _ack_handlers;
+    bool _advertise_myself = true;
+    // Map ip address and generation number
+    generation_for_nodes _advertise_to_nodes;
+    future<> _failure_detector_loop_done{make_ready_future<>()} ;
+
+    rpc::no_wait_type background_msg(sstring type, noncopyable_function<future<>(gossiper&)> fn);
+
+public:
+    // Get current generation number for the given nodes
+    future<generation_for_nodes>
+    get_generation_for_nodes(std::unordered_set<gms::inet_address> nodes);
+    // Only respond echo message listed in nodes with the generation number
+    future<> advertise_to_nodes(generation_for_nodes advertise_to_nodes = {});
+    const sstring& get_cluster_name() const noexcept;
+
+    const sstring& get_partitioner_name() const noexcept {
+        return _gcfg.partitioner;
+    }
+
+    inet_address get_broadcast_address() const noexcept {
+        return utils::fb_utilities::get_broadcast_address();
+    }
+    const std::set<inet_address>& get_seeds() const noexcept;
+
+public:
+    static clk::time_point inline now() noexcept { return clk::now(); }
+public:
+    using endpoint_locks_map = utils::loading_shared_values<inet_address, semaphore>;
+    struct endpoint_permit {
+        endpoint_locks_map::entry_ptr _ptr;
+        semaphore_units<> _units;
+    };
+    future<endpoint_permit> lock_endpoint(inet_address);
+
+private:
+    /* map where key is the endpoint and value is the state associated with the endpoint */
+    std::unordered_map<inet_address, endpoint_state> _endpoint_state_map;
+    // Used for serializing changes to _endpoint_state_map and running of associated change listeners.
+    endpoint_locks_map _endpoint_locks;
+
+public:
+    const std::vector<sstring> DEAD_STATES = {
+        versioned_value::REMOVING_TOKEN,
+        versioned_value::REMOVED_TOKEN,
+        versioned_value::STATUS_LEFT,
+    };
+    const std::vector<sstring> SILENT_SHUTDOWN_STATES = {
+        versioned_value::REMOVING_TOKEN,
+        versioned_value::REMOVED_TOKEN,
+        versioned_value::STATUS_LEFT,
+        versioned_value::HIBERNATE,
+        versioned_value::STATUS_BOOTSTRAPPING,
+        versioned_value::STATUS_UNKNOWN,
+    };
+    static constexpr std::chrono::milliseconds INTERVAL{1000};
+    static constexpr std::chrono::hours A_VERY_LONG_TIME{24 * 3};
+
+    static constexpr std::chrono::milliseconds GOSSIP_SETTLE_MIN_WAIT_MS{5000};
+
+    // Maximimum difference between remote generation value and generation
+    // value this node would get if this node were restarted that we are
+    // willing to accept about a peer.
+    static constexpr generation_type::value_type MAX_GENERATION_DIFFERENCE = 86400 * 365;
+    std::chrono::milliseconds fat_client_timeout;
+
+    std::chrono::milliseconds quarantine_delay() const noexcept;
+private:
+    std::default_random_engine _random_engine{std::random_device{}()};
+
+    /**
+     * subscribers for interest in EndpointState change
+     */
+    atomic_vector<shared_ptr<i_endpoint_state_change_subscriber>> _subscribers;
+
+    std::list<std::vector<inet_address>> _endpoints_to_talk_with;
+
+    /* live member set */
+    utils::chunked_vector<inet_address> _live_endpoints;
+    uint64_t _live_endpoints_version = 0;
+
+    /* nodes are being marked as alive */
+    std::unordered_set<inet_address> _pending_mark_alive_endpoints;
+
+    /* unreachable member set */
+    std::unordered_map<inet_address, clk::time_point> _unreachable_endpoints;
+
+    semaphore _endpoint_update_semaphore = semaphore(1);
+
+    /* initial seeds for joining the cluster */
+    std::set<inet_address> _seeds;
+
+    /* map where key is endpoint and value is timestamp when this endpoint was removed from
+     * gossip. We will ignore any gossip regarding these endpoints for QUARANTINE_DELAY time
+     * after removal to prevent nodes from falsely reincarnating during the time when removal
+     * gossip gets propagated to all nodes */
+    std::map<inet_address, clk::time_point> _just_removed_endpoints;
+
+    std::map<inet_address, clk::time_point> _expire_time_endpoint_map;
+
+    bool _in_shadow_round = false;
+
+    std::unordered_map<inet_address, clk::time_point> _shadow_unreachable_endpoints;
+    utils::chunked_vector<inet_address> _shadow_live_endpoints;
+
+    // replicate shard 0 live endpoints across all other shards.
+    // _endpoint_update_semaphore must be held for the whole duration
+    future<> replicate_live_endpoints_on_change();
+
+    void run();
+    // Replicates given endpoint_state to all other shards.
+    // The state state doesn't have to be kept alive around until completes.
+    future<> replicate(inet_address, const endpoint_state&);
+    // Replicates "states" from "src" to all other shards.
+    // "src" and "states" must be kept alive until completes and must not change.
+    future<> replicate(inet_address, const std::map<application_state, versioned_value>& src, const utils::chunked_vector<application_state>& states);
+    // Replicates given value to all other shards.
+    // The value must be kept alive until completes and not change.
+    future<> replicate(inet_address, application_state key, const versioned_value& value);
+public:
+    explicit gossiper(abort_source& as, feature_service& features, const locator::shared_token_metadata& stm, netw::messaging_service& ms, sharded<db::system_keyspace>& sys_ks, const db::config& cfg, gossip_config gcfg);
+
+    /**
+     * Register for interesting state changes.
+     *
+     * @param subscriber module which implements the IEndpointStateChangeSubscriber
+     */
+    void register_(shared_ptr<i_endpoint_state_change_subscriber> subscriber);
+
+    /**
+     * Unregister interest for state changes.
+     *
+     * @param subscriber module which implements the IEndpointStateChangeSubscriber
+     */
+    future<> unregister_(shared_ptr<i_endpoint_state_change_subscriber> subscriber);
+
+    std::set<inet_address> get_live_members() const;
+
+    std::set<inet_address> get_live_token_owners() const;
+
+    /**
+     * @return a list of unreachable gossip participants, including fat clients
+     */
+    std::set<inet_address> get_unreachable_members() const;
+
+    /**
+     * @return a list of unreachable token owners
+     */
+    std::set<inet_address> get_unreachable_token_owners() const;
+
+    int64_t get_endpoint_downtime(inet_address ep) const noexcept;
+
+    /**
+     * @param endpoint end point that is convicted.
+     */
+    future<> convict(inet_address endpoint);
+
+    /**
+     * Return either: the greatest heartbeat or application state
+     *
+     * @param ep_state
+     * @return
+     */
+    version_type get_max_endpoint_state_version(endpoint_state state) const noexcept;
+
+
+private:
+    /**
+     * Removes the endpoint from gossip completely
+     *
+     * @param endpoint endpoint to be removed from the current membership.
+     */
+    future<> evict_from_membership(inet_address endpoint);
+public:
+    /**
+     * Removes the endpoint from Gossip but retains endpoint state
+     */
+    future<> remove_endpoint(inet_address endpoint);
+    future<> force_remove_endpoint(inet_address endpoint);
+private:
+    /**
+     * Quarantines the endpoint for QUARANTINE_DELAY
+     *
+     * @param endpoint
+     */
+    void quarantine_endpoint(inet_address endpoint);
+
+    /**
+     * Quarantines the endpoint until quarantine_start + QUARANTINE_DELAY
+     *
+     * @param endpoint
+     * @param quarantine_start
+     */
+    void quarantine_endpoint(inet_address endpoint, clk::time_point quarantine_start);
+
+private:
+    /**
+     * The gossip digest is built based on randomization
+     * rather than just looping through the collection of live endpoints.
+     *
+     * @param g_digests list of Gossip Digests.
+     */
+    void make_random_gossip_digest(utils::chunked_vector<gossip_digest>& g_digests);
+
+public:
+    /**
+     * This method will begin removing an existing endpoint from the cluster by spoofing its state
+     * This should never be called unless this coordinator has had 'removenode' invoked
+     *
+     * @param endpoint    - the endpoint being removed
+     * @param host_id      - the ID of the host being removed
+     * @param local_host_id - my own host ID for replication coordination
+     */
+    future<> advertise_removing(inet_address endpoint, locator::host_id host_id, locator::host_id local_host_id);
+
+    /**
+     * Handles switching the endpoint's state from REMOVING_TOKEN to REMOVED_TOKEN
+     * This should only be called after advertise_removing
+     *
+     * @param endpoint
+     * @param host_id
+     */
+    future<> advertise_token_removed(inet_address endpoint, locator::host_id host_id);
+
+    future<> unsafe_assassinate_endpoint(sstring address);
+
+    /**
+     * Do not call this method unless you know what you are doing.
+     * It will try extremely hard to obliterate any endpoint from the ring,
+     * even if it does not know about it.
+     *
+     * @param address
+     * @throws UnknownHostException
+     */
+    future<> assassinate_endpoint(sstring address);
+
+public:
+    future<generation_type> get_current_generation_number(inet_address endpoint);
+    future<version_type> get_current_heart_beat_version(inet_address endpoint);
+
+    bool is_gossip_only_member(inet_address endpoint);
+    bool is_safe_for_bootstrap(inet_address endpoint);
+    bool is_safe_for_restart(inet_address endpoint, locator::host_id host_id);
+private:
+    /**
+     * Returns true if the chosen target was also a seed. False otherwise
+     *
+     * @param message
+     * @param epSet   a set of endpoint from which a random endpoint is chosen.
+     * @return true if the chosen endpoint is also a seed.
+     */
+    future<> send_gossip(gossip_digest_syn message, std::set<inet_address> epset);
+
+    /* Sends a Gossip message to a live member */
+    future<> do_gossip_to_live_member(gossip_digest_syn message, inet_address ep);
+
+    /* Sends a Gossip message to an unreachable member */
+    future<> do_gossip_to_unreachable_member(gossip_digest_syn message);
+
+    future<> do_status_check();
+
+public:
+    clk::time_point get_expire_time_for_endpoint(inet_address endpoint) const noexcept;
+
+    const endpoint_state* get_endpoint_state_for_endpoint_ptr(inet_address ep) const noexcept;
+    endpoint_state& get_endpoint_state(inet_address ep);
+
+    endpoint_state* get_endpoint_state_for_endpoint_ptr(inet_address ep) noexcept;
+
+    const versioned_value* get_application_state_ptr(inet_address endpoint, application_state appstate) const noexcept;
+    sstring get_application_state_value(inet_address endpoint, application_state appstate) const;
+
+    // removes ALL endpoint states; should only be called after shadow gossip
+    future<> reset_endpoint_state_map();
+
+    const std::unordered_map<inet_address, endpoint_state>& get_endpoint_states() const noexcept;
+
+    std::vector<inet_address> get_endpoints() const;
+
+    bool uses_host_id(inet_address endpoint) const;
+
+    locator::host_id get_host_id(inet_address endpoint) const;
+
+    std::set<gms::inet_address> get_nodes_with_host_id(locator::host_id host_id) const;
+
+    std::optional<endpoint_state> get_state_for_version_bigger_than(inet_address for_endpoint, version_type version);
+
+    /**
+     * determine which endpoint started up earlier
+     */
+    generation_type::value_type compare_endpoint_startup(inet_address addr1, inet_address addr2);
+
+    /**
+     * Return the rpc address associated with an endpoint as a string.
+     * @param endpoint The endpoint to get rpc address for
+     * @return the rpc address
+     */
+    sstring get_rpc_address(const inet_address& endpoint) const;
+private:
+    void update_timestamp_for_nodes(const std::map<inet_address, endpoint_state>& map);
+
+    void mark_alive(inet_address addr, endpoint_state& local_state);
+
+    future<> real_mark_alive(inet_address addr, endpoint_state& local_state);
+
+    future<> mark_dead(inet_address addr, endpoint_state& local_state);
+
+    /**
+     * This method is called whenever there is a "big" change in ep state (a generation change for a known node).
+     *
+     * @param ep      endpoint
+     * @param ep_state EndpointState for the endpoint
+     */
+    future<> handle_major_state_change(inet_address ep, const endpoint_state& eps);
+
+public:
+    bool is_alive(inet_address ep) const;
+    bool is_dead_state(const endpoint_state& eps) const;
+    // Wait for nodes to be alive on all shards
+    future<> wait_alive(std::vector<gms::inet_address> nodes, std::chrono::milliseconds timeout);
+
+    // Get live members synchronized to all shards
+    future<std::set<inet_address>> get_live_members_synchronized();
+
+    future<> apply_state_locally(std::map<inet_address, endpoint_state> map);
+
+private:
+    future<> do_apply_state_locally(gms::inet_address node, const endpoint_state& remote_state, bool listener_notification);
+    future<> apply_state_locally_without_listener_notification(std::unordered_map<inet_address, endpoint_state> map);
+
+    future<> apply_new_states(inet_address addr, endpoint_state& local_state, const endpoint_state& remote_state);
+
+    // notify that a local application state is going to change (doesn't get triggered for remote changes)
+    future<> do_before_change_notifications(inet_address addr, const endpoint_state& ep_state, const application_state& ap_state, const versioned_value& new_value);
+
+    // notify that an application state has changed
+    future<> do_on_change_notifications(inet_address addr, const application_state& state, const versioned_value& value);
+    /* Request all the state for the endpoint in the g_digest */
+
+    void request_all(gossip_digest& g_digest, utils::chunked_vector<gossip_digest>& delta_gossip_digest_list, generation_type remote_generation);
+
+    /* Send all the data with version greater than max_remote_version */
+    void send_all(gossip_digest& g_digest, std::map<inet_address, endpoint_state>& delta_ep_state_map, version_type max_remote_version);
+
+public:
+    /*
+        This method is used to figure the state that the Gossiper has but Gossipee doesn't. The delta digests
+        and the delta state are built up.
+    */
+    void examine_gossiper(utils::chunked_vector<gossip_digest>& g_digest_list,
+                         utils::chunked_vector<gossip_digest>& delta_gossip_digest_list,
+                         std::map<inet_address, endpoint_state>& delta_ep_state_map);
+
+public:
+    /**
+     * Start the gossiper with the generation number, preloading the map of application states before starting
+     *
+     * If advertise is set to false, gossip will not respond to gossip echo
+     * message, so that other nodes will not mark this node as alive.
+     *
+     * Note 1: In practice, advertise is set to false only when the local node is
+     * replacing a dead node using the same ip address of the dead node, i.e.,
+     * replacing_a_node_with_same_ip is set to true, because the issue (#7312)
+     * that the advertise flag fixes is limited to replacing a node with the
+     * same ip address only.
+     *
+     * Note 2: When a node with a new ip address joins the cluster, e.g.,
+     * replacing a dead node using the different ip address, with advertise =
+     * false, existing nodes will not mark the node as up. So existing nodes
+     * will not send gossip syn messages to the new node because the new node
+     * is not in either live node list or unreachable node list.
+     *
+     * The new node will only include itself in the gossip syn messages, so the
+     * syn message from new node to existing node will not exchange gossip
+     * application states of existing nodes. Gossip exchanges node information
+     * for node listed in SYN messages only.
+     *
+     * As a result, the new node will not learn other existing nodes in gossip
+     * and existing nodes will learn the new node.
+     *
+     * Note 3: When a node replaces a dead node using the same ip address of
+     * the dead node, with advertise = false, existing nodes will send syn
+     * messages to the replacing node, because the replacing node is listed
+     * in the unreachable node list.
+     *
+     * As a result, the replacing node will learn other existing nodes in
+     * gossip and existing nodes will learn the new replacing node. Yes,
+     * unreachable node is contacted with some probability, but all of the
+     * existing nodes can talk to the replacing node. So the probability of
+     * replacing node being talked to is pretty high.
+     */
+    future<> start_gossiping(gms::generation_type generation_nbr, std::map<application_state, versioned_value> preload_local_states = {},
+            gms::advertise_myself advertise = gms::advertise_myself::yes);
+
+public:
+    /**
+     *  Do a single 'shadow' round of gossip, where we do not modify any state
+     */
+    future<> do_shadow_round(std::unordered_set<gms::inet_address> nodes = {});
+
+private:
+    void build_seeds_list();
+
+public:
+    /**
+     * Add an endpoint we knew about previously, but whose state is unknown
+     */
+    future<> add_saved_endpoint(inet_address ep);
+
+    future<> add_local_application_state(application_state state, versioned_value value);
+
+    /**
+     * Applies all states in set "atomically", as in guaranteed monotonic versions and
+     * inserted into endpoint state together (and assuming same grouping, overwritten together).
+     */
+    future<> add_local_application_state(std::list<std::pair<application_state, versioned_value>>);
+
+    /**
+     * Intentionally overenginered to avoid very rare string copies.
+     */
+    future<> add_local_application_state(std::initializer_list<std::pair<application_state, utils::in<versioned_value>>>);
+
+    future<> start();
+    future<> shutdown();
+    // Needed by seastar::sharded
+    future<> stop();
+    future<> do_stop_gossiping();
+
+public:
+    bool is_enabled() const;
+
+    void finish_shadow_round();
+
+    bool is_in_shadow_round() const;
+
+    void goto_shadow_round();
+
+public:
+    void add_expire_time_for_endpoint(inet_address endpoint, clk::time_point expire_time);
+
+    static clk::time_point compute_expire_time();
+public:
+    void dump_endpoint_state_map();
+public:
+    bool is_seed(const inet_address& endpoint) const;
+    bool is_shutdown(const inet_address& endpoint) const;
+    bool is_normal(const inet_address& endpoint) const;
+    bool is_left(const inet_address& endpoint) const;
+    // Check if a node is in NORMAL or SHUTDOWN status which means the node is
+    // part of the token ring from the gossip point of view and operates in
+    // normal status or was in normal status but is shutdown.
+    bool is_normal_ring_member(const inet_address& endpoint) const;
+    bool is_cql_ready(const inet_address& endpoint) const;
+    bool is_silent_shutdown_state(const endpoint_state& ep_state) const;
+    future<> mark_as_shutdown(const inet_address& endpoint);
+    void force_newer_generation();
+public:
+    std::string_view get_gossip_status(const endpoint_state& ep_state) const noexcept;
+    std::string_view get_gossip_status(const inet_address& endpoint) const noexcept;
+public:
+    future<> wait_for_gossip_to_settle();
+    future<> wait_for_range_setup();
+private:
+    future<> wait_for_gossip(std::chrono::milliseconds, std::optional<int32_t> = {});
+
+    uint64_t _nr_run = 0;
+    uint64_t _msg_processing = 0;
+    bool _gossip_settled = false;
+
+    class msg_proc_guard;
+private:
+    abort_source& _abort_source;
+    feature_service& _feature_service;
+    const locator::shared_token_metadata& _shared_token_metadata;
+    netw::messaging_service& _messaging;
+    sharded<db::system_keyspace>& _sys_ks;
+    utils::updateable_value<uint32_t> _failure_detector_timeout_ms;
+    utils::updateable_value<int32_t> _force_gossip_generation;
+    gossip_config _gcfg;
+    // Get features supported by a particular node
+    std::set<sstring> get_supported_features(inet_address endpoint) const;
+    // Get features supported by all the nodes this node knows about
+    std::set<sstring> get_supported_features(const std::unordered_map<gms::inet_address, sstring>& loaded_peer_features, ignore_features_of_local_node ignore_local_node) const;
+    locator::token_metadata_ptr get_token_metadata_ptr() const noexcept;
+public:
+    void check_knows_remote_features(std::set<std::string_view>& local_features, const std::unordered_map<inet_address, sstring>& loaded_peer_features) const;
+    future<> maybe_enable_features();
+private:
+    seastar::metrics::metric_groups _metrics;
+public:
+    void append_endpoint_state(std::stringstream& ss, const endpoint_state& state);
+public:
+    void check_snitch_name_matches(sstring local_snitch_name) const;
+    int get_down_endpoint_count() const noexcept;
+    int get_up_endpoint_count() const noexcept;
+private:
+    future<> failure_detector_loop();
+    future<> failure_detector_loop_for_node(gms::inet_address node, generation_type gossip_generation, uint64_t live_endpoints_version);
+    future<> update_live_endpoints_version();
+};
+
+
+struct gossip_get_endpoint_states_request {
+    // Application states the sender requested
+    std::unordered_set<gms::application_state> application_states;
+};
+
+struct gossip_get_endpoint_states_response {
+    std::unordered_map<gms::inet_address, gms::endpoint_state> endpoint_state_map;
+};
+
+} // namespace gms
 
 
 
-#include "gms/gossiper.hh"
+
 #include <gnutls/crypto.h>
-#include "hashing_partition_visitor.hh"
-#include "histogram_metrics_helper.hh"
+
+#include <cmath>
+#include <algorithm>
+#include <vector>
+#include <chrono>
+#include <seastar/core/metrics_types.hh>
+#include <seastar/core/print.hh>
+#include <seastar/core/bitops.hh>
+#include <limits>
+#include <array>
+
+namespace utils {
+
+/**
+ * This is a pseudo-exponential implementation of an estimated histogram.
+ *
+ * An exponential-histogram with coefficient 'coef', is a histogram where for bucket 'i'
+ * the lower limit is coef^i and the higher limit is coef^(i+1).
+ *
+ * A pseudo-exponential is similar but the bucket limits are an approximation.
+ *
+ * The approx_exponential_histogram is an efficient pseudo-exponential implementation.
+ *
+ * The histogram is defined by a Min and Max value limits, and a Precision (all should be power of 2
+ * and will be explained).
+ *
+ * When adding a value to a histogram:
+ * All values lower than Min will be included in the first bucket (the assumption is that it's
+ * not suppose to happen but it is ok if it does).
+ *
+ * All values higher than Max will be included in the last bucket that serves as the
+ * infinity bucket (the assumption is that it can happen but it is rare).
+ *
+ * Note the difference between the first and last buckets.
+ * The first bucket is just like a regular bucket but has a second roll to collect unexpected low values.
+ * The last bucket, also known as the infinity bucket, collect all values that passes the defined Max,
+ * it only collect those values.
+ *
+ * Buckets Distribution (limits)
+ * =============================
+ * The buckets limits in the histogram are defined similar to a floating-point representation.
+ *
+ * Buckets limits have an exponent part and a linear part.
+ *
+ * The exponential part is a power of 2. Each power-of-2 range [2^n..2^n+1)
+ * is split linearly to 'Precision' number of buckets.
+ *
+ * The total number of buckets is:
+ *   NUM_BUCKETS = log2(Max/Min)*Precision +1
+ *
+ * For example, if the Min value is 128, the Max is 1024 and the Precision is 4, the number of buckets is 13.
+ *
+ * Anything below 160 will be in the bucket 0, anything above 1024 will be in bucket 13.
+ * Note that the first bucket will include all values below Min.
+ *
+ * the range [128, 1024) will be split into log2(1024/128) = 3 ranges:
+ * 128, 256, 512, 1024
+ * Or more mathematically: [128, 256), [256, 512), [512,1024)
+ *
+ * Each range is split into 4 (The Precision).
+ * 128            | 256            | 512            | 1024
+ * 128 160 192 224| 256 320 384 448| 512 640 768 896|
+ *
+ * To get the exponential part of an index you divide by the Precision.
+ * The linear part of the index is Modulus the precision.
+ *
+ * Calculating the bucket lower limit of bucket i:
+ * The exponential part: exp_part = 2^floor(i/Precision)* Min
+ *    with the above example 2^floor(i/4)*128
+ * The linear part: (i%Precision) * (exp_part/Precision)
+ *    With the example: (i%4) * (exp_part/4)
+ *
+ * So the lower limit of bucket 6:
+ *    2^floor(6/4)* 128  = 256
+ *    (6%4) * 256/4 = 128
+ *    lower-limit   = 384
+ *
+ * How to find a bucket index for a value
+ * =======================================
+ * The bucket index consist of two parts:
+ * higher bits (exponential part) are based on log2(value/min)
+ *
+ * lower bits (linear part) are based on the 'n' MSB (ignoring the leading 1) where n=log2(Precision).
+ * Continuing with the example where the number of precision bits: PRECISION_BITS = log2(4) = 2
+ *
+ * for example: 330 (101001010)
+ * The number of precision_bits: PRECISION_BITS = log2(4) = 2
+ * higher bits: log2(330/128) = 1
+ * MSB: 01 (the highest two bits following the leading 1)
+ * So the index: 101 = 5
+ *
+ * About the Min, Max and Precision
+ * ================================
+ * For Min, Max and Precision, choose numbers that are a power of 2.
+ *
+ * Limitation: You must set the MIN value to be higher or equal to the Precision.
+ *
+ */
+template<uint64_t Min, uint64_t Max, size_t Precision>
+requires (Min >= Precision && Min < Max && log2floor(Max) == log2ceil(Max) && log2floor(Min) == log2ceil(Min) && log2floor(Precision) == log2ceil(Precision))
+class approx_exponential_histogram {
+public:
+
+    static constexpr unsigned NUM_EXP_RANGES = log2floor(Max/Min);
+    static constexpr size_t NUM_BUCKETS = NUM_EXP_RANGES * Precision + 1;
+    static constexpr unsigned PRECISION_BITS = log2floor(Precision);
+    static constexpr unsigned BASESHIFT = log2floor(Min);
+    static constexpr uint64_t LOWER_BITS_MASK = Precision - 1;
+private:
+    std::array<uint64_t, NUM_BUCKETS> _buckets;
+public:
+    approx_exponential_histogram() {
+        clear();
+    }
+
+    /*!
+     * \brief Returns the bucket lower limit given the bucket id.
+     * The first and last bucket will always return the MIN and MAX respectively.
+     *
+     */
+    uint64_t get_bucket_lower_limit(uint16_t bucket_id) const {
+        if (bucket_id == NUM_BUCKETS - 1) {
+            return Max;
+        }
+        int16_t exp_rang = (bucket_id >> PRECISION_BITS);
+        return (Min << exp_rang) +  ((bucket_id & LOWER_BITS_MASK) << (exp_rang + BASESHIFT - PRECISION_BITS));
+    }
+
+    /*!
+     * \brief Returns the bucket upper limit given the bucket id.
+     * The last bucket (Infinity bucket) will return UMAX_INT.
+     *
+     */
+    uint64_t get_bucket_upper_limit(uint16_t bucket_id) const {
+        if (bucket_id == NUM_BUCKETS - 1) {
+            return std::numeric_limits<uint64_t>::max();
+        }
+        return get_bucket_lower_limit(bucket_id + 1);
+    }
+
+    /*!
+     * \brief Find the bucket index for a given value
+     * The position of a value that is lower or equal to Min will always be 0.
+     * The position of a value that is higher or equal to MAX will always be NUM_BUCKETS - 1.
+     */
+    uint16_t find_bucket_index(uint64_t val) const {
+        if (val >= Max) {
+            return NUM_BUCKETS - 1;
+        }
+        if (val <= Min) {
+            return 0;
+        }
+        uint16_t range = log2floor(val);
+        val >>= range - PRECISION_BITS; // leave the top most N+1 bits where N is the resolution.
+        return ((range - BASESHIFT) << PRECISION_BITS) + (val & LOWER_BITS_MASK);
+    }
+
+    /*!
+     * \brief clear the current values.
+     */
+    void clear() {
+        std::fill(_buckets.begin(), _buckets.end(), 0);
+    }
+
+    /*!
+     * \brief Add an item to the histogram
+     * Increments the count of the bucket holding that value
+     */
+    void add(uint64_t n) {
+        _buckets.at(find_bucket_index(n))++;
+    }
+
+    /*!
+     * \brief returns the smallest value that could have been added to this histogram
+     * This method looks for the first non-empty bucket and returns its lower limit.
+     * Note that for non-empty histogram the lowest potentail value is Min.
+     *
+     * It will return 0 if the histogram is empty.
+     */
+    uint64_t min() const {
+        for (size_t i = 0; i < NUM_BUCKETS; i ++) {
+            if (_buckets[i] > 0) {
+                return get_bucket_lower_limit(i);
+            }
+        }
+        return 0;
+    }
+
+    /*!
+     * \brief returns the largest value that could have been added to this histogram.
+     * This method looks for the first non empty bucket and return its upper limit.
+     * If the histogram overflowed, it will returns UINT64_MAX.
+     *
+     * It will return 0 if the histogram is empty.
+     */
+    uint64_t max() const {
+        for (int i = NUM_BUCKETS - 1; i >= 0; i--) {
+            if (_buckets[i] > 0) {
+                return get_bucket_upper_limit(i);
+            }
+        }
+        return 0;
+    }
+
+    /*!
+     * \brief merge a histogram to the current one.
+     */
+    approx_exponential_histogram& merge(const approx_exponential_histogram& b) {
+        for (size_t i = 0; i < NUM_BUCKETS; i++) {
+            _buckets[i] += b.get(i);
+        }
+        return *this;
+    }
+
+    template<uint64_t A, uint64_t B, size_t C>
+    friend approx_exponential_histogram<A, B, C> merge(approx_exponential_histogram<A, B, C> a, const approx_exponential_histogram<A, B, C>& b);
+
+    /*
+     * \brief returns the count in the given bucket
+     */
+    uint64_t get(size_t bucket) const {
+        return _buckets[bucket];
+    }
+
+    /*!
+     * \brief get a histogram quantile
+     *
+     * This method will returns the estimated value at a given quantile.
+     * If there are N values in the histogram.
+     * It would look for the bucket that the total number of elements in the buckets
+     * before it are less than N * quantile and return that bucket lower limit.
+     *
+     * For example, quantile(0.5) will find the bucket that that sum of all buckets values
+     * below it is less than half and will return that bucket lower limit.
+     * In this example, this is a median estimation.
+     *
+     * It will return 0 if the histogram is empty.
+     *
+     */
+    uint64_t quantile(float quantile) const {
+        if (quantile < 0 || quantile > 1.0) {
+            throw std::runtime_error("Invalid quantile value " + std::to_string(quantile) + ". Value should be between 0 and 1");
+        }
+        auto c = count();
+
+        if (!c) {
+            return 0; // no data
+        }
+
+        auto pcount = uint64_t(std::floor(c * quantile));
+        uint64_t elements = 0;
+        for (size_t i = 0; i < NUM_BUCKETS - 2; i++) {
+            if (_buckets[i]) {
+                elements += _buckets[i];
+                if (elements >= pcount) {
+                    return get_bucket_lower_limit(i);
+                }
+            }
+        }
+        return Max; // overflowed value is in the requested quantile
+    }
+
+    /*!
+     * \brief returns the mean histogram value (average of bucket offsets, weighted by count)
+     * It will return 0 if the histogram is empty.
+     */
+    uint64_t mean() const {
+        uint64_t elements = 0;
+        double sum = 0;
+        for (size_t i = 0; i < NUM_BUCKETS - 1; i++) {
+            elements += _buckets[i];
+            sum += _buckets[i] * get_bucket_lower_limit(i);
+        }
+        return (elements) ?  sum / elements : 0;
+    }
+
+    /*!
+     * \brief returns the number of buckets;
+     */
+    size_t size() const {
+        return NUM_BUCKETS;
+    }
+
+    /*!
+     * \brief returns the total number of values inserted
+     */
+    uint64_t count() const {
+        uint64_t sum = 0L;
+        for (size_t i = 0; i < NUM_BUCKETS; i++) {
+            sum += _buckets[i];
+        }
+        return sum;
+    }
+
+    /*!
+     * \brief multiple all the buckets content in the histogram by a constant
+     */
+    approx_exponential_histogram& operator*=(double v) {
+        for (size_t i = 0; i < NUM_BUCKETS; i++) {
+            _buckets[i] *= v;
+        }
+        return *this;
+    }
+
+    uint64_t& operator[](size_t b) noexcept {
+        return _buckets[b];
+    }
+};
+
+template<uint64_t Min, uint64_t Max, size_t NumBuckets>
+inline approx_exponential_histogram<Min, Max, NumBuckets> base_estimated_histogram_merge(approx_exponential_histogram<Min, Max, NumBuckets> a, const approx_exponential_histogram<Min, Max, NumBuckets>& b) {
+    return a.merge(b);
+}
+
+/*!
+ * \brief estimated histogram for duration values
+ * time_estimated_histogram is used for short task timing.
+ * It covers the range of 0.5ms to 33s with a precision of 4.
+ *
+ * 512us, 640us, 768us, 896us, 1024us, 1280us, 1536us, 1792us...16s, 20s, 25s, 29s, 33s (33554432us)
+ */
+class time_estimated_histogram : public approx_exponential_histogram<512, 33554432, 4> {
+public:
+    using clock = std::chrono::steady_clock;
+    using duration = clock::duration;
+    time_estimated_histogram& merge(const time_estimated_histogram& b) {
+        approx_exponential_histogram<512, 33554432, 4>::merge(b);
+        return *this;
+    }
+
+    void add_micro(uint64_t n) {
+        approx_exponential_histogram<512, 33554432, 4>::add(n);
+    }
+
+    void add(const duration& latency) {
+        add_micro(std::chrono::duration_cast<std::chrono::microseconds>(latency).count());
+    }
+};
+
+inline time_estimated_histogram time_estimated_histogram_merge(time_estimated_histogram a, const time_estimated_histogram& b) {
+    return a.merge(b);
+}
+
+struct estimated_histogram {
+    using clock = std::chrono::steady_clock;
+    using duration = clock::duration;
+    /**
+     * The series of values to which the counts in `buckets` correspond:
+     * 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 17, 20, etc.
+     * Thus, a `buckets` of [0, 0, 1, 10] would mean we had seen one value of 3 and 10 values of 4.
+     *
+     * The series starts at 1 and grows by 1.2 each time (rounding and removing duplicates). It goes from 1
+     * to around 36M by default (creating 90+1 buckets), which will give us timing resolution from microseconds to
+     * 36 seconds, with less precision as the numbers get larger.
+     *
+     * When using the histogram for latency, the values are in microseconds
+     *
+     * Each bucket represents values from (previous bucket offset, current offset].
+     */
+    std::vector<int64_t> bucket_offsets;
+
+    // buckets is one element longer than bucketOffsets -- the last element is values greater than the last offset
+    std::vector<int64_t> buckets;
+
+    int64_t _count = 0;
+    int64_t _sample_sum = 0;
+
+    estimated_histogram(int bucket_count = 90) {
+
+        new_offsets(bucket_count);
+        buckets.resize(bucket_offsets.size() + 1, 0);
+    }
+
+    seastar::metrics::histogram get_histogram(size_t lower_bucket = 1, size_t max_buckets = 16) const {
+        seastar::metrics::histogram res;
+        res.buckets.resize(max_buckets);
+        int64_t last_bound = lower_bucket;
+        uint64_t cummulative_count = 0;
+        size_t pos = 0;
+
+        res.sample_count = _count;
+        res.sample_sum = _sample_sum;
+        for (size_t i = 0; i < res.buckets.size(); i++) {
+            auto& v = res.buckets[i];
+            v.upper_bound = last_bound;
+
+            while (bucket_offsets[pos] <= last_bound) {
+                cummulative_count += buckets[pos];
+                pos++;
+            }
+
+            v.count = cummulative_count;
+
+            last_bound <<= 1;
+        }
+        return res;
+    }
+
+    seastar::metrics::histogram get_histogram(duration minmal_latency, size_t max_buckets = 16) const {
+        return get_histogram(std::chrono::duration_cast<std::chrono::microseconds>(minmal_latency).count(), max_buckets);
+    }
+
+
+private:
+    void new_offsets(int size) {
+        bucket_offsets.resize(size);
+        if (size == 0) {
+            return;
+        }
+        int64_t last = 1;
+        bucket_offsets[0] = last;
+        for (int i = 1; i < size; i++) {
+            int64_t next = round(last * 1.2);
+            if (next == last) {
+                next++;
+            }
+            bucket_offsets[i] = next;
+            last = next;
+        }
+    }
+public:
+    /**
+     * @return the histogram values corresponding to each bucket index
+     */
+    const std::vector<int64_t>& get_bucket_offsets() const {
+        return bucket_offsets;
+    }
+
+    /**
+     * @return the histogram buckets
+     */
+    const std::vector<int64_t>& get_buckets() const {
+        return buckets;
+    }
+
+    void clear() {
+        std::fill(buckets.begin(), buckets.end(), 0);
+        _count = 0;
+        _sample_sum = 0;
+    }
+    /**
+     * Increments the count of the bucket closest to n, rounding UP.
+     * @param n
+     */
+    void add(int64_t n) {
+        auto pos = bucket_offsets.size();
+        auto low = std::lower_bound(bucket_offsets.begin(), bucket_offsets.end(), n);
+        if (low != bucket_offsets.end()) {
+            pos = std::distance(bucket_offsets.begin(), low);
+        }
+        buckets.at(pos)++;
+        _count++;
+        _sample_sum += n;
+    }
+
+    /**
+     * Increments the count of the bucket closest to n, rounding UP.
+     * when using sampling, the number of items in the bucket will
+     * be increase so that the overall number of items will be equal
+     * to the new count
+     * @param n
+     */
+    void add_nano(int64_t n, int64_t new_count) {
+        n /= 1000;
+        if (new_count <= _count) {
+            return;
+        }
+        auto pos = bucket_offsets.size();
+        auto low = std::lower_bound(bucket_offsets.begin(), bucket_offsets.end(), n);
+        if (low != bucket_offsets.end()) {
+            pos = std::distance(bucket_offsets.begin(), low);
+        }
+        buckets.at(pos)+= new_count - _count;
+        _sample_sum += n * (new_count - _count);
+        _count = new_count;
+    }
+
+    void add(duration latency, int64_t new_count) {
+        add_nano(std::chrono::duration_cast<std::chrono::nanoseconds>(latency).count(), new_count);
+    }
+
+    /**
+     * @return the smallest value that could have been added to this histogram
+     */
+    int64_t min() const {
+        size_t i = 0;
+        for (auto b : buckets) {
+            if (b > 0) {
+                return i == 0 ? 0 : 1 + bucket_offsets[i - 1];
+            }
+            i++;
+        }
+        return 0;
+    }
+
+    /**
+     * @return the largest value that could have been added to this histogram.  If the histogram
+     * overflowed, returns INT64_MAX.
+     */
+    int64_t max() const {
+        int lastBucket = buckets.size() - 1;
+        if (buckets[lastBucket] > 0) {
+            return INT64_MAX;
+        }
+        for (int i = lastBucket - 1; i >= 0; i--) {
+            if (buckets[i] > 0) {
+                return bucket_offsets[i];
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * merge a histogram to the current one.
+     */
+    estimated_histogram& merge(const estimated_histogram& b) {
+        if (bucket_offsets.size() < b.bucket_offsets.size()) {
+            new_offsets(b.bucket_offsets.size());
+            buckets.resize(b.bucket_offsets.size() + 1, 0);
+        }
+        size_t i = 0;
+        for (auto p: b.buckets) {
+            buckets[i++] += p;
+        }
+        _count += b._count;
+        _sample_sum += b._sample_sum;
+        return *this;
+    }
+
+    friend estimated_histogram merge(estimated_histogram a, const estimated_histogram& b);
+
+    /**
+     * @return the count in the given bucket
+     */
+    int64_t get(int bucket) {
+        return buckets[bucket];
+    }
+
+    /**
+     * @param percentile
+     * @return estimated value at given percentile
+     */
+    int64_t percentile(double perc) const {
+        assert(perc >= 0 && perc <= 1.0);
+        auto last_bucket = buckets.size() - 1;
+
+        auto c = count();
+
+        if (!c) {
+            return 0; // no data
+        }
+
+        auto pcount = int64_t(std::floor(c * perc));
+        int64_t elements = 0;
+        for (size_t i = 0; i < last_bucket; i++) {
+            if (buckets[i]) {
+                elements += buckets[i];
+                if (elements >= pcount) {
+                    return bucket_offsets[i];
+                }
+            }
+        }
+        return round(bucket_offsets.back() * 1.2); // overflowed value is in the requested percentile
+    }
+
+    /**
+     * @return the mean histogram value (average of bucket offsets, weighted by count)
+     */
+    int64_t mean() const {
+        auto lastBucket = buckets.size() - 1;
+        int64_t elements = 0;
+        int64_t sum = 0;
+        for (size_t i = 0; i < lastBucket; i++) {
+            long bCount = buckets[i];
+            elements += bCount;
+            sum += bCount * bucket_offsets[i];
+        }
+
+        return elements ? ((double(sum) + elements - 1) / elements) : 0;
+    }
+
+    /**
+     * @return the total number of non-zero values
+     */
+    int64_t count() const {
+        int64_t sum = 0L;
+        for (size_t i = 0; i < buckets.size(); i++) {
+            sum += buckets[i];
+        }
+        return sum;
+    }
+
+    estimated_histogram& operator*=(double v) {
+        for (size_t i = 0; i < buckets.size(); i++) {
+            buckets[i] *= v;
+        }
+        return *this;
+    }
+
+    friend std::ostream& operator<<(std::ostream& out, const estimated_histogram& h) {
+        // only print overflow if there is any
+        size_t name_count;
+        if (h.buckets[h.buckets.size() - 1] == 0) {
+            name_count = h.buckets.size() - 1;
+        } else {
+            name_count = h.buckets.size();
+        }
+        std::vector<sstring> names;
+        names.reserve(name_count);
+
+        size_t max_name_len = 0;
+        for (size_t i = 0; i < name_count; i++) {
+            names.push_back(h.name_of_range(i));
+            max_name_len = std::max(max_name_len, names.back().size());
+        }
+
+        sstring formatstr = format("{{:{:d}s}}: {{:d}}\n", max_name_len);
+        for (size_t i = 0; i < name_count; i++) {
+            int64_t count = h.buckets[i];
+            // sort-of-hack to not print empty ranges at the start that are only used to demarcate the
+            // first populated range. for code clarity we don't omit this record from the maxNameLength
+            // calculation, and accept the unnecessary whitespace prefixes that will occasionally occur
+            if (i == 0 && count == 0) {
+                continue;
+            }
+            out << format(formatstr.c_str(), names[i], count);
+        }
+        return out;
+    }
+
+    sstring name_of_range(size_t index) const {
+        sstring s;
+        s += "[";
+        if (index == 0) {
+            if (bucket_offsets[0] > 0) {
+                // by original definition, this histogram is for values greater than zero only;
+                // if values of 0 or less are required, an entry of lb-1 must be inserted at the start
+                s += "1";
+            } else {
+                s += "-Inf";
+            }
+        } else {
+            s += format("{:d}", bucket_offsets[index - 1] + 1);
+        }
+        s += "..";
+        if (index == bucket_offsets.size()) {
+            s += "Inf";
+        } else {
+            s += format("{:d}", bucket_offsets[index]);
+        }
+        s += "]";
+        return s;
+    }
+};
+
+inline estimated_histogram estimated_histogram_merge(estimated_histogram a, const estimated_histogram& b) {
+    return a.merge(b);
+}
+
+}
+
+#include <chrono>
+/**
+ * A helper class to keep track of latencies
+ */
+namespace utils {
+
+class latency_counter {
+public:
+    using clock = std::chrono::steady_clock;
+    using time_point = clock::time_point;
+    using duration = clock::duration;
+private:
+    time_point _start;
+    time_point _stop;
+public:
+    void start() {
+        _start = now();
+    }
+
+    bool is_start() const {
+        // if start is not set it is still zero
+        return _start.time_since_epoch().count();
+    }
+    latency_counter& stop() {
+        _stop = now();
+        return *this;
+    }
+
+    bool is_stopped() const {
+        // if stop was not set, it is still zero
+        return _stop.time_since_epoch().count();
+    }
+
+    duration latency() const {
+        return _stop - _start;
+    }
+
+    latency_counter& check_and_stop() {
+        if (!is_stopped()) {
+            return stop();
+        }
+        return *this;
+    }
+
+    static time_point now() {
+        return clock::now();
+    }
+};
+
+}
+
+#include <boost/circular_buffer.hpp>
+#include <cmath>
+#include <seastar/core/timer.hh>
+#include <iosfwd>
+
+namespace utils {
+/**
+ * An exponentially-weighted moving average.
+ */
+class moving_average {
+    double _alpha = 0;
+    bool _initialized = false;
+    latency_counter::duration _tick_interval;
+    uint64_t _count = 0;
+    double _rate = 0;
+public:
+    moving_average(latency_counter::duration interval, latency_counter::duration tick_interval) :
+        _tick_interval(tick_interval) {
+        _alpha = 1 - std::exp(-std::chrono::duration_cast<std::chrono::seconds>(tick_interval).count()/
+                static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(interval).count()));
+    }
+
+    void add(uint64_t val = 1) {
+        _count += val;
+    }
+
+    void update() {
+        double instant_rate = _count / static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(_tick_interval).count());
+        if (_initialized) {
+            _rate += (_alpha * (instant_rate - _rate));
+        } else {
+            _rate = instant_rate;
+            _initialized = true;
+        }
+        _count = 0;
+    }
+
+    bool is_initilized() const {
+        return _initialized;
+    }
+
+    double rate() const {
+        if (is_initilized()) {
+            return _rate;
+        }
+        return 0;
+    }
+};
+
+template <typename Unit>
+class basic_ihistogram {
+public:
+    using duration_unit = Unit;
+    // count holds all the events
+    int64_t count;
+    // total holds only the events we sample
+    int64_t total;
+    int64_t min;
+    int64_t max;
+    int64_t sum;
+    int64_t started;
+    double mean;
+    double variance;
+    int64_t sample_mask;
+    boost::circular_buffer<int64_t> sample;
+    basic_ihistogram(size_t size = 1024, int64_t _sample_mask = 0x80)
+            : count(0), total(0), min(0), max(0), sum(0), started(0), mean(0), variance(0),
+              sample_mask(_sample_mask), sample(
+                    size) {
+    }
+
+    template <typename Rep, typename Ratio>
+    void mark(std::chrono::duration<Rep, Ratio> dur) {
+        auto value = std::chrono::duration_cast<Unit>(dur).count();
+        if (total == 0 || value < min) {
+            min = value;
+        }
+        if (total == 0 || value > max) {
+            max = value;
+        }
+        if (total == 0) {
+            mean = value;
+            variance = 0;
+        } else {
+            double old_m = mean;
+            double old_s = variance;
+
+            mean = ((double)(sum + value)) / (total + 1);
+            variance = old_s + ((value - old_m) * (value - mean));
+        }
+        sum += value;
+        total++;
+        count++;
+        sample.push_back(value);
+    }
+
+    void mark(latency_counter& lc) {
+        if (lc.is_start()) {
+            mark(lc.stop().latency());
+        } else {
+            count++;
+        }
+    }
+
+    /**
+     * Return true if the current event should be sample.
+     * In the typical case, there is no need to use this method
+     * Call set_latency, that would start a latency object if needed.
+     *
+     * Typically, sample_mask is of the form of 2^n-1 which would
+     * mean that we sample one of 2^n, but setting sample_mask to zero
+     * would mean we would always sample.
+     */
+    bool should_sample() const noexcept {
+        return total == 0 || ((started & sample_mask) == sample_mask);
+    }
+    /**
+     * Set the latency according to the sample rate.
+     */
+    basic_ihistogram& set_latency(latency_counter& lc) {
+        if (should_sample()) {
+            lc.start();
+        }
+        started++;
+        return *this;
+    }
+
+    /**
+     * Allow to use the histogram as a counter
+     * Increment the total number of events without
+     * sampling the value.
+     */
+    basic_ihistogram& inc() {
+        count++;
+        return *this;
+    }
+
+    int64_t pending() const {
+        return started - count;
+    }
+
+    inline double pow2(double a) {
+        return a * a;
+    }
+
+    basic_ihistogram& operator +=(const basic_ihistogram& o) {
+        if (count == 0) {
+            *this = o;
+        } else if (o.count > 0) {
+            if (min > o.min) {
+                min = o.min;
+            }
+            if (max < o.max) {
+                max = o.max;
+            }
+            double ncount = count + o.count;
+            sum += o.sum;
+            double a = count / ncount;
+            double b = o.count / ncount;
+
+            double m = a * mean + b * o.mean;
+
+            variance = (variance + pow2(m - mean)) * a
+                    + (o.variance + pow2(o.mean - mean)) * b;
+            mean = m;
+            count += o.count;
+            total += o.total;
+            for (auto i : o.sample) {
+                sample.push_back(i);
+            }
+        }
+        return *this;
+    }
+
+    int64_t estimated_sum() const {
+        return mean * count;
+    }
+
+    template <typename U>
+    friend basic_ihistogram<U> operator +(basic_ihistogram<U> a, const basic_ihistogram<U>& b);
+};
+
+template <typename Unit>
+inline basic_ihistogram<Unit> operator +(basic_ihistogram<Unit> a, const basic_ihistogram<Unit>& b) {
+    a += b;
+    return a;
+}
+
+using ihistogram = basic_ihistogram<std::chrono::microseconds>;
+
+/*!
+ * \brief a helper timer class for the metering functionality
+ *
+ * To make an object use a timer, include an instance of this
+ * class and set a handler at its constructor.
+ */
+class meter_timer {
+    std::function<void()> _fun;
+    timer<> _timer;
+public:
+    static constexpr latency_counter::duration tick_interval() {
+        return std::chrono::seconds(10);
+    }
+
+    meter_timer(std::function<void()>&& fun) : _fun(std::move(fun)), _timer(_fun) {
+        _timer.arm_periodic(tick_interval());
+    }
+};
+
+struct rate_moving_average {
+    uint64_t count = 0;
+    double rates[3] = {0};
+    double mean_rate = 0;
+    rate_moving_average& operator +=(const rate_moving_average& o) {
+        count += o.count;
+        mean_rate += o.mean_rate;
+        for (int i=0; i<3; i++) {
+            rates[i] += o.rates[i];
+        }
+        return *this;
+    }
+    friend rate_moving_average operator+ (rate_moving_average a, const rate_moving_average& b);
+};
+
+inline rate_moving_average operator+ (rate_moving_average a, const rate_moving_average& b) {
+    a += b;
+    return a;
+}
+
+class rates_moving_average {
+    latency_counter::time_point start_time;
+    moving_average rates[3] = {{std::chrono::minutes(1), meter_timer::tick_interval()}, {std::chrono::minutes(5), meter_timer::tick_interval()}, {std::chrono::minutes(15), meter_timer::tick_interval()}};
+public:
+    // _count is public so the collectd will be able to use it.
+    // for all other cases use the count() method
+    uint64_t _count = 0;
+    rates_moving_average() : start_time(latency_counter::now()) {
+    }
+
+    void mark(uint64_t n = 1) {
+        _count += n;
+        for (int i = 0; i < 3; i++) {
+            rates[i].add(n);
+        }
+    }
+
+    rate_moving_average rate() const {
+        rate_moving_average res;
+        double elapsed = std::chrono::duration_cast<std::chrono::seconds>(latency_counter::now() - start_time).count();
+        // We condition also in elapsed because it can happen that the call
+        // for the rate calculation was performed too early and will not yield
+        // meaningful results (i.e mean_rate is infinity) so the best thing is
+        // to return 0 as it best reflects the state.
+        if ((_count > 0) && (elapsed >= 1.0)) [[likely]] {
+            res.mean_rate = (_count / elapsed);
+        } else {
+            res.mean_rate = 0;
+        }
+        res.count = _count;
+        for (int i = 0; i < 3; i++) {
+            res.rates[i] = rates[i].rate();
+        }
+        return res;
+    }
+
+    void update() noexcept {
+        for (int i = 0; i < 3; i++) {
+            rates[i].update();
+        }
+    }
+
+    uint64_t count() const {
+        return _count;
+    }
+};
+
+/*!
+ * \brief A timed wrapper for the rates moving average.
+ *
+ * This is a wrapper for the rates_moving_average class. It uses a meter_timer
+ * to update the rates_moving_average periodically.
+ */
+class timed_rate_moving_average {
+    rates_moving_average _rates;
+    meter_timer _timer;
+public:
+    timed_rate_moving_average() : _timer([this]{_rates.update();}) {
+
+    }
+    rates_moving_average& operator()() noexcept {
+        return _rates;
+    }
+    const rates_moving_average& operator()() const noexcept {
+        return _rates;
+    }
+    void mark(uint64_t n = 1) noexcept {
+        _rates.mark(n);
+    }
+
+    uint64_t count() const noexcept {
+        return _rates.count();
+    }
+
+    rate_moving_average rate() const noexcept {
+        return _rates.rate();
+    }
+};
+
+/*!
+ * \brief A class for a histogram-based summary calculation.
+ *
+ * A summary is a histogram where each bucket holds some quantile.
+ * While a histogram typically holds values from the system start,
+ * a summary is defined over some duration (i.e., latencies in the last 10 seconds).
+ * To calculate a summary, we use two estimated-histograms, calculate their delta, and get the
+ * summary from that delta histogram.
+ *
+ */
+class summary_calculator {
+    std::vector<double> _quantiles = { 0.5, 0.95, 0.99};
+    std::vector<double> _summary = { 0, 0, 0};
+    time_estimated_histogram _previous_histogram;
+    time_estimated_histogram _current_histogram;
+public:
+    /*!
+     * \brief update the summary and histograms
+     *
+     * The update method is called every time tick.
+     * When done, _previous_histogram would equal _current_histogram
+     * and the _summary would contain the current _summary calculation
+     *
+     * The calculation is done in two stages. first, we determine what is
+     * the cutoff for each quantile, for example, assume that there are new 1000
+     * entries and the quantiles are 0.5, 0.95 and 0.99
+     * The cutoffs will be 500, 950, and 990. We reuse the _summary array
+     * to hold these values.
+     *
+     * Second, while coping the _current_histogram to the _previous_histogram,
+     * we collect the diffs. Each time we cross a cutoff value, we update the
+     * _summary with the bucket limit (i.e., the latency value).
+     *
+     * To continue the previous example, if the first 3 diffs had the values:
+     * 10, 300, 200. When reaching the third one, the total diff will be 510,
+     * and we set the summary[0] as the third bucket limit.
+     *
+     */
+    void update() {
+        auto new_entries = _current_histogram.count() - _previous_histogram.count();
+        if (new_entries == 0) {
+            clear();
+            return;
+        }
+        for (size_t i = 0; i < _quantiles.size(); i++ ) {
+            _summary[i] = _quantiles[i] * new_entries;
+        }
+        size_t pos = 0;
+        size_t total_diff = 0;
+
+        for (size_t i = 0; i < _current_histogram.size(); i++) {
+            total_diff += _current_histogram[i] - _previous_histogram[i];
+            while (pos < _summary.size() && total_diff >= _summary[pos]) {
+                _summary[pos] = _current_histogram.get_bucket_upper_limit(i);
+                pos++;
+            }
+            _previous_histogram[i] = _current_histogram[i];
+        }
+    }
+
+    const std::vector<double>& quantiles() const noexcept {
+        return _quantiles;
+    }
+
+    void clear() {
+        for (size_t i =0; i< _summary.size(); i++) {
+            _summary[i] = 0;
+        }
+    }
+    void set_quantiles(const std::vector<double>& quantiles) {
+        _quantiles = quantiles;
+        _summary.resize(quantiles.size());
+        clear();
+    }
+
+    const std::vector<double>& summary() const noexcept {
+        return _summary;
+    }
+
+    template <typename Rep, typename Ratio>
+    void mark(std::chrono::duration<Rep, Ratio> dur) {
+        if (std::chrono::duration_cast<ihistogram::duration_unit>(dur).count() >= 0) {
+            _current_histogram.add(dur);
+        }
+    }
+
+    const time_estimated_histogram& histogram() const noexcept {
+        return _current_histogram;
+    }
+};
+
+struct rate_moving_average_and_histogram {
+    ihistogram hist;
+    rate_moving_average rate;
+
+    rate_moving_average_and_histogram& operator +=(const rate_moving_average_and_histogram& o) {
+        hist += o.hist;
+        rate += o.rate;
+        return *this;
+    }
+    friend rate_moving_average_and_histogram operator +(rate_moving_average_and_histogram a, const rate_moving_average_and_histogram& b);
+};
+
+inline rate_moving_average_and_histogram operator +(rate_moving_average_and_histogram a, const rate_moving_average_and_histogram& b) {
+    a += b;
+    return a;
+}
+
+/**
+ * A timer metric which aggregates timing durations and provides duration statistics, plus
+ * throughput statistics via meter
+ */
+class timed_rate_moving_average_and_histogram {
+public:
+    ihistogram hist;
+    timed_rate_moving_average met;
+    timed_rate_moving_average_and_histogram() = default;
+    timed_rate_moving_average_and_histogram(timed_rate_moving_average_and_histogram&&) = default;
+    timed_rate_moving_average_and_histogram(size_t size, int64_t _sample_mask = 0x80) : hist(size, _sample_mask) {}
+
+    template <typename Rep, typename Ratio>
+    void mark(std::chrono::duration<Rep, Ratio> dur) {
+        if (std::chrono::duration_cast<ihistogram::duration_unit>(dur).count() >= 0) {
+            hist.mark(dur);
+            met().mark();
+        }
+    }
+
+    void mark(latency_counter& lc) {
+        hist.mark(lc);
+        met().mark();
+    }
+
+    void set_latency(latency_counter& lc) {
+        hist.set_latency(lc);
+    }
+
+    rate_moving_average_and_histogram rate() const {
+        rate_moving_average_and_histogram res;
+        res.hist = hist;
+        res.rate = met().rate();
+        return res;
+    }
+};
+
+/**
+ * \brief A unified timer-based histogram rate and summary collector.
+ *
+ * This timer metric handles all latencies histogram options for the API and the metrics layer.
+ *
+ * The metrics layer requires a histogram of the values from the system start and a quantile
+ * summary from the last time tick.
+ *
+ * The API requires a moving average and its kind of histogram (ihistogram)
+ *
+ * This class will replace timed_rate_moving_average_and_histogram and share the same API.
+ *
+ * The summary calculation is per some interval, that interval should be reasonable, by default
+ * it is set to 30s, but can be set to something else.
+ * Because it is different than the tick_interval _match_duration holds once in every how
+ * many times the summary should be updated.
+ *
+ */
+class timed_rate_moving_average_summary_and_histogram {
+    meter_timer _timer;
+    summary_calculator _summary;
+    rates_moving_average _rates;
+    size_t _match_duration = 0;
+    size_t _last_update = 0;
+public:
+    ihistogram hist;
+    timed_rate_moving_average_summary_and_histogram(latency_counter::duration d = std::chrono::seconds(30)) : _timer([this]{
+        _rates.update();
+        _summary.update();}) {
+        _match_duration = d/meter_timer::tick_interval();
+    }
+    rates_moving_average& operator()() noexcept {
+        return _rates;
+    }
+    const rates_moving_average& operator()() const noexcept {
+        return _rates;
+    }
+
+    timed_rate_moving_average_summary_and_histogram(timed_rate_moving_average_summary_and_histogram&&) = default;
+    timed_rate_moving_average_summary_and_histogram(size_t size) : _timer([this]{
+        _rates.update();
+        _last_update++;
+        if (_last_update < _match_duration) {
+            return;
+        }
+        _last_update = 0;
+        _summary.update();}), hist(size, 0) {
+    }
+
+    template <typename Rep, typename Ratio>
+    void mark(std::chrono::duration<Rep, Ratio> dur) noexcept {
+        if (std::chrono::duration_cast<ihistogram::duration_unit>(dur).count() >= 0) {
+            hist.mark(dur);
+            _summary.mark(dur);
+            _rates.mark();
+        }
+    }
+
+    void mark(latency_counter& lc) noexcept {
+        hist.mark(lc);
+        _summary.mark(lc.latency());
+        _rates.mark();
+    }
+
+    void set_latency(latency_counter& lc) noexcept {
+        hist.set_latency(lc);
+    }
+
+    rate_moving_average_and_histogram rate() const noexcept {
+        rate_moving_average_and_histogram res;
+        res.hist = hist;
+        res.rate = _rates.rate();
+        return res;
+    }
+    const time_estimated_histogram& histogram() const noexcept {
+        return _summary.histogram();
+    }
+
+    const summary_calculator& summary() const noexcept {
+        return _summary;
+    }
+};
+
+}
+
+#include <cstdint>
+#include <seastar/core/metrics_types.hh>
+
+template<uint64_t Min, uint64_t Max, size_t Precision>
+seastar::metrics::histogram to_metrics_histogram(const utils::approx_exponential_histogram<Min, Max, Precision>& hist) {
+    seastar::metrics::histogram res;
+    res.buckets.resize(hist.size() - 1);
+    uint64_t cummulative_count = 0;
+    res.sample_sum = 0;
+
+    for (size_t i = 0; i < hist.NUM_BUCKETS - 1; i++) {
+        auto& v = res.buckets[i];
+        v.upper_bound = hist.get_bucket_lower_limit(i + 1);
+        cummulative_count += hist.get(i);
+        v.count = cummulative_count;
+        res.sample_sum += hist.get(i) * v.upper_bound;
+    }
+    // The count serves as the infinite bucket
+    res.sample_count = cummulative_count + hist.get(hist.NUM_BUCKETS - 1);
+    res.sample_sum += hist.get(hist.NUM_BUCKETS - 1) * hist.get_bucket_lower_limit(hist.NUM_BUCKETS - 1);
+    return res;
+}
+
+/*!
+ * \brief get a metrics summary from timed_rate_moving_average_with_summary
+ *
+ * timed_rate_moving_average_with_summary contains a summary. This function
+ * copy it to a metric summary.
+ * A metric summary is a histogram where each bucket holds some quantile.
+ */
+seastar::metrics::histogram to_metrics_summary(const utils::summary_calculator& summary) noexcept;
+
+
+
+
+
 #include "idl/frozen_schema.dist.hh"
 #include "idl/frozen_schema.dist.impl.hh"
 #include "idl/mutation.dist.hh"
