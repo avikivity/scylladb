@@ -15,13 +15,7 @@
 #include "concrete_types.hh"
 #include "config_file_impl.hh"
 #include "converting_mutation_partition_applier.hh"
-#include "cql3/cql3_type.hh"
-#include "cql3/lists.hh"
-#include "cql3/maps.hh"
-#include "cql3/query_options.hh"
-#include "cql3/sets.hh"
 #include "cql3/util.hh"
-#include "crc_combine.hh"
 #include "crc_combine_table.hh"
 #include <cryptopp/md5.h>
 #include <cryptopp/sha.h>
