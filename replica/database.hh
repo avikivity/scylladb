@@ -27,27 +27,7 @@
 #include <seastar/core/gate.hh>
 #include <limits>
 #include <seastar/core/metrics_registration.hh>
-#include "db/view/row_locking.hh"
-#include "utils/phased_barrier.hh"
-#include "backlog_controller.hh"
-#include "dirty_memory_manager.hh"
-#include "reader_concurrency_semaphore.hh"
-#include "db/timeout_clock.hh"
-#include "querier.hh"
-#include "cache_temperature.hh"
 #include <unordered_set>
-#include "utils/updateable_value.hh"
-#include "data_dictionary/user_types_metadata.hh"
-#include "data_dictionary/keyspace_metadata.hh"
-#include "data_dictionary/data_dictionary.hh"
-#include "absl-flat_hash_map.hh"
-#include "utils/cross-shard-barrier.hh"
-#include "sstables/generation_type.hh"
-#include "db/rate_limiter.hh"
-#include "db/operation_type.hh"
-#include "utils/serialized_action.hh"
-#include "compaction/compaction_fwd.hh"
-#include "utils/disk-error-handler.hh"
 #include "rust/wasmtime_bindings.hh"
 
 class cell_locker;

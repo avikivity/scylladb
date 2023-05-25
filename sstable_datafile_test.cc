@@ -72171,6 +72171,1738 @@ struct update_backlog {
 }
 
 
+// row_locker provides a mechanism needed by the Materialized Views code to
+// lock clustering rows or entire partitions. The locks are shared/exclusive
+// (a.k.a. read/write) locks, and locking a row always first locks the
+// partition containing it with a shared lock.
+//
+// Each row_locker is local to a shard (obviously), and to one specific
+// column_family. row_locker needs to know the column_family's schema, and
+// if that schema is updated the upgrade() method should be called so that
+// row_locker could release its shared-pointer to the old schema, and take
+// the new.
+
+#include <unordered_map>
+#include <memory>
+
+#include <seastar/core/rwlock.hh>
+#include <seastar/core/future.hh>
+
+
+class row_locker {
+public:
+    struct single_lock_stats {
+        uint64_t lock_acquisitions = 0;
+        uint64_t operations_currently_waiting_for_lock = 0;
+        utils::time_estimated_histogram estimated_waiting_for_lock;
+    };
+    struct stats {
+        single_lock_stats exclusive_row;
+        single_lock_stats shared_row;
+        single_lock_stats exclusive_partition;
+        single_lock_stats shared_partition;
+    };
+    struct latency_stats_tracker {
+        single_lock_stats& lock_stats;
+        utils::latency_counter waiting_latency;
+
+        latency_stats_tracker(single_lock_stats& stats);
+        ~latency_stats_tracker();
+
+        void lock_acquired();
+    };
+    // row_locker's locking functions lock_pk(), lock_ck() return a
+    // "lock_holder" object. When the caller destroys the object it received,
+    // the lock is released. The same type "lock_holder" is used regardless
+    // of whether a row or partition was locked, for read or write.
+    class lock_holder {
+        row_locker* _locker;
+        // The lock holder pointers to the partition and clustering keys,
+        // which are stored inside the _two_level_locks hash table (we may
+        // only drop them from the hash table when all the lock holders for
+        // this partition or row are released).
+        const dht::decorated_key* _partition;
+        bool _partition_exclusive;
+        const clustering_key_prefix* _row;
+        bool _row_exclusive;
+    public:
+        lock_holder();
+        lock_holder(row_locker* locker, const dht::decorated_key* pk, bool exclusive);
+        lock_holder(row_locker* locker, const dht::decorated_key* pk, const clustering_key_prefix* cpk, bool exclusive);
+        ~lock_holder();
+        // Allow move (noexcept) but disallow copy
+        lock_holder(lock_holder&&) noexcept;
+        lock_holder& operator=(lock_holder&&) noexcept;
+    };
+private:
+    schema_ptr _schema;
+    using lock_type = basic_rwlock<db::timeout_clock>;
+    struct two_level_lock {
+        lock_type _partition_lock;
+        struct clustering_key_prefix_less {
+            // Since the schema object may change, we need to use the
+            // row_locker's current schema every time.
+            const row_locker* locker;
+            clustering_key_prefix_less(const row_locker* rl) : locker(rl) {}
+            bool operator()(const clustering_key_prefix& k1, const clustering_key_prefix& k2) const {
+                return clustering_key_prefix::less_compare(*locker->_schema)(k1, k2);
+            }
+        };
+        std::map<clustering_key_prefix, lock_type, clustering_key_prefix_less> _row_locks;
+        two_level_lock(row_locker* locker)
+            : _row_locks(locker) { }
+    };
+    struct decorated_key_hash {
+        size_t operator()(const dht::decorated_key& k) const {
+            return std::hash<dht::token>()(k.token());
+        }
+    };
+    struct decorated_key_equals_comparator {
+        const row_locker* locker;
+        explicit decorated_key_equals_comparator(const row_locker* rl) : locker(rl) {}
+        bool operator()(const dht::decorated_key& k1, const dht::decorated_key& k2) const {
+            return k1.equal(*locker->_schema, k2);
+        }
+    };
+    std::unordered_map<dht::decorated_key, two_level_lock, decorated_key_hash, decorated_key_equals_comparator> _two_level_locks;
+    void unlock(const dht::decorated_key* pk, bool partition_exclusive, const clustering_key_prefix* cpk, bool row_exclusive);
+public:
+    // row_locker needs to know the column_family's schema because key
+    // comparisons needs the schema.
+    explicit row_locker(schema_ptr s);
+
+    // If new_schema is different from the current schema, convert this
+    // row_locker to use the new schema, and hold the shared pointer to the
+    // new schema instead of the old schema. This is a trivial operation
+    // requiring just comparison/assignment - the hash tables do not need
+    // to be rebuilt on upgrade().
+    void upgrade(schema_ptr new_schema);
+
+    // Lock an entire partition with a shared or exclusive lock.
+    // The key is assumed to belong to the schema saved by row_locker. If you
+    // got a schema with the key, and not sure it's not a new version of the
+    // schema, call upgrade() before taking the lock.
+    future<lock_holder> lock_pk(const dht::decorated_key& pk, bool exclusive, db::timeout_clock::time_point timeout, stats& stats);
+
+    // Lock a clustering row with a shared or exclusive lock.
+    // Also, first, takes a shared lock on the partition.
+    // The key is assumed to belong to the schema saved by row_locker. If you
+    // got a schema with the key, and not sure it's not a new version of the
+    // schema, call upgrade() before taking the lock.
+    future<lock_holder> lock_ck(const dht::decorated_key& pk, const clustering_key_prefix& ckp, bool exclusive, db::timeout_clock::time_point timeout, stats& stats);
+
+    bool empty() const { return _two_level_locks.empty(); }
+};
+
+
+#include <seastar/core/scheduling.hh>
+#include <seastar/core/timer.hh>
+#include <seastar/core/gate.hh>
+#include <seastar/core/file.hh>
+#include <chrono>
+#include <cmath>
+
+#include "seastarx.hh"
+
+// Simple proportional controller to adjust shares for processes for which a backlog can be clearly
+// defined.
+//
+// Goal is to consume the backlog as fast as we can, but not so fast that we steal all the CPU from
+// incoming requests, and at the same time minimize user-visible fluctuations in the quota.
+//
+// What that translates to is we'll try to keep the backlog's firt derivative at 0 (IOW, we keep
+// backlog constant). As the backlog grows we increase CPU usage, decreasing CPU usage as the
+// backlog diminishes.
+//
+// The exact point at which the controller stops determines the desired CPU usage. As the backlog
+// grows and approach a maximum desired, we need to be more aggressive. We will therefore define two
+// thresholds, and increase the constant as we cross them.
+//
+// Doing that divides the range in three (before the first, between first and second, and after
+// second threshold), and we'll be slow to grow in the first region, grow normally in the second
+// region, and aggressively in the third region.
+//
+// The constants q1 and q2 are used to determine the proportional factor at each stage.
+class backlog_controller {
+public:
+    struct scheduling_group {
+        seastar::scheduling_group cpu = default_scheduling_group();
+        seastar::io_priority_class io = default_priority_class();
+    };
+    future<> shutdown() {
+        _update_timer.cancel();
+        return std::move(_inflight_update);
+    }
+
+    future<> update_static_shares(float static_shares) {
+        _static_shares = static_shares;
+        return make_ready_future<>();
+    }
+
+protected:
+    struct control_point {
+        float input;
+        float output;
+    };
+
+    scheduling_group _scheduling_group;
+    timer<> _update_timer;
+
+    std::vector<control_point> _control_points;
+
+    std::function<float()> _current_backlog;
+    // updating shares for an I/O class may contact another shard and returns a future.
+    future<> _inflight_update;
+
+    // Used when the controllers are disabled and a static share is used
+    // When that option is deprecated we should remove this.
+    float _static_shares;
+
+    virtual void update_controller(float quota);
+
+    bool controller_disabled() const noexcept {
+        return _static_shares > 0;
+    }
+
+    void adjust();
+
+    backlog_controller(scheduling_group sg, std::chrono::milliseconds interval,
+                       std::vector<control_point> control_points, std::function<float()> backlog,
+                       float static_shares = 0)
+        : _scheduling_group(std::move(sg))
+        , _update_timer([this] { adjust(); })
+        , _control_points()
+        , _current_backlog(std::move(backlog))
+        , _inflight_update(make_ready_future<>())
+        , _static_shares(static_shares)
+    {
+        _control_points.insert(_control_points.end(), control_points.begin(), control_points.end());
+        _update_timer.arm_periodic(interval);
+    }
+
+    virtual ~backlog_controller() {}
+public:
+    backlog_controller(backlog_controller&&) = default;
+    float backlog_of_shares(float shares) const;
+};
+
+// memtable flush CPU controller.
+//
+// - First threshold is the soft limit line,
+// - Maximum is the point in which we'd stop consuming request,
+// - Second threshold is halfway between them.
+//
+// Below the soft limit, we are in no particular hurry to flush, since it means we're set to
+// complete flushing before we a new memtable is ready. The quota is dirty * q1, and q1 is set to a
+// low number.
+//
+// The first half of the virtual dirty region is where we expect to be usually, so we have a low
+// slope corresponding to a sluggish response between q1 * soft_limit and q2.
+//
+// In the second half, we're getting close to the hard dirty limit so we increase the slope and
+// become more responsive, up to a maximum quota of qmax.
+class flush_controller : public backlog_controller {
+    static constexpr float hard_dirty_limit = 1.0f;
+public:
+    flush_controller(backlog_controller::scheduling_group sg, float static_shares, std::chrono::milliseconds interval, float soft_limit, std::function<float()> current_dirty)
+        : backlog_controller(std::move(sg), std::move(interval),
+          std::vector<backlog_controller::control_point>({{0.0, 0.0}, {soft_limit, 10}, {soft_limit + (hard_dirty_limit - soft_limit) / 2, 200} , {hard_dirty_limit, 1000}}),
+          std::move(current_dirty),
+          static_shares
+        )
+    {}
+};
+
+class compaction_controller : public backlog_controller {
+public:
+    static constexpr unsigned normalization_factor = 30;
+    static constexpr float disable_backlog = std::numeric_limits<double>::infinity();
+    static constexpr float backlog_disabled(float backlog) { return std::isinf(backlog); }
+    compaction_controller(backlog_controller::scheduling_group sg, float static_shares, std::chrono::milliseconds interval, std::function<float()> current_backlog)
+        : backlog_controller(std::move(sg), std::move(interval),
+          std::vector<backlog_controller::control_point>({{0.0, 50}, {1.5, 100} , {normalization_factor, 1000}}),
+          std::move(current_backlog),
+          static_shares
+        )
+    {}
+};
+
+
+#include <boost/intrusive/list.hpp>
+#include <seastar/core/future.hh>
+#include <seastar/core/gate.hh>
+#include <seastar/core/condition-variable.hh>
+
+namespace bi = boost::intrusive;
+
+using namespace seastar;
+
+class flat_mutation_reader_v2;
+using flat_mutation_reader_v2_opt = optimized_optional<flat_mutation_reader_v2>;
+
+/// Specific semaphore for controlling reader concurrency
+///
+/// Use `make_permit()` to create a permit to track the resource consumption
+/// of a specific read. The permit should be created before the read is even
+/// started so it is available to track resource consumption from the start.
+/// Reader concurrency is dual limited by count and memory.
+/// The semaphore can be configured with the desired limits on
+/// construction. New readers will only be admitted when there is both
+/// enough count and memory units available. Readers are admitted in
+/// FIFO order.
+/// Semaphore's `name` must be provided in ctor and its only purpose is
+/// to increase readability of exceptions: both timeout exceptions and
+/// queue overflow exceptions (read below) include this `name` in messages.
+/// It's also possible to specify the maximum allowed number of waiting
+/// readers by the `max_queue_length` constructor parameter. When the
+/// number of waiting readers becomes equal or greater than
+/// `max_queue_length` (upon calling `obtain_permit()`) an exception of
+/// type `std::runtime_error` is thrown. Optionally, some additional
+/// code can be executed just before throwing (`prethrow_action` 
+/// constructor parameter).
+///
+/// The semaphore has 3 layers of defense against consuming more memory
+/// than desired:
+/// 1) After memory consumption is larger than the configured memory limit,
+///    no more reads are admitted
+/// 2) After memory consumption is larger than `_serialize_limit_multiplier`
+///    times the configured memory limit, reads are serialized: only one of them
+///    is allowed to make progress, the rest is made to wait before they can
+///    consume more memory. Enforced via `request_memory()`.
+/// 4) After memory consumption is larger than `_kill_limit_multiplier`
+///    times the configured memory limit, reads are killed, by `consume()`
+///    throwing `std::bad_alloc`.
+///
+/// This makes `_kill_limit_multiplier` times the memory limit the effective
+/// upper bound of the memory consumed by reads.
+///
+/// The semaphore also acts as an execution stage for reads. This
+/// functionality is exposed via \ref with_permit() and \ref
+/// with_ready_permit().
+class reader_concurrency_semaphore {
+public:
+    using resources = reader_resources;
+
+    friend class reader_permit;
+
+    enum class evict_reason {
+        permit, // evicted due to permit shortage
+        time, // evicted due to expiring ttl
+        manual, // evicted manually via `try_evict_one_inactive_read()`
+    };
+
+    using eviction_notify_handler = noncopyable_function<void(evict_reason)>;
+
+    struct stats {
+        // The number of inactive reads evicted to free up permits.
+        uint64_t permit_based_evictions = 0;
+        // The number of inactive reads evicted due to expiring.
+        uint64_t time_based_evictions = 0;
+        // The number of inactive reads currently registered.
+        uint64_t inactive_reads = 0;
+        // Total number of successful reads executed through this semaphore.
+        uint64_t total_successful_reads = 0;
+        // Total number of failed reads executed through this semaphore.
+        uint64_t total_failed_reads = 0;
+        // Total number of reads rejected because the admission queue reached its max capacity
+        uint64_t total_reads_shed_due_to_overload = 0;
+        // Total number of reads killed due to the memory consumption reaching the kill limit.
+        uint64_t total_reads_killed_due_to_kill_limit = 0;
+        // Total number of reads admitted, via all admission paths.
+        uint64_t reads_admitted = 0;
+        // Total number of reads enqueued to wait for admission.
+        uint64_t reads_enqueued_for_admission = 0;
+        // Total number of reads enqueued to wait for memory.
+        uint64_t reads_enqueued_for_memory = 0;
+        // Total number of reads admitted immediately, without queueing
+        uint64_t reads_admitted_immediately = 0;
+        // Total number of reads enqueued because ready_list wasn't empty
+        uint64_t reads_queued_because_ready_list = 0;
+        // Total number of reads enqueued because there are permits who need CPU to make progress
+        uint64_t reads_queued_because_need_cpu_permits = 0;
+        // Total number of reads enqueued because there weren't enough memory resources
+        uint64_t reads_queued_because_memory_resources = 0;
+        // Total number of reads enqueued because there weren't enough count resources
+        uint64_t reads_queued_because_count_resources = 0;
+        // Total number of reads enqueued to be maybe admitted after evicting some inactive reads
+        uint64_t reads_queued_with_eviction = 0;
+        // Total number of permits created so far.
+        uint64_t total_permits = 0;
+        // Current number of permits.
+        uint64_t current_permits = 0;
+        // Current number permits needing CPU to make progress.
+        uint64_t need_cpu_permits = 0;
+        // Current number of permits awaiting I/O or an operation running on a remote shard.
+        uint64_t awaits_permits = 0;
+        // Current number of reads reading from the disk.
+        uint64_t disk_reads = 0;
+        // The number of sstables read currently.
+        uint64_t sstables_read = 0;
+        // Permits waiting on something: admission, memory or execution
+        uint64_t waiters = 0;
+    };
+
+    using permit_list_type = bi::list<
+            reader_permit::impl,
+            bi::base_hook<bi::list_base_hook<bi::link_mode<bi::auto_unlink>>>,
+            bi::constant_time_size<false>>;
+
+    using read_func = noncopyable_function<future<>(reader_permit)>;
+
+private:
+    struct inactive_read;
+
+public:
+    class inactive_read_handle {
+        reader_permit_opt _permit;
+
+        friend class reader_concurrency_semaphore;
+
+    private:
+        void abandon() noexcept;
+
+        explicit inactive_read_handle(reader_permit permit) noexcept;
+    public:
+        inactive_read_handle() = default;
+        inactive_read_handle(inactive_read_handle&& o) noexcept;
+        inactive_read_handle& operator=(inactive_read_handle&& o) noexcept;
+        ~inactive_read_handle() {
+            abandon();
+        }
+        explicit operator bool() const noexcept {
+            return bool(_permit);
+        }
+    };
+
+private:
+    resources _initial_resources;
+    resources _resources;
+
+    struct wait_queue {
+        // Stores entries for permits waiting to be admitted.
+        permit_list_type _admission_queue;
+        // Stores entries for serialized permits waiting to obtain memory.
+        permit_list_type _memory_queue;
+    public:
+        bool empty() const {
+            return _admission_queue.empty() && _memory_queue.empty();
+        }
+        void push_to_admission_queue(reader_permit::impl& p);
+        void push_to_memory_queue(reader_permit::impl& p);
+        reader_permit::impl& front();
+        const reader_permit::impl& front() const;
+    };
+
+    wait_queue _wait_list;
+    permit_list_type _ready_list;
+    condition_variable _ready_list_cv;
+    permit_list_type _inactive_reads;
+    // Stores permits that are not in any of the above list.
+    permit_list_type _permit_list;
+
+    sstring _name;
+    size_t _max_queue_length = std::numeric_limits<size_t>::max();
+    utils::updateable_value<uint32_t> _serialize_limit_multiplier;
+    utils::updateable_value<uint32_t> _kill_limit_multiplier;
+    stats _stats;
+    bool _stopped = false;
+    bool _evicting = false;
+    gate _close_readers_gate;
+    gate _permit_gate;
+    std::optional<future<>> _execution_loop_future;
+    reader_permit::impl* _blessed_permit = nullptr;
+
+private:
+    void do_detach_inactive_reader(reader_permit::impl&, evict_reason reason) noexcept;
+    [[nodiscard]] flat_mutation_reader_v2 detach_inactive_reader(reader_permit::impl&, evict_reason reason) noexcept;
+    void evict(reader_permit::impl&, evict_reason reason) noexcept;
+
+    bool has_available_units(const resources& r) const;
+
+    bool all_need_cpu_permits_are_awaiting() const;
+
+    [[nodiscard]] std::exception_ptr check_queue_size(std::string_view queue_name);
+
+    // Add the permit to the wait queue and return the future which resolves when
+    // the permit is admitted (popped from the queue).
+    enum class wait_on { admission, memory };
+    future<> enqueue_waiter(reader_permit::impl& permit, wait_on wait);
+    void evict_readers_in_background();
+    future<> do_wait_admission(reader_permit::impl& permit);
+
+    // Check whether permit can be admitted or not.
+    // The wait list is not taken into consideration, this is the caller's
+    // responsibility.
+    // A return value of can_admit::maybe means admission might be possible if
+    // some of the inactive readers are evicted.
+    enum class can_admit { no, maybe, yes };
+    enum class reason { all_ok = 0, ready_list, need_cpu_permits, memory_resources, count_resources };
+    struct admit_result { can_admit decision; reason why; };
+    admit_result can_admit_read(const reader_permit::impl& permit) const noexcept;
+
+    bool should_evict_inactive_read() const noexcept;
+
+    void maybe_admit_waiters() noexcept;
+
+    // Request more memory for the permit.
+    // Request is instantly granted while memory consumption of all reads is
+    // below _kill_limit_multiplier.
+    // After memory consumption goes above the above limit, only one reader
+    // (permit) is allowed to make progress, this method will block for all other
+    // one, until:
+    // * The blessed read finishes and a new blessed permit is choosen.
+    // * Memory consumption falls below the limit.
+    future<> request_memory(reader_permit::impl& permit, size_t memory);
+
+    void dequeue_permit(reader_permit::impl&);
+
+    void on_permit_created(reader_permit::impl&);
+    void on_permit_destroyed(reader_permit::impl&) noexcept;
+
+    void on_permit_need_cpu() noexcept;
+    void on_permit_not_need_cpu() noexcept;
+
+    void on_permit_awaits() noexcept;
+    void on_permit_not_awaits() noexcept;
+
+    std::runtime_error stopped_exception();
+
+    // closes reader in the background.
+    void close_reader(flat_mutation_reader_v2 reader);
+
+    future<> execution_loop() noexcept;
+
+    uint64_t get_serialize_limit() const;
+    uint64_t get_kill_limit() const;
+
+    // Throws std::bad_alloc if memory consumed is oom_kill_limit_multiply_threshold more than the memory limit.
+    void consume(reader_permit::impl& permit, resources r);
+    void signal(const resources& r) noexcept;
+
+    future<> with_ready_permit(reader_permit::impl& permit);
+
+public:
+    struct no_limits { };
+
+    /// Create a semaphore with the specified limits
+    ///
+    /// The semaphore's name has to be unique!
+    reader_concurrency_semaphore(int count,
+            ssize_t memory,
+            sstring name,
+            size_t max_queue_length,
+            utils::updateable_value<uint32_t> serialize_limit_multiplier,
+            utils::updateable_value<uint32_t> kill_limit_multiplier);
+
+    /// Create a semaphore with practically unlimited count and memory.
+    ///
+    /// And conversely, no queue limit either.
+    /// The semaphore's name has to be unique!
+    explicit reader_concurrency_semaphore(no_limits, sstring name);
+
+    /// A helper constructor *only for tests* that supplies default arguments.
+    /// The other constructors have default values removed so 'production-code'
+    /// is forced to specify all of them manually to avoid bugs.
+    struct for_tests{};
+    reader_concurrency_semaphore(for_tests, sstring name,
+            int count = std::numeric_limits<int>::max(),
+            ssize_t memory = std::numeric_limits<ssize_t>::max(),
+            size_t max_queue_length = std::numeric_limits<size_t>::max(),
+            utils::updateable_value<uint32_t> serialize_limit_multipler = utils::updateable_value(std::numeric_limits<uint32_t>::max()),
+            utils::updateable_value<uint32_t> kill_limit_multipler = utils::updateable_value(std::numeric_limits<uint32_t>::max()))
+        : reader_concurrency_semaphore(count, memory, std::move(name), max_queue_length, std::move(serialize_limit_multipler), std::move(kill_limit_multipler))
+    {}
+
+    virtual ~reader_concurrency_semaphore();
+
+    reader_concurrency_semaphore(const reader_concurrency_semaphore&) = delete;
+    reader_concurrency_semaphore& operator=(const reader_concurrency_semaphore&) = delete;
+
+    reader_concurrency_semaphore(reader_concurrency_semaphore&&) = delete;
+    reader_concurrency_semaphore& operator=(reader_concurrency_semaphore&&) = delete;
+
+    /// Returns the name of the semaphore
+    ///
+    /// If the semaphore has no name, "unnamed reader concurrency semaphore" is returned.
+    std::string_view name() const {
+        return _name.empty() ? "unnamed reader concurrency semaphore" : std::string_view(_name);
+    }
+
+    /// Register an inactive read.
+    ///
+    /// The semaphore will evict this read when there is a shortage of
+    /// permits. This might be immediate, during this register call.
+    /// Clients can use the returned handle to unregister the read, when it
+    /// stops being inactive and hence evictable, or to set the optional
+    /// notify_handler and ttl.
+    ///
+    /// The semaphore takes ownership of the passed in reader for the duration
+    /// of its inactivity and it may evict it to free up resources if necessary.
+    inactive_read_handle register_inactive_read(flat_mutation_reader_v2 ir) noexcept;
+
+    /// Set the inactive read eviction notification handler and optionally eviction ttl.
+    ///
+    /// The semaphore may evict this read when there is a shortage of
+    /// permits or after the given ttl expired.
+    ///
+    /// The notification handler will be called when the inactive read is evicted
+    /// passing with the reason it was evicted to the handler.
+    ///
+    /// Note that the inactive read might have already been evicted if
+    /// the caller may yield after the register_inactive_read returned the handle
+    /// and before calling set_notify_handler. In this case, the caller must revalidate
+    /// the inactive_read_handle before calling this function.
+    void set_notify_handler(inactive_read_handle& irh, eviction_notify_handler&& handler, std::optional<std::chrono::seconds> ttl);
+
+    /// Unregister the previously registered inactive read.
+    ///
+    /// If the read was not evicted, the inactive read object, passed in to the
+    /// register call, will be returned. Otherwise a nullptr is returned.
+    flat_mutation_reader_v2_opt unregister_inactive_read(inactive_read_handle irh);
+
+    /// Try to evict an inactive read.
+    ///
+    /// Return true if an inactive read was evicted and false otherwise
+    /// (if there was no reader to evict).
+    bool try_evict_one_inactive_read(evict_reason = evict_reason::manual);
+
+    /// Clear all inactive reads.
+    void clear_inactive_reads();
+
+    /// Evict all inactive reads the belong to the table designated by the id.
+    future<> evict_inactive_reads_for_table(table_id id) noexcept;
+private:
+    // The following two functions are extension points for
+    // future inheriting classes that needs to run some stop
+    // logic just before or just after the current stop logic.
+    virtual future<> stop_ext_pre() {
+        return make_ready_future<>();
+    }
+    virtual future<> stop_ext_post() {
+        return make_ready_future<>();
+    }
+public:
+    /// Stop the reader_concurrency_semaphore and clear all inactive reads.
+    ///
+    /// Wait on all async background work to complete.
+    future<> stop() noexcept;
+
+    const stats& get_stats() const {
+        return _stats;
+    }
+
+    stats& get_stats() {
+        return _stats;
+    }
+
+    /// Make an admitted permit
+    ///
+    /// The permit is already in an admitted state after being created, this
+    /// method includes waiting for admission.
+    /// The permit is associated with a schema, which is the schema of the table
+    /// the read is executed against, and the operation name, which should be a
+    /// name such that we can identify the operation which created this permit.
+    /// Ideally this should be a unique enough name that we not only can identify
+    /// the kind of read, but the exact code-path that was taken.
+    ///
+    /// Some permits cannot be associated with any table, so passing nullptr as
+    /// the schema parameter is allowed.
+    future<reader_permit> obtain_permit(const schema* const schema, const char* const op_name, size_t memory, db::timeout_clock::time_point timeout, tracing::trace_state_ptr trace_ptr);
+    future<reader_permit> obtain_permit(const schema* const schema, sstring&& op_name, size_t memory, db::timeout_clock::time_point timeout, tracing::trace_state_ptr trace_ptr);
+
+    /// Make a tracking only permit
+    ///
+    /// The permit is not admitted. It is intended for reads that bypass the
+    /// normal concurrency control, but whose resource usage we still want to
+    /// keep track of, as part of that concurrency control.
+    /// The permit is associated with a schema, which is the schema of the table
+    /// the read is executed against, and the operation name, which should be a
+    /// name such that we can identify the operation which created this permit.
+    /// Ideally this should be a unique enough name that we not only can identify
+    /// the kind of read, but the exact code-path that was taken.
+    ///
+    /// Some permits cannot be associated with any table, so passing nullptr as
+    /// the schema parameter is allowed.
+    reader_permit make_tracking_only_permit(const schema* const schema, const char* const op_name, db::timeout_clock::time_point timeout, tracing::trace_state_ptr trace_ptr);
+    reader_permit make_tracking_only_permit(const schema* const schema, sstring&& op_name, db::timeout_clock::time_point timeout, tracing::trace_state_ptr trace_ptr);
+
+    /// Run the function through the semaphore's execution stage with an admitted permit
+    ///
+    /// First a permit is obtained via the normal admission route, as if
+    /// it was created  with \ref obtain_permit(), then func is enqueued to be
+    /// run by the semaphore's execution loop. This emulates an execution stage,
+    /// as it allows batching multiple funcs to be run together. Unlike an
+    /// execution stage, with_permit() accepts a type-erased function, which
+    /// allows for more flexibility in what functions are batched together.
+    /// Use only functions that share most of their code to benefit from the
+    /// instruction-cache warm-up!
+    ///
+    /// The permit is associated with a schema, which is the schema of the table
+    /// the read is executed against, and the operation name, which should be a
+    /// name such that we can identify the operation which created this permit.
+    /// Ideally this should be a unique enough name that we not only can identify
+    /// the kind of read, but the exact code-path that was taken.
+    ///
+    /// Some permits cannot be associated with any table, so passing nullptr as
+    /// the schema parameter is allowed.
+    future<> with_permit(const schema* const schema, const char* const op_name, size_t memory, db::timeout_clock::time_point timeout, tracing::trace_state_ptr trace_ptr, read_func func);
+
+    /// Run the function through the semaphore's execution stage with a pre-admitted permit
+    ///
+    /// Same as \ref with_permit(), but it uses an already admitted
+    /// permit. Should only be used when a permit is already readily
+    /// available, e.g. when resuming a saved read. Using
+    /// \ref obtain_permit(), then \ref with_ready_permit() is less
+    /// optimal then just using \ref with_permit().
+    future<> with_ready_permit(reader_permit permit, read_func func);
+
+    /// Set the total resources of the semaphore to \p r.
+    ///
+    /// After this call, \ref initial_resources() will reflect the new value.
+    /// Available resources will be adjusted by the delta.
+    void set_resources(resources r);
+
+    const resources initial_resources() const {
+        return _initial_resources;
+    }
+
+    bool is_unlimited() const {
+        return _initial_resources == reader_resources{std::numeric_limits<int>::max(), std::numeric_limits<ssize_t>::max()};
+    }
+
+    const resources available_resources() const {
+        return _resources;
+    }
+
+    const resources consumed_resources() const {
+        return _initial_resources - _resources;
+    }
+
+    void broken(std::exception_ptr ex = {});
+
+    /// Dump diagnostics printout
+    ///
+    /// Use max-lines to cap the number of (permit) lines in the report.
+    /// Use 0 for unlimited.
+    std::string dump_diagnostics(unsigned max_lines = 0) const;
+
+    void set_max_queue_length(size_t size) {
+        _max_queue_length = size;
+    }
+
+    uint64_t active_reads() const noexcept {
+        return _stats.current_permits - _stats.inactive_reads - _stats.waiters;
+    }
+
+    void foreach_permit(noncopyable_function<void(const reader_permit::impl&)> func) const;
+    void foreach_permit(noncopyable_function<void(const reader_permit&)> func) const;
+
+    uintptr_t get_blessed_permit() const noexcept { return reinterpret_cast<uintptr_t>(_blessed_permit); }
+};
+
+
+#include <seastar/util/closeable.hh>
+
+
+#include <boost/intrusive/set.hpp>
+
+#include <variant>
+
+namespace query {
+
+extern logging::logger qrlogger;
+
+/// Consume a page worth of data from the reader.
+///
+/// Uses `compaction_state` for compacting the fragments and `consumer` for
+/// building the results.
+/// Returns a future containing a tuple with the last consumed clustering key,
+/// or std::nullopt if the last row wasn't a clustering row, and whatever the
+/// consumer's `consume_end_of_stream()` method returns.
+template <typename Consumer>
+requires CompactedFragmentsConsumerV2<Consumer>
+auto consume_page(flat_mutation_reader_v2& reader,
+        lw_shared_ptr<compact_for_query_state_v2> compaction_state,
+        const query::partition_slice& slice,
+        Consumer&& consumer,
+        uint64_t row_limit,
+        uint32_t partition_limit,
+        gc_clock::time_point query_time) {
+    return reader.peek().then([=, &reader, consumer = std::move(consumer)] (
+                mutation_fragment_v2* next_fragment) mutable {
+        const auto next_fragment_region = next_fragment ? next_fragment->position().region() : partition_region::partition_start;
+        compaction_state->start_new_page(row_limit, partition_limit, query_time, next_fragment_region, consumer);
+
+        auto reader_consumer = compact_for_query_v2<Consumer>(compaction_state, std::move(consumer));
+
+        return reader.consume(std::move(reader_consumer));
+    });
+}
+
+class querier_base {
+    friend class querier_utils;
+
+public:
+    struct querier_config {
+        uint32_t tombstone_warn_threshold {0}; // 0 disabled
+        querier_config() = default;
+        explicit querier_config(uint32_t warn)
+            : tombstone_warn_threshold(warn) {}
+    };
+
+protected:
+    schema_ptr _schema;
+    reader_permit _permit;
+    lw_shared_ptr<const dht::partition_range> _range;
+    std::unique_ptr<const query::partition_slice> _slice;
+    std::variant<flat_mutation_reader_v2, reader_concurrency_semaphore::inactive_read_handle> _reader;
+    dht::partition_ranges_view _query_ranges;
+    querier_config _qr_config;
+
+public:
+    querier_base(reader_permit permit, lw_shared_ptr<const dht::partition_range> range,
+            std::unique_ptr<const query::partition_slice> slice, flat_mutation_reader_v2 reader, dht::partition_ranges_view query_ranges)
+        : _schema(reader.schema())
+        , _permit(std::move(permit))
+        , _range(std::move(range))
+        , _slice(std::move(slice))
+        , _reader(std::move(reader))
+        , _query_ranges(query_ranges)
+    { }
+
+    querier_base(schema_ptr schema, reader_permit permit, dht::partition_range range,
+            query::partition_slice slice, const mutation_source& ms, const io_priority_class& pc, tracing::trace_state_ptr trace_ptr,
+            querier_config config)
+        : _schema(std::move(schema))
+        , _permit(std::move(permit))
+        , _range(make_lw_shared<const dht::partition_range>(std::move(range)))
+        , _slice(std::make_unique<const query::partition_slice>(std::move(slice)))
+        , _reader(ms.make_reader_v2(_schema, _permit, *_range, *_slice, pc, std::move(trace_ptr), streamed_mutation::forwarding::no, mutation_reader::forwarding::no))
+        , _query_ranges(*_range)
+        , _qr_config(std::move(config))
+    { }
+
+    querier_base(querier_base&&) = default;
+    querier_base& operator=(querier_base&&) = default;
+
+    virtual ~querier_base() = default;
+
+    const ::schema& schema() const {
+        return *_schema;
+    }
+
+    reader_permit& permit() {
+        return _permit;
+    }
+
+    bool is_reversed() const {
+        return _slice->options.contains(query::partition_slice::option::reversed);
+    }
+
+    virtual std::optional<full_position_view> current_position() const = 0;
+
+    dht::partition_ranges_view ranges() const {
+        return _query_ranges;
+    }
+
+    size_t memory_usage() const {
+        return _permit.consumed_resources().memory;
+    }
+
+    future<> close() noexcept;
+};
+
+/// One-stop object for serving queries.
+///
+/// Encapsulates all state and logic for serving all pages for a given range
+/// of a query on a given shard. Can be used with any CompactedMutationsConsumer
+/// certified result-builder.
+/// Intended to be created on the first page of a query then saved and reused on
+/// subsequent pages.
+/// (1) Create with the parameters of your query.
+/// (2) Call consume_page() with your consumer to consume the contents of the
+///     next page.
+/// (3) At the end of the page save the querier if you expect more pages.
+///     The are_limits_reached() method can be used to determine whether the
+///     page was filled or not. Also check your result builder for short reads.
+///     Most result builders have memory-accounters that will stop the read
+///     once some memory limit was reached. This is called a short read as the
+///     read stops before the row and/or partition limits are reached.
+/// (4) At the beginning of the next page validate whether it can be used with
+///     the page's schema and start position. In case a schema or position
+///     mismatch is detected the querier shouldn't be used to produce the next
+///     page. It should be dropped instead and a new one should be created
+///     instead.
+class querier : public querier_base {
+    lw_shared_ptr<compact_for_query_state_v2> _compaction_state;
+
+public:
+    querier(const mutation_source& ms,
+            schema_ptr schema,
+            reader_permit permit,
+            dht::partition_range range,
+            query::partition_slice slice,
+            const io_priority_class& pc,
+            tracing::trace_state_ptr trace_ptr,
+            querier_config config = {})
+        : querier_base(schema, permit, std::move(range), std::move(slice), ms, pc, std::move(trace_ptr), std::move(config))
+        , _compaction_state(make_lw_shared<compact_for_query_state_v2>(*schema, gc_clock::time_point{}, *_slice, 0, 0)) {
+    }
+
+    bool are_limits_reached() const {
+        return  _compaction_state->are_limits_reached();
+    }
+
+    template <typename Consumer>
+    requires CompactedFragmentsConsumerV2<Consumer>
+    auto consume_page(Consumer&& consumer,
+            uint64_t row_limit,
+            uint32_t partition_limit,
+            gc_clock::time_point query_time,
+            tracing::trace_state_ptr trace_ptr = {}) {
+        return ::query::consume_page(std::get<flat_mutation_reader_v2>(_reader), _compaction_state, *_slice, std::move(consumer), row_limit,
+                partition_limit, query_time).then_wrapped([this, trace_ptr = std::move(trace_ptr)] (auto&& fut) {
+            const auto& cstats = _compaction_state->stats();
+            tracing::trace(trace_ptr, "Page stats: {} partition(s), {} static row(s) ({} live, {} dead), {} clustering row(s) ({} live, {} dead) and {} range tombstone(s)",
+                    cstats.partitions,
+                    cstats.static_rows.total(),
+                    cstats.static_rows.live,
+                    cstats.static_rows.dead,
+                    cstats.clustering_rows.total(),
+                    cstats.clustering_rows.live,
+                    cstats.clustering_rows.dead,
+                    cstats.range_tombstones);
+            auto dead = cstats.static_rows.dead + cstats.clustering_rows.dead + cstats.range_tombstones;
+            if (_qr_config.tombstone_warn_threshold > 0 && dead >= _qr_config.tombstone_warn_threshold) {
+                auto live = cstats.static_rows.live + cstats.clustering_rows.live;
+                if (_range->is_singular()) {
+                    qrlogger.warn("Read {} live rows and {} tombstones for {}.{} partition key \"{}\" {} (see tombstone_warn_threshold)",
+                                  live, dead, _schema->ks_name(), _schema->cf_name(), _range->start()->value().key()->with_schema(*_schema), (*_range));
+                } else {
+                    qrlogger.warn("Read {} live rows and {} tombstones for {}.{} <partition-range-scan> {} (see tombstone_warn_threshold)",
+                                  live, dead, _schema->ks_name(), _schema->cf_name(), (*_range));
+                }
+            }
+            return std::move(fut);
+        });
+    }
+
+    virtual std::optional<full_position_view> current_position() const override {
+        const dht::decorated_key* dk = _compaction_state->current_partition();
+        if (!dk) {
+            return {};
+        }
+        return full_position_view(dk->key(), _compaction_state->current_position());
+    }
+};
+
+/// Local state of a multishard query.
+///
+/// This querier is not intended to be used directly to read pages. Instead it
+/// is merely a shard local state of a suspended multishard query and is
+/// intended to be used for storing the state of the query on each shard where
+/// it executes. It stores the local reader and the referenced parameters it was
+/// created with (similar to other queriers).
+/// For position validation purposes (at lookup) the reader's position is
+/// considered to be the same as that of the query.
+class shard_mutation_querier : public querier_base {
+    std::unique_ptr<const dht::partition_range_vector> _query_ranges;
+    full_position _nominal_pos;
+
+private:
+    shard_mutation_querier(
+            std::unique_ptr<const dht::partition_range_vector> query_ranges,
+            lw_shared_ptr<const dht::partition_range> reader_range,
+            std::unique_ptr<const query::partition_slice> reader_slice,
+            flat_mutation_reader_v2 reader,
+            reader_permit permit,
+            full_position nominal_pos)
+        : querier_base(permit, std::move(reader_range), std::move(reader_slice), std::move(reader), *query_ranges)
+        , _query_ranges(std::move(query_ranges))
+        , _nominal_pos(std::move(nominal_pos)) {
+    }
+
+
+public:
+    shard_mutation_querier(
+            const dht::partition_range_vector query_ranges,
+            lw_shared_ptr<const dht::partition_range> reader_range,
+            std::unique_ptr<const query::partition_slice> reader_slice,
+            flat_mutation_reader_v2 reader,
+            reader_permit permit,
+            full_position nominal_pos)
+        : shard_mutation_querier(std::make_unique<const dht::partition_range_vector>(std::move(query_ranges)), std::move(reader_range),
+                std::move(reader_slice), std::move(reader), std::move(permit), std::move(nominal_pos)) {
+    }
+
+    virtual std::optional<full_position_view> current_position() const override {
+        return _nominal_pos;
+    }
+
+    lw_shared_ptr<const dht::partition_range> reader_range() && {
+        return std::move(_range);
+    }
+
+    std::unique_ptr<const query::partition_slice> reader_slice() && {
+        return std::move(_slice);
+    }
+
+    flat_mutation_reader_v2 reader() && {
+        return std::move(std::get<flat_mutation_reader_v2>(_reader));
+    }
+};
+
+/// Special-purpose cache for saving queriers between pages.
+///
+/// Queriers are saved at the end of the page and looked up at the beginning of
+/// the next page. The lookup() always removes the querier from the cache, it
+/// has to be inserted again at the end of the page.
+/// Lookup provides the following extra logic, special to queriers:
+/// * It accepts a factory function which is used to create a new querier if
+///     the lookup fails (see below). This allows for simple call sites.
+/// * It does range matching. A query sometimes will result in multiple querier
+///     objects executing on the same node and shard paralelly. To identify the
+///     appropriate querier lookup() will consider - in addition to the lookup
+///     key - the read range.
+/// * It does schema version and position checking. In some case a subsequent
+///     page will have a different schema version or will start from a position
+///     that is before the end position of the previous page. lookup() will
+///     recognize these cases and drop the previous querier and create a new one.
+///
+/// Inserted queriers will have a TTL. When this expires the querier is
+/// evicted. This is to avoid excess and unnecessary resource usage due to
+/// abandoned queriers.
+/// Registers cached readers with the reader concurrency semaphore, as inactive
+/// readers, so the latter can evict them if needed.
+/// Keeps the total memory consumption of cached queriers
+/// below max_queriers_memory_usage by evicting older entries upon inserting
+/// new ones if the the memory consupmtion would go above the limit.
+class querier_cache {
+public:
+    static const std::chrono::seconds default_entry_ttl;
+
+    struct stats {
+        // The number of inserts into the cache.
+        uint64_t inserts = 0;
+        // The number of cache lookups.
+        uint64_t lookups = 0;
+        // The subset of lookups that missed.
+        uint64_t misses = 0;
+        // The subset of lookups that hit but the looked up querier had to be
+        // dropped due to position mismatch.
+        uint64_t drops = 0;
+        // The number of queriers evicted due to their TTL expiring.
+        uint64_t time_based_evictions = 0;
+        // The number of queriers evicted to free up resources to be able to
+        // create new readers.
+        uint64_t resource_based_evictions = 0;
+        // The number of queriers currently in the cache.
+        uint64_t population = 0;
+    };
+
+    using index = std::unordered_multimap<query_id, std::unique_ptr<querier_base>>;
+
+private:
+    index _data_querier_index;
+    index _mutation_querier_index;
+    index _shard_mutation_querier_index;
+    std::chrono::seconds _entry_ttl;
+    stats _stats;
+    gate _closing_gate;
+
+private:
+    template <typename Querier>
+    void insert_querier(
+            query_id key,
+            querier_cache::index& index,
+            querier_cache::stats& stats,
+            Querier&& q,
+            std::chrono::seconds ttl,
+            tracing::trace_state_ptr trace_state);
+
+    template <typename Querier>
+    std::optional<Querier> lookup_querier(
+        querier_cache::index& index,
+        query_id key,
+        const schema& s,
+        dht::partition_ranges_view ranges,
+        const query::partition_slice& slice,
+        tracing::trace_state_ptr trace_state,
+        db::timeout_clock::time_point timeout);
+
+public:
+    explicit querier_cache(std::chrono::seconds entry_ttl = default_entry_ttl);
+
+    querier_cache(const querier_cache&) = delete;
+    querier_cache& operator=(const querier_cache&) = delete;
+
+    // this is captured
+    querier_cache(querier_cache&&) = delete;
+    querier_cache& operator=(querier_cache&&) = delete;
+
+    void insert_data_querier(query_id key, querier&& q, tracing::trace_state_ptr trace_state);
+
+    void insert_mutation_querier(query_id key, querier&& q, tracing::trace_state_ptr trace_state);
+
+    void insert_shard_querier(query_id key, shard_mutation_querier&& q, tracing::trace_state_ptr trace_state);
+
+    /// Lookup a data querier in the cache.
+    ///
+    /// Queriers are found based on `key` and `range`. There may be multiple
+    /// queriers for the same `key` differentiated by their read range. Since
+    /// each subsequent page may have a narrower read range then the one before
+    /// it ranges cannot be simply matched based on equality. For matching we
+    /// use the fact that the coordinator splits the query range into
+    /// non-overlapping ranges. Thus both bounds of any range, or in case of
+    /// singular ranges only the start bound are guaranteed to be unique.
+    ///
+    /// The found querier is checked for a matching position and schema version.
+    /// The start position of the querier is checked against the start position
+    /// of the page using the `range' and `slice'.
+    std::optional<querier> lookup_data_querier(query_id key,
+            const schema& s,
+            const dht::partition_range& range,
+            const query::partition_slice& slice,
+            tracing::trace_state_ptr trace_state,
+            db::timeout_clock::time_point timeout);
+
+    /// Lookup a mutation querier in the cache.
+    ///
+    /// See \ref lookup_data_querier().
+    std::optional<querier> lookup_mutation_querier(query_id key,
+            const schema& s,
+            const dht::partition_range& range,
+            const query::partition_slice& slice,
+            tracing::trace_state_ptr trace_state,
+            db::timeout_clock::time_point timeout);
+
+    /// Lookup a shard mutation querier in the cache.
+    ///
+    /// See \ref lookup_data_querier().
+    std::optional<shard_mutation_querier> lookup_shard_mutation_querier(query_id key,
+            const schema& s,
+            const dht::partition_range_vector& ranges,
+            const query::partition_slice& slice,
+            tracing::trace_state_ptr trace_state,
+            db::timeout_clock::time_point timeout);
+
+    /// Change the ttl of cache entries
+    ///
+    /// Applies only to entries inserted after the change.
+    void set_entry_ttl(std::chrono::seconds entry_ttl);
+
+    /// Evict a querier.
+    ///
+    /// Return true if a querier was evicted and false otherwise (if the cache
+    /// is empty).
+    future<bool> evict_one() noexcept;
+
+    /// Close all queriers and wait on background work.
+    ///
+    /// Should be used before destroying the querier_cache.
+    future<> stop() noexcept;
+
+    const stats& get_stats() const {
+        return _stats;
+    }
+};
+
+} // namespace query
+
+
+#include <stdint.h>
+
+namespace ser {
+
+template <typename T>
+class serializer;
+
+};
+
+class cache_temperature {
+    float hit_rate;
+    explicit cache_temperature(uint8_t hr) : hit_rate(hr/255.0f) {}
+public:
+    uint8_t get_serialized_temperature() const {
+        return hit_rate * 255;
+    }
+    cache_temperature() : hit_rate(0) {}
+    explicit cache_temperature(float hr) : hit_rate(hr) {}
+    explicit operator float() const { return hit_rate; }
+    static cache_temperature invalid() { return cache_temperature(-1.0f); }
+    friend struct ser::serializer<cache_temperature>;
+};
+
+
+#include <unordered_map>
+#include <ostream>
+
+
+namespace data_dictionary {
+
+class user_types_metadata {
+    std::unordered_map<bytes, user_type> _user_types;
+public:
+    user_type get_type(const bytes& name) const {
+        return _user_types.at(name);
+    }
+    const std::unordered_map<bytes, user_type>& get_all_types() const {
+        return _user_types;
+    }
+    void add_type(user_type type) {
+        auto i = _user_types.find(type->_name);
+        assert(i == _user_types.end() || type->is_compatible_with(*i->second));
+        _user_types[type->_name] = std::move(type);
+    }
+    void remove_type(user_type type) {
+        _user_types.erase(type->_name);
+    }
+    bool has_type(const bytes& name) const {
+        return _user_types.contains(name);
+    }
+    friend std::ostream& operator<<(std::ostream& os, const user_types_metadata& m);
+};
+
+class user_types_storage {
+public:
+    virtual const user_types_metadata& get(const sstring& ks) const = 0;
+    virtual ~user_types_storage() = default;
+};
+
+class dummy_user_types_storage : public user_types_storage {
+    user_types_metadata _empty;
+public:
+    virtual const user_types_metadata& get(const sstring& ks) const override {
+        return _empty;
+    }
+};
+
+}
+
+
+#include <string>
+#include <map>
+#include <seastar/core/sstring.hh>
+
+namespace data_dictionary {
+
+struct storage_options {
+    struct local {
+        static constexpr std::string_view name = "LOCAL";
+
+        static local from_map(const std::map<sstring, sstring>&);
+        std::map<sstring, sstring> to_map() const;
+        bool operator==(const local&) const = default;
+    };
+    struct s3 {
+        sstring bucket;
+        sstring endpoint;
+        static constexpr std::string_view name = "S3";
+
+        static s3 from_map(const std::map<sstring, sstring>&);
+        std::map<sstring, sstring> to_map() const;
+        bool operator==(const s3&) const = default;
+    };
+    using value_type = std::variant<local, s3>;
+    value_type value = local{};
+
+    storage_options() = default;
+
+    bool is_local_type() const noexcept;
+    std::string_view type_string() const;
+    std::map<sstring, sstring> to_map() const;
+
+    bool can_update_to(const storage_options& new_options);
+
+    static value_type from_map(std::string_view type, std::map<sstring, sstring> values);
+};
+
+} // namespace data_dictionary
+#include <unordered_map>
+#include <vector>
+#include <iosfwd>
+#include <seastar/core/sstring.hh>
+
+
+namespace data_dictionary {
+
+class keyspace_metadata final : public keyspace_element {
+    sstring _name;
+    sstring _strategy_name;
+    locator::replication_strategy_config_options _strategy_options;
+    std::unordered_map<sstring, schema_ptr> _cf_meta_data;
+    bool _durable_writes;
+    user_types_metadata _user_types;
+    lw_shared_ptr<const storage_options> _storage_options;
+public:
+    keyspace_metadata(std::string_view name,
+                 std::string_view strategy_name,
+                 locator::replication_strategy_config_options strategy_options,
+                 bool durable_writes,
+                 std::vector<schema_ptr> cf_defs = std::vector<schema_ptr>{});
+    keyspace_metadata(std::string_view name,
+                 std::string_view strategy_name,
+                 locator::replication_strategy_config_options strategy_options,
+                 bool durable_writes,
+                 std::vector<schema_ptr> cf_defs,
+                 user_types_metadata user_types);
+    keyspace_metadata(std::string_view name,
+                 std::string_view strategy_name,
+                 locator::replication_strategy_config_options strategy_options,
+                 bool durable_writes,
+                 std::vector<schema_ptr> cf_defs,
+                 user_types_metadata user_types,
+                 storage_options storage_opts);
+    static lw_shared_ptr<keyspace_metadata>
+    new_keyspace(std::string_view name,
+                 std::string_view strategy_name,
+                 locator::replication_strategy_config_options options,
+                 bool durables_writes,
+                 std::vector<schema_ptr> cf_defs = std::vector<schema_ptr>{},
+                 storage_options storage_opts = {});
+    void validate(const gms::feature_service&, const locator::topology&) const;
+    const sstring& name() const {
+        return _name;
+    }
+    const sstring& strategy_name() const {
+        return _strategy_name;
+    }
+    const locator::replication_strategy_config_options& strategy_options() const {
+        return _strategy_options;
+    }
+    const std::unordered_map<sstring, schema_ptr>& cf_meta_data() const {
+        return _cf_meta_data;
+    }
+    bool durable_writes() const {
+        return _durable_writes;
+    }
+    user_types_metadata& user_types() {
+        return _user_types;
+    }
+    const user_types_metadata& user_types() const {
+        return _user_types;
+    }
+    const storage_options& get_storage_options() const {
+        return *_storage_options;
+    }
+    lw_shared_ptr<const storage_options> get_storage_options_ptr() {
+        return _storage_options;
+    }
+
+    void add_or_update_column_family(const schema_ptr& s) {
+        _cf_meta_data[s->cf_name()] = s;
+    }
+    void remove_column_family(const schema_ptr& s) {
+        _cf_meta_data.erase(s->cf_name());
+    }
+    void add_user_type(const user_type ut);
+    void remove_user_type(const user_type ut);
+    std::vector<schema_ptr> tables() const;
+    std::vector<view_ptr> views() const;
+
+    virtual sstring keypace_name() const override { return name(); }
+    virtual sstring element_name() const override { return name(); }
+    virtual sstring element_type() const override { return "keyspace"; }
+    virtual std::ostream& describe(std::ostream& os) const override;
+    friend std::ostream& operator<<(std::ostream& os, const keyspace_metadata& m);
+};
+
+}
+#include <absl/container/flat_hash_map.h>
+#include <seastar/core/sstring.hh>
+
+using namespace seastar;
+
+struct sstring_hash {
+    using is_transparent = void;
+    size_t operator()(std::string_view v) const noexcept;
+};
+
+struct sstring_eq {
+    using is_transparent = void;
+    bool operator()(std::string_view a, std::string_view b) const noexcept {
+        return a == b;
+    }
+};
+
+template <typename K, typename V, typename... Ts>
+struct flat_hash_map : public absl::flat_hash_map<K, V, Ts...> {
+};
+
+template <typename V>
+struct flat_hash_map<sstring, V>
+    : public absl::flat_hash_map<sstring, V, sstring_hash, sstring_eq> {};
+
+#include <atomic>
+#include <vector>
+#include <optional>
+#include <seastar/core/future.hh>
+#include <seastar/core/smp.hh>
+
+using namespace seastar;
+
+namespace utils {
+
+class barrier_aborted_exception : public std::exception {
+public:
+    virtual const char* what() const noexcept override {
+        return "barrier aborted";
+    }
+};
+
+// Shards-coordination mechanism that allows shards to wait each other at
+// certain points. The barrier should be copied to each shard, then when
+// each shard calls .arrive_and_wait()-s it will be blocked and woken up
+// after all other shards do the same. The call to .arrive_and_wait() is
+// not one-shot but is re-entrable. Every time a shard calls it it gets
+// blocked until the corresponding step from others.
+//
+// Calling the arrive_and_wait() by one shard in one "phase" must be done
+// exactly one time. If not called other shards will be blocked for ever,
+// the second call will trigger the respective assertion.
+//
+// A recommended usage is inside sharded<> service. For example
+//
+//   class foo {
+//       cross_shard_barrier barrier;
+//       foo(cross_shard_barrier b) : barrier(std::move(b)) {}
+//   };
+//
+//   sharded<foo> f;
+//
+//   // Start a sharded service and spread the barrier between instances
+//   co_await f.start(cross_shard_barrier());
+//
+//   // On each shard start synchronizing instances with each-other
+//   f.invoke_on_all([] (auto& f) {
+//      co_await f.do_something();
+//      co_await f.barrier.arrive_and_wait();
+//      co_await f.do_something_else();
+//      co_await f.barrier.arrive_and_wait();
+//      co_await f.cleanup();
+//   });
+//
+// In the above example each shard will only call the do_something_else()
+// after _all_ other shards complete their do_something()s. Respectively,
+// the cleanup() on each shard will only start after do_something_else()
+// completes on _all_ of them.
+
+class cross_shard_barrier {
+    struct barrier {
+        std::atomic<int> counter;
+        std::atomic<bool> alive;
+        std::vector<std::optional<promise<>>> wakeup;
+
+        barrier() : counter(smp::count), alive(true) {
+            wakeup.reserve(smp::count);
+            for (unsigned i = 0; i < smp::count; i++) {
+                wakeup.emplace_back();
+            }
+        }
+
+        barrier(const barrier&) = delete;
+    };
+
+    std::shared_ptr<barrier> _b;
+
+public:
+    cross_shard_barrier() : _b(std::make_shared<barrier>()) {}
+
+    // The 'solo' mode turns all the synchronization off, calls to
+    // arrive_and_wait() never block. Eliminates the need to mess
+    // with conditional usage in callers.
+    struct solo {};
+    cross_shard_barrier(solo) {}
+
+    future<> arrive_and_wait() {
+        if (!_b) {
+            return make_ready_future<>();
+        }
+
+        // The barrier assumes that each shard arrives exactly once
+        // (per phase). At the same time we cannot ban copying the
+        // barrier, because it will likely be copied between sharded
+        // users on sharded::start. The best check in this situation
+        // is to make sure the local promise is not set up.
+        assert(!_b->wakeup[this_shard_id()].has_value());
+        auto i = _b->counter.fetch_add(-1);
+        return i == 1 ? complete() : wait();
+    }
+
+    /**
+     * Wakes up all arrivals with the barrier_aborted_exception() and
+     * returns this exception itself. Once called the barrier becomes
+     * unusable, any subsequent arrive_and_wait()s can (and actually
+     * will) hang forever.
+     */
+    void abort() noexcept {
+        // We can get here from shards that had already visited the
+        // arrive_and_wait() and got the exceptional future. In this
+        // case the counter would be set to smp::count and none of the
+        // fetch_add(-1)s below will make it call complete()
+        _b->alive.store(false);
+        auto i = _b->counter.fetch_add(-1);
+        if (i == 1) {
+            (void)complete().handle_exception([] (std::exception_ptr ignored) {});
+        }
+    }
+
+private:
+    future<> complete() {
+        _b->counter.fetch_add(smp::count);
+        bool alive = _b->alive.load(std::memory_order_relaxed);
+        return smp::invoke_on_all([b = _b, sid = this_shard_id(), alive] {
+            if (this_shard_id() != sid) {
+                std::optional<promise<>>& w = b->wakeup[this_shard_id()];
+                if (alive) {
+                    assert(w.has_value());
+                    w->set_value();
+                    w.reset();
+                } else if (w.has_value()) {
+                    w->set_exception(barrier_aborted_exception());
+                    w.reset();
+                }
+            }
+
+            return alive ? make_ready_future<>()
+                         : make_exception_future<>(barrier_aborted_exception());
+        });
+    }
+
+    future<> wait() {
+        return _b->wakeup[this_shard_id()].emplace().get_future();
+    }
+};
+
+} // namespace utils
+
+#include <charconv>
+#include <chrono>
+#include <fmt/core.h>
+#include <cstdint>
+#include <compare>
+#include <limits>
+#include <iostream>
+#include <type_traits>
+#include <boost/range/adaptors.hpp>
+#include <seastar/core/on_internal_error.hh>
+#include <seastar/core/smp.hh>
+#include <seastar/core/sstring.hh>
+
+namespace sstables {
+
+extern logging::logger sstlog;
+
+class generation_type {
+public:
+    using int_t = int64_t;
+
+private:
+    utils::UUID _value;
+
+    explicit constexpr generation_type(utils::UUID value) noexcept
+        : _value(value) {}
+
+public:
+    generation_type() = delete;
+
+    // use zero as the timestamp to differentiate from the regular timeuuid,
+    // and use the least_sig_bits to encode the value of generation identifier.
+    explicit constexpr generation_type(int_t value) noexcept
+        : _value(utils::UUID_gen::create_time(std::chrono::milliseconds::zero()), value) {}
+    constexpr int_t as_int() const noexcept {
+        if (_value.timestamp() != 0) {
+            on_internal_error(sstlog, "UUID generation used as an int");
+        }
+        return _value.get_least_significant_bits();
+    }
+    static generation_type from_string(const std::string& s) {
+        int64_t int_value;
+        if (auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), int_value);
+            ec == std::errc() && ptr == s.data() + s.size()) {
+            return generation_type(int_value);
+        } else {
+            throw std::invalid_argument(fmt::format("invalid UUID: {}", s));
+        }
+    }
+    // convert to data_value
+    //
+    // this function is used when performing queries to SSTABLES_REGISTRY in
+    // the "system_keyspace", since its "generation" column cannot be a variant
+    // of bigint and timeuuid, we need to use a single value to represent these
+    // two types, and single value should allow us to tell the type of the
+    // original value of generation identifier, so we can convert the value back
+    // to the generation when necessary without losing its type information.
+    // since the timeuuid always encodes the timestamp in its MSB, and the timestamp
+    // should always be greater than zero, we use this fact to tell a regular
+    // timeuuid from a timeuuid converted from a bigint -- we just use zero
+    // for its timestamp of the latter.
+    explicit operator data_value() const noexcept {
+        return _value;
+    }
+    static generation_type from_uuid(utils::UUID value) {
+        // if the encoded value is an int64_t, the UUID's timestamp must be
+        // zero, and the least significant bits is used to encode the value
+        // of the int64_t.
+        assert(value.timestamp() == 0);
+        return generation_type(value);
+    }
+    std::strong_ordering operator<=>(const generation_type& other) const noexcept = default;
+};
+
+constexpr generation_type generation_from_value(generation_type::int_t value) {
+    return generation_type{value};
+}
+
+template <std::ranges::range Range, typename Target = std::vector<sstables::generation_type>>
+Target generations_from_values(const Range& values) {
+    return boost::copy_range<Target>(values | boost::adaptors::transformed([] (auto value) {
+        return generation_type(value);
+    }));
+}
+
+template <typename Target = std::vector<sstables::generation_type>>
+Target generations_from_values(std::initializer_list<generation_type::int_t> values) {
+    return boost::copy_range<Target>(values | boost::adaptors::transformed([] (auto value) {
+        return generation_type(value);
+    }));
+}
+
+class sstable_generation_generator {
+    // We still want to do our best to keep the generation numbers shard-friendly.
+    // Each destination shard will manage its own generation counter.
+    //
+    // operator() is called by multiple shards in parallel when performing reshard,
+    // so we have to use atomic<> here.
+    using int_t = sstables::generation_type::int_t;
+    int_t _last_generation;
+    static int_t base_generation(int_t highest_generation) {
+        // get the base generation so we can increment it by smp::count without
+        // conflicting with other shards
+        return highest_generation - highest_generation % seastar::smp::count + seastar::this_shard_id();
+    }
+public:
+    explicit sstable_generation_generator(int64_t last_generation)
+        : _last_generation(base_generation(last_generation)) {}
+    void update_known_generation(int64_t generation) {
+        if (generation > _last_generation) {
+            _last_generation = generation;
+        }
+    }
+    sstables::generation_type operator()() {
+        // each shard has its own "namespace" so we increment the generation id
+        // by smp::count to avoid name confliction of sstables
+        _last_generation += seastar::smp::count;
+        return generation_type(_last_generation);
+    }
+};
+
+} //namespace sstables
+
+namespace std {
+template <>
+struct hash<sstables::generation_type> {
+    size_t operator()(const sstables::generation_type& generation) const noexcept {
+        return hash<sstables::generation_type::int_t>{}(generation.as_int());
+    }
+};
+
+// for min_max_tracker
+template <>
+struct numeric_limits<sstables::generation_type> : public numeric_limits<sstables::generation_type::int_t> {
+    static constexpr sstables::generation_type min() noexcept {
+        return sstables::generation_type{numeric_limits<sstables::generation_type::int_t>::min()};
+    }
+    static constexpr sstables::generation_type max() noexcept {
+        return sstables::generation_type{numeric_limits<sstables::generation_type::int_t>::max()};
+    }
+};
+} //namespace std
+
+template <>
+struct fmt::formatter<sstables::generation_type> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const sstables::generation_type& generation, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}", generation.as_int());
+    }
+};
+
+#include <boost/signals2.hpp>
+#include <boost/signals2/dummy_mutex.hpp>
+#include <type_traits>
+#include <concepts>
+
+#include <seastar/core/future.hh>
+
+
+namespace bs2 = boost::signals2;
+
+using disk_error_signal_type = bs2::signal_type<void (), bs2::keywords::mutex_type<bs2::dummy_mutex>>::type;
+
+extern thread_local disk_error_signal_type commit_error;
+extern thread_local disk_error_signal_type sstable_read_error;
+extern thread_local disk_error_signal_type sstable_write_error;
+extern thread_local disk_error_signal_type general_disk_error;
+
+bool should_stop_on_system_error(const std::system_error& e);
+
+using io_error_handler = std::function<void (std::exception_ptr)>;
+// stores a function that generates a io handler for a given signal.
+using io_error_handler_gen = std::function<io_error_handler (disk_error_signal_type&)>;
+
+io_error_handler default_io_error_handler(disk_error_signal_type& signal);
+// generates handler that handles exception for a given signal
+io_error_handler_gen default_io_error_handler_gen();
+
+extern thread_local io_error_handler commit_error_handler;
+extern thread_local io_error_handler sstable_write_error_handler;
+extern thread_local io_error_handler general_disk_error_handler;
+
+template<typename Func, typename... Args>
+requires std::invocable<Func, Args&&...>
+        && (!is_future<std::invoke_result_t<Func, Args&&...>>::value)
+std::invoke_result_t<Func, Args&&...>
+do_io_check(const io_error_handler& error_handler, Func&& func, Args&&... args) {
+    try {
+        // calling function
+        return func(std::forward<Args>(args)...);
+    } catch (...) {
+        error_handler(std::current_exception());
+        throw;
+    }
+}
+
+template<typename Func, typename... Args>
+requires std::invocable<Func, Args&&...>
+        && is_future<std::invoke_result_t<Func, Args&&...>>::value
+auto do_io_check(const io_error_handler& error_handler, Func&& func, Args&&... args) noexcept {
+    return futurize_invoke(func, std::forward<Args>(args)...).handle_exception([&error_handler] (auto ep) {
+        error_handler(ep);
+        return futurize<std::result_of_t<Func(Args&&...)>>::make_exception_future(ep);
+    });
+}
+
+template<typename Func, typename... Args>
+auto commit_io_check(Func&& func, Args&&... args) noexcept(is_future<std::result_of_t<Func(Args&&...)>>::value) {
+    return do_io_check(commit_error_handler, std::forward<Func>(func), std::forward<Args>(args)...);
+}
+
+template<typename Func, typename... Args>
+auto sstable_io_check(const io_error_handler& error_handler, Func&& func, Args&&... args) noexcept(is_future<std::result_of_t<Func(Args&&...)>>::value) {
+    return do_io_check(error_handler, std::forward<Func>(func), std::forward<Args>(args)...);
+}
+
+template<typename Func, typename... Args>
+auto io_check(const io_error_handler& error_handler, Func&& func, Args&&... args) noexcept(is_future<std::result_of_t<Func(Args&&...)>>::value) {
+    return do_io_check(error_handler, general_disk_error, std::forward<Func>(func), std::forward<Args>(args)...);
+}
+
+template<typename Func, typename... Args>
+auto io_check(Func&& func, Args&&... args) noexcept(is_future<std::result_of_t<Func(Args&&...)>>::value) {
+    return do_io_check(general_disk_error_handler, std::forward<Func>(func), std::forward<Args>(args)...);
+}
+
+
 
 
 #include "replica/database.hh"
