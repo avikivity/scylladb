@@ -61064,8 +61064,6 @@ future<> use_standard_allocator_segment_pool_backend(size_t available_memory);
 #include <seastar/core/future-util.hh>
 #include <seastar/util/noncopyable_function.hh>
 
-#include "seastarx.hh"
-
 namespace utils {
 
 // Represents a deferring operation which defers cooperatively with the caller.
@@ -62866,16 +62864,392 @@ struct compact_for_compaction_v2 : compact_mutation_v2<compact_for_sstables::yes
 
 
 
-#include "mutation/mutation_partition_serializer.hh"
-#include "mutation/mutation_partition_view.hh"
-#include "mutation/mutation_rebuilder.hh"
-#include "mutation_partition.hh"
-#include "mutation_partition_serializer.hh"
-#include "mutation_partition_v2.hh"
-#include "mutation_partition_view.hh"
-#include "mutation_partition_visitor.hh"
-#include "mutation_query.hh"
-#include "mutation_rebuilder.hh"
+
+
+#include <exception>
+#include <seastar/core/print.hh>
+
+
+/// Converts a stream of range_tombstone_change fragments to an equivalent stream of range_tombstone objects.
+/// The input fragments must be ordered by their position().
+/// The produced range_tombstone objects are non-overlapping and ordered by their position().
+///
+/// on_end_of_stream() must be called after consuming all fragments to produce the final fragment.
+///
+/// Example usage:
+///
+///   range_tombstone_assembler rta;
+///   if (auto rt_opt = rta.consume(range_tombstone_change(...))) {
+///       produce(*rt_opt);
+///   }
+///   if (auto rt_opt = rta.consume(range_tombstone_change(...))) {
+///       produce(*rt_opt);
+///   }
+///   if (auto rt_opt = rta.flush(position_in_partition(...)) {
+///       produce(*rt_opt);
+///   }
+///   rta.on_end_of_stream();
+///
+class range_tombstone_assembler {
+    std::optional<range_tombstone_change> _prev_rt;
+private:
+    bool has_active_tombstone() const {
+        return _prev_rt && _prev_rt->tombstone();
+    }
+public:
+    tombstone get_current_tombstone() const {
+        return _prev_rt ? _prev_rt->tombstone() : tombstone();
+    }
+
+    std::optional<range_tombstone_change> get_range_tombstone_change() && {
+        return std::move(_prev_rt);
+    }
+
+    void reset() {
+        _prev_rt = std::nullopt;
+    }
+
+    std::optional<range_tombstone> consume(const schema& s, range_tombstone_change&& rt) {
+        std::optional<range_tombstone> rt_opt;
+        auto less = position_in_partition::less_compare(s);
+        if (has_active_tombstone() && less(_prev_rt->position(), rt.position())) {
+            rt_opt = range_tombstone(_prev_rt->position(), rt.position(), _prev_rt->tombstone());
+        }
+        _prev_rt = std::move(rt);
+        return rt_opt;
+    }
+
+    void on_end_of_stream() {
+        if (has_active_tombstone()) {
+            throw std::logic_error(format("Stream ends with an active range tombstone: {}", *_prev_rt));
+        }
+    }
+
+    // Returns true if and only if flush() may return something.
+    // Returns false if flush() won't return anything for sure.
+    bool needs_flush() const {
+        return has_active_tombstone();
+    }
+
+    std::optional<range_tombstone> flush(const schema& s, position_in_partition_view pos) {
+        auto less = position_in_partition::less_compare(s);
+        if (has_active_tombstone() && less(_prev_rt->position(), pos)) {
+            position_in_partition start = _prev_rt->position();
+            _prev_rt->set_position(position_in_partition(pos));
+            return range_tombstone(std::move(start), pos, _prev_rt->tombstone());
+        }
+        return std::nullopt;
+    }
+
+    bool discardable() const {
+        return !has_active_tombstone();
+    }
+};
+
+
+class mutation_rebuilder {
+    schema_ptr _s;
+    mutation_opt _m;
+
+public:
+    explicit mutation_rebuilder(schema_ptr s) : _s(std::move(s)) { }
+
+    void consume_new_partition(const dht::decorated_key& dk) {
+        assert(!_m);
+        _m = mutation(_s, std::move(dk));
+    }
+
+    stop_iteration consume(tombstone t) {
+        assert(_m);
+        _m->partition().apply(t);
+        return stop_iteration::no;
+    }
+
+    stop_iteration consume(range_tombstone&& rt) {
+        assert(_m);
+        _m->partition().apply_row_tombstone(*_s, std::move(rt));
+        return stop_iteration::no;
+    }
+
+    stop_iteration consume(static_row&& sr) {
+        assert(_m);
+        _m->partition().static_row().apply(*_s, column_kind::static_column, std::move(sr.cells()));
+        return stop_iteration::no;
+    }
+
+    stop_iteration consume(clustering_row&& cr) {
+        assert(_m);
+        auto& dr = _m->partition().clustered_row(*_s, std::move(cr.key()));
+        dr.apply(cr.tomb());
+        dr.apply(cr.marker());
+        dr.cells().apply(*_s, column_kind::regular_column, std::move(cr.cells()));
+        return stop_iteration::no;
+    }
+
+    stop_iteration consume_end_of_partition() {
+        assert(_m);
+        return stop_iteration::yes;
+    }
+
+    mutation_opt consume_end_of_stream() {
+        return std::move(_m);
+    }
+};
+
+// Builds the mutation corresponding to the next partition in the mutation fragment stream.
+// Implements FlattenedConsumerV2, MutationFragmentConsumerV2 and FlatMutationReaderConsumerV2.
+// Does not work with streams in streamed_mutation::forwarding::yes mode.
+class mutation_rebuilder_v2 {
+    schema_ptr _s;
+    mutation_rebuilder _builder;
+    range_tombstone_assembler _rt_assembler;
+public:
+    mutation_rebuilder_v2(schema_ptr s) : _s(std::move(s)), _builder(_s) { }
+public:
+    stop_iteration consume(partition_start mf) {
+        consume_new_partition(mf.key());
+        return consume(mf.partition_tombstone());
+    }
+    stop_iteration consume(partition_end) {
+        return consume_end_of_partition();
+    }
+    stop_iteration consume(mutation_fragment_v2&& mf) {
+        return std::move(mf).consume(*this);
+    }
+public:
+    void consume_new_partition(const dht::decorated_key& dk) {
+        _builder.consume_new_partition(dk);
+    }
+
+    stop_iteration consume(tombstone t) {
+        _builder.consume(t);
+        return stop_iteration::no;
+    }
+
+    stop_iteration consume(range_tombstone_change&& rt) {
+        if (auto rt_opt = _rt_assembler.consume(*_s, std::move(rt))) {
+            _builder.consume(std::move(*rt_opt));
+        }
+        return stop_iteration::no;
+    }
+
+    stop_iteration consume(static_row&& sr) {
+        _builder.consume(std::move(sr));
+        return stop_iteration::no;
+    }
+
+    stop_iteration consume(clustering_row&& cr) {
+        _builder.consume(std::move(cr));
+        return stop_iteration::no;
+    }
+
+    stop_iteration consume_end_of_partition() {
+        _rt_assembler.on_end_of_stream();
+        return stop_iteration::yes;
+    }
+
+    mutation_opt consume_end_of_stream() {
+        _rt_assembler.on_end_of_stream();
+        return _builder.consume_end_of_stream();
+    }
+};
+
+
+
+
+namespace ser {
+template<typename Output>
+class writer_of_mutation_partition;
+}
+
+class mutation_partition_serializer {
+    static size_t size(const schema&, const mutation_partition&);
+public:
+    using size_type = uint32_t;
+private:
+    const schema& _schema;
+    const mutation_partition& _p;
+private:
+    template<typename Writer>
+    static void write_serialized(Writer&& out, const schema&, const mutation_partition&);
+public:
+    using count_type = uint32_t;
+    mutation_partition_serializer(const schema&, const mutation_partition&);
+public:
+    void write(bytes_ostream&) const;
+    void write(ser::writer_of_mutation_partition<bytes_ostream>&&) const;
+};
+
+void serialize_mutation_fragments(const schema& s, tombstone partition_tombstone,
+    std::optional<static_row> sr, range_tombstone_list range_tombstones,
+    std::deque<clustering_row> clustering_rows, ser::writer_of_mutation_partition<bytes_ostream>&&);
+
+
+
+
+class reconcilable_result;
+class frozen_reconcilable_result;
+class mutation_source;
+
+// Can be read by other cores after publishing.
+struct partition {
+    uint32_t _row_count_low_bits;
+    frozen_mutation _m; // FIXME: We don't need cf UUID, which frozen_mutation includes.
+    uint32_t _row_count_high_bits;
+    partition(uint32_t row_count_low_bits, frozen_mutation m, uint32_t row_count_high_bits)
+        : _row_count_low_bits(row_count_low_bits)
+        , _m(std::move(m))
+        , _row_count_high_bits(row_count_high_bits)
+    { }
+
+    partition(uint64_t row_count, frozen_mutation m)
+        : _row_count_low_bits(static_cast<uint32_t>(row_count))
+        , _m(std::move(m))
+        , _row_count_high_bits(static_cast<uint32_t>(row_count >> 32))
+    { }
+
+    uint32_t row_count_low_bits() const {
+        return _row_count_low_bits;
+    }
+
+    uint32_t row_count_high_bits() const {
+        return _row_count_high_bits;
+    }
+    
+    uint64_t row_count() const {
+        return (static_cast<uint64_t>(_row_count_high_bits) << 32) | _row_count_low_bits;
+    }
+
+    const frozen_mutation& mut() const {
+        return _m;
+    }
+
+    frozen_mutation& mut() {
+        return _m;
+    }
+
+
+    bool operator==(const partition& other) const {
+        return row_count() == other.row_count() && _m.representation() == other._m.representation();
+    }
+};
+
+// The partitions held by this object are ordered according to dht::decorated_key ordering and non-overlapping.
+// Each mutation must have different key.
+//
+// Can be read by other cores after publishing.
+class reconcilable_result {
+    uint32_t _row_count_low_bits;
+    query::short_read _short_read;
+    query::result_memory_tracker _memory_tracker;
+    utils::chunked_vector<partition> _partitions;
+    uint32_t _row_count_high_bits;
+public:
+    ~reconcilable_result();
+    reconcilable_result();
+    reconcilable_result(reconcilable_result&&) = default;
+    reconcilable_result& operator=(reconcilable_result&&) = default;
+    reconcilable_result(uint32_t row_count_low_bits, utils::chunked_vector<partition> partitions, query::short_read short_read,
+                        uint32_t row_count_high_bits, query::result_memory_tracker memory_tracker = { });
+    reconcilable_result(uint64_t row_count, utils::chunked_vector<partition> partitions, query::short_read short_read,
+                        query::result_memory_tracker memory_tracker = { });
+
+    const utils::chunked_vector<partition>& partitions() const;
+    utils::chunked_vector<partition>& partitions();
+
+    uint32_t row_count_low_bits() const {
+        return _row_count_low_bits;
+    }
+
+    uint32_t row_count_high_bits() const {
+        return _row_count_high_bits;
+    }
+
+    uint64_t row_count() const {
+        return (static_cast<uint64_t>(_row_count_high_bits) << 32) | _row_count_low_bits;
+    }
+
+    query::short_read is_short_read() const {
+        return _short_read;
+    }
+
+    size_t memory_usage() const {
+        return _memory_tracker.used_memory();
+    }
+
+    bool operator==(const reconcilable_result& other) const;
+
+    struct printer {
+        const reconcilable_result& self;
+        schema_ptr schema;
+        friend std::ostream& operator<<(std::ostream&, const printer&);
+    };
+
+    printer pretty_printer(schema_ptr) const;
+};
+
+class reconcilable_result_builder {
+    const schema& _schema;
+    const query::partition_slice& _slice;
+    bool _reversed;
+
+    bool _return_static_content_on_partition_with_no_rows{};
+    bool _static_row_is_alive{};
+    uint64_t _total_live_rows = 0;
+    query::result_memory_accounter _memory_accounter;
+    stop_iteration _stop;
+    std::optional<streamed_mutation_freezer> _mutation_consumer;
+    range_tombstone_assembler _rt_assembler;
+
+    uint64_t _live_rows{};
+    // make this the last member so it is destroyed first. #7240
+    utils::chunked_vector<partition> _result;
+
+private:
+    stop_iteration consume(range_tombstone&& rt);
+
+public:
+    // Expects table schema (non-reversed) and half-reversed (legacy) slice when building results for reverse query.
+    reconcilable_result_builder(const schema& s, const query::partition_slice& slice,
+                                query::result_memory_accounter&& accounter) noexcept
+        : _schema(s), _slice(slice), _reversed(_slice.options.contains(query::partition_slice::option::reversed))
+        , _memory_accounter(std::move(accounter))
+    { }
+
+    void consume_new_partition(const dht::decorated_key& dk);
+    void consume(tombstone t);
+    stop_iteration consume(static_row&& sr, tombstone, bool is_alive);
+    stop_iteration consume(clustering_row&& cr, row_tombstone, bool is_alive);
+    stop_iteration consume(range_tombstone_change&& rtc);
+    stop_iteration consume_end_of_partition();
+    reconcilable_result consume_end_of_stream();
+};
+
+future<query::result> to_data_query_result(
+        const reconcilable_result&,
+        schema_ptr,
+        const query::partition_slice&,
+        uint64_t row_limit,
+        uint32_t partition_limit,
+        query::result_options opts = query::result_options::only_result());
+
+// Query the content of the mutation.
+//
+// The mutation is destroyed in the process, see `mutation::consume()`.
+query::result query_mutation(
+        mutation&& m,
+        const query::partition_slice& slice,
+        uint64_t row_limit = query::max_rows,
+        gc_clock::time_point now = gc_clock::now(),
+        query::result_options opts = query::result_options::only_result());
+
+// Performs a query for counter updates.
+future<mutation_opt> counter_write_query(schema_ptr, const mutation_source&, reader_permit permit,
+                                         const dht::decorated_key& dk,
+                                         const query::partition_slice& slice,
+                                         tracing::trace_state_ptr trace_ptr);
+
+
 #include <net/if_arp.h>
 #include <net/if.h>
 #include <optional>
