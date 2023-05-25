@@ -70953,7 +70953,954 @@ public:
 
 
 
-#include "real_dirty_memory_accounter.hh"
+
+// makes sure that cache update handles real dirty memory correctly.
+class real_dirty_memory_accounter {
+    replica::dirty_memory_manager& _mgr;
+    cache_tracker& _tracker;
+    uint64_t _bytes;
+    uint64_t _uncommitted = 0;
+public:
+    real_dirty_memory_accounter(replica::dirty_memory_manager& mgr, cache_tracker& tracker, size_t size);
+    real_dirty_memory_accounter(replica::memtable& m, cache_tracker& tracker);
+    ~real_dirty_memory_accounter();
+    real_dirty_memory_accounter(real_dirty_memory_accounter&& c);
+    real_dirty_memory_accounter(const real_dirty_memory_accounter& c) = delete;
+    // Needs commit() to take effect, or when this object is destroyed.
+    void unpin_memory(uint64_t bytes) { _uncommitted += bytes; }
+    void commit();
+};
+
+inline
+real_dirty_memory_accounter::real_dirty_memory_accounter(replica::dirty_memory_manager& mgr, cache_tracker& tracker, size_t size)
+    : _mgr(mgr)
+    , _tracker(tracker)
+    , _bytes(size) {
+    _mgr.pin_real_dirty_memory(_bytes);
+}
+
+inline
+real_dirty_memory_accounter::real_dirty_memory_accounter(replica::memtable& m, cache_tracker& tracker)
+    : real_dirty_memory_accounter(m.get_dirty_memory_manager(), tracker, m.occupancy().used_space())
+{ }
+
+inline
+real_dirty_memory_accounter::~real_dirty_memory_accounter() {
+    _mgr.unpin_real_dirty_memory(_bytes);
+}
+
+inline
+real_dirty_memory_accounter::real_dirty_memory_accounter(real_dirty_memory_accounter&& c)
+    : _mgr(c._mgr), _tracker(c._tracker), _bytes(c._bytes), _uncommitted(c._uncommitted) {
+    c._bytes = 0;
+    c._uncommitted = 0;
+}
+
+inline
+void real_dirty_memory_accounter::commit() {
+    auto bytes = std::exchange(_uncommitted, 0);
+    // this should never happen - if it does it is a bug. But we'll try to recover and log
+    // instead of asserting. Once it happens, though, it can keep happening until the update is
+    // done. So using metrics is better-suited than printing to the logs
+    if (bytes > _bytes) {
+        _tracker.pinned_dirty_memory_overload(bytes - _bytes);
+    }
+    auto delta = std::min(bytes, _bytes);
+    _bytes -= delta;
+    _mgr.unpin_real_dirty_memory(delta);
+}
+
+
+
+#include <seastar/core/shared_ptr.hh>
+#include <variant>
+#include <boost/regex.hpp>
+
+namespace cql3 {
+
+namespace statements {
+
+struct index_target {
+    static const sstring target_option_name;
+    static const sstring custom_index_option_name;
+    static const boost::regex target_regex;
+
+    enum class target_type {
+        regular_values, collection_values, keys, keys_and_values, full
+    };
+
+    using single_column = ::shared_ptr<column_identifier>;
+    using multiple_columns = std::vector<::shared_ptr<column_identifier>>;
+    using value_type = std::variant<single_column, multiple_columns>;
+
+    const value_type value;
+    target_type type;
+
+    index_target(::shared_ptr<column_identifier> c, target_type t) : value(c) , type(t) {}
+    index_target(std::vector<::shared_ptr<column_identifier>> c, target_type t) : value(std::move(c)), type(t) {}
+
+    sstring column_name() const;
+
+    static target_type from_column_definition(const column_definition& cd);
+    // Parses index_target::target_type from it's textual form.
+    // e.g. from_sstring("keys") == index_target::target_type::keys
+    static index_target::target_type from_sstring(const sstring& s);
+    // Parses index_target::target_type from index target string form.
+    // e.g. from_target_string("keys(some_column)") == index_target::target_type::keys
+    static index_target::target_type from_target_string(const sstring& s);
+    // Parses column name from index target string form
+    // e.g. column_name_from_target_string("keys(some_column)") == "some_column"
+    static sstring column_name_from_target_string(const sstring& s);
+
+    // A CQL column's name may contain any characters. If we use this string
+    // as-is inside a target string, it may confuse us when we later try to
+    // parse the resulting string (e.g., see issue #10707). We should
+    // therefore use the function escape_target_column() to "escape" the
+    // target column name, and the reverse function unescape_target_column().
+    static sstring escape_target_column(const cql3::column_identifier& col);
+    static sstring unescape_target_column(std::string_view str);
+
+    class raw {
+    public:
+        using single_column = ::shared_ptr<column_identifier::raw>;
+        using multiple_columns = std::vector<::shared_ptr<column_identifier::raw>>;
+        using value_type = std::variant<single_column, multiple_columns>;
+
+        const value_type value;
+        const target_type type;
+
+        raw(::shared_ptr<column_identifier::raw> c, target_type t) : value(c), type(t) {}
+        raw(std::vector<::shared_ptr<column_identifier::raw>> pk_columns, target_type t) : value(pk_columns), type(t) {}
+
+        static ::shared_ptr<raw> regular_values_of(::shared_ptr<column_identifier::raw> c);
+        static ::shared_ptr<raw> collection_values_of(::shared_ptr<column_identifier::raw> c);
+        static ::shared_ptr<raw> keys_of(::shared_ptr<column_identifier::raw> c);
+        static ::shared_ptr<raw> keys_and_values_of(::shared_ptr<column_identifier::raw> c);
+        static ::shared_ptr<raw> full_collection(::shared_ptr<column_identifier::raw> c);
+        static ::shared_ptr<raw> columns(std::vector<::shared_ptr<column_identifier::raw>> c);
+        ::shared_ptr<index_target> prepare(const schema&) const;
+    };
+};
+
+sstring to_sstring(index_target::target_type type);
+
+}
+}
+
+
+#include <vector>
+#include <set>
+
+namespace cql3::expr {
+
+enum class oper_t;
+
+}
+
+namespace secondary_index {
+
+sstring index_table_name(const sstring& index_name);
+
+/*!
+ * \brief a reverse of index_table_name
+ * It gets a table_name and return the index name that was used
+ * to create that table.
+ */
+sstring index_name_from_table_name(const sstring& table_name);
+
+class index {
+    index_metadata _im;
+    cql3::statements::index_target::target_type _target_type;
+    sstring _target_column;
+public:
+    index(const sstring& target_column, const index_metadata& im);
+    bool depends_on(const column_definition& cdef) const;
+    struct supports_expression_v {
+        enum class value_type {
+            UsualYes,
+            CollectionYes,
+            No,
+        };
+        value_type value;
+        operator bool() const {
+            return value != value_type::No;
+        }
+        static constexpr supports_expression_v from_bool(bool b) {
+            return {b ? value_type::UsualYes : value_type::No};
+        }
+        static constexpr supports_expression_v from_bool_collection(bool b) {
+            return {b ? value_type::CollectionYes : value_type::No};
+        }
+        friend bool operator==(supports_expression_v, supports_expression_v) = default;
+    };
+
+    supports_expression_v supports_expression(const column_definition& cdef, const cql3::expr::oper_t op) const;
+    supports_expression_v supports_subscript_expression(const column_definition& cdef, const cql3::expr::oper_t op) const;
+    const index_metadata& metadata() const;
+    const sstring& target_column() const {
+        return _target_column;
+    }
+    cql3::statements::index_target::target_type target_type() const {
+        return _target_type;
+    }
+};
+
+class secondary_index_manager {
+    data_dictionary::table _cf;
+    /// The key of the map is the name of the index as stored in system tables.
+    std::unordered_map<sstring, index> _indices;
+public:
+    secondary_index_manager(data_dictionary::table cf);
+    void reload();
+    view_ptr create_view_for_index(const index_metadata& index, bool new_token_column_computation) const;
+    std::vector<index_metadata> get_dependent_indices(const column_definition& cdef) const;
+    std::vector<index> list_indexes() const;
+    bool is_index(view_ptr) const;
+    bool is_index(const schema& s) const;
+    bool is_global_index(const schema& s) const;
+private:
+    void add_index(const index_metadata& im);
+};
+
+}
+
+
+namespace db {
+
+using commitlog_force_sync = bool_class<class force_sync_tag>;
+
+}
+
+
+#include <vector>
+
+#include <seastar/core/sharded.hh>
+#include <seastar/core/future.hh>
+#include <seastar/core/gate.hh>
+#include <seastar/core/rwlock.hh>
+
+using namespace seastar;
+
+namespace db {
+
+class snapshot_ctl : public peering_sharded_service<snapshot_ctl> {
+public:
+    using skip_flush = bool_class<class skip_flush_tag>;
+    using snap_views = bool_class<class snap_views_tag>;
+
+    struct snapshot_details {
+        int64_t live;
+        int64_t total;
+        sstring cf;
+        sstring ks;
+
+        bool operator==(const snapshot_details&) const = default;
+    };
+    explicit snapshot_ctl(sharded<replica::database>& db) : _db(db) {}
+
+    future<> stop() {
+        return _ops.close();
+    }
+
+    /**
+     * Takes the snapshot for all keyspaces. A snapshot name must be specified.
+     *
+     * @param tag the tag given to the snapshot; may not be null or empty
+     */
+    future<> take_snapshot(sstring tag, skip_flush sf = skip_flush::no) {
+        return take_snapshot(tag, {}, sf);
+    }
+
+    /**
+     * Takes the snapshot for the given keyspaces. A snapshot name must be specified.
+     *
+     * @param tag the tag given to the snapshot; may not be null or empty
+     * @param keyspaceNames the names of the keyspaces to snapshot; empty means "all."
+     */
+    future<> take_snapshot(sstring tag, std::vector<sstring> keyspace_names, skip_flush sf = skip_flush::no);
+
+    /**
+     * Takes the snapshot of multiple tables. A snapshot name must be specified.
+     *
+     * @param ks_name the keyspace which holds the specified column family
+     * @param tables a vector of tables names to snapshot
+     * @param tag the tag given to the snapshot; may not be null or empty
+     */
+    future<> take_column_family_snapshot(sstring ks_name, std::vector<sstring> tables, sstring tag, snap_views, skip_flush sf = skip_flush::no);
+
+    /**
+     * Takes the snapshot of a specific column family. A snapshot name must be specified.
+     *
+     * @param keyspaceName the keyspace which holds the specified column family
+     * @param columnFamilyName the column family to snapshot
+     * @param tag the tag given to the snapshot; may not be null or empty
+     */
+    future<> take_column_family_snapshot(sstring ks_name, sstring cf_name, sstring tag, snap_views, skip_flush sf = skip_flush::no);
+
+    /**
+     * Remove the snapshot with the given name from the given keyspaces.
+     * If no tag is specified we will remove all snapshots.
+     * If a cf_name is specified, only that table will be deleted
+     */
+    future<> clear_snapshot(sstring tag, std::vector<sstring> keyspace_names, sstring cf_name);
+
+    future<std::unordered_map<sstring, std::vector<snapshot_details>>> get_snapshot_details();
+
+    future<int64_t> true_snapshots_size();
+private:
+    sharded<replica::database>& _db;
+    seastar::rwlock _lock;
+    seastar::gate _ops;
+
+    future<> check_snapshot_not_exist(sstring ks_name, sstring name, std::optional<std::vector<sstring>> filter = {});
+
+    template <typename Func>
+    std::result_of_t<Func()> run_snapshot_modify_operation(Func&&);
+
+    template <typename Func>
+    std::result_of_t<Func()> run_snapshot_list_operation(Func&&);
+
+    future<> do_take_snapshot(sstring tag, std::vector<sstring> keyspace_names, skip_flush sf = skip_flush::no);
+    future<> do_take_column_family_snapshot(sstring ks_name, std::vector<sstring> tables, sstring tag, snap_views, skip_flush sf = skip_flush::no);
+};
+
+}
+
+#include <seastar/core/shared_ptr.hh>
+
+namespace sstables {
+
+struct writer_offset_tracker {
+    uint64_t offset = 0;
+};
+
+class write_monitor {
+public:
+    virtual ~write_monitor() { }
+    virtual void on_write_started(const writer_offset_tracker&) = 0;
+    virtual void on_data_write_completed() = 0;
+};
+
+write_monitor& default_write_monitor();
+
+struct reader_position_tracker {
+    uint64_t position = 0;
+    uint64_t total_read_size = 0;
+};
+
+class read_monitor {
+public:
+    virtual ~read_monitor() { }
+    // parameters are the current position in the data file
+    virtual void on_read_started(const reader_position_tracker&) = 0;
+    virtual void on_read_completed() = 0;
+};
+
+struct noop_read_monitor final : public read_monitor {
+    virtual void on_read_started(const reader_position_tracker&) override {}
+    virtual void on_read_completed() override {}
+};
+
+read_monitor& default_read_monitor();
+
+struct read_monitor_generator {
+    virtual read_monitor& operator()(shared_sstable sst) = 0;
+    virtual ~read_monitor_generator() {}
+};
+
+struct no_read_monitoring final : public read_monitor_generator {
+    virtual read_monitor& operator()(shared_sstable sst) override {
+        return default_read_monitor();
+    };
+};
+
+read_monitor_generator& default_read_monitor_generator();
+}
+
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/io_priority_class.hh>
+#include <vector>
+
+namespace utils {
+class estimated_histogram;
+}
+
+namespace sstables {
+
+class sstable_set_impl;
+class incremental_selector_impl;
+
+struct sstable_first_key_less_comparator {
+    bool operator()(const shared_sstable& s1, const shared_sstable& s2) const;
+};
+
+// Structure holds all sstables (a.k.a. fragments) that belong to same run identifier, which is an UUID.
+// SStables in that same run will not overlap with one another.
+class sstable_run {
+public:
+    using sstable_set = std::set<shared_sstable, sstable_first_key_less_comparator>;
+private:
+    sstable_set _all;
+private:
+    bool will_introduce_overlapping(const shared_sstable& sst) const;
+public:
+    // Returns false if sstable being inserted cannot satisfy the disjoint invariant. Then caller should pick another run for it.
+    bool insert(shared_sstable sst);
+    void erase(shared_sstable sst);
+    // Data size of the whole run, meaning it's a sum of the data size of all its fragments.
+    uint64_t data_size() const;
+    const sstable_set& all() const { return _all; }
+    double estimate_droppable_tombstone_ratio(gc_clock::time_point gc_before) const;
+};
+
+class sstable_set : public enable_lw_shared_from_this<sstable_set> {
+    std::unique_ptr<sstable_set_impl> _impl;
+    schema_ptr _schema;
+public:
+    ~sstable_set();
+    sstable_set(std::unique_ptr<sstable_set_impl> impl, schema_ptr s);
+    sstable_set(const sstable_set&);
+    sstable_set(sstable_set&&) noexcept;
+    sstable_set& operator=(const sstable_set&);
+    sstable_set& operator=(sstable_set&&) noexcept;
+    std::vector<shared_sstable> select(const dht::partition_range& range) const;
+    // Return all runs which contain any of the input sstables.
+    std::vector<sstable_run> select_sstable_runs(const std::vector<shared_sstable>& sstables) const;
+    // Return all sstables. It's not guaranteed that sstable_set will keep a reference to the returned list, so user should keep it.
+    lw_shared_ptr<const sstable_list> all() const;
+    // Prefer for_each_sstable() over all() for iteration purposes, as the latter may have to copy all sstables into a temporary
+    void for_each_sstable(std::function<void(const shared_sstable&)> func) const;
+    // Calls func for each sstable or until it returns stop_iteration::yes
+    // Returns the last stop_iteration value.
+    stop_iteration for_each_sstable_until(std::function<stop_iteration(const shared_sstable&)> func) const;
+    void insert(shared_sstable sst);
+    void erase(shared_sstable sst);
+    size_t size() const noexcept;
+
+    // Used to incrementally select sstables from sstable set using ring-position.
+    // sstable set must be alive during the lifetime of the selector.
+    class incremental_selector {
+        std::unique_ptr<incremental_selector_impl> _impl;
+        dht::ring_position_comparator _cmp;
+        mutable std::optional<dht::partition_range> _current_range;
+        mutable std::optional<nonwrapping_range<dht::ring_position_view>> _current_range_view;
+        mutable std::vector<shared_sstable> _current_sstables;
+        mutable dht::ring_position_ext _current_next_position = dht::ring_position_view::min();
+    public:
+        ~incremental_selector();
+        incremental_selector(std::unique_ptr<incremental_selector_impl> impl, const schema& s);
+        incremental_selector(incremental_selector&&) noexcept;
+
+        struct selection {
+            const std::vector<shared_sstable>& sstables;
+            dht::ring_position_view next_position;
+        };
+
+        // Return the sstables that intersect with `pos` and the next
+        // position where the intersecting sstables change.
+        // To walk through the token range incrementally call `select()`
+        // with `dht::ring_position_view::min()` and then pass back the
+        // returned `next_position` on each next call until
+        // `next_position` becomes `dht::ring_position::max()`.
+        //
+        // Successive calls to `select()' have to pass weakly monotonic
+        // positions (incrementability).
+        //
+        // NOTE: both `selection.sstables` and `selection.next_position`
+        // are only guaranteed to be valid until the next call to
+        // `select()`.
+        selection select(const dht::ring_position_view& pos) const;
+    };
+    incremental_selector make_incremental_selector() const;
+
+    flat_mutation_reader_v2 create_single_key_sstable_reader(
+        replica::column_family*,
+        schema_ptr,
+        reader_permit,
+        utils::estimated_histogram&,
+        const dht::partition_range&, // must be singular and contain a key
+        const query::partition_slice&,
+        const io_priority_class&,
+        tracing::trace_state_ptr,
+        streamed_mutation::forwarding,
+        mutation_reader::forwarding) const;
+
+    /// Read a range from the sstable set.
+    ///
+    /// The reader is unrestricted, but will account its resource usage on the
+    /// semaphore belonging to the passed-in permit.
+    flat_mutation_reader_v2 make_range_sstable_reader(
+        schema_ptr,
+        reader_permit,
+        const dht::partition_range&,
+        const query::partition_slice&,
+        const io_priority_class&,
+        tracing::trace_state_ptr,
+        streamed_mutation::forwarding,
+        mutation_reader::forwarding,
+        read_monitor_generator& rmg = default_read_monitor_generator()) const;
+
+    // Filters out mutations that don't belong to the current shard.
+    flat_mutation_reader_v2 make_local_shard_sstable_reader(
+        schema_ptr,
+        reader_permit,
+        const dht::partition_range&,
+        const query::partition_slice&,
+        const io_priority_class&,
+        tracing::trace_state_ptr,
+        streamed_mutation::forwarding,
+        mutation_reader::forwarding,
+        read_monitor_generator& rmg = default_read_monitor_generator()) const;
+
+    flat_mutation_reader_v2 make_crawling_reader(
+            schema_ptr,
+            reader_permit,
+            const io_priority_class&,
+            tracing::trace_state_ptr,
+            read_monitor_generator& rmg = default_read_monitor_generator()) const;
+
+    friend class compound_sstable_set;
+};
+
+sstable_set make_partitioned_sstable_set(schema_ptr schema, bool use_level_metadata = true);
+
+sstable_set make_compound_sstable_set(schema_ptr schema, std::vector<lw_shared_ptr<sstable_set>> sets);
+
+std::ostream& operator<<(std::ostream& os, const sstables::sstable_run& run);
+
+using offstrategy = bool_class<class offstrategy_tag>;
+
+/// Return the amount of overlapping in a set of sstables. 0 is returned if set is disjoint.
+///
+/// The 'sstables' parameter must be a set of sstables sorted by first key.
+unsigned sstable_set_overlapping_count(const schema_ptr& schema, const std::vector<shared_sstable>& sstables);
+
+}
+
+class compaction_manager;
+
+class compaction_weight_registration {
+    compaction_manager* _cm;
+    int _weight;
+public:
+    compaction_weight_registration(compaction_manager* cm, int weight);
+
+    compaction_weight_registration& operator=(const compaction_weight_registration&) = delete;
+    compaction_weight_registration(const compaction_weight_registration&) = delete;
+
+    compaction_weight_registration& operator=(compaction_weight_registration&& other) noexcept;
+
+    compaction_weight_registration(compaction_weight_registration&& other) noexcept;
+
+    ~compaction_weight_registration();
+
+    // Release immediately the weight hold by this object
+    void deregister();
+
+    int weight() const;
+};
+
+
+
+namespace compaction {
+
+class table_state;
+class strategy_control;
+struct compaction_state;
+
+using owned_ranges_ptr = lw_shared_ptr<const dht::token_range_vector>;
+
+inline owned_ranges_ptr make_owned_ranges_ptr(dht::token_range_vector&& ranges) {
+    return make_lw_shared<const dht::token_range_vector>(std::move(ranges));
+}
+
+} // namespace compaction
+
+
+#include <functional>
+#include <optional>
+#include <variant>
+#include <seastar/core/smp.hh>
+#include <seastar/core/file.hh>
+
+namespace sstables {
+
+enum class compaction_type {
+    Compaction = 0,
+    Cleanup = 1,
+    Validation = 2, // Origin uses this for a compaction that is used exclusively for repair
+    Scrub = 3,
+    Index_build = 4,
+    Reshard = 5,
+    Upgrade = 6,
+    Reshape = 7,
+};
+
+std::ostream& operator<<(std::ostream& os, compaction_type type);
+
+struct compaction_completion_desc {
+    // Old, existing SSTables that should be deleted and removed from the SSTable set.
+    std::vector<shared_sstable> old_sstables;
+    // New, fresh SSTables that should be added to SSTable set, replacing the old ones.
+    std::vector<shared_sstable> new_sstables;
+    // Set of compacted partition ranges that should be invalidated in the cache.
+    dht::partition_range_vector ranges_for_cache_invalidation;
+};
+
+// creates a new SSTable for a given shard
+using compaction_sstable_creator_fn = std::function<shared_sstable(shard_id shard)>;
+// Replaces old sstable(s) by new one(s) which contain all non-expired data.
+using compaction_sstable_replacer_fn = std::function<void(compaction_completion_desc)>;
+
+class compaction_type_options {
+public:
+    struct regular {
+    };
+    struct cleanup {
+    };
+    struct upgrade {
+    };
+    struct scrub {
+        enum class mode {
+            abort, // abort scrub on the first sign of corruption
+            skip, // skip corrupt data, including range of rows and/or partitions that are out-of-order
+            segregate, // segregate out-of-order data into streams that all contain data with correct order
+            validate, // validate data, printing all errors found (sstables are only read, not rewritten)
+        };
+        mode operation_mode = mode::abort;
+
+        enum class quarantine_mode {
+            include, // scrub all sstables, including quarantined
+            exclude, // scrub only non-quarantined sstables
+            only, // scrub only quarantined sstables
+        };
+        quarantine_mode quarantine_operation_mode = quarantine_mode::include;
+    };
+    struct reshard {
+    };
+    struct reshape {
+    };
+private:
+    using options_variant = std::variant<regular, cleanup, upgrade, scrub, reshard, reshape>;
+
+private:
+    options_variant _options;
+
+private:
+    explicit compaction_type_options(options_variant options) : _options(std::move(options)) {
+    }
+
+public:
+    static compaction_type_options make_reshape() {
+        return compaction_type_options(reshape{});
+    }
+
+    static compaction_type_options make_reshard() {
+        return compaction_type_options(reshard{});
+    }
+
+    static compaction_type_options make_regular() {
+        return compaction_type_options(regular{});
+    }
+
+    static compaction_type_options make_cleanup() {
+        return compaction_type_options(cleanup{});
+    }
+
+    static compaction_type_options make_upgrade() {
+        return compaction_type_options(upgrade{});
+    }
+
+    static compaction_type_options make_scrub(scrub::mode mode) {
+        return compaction_type_options(scrub{mode});
+    }
+
+    template <typename... Visitor>
+    auto visit(Visitor&&... visitor) const {
+        return std::visit(std::forward<Visitor>(visitor)..., _options);
+    }
+
+    const options_variant& options() const { return _options; }
+
+    compaction_type type() const;
+};
+
+std::string_view to_string(compaction_type_options::scrub::mode);
+std::ostream& operator<<(std::ostream& os, compaction_type_options::scrub::mode scrub_mode);
+
+std::string_view to_string(compaction_type_options::scrub::quarantine_mode);
+std::ostream& operator<<(std::ostream& os, compaction_type_options::scrub::quarantine_mode quarantine_mode);
+
+class dummy_tag {};
+using has_only_fully_expired = seastar::bool_class<dummy_tag>;
+
+struct compaction_descriptor {
+    // List of sstables to be compacted.
+    std::vector<sstables::shared_sstable> sstables;
+    // This is a snapshot of the table's sstable set, used only for the purpose of expiring tombstones.
+    // If this sstable set cannot be provided, expiration will be disabled to prevent data from being resurrected.
+    std::optional<sstables::sstable_set> all_sstables_snapshot;
+    // Level of sstable(s) created by compaction procedure.
+    int level;
+    // Threshold size for sstable(s) to be created.
+    uint64_t max_sstable_bytes;
+    // Can split large partitions at clustering boundary.
+    bool can_split_large_partition = false;
+    // Run identifier of output sstables.
+    sstables::run_id run_identifier;
+    // The options passed down to the compaction code.
+    // This also selects the kind of compaction to do.
+    compaction_type_options options = compaction_type_options::make_regular();
+    // If engaged, compaction will cleanup the input sstables by skipping non-owned ranges.
+    compaction::owned_ranges_ptr owned_ranges;
+
+    compaction_sstable_creator_fn creator;
+    compaction_sstable_replacer_fn replacer;
+
+    ::io_priority_class io_priority = default_priority_class();
+
+    // Denotes if this compaction task is comprised solely of completely expired SSTables
+    sstables::has_only_fully_expired has_only_fully_expired = has_only_fully_expired::no;
+
+    compaction_descriptor() = default;
+
+    static constexpr int default_level = 0;
+    static constexpr uint64_t default_max_sstable_bytes = std::numeric_limits<uint64_t>::max();
+
+    explicit compaction_descriptor(std::vector<sstables::shared_sstable> sstables,
+                                   ::io_priority_class io_priority,
+                                   int level = default_level,
+                                   uint64_t max_sstable_bytes = default_max_sstable_bytes,
+                                   run_id run_identifier = run_id::create_random_id(),
+                                   compaction_type_options options = compaction_type_options::make_regular(),
+                                   compaction::owned_ranges_ptr owned_ranges_ = {})
+        : sstables(std::move(sstables))
+        , level(level)
+        , max_sstable_bytes(max_sstable_bytes)
+        , run_identifier(run_identifier)
+        , options(options)
+        , owned_ranges(std::move(owned_ranges_))
+        , io_priority(io_priority)
+    {}
+
+    explicit compaction_descriptor(sstables::has_only_fully_expired has_only_fully_expired,
+                                   std::vector<sstables::shared_sstable> sstables,
+                                   ::io_priority_class io_priority)
+        : sstables(std::move(sstables))
+        , level(default_level)
+        , max_sstable_bytes(default_max_sstable_bytes)
+        , run_identifier(run_id::create_random_id())
+        , options(compaction_type_options::make_regular())
+        , io_priority(io_priority)
+        , has_only_fully_expired(has_only_fully_expired)
+    {}
+
+    // Return fan-in of this job, which is equal to its number of runs.
+    unsigned fan_in() const;
+    // Enables garbage collection for this descriptor, meaning that compaction will be able to purge expired data
+    void enable_garbage_collection(sstables::sstable_set snapshot) { all_sstables_snapshot = std::move(snapshot); }
+    // Returns total size of all sstables contained in this descriptor
+    uint64_t sstables_size() const;
+};
+
+}
+
+class reader_permit;
+class compaction_backlog_tracker;
+
+namespace sstables {
+class sstable_set;
+class compaction_strategy;
+class sstables_manager;
+struct sstable_writer_config;
+}
+
+namespace compaction {
+class compaction_strategy_state;
+}
+
+namespace compaction {
+
+class table_state {
+public:
+    virtual ~table_state() {}
+    virtual const schema_ptr& schema() const noexcept = 0;
+    // min threshold as defined by table.
+    virtual unsigned min_compaction_threshold() const noexcept = 0;
+    virtual bool compaction_enforce_min_threshold() const noexcept = 0;
+    virtual const sstables::sstable_set& main_sstable_set() const = 0;
+    virtual const sstables::sstable_set& maintenance_sstable_set() const = 0;
+    virtual std::unordered_set<sstables::shared_sstable> fully_expired_sstables(const std::vector<sstables::shared_sstable>& sstables, gc_clock::time_point compaction_time) const = 0;
+    virtual const std::vector<sstables::shared_sstable>& compacted_undeleted_sstables() const noexcept = 0;
+    virtual sstables::compaction_strategy& get_compaction_strategy() const noexcept = 0;
+    virtual compaction_strategy_state& get_compaction_strategy_state() noexcept = 0;
+    virtual reader_permit make_compaction_reader_permit() const = 0;
+    virtual sstables::sstables_manager& get_sstables_manager() noexcept = 0;
+    virtual sstables::shared_sstable make_sstable() const = 0;
+    virtual sstables::sstable_writer_config configure_writer(sstring origin) const = 0;
+    virtual api::timestamp_type min_memtable_timestamp() const = 0;
+    virtual future<> on_compaction_completion(sstables::compaction_completion_desc desc, sstables::offstrategy offstrategy) = 0;
+    virtual bool is_auto_compaction_disabled_by_user() const noexcept = 0;
+    virtual bool tombstone_gc_enabled() const noexcept = 0;
+    virtual const tombstone_gc_state& get_tombstone_gc_state() const noexcept = 0;
+    virtual compaction_backlog_tracker& get_backlog_tracker() = 0;
+    virtual const std::string& get_group_id() const noexcept = 0;
+};
+
+} // namespace compaction
+
+namespace fmt {
+
+template <>
+struct formatter<compaction::table_state> : formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const compaction::table_state& t, FormatContext& ctx) const {
+        auto s = t.schema();
+        return fmt::format_to(ctx.out(), "{}.{} compaction_group={}", s->ks_name(), s->cf_name(), t.get_group_id());
+    }
+};
+
+} // namespace fmt
+
+namespace compaction {
+
+// Used by manager to set goals and constraints on compaction strategies
+class strategy_control {
+public:
+    virtual ~strategy_control() {}
+    virtual bool has_ongoing_compaction(table_state& table_s) const noexcept = 0;
+};
+
+}
+
+
+
+#include <seastar/core/future.hh>
+#include <seastar/util/noncopyable_function.hh>
+#include <seastar/core/file.hh>
+
+
+struct mutation_source_metadata;
+class compaction_backlog_tracker;
+
+using namespace compaction;
+
+namespace sstables {
+
+class compaction_strategy_impl;
+class sstable;
+class sstable_set;
+struct compaction_descriptor;
+struct resharding_descriptor;
+
+class compaction_strategy {
+    ::shared_ptr<compaction_strategy_impl> _compaction_strategy_impl;
+public:
+    compaction_strategy(::shared_ptr<compaction_strategy_impl> impl);
+
+    compaction_strategy();
+    ~compaction_strategy();
+    compaction_strategy(const compaction_strategy&);
+    compaction_strategy(compaction_strategy&&);
+    compaction_strategy& operator=(compaction_strategy&&);
+
+    // Return a list of sstables to be compacted after applying the strategy.
+    compaction_descriptor get_sstables_for_compaction(table_state& table_s, strategy_control& control, std::vector<shared_sstable> candidates);
+
+    compaction_descriptor get_major_compaction_job(table_state& table_s, std::vector<shared_sstable> candidates);
+
+    std::vector<compaction_descriptor> get_cleanup_compaction_jobs(table_state& table_s, std::vector<shared_sstable> candidates) const;
+
+    // Some strategies may look at the compacted and resulting sstables to
+    // get some useful information for subsequent compactions.
+    void notify_completion(table_state& table_s, const std::vector<shared_sstable>& removed, const std::vector<shared_sstable>& added);
+
+    // Return if parallel compaction is allowed by strategy.
+    bool parallel_compaction() const;
+
+    // Return if optimization to rule out sstables based on clustering key filter should be applied.
+    bool use_clustering_key_filter() const;
+
+    // An estimation of number of compaction for strategy to be satisfied.
+    int64_t estimated_pending_compactions(table_state& table_s) const;
+
+    static sstring name(compaction_strategy_type type) {
+        switch (type) {
+        case compaction_strategy_type::null:
+            return "NullCompactionStrategy";
+        case compaction_strategy_type::size_tiered:
+            return "SizeTieredCompactionStrategy";
+        case compaction_strategy_type::leveled:
+            return "LeveledCompactionStrategy";
+        case compaction_strategy_type::date_tiered:
+            return "DateTieredCompactionStrategy";
+        case compaction_strategy_type::time_window:
+            return "TimeWindowCompactionStrategy";
+        default:
+            throw std::runtime_error("Invalid Compaction Strategy");
+        }
+    }
+
+    static compaction_strategy_type type(const sstring& name) {
+        auto pos = name.find("org.apache.cassandra.db.compaction.");
+        sstring short_name = (pos == sstring::npos) ? name : name.substr(pos + 35);
+        if (short_name == "NullCompactionStrategy") {
+            return compaction_strategy_type::null;
+        } else if (short_name == "SizeTieredCompactionStrategy") {
+            return compaction_strategy_type::size_tiered;
+        } else if (short_name == "LeveledCompactionStrategy") {
+            return compaction_strategy_type::leveled;
+        } else if (short_name == "DateTieredCompactionStrategy") {
+            return compaction_strategy_type::date_tiered;
+        } else if (short_name == "TimeWindowCompactionStrategy") {
+            return compaction_strategy_type::time_window;
+        } else {
+            throw exceptions::configuration_exception(format("Unable to find compaction strategy class '{}'", name));
+        }
+    }
+
+    compaction_strategy_type type() const;
+
+    sstring name() const {
+        return name(type());
+    }
+
+    sstable_set make_sstable_set(schema_ptr schema) const;
+
+    compaction_backlog_tracker make_backlog_tracker() const;
+
+    uint64_t adjust_partition_estimate(const mutation_source_metadata& ms_meta, uint64_t partition_estimate) const;
+
+    reader_consumer_v2 make_interposer_consumer(const mutation_source_metadata& ms_meta, reader_consumer_v2 end_consumer) const;
+
+    // Returns whether or not interposer consumer is used by a given strategy.
+    bool use_interposer_consumer() const;
+
+    // Informs the caller (usually the compaction manager) about what would it take for this set of
+    // SSTables closer to becoming in-strategy. If this returns an empty compaction descriptor, this
+    // means that the sstable set is already in-strategy.
+    //
+    // The caller can specify one of two modes: strict or relaxed. In relaxed mode the tolerance for
+    // what is considered offstrategy is higher. It can be used, for instance, for when the system
+    // is restarting and previous compactions were likely in-flight. In strict mode, we are less
+    // tolerant to invariant breakages.
+    //
+    // The caller should also pass a maximum number of SSTables which is the maximum amount of
+    // SSTables that can be added into a single job.
+    compaction_descriptor get_reshaping_job(std::vector<shared_sstable> input, schema_ptr schema, const ::io_priority_class& iop, reshape_mode mode) const;
+
+};
+
+// Creates a compaction_strategy object from one of the strategies available.
+compaction_strategy make_compaction_strategy(compaction_strategy_type strategy, const std::map<sstring, sstring>& options);
+
+}
+
+
+
+
+
+
 #include "replica/database.hh"
 #include "reversibly_mergeable.hh"
 #include "rjson.hh"

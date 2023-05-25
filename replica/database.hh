@@ -8,15 +8,10 @@
 
 #pragma once
 
-#include "locator/abstract_replication_strategy.hh"
-#include "index/secondary_index_manager.hh"
 #include <seastar/core/abort_source.hh>
 #include <seastar/core/sstring.hh>
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/execution_stage.hh>
-#include "utils/hash.hh"
-#include "db_clock.hh"
-#include "gc_clock.hh"
 #include <chrono>
 #include <seastar/core/distributed.hh>
 #include <functional>
@@ -30,15 +25,7 @@
 #include "types/types.hh"
 #include <seastar/core/future.hh>
 #include <seastar/core/gate.hh>
-#include "db/commitlog/replay_position.hh"
-#include "db/commitlog/commitlog_types.hh"
 #include <limits>
-#include "schema/schema_fwd.hh"
-#include "db/view/view.hh"
-#include "db/snapshot-ctl.hh"
-#include "memtable.hh"
-#include "row_cache.hh"
-#include "compaction/compaction_strategy.hh"
 #include "utils/estimated_histogram.hh"
 #include <seastar/core/metrics_registration.hh>
 #include "tracing/trace_state.hh"
