@@ -51755,6 +51755,1893 @@ std::vector<view_and_base> with_base_info_snapshot(std::vector<view_ptr>);
 }
 
 #include <deque>
+
+namespace locator {
+
+/// Generates split points which divide the ring into ranges which share the same replica set.
+///
+/// Initially the ring space the splitter works with is set to the whole ring.
+/// The space can be changed using reset().
+class token_range_splitter {
+public:
+    virtual ~token_range_splitter() = default;
+
+    /// Resets the splitter to work with the ring range [pos, +inf).
+    virtual void reset(dht::ring_position_view pos) = 0;
+
+    /// Each token t returned by next_token() means that keys in the range:
+    ///
+    ///   [prev_pos, dht::ring_position_view::ending_at(t))
+    ///
+    /// share the same replica set.
+    ///
+    /// If this is the first call to next_token() after construction or reset() then prev_pos is the
+    /// beginning of the ring space. Otherwise, it is dht::ring_position_view::ending_at(prev_t)
+    /// where prev_t is the token returned by the previous call to next_token().
+    /// If std::nullopt is returned it means that the ring space was exhausted.
+    virtual std::optional<dht::token> next_token() = 0;
+};
+
+}
+
+
+using namespace seastar;
+
+namespace locator {
+
+using inet_address = gms::inet_address;
+
+// Endpoint Data Center and Rack names
+struct endpoint_dc_rack {
+    sstring dc;
+    sstring rack;
+
+    static thread_local const endpoint_dc_rack default_location;
+
+    bool operator==(const endpoint_dc_rack&) const = default;
+};
+
+using dc_rack_fn = seastar::noncopyable_function<endpoint_dc_rack(inet_address)>;
+
+} // namespace locator
+
+#include <unordered_set>
+#include <unordered_map>
+#include <compare>
+#include <iostream>
+
+#include <seastar/core/future.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/util/bool_class.hh>
+
+
+using namespace seastar;
+
+namespace locator {
+class topology;
+}
+
+namespace std {
+std::ostream& operator<<(std::ostream& out, const locator::topology&);
+}
+
+namespace locator {
+
+class node;
+using node_holder = std::unique_ptr<node>;
+
+class node {
+public:
+    using this_node = bool_class<struct this_node_tag>;
+    using idx_type = int;
+
+    enum class state {
+        none = 0,
+        joining,    // while bootstrapping, replacing
+        normal,
+        leaving,    // while decommissioned, removed, replaced
+        left        // after decommissioned, removed, replaced
+    };
+
+private:
+    const locator::topology* _topology;
+    locator::host_id _host_id;
+    inet_address _endpoint;
+    endpoint_dc_rack _dc_rack;
+    state _state;
+
+    // Is this node the `localhost` instance
+    this_node _is_this_node;
+    idx_type _idx = -1;
+
+public:
+    node(const locator::topology* topology, locator::host_id id, inet_address endpoint, endpoint_dc_rack dc_rack, state state, this_node is_this_node = this_node::no, idx_type idx = -1);
+
+    node(const node&) = delete;
+    node(node&&) = delete;
+
+    const locator::topology* topology() const noexcept {
+        return _topology;
+    }
+
+    const locator::host_id& host_id() const noexcept {
+        return _host_id;
+    }
+
+    const inet_address& endpoint() const noexcept {
+        return _endpoint;
+    }
+
+    const endpoint_dc_rack& dc_rack() const noexcept {
+        return _dc_rack;
+    }
+
+    // Is this "localhost"?
+    this_node is_this_node() const noexcept { return _is_this_node; }
+
+    // idx < 0 means "unassigned"
+    idx_type idx() const noexcept { return _idx; }
+
+    state get_state() const noexcept { return _state; }
+
+    static std::string to_string(state);
+
+private:
+    static node_holder make(const locator::topology* topology, locator::host_id id, inet_address endpoint, endpoint_dc_rack dc_rack, state state, node::this_node is_this_node = this_node::no, idx_type idx = -1);
+    node_holder clone() const;
+
+    void set_topology(const locator::topology* topology) noexcept { _topology = topology; }
+    void set_idx(idx_type idx) noexcept { _idx = idx; }
+    void set_state(state state) noexcept { _state = state; }
+
+    friend class topology;
+};
+
+class topology {
+public:
+    struct config {
+        host_id this_host_id;
+        inet_address this_endpoint;
+        endpoint_dc_rack local_dc_rack;
+        bool disable_proximity_sorting = false;
+
+        bool operator==(const config&) const = default;
+    };
+    topology(config cfg);
+    topology(topology&&) noexcept;
+
+    topology& operator=(topology&&) noexcept;
+
+    future<topology> clone_gently() const;
+    future<> clear_gently() noexcept;
+
+public:
+    const config& get_config() const noexcept { return _cfg; }
+
+    const node* this_node() const noexcept {
+        return _this_node;
+    }
+
+    // Adds a node with given host_id, endpoint, and DC/rack.
+    const node* add_node(host_id id, const inet_address& ep, const endpoint_dc_rack& dr, node::state state);
+
+    // Optionally updates node's current host_id, endpoint, or DC/rack.
+    // Note: the host_id may be updated from null to non-null after a new node gets a new, random host_id,
+    // or a peer node host_id may be updated when the node is replaced with another node using the same ip address.
+    const node* update_node(node* node, std::optional<host_id> opt_id, std::optional<inet_address> opt_ep, std::optional<endpoint_dc_rack> opt_dr, std::optional<node::state> opt_st);
+
+    // Removes a node using its host_id
+    // Returns true iff the node was found and removed.
+    bool remove_node(host_id id);
+
+    // Looks up a node by its host_id.
+    // Returns a pointer to the node if found, or nullptr otherwise.
+    const node* find_node(host_id id) const noexcept;
+
+    // Looks up a node by its inet_address.
+    // Returns a pointer to the node if found, or nullptr otherwise.
+    const node* find_node(const inet_address& ep) const noexcept;
+
+    // Finds a node by its index
+    // Returns a pointer to the node if found, or nullptr otherwise.
+    const node* find_node(node::idx_type idx) const noexcept;
+
+    // Returns true if a node with given host_id is found
+    bool has_node(host_id id) const noexcept;
+    bool has_node(inet_address id) const noexcept;
+
+    /**
+     * Stores current DC/rack assignment for ep
+     *
+     * Adds or updates a node with given endpoint
+     */
+    const node* add_or_update_endpoint(inet_address ep, std::optional<host_id> opt_id, std::optional<endpoint_dc_rack> opt_dr, std::optional<node::state> opt_st);
+
+    // Legacy entry point from token_metadata::update_topology
+    const node* add_or_update_endpoint(inet_address ep, endpoint_dc_rack dr, std::optional<node::state> opt_st) {
+        return add_or_update_endpoint(ep, std::nullopt, std::move(dr), std::move(opt_st));
+    }
+    const node* add_or_update_endpoint(inet_address ep, host_id id) {
+        return add_or_update_endpoint(ep, id, std::nullopt, std::nullopt);
+    }
+
+    /**
+     * Removes current DC/rack assignment for ep
+     * Returns true if the node was found and removed.
+     */
+    bool remove_endpoint(inet_address ep);
+
+    /**
+     * Returns true iff contains given endpoint.
+     */
+    bool has_endpoint(inet_address) const;
+
+    const std::unordered_map<sstring,
+                           std::unordered_set<inet_address>>&
+    get_datacenter_endpoints() const {
+        return _dc_endpoints;
+    }
+
+    const std::unordered_map<sstring,
+                       std::unordered_map<sstring,
+                                          std::unordered_set<inet_address>>>&
+    get_datacenter_racks() const {
+        return _dc_racks;
+    }
+
+    const std::unordered_set<sstring>& get_datacenters() const noexcept {
+        return _datacenters;
+    }
+
+    // Get dc/rack location of this node
+    const endpoint_dc_rack& get_location() const noexcept {
+        return _this_node ? _this_node->dc_rack() : _cfg.local_dc_rack;
+    }
+    // Get dc/rack location of a node identified by host_id
+    // The specified node must exist.
+    const endpoint_dc_rack& get_location(host_id id) const {
+        return find_node(id)->dc_rack();
+    }
+    // Get dc/rack location of a node identified by endpoint
+    // The specified node must exist.
+    const endpoint_dc_rack& get_location(const inet_address& ep) const;
+
+    // Get datacenter of this node
+    const sstring& get_datacenter() const noexcept {
+        return get_location().dc;
+    }
+    // Get datacenter of a node identified by host_id
+    // The specified node must exist.
+    const sstring& get_datacenter(host_id id) const {
+        return get_location(id).dc;
+    }
+    // Get datacenter of a node identified by endpoint
+    // The specified node must exist.
+    const sstring& get_datacenter(inet_address ep) const {
+        return get_location(ep).dc;
+    }
+
+    // Get rack of this node
+    const sstring& get_rack() const noexcept {
+        return get_location().rack;
+    }
+    // Get rack of a node identified by host_id
+    // The specified node must exist.
+    const sstring& get_rack(host_id id) const {
+        return get_location(id).rack;
+    }
+    // Get rack of a node identified by endpoint
+    // The specified node must exist.
+    const sstring& get_rack(inet_address ep) const {
+        return get_location(ep).rack;
+    }
+
+    auto get_local_dc_filter() const noexcept {
+        return [ this, local_dc = get_datacenter() ] (inet_address ep) {
+            return get_datacenter(ep) == local_dc;
+        };
+    };
+
+    template <std::ranges::range Range>
+    inline size_t count_local_endpoints(const Range& endpoints) const {
+        return std::count_if(endpoints.begin(), endpoints.end(), get_local_dc_filter());
+    }
+
+    /**
+     * This method will sort the <tt>List</tt> by proximity to the given
+     * address.
+     */
+    void sort_by_proximity(inet_address address, inet_address_vector_replica_set& addresses) const;
+
+    void for_each_node(std::function<void(const node*)> func) const;
+
+private:
+    bool is_configured_this_node(const node&) const;
+    const node* add_node(node_holder node);
+    void remove_node(const node* node);
+
+    static std::string debug_format(const node*);
+
+    void index_node(const node* node);
+    void unindex_node(const node* node);
+    node_holder pop_node(const node* node);
+
+    static node* make_mutable(const node* nptr) {
+        return const_cast<node*>(nptr);
+    }
+
+    /**
+     * compares two endpoints in relation to the target endpoint, returning as
+     * Comparator.compare would
+     *
+     * The closest nodes to a given node are:
+     * 1. The node itself
+     * 2. Nodes in the same RACK as the reference node
+     * 3. Nodes in the same DC as the reference node
+     */
+    std::weak_ordering compare_endpoints(const inet_address& address, const inet_address& a1, const inet_address& a2) const;
+
+    unsigned _shard;
+    config _cfg;
+    const node* _this_node = nullptr;
+    std::vector<node_holder> _nodes;
+    std::unordered_map<host_id, const node*> _nodes_by_host_id;
+    std::unordered_map<inet_address, const node*> _nodes_by_endpoint;
+
+    std::unordered_map<sstring, std::unordered_set<const node*>> _dc_nodes;
+    std::unordered_map<sstring, std::unordered_map<sstring, std::unordered_set<const node*>>> _dc_rack_nodes;
+
+    /** multi-map: DC -> endpoints in that DC */
+    std::unordered_map<sstring,
+                       std::unordered_set<inet_address>>
+        _dc_endpoints;
+
+    /** map: DC -> (multi-map: rack -> endpoints in that rack) */
+    std::unordered_map<sstring,
+                       std::unordered_map<sstring,
+                                          std::unordered_set<inet_address>>>
+        _dc_racks;
+
+    bool _sort_by_proximity = true;
+
+    // pre-calculated
+    std::unordered_set<sstring> _datacenters;
+
+    void calculate_datacenters();
+
+    const std::unordered_map<inet_address, const node*>& get_nodes_by_endpoint() const noexcept {
+        return _nodes_by_endpoint;
+    };
+
+    friend class token_metadata_impl;
+public:
+    void test_compare_endpoints(const inet_address& address, const inet_address& a1, const inet_address& a2) const;
+
+    friend std::ostream& std::operator<<(std::ostream& out, const topology&);
+};
+
+} // namespace locator
+
+namespace std {
+
+std::ostream& operator<<(std::ostream& out, const locator::node& node);
+std::ostream& operator<<(std::ostream& out, const locator::node::state& state);
+
+} // namespace std
+
+template <>
+struct fmt::formatter<locator::node> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const locator::node& node, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}/{}", node.host_id(), node.endpoint());
+    }
+};
+
+template <>
+struct fmt::formatter<locator::node::state> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const locator::node::state& state, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}", locator::node::to_string(state));
+    }
+};
+
+#include <variant>
+
+
+namespace cdc {
+
+struct generation_id_v1 {
+    db_clock::time_point ts;
+    bool operator==(const generation_id_v1&) const = default;
+};
+
+struct generation_id_v2 {
+    db_clock::time_point ts;
+    utils::UUID id;
+    bool operator==(const generation_id_v2&) const = default;
+};
+
+using generation_id = std::variant<generation_id_v1, generation_id_v2>;
+
+db_clock::time_point get_ts(const generation_id&);
+
+} // namespace cdc
+
+template <>
+struct fmt::formatter<cdc::generation_id_v1> {
+    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+    template <typename FormatContext>
+    auto format(const cdc::generation_id_v1& gen_id, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}", gen_id.ts);
+    }
+};
+
+template <>
+struct fmt::formatter<cdc::generation_id_v2> {
+    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+    template <typename FormatContext>
+    auto format(const cdc::generation_id_v2& gen_id, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "({}, {})", gen_id.ts, gen_id.id);
+    }
+};
+
+template <>
+struct fmt::formatter<cdc::generation_id> {
+    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
+    template <typename FormatContext>
+    auto format(const cdc::generation_id& gen_id, FormatContext& ctx) const {
+        return std::visit([&ctx] (auto& id) {
+            return fmt::format_to(ctx.out(), "{}", id);
+        }, gen_id);
+    }
+};
+
+#include <cstdint>
+#include <compare>
+#include <iostream>
+#include <type_traits>
+
+namespace utils {
+
+// Note: do not use directly, use utils::tagged_integer instead.
+// The reason this double-tagged template exist
+// is to distinguish between utils::tagged_integer
+// and raft::internal::tagged_uint64 that have incompatible
+// idl types and therefore must not be convertible to each other.
+template <typename Final, typename Tag, std::integral ValueType>
+class tagged_tagged_integer {
+public:
+    using value_type = ValueType;
+private:
+    value_type _value;
+public:
+    tagged_tagged_integer() noexcept : _value(0) {}
+    explicit tagged_tagged_integer(value_type v) noexcept : _value(v) {}
+
+    tagged_tagged_integer& operator=(value_type v) noexcept {
+        _value = v;
+        return *this;
+    }
+
+    value_type value() const noexcept { return _value; }
+    operator value_type() const noexcept { return _value; }
+
+    explicit operator bool() const { return _value != 0; }
+
+    auto operator<=>(const tagged_tagged_integer& o) const = default;
+
+    tagged_tagged_integer& operator++() noexcept {
+        ++_value;
+        return *this;
+    }
+    tagged_tagged_integer& operator--() noexcept {
+        --_value;
+        return *this;
+    }
+
+    tagged_tagged_integer operator++(int) noexcept {
+        auto ret = *this;
+        ++_value;
+        return ret;
+    }
+    tagged_tagged_integer operator--(int) noexcept {
+        auto ret = *this;
+        --_value;
+        return ret;
+    }
+
+    tagged_tagged_integer operator+(const tagged_tagged_integer& o) const {
+        return tagged_tagged_integer(_value + o._value);
+    }
+    tagged_tagged_integer operator-(const tagged_tagged_integer& o) const {
+        return tagged_tagged_integer(_value - o._value);
+    }
+
+    tagged_tagged_integer& operator+=(const tagged_tagged_integer& o) {
+        _value += o._value;
+        return *this;
+    }
+    tagged_tagged_integer& operator-=(const tagged_tagged_integer& o) {
+        _value -= o._value;
+        return *this;
+    }
+};
+
+template <typename Tag, std::integral ValueType>
+using tagged_integer = tagged_tagged_integer<struct final, Tag, ValueType>;
+
+} // namespace utils
+
+namespace std {
+
+template <typename Final, typename Tag, std::integral ValueType>
+struct hash<utils::tagged_tagged_integer<Final, Tag, ValueType>> {
+    size_t operator()(const utils::tagged_tagged_integer<Final, Tag, ValueType>& x) const noexcept {
+        return hash<ValueType>{}(x.value());
+    }
+};
+
+template <typename Final, typename Tag, std::integral ValueType>
+[[maybe_unused]] ostream& operator<<(ostream& s, const utils::tagged_tagged_integer<Final, Tag, ValueType>& x) {
+    return s << x.value();
+}
+
+template <typename Final, typename Tag, std::integral ValueType>
+struct numeric_limits<utils::tagged_tagged_integer<Final, Tag, ValueType>> : public numeric_limits<ValueType> {
+    using tagged_tagged_integer_t = utils::tagged_tagged_integer<Final, Tag, ValueType>;
+    using value_limits = numeric_limits<ValueType>;
+    static_assert(numeric_limits<ValueType>::is_specialized && numeric_limits<ValueType>::is_bounded);
+
+    static constexpr tagged_tagged_integer_t min() {
+        return tagged_tagged_integer_t(value_limits::min());
+    }
+
+    static constexpr tagged_tagged_integer_t max() {
+        return tagged_tagged_integer_t(value_limits::max());
+    }
+};
+
+} // namespace std
+
+#include <ostream>
+#include <functional>
+
+namespace raft {
+namespace internal {
+
+template<typename Tag>
+using tagged_id = utils::tagged_uuid<Tag>;
+
+template<typename Tag>
+using tagged_uint64 = utils::tagged_tagged_integer<struct non_final, Tag, uint64_t>;
+
+} // end of namespace internal
+} // end of namespace raft
+
+
+#include <chrono>
+#include <ostream>
+
+namespace raft {
+
+// Raft protocol state machine clock ticks at different speeds
+// depending on the environment. A typical clock tick for
+// a production system is 100ms, while a test system can
+// tick it at the speed of the hardware clock.
+//
+// Every state machine has an own instance of logical clock,
+// this enables tests when different state machines run at
+// different clock speeds.
+class logical_clock final {
+public:
+    using rep = int64_t;
+    // There is no realistic period for a logical clock,
+    // just use the smallest period possible.
+    using period = std::chrono::nanoseconds::period;
+    using duration = std::chrono::duration<rep, period>;
+    using time_point = std::chrono::time_point<logical_clock, duration>;
+
+    static constexpr bool is_steady = true;
+
+    void advance(duration diff = duration{1}) {
+        _now += diff;
+    }
+    time_point now() const noexcept {
+        return _now;
+    }
+
+    static constexpr time_point min() {
+        return time_point(duration{0});
+    }
+private:
+    time_point _now = min();
+};
+
+inline std::ostream& operator<<(std::ostream& os, const logical_clock::time_point& p) {
+    return os << (p - logical_clock::min()).count();
+}
+
+} // end of namespace raft
+
+namespace std {
+
+inline std::ostream& operator<<(std::ostream& os, const raft::logical_clock::duration& d) {
+    return os << d.count();
+}
+
+} // end of namespace std
+
+
+#include <vector>
+#include <unordered_set>
+#include <functional>
+#include <source_location>
+#include "utils/source_location-compat.hh"
+#include <boost/container/deque.hpp>
+#include <seastar/core/lowres_clock.hh>
+#include <seastar/core/future.hh>
+#include <seastar/util/log.hh>
+#include <seastar/core/abort_source.hh>
+
+namespace raft {
+// Keeps user defined command. A user is responsible to serialize
+// a state machine operation into it before passing to raft and
+// deserialize in apply() before applying.
+using command = bytes_ostream;
+using command_cref = std::reference_wrapper<const command>;
+
+extern seastar::logger logger;
+
+// This is user provided id for a snapshot
+using snapshot_id = internal::tagged_id<struct snapshot_id_tag>;
+// Unique identifier of a server in a Raft group
+using server_id = internal::tagged_id<struct server_id_tag>;
+// Unique identifier of a Raft group
+using group_id = raft::internal::tagged_id<struct group_id_tag>;
+
+// This type represents the raft term
+using term_t = raft::internal::tagged_uint64<struct term_tag>;
+// This type represensts the index into the raft log
+using index_t = raft::internal::tagged_uint64<struct index_tag>;
+// Identifier for a read barrier request
+using read_id = raft::internal::tagged_uint64<struct read_id_tag>;
+
+// Opaque connection properties. May contain ip:port pair for instance.
+// This value is disseminated between cluster member
+// through regular log replication as part of a configuration
+// log entry. Upon receiving it a server passes it down to
+// RPC module through on_configuration_change() call where it is deserialized
+// and used to obtain connection info for the node `id`. After a server
+// is added to the RPC module RPC's send functions can be used to communicate
+// with it using its `id`.
+using server_info = bytes;
+
+struct server_address {
+    server_id id;
+    server_info info;
+
+    server_address(server_id id, server_info info)
+        : id(std::move(id)), info(std::move(info)) {
+    }
+
+    bool operator==(const server_address& rhs) const {
+        return id == rhs.id;
+    }
+
+    bool operator==(const raft::server_id& rhs) const {
+        return id == rhs;
+    }
+
+    bool operator<(const server_address& rhs) const {
+        return id < rhs.id;
+    }
+
+    friend std::ostream& operator<<(std::ostream&, const server_address&);
+};
+
+struct config_member {
+    server_address addr;
+    bool can_vote;
+
+    config_member(server_address addr, bool can_vote)
+        : addr(std::move(addr)), can_vote(can_vote) {
+    }
+
+    bool operator==(const config_member& rhs) const {
+        return addr == rhs.addr;
+    }
+
+    bool operator==(const raft::server_id& rhs) const {
+        return addr.id == rhs;
+    }
+
+    bool operator<(const config_member& rhs) const {
+        return addr < rhs.addr;
+    }
+
+    friend std::ostream& operator<<(std::ostream&, const config_member&);
+};
+
+struct server_address_hash {
+    using is_transparent = void;
+
+    size_t operator()(const raft::server_id& id) const {
+        return std::hash<raft::server_id>{}(id);
+    }
+
+    size_t operator()(const raft::server_address& address) const {
+        return operator()(address.id);
+    }
+};
+
+struct config_member_hash {
+    using is_transparent = void;
+
+    size_t operator()(const raft::server_id& id) const {
+        return std::hash<raft::server_id>{}(id);
+    }
+
+    size_t operator()(const raft::server_address& address) const {
+        return operator()(address.id);
+    }
+
+    size_t operator()(const raft::config_member& s) const {
+        return operator()(s.addr);
+    }
+};
+
+using server_address_set = std::unordered_set<server_address, server_address_hash, std::equal_to<>>;
+using config_member_set = std::unordered_set<config_member, config_member_hash, std::equal_to<>>;
+
+// A configuration change decomposed to joining and leaving
+// servers. Helps validate the configuration and update RPC.
+struct configuration_diff {
+    config_member_set joining, leaving;
+};
+
+struct configuration {
+    // Contains the current configuration. When configuration
+    // change is in progress, contains the new configuration.
+    config_member_set current;
+    // Used during the transitioning period of configuration
+    // changes.
+    config_member_set previous;
+
+    explicit configuration(config_member_set current_arg = {}, config_member_set previous_arg = {})
+        : current(std::move(current_arg)), previous(std::move(previous_arg)) {
+            if (current.count(server_id{}) || previous.count(server_id{})) {
+                throw std::invalid_argument("raft::configuration: id zero is not supported");
+            }
+        }
+
+    // Return true if the previous configuration is still
+    // in use
+    bool is_joint() const {
+        return !previous.empty();
+    }
+
+    // Count the number of voters in a configuration
+    static size_t voter_count(const config_member_set& c_new) {
+        return std::count_if(c_new.begin(), c_new.end(), [] (const config_member& s) { return s.can_vote; });
+    }
+
+    // Check if transitioning to a proposed configuration is safe.
+    static void check(const config_member_set& c_new) {
+        // We must have at least one voting member in the config.
+        if (c_new.empty()) {
+            throw std::invalid_argument("Attempt to transition to an empty Raft configuration");
+        }
+        if (voter_count(c_new) == 0) {
+            throw std::invalid_argument("The configuration must have at least one voter");
+        }
+    }
+
+    // Compute a diff between a proposed configuration and the current one.
+    configuration_diff diff(const config_member_set& c_new) const {
+        configuration_diff diff;
+        // joining
+        for (const auto& s : c_new) {
+            auto it = current.find(s);
+            // a node is added to a joining set if it is not yet known or its voting status changes
+            if (it == current.end() || it->can_vote != s.can_vote) {
+                diff.joining.insert(s);
+            }
+        }
+
+        // leaving
+        for (const auto& s : current) {
+            if (!c_new.contains(s)) {
+                diff.leaving.insert(s);
+            }
+        }
+        return diff;
+    }
+
+    // True if the current or previous configuration contains
+    // this server.
+    bool contains(server_id id) const {
+        auto it = current.find(id);
+        if (it != current.end()) {
+            return true;
+        }
+        return previous.find(id) != previous.end();
+    }
+
+    // Same as contains() but true only if the member can vote.
+    bool can_vote(server_id id) const {
+        bool can_vote = false;
+        auto it = current.find(id);
+        if (it != current.end()) {
+            can_vote |= it->can_vote;
+        }
+
+        it = previous.find(id);
+        if (it != previous.end()) {
+            can_vote |= it->can_vote;
+        }
+
+        return can_vote;
+    }
+
+    // Enter a joint configuration given a new set of servers.
+    void enter_joint(config_member_set c_new) {
+        if (c_new.empty()) {
+            throw std::invalid_argument("Attempt to transition to an empty Raft configuration");
+        }
+        previous = std::move(current);
+        current = std::move(c_new);
+    }
+
+    // Transition from C_old + C_new to C_new.
+    void leave_joint() {
+        assert(is_joint());
+        previous.clear();
+    }
+
+    friend std::ostream& operator<<(std::ostream&, const configuration&);
+};
+
+struct log_entry {
+    // Dummy entry is used when a leader needs to commit an entry
+    // (after leadership change for instance) but there is nothing
+    // else to commit.
+    struct dummy {};
+    term_t term;
+    index_t idx;
+    std::variant<command, configuration, dummy> data;
+};
+
+using log_entry_ptr = seastar::lw_shared_ptr<const log_entry>;
+
+struct error : public std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
+struct not_a_leader : public error {
+    server_id leader;
+    explicit not_a_leader(server_id l) : error(format("Not a leader, leader: {}", l)), leader(l) {}
+};
+
+struct not_a_member : public error {
+    explicit not_a_member(sstring err) : error(std::move(err)) {}
+    sstring message() const { return what(); }
+};
+
+
+struct dropped_entry : public error {
+    dropped_entry() : error("Entry was dropped because of a leader change") {}
+};
+
+struct commit_status_unknown : public error {
+    commit_status_unknown() : error("Commit status of the entry is unknown") {}
+};
+
+struct stopped_error : public error {
+    explicit stopped_error(const sstring& reason = "")
+            : error(!reason.empty()
+                    ? fmt::format("Raft instance is stopped, reason: \"{}\"", reason)
+                    : std::string("Raft instance is stopped")) {}
+};
+
+struct conf_change_in_progress : public error {
+    conf_change_in_progress() : error("A configuration change is already in progress") {}
+};
+
+struct config_error : public error {
+    using error::error;
+};
+
+
+struct timeout_error : public error {
+    using error::error;
+};
+
+struct state_machine_error: public error {
+    state_machine_error(std::source_location l = std::source_location::current())
+        : error(fmt::format("State machine error at {}:{}", l.file_name(), l.line())) {}
+};
+
+// Should be thrown by the rpc implementation to signal that the connection to the peer has been lost.
+// It's unspecified if any actions caused by rpc were actually performed on the target node.
+struct transport_error: public error {
+    using error::error;
+};
+
+struct command_is_too_big_error: public error {
+    size_t command_size;
+    size_t limit;
+
+    command_is_too_big_error(size_t command_size, size_t limit)
+        : error(fmt::format("Command size {} is greater than the configured limit {}", command_size, limit))
+        , command_size(command_size)
+        , limit(limit) {}
+};
+
+struct no_other_voting_member : public error {
+    no_other_voting_member() : error("Cannot stepdown because there is no other voting member") {}
+};
+
+struct request_aborted : public error {
+    request_aborted() : error("Request is aborted by a caller") {}
+};
+
+inline bool is_uncertainty(const std::exception& e) {
+    return dynamic_cast<const commit_status_unknown*>(&e) ||
+           dynamic_cast<const stopped_error*>(&e);
+}
+
+struct snapshot_descriptor {
+    // Index and term of last entry in the snapshot
+    index_t idx = index_t(0);
+    term_t term = term_t(0);
+    // The committed configuration in the snapshot
+    configuration config{};
+    // Id of the snapshot.
+    snapshot_id id;
+};
+
+struct append_request {
+    // The leader's term.
+    term_t current_term;
+    // Index of the log entry immediately preceding new ones
+    index_t prev_log_idx;
+    // Term of prev_log_idx entry.
+    term_t prev_log_term;
+    // The leader's commit_idx.
+    index_t leader_commit_idx;
+    // Log entries to store (empty vector for heartbeat; may send more
+    // than one entry for efficiency).
+    std::vector<log_entry_ptr> entries;
+
+    append_request copy() const {
+        append_request result;
+        result.current_term = current_term;
+        result.prev_log_idx = prev_log_idx;
+        result.prev_log_term = prev_log_term;
+        result.leader_commit_idx = leader_commit_idx;
+        result.entries.reserve(entries.size());
+        for (const auto& e: entries) {
+            result.entries.push_back(make_lw_shared(*e));
+        }
+        return result;
+    }
+};
+
+struct append_reply {
+    struct rejected {
+        // Index of non matching entry that caused the request
+        // to be rejected.
+        index_t non_matching_idx;
+        // Last index in the follower's log, can be used to find next
+        // matching index more efficiently.
+        index_t last_idx;
+    };
+    struct accepted {
+        // Last entry that was appended (may be smaller than max log index
+        // in case follower's log is longer and appended entries match).
+        index_t last_new_idx;
+    };
+    // Current term, for leader to update itself.
+    term_t current_term;
+    // Contains an index of the last committed entry on the follower
+    // It is used by a leader to know if a follower is behind and issuing
+    // empty append entry with updates commit_idx if it is
+    // Regular RAFT handles this by always sending enoty append requests
+    // as a heartbeat.
+    index_t commit_idx;
+    std::variant<rejected, accepted> result;
+};
+
+struct vote_request {
+    // The candidate’s term.
+    term_t current_term;
+    // The index of the candidate's last log entry.
+    index_t last_log_idx;
+    // The term of the candidate's last log entry.
+    term_t last_log_term;
+    // True if this is prevote request
+    bool is_prevote;
+    // If the flag is set the request will not be ignored even
+    // if there is an active leader. Used during leadership transfer.
+    bool force;
+};
+
+struct vote_reply {
+    // Current term, for the candidate to update itself.
+    term_t current_term;
+    // True means the candidate received a vote.
+    bool vote_granted;
+    // True if it is a reply to prevote request
+    bool is_prevote;
+};
+
+struct install_snapshot {
+    // Current term on a leader
+    term_t current_term;
+    // A snapshot to install
+    snapshot_descriptor snp;
+};
+
+struct snapshot_reply {
+    // Follower current term
+    term_t current_term;
+    // True if the snapshot was applied, false otherwise.
+    bool success;
+};
+
+// 3.10 section from PhD Leadership transfer extension
+struct timeout_now {
+    // Current term on a leader
+    term_t current_term;
+};
+
+struct read_quorum {
+    // The leader's term.
+    term_t current_term;
+    // The leader's commit_idx. Has the same semantics
+    // as in append_entries.
+    index_t leader_commit_idx;
+    // The id of the read barrier. Only valid within this term.
+    read_id id;
+};
+
+struct read_quorum_reply {
+    // The leader's term, as sent in the read_quorum request.
+    // read_id is only valid (and unique) within a given term.
+    term_t current_term;
+    // Piggy-back follower's commit_idx, for the same purposes
+    // as in append_reply::commit_idx
+    index_t commit_idx;
+    // Copy of the id from a read_quorum request
+    read_id id;
+};
+
+struct entry_id {
+    // Added entry term
+    term_t term;
+    // Added entry log index
+    index_t idx;
+};
+
+// The execute_add_entry/execute_modify_config methods can return this error to signal
+// that the request should be retried.
+// The exception is only used internally for entry/config forwarding and should not be leaked to a user.
+struct transient_error: public error {
+    // for IDL serialization
+    sstring message() const {
+        return what();
+    }
+    // A leader that the client should use for retrying.
+    // Could be empty, if the new leader is not known.
+    // Client should wait for a new leader in this case.
+    server_id leader;
+
+    explicit transient_error(const sstring& message, server_id leader)
+        : error(message)
+        , leader(leader)
+    {
+    }
+
+    explicit transient_error(std::exception_ptr e, server_id leader)
+        : transient_error(format("Transient error: '{}'", e), leader)
+    {
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const transient_error& e) {
+        fmt::print(os, "transient_error, message: {}, leader: {}", e.what(), e.leader);
+        return os;
+    }
+};
+
+// Response to add_entry or modify_config RPC.
+// Carries either entry id (the entry is not committed yet),
+// transient_error (the entry is not added to Raft log), or, for
+// modify_config, commit_status_unknown (commit status is
+// unknown).
+using add_entry_reply = std::variant<entry_id, transient_error, commit_status_unknown, not_a_member>;
+
+// std::monostate {} if the leader cannot execute the barrier because
+// it did not commit any entries yet
+// raft::not_a_leader if the node is not a leader
+// index_t index that is safe to read without breaking linearizability
+using read_barrier_reply = std::variant<std::monostate, index_t, raft::not_a_leader>;
+
+using rpc_message = std::variant<append_request,
+      append_reply,
+      vote_request,
+      vote_reply,
+      install_snapshot,
+      snapshot_reply,
+      timeout_now,
+      read_quorum,
+      read_quorum_reply>;
+
+// we need something that can be truncated from both sides.
+// std::deque move constructor is not nothrow hence cannot be used
+// also, boost::deque deallocates blocks when items are removed,
+// we don't want to hold on to memory we don't use.
+using log_entries = boost::container::deque<log_entry_ptr>;
+
+// 3.4 Leader election
+// If a follower receives no communication over a period of
+// time called the election timeout, then it assumes there is
+// no viable leader and begins an election to choose a new
+// leader.
+static constexpr logical_clock::duration ELECTION_TIMEOUT = logical_clock::duration{10};
+
+// rpc, persistence and state_machine classes will have to be implemented by the
+// raft user to provide network, persistency and busyness logic support
+// repectively.
+class rpc;
+class persistence;
+
+// Any of the functions may return an error, but it will kill the
+// raft instance that uses it. Depending on what state the failure
+// leaves the state is the raft instance will either have to be recreated
+// with the same state machine and rejoined the cluster with the same server_id
+// or it new raft instance will have to be created with empty state machine and
+// it will have to rejoin to the cluster with different server_id through
+// configuration change.
+class state_machine {
+public:
+    virtual ~state_machine() {}
+
+    // This is called after entries are committed (replicated to
+    // at least quorum of servers). If a provided vector contains
+    // more than one entry all of them will be committed simultaneously.
+    // Will be eventually called on all replicas, for all committed commands.
+    // Raft owns the data since it may be still replicating.
+    // Raft will not call another apply until the retuned future
+    // will not become ready.
+    virtual future<> apply(std::vector<command_cref> command) = 0;
+
+    // The function suppose to take a snapshot of a state machine
+    // To be called during log compaction or when a leader brings
+    // a lagging follower up-to-date
+    virtual future<snapshot_id> take_snapshot() = 0;
+
+    // The function drops a snapshot with a provided id
+    virtual void drop_snapshot(snapshot_id id) = 0;
+
+    // reload state machine from a snapshot id
+    // To be used by a restarting server or by a follower that
+    // catches up to a leader
+    virtual future<> load_snapshot(snapshot_id id) = 0;
+
+    // stops the state machine instance by aborting the work
+    // that can be aborted and waiting for all the rest to complete
+    // any unfinished apply/snapshot operation may return an error after
+    // this function is called
+    virtual future<> abort() = 0;
+};
+
+class rpc_server;
+
+// It is safe for for rpc implementation to drop any message.
+// Error returned by send function will be ignored. All send_()
+// functions can be called concurrently, returned future should be
+// waited only for back pressure purposes (unless specified otherwise in
+// the function's comment). Values passed by reference may be freed as soon
+// as function returns.
+class rpc {
+protected:
+    // Pointer to Raft server. Needed for passing RPC messages.
+    rpc_server* _client = nullptr;
+public:
+    virtual ~rpc() {}
+
+    // Send a snapshot snap to a server server_id.
+    //
+    // Unlike other RPC, this is a synchronous call:
+    //
+    // A returned future is resolved when snapshot is sent and
+    // successfully applied by a receiver. Will be waited to
+    // know if a snapshot transfer succeeded.
+    virtual future<snapshot_reply> send_snapshot(server_id server_id, const install_snapshot& snap, seastar::abort_source& as) = 0;
+
+    // Send provided append_request to the supplied server, does
+    // not wait for reply. The returned future resolves when
+    // message is sent. It does not mean it was received.
+    virtual future<> send_append_entries(server_id id, const append_request& append_request) = 0;
+
+    // Send a reply to an append_request.
+    virtual void send_append_entries_reply(server_id id, const append_reply& reply) = 0;
+
+    // Send a vote request.
+    virtual void send_vote_request(server_id id, const vote_request& vote_request) = 0;
+
+    // Sends a reply to a vote request.
+    virtual void send_vote_reply(server_id id, const vote_reply& vote_reply) = 0;
+
+    // Send a request to start leader election.
+    virtual void send_timeout_now(server_id, const timeout_now& timeout_now) = 0;
+
+    // Send a read barrier request.
+    virtual void send_read_quorum(server_id id, const read_quorum& read_quorum) = 0;
+
+    // Send a reply to read barrier request.
+    virtual void send_read_quorum_reply(server_id id, const read_quorum_reply& read_quorum_reply) = 0;
+
+    // Forward a read barrier request to the leader.
+    // Should throw a raft::transport_error if the target host is unreachable.
+    // In this case, the call will be retried after some time,
+    // possibly with a different server_id if the leader has changed by then.
+    virtual future<read_barrier_reply> execute_read_barrier_on_leader(server_id id) = 0;
+
+    // Two-way RPC for adding an entry on the leader
+    // @param id the leader
+    // @param cmd raft::command to be added to the leader's log
+    // @retval either term and index of the committed entry or
+    // not_a_leader exception.
+    virtual future<add_entry_reply> send_add_entry(server_id id, const command& cmd) = 0;
+
+    // Send a configuration change request to the leader. Block until the
+    // leader replies.
+    // Should throw a raft::transport_error if the target host is unreachable.
+    virtual future<add_entry_reply> send_modify_config(server_id id,
+        const std::vector<config_member>& add,
+        const std::vector<server_id>& del) = 0;
+
+    // When a configuration is changed this function is called with the
+    // info about the changes. It is also called when a new server
+    // starts and its configuration is loaded from raft storage.
+    //
+    // In fact, today we always call this function first, just
+    // with the added and only then with the removed servers, to
+    // simplify RPC's job of delivering a batch of messages
+    // addressing both  added and removed servers. Passing the
+    // added servers first, then passing a batch, and then passing
+    // the removed servers makes it easier for RPC to deliver all
+    // messages in the batch.
+    virtual void on_configuration_change(server_address_set add,
+            server_address_set del) = 0;
+
+    // Stop the RPC instance by aborting the work that can be
+    // aborted and waiting for all the rest to complete any
+    // unfinished send operation may return an error after this
+    // function is called.
+    //
+    // The implementation must ensure that `_client->apply_snapshot`, `_client->execute_add_entry`,
+    // `_client->execute_modify_config` and `_client->execute_read_barrier` are not called
+    // after `abort()` is called (even before `abort()` future resolves).
+    virtual future<> abort() = 0;
+private:
+    friend rpc_server;
+};
+
+// Each Raft server is a receiver of RPC messages.
+// Defines the API specific to receiving RPC input.
+class rpc_server {
+public:
+    virtual ~rpc_server() {};
+
+    // This function is called by append_entries RPC
+    virtual void append_entries(server_id from, append_request append_request) = 0;
+
+    // This function is called by append_entries_reply RPC
+    virtual void append_entries_reply(server_id from, append_reply reply) = 0;
+
+    // This function is called to handle RequestVote RPC.
+    virtual void request_vote(server_id from, vote_request vote_request) = 0;
+    // Handle response to RequestVote RPC
+    virtual void request_vote_reply(server_id from, vote_reply vote_reply) = 0;
+
+    virtual void timeout_now_request(server_id from, timeout_now timeout_now) = 0;
+
+    virtual void read_quorum_request(server_id from, read_quorum read_quorum) = 0;
+
+    virtual void read_quorum_reply(server_id from, read_quorum_reply read_quorum_reply) = 0;
+
+    // Apply incoming snapshot, future resolves when application is complete
+    virtual future<snapshot_reply> apply_snapshot(server_id from, install_snapshot snp) = 0;
+
+    // Try to execute read barrier, future resolves when the barrier is completed or error happens
+    virtual future<read_barrier_reply> execute_read_barrier(server_id from, seastar::abort_source* as) = 0;
+
+    // An endpoint on the leader to add an entry to the raft log,
+    // as requested by a remote follower.
+    virtual future<add_entry_reply> execute_add_entry(server_id from, command cmd, seastar::abort_source* as) = 0;
+
+    // An endpoint on the leader to change configuration,
+    // as requested by a remote follower.
+    // If the future resolves successfully, a dummy entry was committed after the configuration change.
+    virtual future<add_entry_reply> execute_modify_config(server_id from,
+        std::vector<config_member> add,
+        std::vector<server_id> del, seastar::abort_source* as) = 0;
+
+    // Update RPC implementation with this client as
+    // the receiver of RPC input.
+    void set_rpc_server(class rpc *rpc) { rpc->_client = this; }
+};
+
+// This class represents persistent storage state for the internal fsm. If any of the
+// function returns an error the Raft instance will be aborted.
+class persistence {
+public:
+    virtual ~persistence() {}
+
+    // Persist given term and vote.
+    // Can be called concurrently with other save-* functions in
+    // the persistence and with itself but an implementation has to
+    // make sure that the result is returned back in the calling order.
+    virtual future<> store_term_and_vote(term_t term, server_id vote) = 0;
+
+    // Load persisted term and vote.
+    // Called during Raft server initialization only, is not run
+    // in parallel with store.
+    virtual future<std::pair<term_t, server_id>> load_term_and_vote() = 0;
+
+    // Persist given commit index.
+    // Cannot be called conccurrently with itself.
+    // Persisting a commit index is optional.
+    virtual future<> store_commit_idx(index_t idx) = 0;
+
+    // Load persisted commit index.
+    // Called during Raft server initialization only, is not run
+    // in parallel with store. If no commit index was storred zero
+    // will be returned.
+    virtual future<index_t> load_commit_idx() = 0;
+
+    // Persist given snapshot and drop all but 'preserve_log_entries'
+    // entries from the Raft log starting from the beginning.
+    // This can overwrite a previously persisted snapshot.
+    // Is called only after the previous invocation completes.
+    // In other words, it's the caller's responsibility to serialize
+    // calls to this function. Can be called in parallel with
+    // store_log_entries() but snap.index should belong to an already
+    // persisted entry.
+    virtual future<> store_snapshot_descriptor(const snapshot_descriptor& snap, size_t preserve_log_entries) = 0;
+
+    // Load a saved snapshot.
+    // This only loads it into memory, but does not apply yet. To
+    // apply call 'state_machine::load_snapshot(snapshot::id)'
+    // Called during Raft server initialization only, should not
+    // run in parallel with store.
+    virtual future<snapshot_descriptor> load_snapshot_descriptor() = 0;
+
+    // Persist given log entries.
+    // Can be called without waiting for previous call to resolve,
+    // but internally all writes should be serialized into forming
+    // one contiguous log that holds entries in order of the
+    // function invocation.
+    virtual future<> store_log_entries(const std::vector<log_entry_ptr>& entries) = 0;
+
+    // Load saved Raft log. Called during Raft server
+    // initialization only, should not run in parallel with store.
+    virtual future<log_entries> load_log() = 0;
+
+    // Truncate all entries with an index greater or equal than
+    // the given index in the log and persist the truncation. Can be
+    // called in parallel with store_log_entries() but internally
+    // should be linearized vs store_log_entries():
+    // store_log_entries() called after truncate_log() should wait
+    // for truncation to complete internally before persisting its
+    // entries.
+    virtual future<> truncate_log(index_t idx) = 0;
+
+    // Stop the persistence instance by aborting the work that can be
+    // aborted and waiting for all the rest to complete. Any
+    // unfinished store/load operation may return an error after
+    // this function is called.
+    virtual future<> abort() = 0;
+};
+
+// To support many Raft groups per server, Seastar Raft
+// extends original Raft with a shared failure detector.
+// It is used instead of empty AppendEntries PRCs in idle
+// cluster.
+// This allows multiple Raft groups to share heartbeat traffic.
+class failure_detector {
+public:
+    virtual ~failure_detector() {}
+    // Called by each server on each tick, which defaults to 10
+    // per second. Should return true if the server is
+    // alive. False results may impact liveness.
+    virtual bool is_alive(server_id server) = 0;
+};
+
+} // namespace raft
+
+
+#include <boost/range/algorithm/find_if.hpp>
+#include "boost/range/join.hpp"
+#include <iostream>
+#include <unordered_set>
+#include <unordered_map>
+#include <seastar/core/condition-variable.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/shared_ptr.hh>
+
+namespace service {
+
+enum class node_state: uint8_t {
+    none,                // the new node joined group0 but did not bootstraped yet (has no tokens and data to serve)
+    bootstrapping,       // the node is currently in the process of streaming its part of the ring
+    decommissioning,     // the node is being decomissioned and stream its data to nodes that took over
+    removing,            // the node is being removed and its data is streamed to nodes that took over from still alive owners
+    replacing,           // the node replaces another dead node in the cluster and it data is being streamed to it
+    rebuilding,          // the node is being rebuild and is streaming data from other replicas
+    normal,              // the node does not do any streaming and serves the slice of the ring that belongs to it
+    left                 // the node left the cluster and group0
+};
+
+enum class topology_request: uint8_t {
+    join,
+    leave,
+    remove,
+    replace,
+    rebuild
+};
+
+using request_param = std::variant<raft::server_id, sstring, uint32_t>;
+
+struct ring_slice {
+    std::unordered_set<dht::token> tokens;
+
+    // When a new node joins the cluster, always a new CDC generation is created.
+    // This is the UUID used to access the data of the CDC generation introduced
+    // when the node owning this ring_slice joined (it's the partition key in CDC_GENERATIONS_V3 table).
+    utils::UUID new_cdc_generation_data_uuid;
+};
+
+struct replica_state {
+    node_state state;
+    seastar::sstring datacenter;
+    seastar::sstring rack;
+    seastar::sstring release_version;
+    std::optional<ring_slice> ring; // if engaged contain the set of tokens the node owns together with their state
+    size_t shard_count;
+    uint8_t ignore_msb;
+};
+
+struct topology {
+    enum class transition_state: uint8_t {
+        commit_cdc_generation,
+        write_both_read_old,
+        write_both_read_new,
+    };
+
+    std::optional<transition_state> tstate;
+
+    // Nodes that are normal members of the ring
+    std::unordered_map<raft::server_id, replica_state> normal_nodes;
+    // Nodes that are left
+    std::unordered_set<raft::server_id> left_nodes;
+    // Nodes that are waiting to be joined by the topology coordinator
+    std::unordered_map<raft::server_id, replica_state> new_nodes;
+    // Nodes that are in the process to be added to the ring
+    // Currently only at most one node at a time will be here
+    std::unordered_map<raft::server_id, replica_state> transition_nodes;
+
+    // Pending topology requests
+    std::unordered_map<raft::server_id, topology_request> requests;
+
+    // Holds parameters for a request per node and valid during entire
+    // operation untill the node becomes normal
+    std::unordered_map<raft::server_id, request_param> req_param;
+
+    std::optional<cdc::generation_id_v2> current_cdc_generation_id;
+
+    // Find only nodes in non 'left' state
+    const std::pair<const raft::server_id, replica_state>* find(raft::server_id id) const;
+    // Return true if node exists in any state including 'left' one
+    bool contains(raft::server_id id);
+};
+
+struct raft_topology_snapshot {
+    // Mutations for the system.topology table.
+    std::vector<canonical_mutation> topology_mutations;
+
+    // Mutation for system.cdc_generations_v3, contains the current CDC generation data.
+    std::optional<canonical_mutation> cdc_generation_mutation;
+};
+
+struct raft_topology_pull_params {
+};
+
+// State machine that is responsible for topology change
+struct topology_state_machine {
+    using topology_type = topology;
+    topology_type _topology;
+    condition_variable event;
+};
+
+// Raft leader uses this command to drive bootstrap process on other nodes
+struct raft_topology_cmd {
+      enum class command: uint8_t {
+          barrier,         // request to wait for the latest topology
+          stream_ranges,   // reqeust to stream data, return when streaming is
+                           // done
+          fence_old_reads  // wait for all reads started before to complete
+      };
+      command cmd;
+};
+
+// returned as a result of raft_bootstrap_cmd
+struct raft_topology_cmd_result {
+    enum class command_status: uint8_t {
+        fail,
+        success
+    };
+    command_status status = command_status::fail;
+};
+
+std::ostream& operator<<(std::ostream& os, topology::transition_state s);
+topology::transition_state transition_state_from_string(const sstring& s);
+std::ostream& operator<<(std::ostream& os, node_state s);
+node_state node_state_from_string(const sstring& s);
+std::ostream& operator<<(std::ostream& os, const topology_request& req);
+topology_request topology_request_from_string(const sstring& s);
+std::ostream& operator<<(std::ostream& os, const raft_topology_cmd::command& cmd);
+}
+
+
+
+
+#include <map>
+#include <unordered_set>
+#include <unordered_map>
+#include <optional>
+#include <memory>
+#include <boost/range/iterator_range.hpp>
+#include <boost/icl/interval.hpp>
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/semaphore.hh>
+#include <seastar/core/sharded.hh>
+
+// forward declaration since replica/database.hh includes this file
+namespace replica {
+class keyspace;
+}
+
+namespace locator {
+
+class abstract_replication_strategy;
+
+using token = dht::token;
+
+class token_metadata;
+class tablet_metadata;
+
+struct host_id_or_endpoint {
+    host_id id;
+    gms::inet_address endpoint;
+
+    enum class param_type {
+        host_id,
+        endpoint,
+        auto_detect
+    };
+
+    host_id_or_endpoint(const sstring& s, param_type restrict = param_type::auto_detect);
+
+    bool has_host_id() const noexcept {
+        return bool(id);
+    }
+
+    bool has_endpoint() const noexcept {
+        return endpoint != gms::inet_address();
+    }
+
+    // Map the host_id to endpoint based on whichever of them is set,
+    // using the token_metadata
+    void resolve(const token_metadata& tm);
+};
+
+class token_metadata_impl;
+
+class token_metadata final {
+    std::unique_ptr<token_metadata_impl> _impl;
+public:
+    struct config {
+        topology::config topo_cfg;
+    };
+    using inet_address = gms::inet_address;
+private:
+    friend class token_metadata_ring_splitter;
+    class tokens_iterator {
+    public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = token;
+        using difference_type = std::ptrdiff_t;
+        using pointer = token*;
+        using reference = token&;
+    public:
+        tokens_iterator() = default;
+        tokens_iterator(const token& start, const token_metadata_impl* token_metadata);
+        bool operator==(const tokens_iterator& it) const;
+        const token& operator*() const;
+        tokens_iterator& operator++();
+    private:
+        std::vector<token>::const_iterator _cur_it;
+        size_t _remaining = 0;
+        const token_metadata_impl* _token_metadata = nullptr;
+
+        friend class token_metadata_impl;
+    };
+
+public:
+    token_metadata(config cfg);
+    explicit token_metadata(std::unique_ptr<token_metadata_impl> impl);
+    token_metadata(token_metadata&&) noexcept; // Can't use "= default;" - hits some static_assert in unique_ptr
+    token_metadata& operator=(token_metadata&&) noexcept;
+    ~token_metadata();
+    const std::vector<token>& sorted_tokens() const;
+    const tablet_metadata& tablets() const;
+    void set_tablets(tablet_metadata);
+    // Update token->endpoint mappings for a given \c endpoint.
+    // \c tokens are all the tokens that are now owned by \c endpoint.
+    //
+    // Note: the function is not exception safe!
+    // It must be called only on a temporary copy of the token_metadata
+    future<> update_normal_tokens(std::unordered_set<token> tokens, inet_address endpoint);
+    const token& first_token(const token& start) const;
+    size_t first_token_index(const token& start) const;
+    std::optional<inet_address> get_endpoint(const token& token) const;
+    std::vector<token> get_tokens(const inet_address& addr) const;
+    const std::unordered_map<token, inet_address>& get_token_to_endpoint() const;
+    const std::unordered_set<inet_address>& get_leaving_endpoints() const;
+    const std::unordered_map<token, inet_address>& get_bootstrap_tokens() const;
+
+    /**
+     * Update or add endpoint given its inet_address and endpoint_dc_rack.
+     */
+    void update_topology(inet_address ep, endpoint_dc_rack dr, std::optional<node::state> opt_st = std::nullopt);
+    /**
+     * Creates an iterable range of the sorted tokens starting at the token t
+     * such that t >= start.
+     *
+     * @param start A token that will define the beginning of the range
+     *
+     * @return The requested range (see the description above)
+     */
+    boost::iterator_range<tokens_iterator> ring_range(const token& start) const;
+
+    /**
+     * Returns a range of tokens such that the first token t satisfies dht::ring_position_view::ending_at(t) >= start.
+     */
+    boost::iterator_range<tokens_iterator> ring_range(dht::ring_position_view start) const;
+
+    topology& get_topology();
+    const topology& get_topology() const;
+    void debug_show() const;
+
+    /**
+     * Store an end-point to host ID mapping.  Each ID must be unique, and
+     * cannot be changed after the fact.
+     *
+     * @param hostId
+     * @param endpoint
+     */
+    void update_host_id(const locator::host_id& host_id, inet_address endpoint);
+
+    /** Return the unique host ID for an end-point. */
+    host_id get_host_id(inet_address endpoint) const;
+
+    /// Return the unique host ID for an end-point or nullopt if not found.
+    std::optional<host_id> get_host_id_if_known(inet_address endpoint) const;
+
+    /** Return the end-point for a unique host ID */
+    std::optional<inet_address> get_endpoint_for_host_id(locator::host_id host_id) const;
+
+    /// Parses the \c host_id_string either as a host uuid or as an ip address and returns the mapping.
+    /// Throws std::invalid_argument on parse error or std::runtime_error if the host_id wasn't found.
+    host_id_or_endpoint parse_host_id_and_endpoint(const sstring& host_id_string) const;
+
+    /** @return a copy of the endpoint-to-id map for read-only operations */
+    std::unordered_map<inet_address, host_id> get_endpoint_to_host_id_map_for_reading() const;
+
+    /// Returns host_id of the local node.
+    host_id get_my_id() const;
+
+    void add_bootstrap_token(token t, inet_address endpoint);
+
+    void add_bootstrap_tokens(std::unordered_set<token> tokens, inet_address endpoint);
+
+    void remove_bootstrap_tokens(std::unordered_set<token> tokens);
+
+    void add_leaving_endpoint(inet_address endpoint);
+    void del_leaving_endpoint(inet_address endpoint);
+
+    void remove_endpoint(inet_address endpoint);
+
+    // Checks if the node is part of the token ring. If yes, the node is one of
+    // the nodes that owns the tokens and inside the set _normal_token_owners.
+    bool is_normal_token_owner(inet_address endpoint) const;
+
+    bool is_leaving(inet_address endpoint) const;
+
+    // Is this node being replaced by another node
+    bool is_being_replaced(inet_address endpoint) const;
+
+    // Is any node being replaced by another node
+    bool is_any_node_being_replaced() const;
+
+    void add_replacing_endpoint(inet_address existing_node, inet_address replacing_node);
+
+    void del_replacing_endpoint(inet_address existing_node);
+
+    /**
+     * Create a full copy of token_metadata using asynchronous continuations.
+     * The caller must ensure that the cloned object will not change if
+     * the function yields.
+     */
+    future<token_metadata> clone_async() const noexcept;
+
+    /**
+     * Create a copy of TokenMetadata with only tokenToEndpointMap. That is, pending ranges,
+     * bootstrap tokens and leaving endpoints are not included in the copy.
+     * The caller must ensure that the cloned object will not change if
+     * the function yields.
+     */
+    future<token_metadata> clone_only_token_map() const noexcept;
+    /**
+     * Create a copy of TokenMetadata with tokenToEndpointMap reflecting situation after all
+     * current leave operations have finished.
+     * The caller must ensure that the cloned object will not change if
+     * the function yields.
+     *
+     * @return a future holding a new token metadata
+     */
+    future<token_metadata> clone_after_all_left() const noexcept;
+
+    /**
+     * Gently clear the token_metadata members.
+     * Yield if needed to prevent reactor stalls.
+     */
+    future<> clear_gently() noexcept;
+
+    /*
+     * Number of returned ranges = O(tokens.size())
+     */
+    dht::token_range_vector get_primary_ranges_for(std::unordered_set<token> tokens) const;
+
+    /*
+     * Number of returned ranges = O(1)
+     */
+    dht::token_range_vector get_primary_ranges_for(token right) const;
+    static boost::icl::interval<token>::interval_type range_to_interval(range<dht::token> r);
+    static range<dht::token> interval_to_range(boost::icl::interval<token>::interval_type i);
+
+    bool has_pending_ranges(sstring keyspace_name, inet_address endpoint) const;
+     /**
+     * Calculate pending ranges according to bootstrapping, leaving and replacing nodes.
+     *
+     * We construct an updated version of the token_metadata by incorporating
+     * all proposed modifications (join, bootstrap, and replace operations).
+     * Subsequently, for each token range, we compare the outcomes of the calculate_natural_endpoints
+     * function applied to both the previous and the new token_metadata.
+     * Endpoints present in the updated version but absent in the original one
+     * ought to be appended to the pending_ranges.
+     */
+    future<> update_pending_ranges(const abstract_replication_strategy& strategy, const sstring& keyspace_name, dc_rack_fn& get_dc_rack);
+
+    token get_predecessor(token t) const;
+
+    const std::unordered_set<inet_address>& get_all_endpoints() const;
+
+    /* Returns the number of different endpoints that own tokens in the ring.
+     * Bootstrapping tokens are not taken into account. */
+    size_t count_normal_token_owners() const;
+
+    // returns empty vector if keyspace_name not found.
+    inet_address_vector_topology_change pending_endpoints_for(const token& token, const sstring& keyspace_name) const;
+
+    // This function returns a list of nodes to which a read request should be directed.
+    // Returns not null only during topology changes, if _topology_change_stage == read_new and
+    // new set of replicas differs from the old one.
+    std::optional<inet_address_vector_replica_set> endpoints_for_reading(const token& token, const sstring& keyspace_name) const;
+
+    // updates the current topology_transition_state of this instance,
+    // this value is preserved in all clone functions,
+    // by default it's not set
+    void set_topology_transition_state(std::optional<service::topology::transition_state> state);
+
+    /** @return an endpoint to token multimap representation of tokenToEndpointMap (a copy) */
+    std::multimap<inet_address, token> get_endpoint_to_token_map_for_reading() const;
+    /**
+     * @return a (stable copy, won't be modified) Token to Endpoint map for all the normal and bootstrapping nodes
+     *         in the cluster.
+     */
+    std::map<token, inet_address> get_normal_and_bootstrapping_token_to_endpoint_map() const;
+
+    long get_ring_version() const;
+    void invalidate_cached_rings();
+
+    friend class token_metadata_impl;
+};
+
+using token_metadata_ptr = lw_shared_ptr<const token_metadata>;
+using mutable_token_metadata_ptr = lw_shared_ptr<token_metadata>;
+using token_metadata_lock = semaphore_units<>;
+using token_metadata_lock_func = noncopyable_function<future<token_metadata_lock>() noexcept>;
+
+template <typename... Args>
+mutable_token_metadata_ptr make_token_metadata_ptr(Args... args) {
+    return make_lw_shared<token_metadata>(std::forward<Args>(args)...);
+}
+
+class shared_token_metadata {
+    mutable_token_metadata_ptr _shared;
+    token_metadata_lock_func _lock_func;
+
+public:
+    // used to construct the shared object as a sharded<> instance
+    // lock_func returns semaphore_units<>
+    explicit shared_token_metadata(token_metadata_lock_func lock_func, token_metadata::config cfg)
+        : _shared(make_token_metadata_ptr(std::move(cfg)))
+        , _lock_func(std::move(lock_func))
+    { }
+
+    shared_token_metadata(const shared_token_metadata& x) = delete;
+    shared_token_metadata(shared_token_metadata&& x) = default;
+
+    token_metadata_ptr get() const noexcept {
+        return _shared;
+    }
+
+    void set(mutable_token_metadata_ptr tmptr) noexcept;
+
+    // Token metadata changes are serialized
+    // using the schema_tables merge_lock.
+    //
+    // Must be called on shard 0.
+    future<token_metadata_lock> get_lock() const noexcept {
+        return _lock_func();
+    }
+
+    // mutate_token_metadata_on_all_shards acquires the shared_token_metadata lock,
+    // clones the token_metadata (using clone_async)
+    // and calls an asynchronous functor on
+    // the cloned copy of the token_metadata to mutate it.
+    //
+    // If the functor is successful, the mutated clone
+    // is set back to to the shared_token_metadata,
+    // otherwise, the clone is destroyed.
+    future<> mutate_token_metadata(seastar::noncopyable_function<future<> (token_metadata&)> func);
+
+    // mutate_token_metadata_on_all_shards acquires the shared_token_metadata lock,
+    // clones the token_metadata (using clone_async)
+    // and calls an asynchronous functor on
+    // the cloned copy of the token_metadata to mutate it.
+    //
+    // If the functor is successful, the mutated clone
+    // is set back to to the shared_token_metadata on all shards,
+    // otherwise, the clone is destroyed.
+    //
+    // Must be called on shard 0.
+    static future<> mutate_on_all_shards(sharded<shared_token_metadata>& stm, seastar::noncopyable_function<future<> (token_metadata&)> func);
+};
+
+std::unique_ptr<locator::token_range_splitter> make_splitter(token_metadata_ptr);
+
+}
+
+
+
+
+
+
 #include "dht/boot_strapper.hh"
 #include "dht/i_partitioner.hh"
 #include "dht/partition_filter.hh"

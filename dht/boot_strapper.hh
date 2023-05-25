@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
  */
 #pragma once
-#include "gms/inet_address.hh"
-#include "locator/token_metadata.hh"
+
+
 #include "dht/i_partitioner.hh"
 #include <unordered_set>
 #include "replica/database_fwd.hh"
