@@ -5016,8 +5016,956 @@ deserialize_gc_clock_duration_value(Input& in) {
  */
 
 
-#include "serializer.hh"
-#include "db/extensions.hh"
+
+/*
+ * Copyright (C) 2014-present ScyllaDB
+ */
+
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+// The following is a redesigned subset of Java's DataOutput,
+// DataOutputStream, DataInput, DataInputStream, etc. It allows serializing
+// several primitive types (e.g., integer, string, etc.) to an object which
+// is only capable of write()ing a single byte (write(char)) or an array of
+// bytes (write(char *, int)), and deserializing the same data from an object
+// with a char read() interface.
+//
+// The format of this serialization is identical to the format used by
+// Java's DataOutputStream class. This is important to allow us communicate
+// with nodes running Java version of the code.
+//
+// We only support the subset actually used in Cassandra, and the subset
+// that is reversible, i.e., can be read back by data_input. For example,
+// we only support DataOutput.writeUTF(string) and not
+// DataOutput.writeChars(string) - because the latter does not include
+// the length, which is necessary for reading the string back.
+
+#include <stdint.h>
+
+#include <seastar/core/sstring.hh>
+#include <seastar/net/byteorder.hh>
+#include <iosfwd>
+#include <iterator>
+
+
+class UTFDataFormatException { };
+class EOFException { };
+
+static constexpr size_t serialize_int8_size = 1;
+static constexpr size_t serialize_bool_size = 1;
+static constexpr size_t serialize_int16_size = 2;
+static constexpr size_t serialize_int32_size = 4;
+static constexpr size_t serialize_int64_size = 8;
+
+namespace internal_impl {
+
+template <typename ExplicitIntegerType, typename CharOutputIterator, typename IntegerType>
+requires std::is_integral<ExplicitIntegerType>::value && std::is_integral<IntegerType>::value && requires (CharOutputIterator it) {
+    *it++ = 'a';
+}
+inline
+void serialize_int(CharOutputIterator& out, IntegerType val) {
+    ExplicitIntegerType nval = net::hton(ExplicitIntegerType(val));
+    out = std::copy_n(reinterpret_cast<const char*>(&nval), sizeof(nval), out);
+}
+
+}
+
+template <typename CharOutputIterator>
+inline
+void serialize_int8(CharOutputIterator& out, uint8_t val) {
+    internal_impl::serialize_int<uint8_t>(out, val);
+}
+
+template <typename CharOutputIterator>
+inline
+void serialize_int16(CharOutputIterator& out, uint16_t val) {
+    internal_impl::serialize_int<uint16_t>(out, val);
+}
+
+template <typename CharOutputIterator>
+inline
+void serialize_int32(CharOutputIterator& out, uint32_t val) {
+    internal_impl::serialize_int<uint32_t>(out, val);
+}
+
+template <typename CharOutputIterator>
+inline
+void serialize_int64(CharOutputIterator& out, uint64_t val) {
+    internal_impl::serialize_int<uint64_t>(out, val);
+}
+
+template <typename CharOutputIterator>
+inline
+void serialize_bool(CharOutputIterator& out, bool val) {
+    serialize_int8(out, val ? 1 : 0);
+}
+
+// The following serializer is compatible with Java's writeUTF().
+// In our C++ implementation, we assume the string is already UTF-8
+// encoded. Unfortunately, Java's implementation is a bit different from
+// UTF-8 for encoding characters above 16 bits in unicode (see
+// http://docs.oracle.com/javase/7/docs/api/java/io/DataInput.html#modified-utf-8)
+// For now we'll just assume those aren't in the string...
+// TODO: fix the compatibility with Java even in this case.
+template <typename CharOutputIterator>
+requires requires (CharOutputIterator it) {
+    *it++ = 'a';
+}
+inline
+void serialize_string(CharOutputIterator& out, const sstring& s) {
+    // Java specifies that nulls in the string need to be replaced by the
+    // two bytes 0xC0, 0x80. Let's not bother with such transformation
+    // now, but just verify wasn't needed.
+    for (char c : s) {
+        if (c == '\0') {
+            throw UTFDataFormatException();
+        }
+    }
+    if (s.size() > std::numeric_limits<uint16_t>::max()) {
+        // Java specifies the string length is written as uint16_t, so we
+        // can't serialize longer strings.
+        throw UTFDataFormatException();
+    }
+    serialize_int16(out, s.size());
+    out = std::copy(s.begin(), s.end(), out);
+}
+
+template <typename CharOutputIterator>
+requires requires (CharOutputIterator it) {
+    *it++ = 'a';
+}
+inline
+void serialize_string(CharOutputIterator& out, const char* s) {
+    // TODO: like above, need to change UTF-8 when above 16-bit.
+    auto len = strlen(s);
+    if (len > std::numeric_limits<uint16_t>::max()) {
+        // Java specifies the string length is written as uint16_t, so we
+        // can't serialize longer strings.
+        throw UTFDataFormatException();
+    }
+    serialize_int16(out, len);
+    out = std::copy_n(s, len, out);
+}
+
+inline
+size_t serialize_string_size(const sstring& s) {;
+    // As above, this code is missing the case of modified utf-8
+    return serialize_int16_size + s.size();
+}
+
+template<typename T, typename CharOutputIterator>
+static inline
+void write(CharOutputIterator& out, const T& val) {
+    auto v = net::ntoh(val);
+    out = std::copy_n(reinterpret_cast<char*>(&v), sizeof(v), out);
+}
+
+
+/*
+ * Copyright (C) 2015-present ScyllaDB
+ */
+
+/*
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+// This class is the parts of java.util.UUID that we need
+
+#include <stdint.h>
+#include <cassert>
+#include <array>
+#include <iosfwd>
+#include <compare>
+
+#include <seastar/core/sstring.hh>
+#include <seastar/core/print.hh>
+#include <seastar/net/byteorder.hh>
+
+namespace utils {
+
+class UUID {
+private:
+    int64_t most_sig_bits;
+    int64_t least_sig_bits;
+public:
+    constexpr UUID() noexcept : most_sig_bits(0), least_sig_bits(0) {}
+    constexpr UUID(int64_t most_sig_bits, int64_t least_sig_bits) noexcept
+        : most_sig_bits(most_sig_bits), least_sig_bits(least_sig_bits) {}
+
+    // May throw marshal_exception is failed to parse uuid string.
+    explicit UUID(const sstring& uuid_string) : UUID(sstring_view(uuid_string)) { }
+    explicit UUID(const char * s) : UUID(sstring_view(s)) {}
+    explicit UUID(sstring_view uuid_string);
+
+    int64_t get_most_significant_bits() const noexcept {
+        return most_sig_bits;
+    }
+    int64_t get_least_significant_bits() const noexcept {
+        return least_sig_bits;
+    }
+    int version() const noexcept {
+        return (most_sig_bits >> 12) & 0xf;
+    }
+
+    bool is_timestamp() const noexcept {
+        return version() == 1;
+    }
+
+    int64_t timestamp() const noexcept {
+        //if (version() != 1) {
+        //     throw new UnsupportedOperationException("Not a time-based UUID");
+        //}
+        assert(is_timestamp());
+
+        return ((most_sig_bits & 0xFFF) << 48) |
+               (((most_sig_bits >> 16) & 0xFFFF) << 32) |
+               (((uint64_t)most_sig_bits) >> 32);
+
+    }
+
+    friend ::fmt::formatter<UUID>;
+
+    sstring to_sstring() const {
+        return fmt::to_string(*this);
+    }
+
+    friend std::ostream& operator<<(std::ostream& out, const UUID& uuid);
+
+    bool operator==(const UUID& v) const noexcept = default;
+
+    // Please note that this comparator does not preserve timeuuid
+    // monotonicity. For this reason you should avoid using it for
+    // UUIDs that could store timeuuids, otherwise bugs like
+    // https://github.com/scylladb/scylla/issues/7729 may happen.
+    std::strong_ordering operator<=>(const UUID& v) const noexcept {
+        auto cmp = uint64_t(most_sig_bits) <=> uint64_t(v.most_sig_bits);
+        if (cmp != 0) {
+            return cmp;
+        }
+        return uint64_t(least_sig_bits) <=> uint64_t(v.least_sig_bits);
+    }
+
+    // nibble set to a non-zero value
+    bool is_null() const noexcept {
+        return !most_sig_bits && !least_sig_bits;
+    }
+
+    explicit operator bool() const noexcept {
+        return !is_null();
+    }
+
+    bytes serialize() const {
+        bytes b(bytes::initialized_later(), serialized_size());
+        auto i = b.begin();
+        serialize(i);
+        return b;
+    }
+
+    static size_t serialized_size() noexcept {
+        return 16;
+    }
+
+    template <typename CharOutputIterator>
+    void serialize(CharOutputIterator& out) const {
+        serialize_int64(out, most_sig_bits);
+        serialize_int64(out, least_sig_bits);
+    }
+};
+
+inline UUID null_uuid() noexcept {
+    return UUID();
+}
+
+UUID make_random_uuid() noexcept;
+
+// Read 8 most significant bytes of timeuuid from serialized bytes
+inline uint64_t timeuuid_read_msb(const int8_t *b) noexcept {
+    // cast to unsigned to avoid sign-compliment during shift.
+    auto u64 = [](uint8_t i) -> uint64_t { return i; };
+    // Scylla and Cassandra use a standard UUID memory layout for MSB:
+    // 4 bytes    2 bytes    2 bytes
+    // time_low - time_mid - time_hi_and_version
+    //
+    // The storage format uses network byte order.
+    // Reorder bytes to allow for an integer compare.
+    return u64(b[6] & 0xf) << 56 | u64(b[7]) << 48 |
+           u64(b[4]) << 40 | u64(b[5]) << 32 |
+           u64(b[0]) << 24 | u64(b[1]) << 16 |
+           u64(b[2]) << 8  | u64(b[3]);
+}
+
+inline uint64_t uuid_read_lsb(const int8_t *b) noexcept {
+    auto u64 = [](uint8_t i) -> uint64_t { return i; };
+    return u64(b[8]) << 56 | u64(b[9]) << 48 |
+           u64(b[10]) << 40 | u64(b[11]) << 32 |
+           u64(b[12]) << 24 | u64(b[13]) << 16 |
+           u64(b[14]) << 8  | u64(b[15]);
+}
+
+// Compare two values of timeuuid type.
+// Cassandra legacy requires:
+// - using signed compare for least significant bits.
+// - masking off UUID version during compare, to
+// treat possible non-version-1 UUID the same way as UUID.
+//
+// To avoid breaking ordering in existing sstables, Scylla preserves
+// Cassandra compare order.
+//
+inline std::strong_ordering timeuuid_tri_compare(bytes_view o1, bytes_view o2) noexcept {
+    auto timeuuid_read_lsb = [](bytes_view o) -> uint64_t {
+        return uuid_read_lsb(o.begin()) ^ 0x8080808080808080;
+    };
+    auto res = timeuuid_read_msb(o1.begin()) <=> timeuuid_read_msb(o2.begin());
+    if (res == 0) {
+        res = timeuuid_read_lsb(o1) <=> timeuuid_read_lsb(o2);
+    }
+    return res;
+}
+
+// Compare two values of UUID type, if they happen to be
+// both of Version 1 (timeuuids).
+//
+// This function uses memory order for least significant bits,
+// which is both faster and monotonic, so should be preferred
+// to @timeuuid_tri_compare() used for all new features.
+//
+inline std::strong_ordering uuid_tri_compare_timeuuid(bytes_view o1, bytes_view o2) noexcept {
+    auto res = timeuuid_read_msb(o1.begin()) <=> timeuuid_read_msb(o2.begin());
+    if (res == 0) {
+        res = uuid_read_lsb(o1.begin()) <=> uuid_read_lsb(o2.begin());
+    }
+    return res;
+}
+
+template<typename Tag>
+struct tagged_uuid {
+    utils::UUID id;
+    std::strong_ordering operator<=>(const tagged_uuid&) const noexcept = default;
+    explicit operator bool() const noexcept {
+        // The default constructor sets the id to nil, which is
+        // guaranteed to not match any valid id.
+        return bool(id);
+    }
+    static tagged_uuid create_random_id() noexcept { return tagged_uuid{utils::make_random_uuid()}; }
+    static tagged_uuid create_null_id() noexcept { return tagged_uuid{utils::null_uuid()}; }
+    explicit tagged_uuid(const utils::UUID& uuid) noexcept : id(uuid) {}
+    tagged_uuid() = default;
+
+    const utils::UUID& uuid() const noexcept {
+        return id;
+    }
+
+    sstring to_sstring() const {
+        return id.to_sstring();
+    }
+};
+} // namespace utils
+
+template<>
+struct appending_hash<utils::UUID> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const utils::UUID& id) const noexcept {
+        feed_hash(h, id.get_most_significant_bits());
+        feed_hash(h, id.get_least_significant_bits());
+    }
+};
+
+template<typename Tag>
+struct appending_hash<utils::tagged_uuid<Tag>> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const utils::tagged_uuid<Tag>& id) const noexcept {
+        appending_hash<utils::UUID>{}(h, id.uuid());
+    }
+};
+
+namespace std {
+template<>
+struct hash<utils::UUID> {
+    size_t operator()(const utils::UUID& id) const noexcept {
+        auto hilo = id.get_most_significant_bits()
+                ^ id.get_least_significant_bits();
+        return size_t((hilo >> 32) ^ hilo);
+    }
+};
+
+template<typename Tag>
+struct hash<utils::tagged_uuid<Tag>> {
+    size_t operator()(const utils::tagged_uuid<Tag>& id) const noexcept {
+        return hash<utils::UUID>()(id.id);
+    }
+};
+
+template<typename Tag>
+std::ostream& operator<<(std::ostream& os, const utils::tagged_uuid<Tag>& id) {
+    return os << id.id;
+}
+} // namespace std
+
+template <>
+struct fmt::formatter<utils::UUID> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const utils::UUID& id, FormatContext& ctx) const {
+        // This matches Java's UUID.toString() actual implementation. Note that
+        // that method's documentation suggest something completely different!
+        return fmt::format_to(ctx.out(),
+                "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+                ((uint64_t)id.most_sig_bits >> 32),
+                ((uint64_t)id.most_sig_bits >> 16 & 0xffff),
+                ((uint64_t)id.most_sig_bits & 0xffff),
+                ((uint64_t)id.least_sig_bits >> 48 & 0xffff),
+                ((uint64_t)id.least_sig_bits & 0xffffffffffffLL));
+    }
+};
+
+template <typename Tag>
+struct fmt::formatter<utils::tagged_uuid<Tag>> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const utils::tagged_uuid<Tag>& id, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}", id.id);
+    }
+};
+
+/*
+ *
+ * Modified by ScyllaDB
+ * Copyright (C) 2015-present ScyllaDB
+ */
+
+/*
+ * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
+ */
+
+#include <stdint.h>
+#include <assert.h>
+
+#include <memory>
+#include <chrono>
+#include <random>
+#include <limits>
+
+namespace utils {
+
+// Scylla uses specialized timeuuids for list keys. They use
+// limited space of timeuuid clockseq component to store
+// sub-microsecond time. This exception is thrown when an attempt
+// is made to construct such a UUID with a sub-microsecond argument
+// which is outside the available bit range.
+struct timeuuid_submicro_out_of_range: public std::out_of_range {
+    using out_of_range::out_of_range;
+};
+
+/**
+ * The goods are here: www.ietf.org/rfc/rfc4122.txt.
+ */
+class UUID_gen
+{
+public:
+    // UUID timestamp time component is represented in intervals
+    // of 1/10 of a microsecond since the beginning of GMT epoch.
+    using decimicroseconds = std::chrono::duration<int64_t, std::ratio<1, 10'000'000>>;
+    using milliseconds = std::chrono::milliseconds;
+private:
+    // A grand day! millis at 00:00:00.000 15 Oct 1582.
+    static constexpr decimicroseconds START_EPOCH = decimicroseconds{-122192928000000000L};
+    // UUID time must fit in 60 bits
+    static constexpr milliseconds UUID_UNIXTIME_MAX = duration_cast<milliseconds>(
+        decimicroseconds{0x0fffffffffffffffL} + START_EPOCH);
+
+    // A random mac address for use in timeuuids
+    // where we can not use clockseq to randomize the physical
+    // node, and prefer using a random address to a physical one
+    // to avoid duplicate timeuuids when system time goes back
+    // while scylla is restarting. Using a spoof node also helps
+    // avoid timeuuid duplicates when multiple nodes run on the
+    // same host and share the physical MAC address.
+    static thread_local const int64_t spoof_node;
+    static thread_local const int64_t clock_seq_and_node;
+
+    /*
+     * The min and max possible lsb for a UUID.
+     * Note that his is not 0 and all 1's because Cassandra TimeUUIDType
+     * compares the lsb parts as a signed byte array comparison. So the min
+     * value is 8 times -128 and the max is 8 times +127.
+     *
+     * Note that we ignore the uuid variant (namely, MIN_CLOCK_SEQ_AND_NODE
+     * have variant 2 as it should, but MAX_CLOCK_SEQ_AND_NODE have variant 0).
+     * I don't think that has any practical consequence and is more robust in
+     * case someone provides a UUID with a broken variant.
+     */
+    static constexpr int64_t MIN_CLOCK_SEQ_AND_NODE = 0x8080808080808080L;
+    static constexpr int64_t MAX_CLOCK_SEQ_AND_NODE = 0x7f7f7f7f7f7f7f7fL;
+
+    // An instance of UUID_gen uses clock_seq_and_node so should
+    // be constructed after it.
+    static thread_local UUID_gen _instance;
+
+    decimicroseconds _last_used_time = decimicroseconds{0};
+
+    UUID_gen()
+    {
+        // make sure someone didn't whack the clockSeqAndNode by changing the order of instantiation.
+        assert(clock_seq_and_node != 0);
+    }
+
+    // Return decimicrosecond time based on the system time,
+    // in milliseconds. If the current millisecond hasn't change
+    // from the previous call, increment the previously used
+    // value by one decimicrosecond.
+    // NOTE: In the original Java code this function was
+    // "synchronized". This isn't needed since in Scylla we do not
+    // need monotonicity between time UUIDs created at different
+    // shards and UUID code uses thread local state on each shard.
+    int64_t create_time_safe() {
+        using std::chrono::system_clock;
+        auto millis = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+        decimicroseconds when = from_unix_timestamp(millis);
+        if (when > _last_used_time) {
+            _last_used_time = when;
+        } else {
+            when = ++_last_used_time;
+        }
+        return create_time(when);
+    }
+
+public:
+    // We have only 17 timeuuid bits available to store this
+    // value.
+    static constexpr int SUBMICRO_LIMIT = (1<<17);
+    /**
+     * Creates a type 1 UUID (time-based UUID).
+     *
+     * @return a UUID instance
+     */
+    static UUID get_time_UUID()
+    {
+        auto uuid = UUID(_instance.create_time_safe(), clock_seq_and_node);
+        assert(uuid.is_timestamp());
+        return uuid;
+    }
+
+    /**
+     * Creates a type 1 UUID (time-based UUID) with the wall clock time point @param tp.
+     *
+     * @return a UUID instance
+     */
+    static UUID get_time_UUID(std::chrono::system_clock::time_point tp)
+    {
+        auto uuid = UUID(create_time(from_unix_timestamp(tp.time_since_epoch())), clock_seq_and_node);
+        assert(uuid.is_timestamp());
+        return uuid;
+    }
+
+    /**
+     * Creates a type 1 UUID (time-based UUID) with the timestamp of @param when, in milliseconds.
+     *
+     * @return a UUID instance
+     */
+    static UUID get_time_UUID(milliseconds when, int64_t clock_seq_and_node = UUID_gen::clock_seq_and_node)
+    {
+        auto uuid = UUID(create_time(from_unix_timestamp(when)), clock_seq_and_node);
+        assert(uuid.is_timestamp());
+        return uuid;
+    }
+
+    static UUID get_time_UUID_raw(decimicroseconds when, int64_t clock_seq_and_node)
+    {
+        auto uuid = UUID(create_time(when), clock_seq_and_node);
+        assert(uuid.is_timestamp());
+        return uuid;
+    }
+
+    /**
+     * Similar to get_time_UUID, but randomize the clock and sequence.
+     * If you can guarantee that the when_in_micros() argument is unique for
+     * every call, then you should prefer get_time_UUID_from_micros() which is faster. If you can't
+     * guarantee this however, this method will ensure the returned UUID are still unique (across calls)
+     * through randomization.
+     *
+     * @param when_in_micros a unix time in microseconds.
+     * @return a new UUID 'id' such that micros_timestamp(id) == when_in_micros. The UUID returned
+     * by different calls will be unique even if when_in_micros is not.
+     */
+    static UUID get_random_time_UUID_from_micros(std::chrono::microseconds when_in_micros) {
+        static thread_local std::mt19937_64 rand_gen(std::random_device().operator()());
+        static thread_local std::uniform_int_distribution<int64_t> rand_dist(std::numeric_limits<int64_t>::min());
+
+        auto uuid = UUID(create_time(from_unix_timestamp(when_in_micros)), rand_dist(rand_gen));
+        assert(uuid.is_timestamp());
+        return uuid;
+    }
+    // Generate a time-based (Version 1) UUID using
+    // a microsecond-precision Unix time and a unique number in
+    // range [0, 131072).
+    // Used to generate many unique, monotonic UUIDs
+    // sharing the same microsecond part. In lightweight
+    // transactions we must ensure monotonicity between all UUIDs
+    // which belong to one lightweight transaction and UUIDs of
+    // another transaction, but still need multiple distinct and
+    // monotonic UUIDs within the same transaction.
+    // \throws timeuuid_submicro_out_of_range
+    //
+    static std::array<int8_t, 16>
+    get_time_UUID_bytes_from_micros_and_submicros(std::chrono::microseconds when_in_micros, int submicros) {
+        std::array<int8_t, 16> uuid_bytes;
+
+        if (submicros < 0 || submicros >= SUBMICRO_LIMIT) {
+            throw timeuuid_submicro_out_of_range("timeuuid submicro component does not fit into available bits");
+        }
+
+        auto dmc = from_unix_timestamp(when_in_micros);
+        // We have roughly 3 extra bits we will use to increase
+        // sub-microsecond component range from clockseq's 2^14 to 2^17.
+        int64_t msb = create_time(dmc + decimicroseconds((submicros >> 14) & 0b111));
+        // See RFC 4122 for details.
+        msb = net::hton(msb);
+
+        std::copy_n(reinterpret_cast<char*>(&msb), sizeof(msb), uuid_bytes.data());
+
+        // Use 14-bit clockseq to store the rest of sub-microsecond component.
+        int64_t clockseq = submicros & 0b11'1111'1111'1111;
+        // Scylla, like Cassandra, uses signed int8 compare to
+        // compare lower bits of timeuuid. It means 0xA0 > 0xFF.
+        // Bit-xor the sign bit to "fix" the order. See also
+        // https://issues.apache.org/jira/browse/CASSANDRA-8730
+        // and Cassandra commit 6d266253a5bdaf3a25eef14e54deb56aba9b2944
+        //
+        // Turn 0 into -127, 1 into -126, ... and 128 into 0, ...
+        clockseq ^=  0b0000'0000'1000'0000;
+        // Least significant bits: UUID variant (1), clockseq and node.
+        // To protect against the system clock back-adjustment,
+        // use a random (spoof) node identifier. Normally this
+        // protection is provided by clockseq component, but we've
+        // just stored sub-microsecond time in it.
+        int64_t lsb = ((clockseq | 0b1000'0000'0000'0000) << 48) | UUID_gen::spoof_node;
+        lsb = net::hton(lsb);
+
+        std::copy_n(reinterpret_cast<char*>(&lsb), sizeof(lsb), uuid_bytes.data() + sizeof(msb));
+
+        return uuid_bytes;
+    }
+
+    /** validates uuid from raw bytes. */
+    static bool is_valid_UUID(bytes raw) {
+        return raw.size() == 16;
+    }
+
+    /** creates uuid from raw bytes. */
+    static UUID get_UUID(bytes raw) {
+        assert(raw.size() == 16);
+        return get_UUID(raw.begin());
+    }
+
+    /** creates uuid from raw bytes. src must point to a region of 16 bytes*/
+    static UUID get_UUID(int8_t* src) {
+        struct tmp { uint64_t msb, lsb; } t;
+        std::copy(src, src + 16, reinterpret_cast<char*>(&t));
+        return UUID(net::ntoh(t.msb), net::ntoh(t.lsb));
+    }
+
+    /**
+     * Creates a type 3 (name based) UUID based on the specified byte array.
+     */
+    static UUID get_name_UUID(bytes_view b);
+    static UUID get_name_UUID(sstring_view str);
+    static UUID get_name_UUID(const unsigned char* s, size_t len);
+
+    /** decomposes a uuid into raw bytes. */
+    static std::array<int8_t, 16> decompose(const UUID& uuid)
+    {
+        uint64_t most = uuid.get_most_significant_bits();
+        uint64_t least = uuid.get_least_significant_bits();
+        std::array<int8_t, 16> b;
+        for (int i = 0; i < 8; i++)
+        {
+            b[i] = (char)(most >> ((7-i) * 8));
+            b[8+i] = (char)(least >> ((7-i) * 8));
+        }
+        return b;
+    }
+
+    /**
+     * Returns a 16 byte representation of a type 1 UUID (a time-based UUID),
+     * based on the current system time.
+     *
+     * @return a type 1 UUID represented as a byte[]
+     */
+    static std::array<int8_t, 16> get_time_UUID_bytes() {
+
+        uint64_t msb = _instance.create_time_safe();
+        uint64_t lsb = clock_seq_and_node;
+        std::array<int8_t, 16> uuid_bytes;
+
+        for (int i = 0; i < 8; i++) {
+            uuid_bytes[i] = (int8_t) (msb >> 8 * (7 - i));
+        }
+
+        for (int i = 8; i < 16; i++) {
+            uuid_bytes[i] = (int8_t) (lsb >> 8 * (7 - (i - 8)));
+        }
+
+        return uuid_bytes;
+    }
+
+    /**
+     * Returns the smaller possible type 1 UUID having the provided timestamp.
+     *
+     * <b>Warning:</b> this method should only be used for querying as this
+     * doesn't at all guarantee the uniqueness of the resulting UUID.
+     */
+    static UUID min_time_UUID(decimicroseconds timestamp = decimicroseconds{0})
+    {
+        auto uuid = UUID(create_time(from_unix_timestamp(timestamp)), MIN_CLOCK_SEQ_AND_NODE);
+        assert(uuid.is_timestamp());
+        return uuid;
+    }
+
+    /**
+     * Returns the biggest possible type 1 UUID having the provided timestamp.
+     *
+     * <b>Warning:</b> this method should only be used for querying as this
+     * doesn't at all guarantee the uniqueness of the resulting UUID.
+     */
+    static UUID max_time_UUID(milliseconds timestamp)
+    {
+        // unix timestamp are milliseconds precision, uuid timestamp are 100's
+        // nanoseconds precision. If we ask for the biggest uuid have unix
+        // timestamp 1ms, then we should not extend 100's nanoseconds
+        // precision by taking 10000, but rather 19999.
+        decimicroseconds uuid_tstamp = from_unix_timestamp(timestamp + milliseconds(1)) - decimicroseconds(1);
+        auto uuid = UUID(create_time(uuid_tstamp), MAX_CLOCK_SEQ_AND_NODE);
+        assert(uuid.is_timestamp());
+        return uuid;
+    }
+
+    /**
+     * @param uuid
+     * @return milliseconds since Unix epoch
+     */
+    static milliseconds unix_timestamp(UUID uuid)
+    {
+        return duration_cast<milliseconds>(decimicroseconds(uuid.timestamp()) + START_EPOCH);
+    }
+
+    /**
+     * @param uuid
+     * @return seconds since Unix epoch
+     */
+    static std::chrono::seconds unix_timestamp_in_sec(UUID uuid)
+    {
+        using namespace std::chrono;
+        return duration_cast<seconds>(static_cast<milliseconds>(unix_timestamp(uuid)));
+    }
+
+    /**
+     * @param uuid
+     * @return microseconds since Unix epoch
+     */
+    static int64_t micros_timestamp(UUID uuid)
+    {
+        return (uuid.timestamp() + START_EPOCH.count())/10;
+    }
+
+    template <std::intmax_t N, std::intmax_t D>
+    static bool is_valid_unix_timestamp(std::chrono::duration<int64_t, std::ratio<N, D>> d) {
+        return duration_cast<milliseconds>(d) < UUID_UNIXTIME_MAX;
+    }
+
+    template <std::intmax_t N, std::intmax_t D>
+    static decimicroseconds from_unix_timestamp(std::chrono::duration<int64_t, std::ratio<N, D>> d) {
+        // Avoid 64-bit representation overflow when adding
+        // timeuuid epoch to nanosecond resolution time.
+        auto dmc = duration_cast<decimicroseconds>(d);
+        return dmc - START_EPOCH;
+    }
+
+    // std::chrono typeaware wrapper around create_time().
+    // Creates a timeuuid compatible time (decimicroseconds since
+    // the start of GMT epoch).
+    template <std::intmax_t N, std::intmax_t D>
+    static int64_t create_time(std::chrono::duration<int64_t, std::ratio<N, D>> d) {
+        auto dmc = duration_cast<decimicroseconds>(d);
+        uint64_t msb = dmc.count();
+        // timeuuid time must fit in 60 bits
+        assert(!(0xf000000000000000UL & msb));
+        return ((0x00000000ffffffffL & msb) << 32 |
+               (0x0000ffff00000000UL & msb) >> 16 |
+               (0x0fff000000000000UL & msb) >> 48 |
+                0x0000000000001000L); // sets the version to 1.
+    }
+
+    // Produce an UUID which is derived from this UUID in a reversible manner
+    //
+    // Such that:
+    //
+    //      auto original_uuid = UUID_gen::get_time_UUID();
+    //      auto negated_uuid = UUID_gen::negate(original_uuid);
+    //      assert(original_uuid != negated_uuid);
+    //      assert(original_uuid == UUID_gen::negate(negated_uuid));
+    static UUID negate(UUID);
+};
+
+// for the curious, here is how I generated START_EPOCH
+//        Calendar c = Calendar.getInstance(TimeZone.getTimeZone("GMT-0"));
+//        c.set(Calendar.YEAR, 1582);
+//        c.set(Calendar.MONTH, Calendar.OCTOBER);
+//        c.set(Calendar.DAY_OF_MONTH, 15);
+//        c.set(Calendar.HOUR_OF_DAY, 0);
+//        c.set(Calendar.MINUTE, 0);
+//        c.set(Calendar.SECOND, 0);
+//        c.set(Calendar.MILLISECOND, 0);
+//        long START_EPOCH = c.getTimeInMillis();
+
+} // namespace utils
+
+
+#include <seastar/core/shared_ptr.hh>
+
+
+using column_count_type = uint32_t;
+
+// Column ID, unique within column_kind
+using column_id = column_count_type;
+
+class schema;
+class schema_extension;
+
+using schema_ptr = seastar::lw_shared_ptr<const schema>;
+
+using table_id = utils::tagged_uuid<struct table_id_tag>;
+
+// Cluster-wide identifier of schema version of particular table.
+//
+// The version changes the value not only on structural changes but also
+// temporal. For example, schemas with the same set of columns but created at
+// different times should have different versions. This allows nodes to detect
+// if the version they see was already synchronized with or not even if it has
+// the same structure as the past versions.
+//
+// Schema changes merged in any order should result in the same final version.
+//
+// When table_schema_version changes, schema_tables::calculate_schema_digest() should
+// also change when schema mutations are applied.
+using table_schema_version = utils::tagged_uuid<struct table_schema_version_tag>;
+
+inline table_schema_version reversed(table_schema_version v) noexcept {
+    return table_schema_version(utils::UUID_gen::negate(v.uuid()));
+}
+
+#include <set>
+#include <stdexcept>
+#include <functional>
+#include <map>
+#include <variant>
+#include <vector>
+#include <unordered_set>
+
+#include <seastar/core/sstring.hh>
+
+
+namespace sstables {
+class file_io_extension;
+}
+
+namespace db {
+class commitlog_file_extension;
+
+class extensions {
+public:
+    extensions();
+    ~extensions();
+
+    using map_type = std::map<sstring, sstring>;
+    using schema_ext_config = std::variant<sstring, map_type, bytes>;
+    using schema_ext_create_func = std::function<seastar::shared_ptr<schema_extension>(schema_ext_config)>;
+    using sstable_file_io_extension = std::unique_ptr<sstables::file_io_extension>;
+    using commitlog_file_extension_ptr = std::unique_ptr<db::commitlog_file_extension>;
+
+    /**
+     * Registered extensions
+     */
+    const std::map<sstring, schema_ext_create_func>& schema_extensions() const {
+        return _schema_extensions;
+    }
+    /**
+     * Returns iterable range of registered sstable IO extensions (see sstable.hh#sstable_file_io_extension)
+     * For any sstables wanting to call these on file open...
+     */
+    std::vector<sstables::file_io_extension*> sstable_file_io_extensions() const;
+
+    /**
+     * Returns iterable range of registered commitlog IO extensions (see commitlog_extensions.hh#commitlog_file_extension)
+     * For any commitlogs wanting to call these on file open or descriptor scan...
+     */
+    std::vector<db::commitlog_file_extension*> commitlog_file_extensions() const;
+
+    /**
+     * Registered extensions keywords, i.e. custom properties/propery sets
+     * for schema extensions
+     */
+    std::set<sstring> schema_extension_keywords() const;
+
+    /**
+     * Init time method to add schema extension.
+     */
+    void add_schema_extension(sstring w, schema_ext_create_func f) {
+        _schema_extensions.emplace(std::move(w), std::move(f));
+    }
+    /**
+     * A shorthand for the add_schema_extension. Adds a function that adds
+     * the extension to a schema with appropriate constructor overload.
+     */
+    template<typename Extension>
+    void add_schema_extension(sstring w) {
+        add_schema_extension(std::move(w), [] (db::extensions::schema_ext_config cfg) {
+            return std::visit([] (auto v) {
+                return ::make_shared<Extension>(v);
+            }, cfg);
+        });
+    }
+    /**
+     * Init time method to add sstable extension
+     */
+    void add_sstable_file_io_extension(sstring n, sstable_file_io_extension);
+    /**
+     * Init time method to add sstable extension
+     */
+    void add_commitlog_file_extension(sstring n, commitlog_file_extension_ptr);
+
+    /**
+     * Allows forcible modification of schema extensions of a schema. This should
+     * not be done lightly however. In fact, it should only be done on startup
+     * at most, and thus this method is non-const, i.e. you can only use it on
+     * config apply.
+     */
+    void add_extension_to_schema(schema_ptr, const sstring&, shared_ptr<schema_extension>);
+
+    /**
+     * Adds a keyspace to "extension internal" set.
+     *
+     * Such a keyspace must be loaded before/destroyed after any "normal" user keyspace.
+     * Thus a psuedo-system/internal keyspce.
+     * This has little to no use in open source version, and is temporarily bridged with
+     * the static version of same functionality in distributed loader. It is however (or will
+     * be), essential to enterprise code. Do not remove.
+     */
+    void add_extension_internal_keyspace(std::string);
+
+    /**
+     * Checks if a keyspace is a registered load priority one.
+     */
+    bool is_extension_internal_keyspace(const std::string&) const;
+
+private:
+    std::map<sstring, schema_ext_create_func> _schema_extensions;
+    std::map<sstring, sstable_file_io_extension> _sstable_file_io_extensions;
+    std::map<sstring, commitlog_file_extension_ptr> _commitlog_file_extensions;
+    std::unordered_set<std::string> _extension_internal_keyspaces;
+};
+}
+
 #include "cdc/cdc_options.hh"
 #include "schema/schema.hh"
 #include "serializer_impl.hh"
