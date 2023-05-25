@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "cql3/query_options.hh"
 #include "cql3/selection/selection.hh"
 #include "query-request.hh"
 #include "query-result.hh"
