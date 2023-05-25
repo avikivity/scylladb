@@ -5966,7 +5966,2079 @@ private:
 };
 }
 
-#include "cdc/cdc_options.hh"
+
+#include <map>
+#include <optional>
+#include <seastar/core/sstring.hh>
+
+namespace cdc {
+
+enum class delta_mode : uint8_t {
+    keys,
+    full,
+};
+
+/**
+ * (for now only pre-) image collection mode.
+ * Stating how much info to record.
+ * off == none
+ * on == changed columns
+ * full == all (changed and unmodified columns)
+ */
+enum class image_mode : uint8_t {
+    off, 
+    on,
+    full,
+};
+
+std::ostream& operator<<(std::ostream& os, delta_mode);
+std::ostream& operator<<(std::ostream& os, image_mode);
+
+class options final {
+    std::optional<bool> _enabled;
+    image_mode _preimage = image_mode::off;
+    bool _postimage = false;
+    delta_mode _delta_mode = delta_mode::full;
+    int _ttl = 86400; // 24h in seconds
+public:
+    options() = default;
+    options(const std::map<sstring, sstring>& map);
+
+    std::map<sstring, sstring> to_map() const;
+    sstring to_sstring() const;
+
+    bool enabled() const { return _enabled.value_or(false); }
+    bool is_enabled_set() const { return _enabled.has_value(); }
+    bool preimage() const { return _preimage != image_mode::off; }
+    bool full_preimage() const { return _preimage == image_mode::full; }
+    bool postimage() const { return _postimage; }
+    delta_mode get_delta_mode() const { return _delta_mode; }
+    void set_delta_mode(delta_mode m) { _delta_mode = m; }
+    int ttl() const { return _ttl; }
+
+    void enabled(bool b) { _enabled = b; }
+    void preimage(bool b) { preimage(b ? image_mode::on : image_mode::off); }
+    void preimage(image_mode m) { _preimage = m; }
+    void postimage(bool b) { _postimage = b; }
+    void ttl(int v) { _ttl = v; }
+
+    bool operator==(const options& o) const;
+};
+
+} // namespace cdc
+
+#include <seastar/core/sstring.hh>
+
+#include <cstdint>
+#include <string_view>
+#include <ostream>
+#include <stdexcept>
+
+// Wrapper for a value with a type-tag for differentiating instances.
+template <class Value, class Tag>
+class cql_duration_counter final {
+public:
+    using value_type = Value;
+
+    explicit constexpr cql_duration_counter(value_type count) noexcept : _count(count) {}
+
+    constexpr operator value_type() const noexcept { return _count; }
+private:
+    value_type _count;
+};
+
+using months_counter = cql_duration_counter<int32_t, struct month_tag>;
+using days_counter = cql_duration_counter<int32_t, struct day_tag>;
+using nanoseconds_counter = cql_duration_counter<int64_t, struct nanosecond_tag>;
+
+class cql_duration_error : public std::invalid_argument {
+public:
+    explicit cql_duration_error(std::string_view what) : std::invalid_argument(what.data()) {}
+
+    virtual ~cql_duration_error() = default;
+};
+
+//
+// A duration of time.
+//
+// Three counters represent the time: the number of months, of days, and of nanoseconds. This is necessary because
+// the number hours in a day can vary during daylight savings and because the number of days in a month vary.
+//
+// As a consequence of this representation, there can exist no total ordering relation on durations. To see why,
+// consider a duration `1mo5s` (1 month and 5 seconds). In a month with 30 days, this represents a smaller duration of
+// time than in a month with 31 days.
+//
+// The primary use of this type is to manipulate absolute time-stamps with relative offsets. For example,
+// `"Jan. 31 2005 at 23:15" + 3mo5d`.
+//
+class cql_duration final {
+public:
+    using common_counter_type = int64_t;
+
+    static_assert(
+            (sizeof(common_counter_type) >= sizeof(months_counter::value_type)) &&
+            (sizeof(common_counter_type) >= sizeof(days_counter::value_type)) &&
+            (sizeof(common_counter_type) >= sizeof(nanoseconds_counter::value_type)),
+            "The common counter type is smaller than one of the component counter types.");
+
+    // A zero-valued duration.
+    constexpr cql_duration() noexcept = default;
+
+    // Construct a duration with explicit values for its three counters.
+    constexpr cql_duration(months_counter m, days_counter d, nanoseconds_counter n) noexcept :
+            months(m),
+            days(d),
+            nanoseconds(n) {}
+
+    //
+    // Parse a duration string.
+    //
+    // Three formats for durations are supported:
+    //
+    // 1. "Standard" format. This consists of one or more pairs of a count and a unit specifier. Examples are "23d1mo"
+    //    and "5h23m10s". Components of the total duration must be written in decreasing order. That is, "5h2y" is
+    //    an invalid duration string.
+    //
+    //    The allowed units are:
+    //      - "y": years
+    //      - "mo": months
+    //      - "w": weeks
+    //      - "d": days
+    //      - "h": hours
+    //      - "m": minutes
+    //      - "s": seconds
+    //      - "ms": milliseconds
+    //      - "us" or "µs": microseconds
+    //      - "ns": nanoseconds
+    //
+    //    Units are case-insensitive.
+    //
+    // 2. ISO-8601 format. "P[n]Y[n]M[n]DT[n]H[n]M[n]S" or "P[n]W". All specifiers are optional. Examples are
+    //    "P23Y1M" or "P10W".
+    //
+    // 3. ISO-8601 alternate format. "P[YYYY]-[MM]-[DD]T[hh]:[mm]:[ss]". All specifiers are mandatory. An example is
+    //    "P2000-10-14T07:22:30".
+    //
+    // For all formats, a negative duration is indicated by beginning the string with the '-' symbol. For example,
+    // "-2y10ns".
+    //
+    // Throws `cql_duration_error` in the event of a parsing error.
+    //
+    explicit cql_duration(std::string_view s);
+
+    months_counter::value_type months{0};
+    days_counter::value_type days{0};
+    nanoseconds_counter::value_type nanoseconds{0};
+
+    //
+    // Note that equality comparison is based on exact counter matches. It is not valid to expect equivalency across
+    // counters like months and days. See the documentation for `duration` for more.
+    //
+    friend bool operator==(const cql_duration&, const cql_duration&) noexcept = default;
+};
+
+//
+// Pretty-print a duration using the standard format.
+//
+// Durations are simplified during printing so that `duration(24, 0, 0)` is printed as "2y".
+//
+std::ostream& operator<<(std::ostream& os, const cql_duration& d);
+
+// See above.
+seastar::sstring to_string(const cql_duration&);
+
+
+
+#include <vector>
+
+#include <seastar/core/iostream.hh>
+#include <seastar/core/print.hh>
+#include <seastar/core/temporary_buffer.hh>
+#include <seastar/core/simple-stream.hh>
+
+
+/// Fragmented buffer consisting of multiple temporary_buffer<char>
+class fragmented_temporary_buffer {
+    using vector_type = std::vector<seastar::temporary_buffer<char>>;
+    vector_type _fragments;
+    size_t _size_bytes = 0;
+public:
+    static constexpr size_t default_fragment_size = 128 * 1024;
+
+    class view;
+    class istream;
+    class reader;
+    using ostream = seastar::memory_output_stream<vector_type::iterator>;
+
+    fragmented_temporary_buffer() = default;
+
+    fragmented_temporary_buffer(std::vector<seastar::temporary_buffer<char>> fragments, size_t size_bytes) noexcept
+        : _fragments(std::move(fragments)), _size_bytes(size_bytes)
+    { }
+
+    fragmented_temporary_buffer(const char* str, size_t size)
+    {
+        *this = allocate_to_fit(size);
+        size_t pos = 0;
+        for (auto& frag : _fragments) {
+            std::memcpy(frag.get_write(), str + pos, frag.size());
+            pos += frag.size();
+        }
+    }
+
+    explicit operator view() const noexcept;
+
+    istream get_istream() const noexcept;
+
+    ostream get_ostream() noexcept {
+        if (_fragments.size() != 1) {
+            return ostream::fragmented(_fragments.begin(), _size_bytes);
+        }
+        auto& current = *_fragments.begin();
+        return ostream::simple(reinterpret_cast<char*>(current.get_write()), current.size());
+    }
+
+    size_t size_bytes() const { return _size_bytes; }
+    bool empty() const { return !_size_bytes; }
+
+    // Linear complexity, invalidates views and istreams
+    void remove_prefix(size_t n) noexcept {
+        _size_bytes -= n;
+        auto it = _fragments.begin();
+        while (it->size() < n) {
+            n -= it->size();
+            ++it;
+        }
+        if (n) {
+            it->trim_front(n);
+        }
+        _fragments.erase(_fragments.begin(), it);
+    }
+
+    // Linear complexity, invalidates views and istreams
+    void remove_suffix(size_t n) noexcept {
+        _size_bytes -= n;
+        auto it = _fragments.rbegin();
+        while (it->size() < n) {
+            n -= it->size();
+            ++it;
+        }
+        if (n) {
+            it->trim(it->size() - n);
+        }
+        _fragments.erase(it.base(), _fragments.end());
+    }
+
+    // Creates a fragmented temporary buffer of a specified size, supplied as a parameter.
+    // Max chunk size is limited to 128kb (the same limit as `bytes_stream` has).
+    static fragmented_temporary_buffer allocate_to_fit(size_t data_size) {
+        constexpr size_t max_fragment_size = default_fragment_size; // 128KB
+
+        const size_t full_fragment_count = data_size / max_fragment_size; // number of max-sized fragments
+        const size_t last_fragment_size = data_size % max_fragment_size;
+
+        std::vector<seastar::temporary_buffer<char>> fragments;
+        fragments.reserve(full_fragment_count + !!last_fragment_size);
+        for (size_t i = 0; i < full_fragment_count; ++i) {
+            fragments.emplace_back(seastar::temporary_buffer<char>(max_fragment_size));
+        }
+        if (last_fragment_size) {
+            fragments.emplace_back(seastar::temporary_buffer<char>(last_fragment_size));
+        }
+        return fragmented_temporary_buffer(std::move(fragments), data_size);
+    }
+
+    vector_type release() && noexcept {
+        return std::move(_fragments);
+    }
+};
+
+class fragmented_temporary_buffer::view {
+    vector_type::const_iterator _current;
+    const char* _current_position = nullptr;
+    size_t _current_size = 0;
+    size_t _total_size = 0;
+public:
+    view() = default;
+    view(vector_type::const_iterator it, size_t position, size_t total_size)
+        : _current(it)
+        , _current_position(it->get() + position)
+        , _current_size(std::min(it->size() - position, total_size))
+        , _total_size(total_size)
+    { }
+
+    explicit view(bytes_view bv) noexcept
+        : _current_position(reinterpret_cast<const char*>(bv.data()))
+        , _current_size(bv.size())
+        , _total_size(bv.size())
+    { }
+
+    using fragment_type = bytes_view;
+
+    class iterator {
+        vector_type::const_iterator _it;
+        size_t _left = 0;
+        bytes_view _current;
+    public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = bytes_view;
+        using difference_type = ptrdiff_t;
+        using pointer = const bytes_view*;
+        using reference = const bytes_view&;
+
+        iterator() = default;
+        iterator(vector_type::const_iterator it, bytes_view current, size_t left) noexcept
+            : _it(it)
+            , _left(left)
+            , _current(current)
+        { }
+
+        reference operator*() const noexcept { return _current; }
+        pointer operator->() const noexcept { return &_current; }
+
+        iterator& operator++() noexcept {
+            _left -= _current.size();
+            if (_left) {
+                ++_it;
+                _current = bytes_view(reinterpret_cast<const bytes::value_type*>(_it->get()),
+                                      std::min(_left, _it->size()));
+            }
+            return *this;
+        }
+
+        iterator operator++(int) noexcept {
+            auto it = *this;
+            operator++();
+            return it;
+        }
+
+        bool operator==(const iterator& other) const noexcept {
+            return _left == other._left;
+        }
+    };
+
+    using const_iterator = iterator;
+
+    iterator begin() const noexcept {
+        return iterator(_current,
+                        bytes_view(reinterpret_cast<const bytes::value_type*>(_current_position), _current_size),
+                        _total_size);
+    }
+    iterator end() const noexcept {
+        return iterator();
+    }
+
+    bool empty() const noexcept { return !size_bytes(); }
+    size_t size_bytes() const noexcept { return _total_size; }
+
+    void remove_prefix(size_t n) noexcept {
+        if (!_total_size) {
+            return;
+        }
+        while (n > _current_size) {
+            _total_size -= _current_size;
+            n -= _current_size;
+            ++_current;
+            _current_size = std::min(_current->size(), _total_size);
+            _current_position = _current->get();
+        }
+        _total_size -= n;
+        _current_size -= n;
+        _current_position += n;
+        if (!_current_size && _total_size) {
+            ++_current;
+            _current_size = std::min(_current->size(), _total_size);
+            _current_position = _current->get();
+        }
+    }
+
+    void remove_current() noexcept {
+        _total_size -= _current_size;
+        if (_total_size) {
+            ++_current;
+            _current_size = std::min(_current->size(), _total_size);
+            _current_position = _current->get();
+        } else {
+            _current_size = 0;
+            _current_position = nullptr;
+        }
+    }
+
+    view prefix(size_t n) const {
+        auto tmp = *this;
+        tmp._total_size = std::min(tmp._total_size, n);
+        tmp._current_size = std::min(tmp._current_size, n);
+        return tmp;
+    }
+
+    bytes_view current_fragment() const noexcept {
+        return bytes_view(reinterpret_cast<const bytes_view::value_type*>(_current_position), _current_size);
+    }
+
+    // Invalidates iterators
+    void remove_suffix(size_t n) noexcept {
+        _total_size -= n;
+        _current_size = std::min(_current_size, _total_size);
+    }
+
+    bool operator==(const fragmented_temporary_buffer::view& other) const noexcept {
+        auto this_it = begin();
+        auto other_it = other.begin();
+
+        if (empty() || other.empty()) {
+            return empty() && other.empty();
+        }
+
+        auto this_fragment = *this_it;
+        auto other_fragment = *other_it;
+        while (this_it != end() && other_it != other.end()) {
+            if (this_fragment.empty()) {
+                ++this_it;
+                if (this_it != end()) {
+                    this_fragment = *this_it;
+                }
+            }
+            if (other_fragment.empty()) {
+                ++other_it;
+                if (other_it != other.end()) {
+                    other_fragment = *other_it;
+                }
+            }
+            auto length = std::min(this_fragment.size(), other_fragment.size());
+            if (!std::equal(this_fragment.data(), this_fragment.data() + length, other_fragment.data())) {
+                return false;
+            }
+            this_fragment.remove_prefix(length);
+            other_fragment.remove_prefix(length);
+        }
+        return this_it == end() && other_it == other.end();
+    }
+};
+static_assert(FragmentRange<fragmented_temporary_buffer::view>);
+static_assert(FragmentedView<fragmented_temporary_buffer::view>);
+
+inline fragmented_temporary_buffer::operator view() const noexcept
+{
+    if (!_size_bytes) {
+        return view();
+    }
+    return view(_fragments.begin(), 0, _size_bytes);
+}
+
+namespace fragmented_temporary_buffer_concepts {
+
+template<typename T>
+concept ExceptionThrower = requires(T obj, size_t n) {
+    obj.throw_out_of_range(n, n);
+};
+
+}
+
+class fragmented_temporary_buffer::istream {
+    vector_type::const_iterator _current;
+    const char* _current_position;
+    const char* _current_end;
+    size_t _bytes_left = 0;
+private:
+    size_t contig_remain() const {
+        return _current_end - _current_position;
+    }
+    void next_fragment() {
+        _bytes_left -= _current->size();
+        if (_bytes_left) {
+            _current++;
+            _current_position = _current->get();
+            _current_end = _current->get() + _current->size();
+        } else {
+            _current_position = nullptr;
+            _current_end = nullptr;
+        }
+    }
+
+    template<typename ExceptionThrower>
+    requires fragmented_temporary_buffer_concepts::ExceptionThrower<ExceptionThrower>
+    void check_out_of_range(ExceptionThrower& exceptions, size_t n) {
+        if (__builtin_expect(bytes_left() < n, false)) {
+            exceptions.throw_out_of_range(n, bytes_left());
+            // Let's allow skipping this check if the user trusts its input
+            // data.
+        }
+    }
+
+    template<typename T, typename ExceptionThrower>
+    [[gnu::noinline]] [[gnu::cold]]
+    T read_slow(ExceptionThrower&& exceptions) {
+        check_out_of_range(exceptions, sizeof(T));
+
+        T obj;
+        size_t left = sizeof(T);
+        while (left) {
+            auto this_length = std::min<size_t>(left, _current_end - _current_position);
+            std::copy_n(_current_position, this_length, reinterpret_cast<char*>(&obj) + sizeof(T) - left);
+            left -= this_length;
+            if (left) {
+                next_fragment();
+            } else {
+                _current_position += this_length;
+            }
+        }
+        return obj;
+    }
+
+    [[gnu::noinline]] [[gnu::cold]]
+    void skip_slow(size_t n) noexcept {
+        auto left = std::min<size_t>(n, bytes_left());
+        while (left) {
+            auto this_length = std::min<size_t>(left, _current_end - _current_position);
+            left -= this_length;
+            if (left) {
+                next_fragment();
+            } else {
+                _current_position += this_length;
+            }
+        }
+    }
+public:
+    struct default_exception_thrower {
+        [[noreturn]] [[gnu::cold]]
+        static void throw_out_of_range(size_t attempted_read, size_t actual_left) {
+            throw std::out_of_range(format("attempted to read {:d} bytes from a {:d} byte buffer", attempted_read, actual_left));
+        }
+    };
+    static_assert(fragmented_temporary_buffer_concepts::ExceptionThrower<default_exception_thrower>);
+
+    istream(const vector_type& fragments, size_t total_size) noexcept
+        : _current(fragments.begin())
+        , _current_position(total_size ? _current->get() : nullptr)
+        , _current_end(total_size ? _current->get() + _current->size() : nullptr)
+        , _bytes_left(total_size)
+    { }
+
+    size_t bytes_left() const noexcept {
+        return _bytes_left ? _bytes_left - (_current_position - _current->get()) : 0;
+    }
+
+    void skip(size_t n) noexcept {
+        if (__builtin_expect(contig_remain() < n, false)) {
+            return skip_slow(n);
+        }
+        _current_position += n;
+    }
+
+    template<typename T, typename ExceptionThrower = default_exception_thrower>
+    requires fragmented_temporary_buffer_concepts::ExceptionThrower<ExceptionThrower>
+    T read(ExceptionThrower&& exceptions = default_exception_thrower()) {
+        if (__builtin_expect(contig_remain() < sizeof(T), false)) {
+            return read_slow<T>(std::forward<ExceptionThrower>(exceptions));
+        }
+        T obj;
+        std::copy_n(_current_position, sizeof(T), reinterpret_cast<char*>(&obj));
+        _current_position += sizeof(T);
+        return obj;
+    }
+
+    template<typename Output, typename ExceptionThrower = default_exception_thrower>
+    requires fragmented_temporary_buffer_concepts::ExceptionThrower<ExceptionThrower>
+    Output read_to(size_t n, Output out, ExceptionThrower&& exceptions = default_exception_thrower()) {
+        if (__builtin_expect(contig_remain() >= n, true)) {
+            out = std::copy_n(_current_position, n, out);
+            _current_position += n;
+            return out;
+        }
+        check_out_of_range(exceptions, n);
+        out = std::copy(_current_position, _current_end, out);
+        n -= _current_end - _current_position;
+        next_fragment();
+        while (n > _current->size()) {
+            out = std::copy(_current_position, _current_end, out);
+            n -= _current->size();
+            next_fragment();
+        }
+        out = std::copy_n(_current_position, n, out);
+        _current_position += n;
+        return out;
+    }
+
+    template<typename ExceptionThrower = default_exception_thrower>
+    requires fragmented_temporary_buffer_concepts::ExceptionThrower<ExceptionThrower>
+    view read_view(size_t n, ExceptionThrower&& exceptions = default_exception_thrower()) {
+        if (__builtin_expect(contig_remain() >= n, true)) {
+            auto v = view(_current, _current_position - _current->get(), n);
+            _current_position += n;
+            return v;
+        }
+        check_out_of_range(exceptions, n);
+        auto v = view(_current, _current_position - _current->get(), n);
+        n -= _current_end - _current_position;
+        next_fragment();
+        while (n > _current->size()) {
+            n -= _current->size();
+            next_fragment();
+        }
+        _current_position += n;
+        return v;
+    }
+
+    template<typename ExceptionThrower = default_exception_thrower>
+    requires fragmented_temporary_buffer_concepts::ExceptionThrower<ExceptionThrower>
+    bytes_view read_bytes_view(size_t n, bytes_ostream& linearization_buffer, ExceptionThrower&& exceptions = default_exception_thrower()) {
+        if (__builtin_expect(contig_remain() >= n, true)) {
+            auto v = bytes_view(reinterpret_cast<const bytes::value_type*>(_current_position), n);
+            _current_position += n;
+            return v;
+        }
+        check_out_of_range(exceptions, n);
+        auto ptr = linearization_buffer.write_place_holder(n);
+        read_to(n, ptr, std::forward<ExceptionThrower>(exceptions));
+        return bytes_view(reinterpret_cast<const bytes::value_type*>(ptr), n);
+    }
+};
+
+inline fragmented_temporary_buffer::istream fragmented_temporary_buffer::get_istream() const noexcept // allow empty (ut for that)
+{
+    return istream(_fragments, _size_bytes);
+}
+
+class fragmented_temporary_buffer::reader {
+    std::vector<temporary_buffer<char>> _fragments;
+    size_t _left = 0;
+public:
+    future<fragmented_temporary_buffer> read_exactly(input_stream<char>& in, size_t length) {
+        _fragments = std::vector<temporary_buffer<char>>();
+        _left = length;
+        return repeat_until_value([this, length, &in] {
+            if (!_left) {
+                return make_ready_future<std::optional<fragmented_temporary_buffer>>(fragmented_temporary_buffer(std::move(_fragments), length));
+            }
+            return in.read_up_to(_left).then([this] (temporary_buffer<char> buf) {
+                if (buf.empty()) {
+                    return std::make_optional(fragmented_temporary_buffer());
+                }
+                _left -= buf.size();
+                _fragments.emplace_back(std::move(buf));
+                return std::optional<fragmented_temporary_buffer>();
+            });
+        });
+    }
+};
+
+// The operator below is used only for logging
+
+inline std::ostream& operator<<(std::ostream& out, const fragmented_temporary_buffer::view& v) {
+    for (bytes_view frag : fragment_range(v)) {
+        out << to_hex(frag);
+    }
+    return out;
+}
+
+
+#include <stdexcept>
+#include <seastar/core/sstring.hh>
+
+namespace exceptions {
+
+enum class exception_code : int32_t {
+    SERVER_ERROR    = 0x0000,
+    PROTOCOL_ERROR  = 0x000A,
+
+    BAD_CREDENTIALS = 0x0100,
+
+    // 1xx: problem during request execution
+    UNAVAILABLE     = 0x1000,
+    OVERLOADED      = 0x1001,
+    IS_BOOTSTRAPPING= 0x1002,
+    TRUNCATE_ERROR  = 0x1003,
+    WRITE_TIMEOUT   = 0x1100,
+    READ_TIMEOUT    = 0x1200,
+    READ_FAILURE    = 0x1300,
+    FUNCTION_FAILURE= 0x1400,
+    WRITE_FAILURE   = 0x1500,
+    CDC_WRITE_FAILURE = 0x1600,
+
+    // 2xx: problem validating the request
+    SYNTAX_ERROR    = 0x2000,
+    UNAUTHORIZED    = 0x2100,
+    INVALID         = 0x2200,
+    CONFIG_ERROR    = 0x2300,
+    ALREADY_EXISTS  = 0x2400,
+    UNPREPARED      = 0x2500,
+
+    // Scylla-specific error codes
+    // The error codes below are advertised to the drivers during connection
+    // handshake using the protocol extension negotiation, and are only
+    // enabled if the drivers explicitly enable them. Therefore it's perfectly
+    // fine to change them in case some new error codes are introduced
+    // in Cassandra.
+    // NOTE TO DRIVER DEVELOPERS: These constants must not be relied upon,
+    // they must be learned from protocol extensions instead.
+    RATE_LIMIT_ERROR = 0xF000
+};
+
+std::ostream& operator<<(std::ostream& os, exception_code ec);
+
+const std::unordered_map<exception_code, sstring>& exception_map();
+
+class cassandra_exception : public std::exception {
+private:
+    exception_code _code;
+    sstring _msg;
+public:
+    cassandra_exception(exception_code code, sstring msg) noexcept
+        : _code(code)
+        , _msg(std::move(msg))
+    { }
+    virtual const char* what() const noexcept override { return _msg.c_str(); }
+    exception_code code() const { return _code; }
+    sstring get_message() const { return what(); }
+};
+
+class server_exception : public cassandra_exception {
+public:
+    server_exception(sstring msg) noexcept
+        : exceptions::cassandra_exception{exceptions::exception_code::SERVER_ERROR, std::move(msg)}
+    { }
+};
+
+class protocol_exception : public cassandra_exception {
+public:
+    protocol_exception(sstring msg) noexcept
+        : exceptions::cassandra_exception{exceptions::exception_code::PROTOCOL_ERROR, std::move(msg)}
+    { }
+};
+
+struct unavailable_exception : cassandra_exception {
+    db::consistency_level consistency;
+    int32_t required;
+    int32_t alive;
+
+
+    unavailable_exception(sstring msg, db::consistency_level cl, int32_t required, int32_t alive) noexcept
+        : exceptions::cassandra_exception(exceptions::exception_code::UNAVAILABLE, std::move(msg))
+        , consistency(cl)
+        , required(required)
+        , alive(alive)
+    {}
+
+    unavailable_exception(db::consistency_level cl, int32_t required, int32_t alive) noexcept;
+};
+
+class request_execution_exception : public cassandra_exception {
+public:
+    request_execution_exception(exception_code code, sstring msg) noexcept
+        : cassandra_exception(code, std::move(msg))
+    { }
+};
+
+class truncate_exception : public request_execution_exception
+{
+public:
+    truncate_exception(std::exception_ptr ep);
+};
+
+class request_timeout_exception : public cassandra_exception {
+public:
+    db::consistency_level consistency;
+    int32_t received;
+    int32_t block_for;
+
+    request_timeout_exception(exception_code code, const sstring& ks, const sstring& cf, db::consistency_level consistency, int32_t received, int32_t block_for) noexcept;
+};
+
+class read_timeout_exception : public request_timeout_exception {
+public:
+    bool data_present;
+
+    read_timeout_exception(const sstring& ks, const sstring& cf, db::consistency_level consistency, int32_t received, int32_t block_for, bool data_present) noexcept
+        : request_timeout_exception{exception_code::READ_TIMEOUT, ks, cf, consistency, received, block_for}
+        , data_present{data_present}
+    { }
+};
+
+struct mutation_write_timeout_exception : public request_timeout_exception {
+    db::write_type type;
+    mutation_write_timeout_exception(const sstring& ks, const sstring& cf, db::consistency_level consistency, int32_t received, int32_t block_for, db::write_type type) noexcept :
+        request_timeout_exception(exception_code::WRITE_TIMEOUT, ks, cf, consistency, received, block_for)
+        , type{std::move(type)}
+    { }
+};
+
+class request_failure_exception : public cassandra_exception {
+public:
+    db::consistency_level consistency;
+    int32_t received;
+    int32_t failures;
+    int32_t block_for;
+
+protected:
+    request_failure_exception(exception_code code, const sstring& ks, const sstring& cf, db::consistency_level consistency_, int32_t received_, int32_t failures_, int32_t block_for_) noexcept;
+
+    request_failure_exception(exception_code code, const sstring& msg, db::consistency_level consistency_, int32_t received_, int32_t failures_, int32_t block_for_) noexcept
+        : cassandra_exception{code, msg}
+        , consistency{consistency_}
+        , received{received_}
+        , failures{failures_}
+        , block_for{block_for_}
+    {}
+};
+
+struct mutation_write_failure_exception : public request_failure_exception {
+    db::write_type type;
+    mutation_write_failure_exception(const sstring& ks, const sstring& cf, db::consistency_level consistency_, int32_t received_, int32_t failures_, int32_t block_for_, db::write_type type_) noexcept :
+        request_failure_exception(exception_code::WRITE_FAILURE, ks, cf, consistency_, received_, failures_, block_for_)
+        , type{std::move(type_)}
+    { }
+
+    mutation_write_failure_exception(const sstring& msg, db::consistency_level consistency_, int32_t received_, int32_t failures_, int32_t block_for_, db::write_type type_) noexcept :
+        request_failure_exception(exception_code::WRITE_FAILURE, msg, consistency_, received_, failures_, block_for_)
+        , type{std::move(type_)}
+    { }
+};
+
+struct read_failure_exception : public request_failure_exception {
+    bool data_present;
+
+    read_failure_exception(const sstring& ks, const sstring& cf, db::consistency_level consistency_, int32_t received_, int32_t failures_, int32_t block_for_, bool data_present_) noexcept
+        : request_failure_exception{exception_code::READ_FAILURE, ks, cf, consistency_, received_, failures_, block_for_}
+        , data_present{data_present_}
+    { }
+
+    read_failure_exception(const sstring& msg, db::consistency_level consistency_, int32_t received_, int32_t failures_, int32_t block_for_, bool data_present_) noexcept
+        : request_failure_exception{exception_code::READ_FAILURE, msg, consistency_, received_, failures_, block_for_}
+        , data_present{data_present_}
+    { }
+};
+
+struct overloaded_exception : public cassandra_exception {
+    explicit overloaded_exception(size_t c) noexcept;
+    explicit overloaded_exception(sstring msg) noexcept :
+        cassandra_exception(exception_code::OVERLOADED, std::move(msg)) {}
+};
+
+struct rate_limit_exception : public cassandra_exception {
+    db::operation_type op_type;
+    bool rejected_by_coordinator;
+
+    rate_limit_exception(const sstring& ks, const sstring& cf, db::operation_type op_type_, bool rejected_by_coordinator_) noexcept;
+};
+
+class request_validation_exception : public cassandra_exception {
+public:
+    using cassandra_exception::cassandra_exception;
+};
+
+class invalidated_prepared_usage_attempt_exception : public exceptions::request_validation_exception {
+public:
+    invalidated_prepared_usage_attempt_exception() : request_validation_exception{exception_code::UNPREPARED, "Attempt to execute the invalidated prepared statement."} {}
+};
+
+class unauthorized_exception: public request_validation_exception {
+public:
+    unauthorized_exception(sstring msg) noexcept
+                    : request_validation_exception(exception_code::UNAUTHORIZED,
+                                    std::move(msg)) {
+    }
+};
+
+class authentication_exception: public request_validation_exception {
+public:
+    authentication_exception(sstring msg) noexcept
+                    : request_validation_exception(exception_code::BAD_CREDENTIALS,
+                                    std::move(msg)) {
+    }
+};
+
+class invalid_request_exception : public request_validation_exception {
+public:
+    invalid_request_exception(sstring cause) noexcept
+        : request_validation_exception(exception_code::INVALID, std::move(cause))
+    { }
+};
+
+class keyspace_not_defined_exception : public invalid_request_exception {
+public:
+    keyspace_not_defined_exception(std::string cause) noexcept
+        : invalid_request_exception(std::move(cause))
+    { }
+};
+
+class overflow_error_exception : public invalid_request_exception {
+public:
+    overflow_error_exception(std::string msg) noexcept
+        : invalid_request_exception(std::move(msg))
+    { }
+};
+
+class prepared_query_not_found_exception : public request_validation_exception {
+public:
+    bytes id;
+
+    prepared_query_not_found_exception(bytes id) noexcept;
+};
+
+class syntax_exception : public request_validation_exception {
+public:
+    syntax_exception(sstring msg) noexcept
+        : request_validation_exception(exception_code::SYNTAX_ERROR, std::move(msg))
+    { }
+};
+
+class configuration_exception : public request_validation_exception {
+public:
+    configuration_exception(sstring msg) noexcept
+        : request_validation_exception{exception_code::CONFIG_ERROR, std::move(msg)}
+    { }
+
+    configuration_exception(exception_code code, sstring msg) noexcept
+        : request_validation_exception{code, std::move(msg)}
+    { }
+};
+
+class already_exists_exception : public configuration_exception {
+public:
+    const sstring ks_name;
+    const sstring cf_name;
+private:
+    already_exists_exception(sstring ks_name_, sstring cf_name_, sstring msg)
+        : configuration_exception{exception_code::ALREADY_EXISTS, msg}
+        , ks_name{ks_name_}
+        , cf_name{cf_name_}
+    { }
+public:
+    already_exists_exception(sstring ks_name_, sstring cf_name_);
+    already_exists_exception(sstring ks_name_);
+};
+
+class recognition_exception : public std::runtime_error {
+public:
+    recognition_exception(const std::string& msg) : std::runtime_error(msg) {};
+};
+
+class unsupported_operation_exception : public std::runtime_error {
+public:
+    unsupported_operation_exception() : std::runtime_error("unsupported operation") {}
+    unsupported_operation_exception(const sstring& msg) : std::runtime_error("unsupported operation: " + msg) {}
+};
+
+class function_execution_exception : public cassandra_exception {
+public:
+    const sstring ks_name;
+    const sstring func_name;
+    const std::vector<sstring> args;
+    function_execution_exception(sstring func_name_, sstring detail, sstring ks_name_, std::vector<sstring> args_) noexcept;
+};
+
+}
+
+#include <compare>
+#include <cstdint>
+#include <iterator>
+
+// Specifies position in a lexicographically ordered sequence
+// relative to some value.
+//
+// For example, if used with a value "bc" with lexicographical ordering on strings,
+// each enum value represents the following positions in an example sequence:
+//
+//   aa
+//   aaa
+//   b
+//   ba
+// --> before_all_prefixed
+//   bc
+// --> before_all_strictly_prefixed
+//   bca
+//   bcd
+// --> after_all_prefixed
+//   bd
+//   bda
+//   c
+//   ca
+//
+enum class lexicographical_relation : int8_t {
+    before_all_prefixed,
+    before_all_strictly_prefixed,
+    after_all_prefixed
+};
+
+// Like std::lexicographical_compare but injects values from shared sequence (types) to the comparator
+// Compare is an abstract_type-aware less comparator, which takes the type as first argument.
+template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Compare>
+bool lexicographical_compare(TypesIterator types, InputIt1 first1, InputIt1 last1,
+        InputIt2 first2, InputIt2 last2, Compare comp) {
+    while (first1 != last1 && first2 != last2) {
+        if (comp(*types, *first1, *first2)) {
+            return true;
+        }
+        if (comp(*types, *first2, *first1)) {
+            return false;
+        }
+        ++first1;
+        ++first2;
+        ++types;
+    }
+    return (first1 == last1) && (first2 != last2);
+}
+
+// Like std::lexicographical_compare but injects values from shared sequence
+// (types) to the comparator. Compare is an abstract_type-aware trichotomic
+// comparator, which takes the type as first argument.
+template <std::input_iterator TypesIterator, std::input_iterator InputIt1, std::input_iterator InputIt2, typename Compare>
+requires requires (TypesIterator types, InputIt1 i1, InputIt2 i2, Compare cmp) {
+    { cmp(*types, *i1, *i2) } -> std::same_as<std::strong_ordering>;
+}
+std::strong_ordering lexicographical_tri_compare(TypesIterator types_first, TypesIterator types_last,
+        InputIt1 first1, InputIt1 last1,
+        InputIt2 first2, InputIt2 last2,
+        Compare comp,
+        lexicographical_relation relation1 = lexicographical_relation::before_all_strictly_prefixed,
+        lexicographical_relation relation2 = lexicographical_relation::before_all_strictly_prefixed) {
+    while (types_first != types_last && first1 != last1 && first2 != last2) {
+        auto c = comp(*types_first, *first1, *first2);
+        if (c != 0) {
+            return c;
+        }
+        ++first1;
+        ++first2;
+        ++types_first;
+    }
+    bool e1 = first1 == last1;
+    bool e2 = first2 == last2;
+    if (e1 && e2) {
+        return static_cast<int>(relation1) <=> static_cast<int>(relation2);
+    }
+    if (e2) {
+        return relation2 == lexicographical_relation::after_all_prefixed ? std::strong_ordering::less : std::strong_ordering::greater;
+    } else if (e1) {
+        return relation1 == lexicographical_relation::after_all_prefixed ? std::strong_ordering::greater : std::strong_ordering::less;
+    } else {
+        return std::strong_ordering::equal;
+    }
+}
+
+// A trichotomic comparator for prefix equality total ordering.
+// In this ordering, two sequences are equal iff any of them is a prefix
+// of the another. Otherwise, lexicographical ordering determines the order.
+//
+// 'comp' is an abstract_type-aware trichotomic comparator, which takes the
+// type as first argument.
+//
+template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Compare>
+requires requires (TypesIterator ti, InputIt1 i1, InputIt2 i2, Compare c) {
+    { c(*ti, *i1, *i2) } -> std::same_as<std::strong_ordering>;
+}
+std::strong_ordering prefix_equality_tri_compare(TypesIterator types, InputIt1 first1, InputIt1 last1,
+        InputIt2 first2, InputIt2 last2, Compare comp) {
+    while (first1 != last1 && first2 != last2) {
+        auto c = comp(*types, *first1, *first2);
+        if (c != 0) {
+            return c;
+        }
+        ++first1;
+        ++first2;
+        ++types;
+    }
+    return std::strong_ordering::equal;
+}
+
+// Returns true iff the second sequence is a prefix of the first sequence
+// Equality is an abstract_type-aware equality checker which takes the type as first argument.
+template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Equality>
+bool is_prefixed_by(TypesIterator types, InputIt1 first1, InputIt1 last1,
+        InputIt2 first2, InputIt2 last2, Equality equality) {
+    while (first1 != last1 && first2 != last2) {
+        if (!equality(*types, *first1, *first2)) {
+            return false;
+        }
+        ++first1;
+        ++first2;
+        ++types;
+    }
+    return first2 == last2;
+}
+
+
+#include "utils/UUID.hh"
+
+namespace tasks {
+
+using task_id = utils::tagged_uuid<struct task_id_tag>;
+
+struct task_info {
+    task_id id;
+    unsigned shard;
+
+    task_info() noexcept : id(task_id::create_null_id()) {}
+    task_info(task_id id, unsigned parent_shard) noexcept : id(id), shard(parent_shard) {}
+
+    operator bool() const noexcept {
+        return bool(id);
+    }
+};
+
+}
+
+
+#include <optional>
+#include <boost/functional/hash.hpp>
+#include <iosfwd>
+#include <sstream>
+
+#include <seastar/core/sstring.hh>
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/net/byteorder.hh>
+#include <seastar/net/ipv4_address.hh>
+#include <seastar/net/ipv6_address.hh>
+#include <seastar/net/inet_address.hh>
+#include <seastar/util/backtrace.hh>
+
+class tuple_type_impl;
+class big_decimal;
+
+namespace utils {
+
+class multiprecision_int;
+
+}
+
+namespace cql3 {
+
+class cql3_type;
+
+}
+
+int64_t timestamp_from_string(sstring_view s);
+
+struct runtime_exception : public std::exception {
+    sstring _why;
+public:
+    runtime_exception(sstring why) : _why(sstring("runtime error: ") + why) {}
+    virtual const char* what() const noexcept override { return _why.c_str(); }
+};
+
+struct empty_t {};
+
+class empty_value_exception : public std::exception {
+public:
+    virtual const char* what() const noexcept override {
+        return "Unexpected empty value";
+    }
+};
+
+[[noreturn]] void on_types_internal_error(std::exception_ptr ex);
+
+// Cassandra has a notion of empty values even for scalars (i.e. int).  This is
+// distinct from NULL which means deleted or never set.  It is serialized
+// as a zero-length byte array (whereas NULL is serialized as a negative-length
+// byte array).
+template <typename T>
+requires std::is_default_constructible_v<T>
+class emptyable {
+    // We don't use optional<>, to avoid lots of ifs during the copy and move constructors
+    bool _is_empty = false;
+    T _value;
+public:
+    // default-constructor defaults to a non-empty value, since empty is the
+    // exception rather than the rule
+    emptyable() : _value{} {}
+    emptyable(const T& x) : _value(x) {}
+    emptyable(T&& x) : _value(std::move(x)) {}
+    emptyable(empty_t) : _is_empty(true) {}
+    template <typename... U>
+    emptyable(U&&... args) : _value(std::forward<U>(args)...) {}
+    bool empty() const { return _is_empty; }
+    operator const T& () const { verify(); return _value; }
+    operator T&& () && { verify(); return std::move(_value); }
+    const T& get() const & { verify(); return _value; }
+    T&& get() && { verify(); return std::move(_value); }
+private:
+    void verify() const {
+        if (_is_empty) {
+            throw empty_value_exception();
+        }
+    }
+};
+
+template <typename T>
+inline
+bool
+operator==(const emptyable<T>& me1, const emptyable<T>& me2) {
+    if (me1.empty() && me2.empty()) {
+        return true;
+    }
+    if (me1.empty() != me2.empty()) {
+        return false;
+    }
+    return me1.get() == me2.get();
+}
+
+template <typename T>
+inline
+bool
+operator<(const emptyable<T>& me1, const emptyable<T>& me2) {
+    if (me1.empty()) {
+        if (me2.empty()) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+    if (me2.empty()) {
+        return false;
+    } else {
+        return me1.get() < me2.get();
+    }
+}
+
+// Checks whether T::empty() const exists and returns bool
+template <typename T>
+concept has_empty = requires (T obj) {
+    { obj.empty() } -> std::same_as<bool>;
+};
+
+template <typename T>
+using maybe_empty =
+        std::conditional_t<has_empty<T>, T, emptyable<T>>;
+
+class abstract_type;
+class data_value;
+
+struct ascii_native_type {
+    using primary_type = sstring;
+    primary_type string;
+};
+
+struct simple_date_native_type {
+    using primary_type = uint32_t;
+    primary_type days;
+};
+
+struct date_type_native_type {
+    using primary_type = db_clock::time_point;
+    primary_type tp;
+};
+
+struct time_native_type {
+    using primary_type = int64_t;
+    primary_type nanoseconds;
+};
+
+struct timeuuid_native_type {
+    using primary_type = utils::UUID;
+    primary_type uuid;
+};
+
+using data_type = shared_ptr<const abstract_type>;
+
+template <typename T>
+const T& value_cast(const data_value& value);
+
+template <typename T>
+T&& value_cast(data_value&& value);
+
+struct empty_type_representation {
+};
+
+class data_value {
+    void* _value;  // FIXME: use "small value optimization" for small types
+    data_type _type;
+private:
+    data_value(void* value, data_type type) : _value(value), _type(std::move(type)) {}
+    template <typename T>
+    static data_value make_new(data_type type, T&& value);
+public:
+    ~data_value();
+    data_value(const data_value&);
+    data_value(data_value&& x) noexcept : _value(x._value), _type(std::move(x._type)) {
+        x._value = nullptr;
+    }
+    // common conversions from C++ types to database types
+    // note: somewhat dangerous, consider a factory function instead
+    explicit data_value(bytes);
+
+    data_value(sstring&&);
+    data_value(std::string_view);
+    // We need the following overloads just to avoid ambiguity because
+    // seastar::net::inet_address is implicitly constructible from a
+    // const sstring&.
+    data_value(const char*);
+    data_value(const std::string&);
+    data_value(const sstring&);
+
+    // Do not allow construction of a data_value from nullptr. The reason is
+    // that this is error prone, for example: it conflicts with `const char*` overload
+    // which tries to allocate a value from it and will cause UB.
+    //
+    // We want the null value semantics here instead. So the user will be forced
+    // to explicitly call `make_null()` instead.
+    data_value(std::nullptr_t) = delete;
+
+    data_value(ascii_native_type);
+    data_value(bool);
+    data_value(int8_t);
+    data_value(int16_t);
+    data_value(int32_t);
+    data_value(int64_t);
+    data_value(utils::UUID);
+    data_value(float);
+    data_value(double);
+    data_value(net::ipv4_address);
+    data_value(net::ipv6_address);
+    data_value(seastar::net::inet_address);
+    data_value(simple_date_native_type);
+    data_value(db_clock::time_point);
+    data_value(time_native_type);
+    data_value(timeuuid_native_type);
+    data_value(date_type_native_type);
+    data_value(utils::multiprecision_int);
+    data_value(big_decimal);
+    data_value(cql_duration);
+    data_value(empty_type_representation);
+    explicit data_value(std::optional<bytes>);
+    template <typename NativeType>
+    data_value(std::optional<NativeType>);
+    template <typename NativeType>
+    data_value(const std::unordered_set<NativeType>&);
+
+    data_value& operator=(const data_value&);
+    data_value& operator=(data_value&&);
+    const data_type& type() const {
+        return _type;
+    }
+    bool is_null() const {   // may return false negatives for strings etc.
+        return !_value;
+    }
+    size_t serialized_size() const;
+    void serialize(bytes::iterator& out) const;
+    bytes_opt serialize() const;
+    bytes serialize_nonnull() const;
+    friend bool operator==(const data_value& x, const data_value& y);
+    friend class abstract_type;
+    static data_value make_null(data_type type) {
+        return data_value(nullptr, std::move(type));
+    }
+    template <typename T>
+    static data_value make(data_type type, std::unique_ptr<T> value) {
+        return data_value(value.release(), std::move(type));
+    }
+    friend class empty_type_impl;
+    template <typename T> friend const T& value_cast(const data_value&);
+    template <typename T> friend T&& value_cast(data_value&&);
+    friend std::ostream& operator<<(std::ostream&, const data_value&);
+    friend data_value make_tuple_value(data_type, maybe_empty<std::vector<data_value>>);
+    friend data_value make_set_value(data_type, maybe_empty<std::vector<data_value>>);
+    friend data_value make_list_value(data_type, maybe_empty<std::vector<data_value>>);
+    friend data_value make_map_value(data_type, maybe_empty<std::vector<std::pair<data_value, data_value>>>);
+    friend data_value make_user_value(data_type, std::vector<data_value>);
+    template <typename Func>
+    friend inline auto visit(const data_value& v, Func&& f);
+    // Prints a value of this type in a way which is parsable back from CQL.
+    // Differs from operator<< for collections.
+    sstring to_parsable_string() const;
+};
+
+template<typename T>
+inline bytes serialized(T v) {
+    return data_value(v).serialize_nonnull();
+}
+
+class serialized_compare;
+class serialized_tri_compare;
+class user_type_impl;
+
+// Unsafe to access across shards unless otherwise noted.
+class abstract_type : public enable_shared_from_this<abstract_type> {
+    sstring _name;
+    std::optional<uint32_t> _value_length_if_fixed;
+public:
+    enum class kind : int8_t {
+        ascii,
+        boolean,
+        byte,
+        bytes,
+        counter,
+        date,
+        decimal,
+        double_kind,
+        duration,
+        empty,
+        float_kind,
+        inet,
+        int32,
+        list,
+        long_kind,
+        map,
+        reversed,
+        set,
+        short_kind,
+        simple_date,
+        time,
+        timestamp,
+        timeuuid,
+        tuple,
+        user,
+        utf8,
+        uuid,
+        varint,
+        last = varint,
+    };
+private:
+    kind _kind;
+public:
+    kind get_kind() const { return _kind; }
+
+    abstract_type(kind k, sstring name, std::optional<uint32_t> value_length_if_fixed)
+        : _name(name), _value_length_if_fixed(std::move(value_length_if_fixed)), _kind(k) {}
+    virtual ~abstract_type() {}
+    bool less(bytes_view v1, bytes_view v2) const { return compare(v1, v2) < 0; }
+    // returns a callable that can be called with two byte_views, and calls this->less() on them.
+    serialized_compare as_less_comparator() const ;
+    serialized_tri_compare as_tri_comparator() const ;
+    static data_type parse_type(const sstring& name);
+    size_t hash(bytes_view v) const;
+    size_t hash(managed_bytes_view v) const;
+    bool equal(bytes_view v1, bytes_view v2) const;
+    bool equal(managed_bytes_view v1, managed_bytes_view v2) const;
+    bool equal(managed_bytes_view v1, bytes_view v2) const;
+    bool equal(bytes_view v1, managed_bytes_view v2) const;
+    std::strong_ordering compare(bytes_view v1, bytes_view v2) const;
+    std::strong_ordering compare(managed_bytes_view v1, managed_bytes_view v2) const;
+    std::strong_ordering compare(managed_bytes_view v1, bytes_view v2) const;
+    std::strong_ordering compare(bytes_view v1, managed_bytes_view v2) const;
+private:
+    // Explicitly instantiated in .cc
+    template <FragmentedView View> data_value deserialize_impl(View v) const;
+public:
+    template <FragmentedView View> data_value deserialize(View v) const {
+        if (v.size_bytes() == v.current_fragment().size()) [[likely]] {
+            return deserialize_impl(single_fragmented_view(v.current_fragment()));
+        } else {
+            return deserialize_impl(v);
+        }
+    }
+    data_value deserialize(bytes_view v) const {
+        return deserialize_impl(single_fragmented_view(v));
+    }
+    data_value deserialize(const managed_bytes& v) const {
+        return deserialize(managed_bytes_view(v));
+    }
+    template <FragmentedView View> data_value deserialize_value(View v) const {
+        return deserialize(v);
+    }
+    data_value deserialize_value(bytes_view v) const {
+        return deserialize_impl(single_fragmented_view(v));
+    };
+    // Explicitly instantiated in .cc
+    template <FragmentedView View> void validate(const View& v) const;
+    void validate(bytes_view view) const;
+    bool is_compatible_with(const abstract_type& previous) const;
+    /*
+     * Types which are wrappers over other types return the inner type.
+     * For example the reversed_type returns the type it is reversing.
+     */
+    shared_ptr<const abstract_type> underlying_type() const;
+
+    /**
+     * Returns true if values of the other AbstractType can be read and "reasonably" interpreted by the this
+     * AbstractType. Note that this is a weaker version of isCompatibleWith, as it does not require that both type
+     * compare values the same way.
+     *
+     * The restriction on the other type being "reasonably" interpreted is to prevent, for example, IntegerType from
+     * being compatible with all other types.  Even though any byte string is a valid IntegerType value, it doesn't
+     * necessarily make sense to interpret a UUID or a UTF8 string as an integer.
+     *
+     * Note that a type should be compatible with at least itself.
+     */
+    bool is_value_compatible_with(const abstract_type& other) const;
+    bool references_user_type(const sstring& keyspace, const bytes& name) const;
+
+    // For types that contain (or are equal to) the given user type (e.g., a set of elements of this type),
+    // updates them with the new version of the type ('updated'). For other types does nothing.
+    std::optional<data_type> update_user_type(const shared_ptr<const user_type_impl> updated) const;
+
+    bool references_duration() const;
+    std::optional<uint32_t> value_length_if_fixed() const {
+        return _value_length_if_fixed;
+    }
+public:
+    bytes decompose(const data_value& value) const;
+    // Safe to call across shards
+    const sstring& name() const {
+        return _name;
+    }
+
+    /**
+     * When returns true then equal values have the same byte representation and if byte
+     * representation is different, the values are not equal.
+     *
+     * When returns false, nothing can be inferred.
+     */
+    bool is_byte_order_equal() const;
+    sstring get_string(const bytes& b) const;
+    sstring to_string(bytes_view bv) const {
+        return to_string_impl(deserialize(bv));
+    }
+    sstring to_string(const bytes& b) const {
+        return to_string(bytes_view(b));
+    }
+    sstring to_string_impl(const data_value& v) const;
+    bytes from_string(sstring_view text) const;
+    bool is_counter() const;
+    bool is_string() const;
+    bool is_collection() const;
+    bool is_map() const { return _kind == kind::map; }
+    bool is_set() const { return _kind == kind::set; }
+    bool is_list() const { return _kind == kind::list; }
+    // Lists and sets are similar: they are both represented as std::vector<data_value>
+    // @sa listlike_collection_type_impl
+    bool is_listlike() const { return _kind == kind::list || _kind == kind::set; }
+    bool is_multi_cell() const;
+    bool is_atomic() const { return !is_multi_cell(); }
+    bool is_reversed() const { return _kind == kind::reversed; }
+    bool is_tuple() const;
+    bool is_user_type() const { return _kind == kind::user; }
+    bool is_native() const;
+    cql3::cql3_type as_cql3_type() const;
+    const sstring& cql3_type_name() const;
+    virtual shared_ptr<const abstract_type> freeze() const { return shared_from_this(); }
+
+    const abstract_type& without_reversed() const {
+        return is_reversed() ? *underlying_type() : *this;
+    }
+
+    // Checks whether there can be a set or map somewhere inside a value of this type.
+    bool contains_set_or_map() const;
+
+    // Checks whether there can be a collection somewhere inside a value of this type.
+    bool contains_collection() const;
+
+    // Checks whether a bound value of this type has to be reserialized.
+    // This can be for example because there is a set inside that needs to be sorted.
+    bool bound_value_needs_to_be_reserialized() const;
+
+    friend class list_type_impl;
+private:
+    mutable sstring _cql3_type_name;
+protected:
+    bool _contains_set_or_map = false;
+    bool _contains_collection = false;
+
+    // native_value_* methods are virualized versions of native_type's
+    // sizeof/alignof/copy-ctor/move-ctor etc.
+    void* native_value_clone(const void* from) const;
+    const std::type_info& native_typeid() const;
+    // abstract_type is a friend of data_value, but derived classes are not.
+    static const void* get_value_ptr(const data_value& v) {
+        return v._value;
+    }
+    friend void write_collection_value(bytes::iterator& out, data_type type, const data_value& value);
+    friend class tuple_type_impl;
+    friend class data_value;
+    friend class reversed_type_impl;
+    template <typename T> friend const T& value_cast(const data_value& value);
+    template <typename T> friend T&& value_cast(data_value&& value);
+    friend bool operator==(const abstract_type& x, const abstract_type& y);
+};
+
+inline bool operator==(const abstract_type& x, const abstract_type& y)
+{
+     return &x == &y;
+}
+
+template <typename T>
+inline
+data_value
+data_value::make_new(data_type type, T&& v) {
+    maybe_empty<std::remove_reference_t<T>> value(std::forward<T>(v));
+    return data_value(type->native_value_clone(&value), type);
+}
+
+template <typename T>
+const T& value_cast(const data_value& value) {
+    return value_cast<T>(const_cast<data_value&&>(value));
+}
+
+template <typename T>
+T&& value_cast(data_value&& value) {
+    if (typeid(maybe_empty<T>) != value.type()->native_typeid()) {
+        throw std::bad_cast();
+    }
+    if (value.is_null()) {
+        throw std::runtime_error("value is null");
+    }
+    return std::move(*reinterpret_cast<maybe_empty<T>*>(value._value));
+}
+
+/// Special case: sometimes we cast uuid to timeuuid so we can correctly compare timestamps.  See #7729.
+template <>
+inline timeuuid_native_type&& value_cast<timeuuid_native_type>(data_value&& value) {
+    static thread_local timeuuid_native_type value_holder; // Static so it survives return from this function.
+    value_holder.uuid = value_cast<utils::UUID>(value);
+    return std::move(value_holder);
+}
+
+// CRTP: implements translation between a native_type (C++ type) to abstract_type
+// AbstractType is parametrized because we want a
+//    abstract_type -> collection_type_impl -> map_type
+// type hierarchy, and native_type is only known at the last step.
+template <typename NativeType, typename AbstractType = abstract_type>
+class concrete_type : public AbstractType {
+public:
+    using native_type = maybe_empty<NativeType>;
+    using AbstractType::AbstractType;
+public:
+    data_value make_value(std::unique_ptr<native_type> value) const {
+        return data_value::make(this->shared_from_this(), std::move(value));
+    }
+    data_value make_value(native_type value) const {
+        return make_value(std::make_unique<native_type>(std::move(value)));
+    }
+    data_value make_null() const {
+        return data_value::make_null(this->shared_from_this());
+    }
+    data_value make_empty() const {
+        return make_value(native_type(empty_t()));
+    }
+    const native_type& from_value(const void* v) const {
+        return *reinterpret_cast<const native_type*>(v);
+    }
+    const native_type& from_value(const data_value& v) const {
+        return this->from_value(AbstractType::get_value_ptr(v));
+    }
+
+    friend class abstract_type;
+};
+
+bool operator==(const data_value& x, const data_value& y);
+
+using bytes_view_opt = std::optional<bytes_view>;
+using managed_bytes_view_opt = std::optional<managed_bytes_view>;
+
+static inline
+bool optional_less_compare(data_type t, bytes_view_opt e1, bytes_view_opt e2) {
+    if (bool(e1) != bool(e2)) {
+        return bool(e2);
+    }
+    if (!e1) {
+        return false;
+    }
+    return t->less(*e1, *e2);
+}
+
+static inline
+bool optional_equal(data_type t, bytes_view_opt e1, bytes_view_opt e2) {
+    if (bool(e1) != bool(e2)) {
+        return false;
+    }
+    if (!e1) {
+        return true;
+    }
+    return t->equal(*e1, *e2);
+}
+
+static inline
+bool less_compare(data_type t, bytes_view e1, bytes_view e2) {
+    return t->less(e1, e2);
+}
+
+static inline
+std::strong_ordering tri_compare(data_type t, managed_bytes_view e1, managed_bytes_view e2) {
+    return t->compare(e1, e2);
+}
+
+inline
+std::strong_ordering
+tri_compare_opt(data_type t, managed_bytes_view_opt v1, managed_bytes_view_opt v2) {
+    if (!v1 || !v2) {
+        return bool(v1) <=> bool(v2);
+    } else {
+        return tri_compare(std::move(t), *v1, *v2);
+    }
+}
+
+static inline
+bool equal(data_type t, managed_bytes_view e1, managed_bytes_view e2) {
+    return t->equal(e1, e2);
+}
+
+class row_tombstone;
+
+class collection_type_impl;
+using collection_type = shared_ptr<const collection_type_impl>;
+
+template <typename... T>
+struct simple_tuple_hash;
+
+template <>
+struct simple_tuple_hash<> {
+    size_t operator()() const { return 0; }
+};
+
+template <typename Arg0, typename... Args >
+struct simple_tuple_hash<std::vector<Arg0>, Args...> {
+    size_t operator()(const std::vector<Arg0>& vec, const Args&... args) const {
+        size_t h0 = 0;
+        size_t h1;
+        for (auto&& i : vec) {
+            h1 = std::hash<Arg0>()(i);
+            h0 = h0 ^ ((h1 << 7) | (h1 >> (std::numeric_limits<size_t>::digits - 7)));
+        }
+        h1 = simple_tuple_hash<Args...>()(args...);
+        return h0 ^ ((h1 << 7) | (h1 >> (std::numeric_limits<size_t>::digits - 7)));
+    }
+};
+
+template <typename Arg0, typename... Args>
+struct simple_tuple_hash<Arg0, Args...> {
+    size_t operator()(const Arg0& arg0, const Args&... args) const {
+        size_t h0 = std::hash<Arg0>()(arg0);
+        size_t h1 = simple_tuple_hash<Args...>()(args...);
+        return h0 ^ ((h1 << 7) | (h1 >> (std::numeric_limits<size_t>::digits - 7)));
+    }
+};
+
+template <typename InternedType, typename... BaseTypes>
+class type_interning_helper {
+    using key_type = std::tuple<BaseTypes...>;
+    using value_type = shared_ptr<const InternedType>;
+    struct hash_type {
+        size_t operator()(const key_type& k) const {
+            return apply(simple_tuple_hash<BaseTypes...>(), k);
+        }
+    };
+    using map_type = std::unordered_map<key_type, value_type, hash_type>;
+    static thread_local map_type _instances;
+public:
+    static shared_ptr<const InternedType> get_instance(BaseTypes... keys) {
+        auto key = std::make_tuple(keys...);
+        auto i = _instances.find(key);
+        if (i == _instances.end()) {
+            auto v = ::make_shared<InternedType>(std::move(keys)...);
+            i = _instances.insert(std::make_pair(std::move(key), std::move(v))).first;
+        }
+        return i->second;
+    }
+};
+
+template <typename InternedType, typename... BaseTypes>
+thread_local typename type_interning_helper<InternedType, BaseTypes...>::map_type
+    type_interning_helper<InternedType, BaseTypes...>::_instances;
+
+class reversed_type_impl : public abstract_type {
+    using intern = type_interning_helper<reversed_type_impl, data_type>;
+    friend struct shared_ptr_make_helper<reversed_type_impl, true>;
+
+    data_type _underlying_type;
+    reversed_type_impl(data_type t)
+        : abstract_type(kind::reversed, "org.apache.cassandra.db.marshal.ReversedType(" + t->name() + ")",
+                        t->value_length_if_fixed())
+        , _underlying_type(t)
+    {
+        _contains_set_or_map = _underlying_type->contains_set_or_map();
+        _contains_collection = _underlying_type->contains_collection();
+    }
+public:
+    const data_type& underlying_type() const {
+        return _underlying_type;
+    }
+
+    static shared_ptr<const reversed_type_impl> get_instance(data_type type);
+};
+using reversed_type = shared_ptr<const reversed_type_impl>;
+
+// Reverse the sort order of the type by wrapping in or stripping reversed_type,
+// as needed.
+data_type reversed(data_type);
+
+class map_type_impl;
+using map_type = shared_ptr<const map_type_impl>;
+
+class set_type_impl;
+using set_type = shared_ptr<const set_type_impl>;
+
+class list_type_impl;
+using list_type = shared_ptr<const list_type_impl>;
+
+inline
+size_t hash_value(const shared_ptr<const abstract_type>& x) {
+    return std::hash<const abstract_type*>()(x.get());
+}
+
+struct no_match_for_native_data_type {};
+
+template <typename T>
+inline constexpr auto data_type_for_v = no_match_for_native_data_type();
+
+template <typename Type>
+inline
+shared_ptr<const abstract_type> data_type_for() {
+    return data_type_for_v<Type>;
+}
+
+class serialized_compare {
+    data_type _type;
+public:
+    serialized_compare(data_type type) : _type(type) {}
+    bool operator()(const bytes& v1, const bytes& v2) const {
+        return _type->less(v1, v2);
+    }
+    bool operator()(const managed_bytes& v1, const managed_bytes& v2) const {
+        return _type->compare(v1, v2) < 0;
+    }
+};
+
+inline
+serialized_compare
+abstract_type::as_less_comparator() const {
+    return serialized_compare(shared_from_this());
+}
+
+class serialized_tri_compare {
+    data_type _type;
+public:
+    serialized_tri_compare(data_type type) : _type(type) {}
+    std::strong_ordering operator()(const bytes_view& v1, const bytes_view& v2) const {
+        return _type->compare(v1, v2);
+    }
+    std::strong_ordering operator()(const managed_bytes_view& v1, const managed_bytes_view& v2) const {
+        return _type->compare(v1, v2);
+    }
+};
+
+inline
+serialized_tri_compare
+abstract_type::as_tri_comparator() const {
+    return serialized_tri_compare(shared_from_this());
+}
+
+using key_compare = serialized_compare;
+
+// Remember to update type_codec in transport/server.cc and cql3/cql3_type.cc
+extern thread_local const shared_ptr<const abstract_type> byte_type;
+extern thread_local const shared_ptr<const abstract_type> short_type;
+extern thread_local const shared_ptr<const abstract_type> int32_type;
+extern thread_local const shared_ptr<const abstract_type> long_type;
+extern thread_local const shared_ptr<const abstract_type> ascii_type;
+extern thread_local const shared_ptr<const abstract_type> bytes_type;
+extern thread_local const shared_ptr<const abstract_type> utf8_type;
+extern thread_local const shared_ptr<const abstract_type> boolean_type;
+extern thread_local const shared_ptr<const abstract_type> date_type;
+extern thread_local const shared_ptr<const abstract_type> timeuuid_type;
+extern thread_local const shared_ptr<const abstract_type> timestamp_type;
+extern thread_local const shared_ptr<const abstract_type> simple_date_type;
+extern thread_local const shared_ptr<const abstract_type> time_type;
+extern thread_local const shared_ptr<const abstract_type> uuid_type;
+extern thread_local const shared_ptr<const abstract_type> inet_addr_type;
+extern thread_local const shared_ptr<const abstract_type> float_type;
+extern thread_local const shared_ptr<const abstract_type> double_type;
+extern thread_local const shared_ptr<const abstract_type> varint_type;
+extern thread_local const shared_ptr<const abstract_type> decimal_type;
+extern thread_local const shared_ptr<const abstract_type> counter_type;
+extern thread_local const shared_ptr<const abstract_type> duration_type;
+extern thread_local const data_type empty_type;
+
+template <> inline thread_local const data_type& data_type_for_v<int8_t> = byte_type;
+template <> inline thread_local const data_type& data_type_for_v<int16_t> = short_type;
+template <> inline thread_local const data_type& data_type_for_v<int32_t> = int32_type;
+template <> inline thread_local const data_type& data_type_for_v<int64_t> = long_type;
+template <> inline thread_local const data_type& data_type_for_v<sstring> = utf8_type;
+template <> inline thread_local const data_type& data_type_for_v<bytes> = bytes_type;
+template <> inline thread_local const data_type& data_type_for_v<utils::UUID> = uuid_type;
+template <> inline thread_local const data_type& data_type_for_v<date_type_native_type> = date_type;
+template <> inline thread_local const data_type& data_type_for_v<simple_date_native_type> = simple_date_type;
+template <> inline thread_local const data_type& data_type_for_v<db_clock::time_point> = timestamp_type;
+template <> inline thread_local const data_type& data_type_for_v<ascii_native_type> = ascii_type;
+template <> inline thread_local const data_type& data_type_for_v<time_native_type> = time_type;
+template <> inline thread_local const data_type& data_type_for_v<timeuuid_native_type> = timeuuid_type;
+template <> inline thread_local const data_type& data_type_for_v<net::inet_address> = inet_addr_type;
+template <> inline thread_local const data_type& data_type_for_v<bool> = boolean_type;
+template <> inline thread_local const data_type& data_type_for_v<float> = float_type;
+template <> inline thread_local const data_type& data_type_for_v<double> = double_type;
+template <> inline thread_local const data_type& data_type_for_v<utils::multiprecision_int> = varint_type;
+template <> inline thread_local const data_type& data_type_for_v<big_decimal> = decimal_type;
+template <> inline thread_local const data_type& data_type_for_v<cql_duration> = duration_type;
+
+namespace std {
+
+template <>
+struct hash<shared_ptr<const abstract_type>> : boost::hash<shared_ptr<abstract_type>> {
+};
+
+}
+
+// FIXME: make more explicit
+inline
+bytes
+to_bytes(const char* x) {
+    return bytes(reinterpret_cast<const int8_t*>(x), std::strlen(x));
+}
+
+// FIXME: make more explicit
+inline
+bytes
+to_bytes(const std::string& x) {
+    return bytes(reinterpret_cast<const int8_t*>(x.data()), x.size());
+}
+
+inline
+bytes_view
+to_bytes_view(const std::string& x) {
+    return bytes_view(reinterpret_cast<const int8_t*>(x.data()), x.size());
+}
+
+inline
+bytes
+to_bytes(bytes_view x) {
+    return bytes(x.begin(), x.size());
+}
+
+inline
+bytes_opt
+to_bytes_opt(bytes_view_opt bv) {
+    if (bv) {
+        return to_bytes(*bv);
+    }
+    return std::nullopt;
+}
+
+inline
+bytes_view_opt
+as_bytes_view_opt(const bytes_opt& bv) {
+    if (bv) {
+        return bytes_view{*bv};
+    }
+    return std::nullopt;
+}
+
+// FIXME: make more explicit
+inline
+bytes
+to_bytes(const sstring& x) {
+    return bytes(reinterpret_cast<const int8_t*>(x.c_str()), x.size());
+}
+
+// FIXME: make more explicit
+inline
+managed_bytes
+to_managed_bytes(const sstring& x) {
+    return managed_bytes(reinterpret_cast<const int8_t*>(x.c_str()), x.size());
+}
+
+inline
+bytes_view
+to_bytes_view(const sstring& x) {
+    return bytes_view(reinterpret_cast<const int8_t*>(x.c_str()), x.size());
+}
+
+inline
+bytes
+to_bytes(const utils::UUID& uuid) {
+    struct {
+        uint64_t msb;
+        uint64_t lsb;
+    } tmp = { net::hton(uint64_t(uuid.get_most_significant_bits())),
+        net::hton(uint64_t(uuid.get_least_significant_bits())) };
+    return bytes(reinterpret_cast<int8_t*>(&tmp), 16);
+}
+
+inline bool
+less_unsigned(bytes_view v1, bytes_view v2) {
+    return compare_unsigned(v1, v2) < 0;
+}
+
+template<typename Type>
+static inline
+typename Type::value_type deserialize_value(Type& t, bytes_view v) {
+    return t.deserialize_value(v);
+}
+
+template<typename T>
+T read_simple(bytes_view& v) {
+    if (v.size() < sizeof(T)) {
+        throw_with_backtrace<marshal_exception>(format("read_simple - not enough bytes (expected {:d}, got {:d})", sizeof(T), v.size()));
+    }
+    auto p = v.begin();
+    v.remove_prefix(sizeof(T));
+    return net::ntoh(read_unaligned<T>(p));
+}
+
+template<typename T>
+T read_simple_exactly(bytes_view v) {
+    if (v.size() != sizeof(T)) {
+        throw_with_backtrace<marshal_exception>(format("read_simple_exactly - size mismatch (expected {:d}, got {:d})", sizeof(T), v.size()));
+    }
+    auto p = v.begin();
+    return net::ntoh(read_unaligned<T>(p));
+}
+
+inline
+bytes_view
+read_simple_bytes(bytes_view& v, size_t n) {
+    if (v.size() < n) {
+        throw_with_backtrace<marshal_exception>(format("read_simple_bytes - not enough bytes (requested {:d}, got {:d})", n, v.size()));
+    }
+    bytes_view ret(v.begin(), n);
+    v.remove_prefix(n);
+    return ret;
+}
+
+template<FragmentedView View>
+View read_simple_bytes(View& v, size_t n) {
+    if (v.size_bytes() < n) {
+        throw_with_backtrace<marshal_exception>(format("read_simple_bytes - not enough bytes (requested {:d}, got {:d})", n, v.size_bytes()));
+    }
+    auto prefix = v.prefix(n);
+    v.remove_prefix(n);
+    return prefix;
+}
+
+inline sstring read_simple_short_string(bytes_view& v) {
+    uint16_t len = read_simple<uint16_t>(v);
+    if (v.size() < len) {
+        throw_with_backtrace<marshal_exception>(format("read_simple_short_string - not enough bytes ({:d})", v.size()));
+    }
+    sstring ret = uninitialized_string(len);
+    std::copy(v.begin(), v.begin() + len, ret.begin());
+    v.remove_prefix(len);
+    return ret;
+}
+
+size_t collection_size_len();
+size_t collection_value_len();
+void write_collection_size(bytes::iterator& out, int size);
+void write_collection_size(managed_bytes_mutable_view&, int size);
+void write_collection_value(bytes::iterator& out, bytes_view_opt val_bytes);
+void write_collection_value(managed_bytes_mutable_view&, bytes_view_opt val_bytes);
+void write_collection_value(managed_bytes_mutable_view&, const managed_bytes_view_opt& val_bytes);
+void write_int32(bytes::iterator& out, int32_t value);
+
+// Splits a serialized collection into a vector of elements, but does not recursively deserialize the elements.
+// Does not perform validation.
+template <FragmentedView View>
+utils::chunked_vector<managed_bytes_opt> partially_deserialize_listlike(View in);
+template <FragmentedView View>
+std::vector<std::pair<managed_bytes, managed_bytes>> partially_deserialize_map(View in);
+
+using user_type = shared_ptr<const user_type_impl>;
+using tuple_type = shared_ptr<const tuple_type_impl>;
+
+inline
+data_value::data_value(std::optional<bytes> v)
+        : data_value(v ? data_value(*v) : data_value::make_null(data_type_for<bytes>())) {
+}
+
+template <typename NativeType>
+data_value::data_value(std::optional<NativeType> v)
+        : data_value(v ? data_value(*v) : data_value::make_null(data_type_for<NativeType>())) {
+}
+
+template<>
+struct appending_hash<data_type> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const data_type& v) const {
+        feed_hash(h, v->name());
+    }
+};
+
 #include "schema/schema.hh"
 #include "serializer_impl.hh"
 
