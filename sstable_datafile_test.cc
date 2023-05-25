@@ -59940,11 +59940,2053 @@ seastar::data_source make_limiting_data_source(seastar::data_source&& src,
 #include <link.h>
 #include <map>
 #include <memory>
+#include <vector>
 
-#include "murmur3_partitioner.hh"
-#include "murmur_hash.hh"
-#include "mutation/canonical_mutation.hh"
-#include "mutation_cleaner.hh"
+namespace dht {
+
+class murmur3_partitioner final : public i_partitioner {
+public:
+    murmur3_partitioner() = default;
+    virtual const sstring name() const override { return "org.apache.cassandra.dht.Murmur3Partitioner"; }
+    virtual token get_token(const schema& s, partition_key_view key) const override;
+    virtual token get_token(const sstables::key_view& key) const override;
+private:
+    token get_token(bytes_view key) const;
+    token get_token(uint64_t value) const;
+};
+
+
+}
+
+
+#include <iosfwd>
+#include <map>
+#include <boost/intrusive/set.hpp>
+#include <boost/range/iterator_range.hpp>
+#include <boost/range/adaptor/filtered.hpp>
+#include <boost/intrusive/parent_from_member.hpp>
+
+#include <seastar/core/bitset-iter.hh>
+#include <seastar/util/optimized_optional.hh>
+
+
+// is_evictable::yes means that the object is part of an evictable snapshots in MVCC,
+// and non-evictable one otherwise.
+// See docs/dev/mvcc.md for more details.
+using is_evictable = bool_class<class evictable_tag>;
+
+// Represents a set of writes made to a single partition.
+//
+// Like mutation_partition, but intended to be used in cache/memtable
+// so the tradeoffs are different. This representation must be memory-efficient
+// and must support incremental eviction of its contents. It is used in MVCC so
+// algorithms for merging must respect MVCC invariants. See docs/dev/mvcc.md.
+//
+// The object is schema-dependent. Each instance is governed by some
+// specific schema version. Accessors require a reference to the schema object
+// of that version.
+//
+// There is an operation of addition defined on mutation_partition objects
+// (also called "apply"), which gives as a result an object representing the
+// sum of writes contained in the addends. For instances governed by the same
+// schema, addition is commutative and associative.
+//
+// In addition to representing writes, the object supports specifying a set of
+// partition elements called "continuity". This set can be used to represent
+// lack of information about certain parts of the partition. It can be
+// specified which ranges of clustering keys belong to that set. We say that a
+// key range is continuous if all keys in that range belong to the continuity
+// set, and discontinuous otherwise. By default everything is continuous.
+// The static row may be also continuous or not.
+// Partition tombstone is always continuous.
+//
+// Continuity is ignored by instance equality. It's also transient, not
+// preserved by serialization.
+//
+// Continuity is represented internally using flags on row entries. The key
+// range between two consecutive entries (both ends exclusive) is continuous
+// if and only if rows_entry::continuous() is true for the later entry. The
+// range starting after the last entry is assumed to be continuous. The range
+// corresponding to the key of the entry is continuous if and only if
+// rows_entry::dummy() is false.
+//
+// Adding two fully-continuous instances gives a fully-continuous instance.
+// Continuity doesn't affect how the write part is added.
+//
+// Addition of continuity is not commutative in general, but is associative.
+// The default continuity merging rules are those required by MVCC to
+// preserve its invariants. For details, refer to "Continuity merging rules" section
+// in the doc in partition_version.hh.
+class mutation_partition_v2 final {
+public:
+    using rows_type = rows_entry::container_type;
+    friend class size_calculator;
+private:
+    tombstone _tombstone;
+    lazy_row _static_row;
+    bool _static_row_continuous = true;
+    rows_type _rows;
+#ifdef SEASTAR_DEBUG
+    table_schema_version _schema_version;
+#endif
+
+    friend class converting_mutation_partition_applier;
+public:
+    struct copy_comparators_only {};
+    struct incomplete_tag {};
+    // Constructs an empty instance which is fully discontinuous except for the partition tombstone.
+    mutation_partition_v2(incomplete_tag, const schema& s, tombstone);
+    static mutation_partition_v2 make_incomplete(const schema& s, tombstone t = {}) {
+        return mutation_partition_v2(incomplete_tag(), s, t);
+    }
+    mutation_partition_v2(schema_ptr s)
+        : _rows()
+#ifdef SEASTAR_DEBUG
+        , _schema_version(s->version())
+#endif
+    { }
+    mutation_partition_v2(mutation_partition_v2& other, copy_comparators_only)
+        : _rows()
+#ifdef SEASTAR_DEBUG
+        , _schema_version(other._schema_version)
+#endif
+    { }
+    mutation_partition_v2(mutation_partition_v2&&) = default;
+    // Assumes that p is fully continuous.
+    mutation_partition_v2(const schema& s, mutation_partition&& p);
+    mutation_partition_v2(const schema& s, const mutation_partition_v2&);
+    // Assumes that p is fully continuous.
+    mutation_partition_v2(const schema& s, const mutation_partition& p);
+    ~mutation_partition_v2();
+    static mutation_partition_v2& container_of(rows_type&);
+    mutation_partition_v2& operator=(mutation_partition_v2&& x) noexcept;
+    bool equal(const schema&, const mutation_partition_v2&) const;
+    bool equal(const schema& this_schema, const mutation_partition_v2& p, const schema& p_schema) const;
+    bool equal_continuity(const schema&, const mutation_partition_v2&) const;
+    // Consistent with equal()
+    template<typename Hasher>
+    void feed_hash(Hasher& h, const schema& s) const {
+        hashing_partition_visitor<Hasher> v(h, s);
+        accept(s, v);
+    }
+
+    class printer {
+        const schema& _schema;
+        const mutation_partition_v2& _mutation_partition;
+    public:
+        printer(const schema& s, const mutation_partition_v2& mp) : _schema(s), _mutation_partition(mp) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+public:
+    // Makes sure there is a dummy entry after all clustered rows. Doesn't affect continuity.
+    // Doesn't invalidate iterators.
+    void ensure_last_dummy(const schema&);
+    bool static_row_continuous() const { return _static_row_continuous; }
+    void set_static_row_continuous(bool value) { _static_row_continuous = value; }
+    bool is_fully_continuous() const;
+    void make_fully_continuous();
+    // Sets or clears continuity of clustering ranges between existing rows.
+    void set_continuity(const schema&, const position_range& pr, is_continuous);
+    // Returns clustering row ranges which have continuity matching the is_continuous argument.
+    clustering_interval_set get_continuity(const schema&, is_continuous = is_continuous::yes) const;
+    // Returns true iff all keys from given range are marked as continuous, or range is empty.
+    bool fully_continuous(const schema&, const position_range&);
+    // Returns true iff all keys from given range are marked as not continuous and range is not empty.
+    bool fully_discontinuous(const schema&, const position_range&);
+    // Returns true iff all keys from given range have continuity membership as specified by is_continuous.
+    bool check_continuity(const schema&, const position_range&, is_continuous) const;
+    // Frees elements of the partition in batches.
+    // Returns stop_iteration::yes iff there are no more elements to free.
+    // Continuity is unspecified after this.
+    stop_iteration clear_gently(cache_tracker*) noexcept;
+    // Applies mutation_fragment.
+    // The fragment must be goverened by the same schema as this object.
+    void apply(tombstone t) { _tombstone.apply(t); }
+    void apply_delete(const schema& schema, const clustering_key_prefix& prefix, tombstone t);
+    void apply_delete(const schema& schema, range_tombstone rt);
+    void apply_delete(const schema& schema, clustering_key_prefix&& prefix, tombstone t);
+    void apply_delete(const schema& schema, clustering_key_prefix_view prefix, tombstone t);
+    // Equivalent to applying a mutation with an empty row, created with given timestamp
+    void apply_insert(const schema& s, clustering_key_view, api::timestamp_type created_at);
+    void apply_insert(const schema& s, clustering_key_view, api::timestamp_type created_at,
+                      gc_clock::duration ttl, gc_clock::time_point expiry);
+    // prefix must not be full
+    void apply_row_tombstone(const schema& schema, clustering_key_prefix prefix, tombstone t);
+    void apply_row_tombstone(const schema& schema, range_tombstone rt);
+    //
+    // Applies p to current object.
+    //
+    // Commutative when this_schema == p_schema. If schemas differ, data in p which
+    // is not representable in this_schema is dropped, thus apply() loses commutativity.
+    //
+    // Weak exception guarantees.
+    void apply(const schema& this_schema, const mutation_partition_v2& p, const schema& p_schema,
+            mutation_application_stats& app_stats);
+    // Use in case this instance and p share the same schema.
+    // Same guarantees as apply(const schema&, mutation_partition_v2&&, const schema&);
+    void apply(const schema& s, mutation_partition_v2&& p, mutation_application_stats& app_stats);
+
+    // Applies p to this instance.
+    //
+    // Monotonic exception guarantees. In case of exception the sum of p and this remains the same as before the exception.
+    // This instance and p are governed by the same schema.
+    //
+    // Must be provided with a pointer to the cache_tracker, which owns both this and p.
+    //
+    // Returns stop_iteration::no if the operation was preempted before finished, and stop_iteration::yes otherwise.
+    // On preemption the sum of this and p stays the same (represents the same set of writes), and the state of this
+    // object contains at least all the writes it contained before the call (monotonicity). It may contain partial writes.
+    // Also, some progress is always guaranteed (liveness).
+    //
+    // If returns stop_iteration::yes, then the sum of this and p is NO LONGER the same as before the call,
+    // the state of p is undefined and should not be used for reading.
+    //
+    // The operation can be driven to completion like this:
+    //
+    //   apply_resume res;
+    //   while (apply_monotonically(..., is_preemtable::yes, &res) == stop_iteration::no) { }
+    //
+    // If is_preemptible::no is passed as argument then stop_iteration::no is never returned.
+    //
+    // If is_preemptible::yes is passed, apply_resume must also be passed,
+    // same instance each time until stop_iteration::yes is returned.
+    stop_iteration apply_monotonically(const schema& s, mutation_partition_v2&& p, cache_tracker*,
+            mutation_application_stats& app_stats, is_preemptible, apply_resume&, is_evictable);
+    stop_iteration apply_monotonically(const schema& s, mutation_partition_v2&& p, const schema& p_schema,
+            mutation_application_stats& app_stats, is_preemptible, apply_resume&, is_evictable);
+    stop_iteration apply_monotonically(const schema& s, mutation_partition_v2&& p, cache_tracker* tracker,
+            mutation_application_stats& app_stats, is_evictable);
+    stop_iteration apply_monotonically(const schema& s, mutation_partition_v2&& p, const schema& p_schema,
+            mutation_application_stats& app_stats);
+    stop_iteration apply_monotonically(const schema& s, mutation_partition_v2&& p, cache_tracker*,
+            mutation_application_stats& app_stats, preemption_check, apply_resume&, is_evictable);
+
+    // Weak exception guarantees.
+    // Assumes this and p are not owned by a cache_tracker and non-evictable.
+    void apply_weak(const schema& s, const mutation_partition& p, const schema& p_schema,
+                    mutation_application_stats& app_stats);
+    void apply_weak(const schema& s, mutation_partition&&,
+                    mutation_application_stats& app_stats);
+    void apply_weak(const schema& s, mutation_partition_view p, const schema& p_schema,
+                    mutation_application_stats& app_stats);
+
+    // Converts partition to the new schema. When succeeds the partition should only be accessed
+    // using the new schema.
+    //
+    // Strong exception guarantees.
+    void upgrade(const schema& old_schema, const schema& new_schema);
+
+    // Transforms this instance into a minimal one which still represents the same set of writes.
+    // Does not garbage collect expired data, so the result is clock-independent and
+    // should produce the same result on all replicas.
+    // has_redundant_dummies(*this) is guaranteed to be false after this.
+    void compact(const schema&, cache_tracker*);
+
+    mutation_partition as_mutation_partition(const schema&) const;
+private:
+    // Erases the entry if it's safe to do so without changing the logical state of the partition.
+    rows_type::iterator maybe_drop(const schema&, cache_tracker*, rows_type::iterator, mutation_application_stats&);
+    void insert_row(const schema& s, const clustering_key& key, deletable_row&& row);
+    void insert_row(const schema& s, const clustering_key& key, const deletable_row& row);
+public:
+    // Returns true if the mutation_partition_v2 represents no writes.
+    bool empty() const;
+public:
+    deletable_row& clustered_row(const schema& s, const clustering_key& key);
+    deletable_row& clustered_row(const schema& s, clustering_key&& key);
+    deletable_row& clustered_row(const schema& s, clustering_key_view key);
+    deletable_row& clustered_row(const schema& s, position_in_partition_view pos, is_dummy, is_continuous);
+    rows_entry& clustered_rows_entry(const schema& s, position_in_partition_view pos, is_dummy, is_continuous);
+    rows_entry& clustered_row(const schema& s, position_in_partition_view pos, is_dummy);
+    // Throws if the row already exists or if the row was not inserted to the
+    // last position (one or more greater row already exists).
+    // Weak exception guarantees.
+    deletable_row& append_clustered_row(const schema& s, position_in_partition_view pos, is_dummy, is_continuous);
+public:
+    tombstone partition_tombstone() const { return _tombstone; }
+    lazy_row& static_row() { return _static_row; }
+    const lazy_row& static_row() const { return _static_row; }
+
+    // return a set of rows_entry where each entry represents a CQL row sharing the same clustering key.
+    const rows_type& clustered_rows() const noexcept { return _rows; }
+    utils::immutable_collection<rows_type> clustered_rows() noexcept { return _rows; }
+    rows_type& mutable_clustered_rows() noexcept { return _rows; }
+
+    const row* find_row(const schema& s, const clustering_key& key) const;
+    boost::iterator_range<rows_type::const_iterator> range(const schema& schema, const query::clustering_range& r) const;
+    rows_type::const_iterator lower_bound(const schema& schema, const query::clustering_range& r) const;
+    rows_type::const_iterator upper_bound(const schema& schema, const query::clustering_range& r) const;
+    rows_type::iterator lower_bound(const schema& schema, const query::clustering_range& r);
+    rows_type::iterator upper_bound(const schema& schema, const query::clustering_range& r);
+    boost::iterator_range<rows_type::iterator> range(const schema& schema, const query::clustering_range& r);
+    // Returns an iterator range of rows_entry, with only non-dummy entries.
+    auto non_dummy_rows() const {
+        return boost::make_iterator_range(_rows.begin(), _rows.end())
+            | boost::adaptors::filtered([] (const rows_entry& e) { return bool(!e.dummy()); });
+    }
+    void accept(const schema&, mutation_partition_visitor&) const;
+
+    bool is_static_row_live(const schema&,
+        gc_clock::time_point query_time = gc_clock::time_point::min()) const;
+
+    uint64_t row_count() const;
+
+    size_t external_memory_usage(const schema&) const;
+private:
+    template<typename Func>
+    void for_each_row(const schema& schema, const query::clustering_range& row_range, bool reversed, Func&& func) const;
+    friend class counter_write_query_result_builder;
+
+    void check_schema(const schema& s) const {
+#ifdef SEASTAR_DEBUG
+        assert(s.version() == _schema_version);
+#endif
+    }
+};
+
+inline
+mutation_partition_v2& mutation_partition_v2::container_of(rows_type& rows) {
+    return *boost::intrusive::get_parent_from_member(&rows, &mutation_partition_v2::_rows);
+}
+
+// Returns true iff the mutation contains dummy rows which are redundant,
+// meaning that they can be removed without affecting the set of writes represented by the mutation.
+bool has_redundant_dummies(const mutation_partition_v2&);
+
+#include <iterator>
+
+template<typename T>
+class anchorless_list_base_hook {
+    anchorless_list_base_hook<T>* _next = nullptr;
+    anchorless_list_base_hook<T>* _prev = nullptr;
+public:
+    template <typename ValueType>
+    class iterator {
+        anchorless_list_base_hook<T>* _position;
+    public:
+        using iterator_category = std::bidirectional_iterator_tag;
+        using value_type = ValueType;
+        using difference_type = ssize_t;
+        using pointer = ValueType*;
+        using reference = ValueType&;
+    public:
+        explicit iterator(anchorless_list_base_hook<T>* pos) : _position(pos) { }
+        ValueType& operator*() { return *static_cast<ValueType*>(_position); }
+        ValueType* operator->() { return static_cast<ValueType*>(_position); }
+        iterator& operator++() {
+            _position = _position->_next;
+            return *this;
+        }
+        iterator operator++(int) {
+            iterator it = *this;
+            operator++();
+            return it;
+        }
+        iterator& operator--() {
+            _position = _position->_prev;
+            return *this;
+        }
+        iterator operator--(int) {
+            iterator it = *this;
+            operator--();
+            return it;
+        }
+        bool operator==(const iterator&) const = default;
+    };
+
+    template <typename ValueType>
+    class reverse_iterator {
+        anchorless_list_base_hook<T>* _position;
+    public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = ValueType;
+        using difference_type = ssize_t;
+        using pointer = ValueType*;
+        using reference = ValueType&;
+    public:
+        explicit reverse_iterator(anchorless_list_base_hook<T>* pos) : _position(pos) { }
+        ValueType& operator*() { return *static_cast<ValueType*>(_position); }
+        ValueType* operator->() { return static_cast<ValueType*>(_position); }
+        reverse_iterator& operator++() {
+            _position = _position->_prev;
+            return *this;
+        }
+        reverse_iterator operator++(int) {
+            reverse_iterator it = *this;
+            operator++();
+            return it;
+        }
+        bool operator==(const reverse_iterator& other) const = default;
+    };
+
+    class range {
+        anchorless_list_base_hook<T>* _begin;
+        anchorless_list_base_hook<T>* _end;
+    public:
+        using iterator = anchorless_list_base_hook::iterator<T>;
+        using const_iterator = anchorless_list_base_hook::iterator<const T>;
+        range(anchorless_list_base_hook<T>* b, anchorless_list_base_hook<T>* e)
+            : _begin(b), _end(e) { }
+        iterator begin() { return iterator(_begin); }
+        iterator end() { return iterator(_end); }
+        const_iterator begin() const { return const_iterator(_begin); }
+        const_iterator end() const { return const_iterator(_end); }
+    };
+
+    class reversed_range {
+        anchorless_list_base_hook<T>* _begin;
+        anchorless_list_base_hook<T>* _end;
+    public:
+        using iterator = anchorless_list_base_hook::reverse_iterator<T>;
+        using const_iterator = anchorless_list_base_hook::reverse_iterator<const T>;
+        reversed_range(anchorless_list_base_hook<T>* b, anchorless_list_base_hook<T>* e)
+            : _begin(b), _end(e) { }
+        iterator begin() { return iterator(_begin); }
+        iterator end() { return iterator(_end); }
+        const_iterator begin() const { return const_iterator(_begin); }
+        const_iterator end() const { return const_iterator(_end); }
+    };
+public:
+    anchorless_list_base_hook() = default;
+    anchorless_list_base_hook(const anchorless_list_base_hook&) = delete;
+    anchorless_list_base_hook(anchorless_list_base_hook&& other) noexcept
+        : _next(other._next)
+        , _prev(other._prev)
+    {
+        if (_next) {
+            _next->_prev = this;
+        }
+        if (_prev) {
+            _prev->_next = this;
+        }
+        other._next = nullptr;
+        other._prev = nullptr;
+    }
+    anchorless_list_base_hook& operator=(const anchorless_list_base_hook&) = delete;
+    anchorless_list_base_hook& operator=(anchorless_list_base_hook&& other) noexcept
+    {
+        if (this != &other) {
+            this->~anchorless_list_base_hook();
+            new (this) anchorless_list_base_hook(std::move(other));
+        }
+        return *this;
+    }
+    ~anchorless_list_base_hook() {
+        erase();
+    }
+    // Inserts this after elem.
+    void insert_after(T& elem) {
+        auto e = static_cast<anchorless_list_base_hook*>(&elem);
+        _next = e->_next;
+        e->_next = this;
+        _prev = e;
+        if (_next) {
+            _next->_prev = this;
+        }
+    }
+    // Inserts the chain starting at head after this elem.
+    // Assumes !head.prev() and !next().
+    void splice(T& head) {
+        auto e = static_cast<anchorless_list_base_hook*>(&head);
+        _next = e;
+        e->_prev = this;
+    }
+    // Inserts this before elem.
+    void insert_before(T& elem) {
+        auto e = static_cast<anchorless_list_base_hook*>(&elem);
+        _prev = e->_prev;
+        e->_prev = this;
+        _next = e;
+        if (_prev) {
+            _prev->_next = this;
+        }
+    }
+    void erase() {
+        if (_next) {
+            _next->_prev = _prev;
+        }
+        if (_prev) {
+            _prev->_next = _next;
+        }
+        _next = nullptr;
+        _prev = nullptr;
+    }
+    bool is_front() const { return !_prev; }
+    bool is_back() const { return !_next; }
+    bool is_single() const { return is_front() && is_back(); }
+    T* next() const {
+        return static_cast<T*>(_next);
+    }
+    T* prev() const {
+        return static_cast<T*>(_prev);
+    }
+    T* last() const {
+        // FIXME: Optimize
+        auto v = this;
+        while (v->_next) {
+            v = v->_next;
+        }
+        return const_cast<T*>(static_cast<const T*>(v));
+    }
+    iterator<T> iterator_to() {
+        return iterator<T>(this);
+    }
+    range all_elements() {
+        auto begin = this;
+        while (begin->_prev) {
+            begin = begin->_prev;
+        }
+        return range(begin, nullptr);
+    }
+    reversed_range all_elements_reversed() {
+        return reversed_range(last(), nullptr);
+    }
+    range elements_from_this() {
+        return range(this, nullptr);
+    }
+};
+
+#include <boost/intrusive/parent_from_member.hpp>
+#include <assert.h>
+
+//  A movable pointer-like object paired with exactly one other object of the same type. 
+//  The two objects which are paired with each other point at each other.
+//  The relationship is symmetrical.
+//
+//  A pair of such objects can be used for implementing bi-directional traversal in data structures.
+//
+//  Moving this object automatically updates the other reference, so the references remain
+//  consistent when the containing objects are managed by LSA.
+//
+//                get()
+//          ------------------>
+//   -----------             -----------
+//  | entangled |~~~~~~~~~~~| entangled |
+//   -----------             -----------
+//          <------------------
+//                get()
+//
+class entangled final {
+    entangled* _ref = nullptr;
+private:
+    struct init_tag {};
+    entangled(init_tag, entangled& other) {
+        assert(!other._ref);
+        _ref = &other;
+        other._ref = this;
+    }
+public:
+    // Creates a new object which is paired with a given "other".
+    // The other is also paired with this object afterwards.
+    // The other must not be paired before the call.
+    static entangled make_paired_with(entangled& other) {
+        return entangled(init_tag(), other);
+    }
+
+    // Creates an unpaired object.
+    entangled() = default;
+    entangled(const entangled&) = delete;
+
+    entangled(entangled&& other) noexcept
+        : _ref(other._ref)
+    {
+        if (_ref) {
+            _ref->_ref = this;
+        }
+        other._ref = nullptr;
+    }
+
+    ~entangled() {
+        if (_ref) {
+            _ref->_ref = nullptr;
+        }
+    }
+
+    entangled& operator=(entangled&& other) noexcept {
+        if (_ref) {
+            _ref->_ref = nullptr;
+        }
+        _ref = other._ref;
+        if (_ref) {
+            _ref->_ref = this;
+        }
+        other._ref = nullptr;
+        return *this;
+    }
+
+    entangled* get() { return _ref; }
+    const entangled* get() const { return _ref; }
+    explicit operator bool() const { return _ref != nullptr; }
+
+    template<typename T>
+    T* get(entangled T::* paired_member) {
+        if (!_ref) {
+            return nullptr;
+        }
+        return boost::intrusive::get_parent_from_member(get(), paired_member);
+    }
+
+    template<typename T>
+    const T* get(entangled T::* paired_member) const {
+        if (!_ref) {
+            return nullptr;
+        }
+        return boost::intrusive::get_parent_from_member(get(), paired_member);
+    }
+};
+
+#include <memory>
+#include <seastar/core/memory.hh>
+#include <seastar/core/condition-variable.hh>
+#include <seastar/core/smp.hh>
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/shared_future.hh>
+#include <seastar/core/expiring_fifo.hh>
+
+namespace logalloc {
+
+struct occupancy_stats;
+class region;
+class region_impl;
+class allocating_section;
+
+constexpr int segment_size_shift = 17; // 128K; see #151, #152
+constexpr size_t segment_size = 1 << segment_size_shift;
+constexpr size_t max_zone_segments = 256;
+
+//
+// Frees some amount of objects from the region to which it's attached.
+//
+// This should eventually stop given no new objects are added:
+//
+//     while (eviction_fn() == memory::reclaiming_result::reclaimed_something) ;
+//
+using eviction_fn = std::function<memory::reclaiming_result()>;
+
+// Listens for events from a region
+class region_listener {
+public:
+    virtual ~region_listener();
+    virtual void add(region* r) = 0;
+    virtual void del(region* r) = 0;
+    virtual void moved(region* old_address, region* new_address) = 0;
+    virtual void increase_usage(region* r, ssize_t delta) = 0;
+    virtual void decrease_evictable_usage(region* r) = 0;
+    virtual void decrease_usage(region* r, ssize_t delta) = 0;
+};
+
+// Controller for all LSA regions. There's one per shard.
+class tracker {
+public:
+    class impl;
+
+    struct config {
+        bool defragment_on_idle;
+        bool abort_on_lsa_bad_alloc;
+        bool sanitizer_report_backtrace = false; // Better reports but slower
+        size_t lsa_reclamation_step;
+        scheduling_group background_reclaim_sched_group;
+    };
+
+    struct stats {
+        size_t segments_compacted;
+        size_t lsa_buffer_segments;
+        uint64_t memory_allocated;
+        uint64_t memory_freed;
+        uint64_t memory_compacted;
+        uint64_t memory_evicted;
+
+        friend stats operator+(const stats& s1, const stats& s2) {
+            stats result(s1);
+            result += s2;
+            return result;
+        }
+        friend stats operator-(const stats& s1, const stats& s2) {
+            stats result(s1);
+            result -= s2;
+            return result;
+        }
+        stats& operator+=(const stats& other) {
+            segments_compacted += other.segments_compacted;
+            lsa_buffer_segments += other.lsa_buffer_segments;
+            memory_allocated += other.memory_allocated;
+            memory_freed += other.memory_freed;
+            memory_compacted += other.memory_compacted;
+            memory_evicted += other.memory_evicted;
+            return *this;
+        }
+        stats& operator-=(const stats& other) {
+            segments_compacted -= other.segments_compacted;
+            lsa_buffer_segments -= other.lsa_buffer_segments;
+            memory_allocated -= other.memory_allocated;
+            memory_freed -= other.memory_freed;
+            memory_compacted -= other.memory_compacted;
+            memory_evicted -= other.memory_evicted;
+            return *this;
+        }
+    };
+
+    void configure(const config& cfg);
+    future<> stop();
+
+private:
+    std::unique_ptr<impl> _impl;
+    memory::reclaimer _reclaimer;
+    friend class region;
+    friend class region_impl;
+    memory::reclaiming_result reclaim(seastar::memory::reclaimer::request);
+
+public:
+    tracker();
+    ~tracker();
+
+    stats statistics() const;
+
+    //
+    // Tries to reclaim given amount of bytes in total using all compactible
+    // and evictable regions. Returns the number of bytes actually reclaimed.
+    // That value may be smaller than requested when evictable pools are empty
+    // and compactible pools can't compact any more.
+    //
+    // Invalidates references to objects in all compactible and evictable regions.
+    //
+    size_t reclaim(size_t bytes);
+
+    // Compacts as much as possible. Very expensive, mainly for testing.
+    // Guarantees that every live object from reclaimable regions will be moved.
+    // Invalidates references to objects in all compactible and evictable regions.
+    void full_compaction();
+
+    void reclaim_all_free_segments();
+
+    occupancy_stats global_occupancy() const noexcept;
+
+    // Returns aggregate statistics for all pools.
+    occupancy_stats region_occupancy() const noexcept;
+
+    // Returns statistics for all segments allocated by LSA on this shard.
+    occupancy_stats occupancy() const noexcept;
+
+    // Returns amount of allocated memory not managed by LSA
+    size_t non_lsa_used_space() const noexcept;
+
+    impl& get_impl() noexcept { return *_impl; }
+
+    // Returns the minimum number of segments reclaimed during single reclamation cycle.
+    size_t reclamation_step() const noexcept;
+
+    bool should_abort_on_bad_alloc() const noexcept;
+};
+
+class tracker_reclaimer_lock {
+    tracker::impl& _tracker_impl;
+public:
+    tracker_reclaimer_lock(tracker::impl& impl) noexcept;
+    tracker_reclaimer_lock(tracker& t) noexcept : tracker_reclaimer_lock(t.get_impl()) { }
+    ~tracker_reclaimer_lock();
+};
+
+tracker& shard_tracker() noexcept;
+
+class segment_descriptor;
+
+/// A unique pointer to a chunk of memory allocated inside an LSA region.
+///
+/// The pointer can be in disengaged state in which case it doesn't point at any buffer (nullptr state).
+/// When the pointer points at some buffer, it is said to be engaged.
+///
+/// The pointer owns the object.
+/// When the pointer is destroyed or it transitions from engaged to disengaged state, the buffer is freed.
+/// The buffer is never leaked when operating by the API of lsa_buffer.
+/// The pointer object can be safely destroyed in any allocator context.
+///
+/// The pointer object is never invalidated.
+/// The pointed-to buffer can be moved around by LSA, so the pointer returned by get() can be
+/// invalidated, but the pointer object itself is updated automatically and get() always returns
+/// a pointer which is valid at the time of the call.
+///
+/// Must not outlive the region.
+class lsa_buffer {
+    friend class region_impl;
+    entangled _link;           // Paired with segment_descriptor::_buf_pointers[...]
+    segment_descriptor* _desc; // Valid only when engaged
+    char* _buf = nullptr;      // Valid only when engaged
+    size_t _size = 0;
+public:
+    using char_type = char;
+
+    lsa_buffer() = default;
+    lsa_buffer(lsa_buffer&&) noexcept = default;
+    ~lsa_buffer();
+
+    /// Makes this instance point to the buffer pointed to by the other pointer.
+    /// If this pointer was engaged before, the owned buffer is freed.
+    /// The other pointer will be in disengaged state after this.
+    lsa_buffer& operator=(lsa_buffer&& other) noexcept {
+        if (this != &other) {
+            this->~lsa_buffer();
+            new (this) lsa_buffer(std::move(other));
+        }
+        return *this;
+    }
+
+    /// Disengages the pointer.
+    /// If the pointer was engaged before, the owned buffer is freed.
+    /// Postcondition: !bool(*this)
+    lsa_buffer& operator=(std::nullptr_t) noexcept {
+        this->~lsa_buffer();
+        return *this;
+    }
+
+    /// Returns a pointer to the first element of the buffer.
+    /// Valid only when engaged.
+    char_type* get() noexcept { return _buf; }
+    const char_type* get() const noexcept { return _buf; }
+
+    /// Returns the number of bytes in the buffer.
+    size_t size() const noexcept { return _size; }
+
+    /// Returns true iff the pointer is engaged.
+    explicit operator bool() const noexcept { return bool(_link); }
+};
+
+// Monoid representing pool occupancy statistics.
+// Naturally ordered so that sparser pools come fist.
+// All sizes in bytes.
+class occupancy_stats {
+    size_t _free_space;
+    size_t _total_space;
+public:
+    occupancy_stats() noexcept : _free_space(0), _total_space(0) {}
+
+    occupancy_stats(size_t free_space, size_t total_space) noexcept
+        : _free_space(free_space), _total_space(total_space) { }
+
+    bool operator<(const occupancy_stats& other) const noexcept {
+        return used_fraction() < other.used_fraction();
+    }
+
+    friend occupancy_stats operator+(const occupancy_stats& s1, const occupancy_stats& s2) noexcept {
+        occupancy_stats result(s1);
+        result += s2;
+        return result;
+    }
+
+    friend occupancy_stats operator-(const occupancy_stats& s1, const occupancy_stats& s2) noexcept {
+        occupancy_stats result(s1);
+        result -= s2;
+        return result;
+    }
+
+    occupancy_stats& operator+=(const occupancy_stats& other) noexcept {
+        _total_space += other._total_space;
+        _free_space += other._free_space;
+        return *this;
+    }
+
+    occupancy_stats& operator-=(const occupancy_stats& other) noexcept {
+        _total_space -= other._total_space;
+        _free_space -= other._free_space;
+        return *this;
+    }
+
+    size_t used_space() const noexcept {
+        return _total_space - _free_space;
+    }
+
+    size_t free_space() const noexcept {
+        return _free_space;
+    }
+
+    size_t total_space() const noexcept {
+        return _total_space;
+    }
+
+    float used_fraction() const noexcept {
+        return _total_space ? float(used_space()) / total_space() : 0;
+    }
+
+    explicit operator bool() const noexcept {
+        return _total_space > 0;
+    }
+
+    friend std::ostream& operator<<(std::ostream&, const occupancy_stats&);
+};
+
+class basic_region_impl : public allocation_strategy {
+protected:
+    tracker& _tracker;
+    bool _reclaiming_enabled = true;
+    seastar::shard_id _cpu = this_shard_id();
+public:
+    basic_region_impl(tracker& tracker) : _tracker(tracker)
+    { }
+
+    tracker& get_tracker() { return _tracker; }
+
+    void set_reclaiming_enabled(bool enabled) noexcept {
+        assert(this_shard_id() == _cpu);
+        _reclaiming_enabled = enabled;
+    }
+
+    bool reclaiming_enabled() const noexcept {
+        return _reclaiming_enabled;
+    }
+};
+
+//
+// Log-structured allocator region.
+//
+// Objects allocated using this region are said to be owned by this region.
+// Objects must be freed only using the region which owns them. Ownership can
+// be transferred across regions using the merge() method. Region must be live
+// as long as it owns any objects.
+//
+// Each region has separate memory accounting and can be compacted
+// independently from other regions. To reclaim memory from all regions use
+// shard_tracker().
+//
+// Region is automatically added to the set of
+// compactible regions when constructed.
+//
+class region {
+public:
+    using impl = region_impl;
+private:
+    shared_ptr<basic_region_impl> _impl;
+private:
+    region_impl& get_impl() noexcept;
+    const region_impl& get_impl() const noexcept;
+public:
+    region();
+    ~region();
+    region(region&& other) noexcept;
+    region& operator=(region&& other) noexcept;
+    region(const region& other) = delete;
+
+    void listen(region_listener* listener);
+    void unlisten();
+
+    occupancy_stats occupancy() const noexcept;
+
+    tracker& get_tracker() const {
+        return _impl->get_tracker();
+    }
+
+    allocation_strategy& allocator() noexcept {
+        return *_impl;
+    }
+    const allocation_strategy& allocator() const noexcept {
+        return *_impl;
+    }
+
+    // Allocates a buffer of a given size.
+    // The buffer's pointer will be aligned to 4KB.
+    // Note: it is wasteful to allocate buffers of sizes which are not a multiple of the alignment.
+    lsa_buffer alloc_buf(size_t buffer_size);
+
+    // Merges another region into this region. The other region is left empty.
+    // Doesn't invalidate references to allocated objects.
+    void merge(region& other) noexcept;
+
+    // Compacts everything. Mainly for testing.
+    // Invalidates references to allocated objects.
+    void full_compaction();
+
+    // Runs eviction function once. Mainly for testing.
+    memory::reclaiming_result evict_some();
+
+    // Changes the reclaimability state of this region. When region is not
+    // reclaimable, it won't be considered by tracker::reclaim(). By default region is
+    // reclaimable after construction.
+    void set_reclaiming_enabled(bool e) noexcept { _impl->set_reclaiming_enabled(e); }
+
+    // Returns the reclaimability state of this region.
+    bool reclaiming_enabled() const noexcept { return _impl->reclaiming_enabled(); }
+
+    // Returns a value which is increased when this region is either compacted or
+    // evicted from, which invalidates references into the region.
+    // When the value returned by this method doesn't change, references remain valid.
+    uint64_t reclaim_counter() const noexcept {
+        return allocator().invalidate_counter();
+    }
+
+    // Will cause subsequent calls to evictable_occupancy() to report empty occupancy.
+    void ground_evictable_occupancy();
+
+    // Follows region's occupancy in the parent region group. Less fine-grained than occupancy().
+    // After ground_evictable_occupancy() is called returns 0.
+    occupancy_stats evictable_occupancy() const noexcept;
+
+    // Makes this region an evictable region. Supplied function will be called
+    // when data from this region needs to be evicted in order to reclaim space.
+    // The function should free some space from this region.
+    void make_evictable(eviction_fn) noexcept;
+
+    const eviction_fn& evictor() const noexcept;
+
+    uint64_t id() const noexcept;
+
+    friend class allocating_section;
+};
+
+// Forces references into the region to remain valid as long as this guard is
+// live by disabling compaction and eviction.
+// Can be nested.
+struct reclaim_lock {
+    region& _region;
+    bool _prev;
+    reclaim_lock(region& r) noexcept
+        : _region(r)
+        , _prev(r.reclaiming_enabled())
+    {
+        _region.set_reclaiming_enabled(false);
+    }
+    ~reclaim_lock() {
+        _region.set_reclaiming_enabled(_prev);
+    }
+};
+
+// Utility for running critical sections which need to lock some region and
+// also allocate LSA memory. The object learns from failures how much it
+// should reserve up front in order to not cause allocation failures.
+class allocating_section {
+    // Do not decay below these minimal values
+    static constexpr size_t s_min_lsa_reserve = 1;
+    static constexpr size_t s_min_std_reserve = 1024;
+    static constexpr uint64_t s_bytes_per_decay = 10'000'000'000;
+    static constexpr unsigned s_segments_per_decay = 100'000;
+    size_t _lsa_reserve = s_min_lsa_reserve; // in segments
+    size_t _std_reserve = s_min_std_reserve; // in bytes
+    size_t _minimum_lsa_emergency_reserve = 0;
+    int64_t _remaining_std_bytes_until_decay = s_bytes_per_decay;
+    int _remaining_lsa_segments_until_decay = s_segments_per_decay;
+private:
+    struct guard {
+        tracker::impl& _tracker;
+        size_t _prev;
+        explicit guard(tracker::impl& tracker) noexcept;
+        ~guard();
+    };
+    void reserve(tracker::impl& tracker);
+    void maybe_decay_reserve() noexcept;
+    void on_alloc_failure(logalloc::region&);
+public:
+
+    void set_lsa_reserve(size_t) noexcept;
+    void set_std_reserve(size_t) noexcept;
+
+    //
+    // Reserves standard allocator and LSA memory for subsequent operations that
+    // have to be performed with memory reclamation disabled.
+    //
+    // Throws std::bad_alloc when reserves can't be increased to a sufficient level.
+    //
+    template<typename Func>
+    decltype(auto) with_reserve(region& r, Func&& fn) {
+        auto prev_lsa_reserve = _lsa_reserve;
+        auto prev_std_reserve = _std_reserve;
+        try {
+            guard g(r.get_tracker().get_impl());
+            _minimum_lsa_emergency_reserve = g._prev;
+            reserve(r.get_tracker().get_impl());
+            return fn();
+        } catch (const std::bad_alloc&) {
+            // roll-back limits to protect against pathological requests
+            // preventing future requests from succeeding.
+            _lsa_reserve = prev_lsa_reserve;
+            _std_reserve = prev_std_reserve;
+            throw;
+        }
+    }
+
+    //
+    // Invokes func with reclaim_lock on region r. If LSA allocation fails
+    // inside func it is retried after increasing LSA segment reserve. The
+    // memory reserves are increased with region lock off allowing for memory
+    // reclamation to take place in the region.
+    //
+    // References in the region are invalidated when allocating section is re-entered
+    // on allocation failure.
+    //
+    // Throws std::bad_alloc when reserves can't be increased to a sufficient level.
+    //
+    template<typename Func>
+    decltype(auto) with_reclaiming_disabled(logalloc::region& r, Func&& fn) {
+        assert(r.reclaiming_enabled());
+        maybe_decay_reserve();
+        while (true) {
+            try {
+                logalloc::reclaim_lock _(r);
+                memory::disable_abort_on_alloc_failure_temporarily dfg;
+                return fn();
+            } catch (const std::bad_alloc&) {
+                on_alloc_failure(r);
+            }
+        }
+    }
+
+    //
+    // Reserves standard allocator and LSA memory and
+    // invokes func with reclaim_lock on region r. If LSA allocation fails
+    // inside func it is retried after increasing LSA segment reserve. The
+    // memory reserves are increased with region lock off allowing for memory
+    // reclamation to take place in the region.
+    //
+    // References in the region are invalidated when allocating section is re-entered
+    // on allocation failure.
+    //
+    // Throws std::bad_alloc when reserves can't be increased to a sufficient level.
+    //
+    template<typename Func>
+    decltype(auto) operator()(logalloc::region& r, Func&& func) {
+        return with_reserve(r, [this, &r, &func] {
+            return with_reclaiming_disabled(r, func);
+        });
+    }
+};
+
+future<> prime_segment_pool(size_t available_memory, size_t min_free_memory);
+
+// Use the segment pool appropriate for the standard allocator.
+//
+// In debug mode, this will use the release standard allocator store.
+// Call once, when initializing the application, before any LSA allocation takes place.
+future<> use_standard_allocator_segment_pool_backend(size_t available_memory);
+
+}
+
+#include <functional>
+#include <seastar/core/future-util.hh>
+#include <seastar/util/noncopyable_function.hh>
+
+#include "seastarx.hh"
+
+namespace utils {
+
+// Represents a deferring operation which defers cooperatively with the caller.
+//
+// The operation is started and resumed by calling run(), which returns
+// with stop_iteration::no whenever the operation defers and is not completed yet.
+// When the operation is finally complete, run() returns with stop_iteration::yes.
+// After that, run() should not be invoked any more.
+//
+// This allows the caller to:
+//   1) execute some post-defer and pre-resume actions atomically
+//   2) have control over when the operation is resumed and in which context,
+//      in particular the caller can cancel the operation at deferring points.
+//
+// One simple way to drive the operation to completion:
+//
+//   coroutine c;
+//   while (c.run() == stop_iteartion::no) {}
+//
+class coroutine final {
+public:
+    coroutine() = default;
+    coroutine(noncopyable_function<stop_iteration()> f) : _run(std::move(f)) {}
+    stop_iteration run() { return _run(); }
+    explicit operator bool() const { return bool(_run); }
+private:
+    noncopyable_function<stop_iteration()> _run;
+};
+
+// Makes a coroutine which does nothing.
+inline
+coroutine make_empty_coroutine() {
+    return coroutine([] { return stop_iteration::yes; });
+}
+
+}
+
+#include <boost/intrusive/parent_from_member.hpp>
+#include <boost/intrusive/slist.hpp>
+
+class static_row;
+
+// This is MVCC implementation for mutation_partitions.
+//
+// See docs/dev/mvcc.md for important design information.
+//
+// It is assumed that mutation_partitions are stored in some sort of LSA-managed
+// container (memtable or row cache).
+//
+// partition_entry - the main handle to the mutation_partition, allows writes
+//                   and reads.
+// partition_version - mutation_partition inside a list of partition versions.
+//                     mutation_partition represents just a difference against
+//                     the next one in the list. To get a single
+//                     mutation_partition fully representing this version one
+//                     needs to merge this one and all its successors in the
+//                     list.
+// partition_snapshot - a handle to some particular partition_version. It allows
+//                      only reads and itself is immutable the partition version
+//                      it represents won't be modified as long as the snapshot
+//                      is alive.
+//
+// pe - partition_entry
+// pv - partition_version
+// ps - partition_snapshot
+// ps(u) - partition_snapshot marked as unique owner
+
+// Scene I. Write-only loads
+//   pv
+//   ^
+//   |
+//   pe
+// In case of write-only loads all incoming mutations are directly applied
+// to the partition_version that partition_entry is pointing to. The list
+// of partition_versions contains only a single element.
+//
+// Scene II. Read-only loads
+//   pv
+//   ^
+//   |
+//   pe <- ps
+// In case of read-only scenarios there is only a single partition_snapshot
+// object that points to the partition_entry. There is only a single
+// partition_version.
+//
+// Scene III. Writes and reads
+//   pv -- pv -- pv
+//   ^     ^     ^
+//   |     |     |
+//   pe    ps    ps
+// If the partition_entry that needs to be modified is currently read from (i.e.
+// there exist a partition_snapshot pointing to it) instead of applying new
+// mutation directly a new partition version is created and added at the front
+// of the list. partition_entry points to the new version (so that it has the
+// most recent view of stored data) while the partition_snapshot points to the
+// same partition_version it pointed to before (so that the data it sees doesn't
+// change).
+// As a result the list may contain multiple partition versions used by
+// different partition snapshots.
+// When the partition_snapshot is destroyed partition_versions are squashed
+// together to minimize the amount of elements on the list.
+//
+// Scene IV. Schema upgrade
+//   pv    pv --- pv
+//   ^     ^      ^
+//   |     |      |
+//   pe    ps(u)  ps
+// When there is a schema upgrade the list of partition versions pointed to
+// by partition_entry is replaced by a new single partition_version that is a
+// result of squashing and upgrading the old versions.
+// Old versions not used by any partition snapshot are removed. The first
+// partition snapshot on the list is marked as unique which means that upon
+// its destruction it won't attempt to squash versions but instead remove
+// the unused ones and pass the "unique owner" mark the next snapshot on the
+// list (if there is any).
+//
+// Scene V. partition_entry eviction
+//   pv
+//   ^
+//   |
+//   ps(u)
+// When partition_entry is removed (e.g. because it was evicted from cache)
+// the partition versions are removed in a similar manner than in the schema
+// upgrade scenario. The unused ones are destroyed right away and the first
+// snapshot on the list is marked as unique owner so that on its destruction
+// it continues removal of the partition versions.
+
+class partition_version_ref;
+
+class partition_version : public anchorless_list_base_hook<partition_version> {
+    partition_version_ref* _backref = nullptr;
+    mutation_partition_v2 _partition;
+
+    friend class partition_version_ref;
+    friend class partition_entry;
+    friend class partition_snapshot;
+public:
+    static partition_version& container_of(mutation_partition_v2& mp) {
+        return *boost::intrusive::get_parent_from_member(&mp, &partition_version::_partition);
+    }
+
+    explicit partition_version(schema_ptr s) noexcept
+        : _partition(std::move(s)) { }
+    explicit partition_version(mutation_partition_v2 mp) noexcept
+        : _partition(std::move(mp)) { }
+    partition_version(partition_version&& pv) noexcept;
+    partition_version& operator=(partition_version&& pv) noexcept;
+    ~partition_version();
+    // Frees elements of this version in batches.
+    // Returns stop_iteration::yes iff there are no more elements to free.
+    stop_iteration clear_gently(cache_tracker* tracker) noexcept;
+
+    mutation_partition_v2& partition() { return _partition; }
+    const mutation_partition_v2& partition() const { return _partition; }
+
+    bool is_referenced() const { return _backref; }
+    // Returns true iff this version is directly referenced from a partition_entry (is its newset version).
+    bool is_referenced_from_entry() const;
+    partition_version_ref& back_reference() const { return *_backref; }
+
+    size_t size_in_allocator(const schema& s, allocation_strategy& allocator) const;
+};
+
+using partition_version_range = anchorless_list_base_hook<partition_version>::range;
+using partition_version_reversed_range = anchorless_list_base_hook<partition_version>::reversed_range;
+
+class partition_version_ref {
+    partition_version* _version = nullptr;
+    bool _unique_owner = false;
+
+    friend class partition_version;
+public:
+    partition_version_ref() = default;
+    explicit partition_version_ref(partition_version& pv, bool unique_owner = false) noexcept
+        : _version(&pv)
+        , _unique_owner(unique_owner)
+    {
+        assert(!_version->_backref);
+        _version->_backref = this;
+    }
+    ~partition_version_ref() {
+        if (_version) {
+            _version->_backref = nullptr;
+        }
+    }
+    partition_version_ref(partition_version_ref&& other) noexcept
+        : _version(other._version)
+        , _unique_owner(other._unique_owner)
+    {
+        if (_version) {
+            _version->_backref = this;
+        }
+        other._version = nullptr;
+    }
+    partition_version_ref& operator=(partition_version_ref&& other) noexcept {
+        if (this != &other) {
+            this->~partition_version_ref();
+            new (this) partition_version_ref(std::move(other));
+        }
+        return *this;
+    }
+
+    explicit operator bool() const { return _version; }
+
+    partition_version& operator*() {
+        assert(_version);
+        return *_version;
+    }
+    const partition_version& operator*() const {
+        assert(_version);
+        return *_version;
+    }
+    partition_version* operator->() {
+        assert(_version);
+        return _version;
+    }
+    const partition_version* operator->() const {
+        assert(_version);
+        return _version;
+    }
+
+    bool is_unique_owner() const { return _unique_owner; }
+    void mark_as_unique_owner() { _unique_owner = true; }
+
+    void release() {
+        if (_version) {
+            _version->_backref = nullptr;
+        }
+        _version = nullptr;
+    }
+};
+
+inline
+bool partition_version::is_referenced_from_entry() const {
+    return !prev() && _backref && !_backref->is_unique_owner();
+}
+
+class partition_entry;
+class cache_tracker;
+class mutation_cleaner;
+
+static constexpr cache_tracker* no_cache_tracker = nullptr;
+static constexpr mutation_cleaner* no_cleaner = nullptr;
+
+class partition_snapshot : public enable_lw_shared_from_this<partition_snapshot> {
+public:
+    // Only snapshots created with the same value of phase can point to the same version.
+    using phase_type = uint64_t;
+    static constexpr phase_type default_phase = 0; // For use with non-evictable snapshots
+    static constexpr phase_type min_phase = 1; // Use 1 to prevent underflow on apply_to_incomplete()
+    static constexpr phase_type max_phase = std::numeric_limits<phase_type>::max();
+
+    // Ordinal number of a partition version within a snapshot. Starts with 0.
+    using version_number_type = size_t;
+public:
+    // Used for determining reference stability.
+    // References and iterators into versions owned by the snapshot
+    // obtained between two equal change_mark objects were produced
+    // by that snapshot are guaranteed to be still valid.
+    //
+    // Has a null state which is != than anything returned by get_change_mark().
+    class change_mark {
+        uint64_t _reclaim_count = 0;
+        size_t _versions_count = 0; // merge_partition_versions() removes versions on merge
+    private:
+        friend class partition_snapshot;
+        change_mark(uint64_t reclaim_count, size_t versions_count)
+            : _reclaim_count(reclaim_count), _versions_count(versions_count) {}
+    public:
+        change_mark() = default;
+        bool operator==(const change_mark& m) const {
+            return _reclaim_count == m._reclaim_count && _versions_count == m._versions_count;
+        }
+        explicit operator bool() const {
+            return _reclaim_count > 0;
+        }
+    };
+private:
+    schema_ptr _schema;
+    // Either _version or _entry is non-null.
+    partition_version_ref _version;
+    partition_entry* _entry;
+    phase_type _phase;
+    logalloc::region* _region;
+    mutation_cleaner* _cleaner;
+    cache_tracker* _tracker;
+    boost::intrusive::slist_member_hook<> _cleaner_hook;
+    std::optional<apply_resume> _version_merging_state;
+    bool _locked = false;
+    friend class partition_entry;
+    friend class mutation_cleaner_impl;
+public:
+    explicit partition_snapshot(schema_ptr s,
+                                logalloc::region& region,
+                                mutation_cleaner& cleaner,
+                                partition_entry* entry,
+                                cache_tracker* tracker, // non-null for evictable snapshots
+                                phase_type phase = default_phase)
+        : _schema(std::move(s)), _entry(entry), _phase(phase), _region(&region), _cleaner(&cleaner), _tracker(tracker) { }
+    partition_snapshot(const partition_snapshot&) = delete;
+    partition_snapshot(partition_snapshot&&) = delete;
+    partition_snapshot& operator=(const partition_snapshot&) = delete;
+    partition_snapshot& operator=(partition_snapshot&&) = delete;
+
+    // Makes the snapshot locked.
+    // See is_locked() for meaning.
+    // Can be called only when at_lastest_version(). The snapshot must remain latest as long as it's locked.
+    void lock() noexcept;
+
+    // Makes the snapshot no longer locked.
+    // See is_locked() for meaning.
+    void unlock() noexcept;
+
+    // Tells whether the snapshot is locked.
+    // Locking the snapshot prevents it from getting detached from the partition entry.
+    // It also prevents the partition entry from being evicted.
+    bool is_locked() const {
+        return _locked;
+    }
+
+    static partition_snapshot& container_of(partition_version_ref* ref) {
+        return *boost::intrusive::get_parent_from_member(ref, &partition_snapshot::_version);
+    }
+
+    static const partition_snapshot& container_of(const partition_version_ref* ref) {
+        return *boost::intrusive::get_parent_from_member(ref, &partition_snapshot::_version);
+    }
+
+    // Returns a reference to the partition_snapshot which is attached to given non-latest partition version.
+    // Assumes !v.is_referenced_from_entry() && v.is_referenced().
+    static const partition_snapshot& referer_of(const partition_version& v) {
+        return container_of(v._backref);
+    }
+
+    // If possible, merges the version pointed to by this snapshot with
+    // adjacent partition versions. Leaves the snapshot in an unspecified state.
+    // Can be retried if previous merge attempt has failed.
+    stop_iteration merge_partition_versions(mutation_application_stats& app_stats);
+
+    // Prepares the snapshot for cleaning by moving to the right-most unreferenced version.
+    // Returns stop_iteration::yes if there is nothing to merge with and the snapshot
+    // should be collected right away, and stop_iteration::no otherwise.
+    // When returns stop_iteration::no, the snapshots is guaranteed to not be attached
+    // to the latest version.
+    stop_iteration slide_to_oldest() noexcept;
+
+    // Brings the snapshot to the front of the LRU.
+    void touch() noexcept;
+
+    // Must be called after snapshot's original region is merged into a different region
+    // before the original region is destroyed, unless the snapshot is destroyed earlier.
+    void migrate(logalloc::region* region, mutation_cleaner* cleaner) noexcept {
+        _region = region;
+        _cleaner = cleaner;
+    }
+
+    ~partition_snapshot();
+
+    partition_version_ref& version();
+
+    change_mark get_change_mark() {
+        return {_region->reclaim_counter(), version_count()};
+    }
+
+    const partition_version_ref& version() const;
+
+    partition_version_range versions() {
+        return version()->elements_from_this();
+    }
+
+    unsigned version_count();
+
+    bool at_latest_version() const {
+        return _entry != nullptr;
+    }
+
+    bool at_oldest_version() const {
+        return !version()->next();
+    }
+
+    const schema_ptr& schema() const { return _schema; }
+    logalloc::region& region() const { return *_region; }
+    cache_tracker* tracker() const { return _tracker; }
+    mutation_cleaner& cleaner() { return *_cleaner; }
+
+    tombstone partition_tombstone() const;
+    ::static_row static_row(bool digest_requested) const;
+    bool static_row_continuous() const;
+    mutation_partition squashed() const;
+
+    using range_tombstone_result = utils::chunked_vector<range_tombstone>;
+
+    phase_type phase() const { return _phase; }
+};
+
+class partition_snapshot_ptr {
+    lw_shared_ptr<partition_snapshot> _snp;
+public:
+    using value_type = partition_snapshot;
+    partition_snapshot_ptr() = default;
+    partition_snapshot_ptr(partition_snapshot_ptr&&) = default;
+    partition_snapshot_ptr(const partition_snapshot_ptr&) = default;
+    partition_snapshot_ptr(lw_shared_ptr<partition_snapshot> snp) : _snp(std::move(snp)) {}
+    ~partition_snapshot_ptr();
+    partition_snapshot_ptr& operator=(partition_snapshot_ptr&& other) noexcept {
+        if (this != &other) {
+            this->~partition_snapshot_ptr();
+            new (this) partition_snapshot_ptr(std::move(other));
+        }
+        return *this;
+    }
+    partition_snapshot_ptr& operator=(const partition_snapshot_ptr& other) noexcept {
+        if (this != &other) {
+            this->~partition_snapshot_ptr();
+            new (this) partition_snapshot_ptr(other);
+        }
+        return *this;
+    }
+    partition_snapshot& operator*() { return *_snp; }
+    const partition_snapshot& operator*() const { return *_snp; }
+    partition_snapshot* operator->() { return &*_snp; }
+    const partition_snapshot* operator->() const { return &*_snp; }
+    explicit operator bool() const { return bool(_snp); }
+};
+
+class real_dirty_memory_accounter;
+
+// Represents mutation_partition with snapshotting support a la MVCC.
+//
+// Internally the state is represented by an ordered list of mutation_partition
+// objects called versions. The logical mutation_partition state represented
+// by that chain is equal to reducing the chain using mutation_partition::apply()
+// from left (latest version) to right.
+//
+// We distinguish evictable and non-evictable partition entries. Entries which
+// are non-evictable have all their elements non-evictable and fully continuous.
+// Partition snapshots inherit evictability of the entry, which remains invariant
+// for a snapshot.
+//
+// After evictable partition_entry is linked into a cache_tracker, that cache_tracker
+// must always be passed to methods which accept a pointer to a cache_tracker.
+// Also, evict() must be called before the entry is unlinked from a cache_tracker.
+// For non-evictable entries, no_cache_tracker should be passed to methods which accept a cache_tracker.
+//
+// As long as an entry is linked to a cache_tracker, it must belong to a cache_entry.
+// partition_version objects may be linked with a cache_tracker and detached from a cache_entry
+// if owned by a snapshot.
+//
+class partition_entry {
+    partition_snapshot* _snapshot = nullptr;
+    partition_version_ref _version;
+
+    friend class partition_snapshot;
+    friend class cache_entry;
+private:
+    void set_version(partition_version*);
+public:
+    struct evictable_tag {};
+    // Constructs a non-evictable entry holding empty partition
+    partition_entry() = default;
+    // Constructs a non-evictable entry
+    explicit partition_entry(mutation_partition_v2);
+    partition_entry(const schema&, mutation_partition);
+    // Returns a reference to partition_entry containing given pv,
+    // assuming pv.is_referenced_from_entry().
+    static partition_entry& container_of(partition_version& pv) {
+        return *boost::intrusive::get_parent_from_member(&pv.back_reference(), &partition_entry::_version);
+    }
+    // Constructs an evictable entry
+    // Strong exception guarantees for the state of mp.
+    partition_entry(evictable_tag, const schema& s, mutation_partition&& mp);
+    ~partition_entry();
+    // Frees elements of this entry in batches.
+    // Active snapshots are detached, data referenced by them is not cleared.
+    // Returns stop_iteration::yes iff there are no more elements to free.
+    stop_iteration clear_gently(cache_tracker*) noexcept;
+    static partition_entry make_evictable(const schema& s, mutation_partition&& mp);
+    static partition_entry make_evictable(const schema& s, const mutation_partition& mp);
+
+    partition_entry(partition_entry&& pe) noexcept
+        : _snapshot(pe._snapshot), _version(std::move(pe._version))
+    {
+        if (_snapshot) {
+            _snapshot->_entry = this;
+        }
+        pe._snapshot = nullptr;
+    }
+    partition_entry& operator=(partition_entry&& other) noexcept {
+        if (this != &other) {
+            this->~partition_entry();
+            new (this) partition_entry(std::move(other));
+        }
+        return *this;
+    }
+
+    // Removes data contained by this entry, but not owned by snapshots.
+    // Snapshots will be unlinked and evicted independently by reclaimer.
+    // This entry is invalid after this and can only be destroyed.
+    void evict(mutation_cleaner&) noexcept;
+
+    partition_version_ref& version() {
+        return _version;
+    }
+
+    partition_version_range versions() {
+        return _version->elements_from_this();
+    }
+
+    partition_version_reversed_range versions_from_oldest() {
+        return _version->all_elements_reversed();
+    }
+
+    // Tells whether this entry is locked.
+    // Locked entries are undergoing an update and should not have their snapshots
+    // detached from the entry.
+    // Certain methods can only be called when !is_locked().
+    bool is_locked() const {
+        return _snapshot && _snapshot->is_locked();
+    }
+
+    // Strong exception guarantees.
+    // Assumes this instance and mp are fully continuous.
+    // Use only on non-evictable entries.
+    // Must not be called when is_locked().
+    void apply(logalloc::region&,
+               mutation_cleaner&,
+               const schema& s,
+               const mutation_partition_v2& mp,
+               const schema& mp_schema,
+               mutation_application_stats& app_stats);
+
+    void apply(logalloc::region&,
+               mutation_cleaner&,
+               const schema& s,
+               mutation_partition_v2&& mp,
+               const schema& mp_schema,
+               mutation_application_stats& app_stats);
+
+    void apply(logalloc::region&,
+               mutation_cleaner&,
+               const schema& s,
+               const mutation_partition& mp,
+               const schema& mp_schema,
+               mutation_application_stats& app_stats);
+
+    // Adds mutation_partition represented by "other" to the one represented
+    // by this entry.
+    // This entry must be evictable.
+    //
+    // The argument must be fully-continuous.
+    //
+    // The continuity of this entry remains unchanged. Information from "other"
+    // which is incomplete in this instance is dropped. In other words, this
+    // performs set intersection on continuity information, drops information
+    // which falls outside of the continuity range, and applies regular merging
+    // rules for the rest.
+    //
+    // Weak exception guarantees.
+    // If an exception is thrown this and pe will be left in some valid states
+    // such that if the operation is retried (possibly many times) and eventually
+    // succeeds the result will be as if the first attempt didn't fail.
+    //
+    // The schema of pe must conform to s.
+    //
+    // Returns a coroutine object representing the operation.
+    // The coroutine must be resumed with the region being unlocked.
+    //
+    // The coroutine cannot run concurrently with other apply() calls.
+    utils::coroutine apply_to_incomplete(const schema& s,
+        partition_entry&& pe,
+        mutation_cleaner& pe_cleaner,
+        logalloc::allocating_section&,
+        logalloc::region&,
+        cache_tracker& this_tracker,
+        partition_snapshot::phase_type,
+        real_dirty_memory_accounter&);
+
+    // If this entry is evictable, cache_tracker must be provided.
+    // Must not be called when is_locked().
+    partition_version& add_version(const schema& s, cache_tracker*);
+
+    // Returns a reference to existing version with an active snapshot of given phase
+    // or creates a new version and returns a reference to it.
+    // Doesn't affect value or continuity of the partition.
+    partition_version& open_version(const schema& s, cache_tracker* t, partition_snapshot::phase_type phase = partition_snapshot::max_phase) {
+        if (_snapshot) {
+            if (_snapshot->_phase == phase) {
+                return *_version;
+            } else if (phase < _snapshot->_phase) {
+                // If entry is being updated, we will get reads for non-latest phase, and
+                // they must attach to the non-current version.
+                partition_version* second = _version->next();
+                assert(second && second->is_referenced());
+                auto&& snp = partition_snapshot::referer_of(*second);
+                assert(phase == snp._phase);
+                return *second;
+            } else { // phase > _snapshot->_phase
+                add_version(s, t);
+            }
+        }
+        return *_version;
+    }
+
+    mutation_partition_v2 squashed(schema_ptr from, schema_ptr to, is_evictable);
+    mutation_partition squashed(const schema&, is_evictable);
+    tombstone partition_tombstone() const;
+
+    // needs to be called with reclaiming disabled
+    // Must not be called when is_locked().
+    void upgrade(schema_ptr from, schema_ptr to, mutation_cleaner&, cache_tracker*);
+
+    // Snapshots with different values of phase will point to different partition_version objects.
+    // When is_locked(), read() can only be called with a phase which is <= the phase of the current snapshot.
+    partition_snapshot_ptr read(logalloc::region& region,
+        mutation_cleaner&,
+        schema_ptr entry_schema,
+        cache_tracker*,
+        partition_snapshot::phase_type phase = partition_snapshot::default_phase);
+
+    class printer {
+        const schema& _schema;
+        const partition_entry& _partition_entry;
+    public:
+        printer(const schema& s, const partition_entry& pe) : _schema(s), _partition_entry(pe) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+};
+
+// Monotonic exception guarantees
+void merge_versions(const schema&, mutation_partition& newer, mutation_partition&& older, is_evictable);
+
+inline partition_version_ref& partition_snapshot::version()
+{
+    if (_version) {
+        return _version;
+    } else {
+        return _entry->_version;
+    }
+}
+
+inline const partition_version_ref& partition_snapshot::version() const
+{
+    if (_version) {
+        return _version;
+    } else {
+        return _entry->_version;
+    }
+}
+
+// Double-ended chained list of partition_version objects
+// utilizing partition_version's intrinsic anchorless_list_base_hook.
+class partition_version_list {
+    // All references have unique_owner set to true
+    // so that partition_version::is_referenced_from_entry() is false
+    // so that versions owned here (by mutation_cleaner) are not evicted-from.
+    partition_version_ref _head;
+    partition_version_ref _tail; // nullptr means _tail == _head.
+public:
+    // Appends v to the tail of this deque.
+    // The version must not be already referenced.
+    void push_back(partition_version& v) noexcept {
+        if (!_tail) {
+            if (_head) {
+                v.insert_before(*_head);
+                _tail = std::move(_head);
+            }
+            _head = partition_version_ref(v, true);
+#ifdef SEASTAR_DEBUG
+            assert(!_head->is_referenced_from_entry());
+#endif
+        } else {
+            v.insert_after(*_tail);
+            _tail = partition_version_ref(v, true);
+#ifdef SEASTAR_DEBUG
+            assert(!_tail->is_referenced_from_entry());
+#endif
+        }
+    }
+
+    // Returns a reference to the first version in this deque.
+    // Call only if !empty().
+    partition_version& front() noexcept {
+        return *_head;
+    }
+
+    // Returns true iff contains any versions.
+    bool empty() const noexcept {
+        return !_head;
+    }
+
+    // Detaches the first version from the list.
+    // Assumes !empty().
+    void pop_front() noexcept {
+        if (_tail && _head->next() == &*_tail) {
+            _tail = {};
+        }
+        partition_version* next = _head->next();
+        _head->erase();
+        _head.release();
+        if (next) {
+            _head = partition_version_ref(*next, true);
+#ifdef SEASTAR_DEBUG
+            assert(!_head->is_referenced_from_entry());
+#endif
+        }
+    }
+
+    // Appends other to the tail of this deque.
+    // The other deque will be left empty.
+    void splice(partition_version_list& other) noexcept {
+        if (!other._head) {
+            return;
+        }
+        if (!_head) {
+            _head = std::move(other._head);
+            _tail = std::move(other._tail);
+        } else {
+            (_tail ? _tail : _head)->splice(*other._head);
+            if (other._tail) {
+                _tail = std::move(other._tail);
+                other._head = {};
+            } else {
+                _tail = std::move(other._head);
+            }
+        }
+    }
+};
+
+class mutation_cleaner;
+
+class mutation_cleaner_impl final {
+    using snapshot_list = boost::intrusive::slist<partition_snapshot,
+        boost::intrusive::member_hook<partition_snapshot, boost::intrusive::slist_member_hook<>, &partition_snapshot::_cleaner_hook>,
+                boost::intrusive::cache_last<true>>;
+    struct worker {
+        condition_variable cv;
+        snapshot_list snapshots;
+        logalloc::allocating_section alloc_section;
+        bool done = false; // true means the worker was abandoned and cannot access the mutation_cleaner_impl instance.
+    };
+private:
+    logalloc::region& _region;
+    cache_tracker* _tracker;
+    mutation_cleaner* _cleaner;
+    partition_version_list _versions;
+    lw_shared_ptr<worker> _worker_state;
+    mutation_application_stats& _app_stats;
+    seastar::scheduling_group _scheduling_group;
+    std::function<void(size_t)> _on_space_freed;
+private:
+    stop_iteration merge_some(partition_snapshot& snp) noexcept;
+    stop_iteration merge_some() noexcept;
+    void start_worker();
+public:
+    mutation_cleaner_impl(logalloc::region& r, cache_tracker* t, mutation_cleaner* cleaner,
+            mutation_application_stats& app_stats,
+            seastar::scheduling_group sg = seastar::current_scheduling_group(),
+            std::function<void(size_t)> on_space_freed = nullptr)
+        : _region(r)
+        , _tracker(t)
+        , _cleaner(cleaner)
+        , _worker_state(make_lw_shared<worker>())
+        , _app_stats(app_stats)
+        , _scheduling_group(sg)
+        , _on_space_freed(std::move(on_space_freed))
+    {
+        start_worker();
+    }
+    ~mutation_cleaner_impl();
+    stop_iteration clear_gently() noexcept;
+    memory::reclaiming_result clear_some() noexcept;
+    void clear() noexcept;
+    void destroy_later(partition_version& v) noexcept;
+    void destroy_gently(partition_version& v) noexcept;
+    void merge(mutation_cleaner_impl& other) noexcept;
+    bool empty() const noexcept { return _versions.empty(); }
+    future<> drain();
+    void merge_and_destroy(partition_snapshot&) noexcept;
+    void set_scheduling_group(seastar::scheduling_group sg) {
+        _scheduling_group = sg;
+        _worker_state->cv.broadcast();
+    }
+    auto make_region_space_guard() {
+        return defer([&, dirty_before = _region.occupancy().total_space()] {
+            auto dirty_after = _region.occupancy().total_space();
+            if (_on_space_freed && dirty_before > dirty_after) {
+                _on_space_freed(dirty_before - dirty_after);
+            }
+        });
+    }
+};
+
+inline
+void mutation_cleaner_impl::destroy_later(partition_version& v) noexcept {
+    _versions.push_back(v);
+}
+
+inline
+void mutation_cleaner_impl::destroy_gently(partition_version& v) noexcept {
+    if (v.clear_gently(_tracker) == stop_iteration::no) {
+        destroy_later(v);
+    } else {
+        current_allocator().destroy(&v);
+    }
+}
+
+inline
+void mutation_cleaner_impl::merge_and_destroy(partition_snapshot& ps) noexcept {
+    if (ps.slide_to_oldest() == stop_iteration::yes || merge_some(ps) == stop_iteration::yes) {
+        lw_shared_ptr<partition_snapshot>::dispose(&ps);
+    } else {
+        // The snapshot must not be reachable by partitino_entry::read() after this,
+        // which is ensured by slide_to_oldest() == stop_iteration::no.
+        ps.migrate(&_region, _cleaner);
+        _worker_state->snapshots.push_back(ps);
+        _worker_state->cv.signal();
+    }
+}
+
+// Container for garbage partition_version objects, used for freeing them incrementally.
+//
+// Mutation cleaner extends the lifetime of mutation_partition without doing
+// the same for its schema. This means that the destruction of mutation_partition
+// as well as any LSA migrators it may use cannot depend on the schema. Moreover,
+// all used LSA migrators need remain alive and registered as long as
+// mutation_cleaner is alive. In particular, this means that the instances of
+// mutation_cleaner should not be thread local objects (or members of thread
+// local objects).
+class mutation_cleaner final {
+    lw_shared_ptr<mutation_cleaner_impl> _impl;
+public:
+    mutation_cleaner(logalloc::region& r, cache_tracker* t, mutation_application_stats& app_stats,
+            seastar::scheduling_group sg = seastar::current_scheduling_group(),
+            std::function<void(size_t)> on_space_freed = nullptr)
+        : _impl(make_lw_shared<mutation_cleaner_impl>(r, t, this, app_stats, sg, std::move(on_space_freed))) {
+    }
+
+    mutation_cleaner(mutation_cleaner&&) = delete;
+    mutation_cleaner(const mutation_cleaner&) = delete;
+
+    void set_scheduling_group(seastar::scheduling_group sg) {
+        _impl->set_scheduling_group(sg);
+    }
+
+    // Frees some of the data. Returns stop_iteration::yes iff all was freed.
+    // Must be invoked under owning allocator.
+    stop_iteration clear_gently() noexcept {
+        return _impl->clear_gently();
+    }
+
+    // Must be invoked under owning allocator.
+    memory::reclaiming_result clear_some() noexcept {
+        return _impl->clear_some();
+    }
+
+    // Must be invoked under owning allocator.
+    void clear() noexcept {
+        _impl->clear();
+    }
+
+    // Returns a guard object which when freed calls the on_space_freed callback with the amount
+    // of memory freed in the region in terms of total_space() during the time the guard was
+    // alive.
+    // The guard must not outlive the cleaner.
+    auto make_region_space_guard() {
+        return _impl->make_region_space_guard();
+    }
+
+    // Enqueues v for destruction.
+    // The object must not be part of any list, and must not be accessed externally any more.
+    // In particular, it must not be attached, even indirectly, to any snapshot or partition_entry,
+    // and must not be evicted from.
+    // Must be invoked under owning allocator.
+    void destroy_later(partition_version& v) noexcept {
+        return _impl->destroy_later(v);
+    }
+
+    // Destroys v now or later.
+    // Same requirements as destroy_later().
+    // Must be invoked under owning allocator.
+    void destroy_gently(partition_version& v) noexcept {
+        return _impl->destroy_gently(v);
+    }
+
+    // Transfers objects from other to this.
+    // This and other must belong to the same logalloc::region, and the same cache_tracker.
+    // After the call other will refer to this cleaner.
+    void merge(mutation_cleaner& other) noexcept {
+        _impl->merge(*other._impl);
+        other._impl = _impl;
+    }
+
+    // Returns true iff contains no unfreed objects
+    bool empty() const noexcept {
+        return _impl->empty();
+    }
+
+    // Forces cleaning and returns a future which resolves when there is nothing to clean.
+    future<> drain() {
+        return _impl->drain();
+    }
+
+    // Will merge given snapshot using partition_snapshot::merge_partition_versions() and then destroys it
+    // using destroy_from_this(), possibly deferring in between.
+    // This instance becomes the sole owner of the partition_snapshot object, the caller should not destroy it
+    // nor access it after calling this.
+    void merge_and_destroy(partition_snapshot& ps) {
+        return _impl->merge_and_destroy(ps);
+    }
+};
+
+
+
+
+
+
+
 #include "mutation_compactor.hh"
 #include "mutation_fragment.hh"
 #include "mutation_fragment_v2.hh"
