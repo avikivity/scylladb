@@ -219,7 +219,103 @@ struct appending_hash<std::chrono::time_point<Clock, Duration>> {
     }
 };
 
-#include "gc_clock.hh"
+#include <seastar/core/lowres_clock.hh>
+
+#include <chrono>
+#include <optional>
+
+class gc_clock final {
+public:
+    using base = seastar::lowres_system_clock;
+    using rep = int64_t;
+    using period = std::ratio<1, 1>; // seconds
+    using duration = std::chrono::duration<rep, period>;
+    using time_point = std::chrono::time_point<gc_clock, duration>;
+
+    static constexpr auto is_steady = base::is_steady;
+
+    static constexpr std::time_t to_time_t(time_point t) {
+        return std::chrono::duration_cast<std::chrono::seconds>(t.time_since_epoch()).count();
+    }
+
+    static constexpr time_point from_time_t(std::time_t t) {
+        return time_point(std::chrono::duration_cast<duration>(std::chrono::seconds(t)));
+    }
+
+    static time_point now() noexcept {
+        return time_point(std::chrono::duration_cast<duration>(base::now().time_since_epoch())) + get_clocks_offset();
+    }
+
+    static int32_t as_int32(duration d) {
+        auto count = d.count();
+        int32_t count_32 = static_cast<int32_t>(count);
+        if (count_32 != count) {
+            throw std::runtime_error("Duration too big");
+        }
+        return count_32;
+    }
+
+    static int32_t as_int32(time_point tp) {
+        return as_int32(tp.time_since_epoch());
+    }
+};
+
+using expiry_opt = std::optional<gc_clock::time_point>;
+using ttl_opt = std::optional<gc_clock::duration>;
+
+// 20 years in seconds
+static constexpr gc_clock::duration max_ttl = gc_clock::duration{20 * 365 * 24 * 60 * 60};
+
+std::ostream& operator<<(std::ostream& os, gc_clock::time_point tp);
+
+template<>
+struct appending_hash<gc_clock::time_point> {
+    template<typename Hasher>
+    void operator()(Hasher& h, gc_clock::time_point t) const noexcept {
+        // Remain backwards-compatible with the 32-bit duration::rep (refs #4460).
+        uint64_t d64 = t.time_since_epoch().count();
+        feed_hash(h, uint32_t(d64 & 0xffff'ffff));
+        uint32_t msb = d64 >> 32;
+        if (msb) {
+            feed_hash(h, msb);
+        }
+    }
+};
+
+
+namespace ser {
+
+// Forward-declaration - defined in serializer.hh, to avoid including it here.
+
+template <typename Output>
+void serialize_gc_clock_duration_value(Output& out, int64_t value);
+
+template <typename Input>
+int64_t deserialize_gc_clock_duration_value(Input& in);
+
+template <typename T>
+struct serializer;
+
+template <>
+struct serializer<gc_clock::duration> {
+    template <typename Input>
+    static gc_clock::duration read(Input& in) {
+        return gc_clock::duration(deserialize_gc_clock_duration_value(in));
+    }
+
+    template <typename Output>
+    static void write(Output& out, gc_clock::duration d) {
+        serialize_gc_clock_duration_value(out, d.count());
+    }
+
+    template <typename Input>
+    static void skip(Input& in) {
+        read(in);
+    }
+};
+
+}
+
 
 class db_clock final {
 public:
@@ -349,7 +445,658 @@ uint32_t crc32_fold_barrett_u64(uint64_t p) {
     return std::is_constant_evaluated() ? crc32_fold_barrett_u64_constexpr(p) : crc32_fold_barrett_u64_native(p);
 }
 
-#include "i_filter.hh"
+#include <string_view>
+#include <seastar/core/sstring.hh>
+
+template<typename CharT>
+class basic_mutable_view {
+    CharT* _begin = nullptr;
+    CharT* _end = nullptr;
+public:
+    using value_type = CharT;
+    using pointer = CharT*;
+    using iterator = CharT*;
+    using const_iterator = CharT*;
+
+    basic_mutable_view() = default;
+
+    template<typename U, U N>
+    basic_mutable_view(basic_sstring<CharT, U, N>& str)
+        : _begin(str.begin())
+        , _end(str.end())
+    { }
+
+    basic_mutable_view(CharT* ptr, size_t length)
+        : _begin(ptr)
+        , _end(ptr + length)
+    { }
+
+    operator std::basic_string_view<CharT>() const noexcept {
+        return std::basic_string_view<CharT>(begin(), size());
+    }
+
+    CharT& operator[](size_t idx) const { return _begin[idx]; }
+
+    iterator begin() const { return _begin; }
+    iterator end() const { return _end; }
+
+    CharT* data() const { return _begin; }
+    size_t size() const { return _end - _begin; }
+    bool empty() const { return _begin == _end; }
+    CharT& front() { return *_begin; }
+    const CharT& front() const { return *_begin; }
+
+    void remove_prefix(size_t n) {
+        _begin += n;
+    }
+    void remove_suffix(size_t n) {
+        _end -= n;
+    }
+
+    basic_mutable_view substr(size_t pos, size_t count) {
+        size_t n = std::min(count, (_end - _begin) - pos);
+        return basic_mutable_view{_begin + pos, n};
+    }
+};
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#include <xxhash.h>
+#pragma GCC diagnostic pop
+
+
+
+template<typename H>
+concept SimpleHasher = HasherReturning<H, size_t>;
+
+struct simple_xx_hasher : public hasher {
+    XXH64_state_t _state;
+    simple_xx_hasher(uint64_t seed = 0) noexcept {
+        XXH64_reset(&_state, seed);
+    }
+    void update(const char* ptr, size_t length) noexcept override {
+        XXH64_update(&_state, ptr, length);
+    }
+    size_t finalize() {
+        return static_cast<size_t>(XXH64_digest(&_state));
+    }
+};
+
+#include <fmt/format.h>
+#include <seastar/core/sstring.hh>
+#include <optional>
+#include <iosfwd>
+#include <functional>
+#include <compare>
+
+using bytes = basic_sstring<int8_t, uint32_t, 31, false>;
+using bytes_view = std::basic_string_view<int8_t>;
+using bytes_mutable_view = basic_mutable_view<bytes_view::value_type>;
+using bytes_opt = std::optional<bytes>;
+using sstring_view = std::string_view;
+
+inline bytes to_bytes(bytes&& b) {
+    return std::move(b);
+}
+
+inline sstring_view to_sstring_view(bytes_view view) {
+    return {reinterpret_cast<const char*>(view.data()), view.size()};
+}
+
+inline bytes_view to_bytes_view(sstring_view view) {
+    return {reinterpret_cast<const int8_t*>(view.data()), view.size()};
+}
+
+struct fmt_hex {
+    const bytes_view& v;
+    fmt_hex(const bytes_view& v) noexcept : v(v) {}
+};
+
+std::ostream& operator<<(std::ostream& os, const fmt_hex& hex);
+
+bytes from_hex(sstring_view s);
+sstring to_hex(bytes_view b);
+sstring to_hex(const bytes& b);
+sstring to_hex(const bytes_opt& b);
+
+std::ostream& operator<<(std::ostream& os, const bytes& b);
+std::ostream& operator<<(std::ostream& os, const bytes_opt& b);
+
+template <>
+struct fmt::formatter<fmt_hex> {
+    size_t _group_size_in_bytes = 0;
+    char _delimiter = ' ';
+public:
+    // format_spec := [group_size[delimeter]]
+    // group_size := a char from '0' to '9'
+    // delimeter := a char other than '{'  or '}'
+    //
+    // by default, the given bytes are printed without delimeter, just
+    // like a string. so a string view of {0x20, 0x01, 0x0d, 0xb8} is
+    // printed like:
+    // "20010db8".
+    //
+    // but the format specifier can be used to customize how the bytes
+    // are printed. for instance, to print an bytes_view like IPv6. so
+    // the format specfier would be "{:2:}", where
+    // - "2": bytes are printed in groups of 2 bytes
+    // - ":": each group is delimeted by ":"
+    // and the formatted output will look like:
+    // "2001:0db8:0000"
+    //
+    // or we can mimic how the default format of used by hexdump using
+    // "{:2 }", where
+    // - "2": bytes are printed in group of 2 bytes
+    // - " ": each group is delimeted by " "
+    // and the formatted output will look like:
+    // "2001 0db8 0000"
+    //
+    // or we can just print each bytes and separate them by a dash using
+    // "{:1-}"
+    // and the formatted output will look like:
+    // "20-01-0b-b8-00-00"
+    constexpr auto parse(fmt::format_parse_context& ctx) {
+        // get the delimeter if any
+        auto it = ctx.begin();
+        auto end = ctx.end();
+        if (it != end) {
+            int group_size = *it++ - '0';
+            if (group_size < 0 ||
+                static_cast<size_t>(group_size) > sizeof(uint64_t)) {
+                throw format_error("invalid group_size");
+            }
+            _group_size_in_bytes = group_size;
+            if (it != end) {
+                // optional delimiter
+                _delimiter = *it++;
+            }
+        }
+        if (it != end && *it != '}') {
+            throw format_error("invalid format");
+        }
+        return it;
+    }
+    template <typename FormatContext>
+    auto format(const ::fmt_hex& s, FormatContext& ctx) const {
+        auto out = ctx.out();
+        const auto& v = s.v;
+        if (_group_size_in_bytes > 0) {
+            for (size_t i = 0, size = v.size(); i < size; i++) {
+                if (i != 0 && i % _group_size_in_bytes == 0) {
+                    fmt::format_to(out, "{}{:02x}", _delimiter, std::byte(v[i]));
+                } else {
+                    fmt::format_to(out, "{:02x}", std::byte(v[i]));
+                }
+            }
+        } else {
+            for (auto b : v) {
+                fmt::format_to(out, "{:02x}", std::byte(b));
+            }
+        }
+        return out;
+    }
+};
+
+template <>
+struct fmt::formatter<bytes> : fmt::formatter<fmt_hex> {
+    template <typename FormatContext>
+    auto format(const ::bytes& s, FormatContext& ctx) const {
+        return fmt::formatter<::fmt_hex>::format(::fmt_hex(bytes_view(s)), ctx);
+    }
+};
+
+namespace std {
+
+// Must be in std:: namespace, or ADL fails
+std::ostream& operator<<(std::ostream& os, const bytes_view& b);
+
+}
+
+template<>
+struct appending_hash<bytes> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const bytes& v) const {
+        feed_hash(h, v.size());
+        h.update(reinterpret_cast<const char*>(v.cbegin()), v.size() * sizeof(bytes::value_type));
+    }
+};
+
+template<>
+struct appending_hash<bytes_view> {
+    template<typename Hasher>
+    void operator()(Hasher& h, bytes_view v) const {
+        feed_hash(h, v.size());
+        h.update(reinterpret_cast<const char*>(v.begin()), v.size() * sizeof(bytes_view::value_type));
+    }
+};
+
+using bytes_view_hasher = simple_xx_hasher;
+
+namespace std {
+template <>
+struct hash<bytes_view> {
+    size_t operator()(bytes_view v) const {
+        bytes_view_hasher h;
+        appending_hash<bytes_view>{}(h, v);
+        return h.finalize();
+    }
+};
+} // namespace std
+
+inline std::strong_ordering compare_unsigned(bytes_view v1, bytes_view v2) {
+  auto size = std::min(v1.size(), v2.size());
+  if (size) {
+    auto n = memcmp(v1.begin(), v2.begin(), size);
+    if (n) {
+        return n <=> 0;
+    }
+  }
+    return v1.size() <=> v2.size();
+}
+
+#include <iosfwd>
+
+namespace db {
+
+/// CQL consistency levels.
+///
+/// Values are guaranteed to be dense and in the tight range [MIN_VALUE, MAX_VALUE].
+enum class consistency_level {
+    ANY, MIN_VALUE = ANY,
+    ONE,
+    TWO,
+    THREE,
+    QUORUM,
+    ALL,
+    LOCAL_QUORUM,
+    EACH_QUORUM,
+    SERIAL,
+    LOCAL_SERIAL,
+    LOCAL_ONE, MAX_VALUE = LOCAL_ONE
+};
+
+std::ostream& operator<<(std::ostream& os, consistency_level cl);
+
+}
+
+
+#include <assert.h>
+#include <cstdint>
+#include <iosfwd>
+
+namespace db {
+
+enum class write_type : uint8_t {
+    SIMPLE,
+    BATCH,
+    UNLOGGED_BATCH,
+    COUNTER,
+    BATCH_LOG,
+    CAS,
+    VIEW,
+};
+
+std::ostream& operator<<(std::ostream& os, const write_type& t);
+
+}
+
+
+
+#include <cstdint>
+#include <iosfwd>
+
+namespace db {
+
+enum class operation_type : uint8_t {
+    read = 0,
+    write = 1
+};
+
+std::ostream& operator<<(std::ostream& os, operation_type op_type);
+
+}
+
+#include <seastar/core/print.hh>
+
+namespace utils {
+
+/**
+ * The following calculations are taken from:
+ * http://www.cs.wisc.edu/~cao/papers/summary-cache/node8.html
+ * "Bloom Filters - the math"
+ *
+ * This class's static methods are meant to facilitate the use of the Bloom
+ * Filter class by helping to choose correct values of 'bits per element' and
+ * 'number of hash functions, k'.
+ */
+namespace bloom_calculations {
+
+    /**
+     * A wrapper class that holds two key parameters for a Bloom Filter: the
+     * number of hash functions used, and the number of buckets per element used.
+     */
+    struct bloom_specification final {
+        int K; // number of hash functions.
+        int buckets_per_element;
+
+        bloom_specification(int k, int buckets_per_element) : K(k), buckets_per_element(buckets_per_element) { }
+
+        operator sstring() {
+            return format("bloom_specification(K={:d}, buckets_per_element={:d})", K, buckets_per_element);
+        }
+    };
+
+    int constexpr min_buckets = 2;
+    int constexpr min_k = 1;
+    int constexpr EXCESS = 20;
+
+    extern const std::vector<std::vector<double>> probs;
+    extern const std::vector<int> opt_k_per_buckets;
+
+    /**
+     * Given the number of buckets that can be used per element, return a
+     * specification that minimizes the false positive rate.
+     *
+     * @param buckets_per_element The number of buckets per element for the filter.
+     * @return A spec that minimizes the false positive rate.
+     */
+    inline bloom_specification compute_bloom_spec(int buckets_per_element) {
+        assert(buckets_per_element >= 1);
+        assert(buckets_per_element <= int(probs.size()) - 1);
+        return bloom_specification(opt_k_per_buckets[buckets_per_element], buckets_per_element);
+    }
+
+    /**
+     * Given a maximum tolerable false positive probability, compute a Bloom
+     * specification which will give less than the specified false positive rate,
+     * but minimize the number of buckets per element and the number of hash
+     * functions used.  Because bandwidth (and therefore total bitvector size)
+     * is considered more expensive than computing power, preference is given
+     * to minimizing buckets per element rather than number of hash functions.
+     *
+     * @param max_buckets_per_element The maximum number of buckets available for the filter.
+     * @param max_false_pos_prob The maximum tolerable false positive rate.
+     * @return A Bloom Specification which would result in a false positive rate
+     * less than specified by the function call
+     * @throws unsupported_operation_exception if a filter satisfying the parameters cannot be met
+     */
+    inline bloom_specification compute_bloom_spec(int max_buckets_per_element, double max_false_pos_prob) {
+        assert(max_buckets_per_element >= 1);
+        assert(max_buckets_per_element <= int(probs.size()) - 1);
+
+        auto max_k = int(probs[max_buckets_per_element].size()) - 1;
+
+        // Handle the trivial cases
+        if(max_false_pos_prob >= probs[min_buckets][min_k]) {
+            return bloom_specification(2, opt_k_per_buckets[2]);
+        }
+
+        if (max_false_pos_prob < probs[max_buckets_per_element][max_k]) {
+        }
+
+        // First find the minimal required number of buckets:
+        int buckets_per_element = 2;
+        int K = opt_k_per_buckets[2];
+
+        while(probs[buckets_per_element][K] > max_false_pos_prob){
+            buckets_per_element++;
+            K = opt_k_per_buckets[buckets_per_element];
+        }
+        // Now that the number of buckets is sufficient, see if we can relax K
+        // without losing too much precision.
+        while(probs[buckets_per_element][K - 1] <= max_false_pos_prob){
+            K--;
+        }
+
+        return bloom_specification(K, buckets_per_element);
+    }
+
+    /**
+     * Calculates the maximum number of buckets per element that this implementation
+     * can support.  Crucially, it will lower the bucket count if necessary to meet
+     * BitSet's size restrictions.
+     */
+    inline int max_buckets_per_element(long num_elements) {
+        num_elements = std::max(1l, num_elements);
+
+        auto v = std::numeric_limits<long>::max() - EXCESS;
+        v = v / num_elements;
+
+        if (v < 1) {
+        }
+        return std::min(probs.size() - 1, size_t(v));
+    }
+
+    /**
+     * Retrieves the minimum supported bloom_filter_fp_chance value
+     * if compute_bloom_spec() above is attempted with bloom_filter_fp_chance
+     * lower than this, it will throw an unsupported_operation_exception.
+     */
+    inline double min_supported_bloom_filter_fp_chance() {
+        return probs.back().back();
+    }
+
+}
+
+}
+
+#if 0
+package org.apache.cassandra.utils;
+
+/**
+ * The following calculations are taken from:
+ * http://www.cs.wisc.edu/~cao/papers/summary-cache/node8.html
+ * "Bloom Filters - the math"
+ *
+ * This class's static methods are meant to facilitate the use of the Bloom
+ * Filter class by helping to choose correct values of 'bits per element' and
+ * 'number of hash functions, k'.
+ */
+class BloomCalculations {
+
+    private static final int minBuckets = 2;
+    private static final int minK = 1;
+
+    private static final int EXCESS = 20;
+
+    /**
+     * In the following keyspaceName, the row 'i' shows false positive rates if i buckets
+     * per element are used.  Cell 'j' shows false positive rates if j hash
+     * functions are used.  The first row is 'i=0', the first column is 'j=0'.
+     * Each cell (i,j) the false positive rate determined by using i buckets per
+     * element and j hash functions.
+     */
+    static final double[][] probs = new double[][]{
+        {1.0}, // dummy row representing 0 buckets per element
+        {1.0, 1.0}, // dummy row representing 1 buckets per element
+        {1.0, 0.393,  0.400},
+        {1.0, 0.283,  0.237,   0.253},
+        {1.0, 0.221,  0.155,   0.147,   0.160},
+        {1.0, 0.181,  0.109,   0.092,   0.092,   0.101}, // 5
+        {1.0, 0.154,  0.0804,  0.0609,  0.0561,  0.0578,   0.0638},
+        {1.0, 0.133,  0.0618,  0.0423,  0.0359,  0.0347,   0.0364},
+        {1.0, 0.118,  0.0489,  0.0306,  0.024,   0.0217,   0.0216,   0.0229},
+        {1.0, 0.105,  0.0397,  0.0228,  0.0166,  0.0141,   0.0133,   0.0135,   0.0145},
+        {1.0, 0.0952, 0.0329,  0.0174,  0.0118,  0.00943,  0.00844,  0.00819,  0.00846}, // 10
+        {1.0, 0.0869, 0.0276,  0.0136,  0.00864, 0.0065,   0.00552,  0.00513,  0.00509},
+        {1.0, 0.08,   0.0236,  0.0108,  0.00646, 0.00459,  0.00371,  0.00329,  0.00314},
+        {1.0, 0.074,  0.0203,  0.00875, 0.00492, 0.00332,  0.00255,  0.00217,  0.00199,  0.00194},
+        {1.0, 0.0689, 0.0177,  0.00718, 0.00381, 0.00244,  0.00179,  0.00146,  0.00129,  0.00121,  0.0012},
+        {1.0, 0.0645, 0.0156,  0.00596, 0.003,   0.00183,  0.00128,  0.001,    0.000852, 0.000775, 0.000744}, // 15
+        {1.0, 0.0606, 0.0138,  0.005,   0.00239, 0.00139,  0.000935, 0.000702, 0.000574, 0.000505, 0.00047,  0.000459},
+        {1.0, 0.0571, 0.0123,  0.00423, 0.00193, 0.00107,  0.000692, 0.000499, 0.000394, 0.000335, 0.000302, 0.000287, 0.000284},
+        {1.0, 0.054,  0.0111,  0.00362, 0.00158, 0.000839, 0.000519, 0.00036,  0.000275, 0.000226, 0.000198, 0.000183, 0.000176},
+        {1.0, 0.0513, 0.00998, 0.00312, 0.0013,  0.000663, 0.000394, 0.000264, 0.000194, 0.000155, 0.000132, 0.000118, 0.000111, 0.000109},
+        {1.0, 0.0488, 0.00906, 0.0027,  0.00108, 0.00053,  0.000303, 0.000196, 0.00014,  0.000108, 8.89e-05, 7.77e-05, 7.12e-05, 6.79e-05, 6.71e-05} // 20
+    };  // the first column is a dummy column representing K=0.
+
+    /**
+     * The optimal number of hashes for a given number of bits per element.
+     * These values are automatically calculated from the data above.
+     */
+    private static final int[] optKPerBuckets = new int[probs.length];
+
+    static
+    {
+        for (int i = 0; i < probs.length; i++)
+        {
+            double min = Double.MAX_VALUE;
+            double[] prob = probs[i];
+            for (int j = 0; j < prob.length; j++)
+            {
+                if (prob[j] < min)
+                {
+                    min = prob[j];
+                    optKPerBuckets[i] = Math.max(minK, j);
+                }
+            }
+        }
+    }
+
+    /**
+     * Given the number of buckets that can be used per element, return a
+     * specification that minimizes the false positive rate.
+     *
+     * @param bucketsPerElement The number of buckets per element for the filter.
+     * @return A spec that minimizes the false positive rate.
+     */
+    public static BloomSpecification computeBloomSpec(int bucketsPerElement)
+    {
+        assert bucketsPerElement >= 1;
+        assert bucketsPerElement <= probs.length - 1;
+        return new BloomSpecification(optKPerBuckets[bucketsPerElement], bucketsPerElement);
+    }
+
+    /**
+     * A wrapper class that holds two key parameters for a Bloom Filter: the
+     * number of hash functions used, and the number of buckets per element used.
+     */
+    public static class BloomSpecification
+    {
+        final int K; // number of hash functions.
+        final int bucketsPerElement;
+
+        public BloomSpecification(int k, int bucketsPerElement)
+        {
+            K = k;
+            this.bucketsPerElement = bucketsPerElement;
+        }
+
+        public String toString()
+        {
+            return String.format("BloomSpecification(K=%d, bucketsPerElement=%d)", K, bucketsPerElement);
+        }
+    }
+
+    /**
+     * Given a maximum tolerable false positive probability, compute a Bloom
+     * specification which will give less than the specified false positive rate,
+     * but minimize the number of buckets per element and the number of hash
+     * functions used.  Because bandwidth (and therefore total bitvector size)
+     * is considered more expensive than computing power, preference is given
+     * to minimizing buckets per element rather than number of hash functions.
+     *
+     * @param maxBucketsPerElement The maximum number of buckets available for the filter.
+     * @param maxFalsePosProb The maximum tolerable false positive rate.
+     * @return A Bloom Specification which would result in a false positive rate
+     * less than specified by the function call
+     * @throws UnsupportedOperationException if a filter satisfying the parameters cannot be met
+     */
+    public static BloomSpecification computeBloomSpec(int maxBucketsPerElement, double maxFalsePosProb)
+    {
+        assert maxBucketsPerElement >= 1;
+        assert maxBucketsPerElement <= probs.length - 1;
+        int maxK = probs[maxBucketsPerElement].length - 1;
+
+        // Handle the trivial cases
+        if(maxFalsePosProb >= probs[minBuckets][minK]) {
+            return new BloomSpecification(2, optKPerBuckets[2]);
+        }
+        if (maxFalsePosProb < probs[maxBucketsPerElement][maxK]) {
+            throw new UnsupportedOperationException(String.format("Unable to satisfy %s with %s buckets per element",
+                                                                  maxFalsePosProb, maxBucketsPerElement));
+        }
+
+        // First find the minimal required number of buckets:
+        int bucketsPerElement = 2;
+        int K = optKPerBuckets[2];
+        while(probs[bucketsPerElement][K] > maxFalsePosProb){
+            bucketsPerElement++;
+            K = optKPerBuckets[bucketsPerElement];
+        }
+        // Now that the number of buckets is sufficient, see if we can relax K
+        // without losing too much precision.
+        while(probs[bucketsPerElement][K - 1] <= maxFalsePosProb){
+            K--;
+        }
+
+        return new BloomSpecification(K, bucketsPerElement);
+    }
+
+    /**
+     * Calculates the maximum number of buckets per element that this implementation
+     * can support.  Crucially, it will lower the bucket count if necessary to meet
+     * BitSet's size restrictions.
+     */
+    public static int maxBucketsPerElement(long numElements)
+    {
+        numElements = Math.max(1, numElements);
+        double v = (Long.MAX_VALUE - EXCESS) / (double)numElements;
+        if (v < 1.0)
+        {
+            throw new UnsupportedOperationException("Cannot compute probabilities for " + numElements + " elements.");
+        }
+        return Math.min(BloomCalculations.probs.length - 1, (int)v);
+    }
+}
+#endif
+
+
+
+namespace utils {
+
+struct i_filter;
+using filter_ptr = std::unique_ptr<i_filter>;
+
+enum class filter_format {
+    k_l_format,
+    m_format,
+};
+
+class hashed_key {
+private:
+    std::array<uint64_t, 2> _hash;
+public:
+    hashed_key(std::array<uint64_t, 2> h) : _hash(h) {}
+    std::array<uint64_t, 2> hash() const { return _hash; };
+};
+
+hashed_key make_hashed_key(bytes_view key);
+
+// FIXME: serialize() and serialized_size() not implemented. We should only be serializing to
+// disk, not in the wire.
+struct i_filter {
+    virtual ~i_filter() {}
+
+    virtual void add(const bytes_view& key) = 0;
+    virtual bool is_present(const bytes_view& key) = 0;
+    virtual bool is_present(hashed_key) = 0;
+    virtual void clear() = 0;
+    virtual void close() = 0;
+
+    virtual size_t memory_size() = 0;
+
+    /**
+     * @return The smallest bloom_filter that can provide the given false
+     *         positive probability rate for the given number of elements.
+     *
+     *         Asserts that the given probability can be satisfied using this
+     *         filter.
+     */
+    static filter_ptr get_filter(int64_t num_elements, double max_false_pos_prob, filter_format format);
+};
+}
+
 #include "utils/murmur_hash.hh"
 #include "utils/large_bitset.hh"
 

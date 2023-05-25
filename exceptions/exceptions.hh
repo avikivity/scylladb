@@ -10,12 +10,8 @@
 
 #pragma once
 
-#include "db/consistency_level_type.hh"
-#include "db/write_type.hh"
-#include "db/operation_type.hh"
 #include <stdexcept>
 #include <seastar/core/sstring.hh>
-#include "bytes.hh"
 
 namespace exceptions {
 
