@@ -77022,7 +77022,6 @@ public:
 #include <rapidjson/error/en.h>
 #include <rapidjson/allocators.h>
 #include <seastar/core/sstring.hh>
-#include "seastarx.hh"
 
 namespace rjson {
 
@@ -77703,17 +77702,170 @@ private:
     schema_builder& with_column(bytes name, data_type type, column_kind kind, column_id component_index, column_view_virtual view_virtual = column_view_virtual::no, column_computation_ptr computation = nullptr);
 };
 
-#include "schema_registry.hh"
-#include "schema/schema_builder.hh"
-#include "schema/schema.hh"
-#include "schema/schema_registry.hh"
+#include <unordered_map>
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/timer.hh>
+#include <seastar/core/shared_future.hh>
+
+namespace db {
+class schema_ctxt;
+}
+
+class schema_registry;
+
+using async_schema_loader = std::function<future<frozen_schema>(table_schema_version)>;
+using schema_loader = std::function<frozen_schema(table_schema_version)>;
+
+class schema_version_not_found : public std::runtime_error {
+public:
+    schema_version_not_found(table_schema_version v);
+};
+
+class schema_version_loading_failed : public std::runtime_error {
+public:
+    schema_version_loading_failed(table_schema_version v);
+};
+
+//
+// Presence in schema_registry is controlled by different processes depending on
+// life cycle stage:
+//   1) Initially it's controlled by the loader. When loading fails, entry is removed by the loader.
+//   2) When loading succeeds, the entry is controlled by live schema_ptr. It remains present as long as
+//      there's any live schema_ptr.
+//   3) When last schema_ptr dies, entry is deactivated. Currently it is removed immediately, later we may
+//      want to keep it around for some time to reduce cache misses.
+//
+// In addition to the above the entry is controlled by lw_shared_ptr<> to cope with races between loaders.
+//
+class schema_registry_entry : public enable_lw_shared_from_this<schema_registry_entry> {
+    using erase_clock = seastar::lowres_clock;
+
+    enum class state {
+        INITIAL, LOADING, LOADED
+    };
+
+    state _state;
+    table_schema_version _version; // always valid
+    schema_registry& _registry; // always valid
+
+    async_schema_loader _loader; // valid when state == LOADING
+    shared_promise<schema_ptr> _schema_promise; // valid when state == LOADING
+
+    std::optional<frozen_schema> _frozen_schema; // engaged when state == LOADED
+    // valid when state == LOADED
+    // This is != nullptr when there is an alive schema_ptr associated with this entry.
+    const ::schema* _schema = nullptr;
+
+    enum class sync_state { NOT_SYNCED, SYNCING, SYNCED };
+    sync_state _sync_state;
+    shared_promise<> _synced_promise; // valid when _sync_state == SYNCING
+    timer<erase_clock> _erase_timer;
+
+    friend class schema_registry;
+public:
+    schema_registry_entry(table_schema_version v, schema_registry& r);
+    schema_registry_entry(schema_registry_entry&&) = delete;
+    schema_registry_entry(const schema_registry_entry&) = delete;
+    ~schema_registry_entry();
+    schema_ptr load(frozen_schema);
+    future<schema_ptr> start_loading(async_schema_loader);
+    schema_ptr get_schema(); // call only when state >= LOADED
+    // Can be called from other shards
+    bool is_synced() const;
+    // Initiates asynchronous schema sync or returns ready future when is already synced.
+    future<> maybe_sync(std::function<future<>()> sync);
+    // Marks this schema version as synced. Syncing cannot be in progress.
+    void mark_synced();
+    // Can be called from other shards
+    frozen_schema frozen() const;
+    // Can be called from other shards
+    table_schema_version version() const { return _version; }
+public:
+    // Called by class schema
+    void detach_schema() noexcept;
+};
+
+//
+// Keeps track of different versions of table schemas. A per-shard object.
+//
+// For every schema_ptr obtained through getters, as long as the schema pointed to is
+// alive the registry will keep its entry. To ensure remote nodes can query current node
+// for schema version, make sure that schema_ptr for the request is alive around the call.
+//
+class schema_registry {
+    std::unordered_map<table_schema_version, lw_shared_ptr<schema_registry_entry>> _entries;
+    std::unique_ptr<db::schema_ctxt> _ctxt;
+
+    friend class schema_registry_entry;
+    schema_registry_entry& get_entry(table_schema_version) const;
+    // Duration for which unused entries are kept alive to avoid
+    // too frequent re-requests and syncs. Default is 1 second.
+    schema_registry_entry::erase_clock::duration grace_period() const;
+
+public:
+    ~schema_registry();
+    // workaround to this object being magically appearing from nowhere.
+    void init(const db::schema_ctxt&);
+
+    // Looks up schema by version or loads it using supplied loader.
+    schema_ptr get_or_load(table_schema_version, const schema_loader&);
+
+    // Looks up schema by version or returns an empty pointer if not available.
+    schema_ptr get_or_null(table_schema_version) const;
+
+    // Like get_or_load() which takes schema_loader but the loader may be
+    // deferring. The loader is copied must be alive only until this method
+    // returns. If the loader fails, the future resolves with
+    // schema_version_loading_failed.
+    future<schema_ptr> get_or_load(table_schema_version, const async_schema_loader&);
+
+    // Looks up schema version. Throws schema_version_not_found when not found
+    // or loading is in progress.
+    schema_ptr get(table_schema_version) const;
+
+    // Looks up schema version. Throws schema_version_not_found when not found
+    // or loading is in progress.
+    frozen_schema get_frozen(table_schema_version) const;
+
+    // Attempts to add given schema to the registry. If the registry already
+    // knows about the schema, returns existing entry, otherwise returns back
+    // the schema which was passed as argument. Users should prefer to use the
+    // schema_ptr returned by this method instead of the one passed to it,
+    // because doing so ensures that the entry will be kept in the registry as
+    // long as the schema is actively used.
+    schema_ptr learn(const schema_ptr&);
+};
+
+schema_registry& local_schema_registry();
+
+// Schema pointer which can be safely accessed/passed across shards via
+// const&. Useful for ensuring that schema version obtained on one shard is
+// automatically propagated to other shards, no matter how long the processing
+// chain will last.
+class global_schema_ptr {
+    schema_ptr _ptr;
+    schema_ptr _base_schema;
+    unsigned _cpu_of_origin;
+public:
+    // Note: the schema_ptr must come from the current shard and can't be nullptr.
+    global_schema_ptr(const schema_ptr&);
+    // The other may come from a different shard.
+    global_schema_ptr(const global_schema_ptr& other);
+    // The other must come from current shard.
+    global_schema_ptr(global_schema_ptr&& other) noexcept;
+    // May be invoked across shards. Always returns an engaged pointer.
+    schema_ptr get() const;
+    operator schema_ptr() const { return get(); }
+};
+
+
 #include <seastar/core/abort_on_ebadf.hh>
 #include <seastar/core/align.hh>
 #include <seastar/core/bitops.hh>
 #include <seastar/core/byteorder.hh>
 #include <seastar/core/coroutine.hh>
 #include <seastar/core/do_with.hh>
-#include "seastar/core/thread.hh"
+#include <seastar/core/thread.hh>
 #include <seastar/core/thread.hh>
 #include <seastar/core/with_scheduling_group.hh>
 #include <seastar/coroutine/all.hh>
@@ -77733,13 +77885,210 @@ private:
 #include <seastar/util/log.hh>
 #include <seastar/util/short_streams.hh>
 #include <seastar/util/variant_utils.hh>
-#include "seastarx.hh"
-#include "serializer_impl.hh"
-#include "service/priority_manager.hh"
+
+#include <seastar/core/file.hh>
+
+
+namespace service {
+class priority_manager {
+    ::io_priority_class _commitlog_priority;
+    ::io_priority_class _mt_flush_priority;
+    ::io_priority_class _streaming_priority;
+    ::io_priority_class _sstable_query_read;
+    ::io_priority_class _compaction_priority;
+
+public:
+    const ::io_priority_class&
+    commitlog_priority() const {
+        return _commitlog_priority;
+    }
+
+    const ::io_priority_class&
+    memtable_flush_priority() const {
+        return _mt_flush_priority;
+    }
+
+    const ::io_priority_class&
+    streaming_priority() const {
+        return _streaming_priority;
+    }
+
+    const ::io_priority_class&
+    sstable_query_read_priority() const {
+        return _sstable_query_read;
+    }
+
+    const ::io_priority_class&
+    compaction_priority() const {
+        return _compaction_priority;
+    }
+
+    priority_manager();
+};
+
+priority_manager& get_local_priority_manager();
+const inline ::io_priority_class&
+get_local_commitlog_priority() {
+    return get_local_priority_manager().commitlog_priority();
+}
+
+const inline ::io_priority_class&
+get_local_memtable_flush_priority() {
+    return get_local_priority_manager().memtable_flush_priority();
+}
+
+const inline ::io_priority_class&
+get_local_streaming_priority() {
+    return get_local_priority_manager().streaming_priority();
+}
+
+const inline ::io_priority_class&
+get_local_sstable_query_read_priority() {
+    return get_local_priority_manager().sstable_query_read_priority();
+}
+
+const inline ::io_priority_class&
+get_local_compaction_priority() {
+    return get_local_priority_manager().compaction_priority();
+}
+}
+
 #include <set>
-#include "sharder.hh"
+
+
+#include <vector>
+
+namespace dht {
+
+
+// Utilities for sharding ring partition_range:s
+
+// A ring_position range's data is divided into sub-ranges, where each sub-range's data
+// is owned by a single shard. Note that multiple non-overlapping sub-ranges may map to a
+// single shard, and some shards may not receive any sub-range.
+//
+// This module provides utilities for determining the sub-ranges to shard mapping. The utilities
+// generate optimal mappings: each range that you get is the largest possible, so you
+// get the minimum number of ranges possible. You can get many ranges, so operate on them
+// one (or a few) at a time, rather than accumulating them.
+
+// A mapping between a partition_range and a shard. All positions within `ring_range` are
+// owned by `shard`.
+//
+// The classes that return ring_position_range_and_shard make `ring_range` as large as
+// possible (maximizing the number of tokens), so the total number of such ranges is minimized.
+// Successive ranges therefore always have a different `shard` than the previous return.
+// (classes that return ring_position_range_and_shard_and_element can have the same `shard`
+// in successive returns, if `element` is different).
+struct ring_position_range_and_shard {
+    dht::partition_range ring_range;
+    unsigned shard;
+};
+
+// Incrementally divides a `partition_range` into sub-ranges wholly owned by a single shard.
+class ring_position_range_sharder {
+    const sharder& _sharder;
+    dht::partition_range _range;
+    bool _done = false;
+public:
+    // Initializes the ring_position_range_sharder with a given range to subdivide.
+    ring_position_range_sharder(const sharder& sharder, nonwrapping_range<ring_position> rrp)
+            : _sharder(sharder), _range(std::move(rrp)) {}
+    // Fetches the next range-shard mapping. When the input range is exhausted, std::nullopt is
+    // returned. The returned ranges are contiguous and non-overlapping, and together span the
+    // entire input range.
+    std::optional<ring_position_range_and_shard> next(const schema& s);
+};
+
+// A mapping between a partition_range and a shard (like ring_position_range_and_shard) extended
+// by having a reference to input range index. See ring_position_range_vector_sharder for use.
+//
+// The classes that return ring_position_range_and_shard_and_element make `ring_range` as large as
+// possible (maximizing the number of tokens), so the total number of such ranges is minimized.
+// Successive ranges therefore always have a different `shard` than the previous return.
+// (classes that return ring_position_range_and_shard_and_element can have the same `shard`
+// in successive returns, if `element` is different).
+struct ring_position_range_and_shard_and_element : ring_position_range_and_shard {
+    ring_position_range_and_shard_and_element(ring_position_range_and_shard&& rpras, unsigned element)
+            : ring_position_range_and_shard(std::move(rpras)), element(element) {
+    }
+    unsigned element;
+};
+
+// Incrementally divides several non-overlapping `partition_range`:s into sub-ranges wholly owned by
+// a single shard.
+//
+// Similar to ring_position_range_sharder, but instead of stopping when the input range is exhauseted,
+// moves on to the next input range (input ranges are supplied in a vector).
+//
+// This has two use cases:
+
+// 1. vnodes. A vnode cannot be described by a single range, since
+//    one vnode wraps around from the largest token back to the smallest token. Hence it must be
+//    described as a vector of two ranges, (largest_token, +inf) and (-inf, smallest_token].
+// 2. sstable shard mappings. An sstable has metadata describing which ranges it owns, and this is
+//    used to see what shards these ranges map to (and therefore to see if the sstable is shared or
+//    not, and which shards share it).
+
+class ring_position_range_vector_sharder {
+    using vec_type = dht::partition_range_vector;
+    vec_type _ranges;
+    const sharder& _sharder;
+    vec_type::iterator _current_range;
+    std::optional<ring_position_range_sharder> _current_sharder;
+private:
+    void next_range() {
+        if (_current_range != _ranges.end()) {
+            _current_sharder.emplace(_sharder, std::move(*_current_range++));
+        }
+    }
+public:
+    // Initializes the `ring_position_range_vector_sharder` with the ranges to be processesd.
+    // Input ranges should be non-overlapping (although nothing bad will happen if they do
+    // overlap).
+    ring_position_range_vector_sharder(const sharder& sharder, dht::partition_range_vector ranges);
+    // Fetches the next range-shard mapping. When the input range is exhausted, std::nullopt is
+    // returned. Within an input range, results are contiguous and non-overlapping (but since input
+    // ranges usually are discontiguous, overall the results are not contiguous). Together, the results
+    // span the input ranges.
+    //
+    // The result is augmented with an `element` field which indicates the index from the input vector
+    // that the result belongs to.
+    //
+    // Results are returned sorted by index within the vector first, then within each vector item
+    std::optional<ring_position_range_and_shard_and_element> next(const schema& s);
+};
+
+// Incrementally divides a `partition_range` into sub-ranges wholly owned by a single shard.
+// Unlike ring_position_range_sharder, it only returns result for a shard number provided by the caller.
+class selective_token_range_sharder {
+    const sharder& _sharder;
+    dht::token_range _range;
+    shard_id _shard;
+    bool _done = false;
+    shard_id _next_shard;
+    dht::token _start_token;
+    std::optional<range_bound<dht::token>> _start_boundary;
+public:
+    // Initializes the selective_token_range_sharder with a token range and shard_id of interest.
+    selective_token_range_sharder(const sharder& sharder, dht::token_range range, shard_id shard)
+            : _sharder(sharder)
+            , _range(std::move(range))
+            , _shard(shard)
+            , _next_shard(_shard + 1 == _sharder.shard_count() ? 0 : _shard + 1)
+            , _start_token(_range.start() ? _range.start()->value() : minimum_token())
+            , _start_boundary(_sharder.shard_of(_start_token) == shard ?
+                _range.start() : range_bound<dht::token>(_sharder.token_for_next_shard(_start_token, shard))) {
+    }
+    // Returns the next token_range that is both wholly contained within the input range and also
+    // wholly owned by the input shard_id. When the input range is exhausted, std::nullopt is returned.
+    // Note if the range does not intersect the shard at all, std::nullopt will be returned immediately.
+    std::optional<dht::token_range> next();
+};
+
+} // dht
+
 #include <smmintrin.h>
-#include "sstables/key.hh"
 #include <sstream>
 #include <stack>
 #include <stdexcept>
