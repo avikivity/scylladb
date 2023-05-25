@@ -18,14 +18,6 @@
 #include <seastar/core/bitset-iter.hh>
 #include <seastar/util/optimized_optional.hh>
 
-#include "schema/schema_fwd.hh"
-#include "tombstone.hh"
-#include "keys.hh"
-#include "position_in_partition.hh"
-#include "atomic_cell_or_collection.hh"
-#include "query-result.hh"
-#include "hashing_partition_visitor.hh"
-#include "range_tombstone_list.hh"
 #include "utils/intrusive_btree.hh"
 #include "utils/preempt.hh"
 #include "utils/lru.hh"

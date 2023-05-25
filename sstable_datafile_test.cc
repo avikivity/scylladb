@@ -29899,6 +29899,804 @@ public:
 }
 
 
+
+// A variant type that can hold either an atomic_cell, or a serialized collection.
+// Which type is stored is determined by the schema.
+// Has an "empty" state.
+// Objects moved-from are left in an empty state.
+class atomic_cell_or_collection final {
+    managed_bytes _data;
+private:
+    atomic_cell_or_collection(managed_bytes&& data) : _data(std::move(data)) {}
+public:
+    atomic_cell_or_collection() = default;
+    atomic_cell_or_collection(atomic_cell_or_collection&&) = default;
+    atomic_cell_or_collection(const atomic_cell_or_collection&) = delete;
+    atomic_cell_or_collection& operator=(atomic_cell_or_collection&&) = default;
+    atomic_cell_or_collection& operator=(const atomic_cell_or_collection&) = delete;
+    atomic_cell_or_collection(atomic_cell ac) : _data(std::move(ac._data)) {}
+    atomic_cell_or_collection(const abstract_type& at, atomic_cell_view acv);
+    static atomic_cell_or_collection from_atomic_cell(atomic_cell data) { return { std::move(data._data) }; }
+    atomic_cell_view as_atomic_cell(const column_definition& cdef) const { return atomic_cell_view::from_bytes(*cdef.type, _data); }
+    atomic_cell_mutable_view as_mutable_atomic_cell(const column_definition& cdef) { return atomic_cell_mutable_view::from_bytes(*cdef.type, _data); }
+    atomic_cell_or_collection(collection_mutation cm) : _data(std::move(cm._data)) { }
+    atomic_cell_or_collection copy(const abstract_type&) const;
+    explicit operator bool() const {
+        return !_data.empty();
+    }
+    static constexpr bool can_use_mutable_view() {
+        return true;
+    }
+    static atomic_cell_or_collection from_collection_mutation(collection_mutation data) { return std::move(data._data); }
+    collection_mutation_view as_collection_mutation() const;
+    bytes_view serialize() const;
+    bool equals(const abstract_type& type, const atomic_cell_or_collection& other) const;
+    size_t external_memory_usage(const abstract_type&) const;
+
+    class printer {
+        const column_definition& _cdef;
+        const atomic_cell_or_collection& _cell;
+    public:
+        printer(const column_definition& cdef, const atomic_cell_or_collection& cell)
+            : _cdef(cdef), _cell(cell) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream&, const printer&);
+    };
+    friend std::ostream& operator<<(std::ostream&, const printer&);
+};
+
+
+
+// Not part of atomic_cell.hh to avoid cyclic dependency between types.hh and atomic_cell.hh
+
+template<>
+struct appending_hash<collection_mutation_view> {
+    template<typename Hasher>
+    void operator()(Hasher& h, collection_mutation_view cell, const column_definition& cdef) const {
+        cell.with_deserialized(*cdef.type, [&] (collection_mutation_view_description m_view) {
+            ::feed_hash(h, m_view.tomb);
+            for (auto&& key_and_value : m_view.cells) {
+                ::feed_hash(h, key_and_value.first);
+                ::feed_hash(h, key_and_value.second, cdef);
+            }
+      });
+    }
+};
+
+template<>
+struct appending_hash<atomic_cell_view> {
+    template<typename Hasher>
+    void operator()(Hasher& h, atomic_cell_view cell, const column_definition& cdef) const {
+        feed_hash(h, cell.is_live());
+        feed_hash(h, cell.timestamp());
+        if (cell.is_live()) {
+            if (cdef.is_counter()) {
+                ::feed_hash(h, counter_cell_view(cell));
+                return;
+            }
+            if (cell.is_live_and_has_ttl()) {
+                feed_hash(h, cell.expiry());
+                feed_hash(h, cell.ttl());
+            }
+            feed_hash(h, cell.value());
+        } else {
+            feed_hash(h, cell.deletion_time());
+        }
+    }
+};
+
+template<>
+struct appending_hash<atomic_cell> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const atomic_cell& cell, const column_definition& cdef) const {
+        feed_hash(h, static_cast<atomic_cell_view>(cell), cdef);
+    }
+};
+
+template<>
+struct appending_hash<collection_mutation> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const collection_mutation& cm, const column_definition& cdef) const {
+        feed_hash(h, static_cast<collection_mutation_view>(cm), cdef);
+    }
+};
+
+template<>
+struct appending_hash<atomic_cell_or_collection> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const atomic_cell_or_collection& c, const column_definition& cdef) const {
+        if (cdef.is_atomic()) {
+            feed_hash(h, c.as_atomic_cell(cdef), cdef);
+        } else {
+            feed_hash(h, c.as_collection_mutation(), cdef);
+        }
+    }
+};
+
+
+
+// Calculates a hash of a mutation_partition which is consistent with
+// mutation equality. For any equal mutations, no matter which schema
+// version they were generated under, the hash fed will be the same for both of them.
+template<typename Hasher>
+class hashing_partition_visitor : public mutation_partition_visitor {
+    Hasher& _h;
+    const schema& _s;
+public:
+    hashing_partition_visitor(Hasher& h, const schema& s)
+        : _h(h)
+        , _s(s)
+    { }
+
+    virtual void accept_partition_tombstone(tombstone t) override {
+        feed_hash(_h, t);
+    }
+
+    virtual void accept_static_cell(column_id id, atomic_cell_view cell) override {
+        auto&& col = _s.static_column_at(id);
+        feed_hash(_h, col.name());
+        feed_hash(_h, col.type->name());
+        feed_hash(_h, cell, col);
+    }
+
+    virtual void accept_static_cell(column_id id, collection_mutation_view cell) override {
+        auto&& col = _s.static_column_at(id);
+        feed_hash(_h, col.name());
+        feed_hash(_h, col.type->name());
+        feed_hash(_h, cell, col);
+    }
+
+    virtual void accept_row_tombstone(const range_tombstone& rt) override {
+        feed_hash(_h, rt, _s);
+    }
+
+    virtual void accept_row(position_in_partition_view pos, const row_tombstone& deleted_at, const row_marker& rm, is_dummy dummy, is_continuous continuous) override {
+        if (dummy) {
+            return;
+        }
+        feed_hash(_h, pos.key(), _s);
+        feed_hash(_h, deleted_at);
+        feed_hash(_h, rm);
+    }
+
+    virtual void accept_row_cell(column_id id, atomic_cell_view cell) override {
+        auto&& col = _s.regular_column_at(id);
+        feed_hash(_h, col.name());
+        feed_hash(_h, col.type->name());
+        feed_hash(_h, cell, col);
+    }
+
+    virtual void accept_row_cell(column_id id, collection_mutation_view cell) override {
+        auto&& col = _s.regular_column_at(id);
+        feed_hash(_h, col.name());
+        feed_hash(_h, col.type->name());
+        feed_hash(_h, cell, col);
+    }
+};
+
+
+#include <boost/intrusive/set.hpp>
+#include <optional>
+
+namespace bi = boost::intrusive;
+
+/**
+ * Represents a ranged deletion operation. Can be empty.
+ */
+class range_tombstone final {
+public:
+    clustering_key_prefix start;
+    bound_kind start_kind;
+    clustering_key_prefix end;
+    bound_kind end_kind;
+    tombstone tomb;
+    range_tombstone(clustering_key_prefix start, bound_kind start_kind, clustering_key_prefix end, bound_kind end_kind, tombstone tomb)
+            : start(std::move(start))
+            , start_kind(start_kind)
+            , end(std::move(end))
+            , end_kind(end_kind)
+            , tomb(std::move(tomb))
+    { }
+    range_tombstone(bound_view start, bound_view end, tombstone tomb)
+            : range_tombstone(start.prefix(), start.kind(), end.prefix(), end.kind(), std::move(tomb))
+    { }
+
+    // Can be called only when both start and end are !is_static_row && !is_clustering_row().
+    range_tombstone(position_in_partition_view start, position_in_partition_view end, tombstone tomb)
+            : range_tombstone(start.as_start_bound_view(), end.as_end_bound_view(), tomb)
+    {}
+    range_tombstone(clustering_key_prefix&& start, clustering_key_prefix&& end, tombstone tomb)
+            : range_tombstone(std::move(start), bound_kind::incl_start, std::move(end), bound_kind::incl_end, std::move(tomb))
+    { }
+    // IDL constructor
+    range_tombstone(clustering_key_prefix&& start, tombstone tomb, bound_kind start_kind, clustering_key_prefix&& end, bound_kind end_kind)
+            : range_tombstone(std::move(start), start_kind, std::move(end), end_kind, std::move(tomb))
+    { }
+    range_tombstone(range_tombstone&& rt) noexcept
+            : range_tombstone(std::move(rt.start), rt.start_kind, std::move(rt.end), rt.end_kind, std::move(rt.tomb)) {
+    }
+    range_tombstone(const range_tombstone& rt)
+            : range_tombstone(rt.start, rt.start_kind, rt.end, rt.end_kind, rt.tomb)
+    { }
+    range_tombstone& operator=(range_tombstone&& rt) noexcept {
+        start = std::move(rt.start);
+        start_kind = rt.start_kind;
+        end = std::move(rt.end);
+        end_kind = rt.end_kind;
+        tomb = std::move(rt.tomb);
+        return *this;
+    }
+    range_tombstone& operator=(const range_tombstone& rt) {
+        start = rt.start;
+        start_kind = rt.start_kind;
+        end = rt.end;
+        end_kind = rt.end_kind;
+        tomb = rt.tomb;
+        return *this;
+    }
+    const bound_view start_bound() const {
+        return bound_view(start, start_kind);
+    }
+    const bound_view end_bound() const {
+        return bound_view(end, end_kind);
+    }
+    // Range tombstone covers all rows with positions p such that: position() <= p < end_position()
+    position_in_partition_view position() const;
+    position_in_partition_view end_position() const;
+    bool empty() const noexcept {
+        return !bool(tomb);
+    }
+    explicit operator bool() const noexcept {
+        return bool(tomb);
+    }
+    bool equal(const schema& s, const range_tombstone& other) const {
+        return tomb == other.tomb && start_bound().equal(s, other.start_bound()) && end_bound().equal(s, other.end_bound());
+    }
+    struct compare {
+        bound_view::compare _c;
+        compare(const schema& s) : _c(s) {}
+        bool operator()(const range_tombstone& rt1, const range_tombstone& rt2) const {
+            return _c(rt1.start_bound(), rt2.start_bound());
+        }
+    };
+    friend void swap(range_tombstone& rt1, range_tombstone& rt2) noexcept {
+        range_tombstone tmp = std::move(rt2);
+        rt2 = std::move(rt1);
+        rt1 = std::move(tmp);
+    }
+
+    static bool is_single_clustering_row_tombstone(const schema& s, const clustering_key_prefix& start,
+        bound_kind start_kind, const clustering_key_prefix& end, bound_kind end_kind)
+    {
+        return start.is_full(s) && start_kind == bound_kind::incl_start
+            && end_kind == bound_kind::incl_end && start.equal(s, end);
+    }
+
+    // Applies src to this. The tombstones may be overlapping.
+    // If the tombstone with larger timestamp has the smaller range the remainder
+    // is returned, it guaranteed not to overlap with this.
+    // The start bounds of this and src are required to be equal. The start bound
+    // of this is not changed. The start bound of the remainder (if there is any)
+    // is larger than the end bound of this.
+    std::optional<range_tombstone> apply(const schema& s, range_tombstone&& src);
+
+    // Intersects the range of this tombstone with [pos, +inf) and replaces
+    // the range of the tombstone if there is an overlap.
+    // Returns true if there is an overlap. When returns false, the tombstone
+    // is not modified.
+    //
+    // pos must satisfy:
+    //   1) before_all_clustered_rows() <= pos
+    //   2) !pos.is_clustering_row() - because range_tombstone bounds can't represent such positions
+    bool trim_front(const schema& s, position_in_partition_view pos) {
+        position_in_partition::less_compare less(s);
+        if (!less(pos, end_position())) {
+            return false;
+        }
+        if (less(position(), pos)) {
+            set_start(pos);
+        }
+        return true;
+    }
+
+    // Intersects the range of this tombstone with [start, end) and replaces
+    // the range of the tombstone if there is an overlap.
+    // Returns true if there is an overlap and false otherwise. When returns false, the tombstone
+    // is not modified.
+    //
+    // start and end must satisfy:
+    //   1) has_clustering_key() == true
+    //   2) is_clustering_row() == false
+    //
+    // Also: start <= end
+    bool trim(const schema& s, position_in_partition_view start, position_in_partition_view end) {
+        position_in_partition::less_compare less(s);
+        if (!less(start, end_position())) {
+            return false;
+        }
+        if (!less(position(), end)) {
+            return false;
+        }
+        if (less(position(), start)) {
+            set_start(start);
+        }
+        if (less(end, end_position())) {
+            set_end(s, end);
+        }
+        return true;
+    }
+
+    // Assumes !pos.is_clustering_row(), because range_tombstone bounds can't represent such positions
+    void set_start(position_in_partition_view pos) {
+        bound_view new_start = pos.as_start_bound_view();
+        start = new_start.prefix();
+        start_kind = new_start.kind();
+    }
+
+    // Assumes !pos.is_clustering_row(), because range_tombstone bounds can't represent such positions
+    void set_end(const schema& s, position_in_partition_view pos) {
+        bound_view new_end = pos.as_end_bound_view();
+        end = new_end.prefix();
+        end_kind = new_end.kind();
+    }
+
+    // Swap bounds to reverse range-tombstone -- as if it came from a table with
+    // reverse native order. See docs/dev/reverse-reads.md.
+    void reverse() {
+        std::swap(start, end);
+        std::swap(start_kind, end_kind);
+        start_kind = reverse_kind(start_kind);
+        end_kind = reverse_kind(end_kind);
+    }
+
+    size_t external_memory_usage(const schema&) const noexcept {
+        return start.external_memory_usage() + end.external_memory_usage();
+    }
+
+    size_t minimal_external_memory_usage(const schema&) const noexcept {
+        return start.minimal_external_memory_usage() + end.minimal_external_memory_usage();
+    }
+
+    size_t memory_usage(const schema& s) const noexcept {
+        return sizeof(range_tombstone) + external_memory_usage(s);
+    }
+
+    size_t minimal_memory_usage(const schema& s) const noexcept {
+        return sizeof(range_tombstone) + minimal_external_memory_usage(s);
+    }
+};
+
+template<>
+struct appending_hash<range_tombstone>  {
+    template<typename Hasher>
+    void operator()(Hasher& h, const range_tombstone& value, const schema& s) const {
+        feed_hash(h, value.start, s);
+        // For backward compatibility, don't consider new fields if
+        // this could be an old-style, overlapping, range tombstone.
+        if (!value.start.equal(s, value.end) || value.start_kind != bound_kind::incl_start || value.end_kind != bound_kind::incl_end) {
+            feed_hash(h, value.start_kind);
+            feed_hash(h, value.end, s);
+            feed_hash(h, value.end_kind);
+        }
+        feed_hash(h, value.tomb);
+    }
+};
+
+// The accumulator expects the incoming range tombstones and clustered rows to
+// follow the ordering used by the mutation readers.
+//
+// Unless the accumulator is in the reverse mode, after apply(rt) or
+// tombstone_for_row(ck) are called there are followng restrictions for
+// subsequent calls:
+//  - apply(rt1) can be invoked only if rt.start_bound() < rt1.start_bound()
+//    and ck < rt1.start_bound()
+//  - tombstone_for_row(ck1) can be invoked only if rt.start_bound() < ck1
+//    and ck < ck1
+//
+// In other words position in partition of the mutation fragments passed to the
+// accumulator must be increasing.
+//
+// If the accumulator was created with the reversed flag set it expects the
+// stream of the range tombstone to come from a reverse partitions and follow
+// the ordering that they use. In particular, the restrictions from non-reversed
+// mode change to:
+//  - apply(rt1) can be invoked only if rt.end_bound() > rt1.end_bound() and
+//    ck > rt1.end_bound()
+//  - tombstone_for_row(ck1) can be invoked only if rt.end_bound() > ck1 and
+//    ck > ck1.
+class range_tombstone_accumulator {
+    bound_view::compare _cmp;
+    tombstone _partition_tombstone;
+    std::deque<range_tombstone> _range_tombstones;
+    tombstone _current_tombstone;
+private:
+    void update_current_tombstone();
+    void drop_unneeded_tombstones(const clustering_key_prefix& ck, int w = 0);
+public:
+    explicit range_tombstone_accumulator(const schema& s)
+        : _cmp(s) { }
+
+    void set_partition_tombstone(tombstone t) {
+        _partition_tombstone = t;
+        update_current_tombstone();
+    }
+
+    tombstone get_partition_tombstone() const {
+        return _partition_tombstone;
+    }
+
+    tombstone current_tombstone() const {
+        return _current_tombstone;
+    }
+
+    tombstone tombstone_for_row(const clustering_key_prefix& ck) {
+        drop_unneeded_tombstones(ck);
+        return _current_tombstone;
+    }
+
+    const std::deque<range_tombstone>& range_tombstones_for_row(const clustering_key_prefix& ck) {
+        drop_unneeded_tombstones(ck);
+        return _range_tombstones;
+    }
+
+    std::deque<range_tombstone> range_tombstones() && {
+        return std::move(_range_tombstones);
+    }
+
+    void apply(range_tombstone rt);
+
+    void clear();
+};
+
+template<>
+struct fmt::formatter<range_tombstone> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const range_tombstone& rt, FormatContext& ctx) const {
+        if (rt) {
+            return fmt::format_to(ctx.out(), "{{range_tombstone: start={}, end={}, {}}}",
+                                  rt.position(), rt.end_position(), rt.tomb);
+        } else {
+            return fmt::format_to(ctx.out(), "{{range_tombstone: none}}");
+        }
+    }
+};
+
+
+
+#include <seastar/util/bool_class.hh>
+#include <seastar/util/noncopyable_function.hh>
+#include <seastar/core/preempt.hh>
+
+
+class is_preemptible_tag;
+using is_preemptible = bool_class<is_preemptible_tag>;
+
+/// A function which decides when to preempt.
+/// If it returns true then the algorithm will be interrupted.
+using preemption_check = noncopyable_function<bool() noexcept>;
+
+inline
+preemption_check default_preemption_check() {
+    return [] () noexcept {
+        return seastar::need_preempt();
+    };
+}
+
+inline
+preemption_check never_preempt() {
+    return [] () noexcept {
+        return false;
+    };
+}
+
+inline
+preemption_check always_preempt() {
+    return [] () noexcept {
+        return true;
+    };
+}
+
+
+
+#include <seastar/util/defer.hh>
+#include <iosfwd>
+#include <variant>
+
+class position_in_partition_view;
+
+class range_tombstone_entry {
+    range_tombstone _tombstone;
+    bi::set_member_hook<bi::link_mode<bi::auto_unlink>> _link;
+
+public:
+    struct compare {
+        range_tombstone::compare _c;
+        compare(const schema& s) : _c(s) {}
+        bool operator()(const range_tombstone_entry& rt1, const range_tombstone_entry& rt2) const {
+            return _c(rt1._tombstone, rt2._tombstone);
+        }
+    };
+
+    using container_type = bi::set<range_tombstone_entry,
+            bi::member_hook<range_tombstone_entry, bi::set_member_hook<bi::link_mode<bi::auto_unlink>>, &range_tombstone_entry::_link>,
+            bi::compare<range_tombstone_entry::compare>,
+            bi::constant_time_size<false>>;
+
+    range_tombstone_entry(const range_tombstone_entry& rt)
+        : _tombstone(rt._tombstone)
+    {
+    }
+
+    range_tombstone_entry(range_tombstone_entry&& rt) noexcept
+            : _tombstone(std::move(rt._tombstone))
+    {
+        update_node(rt._link);
+    }
+    range_tombstone_entry(range_tombstone&& rt) noexcept
+        : _tombstone(std::move(rt))
+    { }
+
+    range_tombstone_entry& operator=(range_tombstone_entry&& rt) noexcept {
+        update_node(rt._link);
+        _tombstone = std::move(rt._tombstone);
+        return *this;
+    }
+
+    range_tombstone& tombstone() noexcept { return _tombstone; }
+    const range_tombstone& tombstone() const noexcept { return _tombstone; }
+
+    const bound_view start_bound() const { return _tombstone.start_bound(); }
+    const bound_view end_bound() const { return _tombstone.end_bound(); }
+    position_in_partition_view position() const { return _tombstone.position(); }
+    position_in_partition_view end_position() const { return _tombstone.end_position(); }
+
+    size_t memory_usage(const schema& s) const noexcept {
+        return sizeof(range_tombstone_entry) + _tombstone.external_memory_usage(s);
+    }
+
+private:
+    void update_node(bi::set_member_hook<bi::link_mode<bi::auto_unlink>>& other_link) noexcept {
+        if (other_link.is_linked()) {
+            // Move the link in case we're being relocated by LSA.
+            container_type::node_algorithms::replace_node(other_link.this_ptr(), _link.this_ptr());
+            container_type::node_algorithms::init(other_link.this_ptr());
+        }
+    }
+};
+
+template <>
+struct fmt::formatter<range_tombstone_entry> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const range_tombstone_entry& rt, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}", rt.tombstone());
+    }
+};
+
+class range_tombstone_list final {
+    using range_tombstones_type = range_tombstone_entry::container_type;
+    class insert_undo_op {
+        const range_tombstone_entry& _new_rt;
+    public:
+        insert_undo_op(const range_tombstone_entry& new_rt)
+                : _new_rt(new_rt) { }
+        void undo(const schema& s, range_tombstone_list& rt_list) noexcept;
+    };
+    class erase_undo_op {
+        alloc_strategy_unique_ptr<range_tombstone_entry> _rt;
+    public:
+        erase_undo_op(range_tombstone_entry& rt)
+                : _rt(&rt) { }
+        void undo(const schema& s, range_tombstone_list& rt_list) noexcept;
+    };
+    class update_undo_op {
+        range_tombstone _old_rt;
+        const range_tombstone_entry& _new_rt;
+    public:
+        update_undo_op(range_tombstone&& old_rt, const range_tombstone_entry& new_rt)
+                : _old_rt(std::move(old_rt)), _new_rt(new_rt) { }
+        void undo(const schema& s, range_tombstone_list& rt_list) noexcept;
+    };
+    class reverter {
+    private:
+        using op = std::variant<erase_undo_op, insert_undo_op, update_undo_op>;
+        utils::chunked_vector<op> _ops;
+        const schema& _s;
+    protected:
+        range_tombstone_list& _dst;
+    public:
+        reverter(const schema& s, range_tombstone_list& dst)
+                : _s(s)
+                , _dst(dst) { }
+        virtual ~reverter() {
+            revert();
+        }
+        reverter(reverter&&) = default;
+        reverter(const reverter&) = delete;
+        reverter& operator=(reverter&) = delete;
+        virtual range_tombstones_type::iterator insert(range_tombstones_type::iterator it, range_tombstone_entry& new_rt);
+        virtual range_tombstones_type::iterator erase(range_tombstones_type::iterator it);
+        virtual void update(range_tombstones_type::iterator it, range_tombstone&& new_rt);
+        void revert() noexcept;
+        void cancel() noexcept {
+            _ops.clear();
+        }
+    };
+    class nop_reverter : public reverter {
+    public:
+        nop_reverter(const schema& s, range_tombstone_list& rt_list)
+                : reverter(s, rt_list) { }
+        virtual range_tombstones_type::iterator insert(range_tombstones_type::iterator it, range_tombstone_entry& new_rt) override;
+        virtual range_tombstones_type::iterator erase(range_tombstones_type::iterator it) override;
+        virtual void update(range_tombstones_type::iterator it, range_tombstone&& new_rt) override;
+    };
+private:
+    range_tombstones_type _tombstones;
+public:
+    // ForwardIterator<range_tombstone>
+    using iterator = range_tombstones_type::iterator;
+    using reverse_iterator = range_tombstones_type::reverse_iterator;
+    using const_iterator = range_tombstones_type::const_iterator;
+
+    struct copy_comparator_only { };
+    range_tombstone_list(const schema& s)
+        : _tombstones(range_tombstone_entry::compare(s))
+    { }
+    range_tombstone_list(const range_tombstone_list& x, copy_comparator_only)
+        : _tombstones(x._tombstones.key_comp())
+    { }
+    range_tombstone_list(const range_tombstone_list&);
+    range_tombstone_list& operator=(range_tombstone_list&) = delete;
+    range_tombstone_list(range_tombstone_list&&) = default;
+    range_tombstone_list& operator=(range_tombstone_list&&) = default;
+    ~range_tombstone_list();
+    size_t size() const noexcept {
+        return _tombstones.size();
+    }
+    bool empty() const noexcept {
+        return _tombstones.empty();
+    }
+    auto begin() noexcept {
+        return _tombstones.begin();
+    }
+    auto begin() const noexcept {
+        return _tombstones.begin();
+    }
+    auto rbegin() noexcept {
+        return _tombstones.rbegin();
+    }
+    auto rbegin() const noexcept {
+        return _tombstones.rbegin();
+    }
+    auto end() noexcept {
+        return _tombstones.end();
+    }
+    auto end() const noexcept {
+        return _tombstones.end();
+    }
+    auto rend() noexcept {
+        return _tombstones.rend();
+    }
+    auto rend() const noexcept {
+        return _tombstones.rend();
+    }
+    void apply(const schema& s, const bound_view& start_bound, const bound_view& end_bound, tombstone tomb) {
+        apply(s, start_bound.prefix(), start_bound.kind(), end_bound.prefix(), end_bound.kind(), std::move(tomb));
+    }
+    void apply(const schema& s, const range_tombstone& rt) {
+        apply(s, rt.start, rt.start_kind, rt.end, rt.end_kind, rt.tomb);
+    }
+    void apply(const schema& s, range_tombstone&& rt) {
+        apply(s, std::move(rt.start), rt.start_kind, std::move(rt.end), rt.end_kind, std::move(rt.tomb));
+    }
+    void apply(const schema& s, clustering_key_prefix start, bound_kind start_kind,
+               clustering_key_prefix end, bound_kind end_kind, tombstone tomb) {
+        nop_reverter rev(s, *this);
+        apply_reversibly(s, std::move(start), start_kind, std::move(end), end_kind, std::move(tomb), rev);
+    }
+    // Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
+    void apply_monotonically(const schema& s, const range_tombstone& rt);
+    // Merges another list with this object.
+    // Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
+    void apply_monotonically(const schema& s, const range_tombstone_list& list);
+    /// Merges another list with this object.
+    /// The other list must be governed by the same allocator as this object.
+    ///
+    /// Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
+    /// The other list will be left in a state such that it would still commute with this object to the same state as it
+    /// would if the call didn't fail.
+    stop_iteration apply_monotonically(const schema& s, range_tombstone_list&& list, is_preemptible = is_preemptible::no);
+public:
+    tombstone search_tombstone_covering(const schema& s, const clustering_key_prefix& key) const;
+
+    using iterator_range = boost::iterator_range<const_iterator>;
+    // Returns range tombstones which overlap with given range
+    iterator_range slice(const schema& s, const query::clustering_range&) const;
+    // Returns range tombstones which overlap with [start, end)
+    iterator_range slice(const schema& s, position_in_partition_view start, position_in_partition_view end) const;
+
+    // Returns range tombstones with ends inside [start, before).
+    iterator_range lower_slice(const schema& s, bound_view start, position_in_partition_view before) const;
+    // Returns range tombstones with starts inside (after, end].
+    iterator_range upper_slice(const schema& s, position_in_partition_view after, bound_view end) const;
+
+    iterator erase(const_iterator, const_iterator);
+
+    // Pops the first element and bans (in theory) further additions
+    // The list is assumed not to be empty
+    range_tombstone pop_front_and_lock() {
+        range_tombstone_entry* rt = _tombstones.unlink_leftmost_without_rebalance();
+        assert(rt != nullptr);
+        auto _ = seastar::defer([rt] () noexcept { current_deleter<range_tombstone_entry>()(rt); });
+        return std::move(rt->tombstone());
+    }
+
+    // Ensures that every range tombstone is strictly contained within given clustering ranges.
+    // Preserves all information which may be relevant for rows from that ranges.
+    void trim(const schema& s, const query::clustering_row_ranges&);
+    range_tombstone_list difference(const schema& s, const range_tombstone_list& rt_list) const;
+    // Erases the range tombstones for which filter returns true.
+    template <typename Pred>
+    requires std::is_invocable_r_v<bool, Pred, const range_tombstone&>
+    void erase_where(Pred filter) {
+        auto it = begin();
+        while (it != end()) {
+            if (filter(it->tombstone())) {
+                it = _tombstones.erase_and_dispose(it, current_deleter<range_tombstone_entry>());
+            } else {
+                ++it;
+            }
+        }
+    }
+    void clear() noexcept {
+        _tombstones.clear_and_dispose(current_deleter<range_tombstone_entry>());
+    }
+
+    range_tombstone pop(iterator it) {
+        range_tombstone rt(std::move(it->tombstone()));
+        _tombstones.erase_and_dispose(it, current_deleter<range_tombstone_entry>());
+        return rt;
+    }
+
+    // Removes elements of this list in batches.
+    // Returns stop_iteration::yes iff there is no more elements to remove.
+    stop_iteration clear_gently() noexcept;
+    void apply(const schema& s, const range_tombstone_list& rt_list);
+    // See reversibly_mergeable.hh
+    reverter apply_reversibly(const schema& s, range_tombstone_list& rt_list);
+
+    bool equal(const schema&, const range_tombstone_list&) const;
+    size_t external_memory_usage(const schema& s) const noexcept {
+        size_t result = 0;
+        for (auto& rtb : _tombstones) {
+            result += rtb.tombstone().memory_usage(s);
+        }
+        return result;
+    }
+private:
+    void apply_reversibly(const schema& s, clustering_key_prefix start, bound_kind start_kind,
+                          clustering_key_prefix end, bound_kind end_kind, tombstone tomb, reverter& rev);
+
+    void insert_from(const schema& s,
+                     range_tombstones_type::iterator it,
+                     position_in_partition start,
+                     position_in_partition end,
+                     tombstone tomb,
+                     reverter& rev);
+
+    range_tombstones_type::iterator find(const schema& s, const range_tombstone_entry& rt);
+};
+
+template <>
+struct fmt::formatter<range_tombstone_list> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const range_tombstone_list& list, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{{{}}}", fmt::join(list, ", "));
+    }
+};
+
+
 #include "cql3/maps.hh"
 #include "cql3/sets.hh"
 
