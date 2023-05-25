@@ -14,7 +14,6 @@
 #include <seastar/core/sstring.hh>
 #include <unordered_map>
 #include <optional>
-#include "enum_set.hh"
 #include "utils/managed_bytes.hh"
 #include "bytes_ostream.hh"
 #include <seastar/core/simple-stream.hh>

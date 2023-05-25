@@ -1195,7 +1195,1606 @@ filter_ptr create_filter(int hash, int64_t num_elements, int buckets_per, filter
 
 #include <seastar/core/sstring.hh>
 
-#include "bytes.hh"
+#include <boost/iterator/transform_iterator.hpp>
+#include <seastar/core/bitset-iter.hh>
+
+#include <algorithm>
+#include <cstddef>
+#include <optional>
+#include <stdexcept>
+#include <type_traits>
+#include <limits>
+
+/**
+ *
+ * Allows to take full advantage of compile-time information when operating
+ * on a set of enum values.
+ *
+ * Examples:
+ *
+ *   enum class x { A, B, C };
+ *   using my_enum = super_enum<x, x::A, x::B, x::C>;
+ *   using my_enumset = enum_set<my_enum>;
+ *
+ *   static_assert(my_enumset::frozen<x::A, x::B>::contains<x::A>(), "it should...");
+ *
+ *   assert(my_enumset::frozen<x::A, x::B>::contains(my_enumset::prepare<x::A>()));
+ *
+ *   assert(my_enumset::frozen<x::A, x::B>::contains(x::A));
+ *
+ */
+
+
+template<typename EnumType, EnumType... Items>
+struct super_enum {
+    using enum_type = EnumType;
+
+    template<enum_type... values>
+    struct max {
+        static constexpr enum_type max_of(enum_type a, enum_type b) {
+            return a > b ? a : b;
+        }
+
+        template<enum_type first, enum_type second, enum_type... rest>
+        static constexpr enum_type get() {
+            return max_of(first, get<second, rest...>());
+        }
+
+        template<enum_type first>
+        static constexpr enum_type get() { return first; }
+
+        static constexpr enum_type value = get<values...>();
+    };
+
+    template<enum_type... values>
+    struct min {
+        static constexpr enum_type min_of(enum_type a, enum_type b) {
+            return a < b ? a : b;
+        }
+
+        template<enum_type first, enum_type second, enum_type... rest>
+        static constexpr enum_type get() {
+            return min_of(first, get<second, rest...>());
+        }
+
+        template<enum_type first>
+        static constexpr enum_type get() { return first; }
+
+        static constexpr enum_type value = get<values...>();
+    };
+
+    using sequence_type = typename std::underlying_type<enum_type>::type;
+
+    template <enum_type first, enum_type... rest>
+    struct valid_sequence {
+        static constexpr bool apply(sequence_type v) noexcept {
+            return (v == static_cast<sequence_type>(first)) || valid_sequence<rest...>::apply(v);
+        }
+    };
+
+    template <enum_type first>
+    struct valid_sequence<first> {
+        static constexpr bool apply(sequence_type v) noexcept {
+            return v == static_cast<sequence_type>(first);
+        }
+    };
+
+    static constexpr bool is_valid_sequence(sequence_type v) noexcept {
+        return valid_sequence<Items...>::apply(v);
+    }
+
+    template<enum_type Elem>
+    static constexpr sequence_type sequence_for() {
+        return static_cast<sequence_type>(Elem);
+    }
+
+    static sequence_type sequence_for(enum_type elem) {
+        return static_cast<sequence_type>(elem);
+    }
+
+    static constexpr sequence_type max_sequence = sequence_for<max<Items...>::value>();
+    static constexpr sequence_type min_sequence = sequence_for<min<Items...>::value>();
+
+    static_assert(min_sequence >= 0, "negative enum values unsupported");
+};
+
+class bad_enum_set_mask : public std::invalid_argument {
+public:
+    bad_enum_set_mask() : std::invalid_argument("Bit mask contains invalid enumeration indices.") {
+    }
+};
+
+template<typename Enum>
+class enum_set {
+public:
+    using mask_type = size_t; // TODO: use the smallest sufficient type
+    using enum_type = typename Enum::enum_type;
+
+private:
+    static constexpr int mask_digits = std::numeric_limits<mask_type>::digits;
+    using mask_iterator = seastar::bitsets::set_iterator<mask_digits>;
+
+    mask_type _mask;
+    constexpr enum_set(mask_type mask) : _mask(mask) {}
+
+    template<enum_type Elem>
+    static constexpr unsigned shift_for() {
+        return Enum::template sequence_for<Elem>();
+    }
+
+    static auto make_iterator(mask_iterator iter) {
+        return boost::make_transform_iterator(std::move(iter), [](typename Enum::sequence_type s) {
+            return enum_type(s);
+        });
+    }
+
+public:
+    using iterator = std::invoke_result_t<decltype(&enum_set::make_iterator), mask_iterator>;
+
+    constexpr enum_set() : _mask(0) {}
+
+    /**
+     * \throws \ref bad_enum_set_mask
+     */
+    static constexpr enum_set from_mask(mask_type mask) {
+        const auto bit_range = seastar::bitsets::for_each_set(std::bitset<mask_digits>(mask));
+
+        if (!std::all_of(bit_range.begin(), bit_range.end(), &Enum::is_valid_sequence)) {
+            throw bad_enum_set_mask();
+        }
+
+        return enum_set(mask);
+    }
+
+    static constexpr mask_type full_mask() {
+        return ~(std::numeric_limits<mask_type>::max() << (Enum::max_sequence + 1));
+    }
+
+    static constexpr enum_set full() {
+        return enum_set(full_mask());
+    }
+
+    static inline mask_type mask_for(enum_type e) {
+        return mask_type(1) << Enum::sequence_for(e);
+    }
+
+    template<enum_type Elem>
+    static constexpr mask_type mask_for() {
+        return mask_type(1) << shift_for<Elem>();
+    }
+
+    struct prepared {
+        mask_type mask;
+        bool operator==(const prepared& o) const {
+            return mask == o.mask;
+        }
+    };
+
+    static prepared prepare(enum_type e) {
+        return {mask_for(e)};
+    }
+
+    template<enum_type e>
+    static constexpr prepared prepare() {
+        return {mask_for<e>()};
+    }
+
+    static_assert(std::numeric_limits<mask_type>::max() >= ((size_t)1 << Enum::max_sequence), "mask type too small");
+
+    template<enum_type e>
+    bool contains() const {
+        return bool(_mask & mask_for<e>());
+    }
+
+    bool contains(enum_type e) const {
+        return bool(_mask & mask_for(e));
+    }
+
+    template<enum_type e>
+    void remove() {
+        _mask &= ~mask_for<e>();
+    }
+
+    void remove(enum_type e) {
+        _mask &= ~mask_for(e);
+    }
+
+    template<enum_type e>
+    void set() {
+        _mask |= mask_for<e>();
+    }
+
+    template<enum_type e>
+    void set_if(bool condition) {
+        _mask |= mask_type(condition) << shift_for<e>();
+    }
+
+    void set(enum_type e) {
+        _mask |= mask_for(e);
+    }
+
+    template<enum_type e>
+    void toggle() {
+        _mask ^= mask_for<e>();
+    }
+
+    void toggle(enum_type e) {
+        _mask ^= mask_for(e);
+    }
+
+    void add(const enum_set& other) {
+        _mask |= other._mask;
+    }
+
+    explicit operator bool() const {
+        return bool(_mask);
+    }
+
+    mask_type mask() const {
+        return _mask;
+    }
+
+    iterator begin() const {
+        return make_iterator(mask_iterator(_mask));
+    }
+
+    iterator end() const {
+        return make_iterator(mask_iterator(0));
+    }
+
+    template<enum_type... items>
+    struct frozen {
+        template<enum_type first>
+        static constexpr mask_type make_mask() {
+            return mask_for<first>();
+        }
+
+        static constexpr mask_type make_mask() {
+            return 0;
+        }
+
+        template<enum_type first, enum_type second, enum_type... rest>
+        static constexpr mask_type make_mask() {
+            return mask_for<first>() | make_mask<second, rest...>();
+        }
+
+        static constexpr mask_type mask = make_mask<items...>();
+
+        template<enum_type Elem>
+        static constexpr bool contains() {
+            return mask & mask_for<Elem>();
+        }
+
+        static bool contains(enum_type e) {
+            return mask & mask_for(e);
+        }
+
+        static bool contains(prepared e) {
+            return mask & e.mask;
+        }
+
+        static constexpr enum_set<Enum> unfreeze() {
+            return enum_set<Enum>(mask);
+        }
+    };
+
+    template<enum_type... items>
+    static constexpr enum_set<Enum> of() {
+        return frozen<items...>::unfreeze();
+    }
+};
+
+
+#include <any>
+#include <cstdlib>
+#include <seastar/core/memory.hh>
+#include <seastar/util/alloc_failure_injector.hh>
+#include <malloc.h>
+
+// A function used by compacting collectors to migrate objects during
+// compaction. The function should reconstruct the object located at src
+// in the location pointed by dst. The object at old location should be
+// destroyed. See standard_migrator() above for example. Both src and dst
+// are aligned as requested during alloc()/construct().
+class migrate_fn_type {
+    // Migrators may be registered by thread-local objects. The table of all
+    // registered migrators is also thread-local which may cause problems with
+    // the order of object destruction and lead to use-after-free.
+    // This can be worked around by making migrators keep a shared pointer
+    // to the table of migrators. std::any is used so that its type doesn't
+    // have to be made public.
+    std::any _migrators;
+    uint32_t _align = 0;
+    uint32_t _index;
+private:
+    static uint32_t register_migrator(migrate_fn_type* m);
+    static void unregister_migrator(uint32_t index);
+protected:
+    explicit migrate_fn_type(size_t align) : _align(align), _index(register_migrator(this)) {}
+public:
+    virtual ~migrate_fn_type() { unregister_migrator(_index); }
+    virtual void migrate(void* src, void* dsts, size_t size) const noexcept = 0;
+    virtual size_t size(const void* obj) const = 0;
+    size_t align() const { return _align; }
+    uint32_t index() const { return _index; }
+};
+
+// Non-constant-size classes (ending with `char data[0]`) must provide
+// the method telling the underlying storage size
+template <typename T>
+concept DynamicObject = requires (const T& obj) {
+    { obj.storage_size() } noexcept -> std::same_as<size_t>;
+};
+
+template <typename T>
+inline
+size_t
+size_for_allocation_strategy(const T& obj) noexcept {
+    if constexpr (DynamicObject<T>) {
+        return obj.storage_size();
+    } else {
+        return sizeof(T);
+    }
+}
+
+template <typename T>
+requires std::is_nothrow_move_constructible_v<T> && std::is_nothrow_destructible_v<T>
+class standard_migrator final : public migrate_fn_type {
+    friend class allocation_strategy;
+    standard_migrator() : migrate_fn_type(alignof(T)) {}
+
+public:
+    virtual void migrate(void* src, void* dst, size_t size) const noexcept override {
+        T* src_t = static_cast<T*>(src);
+        new (static_cast<T*>(dst)) T(std::move(*src_t));
+        src_t->~T();
+    }
+    virtual size_t size(const void* obj) const override {
+        return size_for_allocation_strategy(*static_cast<const T*>(obj));
+    }
+};
+
+//
+// Abstracts allocation strategy for managed objects.
+//
+// Managed objects may be moved by the allocator during compaction, which
+// invalidates any references to those objects. Compaction may be started
+// synchronously with allocations. To ensure that references remain valid, use
+// logalloc::compaction_lock.
+//
+// Because references may get invalidated, managing allocators can't be used
+// with standard containers, because they assume the reference is valid until freed.
+//
+// For example containers compatible with compacting allocators see:
+//   - managed_ref - managed version of std::unique_ptr<>
+//   - managed_bytes - managed version of "bytes"
+//
+// Note: When object is used as an element inside intrusive containers,
+// typically no extra measures need to be taken for reference tracking, if the
+// link member is movable. When object is moved, the member hook will be moved
+// too and it should take care of updating any back-references. The user must
+// be aware though that any iterators into such container may be invalidated
+// across deferring points.
+//
+class allocation_strategy {
+    template <typename T>
+    standard_migrator<T>& get_standard_migrator()
+    {
+        seastar::memory::scoped_critical_alloc_section dfg;
+        static thread_local standard_migrator<T> instance;
+        return instance;
+    }
+
+protected:
+    size_t _preferred_max_contiguous_allocation = std::numeric_limits<size_t>::max();
+    uint64_t _invalidate_counter = 1;
+public:
+    using migrate_fn = const migrate_fn_type*;
+
+    virtual ~allocation_strategy() {}
+
+    virtual void* alloc(migrate_fn, size_t size, size_t alignment) = 0;
+    //
+    // Allocates space for a new ManagedObject. The caller must construct the
+    // object before compaction runs. "size" is the amount of space to reserve
+    // in bytes. It can be larger than MangedObjects's size.
+    //
+    // Throws std::bad_alloc on allocation failure.
+    //
+    // Doesn't invalidate references to objects allocated with this strategy.
+    //
+    template <typename T>
+    requires DynamicObject<T>
+    void* alloc(size_t size) {
+        return alloc(&get_standard_migrator<T>(), size, alignof(T));
+    }
+
+    // Releases storage for the object. Doesn't invoke object's destructor.
+    // Doesn't invalidate references to objects allocated with this strategy.
+    virtual void free(void* object, size_t size) = 0;
+    virtual void free(void* object) = 0;
+
+    // Returns the total immutable memory size used by the allocator to host
+    // this object.  This will be at least the size of the object itself, plus
+    // any immutable overhead needed to represent the object (if any).
+    //
+    // The immutable overhead is the overhead that cannot change over the
+    // lifetime of the object (such as padding, etc).
+    virtual size_t object_memory_size_in_allocator(const void* obj) const noexcept = 0;
+
+    // Like alloc() but also constructs the object with a migrator using
+    // standard move semantics. Allocates respecting object's alignment
+    // requirement.
+    template<typename T, typename... Args>
+    T* construct(Args&&... args) {
+        void* storage = alloc(&get_standard_migrator<T>(), sizeof(T), alignof(T));
+        try {
+            return new (storage) T(std::forward<Args>(args)...);
+        } catch (...) {
+            free(storage, sizeof(T));
+            throw;
+        }
+    }
+
+    // Destroys T and releases its storage.
+    // Doesn't invalidate references to allocated objects.
+    template<typename T>
+    void destroy(T* obj) {
+        size_t size = size_for_allocation_strategy(*obj);
+        obj->~T();
+        free(obj, size);
+    }
+
+    size_t preferred_max_contiguous_allocation() const noexcept {
+        return _preferred_max_contiguous_allocation;
+    }
+
+    // Returns a number which is increased when references to objects managed by this allocator
+    // are invalidated, e.g. due to internal events like compaction or eviction.
+    // When the value returned by this method doesn't change, references obtained
+    // between invocations remain valid.
+    uint64_t invalidate_counter() const noexcept {
+        return _invalidate_counter;
+    }
+
+    void invalidate_references() noexcept {
+        ++_invalidate_counter;
+    }
+};
+
+class standard_allocation_strategy : public allocation_strategy {
+public:
+    constexpr standard_allocation_strategy() {
+        _preferred_max_contiguous_allocation = 128 * 1024;
+    }
+    virtual void* alloc(migrate_fn, size_t size, size_t alignment) override {
+        seastar::memory::on_alloc_point();
+        // ASAN doesn't intercept aligned_alloc() and complains on free().
+        void* ret;
+        // The system posix_memalign will return EINVAL if alignment is not
+        // a multiple of pointer size.
+        if (alignment < sizeof(void*)) {
+            alignment = sizeof(void*);
+        }
+        if (posix_memalign(&ret, alignment, size) != 0) {
+            throw std::bad_alloc();
+        }
+        return ret;
+    }
+
+    virtual void free(void* obj, size_t size) override {
+        ::free(obj);
+    }
+
+    virtual void free(void* obj) override {
+        ::free(obj);
+    }
+
+    virtual size_t object_memory_size_in_allocator(const void* obj) const noexcept override {
+        return ::malloc_usable_size(const_cast<void *>(obj));
+    }
+};
+
+extern standard_allocation_strategy standard_allocation_strategy_instance;
+
+inline
+standard_allocation_strategy& standard_allocator() {
+    return standard_allocation_strategy_instance;
+}
+
+inline
+allocation_strategy*& current_allocation_strategy_ptr() {
+    static thread_local allocation_strategy* current = &standard_allocation_strategy_instance;
+    return current;
+}
+
+inline
+allocation_strategy& current_allocator() {
+    return *current_allocation_strategy_ptr();
+}
+
+template<typename T>
+inline
+auto current_deleter() {
+    auto& alloc = current_allocator();
+    return [&alloc] (T* obj) noexcept {
+        alloc.destroy(obj);
+    };
+}
+
+template<typename T>
+struct alloc_strategy_deleter {
+    void operator()(T* ptr) const noexcept {
+        current_allocator().destroy(ptr);
+    }
+};
+
+// std::unique_ptr which can be used for owning an object allocated using allocation_strategy.
+// Must be destroyed before the pointer is invalidated. For compacting allocators, that
+// means it must not escape outside allocating_section or reclaim lock.
+// Must be destroyed in the same allocating context in which T was allocated.
+template<typename T>
+using alloc_strategy_unique_ptr = std::unique_ptr<T, alloc_strategy_deleter<T>>;
+
+//
+// Passing allocators to objects.
+//
+// The same object type can be allocated using different allocators, for
+// example standard allocator (for temporary data), or log-structured
+// allocator for long-lived data. In case of LSA, objects may be allocated
+// inside different LSA regions. Objects should be freed only from the region
+// which owns it.
+//
+// There's a problem of how to ensure correct usage of allocators. Storing the
+// reference to the allocator used for construction of some object inside that
+// object is a possible solution. This has a disadvantage of extra space
+// overhead per-object though. We could avoid that if the code which decides
+// about which allocator to use is also the code which controls object's life
+// time. That seems to be the case in current uses, so a simplified scheme of
+// passing allocators will do. Allocation strategy is set in a thread-local
+// context, as shown below. From there, aware objects pick up the allocation
+// strategy. The code controling the objects must ensure that object allocated
+// in one regime is also freed in the same regime.
+//
+// with_allocator() provides a way to set the current allocation strategy used
+// within given block of code. with_allocator() can be nested, which will
+// temporarily shadow enclosing strategy. Use current_allocator() to obtain
+// currently active allocation strategy. Use current_deleter() to obtain a
+// Deleter object using current allocation strategy to destroy objects.
+//
+// Example:
+//
+//   logalloc::region r;
+//   with_allocator(r.allocator(), [] {
+//       auto obj = make_managed<int>();
+//   });
+//
+
+class allocator_lock {
+    allocation_strategy* _prev;
+public:
+    allocator_lock(allocation_strategy& alloc) {
+        _prev = current_allocation_strategy_ptr();
+        current_allocation_strategy_ptr() = &alloc;
+    }
+
+    ~allocator_lock() {
+        current_allocation_strategy_ptr() = _prev;
+    }
+};
+
+template<typename Func>
+inline
+decltype(auto) with_allocator(allocation_strategy& alloc, Func&& func) {
+    allocator_lock l(alloc);
+    return func();
+}
+
+
+#include <stdexcept>
+#include <seastar/core/sstring.hh>
+
+
+class marshal_exception : public std::exception {
+    sstring _why;
+public:
+    marshal_exception() = delete;
+    marshal_exception(sstring why) : _why(sstring("marshaling error: ") + why) {}
+    virtual const char* what() const noexcept override { return _why.c_str(); }
+};
+
+// Speed up compilation of code using throw_with_backtrace<marshal_exception,
+// sstring> by compiling it only once (in types.cc), and elsewhere say that
+// it is extern and not compile it again.
+namespace seastar {
+template <class Exc, typename... Args> [[noreturn]] void throw_with_backtrace(Args&&... args);
+extern template void throw_with_backtrace<marshal_exception, sstring>(sstring&&);
+}
+
+
+#include <bit>
+#include <cstring>
+#include <cstddef>
+#include <type_traits>
+
+template <class T> concept Trivial = std::is_trivial_v<T>;
+template <class T> concept TriviallyCopyable = std::is_trivially_copyable_v<T>;
+
+template <TriviallyCopyable To>
+To read_unaligned(const void* src) {
+    To dst;
+    std::memcpy(&dst, src, sizeof(To));
+    return dst;
+}
+
+template <TriviallyCopyable From>
+void write_unaligned(void* dst, const From& src) {
+    std::memcpy(dst, &src, sizeof(From));
+}
+
+
+#include <concepts>
+#include <compare>
+#include <boost/range/algorithm/copy.hpp>
+#include <seastar/net/byteorder.hh>
+#include <seastar/core/print.hh>
+#include <seastar/util/backtrace.hh>
+
+
+enum class mutable_view { no, yes, };
+
+/// Fragmented buffer
+///
+/// Concept `FragmentedBuffer` is satisfied by any class that is a range of
+/// fragments and provides a method `size_bytes()` which returns the total
+/// size of the buffer. The interfaces accepting `FragmentedBuffer` will attempt
+/// to avoid unnecessary linearisation.
+template<typename T>
+concept FragmentRange = requires (T range) {
+    typename T::fragment_type;
+    requires std::is_same_v<typename T::fragment_type, bytes_view>
+        || std::is_same_v<typename T::fragment_type, bytes_mutable_view>;
+    { *range.begin() } -> std::convertible_to<const typename T::fragment_type&>;
+    { *range.end() } -> std::convertible_to<const typename T::fragment_type&>;
+    { range.size_bytes() } -> std::convertible_to<size_t>;
+    { range.empty() } -> std::same_as<bool>; // returns true iff size_bytes() == 0.
+};
+
+template<typename T, typename = void>
+struct is_fragment_range : std::false_type { };
+
+template<typename T>
+struct is_fragment_range<T, std::void_t<typename T::fragment_type>> : std::true_type { };
+
+template<typename T>
+static constexpr bool is_fragment_range_v = is_fragment_range<T>::value;
+
+/// A non-mutable view of a FragmentRange
+///
+/// Provide a trivially copyable and movable, non-mutable view on a
+/// fragment range. This allows uniform ownership semantics across
+/// multi-fragment ranges and the single fragment and empty fragment
+/// adaptors below, i.e. it allows treating all fragment ranges
+/// uniformly as views.
+template <typename T>
+requires FragmentRange<T>
+class fragment_range_view {
+    const T* _range;
+public:
+    using fragment_type = typename T::fragment_type;
+    using iterator = typename T::const_iterator;
+    using const_iterator = typename T::const_iterator;
+
+public:
+    explicit fragment_range_view(const T& range) : _range(&range) { }
+
+    const_iterator begin() const { return _range->begin(); }
+    const_iterator end() const { return _range->end(); }
+
+    size_t size_bytes() const { return _range->size_bytes(); }
+    bool empty() const { return _range->empty(); }
+};
+
+/// Single-element fragment range
+///
+/// This is a helper that allows converting a bytes_view into a FragmentRange.
+template<mutable_view is_mutable>
+class single_fragment_range {
+public:
+    using fragment_type = std::conditional_t<is_mutable == mutable_view::no,
+                                             bytes_view, bytes_mutable_view>;
+private:
+    fragment_type _view;
+public:
+    using iterator = const fragment_type*;
+    using const_iterator = const fragment_type*;
+
+    explicit single_fragment_range(fragment_type f) : _view { f } { }
+
+    const_iterator begin() const { return &_view; }
+    const_iterator end() const { return &_view + 1; }
+
+    size_t size_bytes() const { return _view.size(); }
+    bool empty() const { return _view.empty(); }
+};
+
+single_fragment_range(bytes_view) -> single_fragment_range<mutable_view::no>;
+single_fragment_range(bytes_mutable_view) -> single_fragment_range<mutable_view::yes>;
+
+/// Empty fragment range.
+struct empty_fragment_range {
+    using fragment_type = bytes_view;
+    using iterator = bytes_view*;
+    using const_iterator = bytes_view*;
+
+    iterator begin() const { return nullptr; }
+    iterator end() const { return nullptr; }
+
+    size_t size_bytes() const { return 0; }
+    bool empty() const { return true; }
+};
+
+static_assert(FragmentRange<empty_fragment_range>);
+static_assert(FragmentRange<single_fragment_range<mutable_view::no>>);
+static_assert(FragmentRange<single_fragment_range<mutable_view::yes>>);
+
+template<typename FragmentedBuffer>
+requires FragmentRange<FragmentedBuffer>
+bytes linearized(const FragmentedBuffer& buffer)
+{
+    bytes b(bytes::initialized_later(), buffer.size_bytes());
+    auto dst = b.begin();
+    for (bytes_view fragment : buffer) {
+        dst = boost::copy(fragment, dst);
+    }
+    return b;
+}
+
+template<typename FragmentedBuffer, typename Function>
+requires FragmentRange<FragmentedBuffer> && requires (Function fn, bytes_view bv) {
+    fn(bv);
+}
+decltype(auto) with_linearized(const FragmentedBuffer& buffer, Function&& fn)
+{
+    bytes b;
+    bytes_view bv;
+    if (__builtin_expect(!buffer.empty() && std::next(buffer.begin()) == buffer.end(), true)) {
+        bv = *buffer.begin();
+    } else if (!buffer.empty()) {
+        b = linearized(buffer);
+        bv = b;
+    }
+    return fn(bv);
+}
+
+template<typename T>
+concept FragmentedView = requires (T view, size_t n) {
+    typename T::fragment_type;
+    requires std::is_same_v<typename T::fragment_type, bytes_view>
+            || std::is_same_v<typename T::fragment_type, bytes_mutable_view>;
+    // No preconditions.
+    { view.current_fragment() } -> std::convertible_to<const typename T::fragment_type&>;
+    // No preconditions.
+    { view.empty() } -> std::same_as<bool>;
+    // No preconditions.
+    { view.size_bytes() } -> std::convertible_to<size_t>;
+    // Precondition: n <= size_bytes()
+    { view.prefix(n) } -> std::same_as<T>;
+    // Precondition: n <= size_bytes()
+    view.remove_prefix(n);
+    // Precondition: size_bytes() > 0
+    view.remove_current();
+};
+
+template<typename T>
+concept FragmentedMutableView = requires (T view) {
+    requires FragmentedView<T>;
+    requires std::is_same_v<typename T::fragment_type, bytes_mutable_view>;
+};
+
+template<FragmentedView View>
+struct fragment_range {
+    using fragment_type = typename View::fragment_type;
+    View view;
+    class fragment_iterator {
+        using iterator_category = std::input_iterator_tag;
+        using value_type = typename View::fragment_type;
+        using difference_type = std::ptrdiff_t;
+        using pointer = const value_type*;
+        using reference = const value_type&;
+        View _view;
+        value_type _current;
+    public:
+        fragment_iterator() : _view(value_type()) {}
+        fragment_iterator(const View& v) : _view(v) {
+            _current = _view.current_fragment();
+        }
+        fragment_iterator& operator++() {
+            _view.remove_current();
+            _current = _view.current_fragment(); 
+            return *this;
+        }
+        fragment_iterator operator++(int) {
+            fragment_iterator i(*this);
+            ++(*this);
+            return i;
+        }
+        reference operator*() const { return _current; }
+        pointer operator->() const { return &_current; }
+        bool operator==(const fragment_iterator& i) const { return _view.size_bytes() == i._view.size_bytes(); }
+    };
+    using iterator = fragment_iterator;
+    fragment_range(const View& v) : view(v) {}
+    fragment_iterator begin() const { return fragment_iterator(view); }
+    fragment_iterator end() const { return fragment_iterator(); }
+    size_t size_bytes() const { return view.size_bytes(); }
+    bool empty() const { return view.empty(); }
+};
+
+template<FragmentedView View>
+requires (!FragmentRange<View>)
+bytes linearized(View v)
+{
+    bytes b(bytes::initialized_later(), v.size_bytes());
+    auto out = b.begin();
+    while (v.size_bytes()) {
+        out = std::copy(v.current_fragment().begin(), v.current_fragment().end(), out);
+        v.remove_current();
+    }
+    return b;
+}
+
+template<FragmentedView View, typename Function>
+requires (!FragmentRange<View>) && std::invocable<Function, bytes_view>
+decltype(auto) with_linearized(const View& v, Function&& fn)
+{
+    if (v.size_bytes() == v.current_fragment().size()) [[likely]] {
+        return fn(v.current_fragment());
+    } else {
+        return fn(linearized(v));
+    }
+}
+
+template <mutable_view is_mutable>
+class basic_single_fragmented_view {
+public:
+    using fragment_type = std::conditional_t<is_mutable == mutable_view::yes, bytes_mutable_view, bytes_view>;
+private:
+    fragment_type _view;
+public:
+    explicit basic_single_fragmented_view(fragment_type bv) : _view(bv) {}
+    size_t size_bytes() const { return _view.size(); }
+    bool empty() const { return _view.empty(); }
+    void remove_prefix(size_t n) { _view.remove_prefix(n); }
+    void remove_current() { _view = fragment_type(); }
+    fragment_type current_fragment() const { return _view; }
+    basic_single_fragmented_view prefix(size_t n) { return basic_single_fragmented_view(_view.substr(0, n)); }
+};
+using single_fragmented_view = basic_single_fragmented_view<mutable_view::no>;
+using single_fragmented_mutable_view = basic_single_fragmented_view<mutable_view::yes>;
+static_assert(FragmentedView<single_fragmented_view>);
+static_assert(FragmentedMutableView<single_fragmented_mutable_view>);
+static_assert(FragmentRange<fragment_range<single_fragmented_view>>);
+static_assert(FragmentRange<fragment_range<single_fragmented_mutable_view>>);
+
+template<FragmentedView View, typename Function>
+requires std::invocable<Function, View> && std::invocable<Function, single_fragmented_view>
+decltype(auto) with_simplified(const View& v, Function&& fn)
+{
+    if (v.size_bytes() == v.current_fragment().size()) [[likely]] {
+        return fn(single_fragmented_view(v.current_fragment()));
+    } else {
+        return fn(v);
+    }
+}
+
+template<FragmentedView View>
+void skip_empty_fragments(View& v) {
+    while (!v.empty() && v.current_fragment().empty()) {
+        v.remove_current();
+    }
+}
+
+template<FragmentedView V1, FragmentedView V2>
+std::strong_ordering compare_unsigned(V1 v1, V2 v2) {
+    while (!v1.empty() && !v2.empty()) {
+        size_t n = std::min(v1.current_fragment().size(), v2.current_fragment().size());
+        if (int d = memcmp(v1.current_fragment().data(), v2.current_fragment().data(), n)) {
+            return d <=> 0;
+        }
+        v1.remove_prefix(n);
+        v2.remove_prefix(n);
+        skip_empty_fragments(v1);
+        skip_empty_fragments(v2);
+    }
+    return v1.size_bytes() <=> v2.size_bytes();
+}
+
+template<FragmentedView V1, FragmentedView V2>
+int equal_unsigned(V1 v1, V2 v2) {
+    return v1.size_bytes() == v2.size_bytes() && compare_unsigned(v1, v2) == 0;
+}
+
+template<FragmentedMutableView Dest, FragmentedView Src>
+void write_fragmented(Dest& dest, Src src) {
+    if (dest.size_bytes() < src.size_bytes()) [[unlikely]] {
+        throw std::out_of_range(format("tried to copy a buffer of size {} to a buffer of smaller size {}", src.size_bytes(), dest.size_bytes()));
+    }
+    while (!src.empty()) {
+        size_t n = std::min(dest.current_fragment().size(), src.current_fragment().size());
+        memcpy(dest.current_fragment().data(), src.current_fragment().data(), n);
+        dest.remove_prefix(n);
+        src.remove_prefix(n);
+        skip_empty_fragments(dest);
+        skip_empty_fragments(src);
+    }
+}
+
+template<FragmentedMutableView Dest, FragmentedView Src>
+void copy_fragmented_view(Dest dest, Src src) {
+    if (dest.size_bytes() < src.size_bytes()) [[unlikely]] {
+        throw std::out_of_range(format("tried to copy a buffer of size {} to a buffer of smaller size {}", src.size_bytes(), dest.size_bytes()));
+    }
+    while (!src.empty()) {
+        size_t n = std::min(dest.current_fragment().size(), src.current_fragment().size());
+        memcpy(dest.current_fragment().data(), src.current_fragment().data(), n);
+        dest.remove_prefix(n);
+        src.remove_prefix(n);
+        skip_empty_fragments(dest);
+        skip_empty_fragments(src);
+    }
+}
+
+// Does not check bounds. Must be called only after size is already checked.
+template<FragmentedView View>
+void read_fragmented(View& v, size_t n, bytes::value_type* out) {
+    while (n) {
+        if (n <= v.current_fragment().size()) {
+            std::copy_n(v.current_fragment().data(), n, out);
+            v.remove_prefix(n);
+            n = 0;
+        } else {
+            out = std::copy_n(v.current_fragment().data(), v.current_fragment().size(), out);
+            n -= v.current_fragment().size();
+            v.remove_current();
+        }
+    }
+}
+template<> void inline read_fragmented(single_fragmented_view& v, size_t n, bytes::value_type* out) {
+    std::copy_n(v.current_fragment().data(), n, out);
+    v.remove_prefix(n);
+}
+
+template<typename T, FragmentedView View>
+T read_simple_native(View& v) {
+    if (v.current_fragment().size() >= sizeof(T)) [[likely]] {
+        auto p = v.current_fragment().data();
+        v.remove_prefix(sizeof(T));
+        return read_unaligned<T>(p);
+    } else if (v.size_bytes() >= sizeof(T)) {
+        T buf;
+        read_fragmented(v, sizeof(T), reinterpret_cast<bytes::value_type*>(&buf));
+        return buf;
+    } else {
+        throw_with_backtrace<marshal_exception>(format("read_simple - not enough bytes (expected {:d}, got {:d})", sizeof(T), v.size_bytes()));
+    }
+}
+
+template<typename T, FragmentedView View>
+T read_simple(View& v) {
+    if (v.current_fragment().size() >= sizeof(T)) [[likely]] {
+        auto p = v.current_fragment().data();
+        v.remove_prefix(sizeof(T));
+        return net::ntoh(read_unaligned<T>(p));
+    } else if (v.size_bytes() >= sizeof(T)) {
+        T buf;
+        read_fragmented(v, sizeof(T), reinterpret_cast<bytes::value_type*>(&buf));
+        return net::ntoh(buf);
+    } else {
+        throw_with_backtrace<marshal_exception>(format("read_simple - not enough bytes (expected {:d}, got {:d})", sizeof(T), v.size_bytes()));
+    }
+}
+
+template<typename T, FragmentedView View>
+T read_simple_exactly(View v) {
+    if (v.current_fragment().size() == sizeof(T)) [[likely]] {
+        auto p = v.current_fragment().data();
+        return net::ntoh(read_unaligned<T>(p));
+    } else if (v.size_bytes() == sizeof(T)) {
+        T buf;
+        read_fragmented(v, sizeof(T), reinterpret_cast<bytes::value_type*>(&buf));
+        return net::ntoh(buf);
+    } else {
+        throw_with_backtrace<marshal_exception>(format("read_simple_exactly - size mismatch (expected {:d}, got {:d})", sizeof(T), v.size_bytes()));
+    }
+}
+
+template<typename T, FragmentedMutableView Out>
+static inline
+void write(Out& out, std::type_identity_t<T> val) {
+    auto v = net::ntoh(val);
+    auto p = reinterpret_cast<const bytes_view::value_type*>(&v);
+    if (out.current_fragment().size() >= sizeof(v)) [[likely]] {
+        std::copy_n(p, sizeof(v), out.current_fragment().data());
+        out.remove_prefix(sizeof(v));
+    } else {
+        write_fragmented(out, single_fragmented_view(bytes_view(p, sizeof(v))));
+    }
+}
+
+template<typename T, FragmentedMutableView Out>
+static inline
+void write_native(Out& out, std::type_identity_t<T> v) {
+    auto p = reinterpret_cast<const bytes_view::value_type*>(&v);
+    if (out.current_fragment().size() >= sizeof(v)) [[likely]] {
+        std::copy_n(p, sizeof(v), out.current_fragment().data());
+        out.remove_prefix(sizeof(v));
+    } else {
+        write_fragmented(out, single_fragmented_view(bytes_view(p, sizeof(v))));
+    }
+}
+
+template <FragmentedView View>
+struct fmt::formatter<View> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const View& b, FormatContext& ctx) const {
+        auto out = ctx.out();
+        for (auto frag : fragment_range(b)) {
+            fmt::format_to(out, "{}", fmt_hex(frag));
+        }
+        return out;
+    }
+};
+
+#include <stdint.h>
+#include <memory>
+#include <seastar/util/alloc_failure_injector.hh>
+#include <unordered_map>
+#include <type_traits>
+
+class bytes_ostream;
+
+template <mutable_view is_mutable_view>
+class managed_bytes_basic_view;
+using managed_bytes_view = managed_bytes_basic_view<mutable_view::no>;
+using managed_bytes_mutable_view = managed_bytes_basic_view<mutable_view::yes>;
+
+struct blob_storage {
+    struct [[gnu::packed]] ref_type {
+        blob_storage* ptr = nullptr;
+
+        ref_type() {}
+        ref_type(blob_storage* ptr) : ptr(ptr) {}
+        operator blob_storage*() const { return ptr; }
+        blob_storage* operator->() const { return ptr; }
+        blob_storage& operator*() const { return *ptr; }
+    };
+    using size_type = uint32_t;
+    using char_type = bytes_view::value_type;
+
+    ref_type* backref;
+    size_type size;
+    size_type frag_size;
+    ref_type next;
+    char_type data[];
+
+    blob_storage(ref_type* backref, size_type size, size_type frag_size) noexcept
+        : backref(backref)
+        , size(size)
+        , frag_size(frag_size)
+        , next(nullptr)
+    {
+        *backref = this;
+    }
+
+    blob_storage(blob_storage&& o) noexcept
+        : backref(o.backref)
+        , size(o.size)
+        , frag_size(o.frag_size)
+        , next(o.next)
+    {
+        *backref = this;
+        o.next = nullptr;
+        if (next) {
+            next->backref = &next;
+        }
+        memcpy(data, o.data, frag_size);
+    }
+
+    size_t storage_size() const noexcept {
+        return sizeof(*this) + frag_size;
+    }
+} __attribute__((packed));
+
+// A managed version of "bytes" (can be used with LSA).
+class managed_bytes {
+    friend class bytes_ostream;
+    static constexpr size_t max_inline_size = 15;
+    struct small_blob {
+        bytes_view::value_type data[max_inline_size];
+        int8_t size; // -1 -> use blob_storage
+    };
+    union u {
+        u() {}
+        ~u() {}
+        blob_storage::ref_type ptr;
+        small_blob small;
+    } _u;
+    static_assert(sizeof(small_blob) > sizeof(blob_storage*), "inline size too small");
+private:
+    bool external() const noexcept {
+        return _u.small.size < 0;
+    }
+    size_t max_seg(allocation_strategy& alctr) {
+        return alctr.preferred_max_contiguous_allocation() - sizeof(blob_storage);
+    }
+    void free_chain(blob_storage* p) noexcept {
+        auto& alctr = current_allocator();
+        while (p) {
+            auto n = p->next;
+            alctr.destroy(p);
+            p = n;
+        }
+    }
+    bytes_view::value_type& value_at_index(blob_storage::size_type index) {
+        if (!external()) {
+            return _u.small.data[index];
+        }
+        blob_storage* a = _u.ptr;
+        while (index >= a->frag_size) {
+            index -= a->frag_size;
+            a = a->next;
+        }
+        return a->data[index];
+    }
+    std::unique_ptr<bytes_view::value_type[]> do_linearize_pure() const;
+
+    explicit managed_bytes(blob_storage* data) {
+        _u.small.size = -1;
+        _u.ptr.ptr = data;
+        data->backref = &_u.ptr;
+    }
+public:
+    using size_type = blob_storage::size_type;
+    struct initialized_later {};
+
+    managed_bytes() {
+        _u.small.size = 0;
+    }
+
+    managed_bytes(const blob_storage::char_type* ptr, size_type size)
+        : managed_bytes(bytes_view(ptr, size)) {}
+
+    explicit managed_bytes(const bytes& b) : managed_bytes(static_cast<bytes_view>(b)) {}
+
+    template <FragmentedView View>
+    explicit managed_bytes(View v);
+
+    managed_bytes(initialized_later, size_type size) {
+        memory::on_alloc_point();
+        if (size <= max_inline_size) {
+            _u.small.size = size;
+        } else {
+            _u.small.size = -1;
+            auto& alctr = current_allocator();
+            auto maxseg = max_seg(alctr);
+            auto now = std::min(size_t(size), maxseg);
+            void* p = alctr.alloc<blob_storage>(sizeof(blob_storage) + now);
+            auto first = new (p) blob_storage(&_u.ptr, size, now);
+            auto last = first;
+            size -= now;
+            try {
+                while (size) {
+                    auto now = std::min(size_t(size), maxseg);
+                    void* p = alctr.alloc<blob_storage>(sizeof(blob_storage) + now);
+                    last = new (p) blob_storage(&last->next, 0, now);
+                    size -= now;
+                }
+            } catch (...) {
+                free_chain(first);
+                throw;
+            }
+        }
+    }
+
+    explicit managed_bytes(bytes_view v) : managed_bytes(initialized_later(), v.size()) {
+        if (!external()) {
+            // Workaround for https://github.com/scylladb/scylla/issues/4086
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Warray-bounds"
+            std::copy(v.begin(), v.end(), _u.small.data);
+            #pragma GCC diagnostic pop
+            return;
+        }
+        auto p = v.data();
+        auto s = v.size();
+        auto b = _u.ptr;
+        while (s) {
+            memcpy(b->data, p, b->frag_size);
+            p += b->frag_size;
+            s -= b->frag_size;
+            b = b->next;
+        }
+        assert(!b);
+    }
+
+    managed_bytes(std::initializer_list<bytes::value_type> b) : managed_bytes(b.begin(), b.size()) {}
+
+    ~managed_bytes() noexcept {
+        if (external()) {
+            free_chain(_u.ptr);
+        }
+    }
+
+    managed_bytes(const managed_bytes& o) : managed_bytes(initialized_later(), o.size()) {
+        if (!o.external()) {
+            _u.small = o._u.small;
+            return;
+        }
+        auto s = size();
+        const blob_storage::ref_type* next_src = &o._u.ptr;
+        blob_storage* blob_src = nullptr;
+        size_type size_src = 0;
+        size_type offs_src = 0;
+        blob_storage::ref_type* next_dst = &_u.ptr;
+        blob_storage* blob_dst = nullptr;
+        size_type size_dst = 0;
+        size_type offs_dst = 0;
+        while (s) {
+            if (!size_src) {
+                blob_src = *next_src;
+                next_src = &blob_src->next;
+                size_src = blob_src->frag_size;
+                offs_src = 0;
+            }
+            if (!size_dst) {
+                blob_dst = *next_dst;
+                next_dst = &blob_dst->next;
+                size_dst = blob_dst->frag_size;
+                offs_dst = 0;
+            }
+            auto now = std::min(size_src, size_dst);
+            memcpy(blob_dst->data + offs_dst, blob_src->data + offs_src, now);
+            s -= now;
+            offs_src += now; size_src -= now;
+            offs_dst += now; size_dst -= now;
+        }
+        assert(size_src == 0 && size_dst == 0);
+    }
+
+    managed_bytes(managed_bytes&& o) noexcept
+        : _u(o._u)
+    {
+        if (external()) {
+            // _u.ptr cannot be null
+            _u.ptr->backref = &_u.ptr;
+        }
+        o._u.small.size = 0;
+    }
+
+    managed_bytes& operator=(managed_bytes&& o) noexcept {
+        if (this != &o) {
+            this->~managed_bytes();
+            new (this) managed_bytes(std::move(o));
+        }
+        return *this;
+    }
+
+    managed_bytes& operator=(const managed_bytes& o) {
+        if (this != &o) {
+            managed_bytes tmp(o);
+            this->~managed_bytes();
+            new (this) managed_bytes(std::move(tmp));
+        }
+        return *this;
+    }
+
+    bool operator==(const managed_bytes& o) const {
+        if (size() != o.size()) {
+            return false;
+        }
+        if (!external()) {
+            return std::equal(_u.small.data, _u.small.data + _u.small.size, o._u.small.data);
+        } else {
+            auto a = _u.ptr;
+            auto a_data = a->data;
+            auto a_remain = a->frag_size;
+            a = a->next;
+            auto b = o._u.ptr;
+            auto b_data = b->data;
+            auto b_remain = b->frag_size;
+            b = b->next;
+            while (a_remain || b_remain) {
+                auto now = std::min(a_remain, b_remain);
+                if (bytes_view(a_data, now) != bytes_view(b_data, now)) {
+                    return false;
+                }
+                a_data += now;
+                a_remain -= now;
+                if (!a_remain && a) {
+                    a_data = a->data;
+                    a_remain = a->frag_size;
+                    a = a->next;
+                }
+                b_data += now;
+                b_remain -= now;
+                if (!b_remain && b) {
+                    b_data = b->data;
+                    b_remain = b->frag_size;
+                    b = b->next;
+                }
+            }
+            return true;
+        }
+    }
+
+    bytes_view::value_type& operator[](size_type index) {
+        return value_at_index(index);
+    }
+
+    const bytes_view::value_type& operator[](size_type index) const {
+        return const_cast<const bytes_view::value_type&>(
+                const_cast<managed_bytes*>(this)->value_at_index(index));
+    }
+
+    size_type size() const {
+        if (external()) {
+            return _u.ptr->size;
+        } else {
+            return _u.small.size;
+        }
+    }
+
+    bool empty() const {
+        return _u.small.size == 0;
+    }
+
+    // Returns the amount of external memory used.
+    size_t external_memory_usage() const noexcept {
+        if (external()) {
+            size_t mem = 0;
+            blob_storage* blob = _u.ptr;
+            while (blob) {
+                mem += blob->frag_size + sizeof(blob_storage);
+                blob = blob->next;
+            }
+            return mem;
+        }
+        return 0;
+    }
+
+    // Returns the minimum possible amount of external memory used by a managed_bytes
+    // of the same size as us.
+    // In other words, it returns the amount of external memory that would used by this
+    // managed_bytes if all data was allocated in one big fragment.
+    size_t minimal_external_memory_usage() const noexcept {
+        if (external()) {
+            return sizeof(blob_storage) + _u.ptr->size;
+        } else {
+            return 0;
+        }
+    }
+
+    template <std::invocable<bytes_view> Func>
+    std::invoke_result_t<Func, bytes_view> with_linearized(Func&& func) const {
+        const bytes_view::value_type* start = nullptr;
+        size_t size = 0;
+        if (!external()) {
+            start = _u.small.data;
+            size = _u.small.size;
+        } else if (!_u.ptr->next) {
+            start = _u.ptr->data;
+            size = _u.ptr->size;
+        }
+        if (start) {
+            return func(bytes_view(start, size));
+        } else {
+            auto data = do_linearize_pure();
+            return func(bytes_view(data.get(), _u.ptr->size));
+        }
+    }
+
+    template <mutable_view is_mutable_view>
+    friend class managed_bytes_basic_view;
+};
+
+template <mutable_view is_mutable>
+class managed_bytes_basic_view {
+public:
+    using fragment_type = std::conditional_t<is_mutable == mutable_view::yes, bytes_mutable_view, bytes_view>;
+    using owning_type = std::conditional_t<is_mutable == mutable_view::yes, managed_bytes, const managed_bytes>;
+    using value_type = typename fragment_type::value_type;
+private:
+    fragment_type _current_fragment = {};
+    blob_storage* _next_fragments = nullptr;
+    size_t _size = 0;
+private:
+    managed_bytes_basic_view(fragment_type current_fragment, blob_storage* next_fragments, size_t size)
+        : _current_fragment(current_fragment)
+        , _next_fragments(next_fragments)
+        , _size(size) {
+    }
+public:
+    managed_bytes_basic_view() = default;
+    managed_bytes_basic_view(const managed_bytes_basic_view&) = default;
+    managed_bytes_basic_view(owning_type& mb) {
+        if (mb._u.small.size != -1) {
+            _current_fragment = fragment_type(mb._u.small.data, mb._u.small.size);
+            _size = mb._u.small.size;
+        } else {
+            auto p = mb._u.ptr;
+            _current_fragment = fragment_type(p->data, p->frag_size);
+            _next_fragments = p->next;
+            _size = p->size;
+        }
+    }
+    managed_bytes_basic_view(fragment_type bv)
+        : _current_fragment(bv)
+        , _size(bv.size()) {
+    }
+    size_t size() const { return _size; }
+    size_t size_bytes() const { return _size; }
+    bool empty() const { return _size == 0; }
+    fragment_type current_fragment() const { return _current_fragment; }
+    void remove_prefix(size_t n) {
+        while (n >= _current_fragment.size() && n > 0) {
+            n -= _current_fragment.size();
+            remove_current();
+        }
+        _size -= n;
+        _current_fragment.remove_prefix(n);
+    }
+    void remove_current() {
+        _size -= _current_fragment.size();
+        if (_size) {
+            _current_fragment = fragment_type(_next_fragments->data, _next_fragments->frag_size);
+            _next_fragments = _next_fragments->next;
+            _current_fragment = _current_fragment.substr(0, _size);
+        } else {
+            _current_fragment = fragment_type();
+        }
+    }
+    managed_bytes_basic_view prefix(size_t len) const {
+        managed_bytes_basic_view v = *this;
+        v._size = len;
+        v._current_fragment = v._current_fragment.substr(0, len);
+        return v;
+    }
+    managed_bytes_basic_view substr(size_t offset, size_t len) const {
+        size_t end = std::min(offset + len, _size);
+        managed_bytes_basic_view v = prefix(end);
+        v.remove_prefix(offset);
+        return v;
+    }
+    const auto& front() const { return _current_fragment.front(); }
+    auto& front() { return _current_fragment.front(); }
+    const value_type& operator[](size_t index) const {
+        auto v = *this;
+        v.remove_prefix(index);
+        return v.current_fragment().front();
+    }
+    bytes linearize() const {
+        return linearized(*this);
+    }
+    bool is_linearized() const {
+        return _current_fragment.size() == _size;
+    }
+
+    // Allow casting mutable views to immutable views.
+    template <mutable_view Other>
+    friend class managed_bytes_basic_view;
+
+    template <mutable_view Other>
+    managed_bytes_basic_view(const managed_bytes_basic_view<Other>& other)
+    requires (is_mutable == mutable_view::no) && (Other == mutable_view::yes)
+        : _current_fragment(other._current_fragment.data(), other._current_fragment.size())
+        , _next_fragments(other._next_fragments)
+        , _size(other._size)
+    {}
+
+    template <std::invocable<bytes_view> Func>
+    std::invoke_result_t<Func, bytes_view> with_linearized(Func&& func) const {
+        bytes b;
+        auto bv = std::invoke([&] () -> bytes_view {
+            if (is_linearized()) {
+                return _current_fragment;
+            } else {
+                b = linearize();
+                return b;
+            }
+        });
+        return func(bv);
+    }
+
+    friend managed_bytes_basic_view<mutable_view::no> build_managed_bytes_view_from_internals(bytes_view current_fragment, blob_storage* next_fragment, size_t size);
+};
+static_assert(FragmentedView<managed_bytes_view>);
+static_assert(FragmentedMutableView<managed_bytes_mutable_view>);
+
+using managed_bytes_opt = std::optional<managed_bytes>;
+using managed_bytes_view_opt = std::optional<managed_bytes_view>;
+
+inline bytes to_bytes(const managed_bytes& v) {
+    return linearized(managed_bytes_view(v));
+}
+inline bytes to_bytes(managed_bytes_view v) {
+    return linearized(v);
+}
+
+/// Converts a possibly fragmented managed_bytes_opt to a
+/// linear bytes_opt.
+///
+/// \note copies data
+bytes_opt to_bytes_opt(const managed_bytes_opt&);
+
+/// Converts a linear bytes_opt to a possibly fragmented
+/// managed_bytes_opt.
+///
+/// \note copies data
+managed_bytes_opt to_managed_bytes_opt(const bytes_opt&);
+
+template<FragmentedView View>
+inline managed_bytes::managed_bytes(View v) : managed_bytes(initialized_later(), v.size_bytes()) {
+    managed_bytes_mutable_view self(*this);
+    write_fragmented(self, v);
+}
+
+inline
+managed_bytes_view
+build_managed_bytes_view_from_internals(bytes_view current_fragment, blob_storage* next_fragment, size_t size) {
+    return managed_bytes_view(current_fragment, next_fragment, size);
+}
+
+template<>
+struct appending_hash<managed_bytes_view> {
+    template<Hasher Hasher>
+    void operator()(Hasher& h, managed_bytes_view v) const {
+        feed_hash(h, v.size_bytes());
+        for (bytes_view frag : fragment_range(v)) {
+            h.update(reinterpret_cast<const char*>(frag.data()), frag.size());
+        }
+    }
+};
+
+namespace std {
+template <>
+struct hash<managed_bytes_view> {
+    size_t operator()(managed_bytes_view v) const {
+        bytes_view_hasher h;
+        appending_hash<managed_bytes_view>{}(h, v);
+        return h.finalize();
+    }
+};
+template <>
+struct hash<managed_bytes> {
+    size_t operator()(const managed_bytes& v) const {
+        return hash<managed_bytes_view>{}(v);
+    }
+};
+} // namespace std
+
+sstring to_hex(const managed_bytes& b);
+sstring to_hex(const managed_bytes_opt& b);
+
+// The operators below are used only by tests.
+
+inline bool operator==(const managed_bytes_view& a, const managed_bytes_view& b) {
+    return a.size_bytes() == b.size_bytes() && compare_unsigned(a, b) == 0;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const managed_bytes_view& v) {
+    for (bytes_view frag : fragment_range(v)) {
+        os << to_hex(frag);
+    }
+    return os;
+}
+inline std::ostream& operator<<(std::ostream& os, const managed_bytes& b) {
+    return (os << managed_bytes_view(b));
+}
+std::ostream& operator<<(std::ostream& os, const managed_bytes_opt& b);
+
+
+
 #include "serializer.hh"
 #include "db/extensions.hh"
 #include "cdc/cdc_options.hh"
