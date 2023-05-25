@@ -1,3 +1,4 @@
+
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
 
 
@@ -14,25 +15,269 @@
 // is defined which isn't the case for us.
 #define RAPIDJSON_FORCEINLINE __attribute__((always_inline))
 
+/* That's to define a new entry point that process scylla tests specific options */
+#undef SEASTAR_TESTING_MAIN
 
 
-#include <chrono>
-#include <cstdint>
-#include <ratio>
-#include <type_traits>
-#include <fmt/chrono.h>
-#include <list>
-#include <deque>
-#include <set>
-#include <unordered_set>
+
+
+#include <absl/container/btree_set.h>
+#include <absl/container/flat_hash_map.h>
+#include <algorithm>
+#include <antlr3.hpp>
+#include <any>
+#include <array>
+#include <assert.h>
+#include <atomic>
+#include <bit>
+#include <bitset>
+#include <boost/algorithm/clamp.hpp>
+#include <boost/algorithm/cxx11/any_of.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/join.hpp>
+#include <boost/any.hpp>
+#include <boost/asio/ip/address_v4.hpp>  // avoid conflict between ::socket and seastar::socket
+#include <boost/circular_buffer.hpp>
+#include <boost/container/deque.hpp>
+#include <boost/date_time/c_local_time_adjustor.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/dynamic_bitset.hpp>
+#include <boost/functional/hash.hpp>
+#include <boost/heap/binomial_heap.hpp>
+#include <boost/icl/interval.hpp>
+#include <boost/icl/interval_set.hpp>
+#include <boost/intrusive/list.hpp>
+#include <boost/intrusive/parent_from_member.hpp>
+#include <boost/intrusive/set.hpp>
+#include <boost/intrusive/slist.hpp>
+#include <boost/intrusive/unordered_set.hpp>
+#include <boost/iterator/transform_iterator.hpp>
+#include <boost/iterator/zip_iterator.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/locale/encoding_utf.hpp>
+#include <boost/multiprecision/cpp_int.hpp>
+#include <boost/outcome/success_failure.hpp>
+#include <boost/outcome/trait.hpp>
+#include <boost/outcome/policy/base.hpp>
+#include <boost/outcome/result.hpp>
+#include <boost/program_options/errors.hpp>
+#include <boost/program_options.hpp>
+#include <boost/range/adaptor/filtered.hpp>
+#include <boost/range/adaptor/map.hpp>
+#include <boost/range/adaptors.hpp>
+#include <boost/range/adaptor/sliced.hpp>
+#include <boost/range/adaptor/transformed.hpp>
+#include <boost/range/algorithm/copy.hpp>
+#include <boost/range/algorithm/equal.hpp>
+#include <boost/range/algorithm_ext/push_back.hpp>
+#include <boost/range/algorithm/find.hpp>
+#include <boost/range/algorithm/find_if.hpp>
+#include <boost/range/algorithm/for_each.hpp>
+#include <boost/range/algorithm/generate.hpp>
+#include <boost/range/algorithm/heap_algorithm.hpp>
+#include <boost/range/algorithm.hpp>
+#include <boost/range/algorithm/remove.hpp>
+#include <boost/range/algorithm/replace.hpp>
+#include <boost/range/combine.hpp>
+#include <boost/range/iterator_range_core.hpp>
+#include <boost/range/iterator_range.hpp>
+#include <boost/range/join.hpp>
+#include <boost/range/numeric.hpp>
+#include <boost/regex.hpp>
+#include <boost/regex/icu.hpp>
+#include <boost/signals2/dummy_mutex.hpp>
+#include <boost/signals2.hpp>
+#include <boost/test/unit_test.hpp>
+#include <boost/type.hpp>
+#include <boost/variant/get.hpp>
 #include <boost/variant.hpp>
+#include <boost/variant/variant.hpp>
+#include <boost/version.hpp>
+#include <byteswap.h>
+#include <cassert>
+#include <cctype>
+#include <charconv>
+#include <chrono>
+#include <cinttypes>
+#include <cmath>
+#include <compare>
+#include <concepts>
+#include <condition_variable>
+#include <cryptopp/md5.h>
+#include <cryptopp/sha.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
+#include <ctype.h>
+#include <deque>
+#include <exception>
+#include <experimental/source_location>
+#include <fcntl.h>
+#include <filesystem>
+#include <fmt/chrono.h>
+#include <fmt/core.h>
+#include <fmt/format.h>
+#include <fmt/ostream.h>
+#include <forward_list>
+#include <functional>
+#include <gnutls/crypto.h>
+#include <initializer_list>
+#include <ios>
+#include <iosfwd>
+#include <iostream>
+#include <istream>
+#include <iterator>
+#include <limits>
+#include <link.h>
+#include <list>
+#include <locale>
+#include <malloc.h>
+#include <map>
+#include <memory>
+#include <memory_resource>
+#include <mutex>
+#include <net/if_arp.h>
+#include <net/if.h>
+#include <new>
+#include <numeric>
+#include <optional>
+#include <ostream>
+#include <queue>
+#include <random>
+#include <ranges>
+#include <rapidjson/allocators.h>
+#include <rapidjson/document.h>
+#include <rapidjson/error/en.h>
+#include <rapidjson/stream.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
+#include <rapidxml.h>
+#include <ratio>
+#include <sanitizer/asan_interface.h>
+#include <seastar/core/abort_on_ebadf.hh>
+#include <seastar/core/abort_source.hh>
+#include <seastar/core/align.hh>
+#include <seastar/core/bitops.hh>
+#include <seastar/core/bitset-iter.hh>
+#include <seastar/core/byteorder.hh>
+#include <seastar/core/checked_ptr.hh>
+#include <seastar/core/circular_buffer.hh>
+#include <seastar/core/condition-variable.hh>
+#include <seastar/core/coroutine.hh>
+#include <seastar/core/distributed.hh>
+#include <seastar/core/do_with.hh>
+#include <seastar/core/enum.hh>
+#include <seastar/core/execution_stage.hh>
+#include <seastar/core/expiring_fifo.hh>
+#include <seastar/core/file.hh>
+#include <seastar/core/future.hh>
+#include <seastar/core/future-util.hh>
+#include <seastar/core/gate.hh>
+#include <seastar/core/io_priority_class.hh>
+#include <seastar/core/iostream.hh>
+#include <seastar/core/loop.hh>
+#include <seastar/core/lowres_clock.hh>
+#include <seastar/core/memory.hh>
+#include <seastar/core/metrics.hh>
+#include <seastar/core/metrics_registration.hh>
+#include <seastar/core/metrics_types.hh>
+#include <seastar/core/on_internal_error.hh>
+#include <seastar/core/pipe.hh>
+#include <seastar/core/preempt.hh>
+#include <seastar/core/print.hh>
+#include <seastar/core/queue.hh>
+#include <seastar/core/rwlock.hh>
+#include <seastar/core/scheduling.hh>
+#include <seastar/core/seastar.hh>
+#include <seastar/core/semaphore.hh>
+#include <seastar/core/sharded.hh>
+#include <seastar/core/shared_future.hh>
+#include <seastar/core/shared_mutex.hh>
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/simple-stream.hh>
+#include <seastar/core/sleep.hh>
+#include <seastar/core/smp.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/temporary_buffer.hh>
+#include <seastar/core/thread.hh>
+#include <seastar/core/timer.hh>
+#include <seastar/core/weak_ptr.hh>
+#include <seastar/core/with_scheduling_group.hh>
+#include <seastar/coroutine/all.hh>
+#include <seastar/coroutine/maybe_yield.hh>
+#include <seastar/http/client.hh>
+#include <seastar/http/request.hh>
+#include <seastar/json/json_elements.hh>
+#include <seastar/net/api.hh>
+#include <seastar/net//byteorder.hh>
+#include <seastar/net/byteorder.hh>
+#include <seastar/net/dns.hh>
+#include <seastar/net/inet_address.hh>
+#include <seastar/net/ipv4_address.hh>
+#include <seastar/net/ipv6_address.hh>
+#include <seastar/net/socket_defs.hh>
+#include <seastar/net/tls.hh>
+#include <seastar/rpc/rpc.hh>
+#include <seastar/rpc/rpc_types.hh>
+#include <seastar/testing/entry_point.hh>
+#include <seastar/testing/test_case.hh>
+#include <seastar/testing/test_runner.hh>
+#include <seastar/testing/thread_test_case.hh>
+#include <seastar/util/alloc_failure_injector.hh>
+#include <seastar/util/backtrace.hh>
+#include <seastar/util/bool_class.hh>
+#include <seastar/util/closeable.hh>
+#include <seastar/util/concepts.hh>
+#include <seastar/util/defer.hh>
+#include <seastar/util/later.hh>
+#include <seastar/util/lazy.hh>
+#include <seastar/util/log.hh>
+#include <seastar/util/noncopyable_function.hh>
+#include <seastar/util/optimized_optional.hh>
+#include <seastar/util/program-options.hh>
+#include <seastar/util/short_streams.hh>
+#include <seastar/util/variant_utils.hh>
+#include <set>
+#include <smmintrin.h>
+#include <source_location>
+#include <span>
+#include <sstream>
+#include <stack>
+#include <stddef.h>
+#include <stdexcept>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string>
+#include <string.h>
+#include <string_view>
+#include <sys/ioctl.h>
+#include <systemd/sd-daemon.h>
+#include <system_error>
+#include <sys/types.h>
+#include <thread>
+#include <tuple>
+#include <typeinfo>
+#include <type_traits>
+#include <unistd.h>
+#include <unordered_map>
+#include <unordered_set>
+#include <unwind.h>
+#include <utility>
+#include <variant>
+#include <vector>
+#include <wmmintrin.h>
+#include <x86intrin.h>
+#include <xxhash.h>
+#include <yaml-cpp/yaml.h>
+#include <zlib.h>
+
+
+
 
 // the database clock follows Java - 1ms granularity, 64-bit counter, 1970 epoch
 
-#include <algorithm>
-#include <atomic>
-#include <chrono>
-#include <cstdint>
 
 extern std::atomic<int64_t> clocks_offset;
 
@@ -56,7 +301,6 @@ auto saturating_subtract(std::chrono::time_point<Clock, Duration> t, std::chrono
     return std::max(t, decltype(t)::min() + d) - d;
 }
 
-#include <boost/asio/ip/address_v4.hpp>  // avoid conflict between ::socket and seastar::socket
 
 namespace seastar {
 
@@ -73,12 +317,6 @@ using namespace seastar;
 using seastar::shared_ptr;
 using seastar::make_shared;
 
-#include <chrono>
-#include <map>
-#include <optional>
-#include <concepts>
-#include <seastar/core/byteorder.hh>
-#include <seastar/core/sstring.hh>
 
 //
 // This hashing differs from std::hash<> in that it decouples knowledge about
@@ -238,10 +476,7 @@ struct appending_hash<std::chrono::time_point<Clock, Duration>> {
     }
 };
 
-#include <seastar/core/lowres_clock.hh>
 
-#include <chrono>
-#include <optional>
 
 class gc_clock final {
 public:
@@ -371,10 +606,7 @@ gc_clock::time_point to_gc_clock(db_clock::time_point tp) noexcept {
     return gc_clock::from_time_t(db_clock::to_time_t(tp));
 }
 
-#include <cstdint>
 
-#include <cstdint>
-#include <type_traits>
 
 inline
 constexpr uint64_t clmul_u32_constexpr(uint32_t p1, uint32_t p2) {
@@ -397,8 +629,6 @@ constexpr uint64_t clmul_u64_low_constexpr(uint64_t p1, uint64_t p2) {
 
 #if defined(__x86_64__) || defined(__i386__)
 
-#include <wmmintrin.h>
-#include <smmintrin.h>
 
 // Performs a carry-less multiplication of two integers.
 inline
@@ -416,7 +646,6 @@ uint64_t clmul(uint32_t p1, uint32_t p2) {
 
 #elif defined(__aarch64__)
 
-#include <arm_neon.h>
 
 // Performs a carry-less multiplication of two integers.
 inline
@@ -453,7 +682,6 @@ inline constexpr uint32_t crc32_fold_barrett_u64_constexpr(uint64_t p) {
     return (x0 ^ x1) >> 32;
 }
 
-#include <wmmintrin.h>
 
 inline
 uint32_t crc32_fold_barrett_u64_in_m128(__m128i x0) {
@@ -523,8 +751,6 @@ uint32_t crc32_fold_barrett_u64(uint64_t p) {
     return std::is_constant_evaluated() ? crc32_fold_barrett_u64_constexpr(p) : crc32_fold_barrett_u64_native(p);
 }
 
-#include <string_view>
-#include <seastar/core/sstring.hh>
 
 template<typename CharT>
 class basic_mutable_view {
@@ -579,7 +805,6 @@ public:
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
-#include <xxhash.h>
 #pragma GCC diagnostic pop
 
 
@@ -600,12 +825,6 @@ struct simple_xx_hasher : public hasher {
     }
 };
 
-#include <fmt/format.h>
-#include <seastar/core/sstring.hh>
-#include <optional>
-#include <iosfwd>
-#include <functional>
-#include <compare>
 
 using bytes = basic_sstring<int8_t, uint32_t, 31, false>;
 using bytes_view = std::basic_string_view<int8_t>;
@@ -772,7 +991,6 @@ inline std::strong_ordering compare_unsigned(bytes_view v1, bytes_view v2) {
     return v1.size() <=> v2.size();
 }
 
-#include <iosfwd>
 
 namespace db {
 
@@ -798,9 +1016,6 @@ std::ostream& operator<<(std::ostream& os, consistency_level cl);
 }
 
 
-#include <assert.h>
-#include <cstdint>
-#include <iosfwd>
 
 namespace db {
 
@@ -820,8 +1035,6 @@ std::ostream& operator<<(std::ostream& os, const write_type& t);
 
 
 
-#include <cstdint>
-#include <iosfwd>
 
 namespace db {
 
@@ -834,7 +1047,6 @@ std::ostream& operator<<(std::ostream& os, operation_type op_type);
 
 }
 
-#include <seastar/core/print.hh>
 
 namespace utils {
 
@@ -1304,7 +1516,6 @@ void hash3_x64_128(bytes_view key, uint64_t seed, std::array<uint64_t, 2>& resul
 } // namespace utils
 
 
-#include <boost/range/adaptor/transformed.hpp>
 
 namespace utils {
 
@@ -1418,18 +1629,6 @@ struct fmt::formatter<std::optional<T>> : fmt::formatter<std::string_view> {
 
 
 
-#include <compare>
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
-#include <new>
-#include <utility>
-#include <algorithm>
-#include <initializer_list>
-#include <memory>
-#include <stdexcept>
-#include <malloc.h>
-#include <iostream>
 
 
 namespace utils {
@@ -1881,19 +2080,7 @@ std::ostream& operator<<(std::ostream& os, const utils::small_vector<T, N>& v) {
 }
 
 
-#include <seastar/core/sstring.hh>
-#include <ranges>
-#include <vector>
-#include <sstream>
-#include <unordered_set>
-#include <set>
-#include <optional>
-#include <list>
-#include <map>
-#include <array>
-#include <deque>
 
-#include <fmt/format.h>
 
 
 // chunked_vector is a vector-like container that uses discontiguous storage.
@@ -1928,16 +2115,6 @@ std::ostream& operator<<(std::ostream& os, const utils::small_vector<T, N>& v) {
 // this problem differently: It makes the last chunk variable in size,
 // possibly smaller than a full 128 KB.
 
-#include <boost/range/algorithm/equal.hpp>
-#include <boost/algorithm/clamp.hpp>
-#include <boost/version.hpp>
-#include <memory>
-#include <type_traits>
-#include <iterator>
-#include <utility>
-#include <algorithm>
-#include <stdexcept>
-#include <malloc.h>
 
 
 namespace utils {
@@ -2390,8 +2567,6 @@ std::ostream& operator<<(std::ostream& os, const chunked_vector<T, max_contiguou
 
 
 
-#include <limits>
-#include <seastar/core/preempt.hh>
 
 using namespace seastar;
 
@@ -2441,7 +2616,6 @@ public:
     }
 };
 
-#include <vector>
 
 namespace utils {
 namespace filter {
@@ -2522,29 +2696,11 @@ filter_ptr create_filter(int hash, int64_t num_elements, int buckets_per, filter
 }
 
 
-#include <boost/algorithm/string.hpp>
-#include <boost/date_time/c_local_time_adjustor.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/locale/encoding_utf.hpp>
-#include <boost/range/algorithm_ext/push_back.hpp>
-#include <boost/range/algorithm.hpp>
-#include <boost/range/combine.hpp>
-#include <boost/regex/icu.hpp>
 
 
-#include <map>
 
-#include <seastar/core/sstring.hh>
 
-#include <boost/iterator/transform_iterator.hpp>
-#include <seastar/core/bitset-iter.hh>
 
-#include <algorithm>
-#include <cstddef>
-#include <optional>
-#include <stdexcept>
-#include <type_traits>
-#include <limits>
 
 /**
  *
@@ -2826,11 +2982,6 @@ public:
 };
 
 
-#include <any>
-#include <cstdlib>
-#include <seastar/core/memory.hh>
-#include <seastar/util/alloc_failure_injector.hh>
-#include <malloc.h>
 
 // A function used by compacting collectors to migrate objects during
 // compaction. The function should reconstruct the object located at src
@@ -3132,8 +3283,6 @@ decltype(auto) with_allocator(allocation_strategy& alloc, Func&& func) {
 }
 
 
-#include <stdexcept>
-#include <seastar/core/sstring.hh>
 
 
 
@@ -3154,10 +3303,6 @@ extern template void throw_with_backtrace<marshal_exception, sstring>(sstring&&)
 }
 
 
-#include <bit>
-#include <cstring>
-#include <cstddef>
-#include <type_traits>
 
 template <class T> concept Trivial = std::is_trivial_v<T>;
 template <class T> concept TriviallyCopyable = std::is_trivially_copyable_v<T>;
@@ -3175,12 +3320,6 @@ void write_unaligned(void* dst, const From& src) {
 }
 
 
-#include <concepts>
-#include <compare>
-#include <boost/range/algorithm/copy.hpp>
-#include <seastar/net/byteorder.hh>
-#include <seastar/core/print.hh>
-#include <seastar/util/backtrace.hh>
 
 
 enum class mutable_view { no, yes, };
@@ -3588,11 +3727,6 @@ struct fmt::formatter<View> : fmt::formatter<std::string_view> {
     }
 };
 
-#include <stdint.h>
-#include <memory>
-#include <seastar/util/alloc_failure_injector.hh>
-#include <unordered_map>
-#include <type_traits>
 
 class bytes_ostream;
 
@@ -4137,12 +4271,7 @@ std::ostream& operator<<(std::ostream& os, const managed_bytes_opt& b);
 
 
 
-#include <boost/range/iterator_range.hpp>
 
-#include <seastar/core/simple-stream.hh>
-#include <seastar/core/loop.hh>
-#include <bit>
-#include <concepts>
 
 /**
  * Utility for writing data into a buffer when its final size is not known up front.
@@ -4615,7 +4744,6 @@ public:
     }
 };
 
-#include <seastar/core/simple-stream.hh>
 
 namespace utils {
 
@@ -4623,18 +4751,7 @@ using input_stream = seastar::memory_input_stream<bytes_ostream::fragment_iterat
 
 }
 
-#include <vector>
-#include <unordered_set>
-#include <list>
-#include <array>
-#include <seastar/core/sstring.hh>
-#include <unordered_map>
-#include <optional>
-#include <seastar/core/simple-stream.hh>
-#include <variant>
 
-#include <boost/range/algorithm/for_each.hpp>
-#include <boost/type.hpp>
 
 namespace ser {
 
@@ -5043,12 +5160,7 @@ deserialize_gc_clock_duration_value(Input& in) {
 // DataOutput.writeChars(string) - because the latter does not include
 // the length, which is necessary for reading the string back.
 
-#include <stdint.h>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/net/byteorder.hh>
-#include <iosfwd>
-#include <iterator>
 
 
 class UTFDataFormatException { };
@@ -5175,15 +5287,7 @@ void write(CharOutputIterator& out, const T& val) {
 
 // This class is the parts of java.util.UUID that we need
 
-#include <stdint.h>
-#include <cassert>
-#include <array>
-#include <iosfwd>
-#include <compare>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/print.hh>
-#include <seastar/net/byteorder.hh>
 
 namespace utils {
 
@@ -5439,13 +5543,7 @@ struct fmt::formatter<utils::tagged_uuid<Tag>> : fmt::formatter<std::string_view
  * SPDX-License-Identifier: (AGPL-3.0-or-later and Apache-2.0)
  */
 
-#include <stdint.h>
-#include <assert.h>
 
-#include <memory>
-#include <chrono>
-#include <random>
-#include <limits>
 
 namespace utils {
 
@@ -5822,7 +5920,6 @@ public:
 } // namespace utils
 
 
-#include <seastar/core/shared_ptr.hh>
 
 
 using column_count_type = uint32_t;
@@ -5855,15 +5952,7 @@ inline table_schema_version reversed(table_schema_version v) noexcept {
     return table_schema_version(utils::UUID_gen::negate(v.uuid()));
 }
 
-#include <set>
-#include <stdexcept>
-#include <functional>
-#include <map>
-#include <variant>
-#include <vector>
-#include <unordered_set>
 
-#include <seastar/core/sstring.hh>
 
 
 namespace sstables {
@@ -5968,9 +6057,6 @@ private:
 }
 
 
-#include <map>
-#include <optional>
-#include <seastar/core/sstring.hh>
 
 namespace cdc {
 
@@ -6028,12 +6114,7 @@ public:
 
 } // namespace cdc
 
-#include <seastar/core/sstring.hh>
 
-#include <cstdint>
-#include <string_view>
-#include <ostream>
-#include <stdexcept>
 
 // Wrapper for a value with a type-tag for differentiating instances.
 template <class Value, class Tag>
@@ -6150,12 +6231,7 @@ seastar::sstring to_string(const cql_duration&);
 
 
 
-#include <vector>
 
-#include <seastar/core/iostream.hh>
-#include <seastar/core/print.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/core/simple-stream.hh>
 
 
 /// Fragmented buffer consisting of multiple temporary_buffer<char>
@@ -6633,8 +6709,6 @@ inline std::ostream& operator<<(std::ostream& out, const fragmented_temporary_bu
 }
 
 
-#include <stdexcept>
-#include <seastar/core/sstring.hh>
 
 namespace exceptions {
 
@@ -6930,9 +7004,6 @@ public:
 
 }
 
-#include <compare>
-#include <cstdint>
-#include <iterator>
 
 // Specifies position in a lexicographically ordered sequence
 // relative to some value.
@@ -7078,18 +7149,7 @@ struct task_info {
 }
 
 
-#include <optional>
-#include <boost/functional/hash.hpp>
-#include <iosfwd>
-#include <sstream>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/net/byteorder.hh>
-#include <seastar/net/ipv4_address.hh>
-#include <seastar/net/ipv6_address.hh>
-#include <seastar/net/inet_address.hh>
-#include <seastar/util/backtrace.hh>
 
 class tuple_type_impl;
 class big_decimal;
@@ -8039,13 +8099,6 @@ struct appending_hash<data_type> {
     }
 };
 
-#include <iosfwd>
-#include <algorithm>
-#include <vector>
-#include <span>
-#include <boost/range/iterator_range.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-#include <seastar/util/backtrace.hh>
 
 enum class allow_prefixes { no, yes };
 
@@ -8331,12 +8384,7 @@ public:
 using compound_prefix = compound_type<allow_prefixes::yes>;
 
 
-#include <map>
-#include <set>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
 
 
 
@@ -8450,8 +8498,6 @@ enum class reshape_mode { strict, relaxed };
 }
 
 
-#include <seastar/core/sstring.hh>
-#include <map>
 
 class schema;
 
@@ -8624,10 +8670,6 @@ public:
             const db::view::clustering_or_static_row& row, const std::optional<db::view::clustering_or_static_row>& existing) const;
 };
 
-#include <cstdint>
-#include <limits>
-#include <chrono>
-#include <string>
 
 namespace api {
 
@@ -8666,9 +8708,6 @@ std::string format_timestamp(api::timestamp_type);
 
 
 
-#include <map>
-#include <chrono>
-#include <seastar/core/sstring.hh>
 
 enum class tombstone_gc_mode : uint8_t { timeout, disabled, immediate, repair };
 
@@ -8691,10 +8730,7 @@ public:
 std::ostream& operator<<(std::ostream& os, const tombstone_gc_mode& m);
 
 
-#include <optional>
-#include <map>
 
-#include <seastar/core/sstring.hh>
 
 
 using namespace seastar;
@@ -8745,7 +8781,6 @@ public:
 
 }
 
-#include <ostream>
 
 namespace replica {
 class database;
@@ -8811,16 +8846,7 @@ public:
 
 }
 
-#include <functional>
-#include <optional>
-#include <unordered_map>
-#include <boost/range/iterator_range.hpp>
-#include <boost/range/join.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/dynamic_bitset.hpp>
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/util/backtrace.hh>
 
 namespace dht {
 
@@ -9842,7 +9868,6 @@ inline void check_schema_version(table_schema_version expected, const schema& ac
     }
 }
 
-#include <seastar/util/log.hh>
 
 namespace logging {
 
@@ -9869,10 +9894,6 @@ using seastar::level_name;
 
 }
 
-#include <seastar/util/bool_class.hh>
-#include <absl/container/btree_set.h>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/on_internal_error.hh>
 
 namespace seastar {
 extern logger seastar_logger;
@@ -10857,9 +10878,6 @@ public:
 }
 
 
-#include <seastar/core/sstring.hh>
-#include <iosfwd>
-#include <functional>
 
 namespace db {
 
@@ -10921,8 +10939,6 @@ struct hash<db::functions::function_name> {
 }
 
 
-#include <vector>
-#include <optional>
 
 namespace db {
 namespace functions {
@@ -10984,7 +11000,6 @@ operator<<(std::ostream& os, const function& f) {
 }
 }
 
-#include <span>
 
 namespace db::functions {
 
@@ -11004,7 +11019,6 @@ public:
 }
 
 
-#include <optional>
 
 namespace db::functions {
 
@@ -11034,7 +11048,6 @@ struct stateless_aggregate_function final {
 }
 
 
-#include <optional>
 
 namespace db {
 namespace functions {
@@ -11095,10 +11108,6 @@ public:
 }
 
 
-#include <stdexcept>
-#include <type_traits>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/enum.hh>
 
 namespace sstables {
 
@@ -11178,9 +11187,6 @@ struct fmt::formatter<sstables::sstable_format_types> : fmt::formatter<std::stri
 
 
 
-#include <boost/range/algorithm/copy.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-#include <compare>
 
 //FIXME: de-inline methods and define this as static in a .cc file.
 extern logging::logger compound_logger;
@@ -11858,7 +11864,6 @@ std::strong_ordering composite::tri_compare::operator()(composite_view v1, compo
 
 
 
-#include <cstdint>
 
 namespace utils {
 
@@ -11994,11 +11999,6 @@ class memtable;
 }
 
 
-#include <boost/iterator/zip_iterator.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-#include <boost/range/iterator_range_core.hpp>
-#include <compare>
-#include <span>
 
 //
 // This header defines type system for primary key holders.
@@ -12943,15 +12943,6 @@ struct appending_hash<clustering_key_prefix> {
     }
 };
 
-#include <list>
-#include <vector>
-#include <optional>
-#include <iosfwd>
-#include <boost/range/algorithm/copy.hpp>
-#include <boost/range/adaptor/sliced.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-#include <compare>
-#include <fmt/format.h>
 
 template <typename Comparator, typename T>
 concept IntervalComparatorFor = requires (T a, T b, Comparator& cmp) {
@@ -13691,24 +13682,9 @@ using range = wrapping_interval<T>;
 template <template<typename> typename T, typename U>
 concept Range = Interval<T, U>;
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/util/optimized_optional.hh>
-#include <memory>
-#include <random>
-#include <utility>
-#include <vector>
-#include <compare>
-#include <byteswap.h>
 
 
 
-#include <seastar/net/byteorder.hh>
-#include <fmt/format.h>
-#include <array>
-#include <functional>
-#include <utility>
-#include <compare>
 
 namespace dht {
 
@@ -13942,7 +13918,6 @@ struct fmt::formatter<dht::token> : fmt::formatter<std::string_view> {
 };
 
 
-#include <seastar/core/smp.hh>
 
 namespace dht {
 
@@ -14022,8 +13997,6 @@ dht::token find_first_token_for_shard(
 
 } //namespace dht
 
-#include <seastar/core/thread.hh>
-#include <seastar/util/bool_class.hh>
 
 namespace utils {
 
@@ -14689,12 +14662,6 @@ struct hash<dht::decorated_key> {
 
 }
 
-#include <seastar/net/ipv4_address.hh>
-#include <seastar/net/inet_address.hh>
-#include <seastar/net/socket_defs.hh>
-#include <iosfwd>
-#include <optional>
-#include <functional>
 
 
 namespace gms {
@@ -14780,12 +14747,6 @@ struct fmt::formatter<gms::inet_address> : fmt::formatter<std::string_view> {
 };
 
 
-#include <vector>
-#include <atomic>
-#include <random>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/metrics_registration.hh>
 
 namespace cql3 { class query_processor; }
 
@@ -15407,7 +15368,6 @@ inline span_id span_id::make_span_id() {
 }
 }
 
-#include <cinttypes>
 
 namespace ser {
 
@@ -15505,9 +15465,6 @@ inline bool operator==(const max_result_size& a, const max_result_size& b) {
 
 }
 
-#include <cstdint>
-#include <variant>
-#include <seastar/util/bool_class.hh>
 
 namespace db {
 
@@ -15548,9 +15505,6 @@ using info = std::variant<std::monostate, account_only, account_and_enforce>;
 
 using query_id = utils::tagged_uuid<struct query_id_tag>;
 
-#include <iostream>
-#include <cstdint>
-#include <exception>
 
 using cql_protocol_version_type = uint8_t;
 
@@ -15576,8 +15530,6 @@ public:
 };
 
 
-#include <memory>
-#include <optional>
 
 
 class position_in_partition_view;
@@ -16032,7 +15984,6 @@ public:
 }
 
 
-#include <algorithm>
 
 // combine two sorted uniqued sequences into a single sorted sequence
 // unique elements are copied, duplicate elements are merged with a
@@ -16071,11 +16022,8 @@ combine(InputIterator1 begin1, InputIterator1 end1,
 
 
 
-#include <seastar/net/inet_address.hh>
 
 
-#include <functional>
-#include <compare>
 
 /**
  * Represents deletion operation. Can be commuted with other tombstones via apply() method.
@@ -16159,11 +16107,6 @@ using can_gc_fn = std::function<bool(tombstone)>;
 
 extern can_gc_fn always_gc;
 
-#include <seastar/net//byteorder.hh>
-#include <seastar/util/bool_class.hh>
-#include <cstdint>
-#include <iosfwd>
-#include <concepts>
 
 class abstract_type;
 class collection_type_impl;
@@ -16532,8 +16475,6 @@ void merge_column(const abstract_type& def,
         const atomic_cell_or_collection& neww);
 
 
-#include <iosfwd>
-#include <forward_list>
 
 class abstract_type;
 class compaction_garbage_collector;
@@ -16652,9 +16593,6 @@ collection_mutation difference(const abstract_type&, collection_mutation_view, c
 bytes_ostream serialize_for_cql(const abstract_type&, collection_mutation_view);
 
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
-#include <vector>
 
 namespace cql3 {
 
@@ -16776,9 +16714,6 @@ extern
 template
 void listlike_collection_type_impl::validate_for_storage(const fragmented_temporary_buffer::view& value) const;
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
-#include <vector>
 
 
 class user_type_impl;
@@ -16806,10 +16741,6 @@ public:
 data_value make_list_value(data_type type, list_type_impl::native_type value);
 
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
-#include <vector>
-#include <utility>
 
 
 class user_type_impl;
@@ -16932,9 +16863,6 @@ managed_bytes map_type_impl::serialize_to_managed_bytes(const Range& map_range) 
 }
 
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
-#include <vector>
 
 class user_type_impl;
 
@@ -16970,13 +16898,7 @@ data_value::data_value(const std::unordered_set<NativeType>& v)
 {}
 
 
-#include <iterator>
-#include <vector>
-#include <string>
 
-#include <boost/range/numeric.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-#include <boost/range/algorithm/for_each.hpp>
 
 struct tuple_deserializing_iterator {
 public:
@@ -17229,9 +17151,6 @@ size_t deserialize_field_index(managed_bytes_view);
 
 
 
-#include <boost/multiprecision/cpp_int.hpp>
-#include <iosfwd>
-#include <compare>
 
 namespace utils {
 
@@ -17439,10 +17358,6 @@ public:
 
 }
 
-#include <boost/multiprecision/cpp_int.hpp>
-#include <ostream>
-#include <compare>
-#include <concepts>
 
 
 uint64_t from_varint_to_integer(const utils::multiprecision_int& varint);
@@ -17729,20 +17644,10 @@ template <typename Func> inline auto visit(const data_value& v, Func&& f) {
 }
 
 
-#include <iterator>
-#include <boost/regex.hpp>
-
-#include <yaml-cpp/yaml.h>
-#include <boost/any.hpp>
-
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/smp.hh>
 
 
-#include <seastar/util/noncopyable_function.hh>
-#include <vector>
-#include <boost/range/algorithm/replace.hpp>
-#include <boost/range/algorithm/remove.hpp>
+
+
 
 namespace utils {
 
@@ -17880,12 +17785,6 @@ inline observer<Args...> dummy_observer() {
 }
 
 
-#include <functional>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_future.hh>
-#include <seastar/util/later.hh>
-#include <seastar/core/abort_source.hh>
 
 // An async action wrapper which ensures that at most one action
 // is running at any time.
@@ -17998,9 +17897,6 @@ public:
 };
 
 
-#include <seastar/core/future.hh>
-#include <vector>
-#include <functional>
 
 namespace utils {
 
@@ -18222,17 +18118,8 @@ public:
 };
 
 }
-#include <fmt/format.h>
-#include <fmt/ostream.h>
-#include <unordered_map>
-#include <iosfwd>
-#include <string_view>
 
-#include <boost/program_options.hpp>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future.hh>
-#include <seastar/util/log.hh>
 
 
 namespace seastar { class file; }
@@ -18515,7 +18402,6 @@ extern template struct config_file::named_value<seastar::log_level>;
 
 
 
-#include <seastar/json/json_elements.hh>
 
 namespace YAML {
 
@@ -18735,7 +18621,6 @@ future<bool> utils::config_file::named_value<T>::set_value_on_all_shards(sstring
 
 
 
-#include <seastar/util/bool_class.hh>
 
 class atomic_cell_view;
 class collection_mutation_view;
@@ -18839,18 +18724,11 @@ private:
 };
 
 
-#include <vector>
-
-#include <boost/algorithm/string/join.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-
-#include <seastar/core/sstring.hh>
 
 
 
-#include <algorithm>
-#include <functional>
-#include <iosfwd>
+
+
 
 namespace cql3 {
 
@@ -18970,11 +18848,6 @@ class prepare_context;
 
 }
 
-#include <optional>
-#include <set>
-#include <string_view>
-#include <vector>
-#include <seastar/core/shared_ptr.hh>
 
 namespace replica {
 class database; // For transition; remove
@@ -19088,7 +18961,6 @@ public:
 
 }
 
-#include <iosfwd>
 
 namespace data_dictionary {
 class database;
@@ -19434,14 +19306,7 @@ inline bool operator==(const cql3_type& a, const cql3_type& b) {
 }
 
 
-#include <iosfwd>
-#include <optional>
-#include <stdexcept>
-#include <unordered_map>
-#include <unordered_set>
 
-#include <seastar/core/print.hh>
-#include <seastar/core/sstring.hh>
 
 
 namespace auth {
@@ -19488,9 +19353,7 @@ struct fmt::formatter<auth::authentication_option> : fmt::formatter<std::string_
     }
 };
 
-#include <unordered_set>
 
-#include <seastar/core/sstring.hh>
 
 
 namespace auth {
@@ -19552,7 +19415,6 @@ permission_set from_strings(const std::unordered_set<sstring>&);
 #ifndef UTILS_HASH_HH_
 #define UTILS_HASH_HH_
 
-#include <functional>
 
 namespace utils {
 
@@ -19615,17 +19477,7 @@ inline size_t tuple_hash::operator()(const std::tuple<>& v) const {
 
 #endif /* UTILS_HASH_HH_ */
 
-#include <string_view>
-#include <iostream>
-#include <optional>
-#include <stdexcept>
-#include <tuple>
-#include <vector>
-#include <unordered_set>
 
-#include <boost/range/adaptor/transformed.hpp>
-#include <seastar/core/print.hh>
-#include <seastar/core/sstring.hh>
 
 
 namespace auth {
@@ -19977,12 +19829,7 @@ struct hash<auth::authenticated_user> final {
 
 }
 
-#include <functional>
-#include <optional>
-#include <string_view>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
 
 
 namespace auth {
@@ -20022,16 +19869,7 @@ private:
 }
 
 
-#include <string_view>
-#include <memory>
-#include <set>
-#include <stdexcept>
-#include <unordered_map>
 
-#include <seastar/core/enum.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
 
 
 namespace db {
@@ -20133,15 +19971,7 @@ public:
 
 
 
-#include <string_view>
-#include <functional>
-#include <optional>
-#include <stdexcept>
-#include <tuple>
-#include <vector>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
 
 namespace auth {
 
@@ -20241,12 +20071,7 @@ public:
 }
 
 
-#include <string_view>
-#include <functional>
-#include <iosfwd>
-#include <optional>
 
-#include <seastar/core/sstring.hh>
 
 
 namespace auth {
@@ -20279,13 +20104,6 @@ struct hash<auth::role_or_anonymous> {
 }
 
 
-#include <vector>
-#include <memory>
-#include <seastar/core/shared_future.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/bitops.hh>
-#include <boost/intrusive/unordered_set.hpp>
 
 namespace bi = boost::intrusive;
 
@@ -20640,22 +20458,8 @@ private:
 
 
 
-#include <chrono>
-#include <unordered_map>
-#include <memory_resource>
-#include <optional>
 
-#include <boost/intrusive/list.hpp>
-#include <boost/intrusive/unordered_set.hpp>
-#include <boost/intrusive/parent_from_member.hpp>
-#include <boost/range/adaptor/filtered.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-#include <boost/range/join.hpp>
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/timer.hh>
-#include <seastar/core/gate.hh>
 
 
 namespace bi = boost::intrusive;
@@ -21418,16 +21222,7 @@ public:
 
 }
 
-#include <chrono>
-#include <string_view>
-#include <functional>
-#include <iostream>
-#include <optional>
-#include <utility>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
 
 
 namespace std {
@@ -21475,15 +21270,7 @@ public:
 }
 
 
-#include <string_view>
-#include <memory>
-#include <optional>
-#include <stdexcept>
-#include <unordered_set>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/print.hh>
-#include <seastar/core/sstring.hh>
 
 namespace auth {
 
@@ -21644,14 +21431,7 @@ public:
 };
 }
 
-#include <string_view>
-#include <memory>
-#include <optional>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/util/bool_class.hh>
-#include <seastar/core/sharded.hh>
 
 
 namespace cql3 {
@@ -21933,10 +21713,6 @@ future<std::vector<permission_details>> list_filtered_permissions(
 }
 
 
-#include <iosfwd>
-#include <seastar/core/print.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/enum.hh>
 
 namespace unimplemented {
 
@@ -21983,9 +21759,6 @@ struct hash<unimplemented::cause> : seastar::enum_hash<unimplemented::cause> {};
 
 }
 
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/semaphore.hh>
-#include <chrono>
 
 namespace db {
 using timeout_clock = seastar::lowres_clock;
@@ -21994,7 +21767,6 @@ using timeout_semaphore_units = seastar::semaphore_units<seastar::default_timeou
 static constexpr timeout_clock::time_point no_timeout = timeout_clock::time_point::max();
 }
 
-#include <chrono>
 
 namespace db { class config; }
 
@@ -22045,11 +21817,6 @@ using inet_address_vector_replica_set = utils::small_vector<gms::inet_address, 3
 
 using inet_address_vector_topology_change = utils::small_vector<gms::inet_address, 1>;
 
-#include <deque>
-#include <unordered_set>
-#include <seastar/util/lazy.hh>
-#include <seastar/core/weak_ptr.hh>
-#include <seastar/core/checked_ptr.hh>
 
 namespace cql3{
 class query_options;
@@ -22809,9 +22576,7 @@ public:
 };
 }
 
-#include <seastar/core/sstring.hh>
 
-#include <map>
 
 namespace cql_transport {
 
@@ -22856,12 +22621,6 @@ std::vector<seastar::sstring> additional_options_for_proto_ext(cql_protocol_exte
 } // namespace cql_transport
 
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/print.hh>
-#include <map>
-#include <stdexcept>
-#include <variant>
-#include <seastar/core/lowres_clock.hh>
 
 namespace qos {
 
@@ -22920,12 +22679,7 @@ public:
 
 }
 
-#include <seastar/core/rwlock.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/util/noncopyable_function.hh>
-#include <seastar/core/coroutine.hh>
 
-#include <vector>
 
 // This class supports atomic removes (by using a lock and returning a
 // future) and non atomic insert and iteration (by using indexes).
@@ -23061,11 +22815,6 @@ namespace qos {
     };
 }
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/distributed.hh>
-#include <seastar/core/abort_source.hh>
-#include <map>
-#include <unordered_set>
 
 namespace db {
     class system_distributed_keyspace;
@@ -23678,8 +23427,6 @@ public:
 
 }
 
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/shared_ptr.hh>
 
 class service_permit {
     seastar::lw_shared_ptr<seastar::semaphore_units<>> _permit;
@@ -23763,7 +23510,6 @@ public:
 
 #endif
 
-#include <iostream>
 
 namespace db {
 
@@ -23785,9 +23531,7 @@ inline std::ostream&  operator<<(std::ostream& out, db::read_repair_decision d) 
 
 }
 
-#include <optional>
 
-#include <functional>
 
 /**
  * Represents the kind of bound in a range tombstone.
@@ -23933,8 +23677,6 @@ public:
 };
 
 
-#include <optional>
-#include <cstdlib>
 
 inline
 lexicographical_relation relation_for_lower_bound(composite_view v) {
@@ -24920,10 +24662,7 @@ template<typename... Ts> overloaded_functor(Ts...) -> overloaded_functor<Ts...>;
 
 
 
-#include <optional>
-#include <variant>
 
-#include <seastar/util/variant_utils.hh>
 
 
 namespace cql3 {
@@ -25200,8 +24939,6 @@ inline bytes_opt to_bytes_opt(const cql3::raw_value& value) {
 }
 
 
-#include <concepts>
-#include <initializer_list>
 
 namespace cql3 {
 
@@ -25478,7 +25215,6 @@ query_options::query_options(query_options&& o, std::vector<Values> values_range
 
 }
 
-#include <cstdint>
 
 namespace query {
 
@@ -25529,8 +25265,6 @@ inline full_position::full_position(full_position_view fpv) : partition(fpv.part
 inline full_position::full_position(partition_key pk, position_in_partition pos) : partition(std::move(pk)), position(pos) { }
 
 
-#include <optional>
-#include <seastar/util/bool_class.hh>
 
 namespace query {
 
@@ -27162,8 +26896,6 @@ struct writer_of_query_result {
 } // ser
 
 
-#include <boost/range/adaptor/transformed.hpp>
-#include <boost/range/numeric.hpp>
 
 
 
@@ -27363,8 +27095,6 @@ public:
 }
 
 
-#include <memory>
-#include <vector>
 
 namespace cql3 {
 
@@ -27418,9 +27148,6 @@ operator<<(std::ostream& os, const assignment_testable& at) {
 }
 
 
-#include <boost/range/iterator_range.hpp>
-#include <boost/range/algorithm/find_if.hpp>
-#include <boost/range/numeric.hpp>
 
 
 class mutation;
@@ -27797,7 +27524,6 @@ struct appending_hash<counter_cell_view> {
 
 
 
-#include <vector>
 
 namespace cql3 {
 
@@ -27998,7 +27724,6 @@ using function_name = db::functions::function_name;
 
 
 
-#include <seastar/core/shared_ptr.hh>
 
 namespace cql3 {
 
@@ -28077,7 +27802,6 @@ public:
 }
 
 
-#include <seastar/core/thread.hh>
 
 namespace cql3 {
 
@@ -28637,8 +28361,6 @@ bool is_end(bound b) {
 
 }
 
-#include <variant>
-#include <type_traits>
 
 namespace utils {
 
@@ -28657,12 +28379,6 @@ concept VariantElement = is_variant_element<T, Variant>::value;
 }
 
 
-#include <fmt/core.h>
-#include <ostream>
-#include <seastar/core/shared_ptr.hh>
-#include <variant>
-#include <concepts>
-#include <numeric>
 
 
 class row;
@@ -29544,9 +29260,7 @@ public:
 
 
 
-#include <seastar/core/shared_ptr.hh>
 
-#include <optional>
 
 namespace cql3 {
 
@@ -30077,8 +29791,6 @@ public:
 };
 
 
-#include <boost/intrusive/set.hpp>
-#include <optional>
 
 namespace bi = boost::intrusive;
 
@@ -30365,9 +30077,6 @@ struct fmt::formatter<range_tombstone> : fmt::formatter<std::string_view> {
 
 
 
-#include <seastar/util/bool_class.hh>
-#include <seastar/util/noncopyable_function.hh>
-#include <seastar/core/preempt.hh>
 
 
 class is_preemptible_tag;
@@ -30400,9 +30109,6 @@ preemption_check always_preempt() {
 
 
 
-#include <seastar/util/defer.hh>
-#include <iosfwd>
-#include <variant>
 
 class position_in_partition_view;
 
@@ -30697,9 +30403,6 @@ struct fmt::formatter<range_tombstone_list> : fmt::formatter<std::string_view> {
 };
 
 
-#include <type_traits>
-#include <seastar/util/concepts.hh>
-#include <compare>
 
 template <typename Func, typename T>
 concept Disposer = requires (Func f, T* val) { 
@@ -30724,7 +30427,6 @@ concept Comparable = requires (const T1& a, const T2& b, Compare cmp) {
     { cmp(a, b) } -> std::same_as<std::strong_ordering>;
 };
 
-#include <atomic>
 
 namespace utils {
 
@@ -30756,10 +30458,6 @@ struct neat_id<true> {
 } // namespace
 
 
-#include <boost/intrusive/parent_from_member.hpp>
-#include <seastar/util/alloc_failure_injector.hh>
-#include <cassert>
-#include <fmt/core.h>
 
 namespace intrusive_b {
 
@@ -32949,8 +32647,6 @@ private:
 } // namespace
 
 
-#include <boost/intrusive/list.hpp>
-#include <seastar/core/memory.hh>
 
 class evictable {
     friend class lru;
@@ -33185,8 +32881,6 @@ make_managed(Args&&... args) {
 }
 
 
-#include <cstdint>
-#include <limits>
 
 namespace utils {
 
@@ -33237,11 +32931,6 @@ unsigned array_search_x32_eq(uint8_t val, const uint8_t* array, int nr);
 }
 
 
-#include <cassert>
-#include <algorithm>
-#include <bitset>
-#include <fmt/core.h>
-#include <boost/intrusive/parent_from_member.hpp>
 
 class size_calculator;
 
@@ -35316,9 +35005,6 @@ public:
 
 
 
-#include <type_traits>
-#include <seastar/util/concepts.hh>
-#include <utility>
 
 namespace utils {
 
@@ -35387,7 +35073,6 @@ public:
 
 
 
-#include <seastar/core/shared_ptr.hh>
 
 namespace dht {
 
@@ -35439,15 +35124,7 @@ void validate_tombstone_gc_options(const tombstone_gc_options* options, data_dic
 
 
 
-#include <iosfwd>
-#include <map>
-#include <boost/intrusive/set.hpp>
-#include <boost/range/iterator_range.hpp>
-#include <boost/range/adaptor/filtered.hpp>
-#include <boost/intrusive/parent_from_member.hpp>
 
-#include <seastar/core/bitset-iter.hh>
-#include <seastar/util/optimized_optional.hh>
 
 
 class mutation_fragment;
@@ -36899,7 +36576,6 @@ bool has_any_live_data(const schema& s, column_kind kind, const row& cells, tomb
                        gc_clock::time_point now = gc_clock::time_point::min());
 
 
-#include <seastar/util/optimized_optional.hh>
 
 namespace seastar {
     class file;
@@ -37207,8 +36883,6 @@ bool operator==(const tracking_allocator<T>& a, const tracking_allocator<T>& b) 
 }
 
 
-#include <seastar/util/bool_class.hh>
-#include <seastar/util/optimized_optional.hh>
 
 using namespace seastar;
 
@@ -37220,10 +36894,7 @@ using mutation_fragment_v2_opt = optimized_optional<mutation_fragment_v2>;
 
 
 
-#include <optional>
-#include <seastar/util/optimized_optional.hh>
 
-#include <seastar/core/future-util.hh>
 
 
 // mutation_fragments are the objects that streamed_mutation are going to
@@ -37797,11 +37468,7 @@ struct appending_hash<mutation_fragment> {
 
 
 
-#include <fmt/core.h>
-#include <optional>
-#include <seastar/util/optimized_optional.hh>
 
-#include <seastar/core/future-util.hh>
 
 
 // Mutation fragment which represents a range tombstone boundary.
@@ -38370,9 +38037,6 @@ public:
     }
 };
 
-#include <seastar/util/optimized_optional.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
 struct mutation_consume_cookie {
     using crs_iterator_type = mutation_partition::rows_type::iterator;
@@ -38815,7 +38479,6 @@ boost::iterator_range<std::vector<mutation>::const_iterator> slice(
 mutation reverse(mutation mut);
 
 
-#include <seastar/core/shared_ptr.hh>
 
 namespace service::broadcast_tables {
     class update_query;
@@ -38951,7 +38614,6 @@ public:
 
 
 
-#include <unordered_set>
 
 namespace cql3 {
 
@@ -39001,8 +38663,6 @@ public:
 
 }
 
-#include <seastar/core/sstring.hh>
-#include <antlr3.hpp>
 
 namespace cql3 {
 
@@ -39344,9 +39004,7 @@ error_collector<RecognizerType,TokenType,ExceptionBaseType>::_empty_bit_list = t
 
 
 
-#include <seastar/core/sstring.hh>
 
-#include <optional>
 
 namespace cql3 {
 
@@ -39414,11 +39072,7 @@ operator<<(std::ostream& os, const cf_name& n) {
 }
 
 
-#include <seastar/core/shared_ptr.hh>
 
-#include <optional>
-#include <vector>
-#include <stddef.h>
 
 class schema;
 
@@ -39485,10 +39139,7 @@ public:
 }
 
 
-#include <seastar/core/shared_ptr.hh>
 
-#include <optional>
-#include <vector>
 
 namespace cql3 {
 
@@ -39524,7 +39175,6 @@ public:
 
 
 
-#include <optional>
 
 
 namespace service { class client_state; }
@@ -39560,11 +39210,6 @@ public:
 
 }
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/weak_ptr.hh>
-#include <seastar/core/checked_ptr.hh>
-#include <optional>
-#include <vector>
 
 
 namespace cql3 {
@@ -39669,10 +39314,6 @@ public:
 
 
 
-#include <boost/program_options/errors.hpp>
-#include <iostream>
-#include <sstream>
-#include <type_traits>
 
 template<typename T>
 concept HasMapInterface = requires(T t) {
@@ -39774,12 +39415,7 @@ class enum_option {
     }
 };
 
-#include <unordered_set>
-#include <stdexcept>
-#include <iosfwd>
-#include <string_view>
 
-#include <seastar/core/sstring.hh>
 
 namespace gms {
     class inet_address;
@@ -39856,8 +39492,6 @@ public:
 
 }
 }
-#include <optional>
-#include <seastar/core/shared_ptr.hh>
 
 namespace s3 {
 
@@ -39880,13 +39514,7 @@ using endpoint_config_ptr = seastar::lw_shared_ptr<endpoint_config>;
 
 
 
-#include <boost/program_options.hpp>
-#include <unordered_map>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/util/program-options.hh>
-#include <seastar/util/log.hh>
 
 
 namespace seastar {
@@ -40365,7 +39993,6 @@ future<gms::inet_address> resolve(const config_file::named_value<sstring>&, gms:
 future<> update_relabel_config_from_file(const std::string& name);
 }
 
-#include <seastar/core/shared_ptr.hh>
 
 namespace cql3 {
 
@@ -40598,8 +40225,6 @@ void validate_timestamp(const db::config& config, const query_options& options, 
 
 } // namespace cql3
 
-#include <cstdint>
-#include <array>
 
 /*
  * Let t_i be the following polynomial depending on i and u:
@@ -40631,12 +40256,6 @@ extern std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_8;
 extern std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_16;
 extern std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_24;
 
-#include <cryptopp/md5.h>
-#include <cryptopp/sha.h>
-#include <cstdint>
-#include <cstdlib>
-#include <ctime>
-#include <ctype.h>
 
 /* For debugging and log messages. */
 template <>
@@ -40649,7 +40268,6 @@ struct fmt::formatter<db_clock::time_point> : fmt::formatter<std::string_view> {
 };
 
 
-#include <seastar/core/sstring.hh>
 
 namespace db {
 
@@ -41144,8 +40762,6 @@ public:
 }
 
 
-#include <stdint.h>
-#include <seastar/core/shared_ptr.hh>
 
 
 namespace db {
@@ -41266,7 +40882,6 @@ using schema_features = enum_set<super_enum<schema_feature,
 
 }
 
-#include <iosfwd>
 
 // Immutable mutation form which can be read using any schema version of the same table.
 // Safe to access from other shards via const&.
@@ -41298,7 +40913,6 @@ public:
 };
 
 
-#include <vector>
 
 // Commutative representation of table schema
 // Equality ignores tombstones.
@@ -41425,10 +41039,7 @@ public:
 
 
 
-#include <seastar/core/shared_ptr.hh>
 
-#include <optional>
-#include <stdexcept>
 
 class mutation;
 
@@ -41545,10 +41156,7 @@ inline bool operator==(const result_set& x, const result_set& y) {
 }
 
 
-#include <seastar/core/distributed.hh>
 
-#include <vector>
-#include <map>
 
 namespace data_dictionary {
 class keyspace_metadata;
@@ -42094,9 +41702,6 @@ struct serializer<const partition_end> : public serializer<partition_end>
 
 
 
-#include <seastar/util/bool_class.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/circular_buffer.hh>
 
 
 using seastar::future;
@@ -51754,7 +51359,6 @@ std::vector<view_and_base> with_base_info_snapshot(std::vector<view_ptr>);
 
 }
 
-#include <deque>
 
 namespace locator {
 
@@ -51805,14 +51409,7 @@ using dc_rack_fn = seastar::noncopyable_function<endpoint_dc_rack(inet_address)>
 
 } // namespace locator
 
-#include <unordered_set>
-#include <unordered_map>
-#include <compare>
-#include <iostream>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/util/bool_class.hh>
 
 
 using namespace seastar;
@@ -52145,7 +51742,6 @@ struct fmt::formatter<locator::node::state> : fmt::formatter<std::string_view> {
     }
 };
 
-#include <variant>
 
 
 namespace cdc {
@@ -52196,10 +51792,6 @@ struct fmt::formatter<cdc::generation_id> {
     }
 };
 
-#include <cstdint>
-#include <compare>
-#include <iostream>
-#include <type_traits>
 
 namespace utils {
 
@@ -52303,8 +51895,6 @@ struct numeric_limits<utils::tagged_tagged_integer<Final, Tag, ValueType>> : pub
 
 } // namespace std
 
-#include <ostream>
-#include <functional>
 
 namespace raft {
 namespace internal {
@@ -52319,8 +51909,6 @@ using tagged_uint64 = utils::tagged_tagged_integer<struct non_final, Tag, uint64
 } // end of namespace raft
 
 
-#include <chrono>
-#include <ostream>
 
 namespace raft {
 
@@ -52372,25 +51960,15 @@ inline std::ostream& operator<<(std::ostream& os, const raft::logical_clock::dur
 } // end of namespace std
 
 
-#include <vector>
-#include <unordered_set>
-#include <functional>
-#include <source_location>
 
 #if defined(__clang_major__) && __clang_major__ <= 14
 
-#include <experimental/source_location>
 
 namespace std {
     using source_location = std::experimental::source_location;
 }
 #endif
 
-#include <boost/container/deque.hpp>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/future.hh>
-#include <seastar/util/log.hh>
-#include <seastar/core/abort_source.hh>
 
 namespace raft {
 // Keeps user defined command. A user is responsible to serialize
@@ -53172,14 +52750,6 @@ public:
 } // namespace raft
 
 
-#include <boost/range/algorithm/find_if.hpp>
-#include <boost/range/join.hpp>
-#include <iostream>
-#include <unordered_set>
-#include <unordered_map>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
 
 namespace service {
 
@@ -53307,16 +52877,6 @@ std::ostream& operator<<(std::ostream& os, const raft_topology_cmd::command& cmd
 
 
 
-#include <map>
-#include <unordered_set>
-#include <unordered_map>
-#include <optional>
-#include <memory>
-#include <boost/range/iterator_range.hpp>
-#include <boost/icl/interval.hpp>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/sharded.hh>
 
 // forward declaration since replica/database.hh includes this file
 namespace replica {
@@ -53648,9 +53208,6 @@ std::unique_ptr<locator::token_range_splitter> make_splitter(token_metadata_ptr)
 
 
 
-#include <cstdint>
-#include <string_view>
-#include <fmt/format.h>
 
 namespace streaming {
 
@@ -53692,9 +53249,6 @@ struct fmt::formatter<streaming::stream_reason> : fmt::formatter<std::string_vie
 };
 
 
-#include <unordered_set>
-#include <seastar/core/distributed.hh>
-#include <seastar/core/abort_source.hh>
 
 namespace streaming { class stream_manager; }
 namespace gms { class gossiper; }
@@ -53815,13 +53369,8 @@ public:
 
 
 
-#include <any>
 
-#include <boost/signals2.hpp>
-#include <boost/signals2/dummy_mutex.hpp>
 
-#include <seastar/core/shared_future.hh>
-#include <seastar/util/noncopyable_function.hh>
 
 using namespace seastar;
 
@@ -53906,13 +53455,6 @@ public:
 
 } // namespace gms
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_future.hh>
-#include <unordered_map>
-#include <functional>
-#include <set>
-#include <any>
 
 namespace db { class config; }
 namespace service { class storage_service; }
@@ -54037,9 +53579,6 @@ namespace version_generator
 
 } // namespace gms
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/print.hh>
-#include <tuple>
 
 namespace version {
 class version {
@@ -54065,8 +53604,6 @@ inline const seastar::sstring& release() {
 }
 }
 
-#include <seastar/core/sstring.hh>
-#include <unordered_set>
 
 namespace gms {
 
@@ -54276,10 +53813,6 @@ public:
 
 } // namespace gms
 
-#include <memory>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
-#include <boost/range/algorithm/find_if.hpp>
 
 
 class no_such_class : public std::runtime_error {
@@ -54473,14 +54006,7 @@ public:
 };
 
 
-#include <unordered_set>
-#include <vector>
-#include <boost/signals2.hpp>
-#include <boost/signals2/dummy_mutex.hpp>
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/distributed.hh>
 
 namespace gms {
 
@@ -54750,10 +54276,6 @@ protected:
 
 } // namespace locator
 
-#include <vector>
-#include <unordered_set>
-#include <cstddef>
-#include <iostream>
 
 namespace utils {
 /**
@@ -54920,10 +54442,6 @@ ostream& operator<<(ostream& os, const utils::basic_sequenced_set<T, VectorType>
 } // namespace std
 
 
-#include <memory>
-#include <functional>
-#include <unordered_map>
-#include <seastar/util/bool_class.hh>
 
 // forward declaration since replica/database.hh includes this file
 namespace replica {
@@ -55386,8 +54904,6 @@ inline void debug_validate_gossip_generation([[maybe_unused]] int64_t generation
 }
 
 
-#include <ostream>
-#include <limits>
 
 namespace gms {
 /**
@@ -55443,7 +54959,6 @@ public:
 } // gms
 
 
-#include <ostream>
 
 namespace gms {
 
@@ -55477,8 +54992,6 @@ std::ostream& operator<<(std::ostream& os, const application_state& m);
 
 }
 
-#include <optional>
-#include <chrono>
 
 namespace gms {
 
@@ -55679,10 +55192,8 @@ public:
 } // namespace gms
 
 
-#include <boost/signals2.hpp>
 
 
-#include <boost/signals2/dummy_mutex.hpp>
 
 namespace gms { class inet_address; }
 
@@ -55714,7 +55225,6 @@ std::ostream& operator<<(std::ostream& os, const stream_session_state& s);
 
 } // namespace
 
-#include <ostream>
 
 namespace streaming {
 
@@ -55742,8 +55252,6 @@ public:
 
 } // namespace streaming
 
-#include <memory>
-#include <seastar/core/shared_ptr.hh>
 
 namespace streaming {
 
@@ -55789,7 +55297,6 @@ public:
 
 } // namespace streaming
 
-#include <vector>
 
 namespace streaming {
 
@@ -55804,8 +55311,6 @@ struct stream_detail {
 } // namespace streaming
 
 
-#include <map>
-#include <seastar/core/semaphore.hh>
 
 namespace streaming {
 
@@ -55846,7 +55351,6 @@ public:
 } // namespace streaming
 
 
-#include <memory>
 
 namespace streaming {
 
@@ -55886,7 +55390,6 @@ public:
 
 
 
-#include <vector>
 
 namespace compat {
 
@@ -56034,8 +55537,6 @@ unwrap_into(wrapping_range<T>&& range, const Comparator& cmp, Func&& func) {
 }
 
 
-#include <seastar/core/sstring.hh>
-#include <vector>
 
 namespace streaming {
 
@@ -56091,7 +55592,6 @@ public:
 } // namespace streaming
 
 
-#include <seastar/core/sstring.hh>
 
 namespace streaming {
 
@@ -56134,11 +55634,6 @@ public:
 } // namespace streaming
 
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/distributed.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <map>
 
 namespace db {
 class config;
@@ -56304,8 +55799,6 @@ public:
 } // namespace streaming
 
 
-#include <vector>
-#include <map>
 
 namespace streaming {
 
@@ -56421,10 +55914,6 @@ private:
 } // namespace streaming
 
 
-#include <seastar/core/distributed.hh>
-#include <map>
-#include <vector>
-#include <memory>
 
 namespace db {
 
@@ -56721,8 +56210,6 @@ private:
 
 } // namespace streaming
 
-#include <map>
-#include <algorithm>
 
 namespace streaming {
 
@@ -56776,8 +56263,6 @@ public:
 
 } // namespace streaming
 
-#include <seastar/core/sstring.hh>
-#include <vector>
 
 namespace streaming {
 
@@ -56882,10 +56367,6 @@ public:
 
 } // namespace streaming
 
-#include <seastar/core/distributed.hh>
-#include <seastar/core/abort_source.hh>
-#include <unordered_map>
-#include <memory>
 
 namespace replica {
 class database;
@@ -57041,11 +56522,6 @@ private:
 
 
 
-#include <memory>
-#include <ostream>
-#include <filesystem>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future.hh>
 
 
 namespace fs = std::filesystem;
@@ -57077,10 +56553,6 @@ namespace utils {
 
 
 
-#include <set>
-#include <vector>
-#include <seastar/core/future.hh>
-#include <seastar/core/smp.hh>
 
 using namespace seastar;
 
@@ -57120,7 +56592,6 @@ private:
 
 
 
-#include <exception>
 
 #if defined(__GLIBCXX__) && (defined(__x86_64__) || defined(__aarch64__))
   #define OPTIMIZED_EXCEPTION_HANDLING_AVAILABLE
@@ -57134,13 +56605,7 @@ private:
   #endif
 #endif
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/align.hh>
 
-#include <functional>
-#include <system_error>
-#include <type_traits>
 
 namespace seastar { class logger; }
 
@@ -57294,8 +56759,6 @@ inline std::exception_ptr make_nested_exception_ptr(Ex&& ex, std::exception_ptr 
 
 
 
-#include <cstdint>
-#include <optional>
 
 namespace utils {
 
@@ -57341,12 +56804,7 @@ public:
 };
 }
 
-#include <fcntl.h>
-#include <fmt/chrono.h>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
 
-#include <seastar/core/sstring.hh>
 
 namespace gms {
 
@@ -57397,7 +56855,6 @@ public:
 } // namespace gms
 
 
-#include <seastar/core/sstring.hh>
 
 namespace gms {
 
@@ -57445,8 +56902,6 @@ public:
 
 }
 
-#include <boost/range/adaptor/transformed.hpp>
-#include <boost/range/algorithm/copy.hpp>
 
 /**
  * Adopted from
@@ -57562,19 +57017,6 @@ std::vector<T, Args...> make_vector_from_in_list(std::initializer_list<in<T>> ar
 
 }
 
-#include <seastar/core/distributed.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/print.hh>
-#include <seastar/rpc/rpc_types.hh>
-#include <optional>
-#include <algorithm>
-#include <chrono>
-#include <set>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/scheduling.hh>
 
 namespace db {
 class config;
@@ -58174,17 +57616,7 @@ struct gossip_get_endpoint_states_response {
 
 
 
-#include <gnutls/crypto.h>
 
-#include <cmath>
-#include <algorithm>
-#include <vector>
-#include <chrono>
-#include <seastar/core/metrics_types.hh>
-#include <seastar/core/print.hh>
-#include <seastar/core/bitops.hh>
-#include <limits>
-#include <array>
 
 namespace utils {
 
@@ -58836,7 +58268,6 @@ inline estimated_histogram estimated_histogram_merge(estimated_histogram a, cons
 
 }
 
-#include <chrono>
 /**
  * A helper class to keep track of latencies
  */
@@ -58887,10 +58318,6 @@ public:
 
 }
 
-#include <boost/circular_buffer.hpp>
-#include <cmath>
-#include <seastar/core/timer.hh>
-#include <iosfwd>
 
 namespace utils {
 /**
@@ -59425,8 +58852,6 @@ public:
 
 }
 
-#include <cstdint>
-#include <seastar/core/metrics_types.hh>
 
 template<uint64_t Min, uint64_t Max, size_t Precision>
 seastar::metrics::histogram to_metrics_histogram(const utils::approx_exponential_histogram<Min, Max, Precision>& hist) {
@@ -59764,13 +59189,7 @@ struct writer_of_schema {
 } // ser
 
 
-#include <any>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/distributed.hh>
-#include <seastar/core/abort_source.hh>
-#include <boost/program_options.hpp>
 
 namespace db {
 class extensions;
@@ -59882,10 +59301,8 @@ private:
 };
 
 
-#include <iostream>
 
 
-#include <memory>
 
 /// Implements <code>text LIKE pattern</code>.
 ///
@@ -59920,8 +59337,6 @@ public:
 };
 
 
-#include <stddef.h>
-#include <seastar/util/noncopyable_function.hh>
 
 namespace seastar {
 
@@ -59936,11 +59351,6 @@ class data_source;
 seastar::data_source make_limiting_data_source(seastar::data_source&& src,
                                                seastar::noncopyable_function<size_t()>&& limit_generator);
 
-#include <limits>
-#include <link.h>
-#include <map>
-#include <memory>
-#include <vector>
 
 namespace dht {
 
@@ -59959,15 +59369,7 @@ private:
 }
 
 
-#include <iosfwd>
-#include <map>
-#include <boost/intrusive/set.hpp>
-#include <boost/range/iterator_range.hpp>
-#include <boost/range/adaptor/filtered.hpp>
-#include <boost/intrusive/parent_from_member.hpp>
 
-#include <seastar/core/bitset-iter.hh>
-#include <seastar/util/optimized_optional.hh>
 
 
 // is_evictable::yes means that the object is part of an evictable snapshots in MVCC,
@@ -60257,7 +59659,6 @@ mutation_partition_v2& mutation_partition_v2::container_of(rows_type& rows) {
 // meaning that they can be removed without affecting the set of writes represented by the mutation.
 bool has_redundant_dummies(const mutation_partition_v2&);
 
-#include <iterator>
 
 template<typename T>
 class anchorless_list_base_hook {
@@ -60450,8 +59851,6 @@ public:
     }
 };
 
-#include <boost/intrusive/parent_from_member.hpp>
-#include <assert.h>
 
 //  A movable pointer-like object paired with exactly one other object of the same type. 
 //  The two objects which are paired with each other point at each other.
@@ -60539,13 +59938,6 @@ public:
     }
 };
 
-#include <memory>
-#include <seastar/core/memory.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/shared_future.hh>
-#include <seastar/core/expiring_fifo.hh>
 
 namespace logalloc {
 
@@ -61060,9 +60452,6 @@ future<> use_standard_allocator_segment_pool_backend(size_t available_memory);
 
 }
 
-#include <functional>
-#include <seastar/core/future-util.hh>
-#include <seastar/util/noncopyable_function.hh>
 
 namespace utils {
 
@@ -61101,8 +60490,6 @@ coroutine make_empty_coroutine() {
 
 }
 
-#include <boost/intrusive/parent_from_member.hpp>
-#include <boost/intrusive/slist.hpp>
 
 class static_row;
 
@@ -62866,8 +62253,6 @@ struct compact_for_compaction_v2 : compact_mutation_v2<compact_for_sstables::yes
 
 
 
-#include <exception>
-#include <seastar/core/print.hh>
 
 
 /// Converts a stream of range_tombstone_change fragments to an equivalent stream of range_tombstone objects.
@@ -63250,10 +62635,6 @@ future<mutation_opt> counter_write_query(schema_ptr, const mutation_source&, rea
                                          tracing::trace_state_ptr trace_ptr);
 
 
-#include <net/if_arp.h>
-#include <net/if.h>
-#include <optional>
-#include <ostream>
 
 
 // Partition visitor which builds mutation_partition corresponding to the data its fed with.
@@ -63369,9 +62750,6 @@ public:
 };
 
 
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/shared_ptr.hh>
 
 namespace utils {
 
@@ -63444,9 +62822,6 @@ public:
 
 }
 
-#include <boost/intrusive/parent_from_member.hpp>
-#include <seastar/util/defer.hh>
-#include <cassert>
 
 namespace bplus {
 
@@ -65393,9 +64768,6 @@ public:
 
 } // namespace bplus
 
-#include <array>
-#include <cassert>
-#include <seastar/util/concepts.hh>
 
 
 template <typename T>
@@ -65717,9 +65089,6 @@ public:
     }
 };
 
-#include <type_traits>
-#include <seastar/util/concepts.hh>
-#include <fmt/core.h>
 
 /*
  * The double-decker is the ordered keeper of key:value pairs having
@@ -66104,9 +65473,7 @@ public:
 };
 
 
-#include <seastar/core/metrics_registration.hh>
 
-#include <stdint.h>
 
 class cache_entry;
 
@@ -66270,7 +65637,6 @@ flat_mutation_reader_v2 make_empty_flat_reader_v2(schema_ptr s, reader_permit pe
 
 
 
-#include <seastar/util/bool_class.hh>
 
 using namespace seastar;
 
@@ -66703,14 +66069,8 @@ snapshot_source make_empty_snapshot_source();
 
 using mutation_source_opt = optimized_optional<mutation_source>;
 
-#include <boost/intrusive/list.hpp>
-#include <boost/intrusive/set.hpp>
-#include <boost/intrusive/parent_from_member.hpp>
 
-#include <seastar/core/memory.hh>
-#include <seastar/util/noncopyable_function.hh>
 
-#include <seastar/core/metrics_registration.hh>
 
 namespace bi = boost::intrusive;
 
@@ -67189,8 +66549,6 @@ public:
 
 }
 
-#include <boost/algorithm/cxx11/any_of.hpp>
-#include <boost/range/algorithm/heap_algorithm.hpp>
 
 class partition_snapshot_row_cursor;
 
@@ -68032,10 +67390,8 @@ public:
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
-#include <xxhash.h>
 #pragma GCC diagnostic pop
 
-#include <array>
 
 class xx_hasher {
     static constexpr size_t digest_size = 16;
@@ -68116,8 +67472,6 @@ class sha256_hasher final : public cryptopp_hasher<sha256_hasher, 32> {};
 
 
 
-#include <type_traits>
-#include <variant>
 
 namespace query {
 
@@ -68394,25 +67748,9 @@ public:
     void consume_end_of_stream();
 };
 
-#include <random>
-#include <rapidjson/stream.h>
-#include <rapidxml.h>
 
 
-#include <cstdint>
-#include <cstddef>
-#include <chrono>
-#include <limits>
-#include <concepts>
-#include <vector>
-#include <optional>
-#include <random>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/timer.hh>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/util/bool_class.hh>
 
 
 // A data structure used to implement per-partition rate limiting. It accounts
@@ -68567,9 +67905,6 @@ using rate_limiter = generic_rate_limiter<seastar::lowres_clock>;
 }
 
 
-#include <seastar/core/timer.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/seastar.hh>
 
 namespace utils {
 
@@ -68593,9 +67928,6 @@ public:
 }
 
 
-#include <functional>
-#include <limits>
-#include <optional>
 
 namespace detail {
 
@@ -68732,12 +68064,6 @@ public:
     }
 };
 
-#include <boost/intrusive/parent_from_member.hpp>
-#include <boost/heap/binomial_heap.hpp>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/semaphore.hh>
 
 class test_region_group;
 
@@ -69321,7 +68647,6 @@ extern thread_local dirty_memory_manager default_dirty_memory_manager;
 }
 
 
-#include <unordered_map>
 
 
 namespace db {
@@ -69366,12 +68691,6 @@ private:
 
 }
 
-#include <seastar/core/enum.hh>
-#include <boost/variant/variant.hpp>
-#include <boost/variant/get.hpp>
-#include <unordered_map>
-#include <type_traits>
-#include <deque>
 
 namespace sstables {
 
@@ -69505,8 +68824,6 @@ struct hash<sstables::disk_string<Size>> {
 }
 
 
-#include <cstdint>
-#include <map>
 
 namespace utils {
 
@@ -69712,7 +69029,6 @@ struct streaming_histogram {
 };
 
 }
-#include <seastar/core/future.hh>
 
 namespace sstables {
 
@@ -69852,13 +69168,8 @@ public:
 
 }
 
-#include <utility>
-#include <functional>
-#include <unordered_set>
 
-#include <fmt/format.h>
 
-#include <seastar/core/shared_ptr.hh>
 
 namespace sstables {
 
@@ -69909,11 +69220,6 @@ using run_id = utils::tagged_uuid<struct run_id_tag>;
 
 
 
-#include <seastar/core/enum.hh>
-#include <vector>
-#include <unordered_map>
-#include <type_traits>
-#include <concepts>
 
 // While the sstable code works with char, bytes_view works with int8_t
 // (signed char). Rather than change all the code, let's do a cast.
@@ -70670,9 +69976,6 @@ public:
 };
 }
 
-#include <map>
-#include <memory>
-#include <iosfwd>
 
 class frozen_mutation;
 class row_cache;
@@ -71012,9 +70315,6 @@ void real_dirty_memory_accounter::commit() {
 
 
 
-#include <seastar/core/shared_ptr.hh>
-#include <variant>
-#include <boost/regex.hpp>
 
 namespace cql3 {
 
@@ -71088,8 +70388,6 @@ sstring to_sstring(index_target::target_type type);
 }
 
 
-#include <vector>
-#include <set>
 
 namespace cql3::expr {
 
@@ -71172,12 +70470,7 @@ using commitlog_force_sync = bool_class<class force_sync_tag>;
 }
 
 
-#include <vector>
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/rwlock.hh>
 
 using namespace seastar;
 
@@ -71266,7 +70559,6 @@ private:
 
 }
 
-#include <seastar/core/shared_ptr.hh>
 
 namespace sstables {
 
@@ -71317,9 +70609,6 @@ struct no_read_monitoring final : public read_monitor_generator {
 read_monitor_generator& default_read_monitor_generator();
 }
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/io_priority_class.hh>
-#include <vector>
 
 namespace utils {
 class estimated_histogram;
@@ -71517,11 +70806,6 @@ inline owned_ranges_ptr make_owned_ranges_ptr(dht::token_range_vector&& ranges) 
 } // namespace compaction
 
 
-#include <functional>
-#include <optional>
-#include <variant>
-#include <seastar/core/smp.hh>
-#include <seastar/core/file.hh>
 
 namespace sstables {
 
@@ -71775,9 +71059,6 @@ public:
 
 
 
-#include <seastar/core/future.hh>
-#include <seastar/util/noncopyable_function.hh>
-#include <seastar/core/file.hh>
 
 
 struct mutation_source_metadata;
@@ -71899,7 +71180,6 @@ compaction_strategy make_compaction_strategy(compaction_strategy_type strategy, 
 
 
 
-#include <seastar/core/metrics.hh>
 
 namespace locator { class topology; }
 
@@ -72135,9 +71415,6 @@ private:
 } // namespace db
 
 
-#include <compare>
-#include <cstddef>
-#include <limits>
 
 namespace db::view {
 
@@ -72182,11 +71459,7 @@ struct update_backlog {
 // row_locker could release its shared-pointer to the old schema, and take
 // the new.
 
-#include <unordered_map>
-#include <memory>
 
-#include <seastar/core/rwlock.hh>
-#include <seastar/core/future.hh>
 
 
 class row_locker {
@@ -72295,12 +71568,6 @@ public:
 };
 
 
-#include <seastar/core/scheduling.hh>
-#include <seastar/core/timer.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/file.hh>
-#include <chrono>
-#include <cmath>
 
 
 // Simple proportional controller to adjust shares for processes for which a backlog can be clearly
@@ -72427,10 +71694,6 @@ public:
 };
 
 
-#include <boost/intrusive/list.hpp>
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/condition-variable.hh>
 
 namespace bi = boost::intrusive;
 
@@ -72900,12 +72163,9 @@ public:
 };
 
 
-#include <seastar/util/closeable.hh>
 
 
-#include <boost/intrusive/set.hpp>
 
-#include <variant>
 
 namespace query {
 
@@ -73309,7 +72569,6 @@ public:
 } // namespace query
 
 
-#include <stdint.h>
 
 namespace ser {
 
@@ -73333,8 +72592,6 @@ public:
 };
 
 
-#include <unordered_map>
-#include <ostream>
 
 
 namespace data_dictionary {
@@ -73379,9 +72636,6 @@ public:
 }
 
 
-#include <string>
-#include <map>
-#include <seastar/core/sstring.hh>
 
 namespace data_dictionary {
 
@@ -73417,10 +72671,6 @@ struct storage_options {
 };
 
 } // namespace data_dictionary
-#include <unordered_map>
-#include <vector>
-#include <iosfwd>
-#include <seastar/core/sstring.hh>
 
 
 namespace data_dictionary {
@@ -73507,8 +72757,6 @@ public:
 };
 
 }
-#include <absl/container/flat_hash_map.h>
-#include <seastar/core/sstring.hh>
 
 using namespace seastar;
 
@@ -73532,11 +72780,6 @@ template <typename V>
 struct flat_hash_map<sstring, V>
     : public absl::flat_hash_map<sstring, V, sstring_hash, sstring_eq> {};
 
-#include <atomic>
-#include <vector>
-#include <optional>
-#include <seastar/core/future.hh>
-#include <seastar/core/smp.hh>
 
 using namespace seastar;
 
@@ -73675,18 +72918,6 @@ private:
 
 } // namespace utils
 
-#include <charconv>
-#include <chrono>
-#include <fmt/core.h>
-#include <cstdint>
-#include <compare>
-#include <limits>
-#include <iostream>
-#include <type_traits>
-#include <boost/range/adaptors.hpp>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/sstring.hh>
 
 namespace sstables {
 
@@ -73826,12 +73057,7 @@ struct fmt::formatter<sstables::generation_type> : fmt::formatter<std::string_vi
     }
 };
 
-#include <boost/signals2.hpp>
-#include <boost/signals2/dummy_mutex.hpp>
-#include <type_traits>
-#include <concepts>
 
-#include <seastar/core/future.hh>
 
 
 namespace bs2 = boost::signals2;
@@ -73901,25 +73127,8 @@ auto io_check(Func&& func, Args&&... args) noexcept(is_future<std::result_of_t<F
     return do_io_check(general_disk_error_handler, std::forward<Func>(func), std::forward<Args>(args)...);
 }
 
-#include <algorithm>
-#include <array>
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <initializer_list>
-#include <iosfwd>
-#include <iterator>
-#include <new>
-#include <stdexcept>
-#include <string>
-#include <type_traits>
-#include <utility>
-#include <vector>
 #if defined(_WIN32)
-#include <basetsd.h>
 #else
-#include <sys/types.h>
 #endif
 
 namespace rust {
@@ -75209,25 +74418,6 @@ private:
 
 
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/execution_stage.hh>
-#include <chrono>
-#include <seastar/core/distributed.hh>
-#include <functional>
-#include <unordered_map>
-#include <map>
-#include <set>
-#include <boost/functional/hash.hpp>
-#include <boost/range/algorithm/find.hpp>
-#include <optional>
-#include <string.h>
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <limits>
-#include <seastar/core/metrics_registration.hh>
-#include <unordered_set>
 
 class cell_locker;
 class cell_locker_stats;
@@ -76968,7 +76158,6 @@ struct default_reverter {
 };
 
 
-#include <string_view>
 
 std::string base64_encode(bytes_view);
 
@@ -76996,10 +76185,7 @@ bool base64_begins_with(std::string_view base, std::string_view operand);
  * or calling Size() on a non-array value.
  */
 
-#include <string>
-#include <stdexcept>
 
-#include <seastar/core/future.hh>
 
 namespace seastar {
     template<typename> class output_stream;
@@ -77016,12 +76202,6 @@ public:
 };
 }
 
-#include <rapidjson/document.h>
-#include <rapidjson/writer.h>
-#include <rapidjson/stringbuffer.h>
-#include <rapidjson/error/en.h>
-#include <rapidjson/allocators.h>
-#include <seastar/core/sstring.hh>
 
 namespace rjson {
 
@@ -77301,17 +76481,7 @@ std::ostream& operator<<(std::ostream& os, const rjson::value& v);
 
 
 
-#include <sanitizer/asan_interface.h>
-#include <functional>
-#include <optional>
-#include <map>
-#include <string>
-#include <vector>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
 
 
 class schema;
@@ -77702,10 +76872,6 @@ private:
     schema_builder& with_column(bytes name, data_type type, column_kind kind, column_id component_index, column_view_virtual view_virtual = column_view_virtual::no, column_computation_ptr computation = nullptr);
 };
 
-#include <unordered_map>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/timer.hh>
-#include <seastar/core/shared_future.hh>
 
 namespace db {
 class schema_ctxt;
@@ -77859,34 +77025,7 @@ public:
 };
 
 
-#include <seastar/core/abort_on_ebadf.hh>
-#include <seastar/core/align.hh>
-#include <seastar/core/bitops.hh>
-#include <seastar/core/byteorder.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/do_with.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/coroutine/all.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/http/request.hh>
-#include <seastar/json/json_elements.hh>
-#include <seastar/net/byteorder.hh>
-#include <seastar/net/dns.hh>
-#include <seastar/net/inet_address.hh>
-#include <seastar/net/tls.hh>
-#include <seastar/rpc/rpc.hh>
-#include <seastar/util/alloc_failure_injector.hh>
-#include <seastar/util/backtrace.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/util/later.hh>
-#include <seastar/util/log.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/util/variant_utils.hh>
 
-#include <seastar/core/file.hh>
 
 
 namespace service {
@@ -77953,10 +77092,8 @@ get_local_compaction_priority() {
 }
 }
 
-#include <set>
 
 
-#include <vector>
 
 namespace dht {
 
@@ -78088,12 +77225,6 @@ public:
 
 } // dht
 
-#include <smmintrin.h>
-#include <sstream>
-#include <stack>
-#include <stdexcept>
-#include <stdlib.h>
-#include <vector>
 
 namespace streaming {
 
@@ -78124,12 +77255,8 @@ public:
 
 } // namespace streaming
 
-#include <string>
 
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/print.hh>
-#include <systemd/sd-daemon.h>
 
 extern logger startlog;
 
@@ -78160,11 +77287,7 @@ private:
 };
 
 
-#include <sys/ioctl.h>
-#include <system_error>
 
-#include <vector>
-#include <seastar/core/sstring.hh>
 
 
 namespace cql_transport {
@@ -78561,14 +77684,7 @@ inline std::ostream& operator<<(std::ostream& out, const cql3::authorized_prepar
 }
 }
 
-#include <functional>
-#include <mutex>
-#include <queue>
-#include <condition_variable>
-#include <thread>
 
-#include <seastar/core/future.hh>
-#include <seastar/util/noncopyable_function.hh>
 
 
 namespace wasm {
@@ -78602,8 +77718,6 @@ public:
 } // namespace wasm
 
 
-#include <span>
-#include <seastar/core/future.hh>
 
 namespace wasm {
 
@@ -78651,13 +77765,6 @@ seastar::future<bytes_opt> run_script(const db::functions::function_name& name, 
 
 
 
-#include <list>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/scheduling.hh>
-#include <seastar/core/shared_mutex.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/timer.hh>
-#include <unordered_map>
 
 namespace wasm {
 
@@ -78817,10 +77924,6 @@ public:
 }
 
 
-#include <vector>
-#include <seastar/core/rwlock.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
 
 namespace data_dictionary {
 class keyspace_metadata;
@@ -78951,7 +78054,6 @@ public:
 }
 
 
-#include <ostream>
 
 namespace cql3 {
 
@@ -79016,7 +78118,6 @@ public:
 }
 
 
-#include <cstdint>
 
 namespace cql3 {
 
@@ -79587,11 +78688,7 @@ public:
 
 
 
-#include <seastar/core/sstring.hh>
-#include <seastar/net/api.hh>
 
-#include <optional>
-#include <stdexcept>
 
 namespace cql_transport {
 
@@ -79662,15 +78759,6 @@ public:
 };
 
 }
-#include <exception>
-#include <typeinfo>
-#include <type_traits>
-#include <memory>
-#include <ostream>
-#include <variant>
-#include <seastar/core/future.hh>
-#include <seastar/core/distributed.hh>
-#include <seastar/util/log.hh>
 
 namespace utils {
 
@@ -79816,10 +78904,6 @@ concept ExceptionContainer = is_exception_container<T>::value;
 // Basic utilities which allow to start working with boost::outcome::result
 // in conjunction with our exception_container.
 
-#include <boost/outcome/success_failure.hpp>
-#include <boost/outcome/trait.hpp>
-#include <boost/outcome/policy/base.hpp>
-#include <boost/outcome/result.hpp>
 
 namespace bo = BOOST_OUTCOME_V2_NAMESPACE;
 
@@ -79865,7 +78949,6 @@ using rebind_result = bo::result<T, typename R::error_type, exception_container_
 }
 
 
-#include <boost/outcome/result.hpp>
 
 namespace exceptions {
 
@@ -79899,12 +78982,9 @@ using coordinator_result = bo::result<T,
 
 
 
-#include <concepts>
 
 
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
 
 namespace cql_transport {
 
@@ -80155,12 +79235,7 @@ inline future<ResultMessagePtr> propagate_exception_as_future(ResultMessagePtr&&
 
 
 
-#include <string_view>
-#include <unordered_map>
 
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/shared_ptr.hh>
 
 
 
@@ -80680,8 +79755,6 @@ private:
 }
 
 
-#include <seastar/core/sleep.hh>
-#include <seastar/util/noncopyable_function.hh>
 
 
 inline
@@ -80724,13 +79797,7 @@ bool eventually_true(noncopyable_function<bool ()> f) {
 #define CHECK_EVENTUALLY_EQUAL(a, b) BOOST_CHECK(eventually_true([&] { return a == b; }))
 
 
-#include <functional>
-#include <vector>
 
-#include <seastar/core/distributed.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
 
 
 namespace replica {
@@ -81062,9 +80129,6 @@ public:
 
 
 
-#include <source_location>
-#include <functional>
-#include <seastar/core/sstring.hh>
 
 
 namespace exception_predicate {
@@ -81094,7 +80158,6 @@ extern std::function<bool(const std::exception&)> message_matches(
 
 
 
-#include <boost/icl/interval_set.hpp>
 
 // Represents a non-contiguous subset of clustering_key domain of a particular schema.
 // Can be treated like an ordered and non-overlapping sequence of position_range:s.
@@ -81210,7 +80273,6 @@ public:
 };
 
 
-#include <boost/test/unit_test.hpp>
 
 
 extern logging::logger testlog;
@@ -81448,7 +80510,6 @@ public:
 
 
 
-#include <seastar/util/log.hh>
 
 // A test log to use in all unit tests, including boost unit
 // tests. Built-in boost logging log levels do not allow to filter
@@ -81458,8 +80519,6 @@ public:
 extern seastar::logger testlog;
 
 
-#include <boost/test/unit_test.hpp>
-#include <seastar/util/backtrace.hh>
 
 inline bool trim_range_tombstone(const schema& s, range_tombstone& rt, const query::clustering_row_ranges& ck_ranges) {
     if (ck_ranges.empty()) {
@@ -82016,14 +81075,12 @@ clustering_key generate_clustering_key(schema_ptr s, bool allow_prefix = false, 
 
 
 
-#include <seastar/core/sstring.hh>
 
 sstring make_random_string(size_t size);
 sstring make_random_numeric_string(size_t size);
 
 
 
-#include <map>
 
 
 // Helper for working with the following table:
@@ -82619,13 +81676,8 @@ future<std::vector<mutation>> generate_random_mutations(tests::random_schema& ra
 } // namespace tests
 
 
-#include <algorithm>
-#include <random>
 
-#include <boost/range/algorithm/generate.hpp>
-#include <iostream>
 
-#include <seastar/testing/test_runner.hh>
 
 
 namespace tests::random {
@@ -82820,7 +81872,6 @@ public:
 } // namespace tests
 
 
-#include <map>
 
 
 //
@@ -82873,15 +81924,8 @@ result_set_assertions assert_that(const query::result_set& rs) {
 
 
 
-/* That's to define a new entry point that process scylla tests specific options */
-#undef SEASTAR_TESTING_MAIN
-
-#include <seastar/testing/test_case.hh>
-#include <seastar/testing/thread_test_case.hh>
-#include <seastar/testing/entry_point.hh>
 
 
-#include <utility>
 
 class scylla_tests_cmdline_options_processor {
 private:
@@ -82901,10 +81945,6 @@ int main(int argc, char** argv) {
 
 
 
-#include <source_location>
-#include <string>
-#include <boost/test/unit_test.hpp>
-#include <fmt/format.h>
 
 // Thread safe alternatives to BOOST_REQUIRE_*, BOOST_CHECK_* and BOOST_FAIL().
 // Use these if instead of the BOOST provided macros if you want to use them on
@@ -82951,9 +81991,7 @@ extern boost::test_tools::assertion_result has_scylla_test_env(boost::unit_test:
 
 }
 
-#include <typeinfo>
 
-#include <iterator>
 
 
 int read_collection_size(bytes_view& in);
@@ -83054,14 +82092,7 @@ private:
     }
 };
 
-#include <type_traits>
-#include <unistd.h>
-#include <unordered_map>
-#include <utility>
 
-#include <unwind.h>
-#include <typeinfo>
-#include <exception>
 
 // This file defines structures/functions derived from the Itanium C++ ABI.
 // Source: https://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html
@@ -83102,9 +82133,6 @@ inline cxa_exception* get_cxa_exception(void* eptr) {
 } // utils
 
 
-#include <concepts>
-#include <vector>
-#include <memory>
 
 /// Represents a container which can preallocate space for future insertions
 /// which can be used to reduce the number of overall memory re-allocation and item movement.
@@ -83148,7 +82176,6 @@ void amortized_reserve(T& v, size_t desired_capacity) {
 }
 
 
-#include <cstdint>
 
 namespace utils {
 
@@ -83169,7 +82196,6 @@ inline bool validate(bytes_view string) {
 
 
 
-#include <gnutls/crypto.h>
 
 // The declared below get_signature() method makes the Signature string for AWS
 // authenticated requests as described in [1]. It can be used in two ways.
@@ -83215,8 +82241,6 @@ std::string format_time_point(db_clock::time_point tp);
 // Intended for measuring time taken by synchronous code paths (where
 // seastar::lowres_clock is not suitable).
 
-#include <chrono>
-#include <ctime>
 
 namespace utils {
 
@@ -83244,8 +82268,6 @@ struct coarse_steady_clock {
 };
 
 
-#include <seastar/net/byteorder.hh>
-#include <concepts>
 
 class data_input {
 public:
@@ -83367,9 +82389,7 @@ template<typename T> inline size_t data_input::ssize(const T &) const {
 }
 
 
-#include <map>
 
-#include <seastar/core/sstring.hh>
 
 
 class tombstone_gc_extension : public schema_extension {
@@ -83429,27 +82449,9 @@ public:
 // been invented (that woud involve another several millennia of evolution).
 // We did not mean to shout.
 
-#include <algorithm>
-#include <cctype>
-#include <chrono>
 #if !(__cplusplus >= 201402)
 #  include <cmath>
 #endif
-#include <cstdint>
-#include <cstdlib>
-#include <ctime>
-#include <ios>
-#include <istream>
-#include <iterator>
-#include <limits>
-#include <locale>
-#include <ostream>
-#include <ratio>
-#include <sstream>
-#include <stdexcept>
-#include <string>
-#include <utility>
-#include <type_traits>
 
 namespace date
 {
@@ -89938,11 +88940,7 @@ div_ceil(Dividend dividend, Divisor divisor) {
 
 
 
-#include <limits>
-#include <vector>
 
-#include <seastar/core/align.hh>
-#include <seastar/core/bitops.hh>
 
 namespace utils {
 
@@ -89998,20 +88996,9 @@ public:
 }
 
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/smp.hh>
 
 
-#include <algorithm>
-#include <chrono>
-#include <set>
-#include <type_traits>
-#include <concepts>
-#include <optional>
 
-#include <boost/range/adaptor/map.hpp>
 
 namespace utils {
 
@@ -90369,7 +89356,6 @@ inline error_injection_type& get_local_injector() {
 
 
 
-#include <fmt/core.h>
 
 // compatibility between fmt < 8 (that doesn't have fmt::runtime())
 // and fmt 8 (that requires it)
@@ -90390,8 +89376,6 @@ auto runtime(auto fmt_string) {
 
 
 
-#include <cinttypes>
-#include <iosfwd>
 
 namespace utils {
 
@@ -90422,14 +89406,6 @@ human_readable_value to_hr_size(uint64_t size);
 } // namespace utils
 
 
-#include <unordered_set>
-#include <filesystem>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/enum.hh>
-#include <seastar/core/queue.hh>
-#include <seastar/core/pipe.hh>
-#include <seastar/util/bool_class.hh>
 
 namespace fs = std::filesystem;
 
@@ -90629,9 +89605,6 @@ static inline fs::path operator/(const fs::path& lhs, const std::string& rhs) {
 
 
 
-#include <boost/intrusive/list.hpp>
-#include <limits>
-#include <seastar/core/bitops.hh>
 
 namespace bi = boost::intrusive;
 
@@ -91001,7 +89974,6 @@ public:
 
 
 
-#include <chrono>
 
 namespace runtime {
 
@@ -91015,10 +89987,6 @@ std::chrono::steady_clock::duration get_uptime();
 }
 
 
-#include <seastar/core/file.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/http/client.hh>
 
 using namespace seastar;
 class memory_data_sink_buffers;
@@ -91084,12 +90052,6 @@ public:
 } // s3 namespace
 
 
-#include <list>
-#include <algorithm>
-#include <seastar/core/thread.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/sharded.hh>
 
 using namespace seastar;
 
@@ -91341,7 +90303,6 @@ future<> clear_gently(seastar::optimized_optional<T>& opt) noexcept {
 
 
 
-#include <boost/range/iterator_range.hpp>
 
 template <typename Container>
 boost::iterator_range<typename Container::iterator>
@@ -91360,8 +90321,6 @@ unconst(Container& c, typename Container::const_iterator i) {
 
 
 
-#include <seastar/core/bitops.hh>
-#include <seastar/core/byteorder.hh>
 
 namespace utils {
 
@@ -91487,7 +90446,6 @@ static inline uint32_t uleb64_decode_bacwards(const char*& pos, Poison&& poison,
 
 
 
-#include <cstdint>
 
 using vint_size_type = bytes::size_type;
 
@@ -91517,9 +90475,6 @@ struct signed_vint final {
     static vint_size_type serialized_size_from_first_byte(bytes::value_type first_byte);
 };
 
-#include <x86intrin.h>
-#include <yaml-cpp/yaml.h>
-#include <zlib.h>
 
 namespace tests {  }
  void tests::random_schema::add_row(std::mt19937& engine, data_model::mutation_description& md, data_model::mutation_description::key ckey,         timestamp_generator ts_gen, expiry_generator exp_gen) {     value_generator gen;     const auto& cdef = _schema->regular_columns()[0];     {         auto value = gen.generate_value(engine, *cdef.type);         md.add_clustered_cell(ckey, cdef.name_as_text(), std::move(value));     } }
