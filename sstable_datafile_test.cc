@@ -3136,6 +3136,7 @@ decltype(auto) with_allocator(allocation_strategy& alloc, Func&& func) {
 #include <seastar/core/sstring.hh>
 
 
+
 class marshal_exception : public std::exception {
     sstring _why;
 public:
@@ -18961,25 +18962,23 @@ struct hash<cql3::column_identifier_raw> {
 }
 
 
-#include "cql3/CqlParser.hpp"
+//#include "cql3/CqlParser.hpp"
+#include "cql3/lists.hh"
+#include "cql3/maps.hh"
+#include "cql3/sets.hh"
+
 #include "cql3/error_collector.hh"
 #include "cql3/statements/raw/select_statement.hh"
+
+
+
+
 
 namespace cql3 {
 
 namespace util {
 
 
-void do_with_parser_impl(const sstring_view& cql, noncopyable_function<void (cql3_parser::CqlParser& p)> func);
-
-template <typename Func, typename Result = std::result_of_t<Func(cql3_parser::CqlParser&)>>
-Result do_with_parser(const sstring_view& cql, Func&& f) {
-    std::optional<Result> ret;
-    do_with_parser_impl(cql, [&] (cql3_parser::CqlParser& parser) {
-        ret.emplace(f(parser));
-    });
-    return std::move(*ret);
-}
 
 sstring relations_to_where_clause(const expr::expression& e);
 
