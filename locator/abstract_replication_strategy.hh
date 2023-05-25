@@ -11,9 +11,6 @@
 #include <memory>
 #include <functional>
 #include <unordered_map>
-#include "gms/inet_address.hh"
-#include "gms/feature_service.hh"
-#include "locator/snitch_base.hh"
 #include "locator/token_range_splitter.hh"
 #include "dht/i_partitioner.hh"
 #include "token_metadata.hh"

@@ -53639,12 +53639,1113 @@ std::unique_ptr<locator::token_range_splitter> make_splitter(token_metadata_ptr)
 
 
 
+#include <cstdint>
+#include <string_view>
+#include <fmt/format.h>
+
+namespace streaming {
+
+enum class stream_reason : uint8_t {
+    unspecified,
+    bootstrap,
+    decommission,
+    removenode,
+    rebuild,
+    repair,
+    replace,
+};
+
+}
+
+template <>
+struct fmt::formatter<streaming::stream_reason> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const streaming::stream_reason& r, FormatContext& ctx) const {
+        using enum streaming::stream_reason;
+        switch (r) {
+        case unspecified:
+            return formatter<std::string_view>::format("unspecified", ctx);
+        case bootstrap:
+            return formatter<std::string_view>::format("bootstrap", ctx);
+        case decommission:
+            return formatter<std::string_view>::format("decommission", ctx);
+        case removenode:
+            return formatter<std::string_view>::format("removenode", ctx);
+        case rebuild:
+            return formatter<std::string_view>::format("rebuild", ctx);
+        case repair:
+            return formatter<std::string_view>::format("repair", ctx);
+        case replace:
+            return formatter<std::string_view>::format("replace", ctx);
+        }
+        std::abort();
+    }
+};
+
+
+#include <unordered_set>
+#include <seastar/core/distributed.hh>
+#include <seastar/core/abort_source.hh>
+
+namespace streaming { class stream_manager; }
+namespace gms { class gossiper; }
+namespace db { class config; }
+
+namespace dht {
+
+using check_token_endpoint = bool_class<struct check_token_endpoint_tag>;
+
+class boot_strapper {
+    using inet_address = gms::inet_address;
+    using token_metadata = locator::token_metadata;
+    using token_metadata_ptr = locator::token_metadata_ptr;
+    using token = dht::token;
+    distributed<replica::database>& _db;
+    sharded<streaming::stream_manager>& _stream_manager;
+    abort_source& _abort_source;
+    /* endpoint that needs to be bootstrapped */
+    inet_address _address;
+    /* its DC/RACK info */
+    locator::endpoint_dc_rack _dr;
+    /* token of the node being bootstrapped. */
+    std::unordered_set<token> _tokens;
+    const token_metadata_ptr _token_metadata_ptr;
+public:
+    boot_strapper(distributed<replica::database>& db, sharded<streaming::stream_manager>& sm, abort_source& abort_source,
+            inet_address addr, locator::endpoint_dc_rack dr, std::unordered_set<token> tokens, const token_metadata_ptr tmptr)
+        : _db(db)
+        , _stream_manager(sm)
+        , _abort_source(abort_source)
+        , _address(addr)
+        , _dr(std::move(dr))
+        , _tokens(tokens)
+        , _token_metadata_ptr(std::move(tmptr)) {
+    }
+
+    future<> bootstrap(streaming::stream_reason reason, gms::gossiper& gossiper, inet_address replace_address = {});
+
+    /**
+     * if initialtoken was specified, use that (split on comma).
+     * otherwise, if num_tokens == 1, pick a token to assume half the load of the most-loaded node.
+     * else choose num_tokens tokens at random
+     */
+    static std::unordered_set<token> get_bootstrap_tokens(const token_metadata_ptr tmptr, const db::config& cfg, check_token_endpoint check);
+
+    /**
+     * Same as above but does not consult initialtoken config
+     */
+    static std::unordered_set<token> get_random_bootstrap_tokens(const token_metadata_ptr tmptr, size_t num_tokens, check_token_endpoint check);
+
+    static std::unordered_set<token> get_random_tokens(const token_metadata_ptr tmptr, size_t num_tokens);
+#if 0
+    public static class StringSerializer implements IVersionedSerializer<String>
+    {
+        public static final StringSerializer instance = new StringSerializer();
+
+        public void serialize(String s, DataOutputPlus out, int version) throws IOException
+        {
+            out.writeUTF(s);
+        }
+
+        public String deserialize(DataInput in, int version) throws IOException
+        {
+            return in.readUTF();
+        }
+
+        public long serializedSize(String s, int version)
+        {
+            return TypeSizes.NATIVE.sizeof(s);
+        }
+    }
+#endif
+
+private:
+    const token_metadata& get_token_metadata() {
+        return *_token_metadata_ptr;
+    }
+};
+
+} // namespace dht
 
 
 
-#include "dht/boot_strapper.hh"
-#include "dht/i_partitioner.hh"
-#include "dht/partition_filter.hh"
+
+
+
+namespace dht {
+
+class incremental_owned_ranges_checker {
+    const dht::token_range_vector& _sorted_owned_ranges;
+    mutable dht::token_range_vector::const_iterator _it;
+public:
+    incremental_owned_ranges_checker(const dht::token_range_vector& sorted_owned_ranges)
+            : _sorted_owned_ranges(sorted_owned_ranges)
+            , _it(_sorted_owned_ranges.begin()) {
+    }
+
+    // Must be called with increasing token values.
+    bool belongs_to_current_node(const dht::token& t) const noexcept {
+        // While token T is after a range Rn, advance the iterator.
+        // iterator will be stopped at a range which either overlaps with T (if T belongs to node),
+        // or at a range which is after T (if T doesn't belong to this node).
+        //
+        // As the name "incremental" suggests, the search is expected to
+        // terminate quickly (usually after 0 or 1 iterations) and so linear
+        // search is best.
+        while (_it != _sorted_owned_ranges.end() && _it->after(t, dht::token_comparator())) {
+            _it++;
+        }
+
+        return _it != _sorted_owned_ranges.end() && _it->contains(t, dht::token_comparator());
+    }
+
+    static flat_mutation_reader_v2::filter make_partition_filter(const dht::token_range_vector& sorted_owned_ranges);
+};
+
+} // dht
+
+
+
+#include <any>
+
+#include <boost/signals2.hpp>
+#include <boost/signals2/dummy_mutex.hpp>
+
+#include <seastar/core/shared_future.hh>
+#include <seastar/util/noncopyable_function.hh>
+
+using namespace seastar;
+
+namespace bs2 = boost::signals2;
+
+namespace gms {
+
+class feature_service;
+
+/**
+ * A gossip feature tracks whether all the nodes the current one is
+ * aware of support the specified feature.
+ *
+ * A feature should only be created once the gossiper is available.
+ */
+class feature final {
+    using signal_type = bs2::signal_type<void (), bs2::keywords::mutex_type<bs2::dummy_mutex>>::type;
+
+    feature_service* _service = nullptr;
+    sstring _name;
+    bool _enabled = false;
+    mutable signal_type _s;
+public:
+    using listener_registration = std::any;
+    class listener {
+        friend class feature;
+        bs2::scoped_connection _conn;
+        signal_type::slot_type _slot;
+        const signal_type::slot_type& get_slot() const { return _slot; }
+        void set_connection(bs2::scoped_connection&& conn) { _conn = std::move(conn); }
+        void callback() {
+            _conn.disconnect();
+            on_enabled();
+        }
+    protected:
+        bool _started = false;
+    public:
+        listener() : _slot(signal_type::slot_type(&listener::callback, this)) {}
+        listener(const listener&) = delete;
+        listener(listener&&) = delete;
+        listener& operator=(const listener&) = delete;
+        listener& operator=(listener&&) = delete;
+        // Has to run inside seastar::async context
+        virtual void on_enabled() = 0;
+    };
+    explicit feature(feature_service& service, std::string_view name, bool enabled = false);
+    feature() = default;
+    ~feature();
+    feature(const feature& other) = delete;
+    // Has to run inside seastar::async context
+    void enable();
+    feature& operator=(feature&& other);
+    const sstring& name() const {
+        return _name;
+    }
+    operator bool() const {
+        return _enabled;
+    }
+    friend inline std::ostream& operator<<(std::ostream& os, const feature& f) {
+        return os << "{ gossip feature = " << f._name << " }";
+    }
+    void when_enabled(listener& callback) const {
+        callback.set_connection(_s.connect(callback.get_slot()));
+        if (_enabled) {
+            _s();
+        }
+    }
+    // Will call the callback functor when this feature is enabled, unless
+    // the returned listener_registration is destroyed earlier.
+    listener_registration when_enabled(seastar::noncopyable_function<void()> callback) const {
+        struct wrapper : public listener {
+            seastar::noncopyable_function<void()> _func;
+            wrapper(seastar::noncopyable_function<void()> func) : _func(std::move(func)) {}
+            void on_enabled() override { _func(); }
+        };
+        auto holder = make_lw_shared<wrapper>(std::move(callback));
+        when_enabled(*holder);
+        return holder;
+    }
+};
+
+
+} // namespace gms
+
+#include <seastar/core/sstring.hh>
+#include <seastar/core/future.hh>
+#include <seastar/core/shared_future.hh>
+#include <unordered_map>
+#include <functional>
+#include <set>
+#include <any>
+
+namespace db { class config; }
+namespace service { class storage_service; }
+
+namespace gms {
+
+class feature_service;
+
+struct feature_config {
+private:
+    std::set<sstring> _disabled_features;
+    feature_config();
+
+    friend class feature_service;
+    friend feature_config feature_config_from_db_config(const db::config& cfg, std::set<sstring> disabled);
+};
+
+feature_config feature_config_from_db_config(const db::config& cfg, std::set<sstring> disabled = {});
+
+using namespace std::literals;
+
+/**
+ * A gossip feature tracks whether all the nodes the current one is
+ * aware of support the specified feature.
+ *
+ * A pointer to `cql3::query_processor` can be optionally supplied
+ * if the instance needs to persist enabled features in a system table.
+ */
+class feature_service final {
+    void register_feature(feature& f);
+    void unregister_feature(feature& f);
+    friend class feature;
+    std::unordered_map<sstring, std::reference_wrapper<feature>> _registered_features;
+
+    feature_config _config;
+public:
+    explicit feature_service(feature_config cfg);
+    ~feature_service() = default;
+    future<> stop();
+    future<> enable(std::set<std::string_view> list);
+    db::schema_features cluster_schema_features() const;
+    std::set<std::string_view> supported_feature_set() const;
+
+    // Key in the 'system.scylla_local' table, that is used to
+    // persist enabled features
+    static constexpr const char* ENABLED_FEATURES_KEY = "enabled_features";
+
+public:
+    gms::feature user_defined_functions { *this, "UDF"sv };
+    gms::feature md_sstable { *this, "MD_SSTABLE_FORMAT"sv };
+    gms::feature me_sstable { *this, "ME_SSTABLE_FORMAT"sv };
+    gms::feature view_virtual_columns { *this, "VIEW_VIRTUAL_COLUMNS"sv };
+    gms::feature digest_insensitive_to_expiry { *this, "DIGEST_INSENSITIVE_TO_EXPIRY"sv };
+    gms::feature computed_columns { *this, "COMPUTED_COLUMNS"sv };
+    gms::feature cdc { *this, "CDC"sv };
+    gms::feature nonfrozen_udts { *this, "NONFROZEN_UDTS"sv };
+    gms::feature hinted_handoff_separate_connection { *this, "HINTED_HANDOFF_SEPARATE_CONNECTION"sv };
+    gms::feature lwt { *this, "LWT"sv };
+    gms::feature per_table_partitioners { *this, "PER_TABLE_PARTITIONERS"sv };
+    gms::feature per_table_caching { *this, "PER_TABLE_CACHING"sv };
+    gms::feature digest_for_null_values { *this, "DIGEST_FOR_NULL_VALUES"sv };
+    gms::feature correct_idx_token_in_secondary_index { *this, "CORRECT_IDX_TOKEN_IN_SECONDARY_INDEX"sv };
+    gms::feature alternator_streams { *this, "ALTERNATOR_STREAMS"sv };
+    gms::feature alternator_ttl { *this, "ALTERNATOR_TTL"sv };
+    gms::feature range_scan_data_variant { *this, "RANGE_SCAN_DATA_VARIANT"sv };
+    gms::feature cdc_generations_v2 { *this, "CDC_GENERATIONS_V2"sv };
+    gms::feature user_defined_aggregates { *this, "UDA"sv };
+    // Historically max_result_size contained only two fields: soft_limit and
+    // hard_limit. It was somehow obscure because for normal paged queries both
+    // fields were equal and meant page size. For unpaged queries and reversed
+    // queries soft_limit was used to warn when the size of the result exceeded
+    // the soft_limit and hard_limit was used to throw when the result was
+    // bigger than this hard_limit. To clean things up, we introduced the third
+    // field into max_result_size. It's name is page_size. Now page_size always
+    // means the size of the page while soft and hard limits are just what their
+    // names suggest. They are no longer interepreted as page size. This is not
+    // a backwards compatible change so this new cluster feature is used to make
+    // sure the whole cluster supports the new page_size field and we can safely
+    // send it to replicas.
+    gms::feature separate_page_size_and_safety_limit { *this, "SEPARATE_PAGE_SIZE_AND_SAFETY_LIMIT"sv };
+    // Replica is allowed to send back empty pages to coordinator on queries.
+    gms::feature empty_replica_pages { *this, "EMPTY_REPLICA_PAGES"sv };
+    gms::feature supports_raft_cluster_mgmt { *this, "SUPPORTS_RAFT_CLUSTER_MANAGEMENT"sv };
+    gms::feature tombstone_gc_options { *this, "TOMBSTONE_GC_OPTIONS"sv };
+    gms::feature parallelized_aggregation { *this, "PARALLELIZED_AGGREGATION"sv };
+    gms::feature keyspace_storage_options { *this, "KEYSPACE_STORAGE_OPTIONS"sv };
+    gms::feature typed_errors_in_read_rpc { *this, "TYPED_ERRORS_IN_READ_RPC"sv };
+    gms::feature schema_commitlog { *this, "SCHEMA_COMMITLOG"sv };
+    gms::feature uda_native_parallelized_aggregation { *this, "UDA_NATIVE_PARALLELIZED_AGGREGATION"sv };
+    gms::feature aggregate_storage_options { *this, "AGGREGATE_STORAGE_OPTIONS"sv };
+    gms::feature collection_indexing { *this, "COLLECTION_INDEXING"sv };
+    gms::feature large_collection_detection { *this, "LARGE_COLLECTION_DETECTION"sv };
+    gms::feature secondary_indexes_on_static_columns { *this, "SECONDARY_INDEXES_ON_STATIC_COLUMNS"sv };
+    gms::feature tablets { *this, "TABLETS"sv };
+
+public:
+
+    const std::unordered_map<sstring, std::reference_wrapper<feature>>& registered_features() const;
+
+    static std::set<sstring> to_feature_set(sstring features_string);
+    // Persist enabled feature in the `system.scylla_local` table under the "enabled_features" key.
+    // The key itself is maintained as an `unordered_set<string>` and serialized via `to_string`
+    // function to preserve readability.
+    void persist_enabled_feature_info(const gms::feature& f) const;
+};
+
+} // namespace gms
+
+namespace gms {
+
+using version_type = utils::tagged_integer<struct version_type_tag, int32_t>;
+
+/**
+ * A unique version number generator for any state that is generated by the
+ * local node.
+ */
+
+namespace version_generator
+{
+    version_type get_next_version() noexcept;
+}
+
+} // namespace gms
+
+#include <seastar/core/sstring.hh>
+#include <seastar/core/print.hh>
+#include <tuple>
+
+namespace version {
+class version {
+    std::tuple<uint16_t, uint16_t, uint16_t> _version;
+public:
+    version(uint16_t x, uint16_t y = 0, uint16_t z = 0): _version(std::make_tuple(x, y, z)) {}
+
+    seastar::sstring to_sstring() {
+        return seastar::format("{:d}.{:d}.{:d}", std::get<0>(_version), std::get<1>(_version), std::get<2>(_version));
+    }
+
+    static version current() {
+        static version v(3, 0, 8);
+        return v;
+    }
+
+    std::strong_ordering operator<=>(const version&) const = default;
+};
+
+inline const seastar::sstring& release() {
+    static thread_local auto str_ver = version::current().to_sstring();
+    return str_ver;
+}
+}
+
+#include <seastar/core/sstring.hh>
+#include <unordered_set>
+
+namespace gms {
+
+/**
+ * This abstraction represents the state associated with a particular node which an
+ * application wants to make available to the rest of the nodes in the cluster.
+ * Whenever a piece of state needs to be disseminated to the rest of cluster wrap
+ * the state in an instance of <i>ApplicationState</i> and add it to the Gossiper.
+ * <p></p>
+ * e.g. if we want to disseminate load information for node A do the following:
+ * <p></p>
+ * ApplicationState loadState = new ApplicationState(<string representation of load>);
+ * Gossiper.instance.addApplicationState("LOAD STATE", loadState);
+ */
+
+class versioned_value {
+    version_type _version;
+    sstring _value;
+public:
+    // this must be a char that cannot be present in any token
+    static constexpr char DELIMITER = ',';
+    static constexpr const char DELIMITER_STR[] = { DELIMITER, 0 };
+
+    // values for ApplicationState.STATUS
+    static constexpr const char* STATUS_UNKNOWN = "UNKNOWN";
+    static constexpr const char* STATUS_BOOTSTRAPPING = "BOOT";
+    static constexpr const char* STATUS_NORMAL = "NORMAL";
+    static constexpr const char* STATUS_LEAVING = "LEAVING";
+    static constexpr const char* STATUS_LEFT = "LEFT";
+    static constexpr const char* STATUS_MOVING = "MOVING";
+
+    static constexpr const char* REMOVING_TOKEN = "removing";
+    static constexpr const char* REMOVED_TOKEN = "removed";
+
+    static constexpr const char* HIBERNATE = "hibernate";
+    static constexpr const char* SHUTDOWN = "shutdown";
+
+    // values for ApplicationState.REMOVAL_COORDINATOR
+    static constexpr const char* REMOVAL_COORDINATOR = "REMOVER";
+
+    version_type version() const noexcept { return _version; };
+    const sstring& value() const noexcept { return _value; };
+public:
+    bool operator==(const versioned_value& other) const noexcept {
+        return _version == other._version &&
+               _value   == other._value;
+    }
+
+public:
+    versioned_value(const sstring& value, version_type version = version_generator::get_next_version())
+        : _version(version), _value(value) {
+#if 0
+        // blindly interning everything is somewhat suboptimal -- lots of VersionedValues are unique --
+        // but harmless, and interning the non-unique ones saves significant memory.  (Unfortunately,
+        // we don't really have enough information here in VersionedValue to tell the probably-unique
+        // values apart.)  See CASSANDRA-6410.
+        this.value = value.intern();
+#endif
+    }
+
+    versioned_value(sstring&& value, version_type version = version_generator::get_next_version()) noexcept
+        : _version(version), _value(std::move(value)) {
+    }
+
+    versioned_value() noexcept
+        : _version(-1) {
+    }
+
+    friend inline std::ostream& operator<<(std::ostream& os, const versioned_value& x) {
+        return os << "Value(" << x.value() << "," << x.version() <<  ")";
+    }
+
+    static sstring version_string(const std::initializer_list<sstring>& args) {
+        return fmt::to_string(fmt::join(args, std::string_view(versioned_value::DELIMITER_STR)));
+    }
+
+    static sstring make_full_token_string(const std::unordered_set<dht::token>& tokens);
+    static sstring make_token_string(const std::unordered_set<dht::token>& tokens);
+    static sstring make_cdc_generation_id_string(std::optional<cdc::generation_id>);
+
+    // Reverse of `make_full_token_string`.
+    static std::unordered_set<dht::token> tokens_from_string(const sstring&);
+
+    // Reverse of `make_cdc_generation_id_string`.
+    static std::optional<cdc::generation_id> cdc_generation_id_from_string(const sstring&);
+
+    static versioned_value clone_with_higher_version(const versioned_value& value) noexcept {
+        return versioned_value(value.value());
+    }
+
+    static versioned_value bootstrapping(const std::unordered_set<dht::token>& tokens) {
+        return versioned_value(version_string({sstring(versioned_value::STATUS_BOOTSTRAPPING),
+                                               make_token_string(tokens)}));
+    }
+
+    static versioned_value normal(const std::unordered_set<dht::token>& tokens) {
+        return versioned_value(version_string({sstring(versioned_value::STATUS_NORMAL),
+                                               make_token_string(tokens)}));
+    }
+
+    static versioned_value load(double load) {
+        return versioned_value(to_sstring(load));
+    }
+
+    static versioned_value schema(const table_schema_version& new_version) {
+        return versioned_value(new_version.to_sstring());
+    }
+
+    static versioned_value leaving(const std::unordered_set<dht::token>& tokens) {
+        return versioned_value(version_string({sstring(versioned_value::STATUS_LEAVING),
+                                               make_token_string(tokens)}));
+    }
+
+    static versioned_value left(const std::unordered_set<dht::token>& tokens, int64_t expire_time) {
+        return versioned_value(version_string({sstring(versioned_value::STATUS_LEFT),
+                                               make_token_string(tokens),
+                                               std::to_string(expire_time)}));
+    }
+
+    static versioned_value moving(dht::token t) {
+        std::unordered_set<dht::token> tokens = {t};
+        return versioned_value(version_string({sstring(versioned_value::STATUS_MOVING),
+                                               make_token_string(tokens)}));
+    }
+
+    static versioned_value host_id(const locator::host_id& host_id) {
+        return versioned_value(host_id.to_sstring());
+    }
+
+    static versioned_value tokens(const std::unordered_set<dht::token>& tokens) {
+        return versioned_value(make_full_token_string(tokens));
+    }
+
+    static versioned_value cdc_generation_id(std::optional<cdc::generation_id> gen_id) {
+        return versioned_value(make_cdc_generation_id_string(gen_id));
+    }
+
+    static versioned_value removing_nonlocal(const locator::host_id& host_id) {
+        return versioned_value(sstring(REMOVING_TOKEN) +
+            sstring(DELIMITER_STR) + host_id.to_sstring());
+    }
+
+    static versioned_value removed_nonlocal(const locator::host_id& host_id, int64_t expire_time) {
+        return versioned_value(sstring(REMOVED_TOKEN) + sstring(DELIMITER_STR) +
+            host_id.to_sstring() + sstring(DELIMITER_STR) + to_sstring(expire_time));
+    }
+
+    static versioned_value removal_coordinator(const locator::host_id& host_id) {
+        return versioned_value(sstring(REMOVAL_COORDINATOR) +
+            sstring(DELIMITER_STR) + host_id.to_sstring());
+    }
+
+    static versioned_value shutdown(bool value) {
+        return versioned_value(sstring(SHUTDOWN) + sstring(DELIMITER_STR) + (value ? "true" : "false"));
+    }
+
+    static versioned_value datacenter(const sstring& dc_id) {
+        return versioned_value(dc_id);
+    }
+
+    static versioned_value rack(const sstring& rack_id) {
+        return versioned_value(rack_id);
+    }
+
+    static versioned_value snitch_name(const sstring& snitch_name) {
+        return versioned_value(snitch_name);
+    }
+
+    static versioned_value shard_count(int shard_count) {
+        return versioned_value(format("{}", shard_count));
+    }
+
+    static versioned_value ignore_msb_bits(unsigned ignore_msb_bits) {
+        return versioned_value(format("{}", ignore_msb_bits));
+    }
+
+    static versioned_value rpcaddress(gms::inet_address endpoint) {
+        return versioned_value(format("{}", endpoint));
+    }
+
+    static versioned_value release_version() {
+        return versioned_value(version::release());
+    }
+
+    static versioned_value network_version();
+
+    static versioned_value internal_ip(const sstring &private_ip) {
+        return versioned_value(private_ip);
+    }
+
+    static versioned_value severity(double value) {
+        return versioned_value(to_sstring(value));
+    }
+
+    static versioned_value supported_features(const std::set<std::string_view>& features) {
+        return versioned_value(fmt::to_string(fmt::join(features, ",")));
+    }
+
+    static versioned_value cache_hitrates(const sstring& hitrates) {
+        return versioned_value(hitrates);
+    }
+
+    static versioned_value cql_ready(bool value) {
+        return versioned_value(to_sstring(int(value)));
+    };
+}; // class versioned_value
+
+} // namespace gms
+
+#include <memory>
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/sstring.hh>
+#include <boost/range/algorithm/find_if.hpp>
+
+
+class no_such_class : public std::runtime_error {
+public:
+    using runtime_error::runtime_error;
+};
+
+inline bool is_class_name_qualified(std::string_view class_name) {
+    return class_name.find_last_of('.') != std::string_view::npos;
+}
+
+// BaseType is a base type of a type hierarchy that this registry will hold
+// Args... are parameters for object's constructor
+template<typename BaseType, typename... Args>
+class nonstatic_class_registry {
+    template<typename T, typename ResultType = typename T::ptr_type>
+    requires requires (typename T::ptr_type ptr) {
+        { ptr.get() } -> std::same_as<T*>;
+    }
+    struct result_for;
+
+    template<typename T>
+    struct result_for<T, std::unique_ptr<T>> {
+        typedef std::unique_ptr<T> type;
+        template<typename Impl>
+        static inline type make(Args&& ...args) {
+            return std::make_unique<Impl>(std::forward<Args>(args)...);
+        }
+    };
+    template<typename T>
+    struct result_for<T, seastar::shared_ptr<T>> {
+        typedef seastar::shared_ptr<T> type;
+        template<typename Impl>
+        static inline type make(Args&& ...args) {
+            return seastar::make_shared<Impl>(std::forward<Args>(args)...);
+        }
+    };
+    template<typename T>
+    struct result_for<T, seastar::lw_shared_ptr<T>> {
+        typedef seastar::lw_shared_ptr<T> type;
+        // lw_shared is not (yet?) polymorph, thus having automatic
+        // instantiation of it makes no sense. This way we get a nice
+        // compilation error if someone messes up.
+    };
+    template<typename T>
+    struct result_for<T, std::shared_ptr<T>> {
+        typedef std::shared_ptr<T> type;
+        template<typename Impl>
+        static inline type make(Args&& ...args) {
+            return std::make_shared<Impl>(std::forward<Args>(args)...);
+        }
+   };
+    template<typename T, typename D>
+    struct result_for<T, std::unique_ptr<T, D>> {
+        typedef std::unique_ptr<T, D> type;
+        template<typename Impl>
+        static inline type make(Args&& ...args) {
+            return std::make_unique<Impl, D>(std::forward<Args>(args)...);
+        }
+    };
+public:
+    using result_type = typename BaseType::ptr_type;
+    using creator_type = std::function<result_type(Args...)>;
+private:
+    std::unordered_map<sstring, creator_type> _classes;
+public:
+    void register_class(sstring name, creator_type creator);
+    template<typename T>
+    void register_class(sstring name);
+    result_type create(const sstring& name, Args&&...);
+
+    std::unordered_map<sstring, creator_type>& classes() {
+        return _classes;
+    }
+    const std::unordered_map<sstring, creator_type>& classes() const {
+        return _classes;
+    }
+
+    sstring to_qualified_class_name(std::string_view class_name) const;
+};
+
+template<typename BaseType, typename... Args>
+void nonstatic_class_registry<BaseType, Args...>::register_class(sstring name, typename nonstatic_class_registry<BaseType, Args...>::creator_type creator) {
+    classes().emplace(name, std::move(creator));
+}
+
+template<typename BaseType, typename... Args>
+template<typename T>
+void nonstatic_class_registry<BaseType, Args...>::register_class(sstring name) {
+    register_class(name, &result_for<BaseType>::template make<T>);
+}
+
+template<typename BaseType, typename... Args>
+sstring nonstatic_class_registry<BaseType, Args...>::to_qualified_class_name(std::string_view class_name) const {
+    if (is_class_name_qualified(class_name)) {
+        return sstring(class_name);
+    } else {
+        const auto& classes{nonstatic_class_registry<BaseType, Args...>::classes()};
+
+        const auto it = boost::find_if(classes, [class_name](const auto& registered_class) {
+            // the fully qualified name contains the short name
+            auto i = registered_class.first.find_last_of('.');
+            return i != sstring::npos && registered_class.first.compare(i + 1, sstring::npos, class_name) == 0;
+        });
+        if (it == classes.end()) {
+            return sstring(class_name);
+        }
+        return it->first;
+    }
+}
+
+// BaseType is a base type of a type hierarchy that this registry will hold
+// Args... are parameters for object's constructor
+template<typename BaseType, typename... Args>
+class class_registry {
+    using base_registry = nonstatic_class_registry<BaseType, Args...>;
+    static base_registry& registry() {
+        static base_registry the_registry;
+        return the_registry;
+    }
+public:
+    using result_type = typename base_registry::result_type;
+    using creator_type = std::function<result_type(Args...)>;
+public:
+    static void register_class(sstring name, creator_type creator) {
+        registry().register_class(std::move(name), std::move(creator));
+    }
+    template<typename T>
+    static void register_class(sstring name) {
+        registry().template register_class<T>(std::move(name));
+    }
+    template <typename... U>
+    static result_type create(const sstring& name, U&&... a) {
+        return registry().create(name, std::forward<U>(a)...);
+    }
+
+    static std::unordered_map<sstring, creator_type>& classes() {
+        return registry().classes();
+    }
+
+    static sstring to_qualified_class_name(std::string_view class_name) {
+        return registry().to_qualified_class_name(class_name);
+    }
+};
+
+template<typename BaseType, typename T, typename... Args>
+struct class_registrator {
+    class_registrator(const sstring& name) {
+        class_registry<BaseType, Args...>::template register_class<T>(name);
+    }
+    class_registrator(const sstring& name, typename class_registry<BaseType, Args...>::creator_type creator) {
+        class_registry<BaseType, Args...>::register_class(name, creator);
+    }
+};
+
+template<typename BaseType, typename... Args>
+typename nonstatic_class_registry<BaseType, Args...>::result_type nonstatic_class_registry<BaseType, Args...>::create(const sstring& name, Args&&... args) {
+    auto it = classes().find(name);
+    if (it == classes().end()) {
+        throw no_such_class(sstring("unable to find class '") + name + sstring("'"));
+    }
+
+    return it->second(std::forward<Args>(args)...);
+}
+
+template<typename BaseType, typename... Args>
+typename class_registry<BaseType, Args...>::result_type  create_object(const sstring& name, Args&&... args) {
+    return class_registry<BaseType, Args...>::create(name, std::forward<Args>(args)...);
+}
+
+class qualified_name {
+    sstring _qname;
+public:
+    qualified_name(std::string_view pkg_pfx, std::string_view name)
+        : _qname(is_class_name_qualified(name) ? name : make_sstring(pkg_pfx, name))
+    {}
+    operator const sstring&() const {
+        return _qname;
+    }
+};
+
+class unqualified_name {
+    sstring _qname;
+public:
+    unqualified_name(std::string_view pkg_pfx, std::string_view name)
+        : _qname(name.compare(0, pkg_pfx.size(), pkg_pfx) == 0 ? name.substr(pkg_pfx.size()) : name)
+    {}
+    operator const sstring&() const {
+        return _qname;
+    }
+};
+
+
+#include <unordered_set>
+#include <vector>
+#include <boost/signals2.hpp>
+#include <boost/signals2/dummy_mutex.hpp>
+
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/thread.hh>
+#include <seastar/core/distributed.hh>
+
+namespace gms {
+
+class gossiper;
+enum class application_state;
+
+}
+
+namespace locator {
+
+using snitch_signal_t = boost::signals2::signal_type<void (), boost::signals2::keywords::mutex_type<boost::signals2::dummy_mutex>>::type;
+using snitch_signal_slot_t = std::function<future<>()>;
+using snitch_signal_connection_t = boost::signals2::scoped_connection;
+
+struct snitch_ptr;
+
+typedef gms::inet_address inet_address;
+
+struct snitch_config {
+    sstring name = "SimpleSnitch";
+    sstring properties_file_name = "";
+    unsigned io_cpu_id = 0;
+    bool broadcast_rpc_address_specified_by_user = false;
+
+    // Gossiping-property-file specific
+    gms::inet_address listen_address;
+
+    // GCE-specific
+    sstring gce_meta_server_url = "";
+};
+
+struct i_endpoint_snitch {
+public:
+    using ptr_type = std::unique_ptr<i_endpoint_snitch>;
+
+    static future<> reset_snitch(sharded<snitch_ptr>& snitch, snitch_config cfg);
+
+    /**
+     * returns a String representing the rack local node belongs to
+     */
+    virtual sstring get_rack() const = 0;
+
+    /**
+     * returns a String representing the datacenter local node belongs to
+     */
+    virtual sstring get_datacenter() const = 0;
+
+    /**
+     * returns whatever info snitch wants to gossip
+     */
+    virtual std::list<std::pair<gms::application_state, gms::versioned_value>> get_app_states() const = 0;
+
+    virtual ~i_endpoint_snitch() { assert(_state == snitch_state::stopped); };
+
+    // noop by default
+    virtual future<> stop() {
+        _state = snitch_state::stopped;
+        return make_ready_future<>();
+    }
+
+    // noop by default
+    virtual future<> pause_io() {
+        _state = snitch_state::io_paused;
+        return make_ready_future<>();
+    };
+
+    // noop by default
+    virtual void resume_io() {
+        _state = snitch_state::running;
+    };
+
+    // noop by default
+    virtual future<> start() {
+        _state = snitch_state::running;
+        return make_ready_future<>();
+    }
+
+    // noop by default
+    virtual void set_my_dc_and_rack(const sstring& new_dc, const sstring& enw_rack) {};
+    virtual void set_prefer_local(bool prefer_local) {};
+    virtual void set_local_private_addr(const sstring& addr_str) {};
+
+    void set_snitch_ready() {
+        _state = snitch_state::running;
+    }
+
+    virtual sstring get_name() const = 0;
+
+    // should be called for production snitches before calling start()
+    virtual void set_backreference(snitch_ptr& d)  {
+        //noop by default
+    }
+
+    virtual future<> reload_gossiper_state() {
+        // noop by default
+        return make_ready_future<>();
+    }
+
+    virtual snitch_signal_connection_t when_reconfigured(snitch_signal_slot_t& slot) {
+        // no updates by default
+        return snitch_signal_connection_t();
+    }
+
+    // tells wheter the INTERNAL_IP address should be preferred over endpoint address
+    virtual bool prefer_local() const noexcept {
+        return false;
+    }
+
+    static logging::logger& logger() {
+        static logging::logger snitch_logger("snitch_logger");
+        return snitch_logger;
+    }
+
+protected:
+    static unsigned& io_cpu_id() {
+        static unsigned id = 0;
+        return id;
+    }
+
+protected:
+    enum class snitch_state {
+        initializing,
+        running,
+        io_pausing,
+        io_paused,
+        stopping,
+        stopped
+    } _state = snitch_state::initializing;
+};
+
+struct snitch_ptr : public peering_sharded_service<snitch_ptr> {
+    using ptr_type = i_endpoint_snitch::ptr_type;
+    future<> stop() {
+        if (_ptr) {
+            return _ptr->stop();
+        } else {
+            return make_ready_future<>();
+        }
+    }
+
+    future<> start() {
+        if (_ptr) {
+            return _ptr->start();
+        } else {
+            return make_ready_future<>();
+        }
+    }
+
+    i_endpoint_snitch* operator->() {
+        return _ptr.get();
+    }
+    const i_endpoint_snitch* operator->() const {
+        return _ptr.get();
+    }
+
+    snitch_ptr& operator=(ptr_type&& new_val) {
+        _ptr = std::move(new_val);
+
+        return *this;
+    }
+
+    snitch_ptr& operator=(snitch_ptr&& new_val) {
+        _ptr = std::move(new_val._ptr);
+
+        return *this;
+    }
+
+    operator bool() const {
+        return _ptr ? true : false;
+    }
+
+    snitch_ptr(const snitch_config cfg);
+
+private:
+    ptr_type _ptr;
+};
+
+/**
+ * Resets the global snitch instance with the new value
+ *
+ * @param snitch_name Name of a new snitch
+ * @param A optional parameters for a new snitch constructor
+ *
+ * @return ready future when the transition is complete
+ *
+ * The flow goes as follows:
+ *  1) Create a new distributed<snitch_ptr> and initialize it with the new
+ *     snitch.
+ *  2) Start the new snitches above - this will initialize the snitches objects
+ *     and will make them ready to be used.
+ *  3) Stop() the current global per-shard snitch objects.
+ *  4) Pause the per-shard snitch objects from (1) - this will stop the async
+ *     I/O parts of the snitches if any.
+ *  5) Assign the per-shard snitch_ptr's from new distributed from (1) to the
+ *     global one and update the distributed<> pointer in the new snitch
+ *     instances.
+ *  6) Start the new snitches.
+ *  7) Stop() the temporary distributed<snitch_ptr> from (1).
+ */
+inline future<> i_endpoint_snitch::reset_snitch(sharded<snitch_ptr>& snitch, snitch_config cfg) {
+    return seastar::async([cfg = std::move(cfg), &snitch] {
+        // (1) create a new snitch
+        distributed<snitch_ptr> tmp_snitch;
+        try {
+            tmp_snitch.start(cfg).get();
+
+            // (2) start the local instances of the new snitch
+            tmp_snitch.invoke_on_all([] (snitch_ptr& local_inst) {
+                return local_inst.start();
+            }).get();
+        } catch (...) {
+            tmp_snitch.stop().get();
+            throw;
+        }
+
+        // If we've got here then we may not fail
+
+        // (3) stop the current snitch instances on all CPUs
+        snitch.invoke_on_all([] (snitch_ptr& s) {
+            return s->stop();
+        }).get();
+
+        //
+        // (4) If we've got here - the new snitch has been successfully created
+        // and initialized. We may pause its I/O it now and start moving
+        // pointers...
+        //
+        tmp_snitch.invoke_on_all([] (snitch_ptr& local_inst) {
+            return local_inst->pause_io();
+        }).get();
+
+        //
+        // (5) move the pointers - this would ensure the atomicity on a
+        // per-shard level (since users are holding snitch_ptr objects only)
+        //
+        tmp_snitch.invoke_on_all([&snitch] (snitch_ptr& local_inst) {
+            local_inst->set_backreference(snitch.local());
+            snitch.local() = std::move(local_inst);
+
+            return make_ready_future<>();
+        }).get();
+
+        // (6) re-start I/O on the new snitches
+        snitch.invoke_on_all([] (snitch_ptr& local_inst) {
+            local_inst->resume_io();
+        }).get();
+
+        // (7) stop the temporary from (1)
+        tmp_snitch.stop().get();
+    });
+}
+
+class snitch_base : public i_endpoint_snitch {
+public:
+    //
+    // Sons have to implement:
+    // virtual sstring get_rack()        = 0;
+    // virtual sstring get_datacenter()  = 0;
+    //
+
+    virtual std::list<std::pair<gms::application_state, gms::versioned_value>> get_app_states() const override;
+
+protected:
+    sstring _my_dc;
+    sstring _my_rack;
+};
+
+} // namespace locator
+
+
+
+
+
+
 #include "dht/range_streamer.hh"
 #include "dht/token.hh"
 #include "dht/token-sharding.hh"
