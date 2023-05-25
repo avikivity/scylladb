@@ -41832,7 +41832,119 @@ future<> drop_column_mapping(table_id table_id, table_schema_version version);
   * The object definition
   */
     
-#include "idl/uuid.dist.hh"
+namespace ser {
+
+template <>
+struct serializer<utils::UUID> {
+  template <typename Output>
+  static void write(Output& buf, const utils::UUID& v);
+
+  template <typename Input>
+  static utils::UUID read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const utils::UUID> : public serializer<utils::UUID>
+{};
+
+
+template <>
+struct serializer<tasks::task_id> {
+  template <typename Output>
+  static void write(Output& buf, const tasks::task_id& v);
+
+  template <typename Input>
+  static tasks::task_id read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const tasks::task_id> : public serializer<tasks::task_id>
+{};
+
+
+template <>
+struct serializer<table_id> {
+  template <typename Output>
+  static void write(Output& buf, const table_id& v);
+
+  template <typename Input>
+  static table_id read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const table_id> : public serializer<table_id>
+{};
+
+
+template <>
+struct serializer<table_schema_version> {
+  template <typename Output>
+  static void write(Output& buf, const table_schema_version& v);
+
+  template <typename Input>
+  static table_schema_version read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const table_schema_version> : public serializer<table_schema_version>
+{};
+
+
+template <>
+struct serializer<query_id> {
+  template <typename Output>
+  static void write(Output& buf, const query_id& v);
+
+  template <typename Input>
+  static query_id read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const query_id> : public serializer<query_id>
+{};
+
+
+template <>
+struct serializer<locator::host_id> {
+  template <typename Output>
+  static void write(Output& buf, const locator::host_id& v);
+
+  template <typename Input>
+  static locator::host_id read(Input& buf);
+
+  template <typename Input>
+  static void skip(Input& buf);
+};
+
+
+template <>
+struct serializer<const locator::host_id> : public serializer<locator::host_id>
+{};
+
+} // ser
+
+
+
 #include "idl/keys.dist.hh"
 namespace ser {
 
