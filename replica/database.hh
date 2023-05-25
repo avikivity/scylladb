@@ -28,7 +28,6 @@
 #include <limits>
 #include <seastar/core/metrics_registration.hh>
 #include <unordered_set>
-#include "rust/wasmtime_bindings.hh"
 
 class cell_locker;
 class cell_locker_stats;
