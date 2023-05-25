@@ -59764,23 +59764,183 @@ struct writer_of_schema {
 } // ser
 
 
-#include "i_filter.hh"
-#include "init.hh"
+#include <any>
+
+#include <seastar/core/sstring.hh>
+#include <seastar/core/future.hh>
+#include <seastar/core/distributed.hh>
+#include <seastar/core/abort_source.hh>
+#include <boost/program_options.hpp>
+
+namespace db {
+class extensions;
+class seed_provider_type;
+class config;
+namespace view {
+class view_update_generator;
+}
+}
+
+namespace gms {
+class feature_service;
+class inet_address;
+}
+
+extern logging::logger startlog;
+
+class bad_configuration_error : public std::exception {};
+
+std::set<gms::inet_address> get_seeds_from_db_config(const db::config& cfg);
+
+class service_set {
+public:
+    service_set();
+    ~service_set();
+    template<typename... Args>
+    service_set(seastar::sharded<Args>&... args) 
+        : service_set()
+    {
+        (void)std::initializer_list<int>{ (add(args), 0)...};
+    }
+    template<typename T>
+    void add(seastar::sharded<T>& t) {
+        add(std::any{std::addressof(t)});
+    }
+    template<typename T>
+    seastar::sharded<T>& find() const {
+        return *std::any_cast<seastar::sharded<T>*>(find(typeid(seastar::sharded<T>*)));
+    }
+private:
+    void add(std::any);
+    std::any find(const std::type_info&) const;
+
+    class impl;
+    std::unique_ptr<impl> _impl;
+};
+
+/**
+ * Very simplistic config registry. Allows hooking in a config object
+ * to the "main" sequence.
+ */
+class configurable {
+public:
+    configurable() {
+        // We auto register. Not that like cycle is assumed to be forever
+        // and scope should be managed elsewhere.
+        register_configurable(*this);
+    }
+    virtual ~configurable()
+    {}
+    // Hook to add command line options and/or add main config options
+    virtual void append_options(db::config&, boost::program_options::options_description_easy_init&)
+    {};
+    // Called after command line is parsed and db/config populated.
+    // Hooked config can for example take this oppurtunity to load any file(s).
+    virtual future<> initialize(const boost::program_options::variables_map&) {
+        return make_ready_future();
+    }
+    virtual future<> initialize(const boost::program_options::variables_map& map, const db::config& cfg, db::extensions& exts) {
+        return initialize(map);
+    }
+
+    /**
+     * State of initiating system for optional 
+     * notification callback to objects created by
+     * `initialize`
+     */
+    enum class system_state {
+        started,
+        stopped,
+    };
+
+    using notify_func = std::function<future<>(system_state)>;
+
+    /** Hooks should override this to allow adding a notification function to the startup sequence. */
+    virtual future<notify_func> initialize_ex(const boost::program_options::variables_map& map, const db::config& cfg, db::extensions& exts) {
+        return initialize(map, cfg, exts).then([] { return notify_func{}; });
+    }
+
+    virtual future<notify_func> initialize_ex(const boost::program_options::variables_map& map, const db::config& cfg, db::extensions& exts, const service_set&) {
+        return initialize_ex(map, cfg, exts);
+    }
+
+    class notify_set {
+    public:
+        future<> notify_all(system_state);
+    private:
+        friend class configurable;
+        std::vector<notify_func> _listeners;
+    };
+
+    // visible for testing
+    static std::vector<std::reference_wrapper<configurable>>& configurables();
+    static future<notify_set> init_all(const boost::program_options::variables_map&, const db::config&, db::extensions&, const service_set& = {});
+    static future<notify_set> init_all(const db::config&, db::extensions&, const service_set& = {});
+    static void append_all(db::config&, boost::program_options::options_description_easy_init&);
+private:
+    static void register_configurable(configurable &);
+};
+
+
 #include <iostream>
-#include "i_partitioner.hh"
-#include "keys.hh"
-#include "large_bitset.hh"
-#include "like_matcher.hh"
-#include "limiting_data_source.hh"
+
+
+#include <memory>
+
+/// Implements <code>text LIKE pattern</code>.
+///
+/// The pattern is a string of characters with two wildcards:
+/// - '_' matches any single character
+/// - '%' matches any substring (including an empty string)
+/// - '\' escapes the next pattern character, so it matches verbatim
+/// - any other pattern character matches itself
+///
+/// The whole text must match the pattern; thus <code>'abc' LIKE 'a'</code> doesn't match, but
+/// <code>'abc' LIKE 'a%'</code> matches.
+class like_matcher {
+    class impl;
+    std::unique_ptr<impl> _impl;
+public:
+    /// Compiles \c pattern and stores the result.
+    ///
+    /// \param pattern UTF-8 encoded pattern with wildcards '_' and '%'.
+    explicit like_matcher(bytes_view pattern);
+
+    like_matcher(like_matcher&&) noexcept; // Must be defined in .cc, where class impl is known.
+
+    ~like_matcher();
+
+    /// Runs the compiled pattern on \c text.
+    ///
+    /// \return true iff text matches constructor's pattern.
+    bool operator()(bytes_view text) const;
+
+    /// Resets pattern if different from the current one.
+    void reset(bytes_view pattern);
+};
+
+
+#include <stddef.h>
+#include <seastar/util/noncopyable_function.hh>
+
+namespace seastar {
+
+class data_source;
+
+}
+
+/// \brief Creates an data_source from another data_source but returns its data in chunks not bigger than a given limit
+///
+/// \param src Source data_source from which data will be taken
+/// \return resulting data_source that returns data in chunks not bigger than a given limit
+seastar::data_source make_limiting_data_source(seastar::data_source&& src,
+                                               seastar::noncopyable_function<size_t()>&& limit_generator);
+
 #include <limits>
 #include <link.h>
-#include "locator/abstract_replication_strategy.hh"
-#include "log.hh"
-#include "managed_bytes.hh"
 #include <map>
-#include "marshal_exception.hh"
 #include <memory>
-#include "multiprecision_int.hh"
+
 #include "murmur3_partitioner.hh"
 #include "murmur_hash.hh"
 #include "mutation/canonical_mutation.hh"
