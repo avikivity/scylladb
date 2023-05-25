@@ -1416,7 +1416,1029 @@ struct fmt::formatter<std::optional<T>> : fmt::formatter<std::string_view> {
 };
 
 
-#include "utils/large_bitset.hh"
+
+#include <compare>
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <new>
+#include <utility>
+#include <algorithm>
+#include <initializer_list>
+#include <memory>
+#include <stdexcept>
+#include <malloc.h>
+#include <iostream>
+
+
+namespace utils {
+
+/// A vector with small buffer optimisation
+///
+/// small_vector is a variation of std::vector<> that reserves a configurable
+/// amount of storage internally, without the need for memory allocation.
+/// This can bring measurable gains if the expected number of elements is
+/// small. The drawback is that moving such small_vector is more expensive
+/// and invalidates iterators as well as references which disqualifies it in
+/// some cases.
+///
+/// All member functions of small_vector provide strong exception guarantees.
+///
+/// It is unspecified when small_vector is going to use internal storage, except
+/// for the obvious case when size() > N. In other situations user must not
+/// attempt to guess if data is stored internally or externally. The same applies
+/// to capacity(). Apart from the obvious fact that capacity() >= size() the user
+/// must not assume anything else. In particular it may not always hold that
+/// capacity() >= N.
+///
+/// Unless otherwise specified (e.g. move ctor and assignment) small_vector
+/// provides guarantees at least as strong as those of std::vector<>.
+template<typename T, size_t N>
+requires std::is_nothrow_move_constructible_v<T> && std::is_nothrow_move_assignable_v<T> && std::is_nothrow_destructible_v<T> && (N > 0)
+class small_vector {
+private:
+    T* _begin;
+    T* _end;
+    T* _capacity_end;
+
+    // Use union instead of std::aligned_storage so that debuggers can see
+    // the contained objects without needing any pretty printers.
+    union internal {
+        internal() { }
+        ~internal() { }
+        T storage[N];
+    };
+    internal _internal;
+
+private:
+    bool uses_internal_storage() const noexcept {
+        return _begin == _internal.storage;
+    }
+
+    [[gnu::cold]] [[gnu::noinline]]
+    void expand(size_t new_capacity) {
+        auto ptr = static_cast<T*>(::aligned_alloc(alignof(T), new_capacity * sizeof(T)));
+        if (!ptr) {
+            throw std::bad_alloc();
+        }
+        auto n_end = std::uninitialized_move(begin(), end(), ptr);
+        std::destroy(begin(), end());
+        if (!uses_internal_storage()) {
+            std::free(_begin);
+        }
+        _begin = ptr;
+        _end = n_end;
+        _capacity_end = ptr + new_capacity;
+    }
+
+    [[gnu::cold]] [[gnu::noinline]]
+    void slow_copy_assignment(const small_vector& other) {
+        auto ptr = static_cast<T*>(::aligned_alloc(alignof(T), other.size() * sizeof(T)));
+        if (!ptr) {
+            throw std::bad_alloc();
+        }
+        auto n_end = ptr;
+        try {
+            n_end = std::uninitialized_copy(other.begin(), other.end(), n_end);
+        } catch (...) {
+            std::free(ptr);
+            throw;
+        }
+        std::destroy(begin(), end());
+        if (!uses_internal_storage()) {
+            std::free(_begin);
+        }
+        _begin = ptr;
+        _end = n_end;
+        _capacity_end = n_end;
+    }
+
+    void reserve_at_least(size_t n) {
+        if (__builtin_expect(_begin + n > _capacity_end, false)) {
+            expand(std::max(n, capacity() * 2));
+        }
+    }
+
+    [[noreturn]] [[gnu::cold]] [[gnu::noinline]]
+    void throw_out_of_range() const {
+        throw std::out_of_range("out of range small vector access");
+    }
+
+public:
+    using value_type = T;
+    using pointer = T*;
+    using const_pointer = const T*;
+    using reference = T&;
+    using const_reference = const T&;
+
+    using iterator = T*;
+    using const_iterator = const T*;
+
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+
+    small_vector() noexcept
+        : _begin(_internal.storage)
+        , _end(_begin)
+        , _capacity_end(_begin + N)
+    { }
+
+    template<typename InputIterator>
+    small_vector(InputIterator first, InputIterator last) : small_vector() {
+        if constexpr (std::is_base_of_v<std::forward_iterator_tag, typename std::iterator_traits<InputIterator>::iterator_category>) {
+            reserve(std::distance(first, last));
+            _end = std::uninitialized_copy(first, last, _end);
+        } else {
+            std::copy(first, last, std::back_inserter(*this));
+        }
+    }
+
+    small_vector(std::initializer_list<T> list) : small_vector(list.begin(), list.end()) { }
+
+    // May invalidate iterators and references.
+    small_vector(small_vector&& other) noexcept {
+        if (other.uses_internal_storage()) {
+            _begin = _internal.storage;
+            _capacity_end = _begin + N;
+            if constexpr (std::is_trivially_copyable_v<T>) {
+                // Compilers really like loops with the number of iterations known at
+                // the compile time, the usually emit less code which can be more aggressively
+                // optimised. Since we can assume that N is small it is most likely better
+                // to just copy everything, regardless of how many elements are actually in
+                // the vector.
+                std::memcpy(_internal.storage, other._internal.storage, N * sizeof(T));
+                _end = _begin + other.size();
+            } else {
+                _end = _begin;
+
+                // What we would really like here is std::uninintialized_move_and_destroy.
+                // It is beneficial to do move and destruction in a single pass since the compiler
+                // may be able to merge those operations (e.g. the destruction of a move-from
+                // std::unique_ptr is a no-op).
+                for (auto& e : other) {
+                    new (_end++) T(std::move(e));
+                    e.~T();
+                }
+            }
+            other._end = other._internal.storage;
+        } else {
+            _begin = std::exchange(other._begin, other._internal.storage);
+            _end = std::exchange(other._end, other._internal.storage);
+            _capacity_end = std::exchange(other._capacity_end, other._internal.storage + N);
+        }
+    }
+
+    small_vector(const small_vector& other) : small_vector() {
+        reserve(other.size());
+        _end = std::uninitialized_copy(other.begin(), other.end(), _end);
+    }
+
+    // May invalidate iterators and references.
+    small_vector& operator=(small_vector&& other) noexcept {
+        clear();
+        if (other.uses_internal_storage()) {
+            if (__builtin_expect(!uses_internal_storage(), false)) {
+                std::free(_begin);
+                _begin = _internal.storage;
+            }
+            _capacity_end = _begin + N;
+            if constexpr (std::is_trivially_copyable_v<T>) {
+                std::memcpy(_internal.storage, other._internal.storage, N * sizeof(T));
+                _end = _begin + other.size();
+            } else {
+                _end = _begin;
+
+                // Better to use single pass than std::uninitialize_move + std::destroy.
+                // See comment in move ctor for details.
+                for (auto& e : other) {
+                    new (_end++) T(std::move(e));
+                    e.~T();
+                }
+            }
+            other._end = other._internal.storage;
+        } else {
+            if (__builtin_expect(!uses_internal_storage(), false)) {
+                std::free(_begin);
+            }
+            _begin = std::exchange(other._begin, other._internal.storage);
+            _end = std::exchange(other._end, other._internal.storage);
+            _capacity_end = std::exchange(other._capacity_end, other._internal.storage + N);
+        }
+        return *this;
+    }
+
+    small_vector& operator=(const small_vector& other) {
+        if constexpr (std::is_nothrow_copy_constructible_v<T>) {
+            if (capacity() >= other.size()) {
+                clear();
+                _end = std::uninitialized_copy(other.begin(), other.end(), _end);
+                return *this;
+            }
+        }
+        slow_copy_assignment(other);
+        return *this;
+    }
+
+    ~small_vector() {
+        clear();
+        if (__builtin_expect(!uses_internal_storage(), false)) {
+            std::free(_begin);
+        }
+    }
+
+    size_t external_memory_usage() const {
+        if (uses_internal_storage()) {
+            return 0;
+        }
+        return ::malloc_usable_size(_begin);
+    }
+
+    void reserve(size_t n) {
+        if (__builtin_expect(_begin + n > _capacity_end, false)) {
+            expand(n);
+        }
+    }
+
+    void clear() noexcept {
+        std::destroy(_begin, _end);
+        _end = _begin;
+    }
+
+    iterator begin() noexcept { return _begin; }
+    const_iterator begin() const noexcept { return _begin; }
+    const_iterator cbegin() const noexcept { return _begin; }
+
+    iterator end() noexcept { return _end; }
+    const_iterator end() const noexcept { return _end; }
+    const_iterator cend() const noexcept { return _end; }
+
+    reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
+    const_reverse_iterator rbegin() const noexcept { return const_reverse_iterator(end()); }
+    const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(end()); }
+
+    reverse_iterator rend() noexcept { return reverse_iterator(begin()); }
+    const_reverse_iterator rend() const noexcept { return const_reverse_iterator(begin()); }
+    const_reverse_iterator crend() const noexcept { return const_reverse_iterator(begin()); }
+
+    T* data() noexcept { return _begin; }
+    const T* data() const noexcept { return _begin; }
+
+    T& front() noexcept { return *begin(); }
+    const T& front() const noexcept { return *begin(); }
+
+    T& back() noexcept { return end()[-1]; }
+    const T& back() const noexcept { return end()[-1]; }
+
+    T& operator[](size_t idx) noexcept { return data()[idx]; }
+    const T& operator[](size_t idx) const noexcept { return data()[idx]; }
+
+    T& at(size_t idx) {
+        if (__builtin_expect(idx >= size(), false)) {
+            throw_out_of_range();
+        }
+        return operator[](idx);
+    }
+    const T& at(size_t idx) const {
+        if (__builtin_expect(idx >= size(), false)) {
+            throw_out_of_range();
+        }
+        return operator[](idx);
+    }
+
+    bool empty() const noexcept { return _begin == _end; }
+    size_t size() const noexcept { return _end - _begin; }
+    size_t capacity() const noexcept { return _capacity_end - _begin; }
+
+    template<typename... Args>
+    T& emplace_back(Args&&... args) {
+        if (__builtin_expect(_end == _capacity_end, false)) {
+            expand(std::max<size_t>(capacity() * 2, 1));
+        }
+        auto& ref = *new (_end) T(std::forward<Args>(args)...);
+        ++_end;
+        return ref;
+    }
+
+    T& push_back(const T& value) {
+        return emplace_back(value);
+    }
+
+    T& push_back(T&& value) {
+        return emplace_back(std::move(value));
+    }
+
+    template<typename InputIterator>
+    iterator insert(const_iterator cpos, InputIterator first, InputIterator last) {
+        if constexpr (std::is_base_of_v<std::forward_iterator_tag, typename std::iterator_traits<InputIterator>::iterator_category>) {
+            if (first == last) {
+                return const_cast<iterator>(cpos);
+            }
+            auto idx = cpos - _begin;
+            auto new_count = std::distance(first, last);
+            reserve_at_least(size() + new_count);
+            auto pos = _begin + idx;
+            auto after = std::distance(pos, end());
+            if (__builtin_expect(pos == end(), true)) {
+                _end = std::uninitialized_copy(first, last, end());
+                return pos;
+            } else if (after > new_count) {
+                std::uninitialized_move(end() - new_count, end(), end());
+                std::move_backward(pos, end() - new_count, end());
+                try {
+                    std::copy(first, last, pos);
+                } catch (...) {
+                    std::move(pos + new_count, end() + new_count, pos);
+                    std::destroy(end(), end() + new_count);
+                    throw;
+                }
+            } else {
+                std::uninitialized_move(pos, end(), pos + new_count);
+                auto mid = std::next(first, after);
+                try {
+                    std::uninitialized_copy(mid, last, end());
+                    try {
+                        std::copy(first, mid, pos);
+                    } catch (...) {
+                        std::destroy(end(), pos + new_count);
+                        throw;
+                    }
+                } catch (...) {
+                    std::move(pos + new_count, end() + new_count, pos);
+                    std::destroy(pos + new_count, end() + new_count);
+                    throw;
+                }
+
+            }
+            _end += new_count;
+            return pos;
+        } else {
+            auto start = cpos - _begin;
+            auto idx = start;
+            while (first != last) {
+                try {
+                    insert(begin() + idx, *first);
+                    ++first;
+                    ++idx;
+                } catch (...) {
+                    erase(begin() + start, begin() + idx);
+                    throw;
+                }
+            }
+            return begin() + idx;
+        }
+    }
+
+    template<typename... Args>
+    iterator emplace(const_iterator cpos, Args&&... args) {
+        auto idx = cpos - _begin;
+        reserve_at_least(size() + 1);
+        auto pos = _begin + idx;
+        if (pos != _end) {
+            new (_end) T(std::move(_end[-1]));
+            std::move_backward(pos, _end - 1, _end);
+            pos->~T();
+        }
+        try {
+            new (pos) T(std::forward<Args>(args)...);
+        } catch (...) {
+            if (pos != _end) {
+                new (pos) T(std::move(pos[1]));
+                std::move(pos + 2, _end + 1, pos + 1);
+                _end->~T();
+            }
+            throw;
+        }
+        _end++;
+        return pos;
+    }
+
+    iterator insert(const_iterator cpos, const T& obj) {
+        return emplace(cpos, obj);
+    }
+
+    iterator insert(const_iterator cpos, T&& obj) {
+        return emplace(cpos, std::move(obj));
+    }
+
+    void resize(size_t n) {
+        if (n < size()) {
+            erase(end() - (size() - n), end());
+        } else if (n > size()) {
+            reserve_at_least(n);
+            _end = std::uninitialized_value_construct_n(_end, n - size());
+        }
+    }
+
+    void resize(size_t n, const T& value) {
+        if (n < size()) {
+            erase(end() - (size() - n), end());
+        } else if (n > size()) {
+            reserve_at_least(n);
+            auto nend = _begin + n;
+            std::uninitialized_fill(_end, nend, value);
+            _end = nend;
+        }
+    }
+
+    void pop_back() noexcept {
+        (--_end)->~T();
+    }
+
+    iterator erase(const_iterator cit) noexcept {
+        return erase(cit, cit + 1);
+    }
+
+    iterator erase(const_iterator cfirst, const_iterator clast) noexcept {
+        auto first = const_cast<iterator>(cfirst);
+        auto last = const_cast<iterator>(clast);
+        std::move(last, end(), first);
+        auto nend = _end - (clast - cfirst);
+        std::destroy(nend, _end);
+        _end = nend;
+        return first;
+    }
+
+    void swap(small_vector& other) noexcept {
+        std::swap(*this, other);
+    }
+
+    auto operator<=>(const small_vector& other) const noexcept requires std::three_way_comparable<T> {
+        return std::lexicographical_compare_three_way(this->begin(), this->end(),
+                                                      other.begin(), other.end());
+    }
+
+    bool operator==(const small_vector& other) const noexcept {
+        return size() == other.size() && std::equal(_begin, _end, other.begin());
+    }
+};
+
+template <typename T, size_t N>
+std::ostream& operator<<(std::ostream& os, const utils::small_vector<T, N>& v) {
+    return utils::format_range(os, v);
+}
+
+}
+
+
+#include <seastar/core/sstring.hh>
+#include <ranges>
+#include <vector>
+#include <sstream>
+#include <unordered_set>
+#include <set>
+#include <optional>
+#include <list>
+#include <map>
+#include <array>
+#include <deque>
+
+#include <fmt/format.h>
+
+
+// chunked_vector is a vector-like container that uses discontiguous storage.
+// It provides fast random access, the ability to append at the end, and aims
+// to avoid large contiguous allocations - unlike std::vector which allocates
+// all the data in one contiguous allocation.
+//
+// std::deque aims to achieve the same goals, but its implementation in
+// libstdc++ still results in large contiguous allocations: std::deque
+// keeps the items in small (512-byte) chunks, and then keeps a contiguous
+// vector listing these chunks. This chunk vector can grow pretty big if the
+// std::deque grows big: When an std::deque contains just 8 MB of data, it
+// needs 16384 chunks, and the vector listing those needs 128 KB.
+//
+// Therefore, in chunked_vector we use much larger 128 KB chunks (this is
+// configurable, with the max_contiguous_allocation template parameter).
+// With 128 KB chunks, the contiguous vector listing them is 256 times
+// smaller than it would be in std::dequeue with its 512-byte chunks.
+//
+// In particular, when a chunked_vector stores up to 2 GB of data, the
+// largest contiguous allocation is guaranteed to be 128 KB: 2 GB of data
+// fits in 16384 chunks of 128 KB each, and the vector of 16384 8-byte
+// pointers requires another 128 KB allocation.
+//
+// Remember, however, that when the chunked_vector grows beyond 2 GB, its
+// largest contiguous allocation (used to store the chunk list) continues to
+// grow as O(N). This is not a problem for current real-world uses of
+// chunked_vector which never reach 2 GB.
+//
+// Always allocating large 128 KB chunks can be wasteful for small vectors;
+// This is why std::deque chose small 512-byte chunks. chunked_vector solves
+// this problem differently: It makes the last chunk variable in size,
+// possibly smaller than a full 128 KB.
+
+#include <boost/range/algorithm/equal.hpp>
+#include <boost/algorithm/clamp.hpp>
+#include <boost/version.hpp>
+#include <memory>
+#include <type_traits>
+#include <iterator>
+#include <utility>
+#include <algorithm>
+#include <stdexcept>
+#include <malloc.h>
+
+
+namespace utils {
+
+struct chunked_vector_free_deleter {
+    void operator()(void* x) const { ::free(x); }
+};
+
+template <typename T, size_t max_contiguous_allocation = 128*1024>
+class chunked_vector {
+    static_assert(std::is_nothrow_move_constructible<T>::value, "T must be nothrow move constructible");
+    using chunk_ptr = std::unique_ptr<T[], chunked_vector_free_deleter>;
+    // Each chunk holds max_chunk_capacity() items, except possibly the last
+    utils::small_vector<chunk_ptr, 1> _chunks;
+    size_t _size = 0;
+    size_t _capacity = 0;
+public:
+    // Maximum number of T elements fitting in a single chunk.
+    static size_t max_chunk_capacity() {
+        return std::max(max_contiguous_allocation / sizeof(T), size_t(1));
+    }
+private:
+    void reserve_for_push_back() {
+        if (_size == _capacity) {
+            do_reserve_for_push_back();
+        }
+    }
+    void do_reserve_for_push_back();
+    size_t make_room(size_t n, bool stop_after_one);
+    chunk_ptr new_chunk(size_t n);
+    T* addr(size_t i) const {
+        return &_chunks[i / max_chunk_capacity()][i % max_chunk_capacity()];
+    }
+    void check_bounds(size_t i) const {
+        if (i >= _size) {
+            throw std::out_of_range("chunked_vector out of range access");
+        }
+    }
+    static void migrate(T* begin, T* end, T* result);
+public:
+    using value_type = T;
+    using size_type = size_t;
+    using difference_type = ssize_t;
+    using reference = T&;
+    using const_reference = const T&;
+    using pointer = T*;
+    using const_pointer = const T*;
+public:
+    chunked_vector() = default;
+    chunked_vector(const chunked_vector& x);
+    chunked_vector(chunked_vector&& x) noexcept;
+    template <typename Iterator>
+    chunked_vector(Iterator begin, Iterator end);
+    template <std::ranges::range Range>
+    chunked_vector(const Range& r) : chunked_vector(r.begin(), r.end()) {}
+    explicit chunked_vector(size_t n, const T& value = T());
+    ~chunked_vector();
+    chunked_vector& operator=(const chunked_vector& x);
+    chunked_vector& operator=(chunked_vector&& x) noexcept;
+
+    bool empty() const {
+        return !_size;
+    }
+    size_t size() const {
+        return _size;
+    }
+    size_t capacity() const {
+        return _capacity;
+    }
+    T& operator[](size_t i) {
+        return *addr(i);
+    }
+    const T& operator[](size_t i) const {
+        return *addr(i);
+    }
+    T& at(size_t i) {
+        check_bounds(i);
+        return *addr(i);
+    }
+    const T& at(size_t i) const {
+        check_bounds(i);
+        return *addr(i);
+    }
+
+    void push_back(const T& x) {
+        reserve_for_push_back();
+        new (addr(_size)) T(x);
+        ++_size;
+    }
+    void push_back(T&& x) {
+        reserve_for_push_back();
+        new (addr(_size)) T(std::move(x));
+        ++_size;
+    }
+    template <typename... Args>
+    T& emplace_back(Args&&... args) {
+        reserve_for_push_back();
+        auto& ret = *new (addr(_size)) T(std::forward<Args>(args)...);
+        ++_size;
+        return ret;
+    }
+    void pop_back() {
+        --_size;
+        addr(_size)->~T();
+    }
+    const T& back() const {
+        return *addr(_size - 1);
+    }
+    T& back() {
+        return *addr(_size - 1);
+    }
+
+    void clear();
+    void shrink_to_fit();
+    void resize(size_t n);
+    void reserve(size_t n) {
+        if (n > _capacity) {
+            make_room(n, false);
+        }
+    }
+    /// Reserve some of the memory.
+    ///
+    /// Allows reserving the memory chunk-by-chunk, avoiding stalls when a lot of
+    /// chunks are needed. To drive the reservation to completion, call this
+    /// repeatedly with the value returned from the previous call until it
+    /// returns 0, yielding between calls when necessary. Example usage:
+    ///
+    ///     return do_until([&size] { return !size; }, [&my_vector, &size] () mutable {
+    ///         size = my_vector.reserve_partial(size);
+    ///     });
+    ///
+    /// Here, `do_until()` takes care of yielding between iterations when
+    /// necessary.
+    ///
+    /// \returns the memory that remains to be reserved
+    size_t reserve_partial(size_t n) {
+        if (n > _capacity) {
+            return make_room(n, true);
+        }
+        return 0;
+    }
+
+    size_t memory_size() const {
+        return _capacity * sizeof(T);
+    }
+
+    size_t external_memory_usage() const;
+public:
+    template <class ValueType>
+    class iterator_type {
+        const chunk_ptr* _chunks;
+        size_t _i;
+    public:
+        using iterator_category = std::random_access_iterator_tag;
+        using value_type = ValueType;
+        using difference_type = ssize_t;
+        using pointer = ValueType*;
+        using reference = ValueType&;
+    private:
+        pointer addr() const {
+            return &_chunks[_i / max_chunk_capacity()][_i % max_chunk_capacity()];
+        }
+        iterator_type(const chunk_ptr* chunks, size_t i) : _chunks(chunks), _i(i) {}
+    public:
+        iterator_type() = default;
+        iterator_type(const iterator_type<std::remove_const_t<ValueType>>& x) : _chunks(x._chunks), _i(x._i) {} // needed for iterator->const_iterator conversion
+        reference operator*() const {
+            return *addr();
+        }
+        pointer operator->() const {
+            return addr();
+        }
+        reference operator[](ssize_t n) const {
+            return *(*this + n);
+        }
+        iterator_type& operator++() {
+            ++_i;
+            return *this;
+        }
+        iterator_type operator++(int) {
+            auto x = *this;
+            ++_i;
+            return x;
+        }
+        iterator_type& operator--() {
+            --_i;
+            return *this;
+        }
+        iterator_type operator--(int) {
+            auto x = *this;
+            --_i;
+            return x;
+        }
+        iterator_type& operator+=(ssize_t n) {
+            _i += n;
+            return *this;
+        }
+        iterator_type& operator-=(ssize_t n) {
+            _i -= n;
+            return *this;
+        }
+        iterator_type operator+(ssize_t n) const {
+            auto x = *this;
+            return x += n;
+        }
+        iterator_type operator-(ssize_t n) const {
+            auto x = *this;
+            return x -= n;
+        }
+        friend iterator_type operator+(ssize_t n, iterator_type a) {
+            return a + n;
+        }
+        friend ssize_t operator-(iterator_type a, iterator_type b) {
+            return a._i - b._i;
+        }
+        bool operator==(iterator_type x) const {
+            return _i == x._i;
+        }
+        bool operator<(iterator_type x) const {
+            return _i < x._i;
+        }
+        bool operator<=(iterator_type x) const {
+            return _i <= x._i;
+        }
+        bool operator>(iterator_type x) const {
+            return _i > x._i;
+        }
+        bool operator>=(iterator_type x) const {
+            return _i >= x._i;
+        }
+        friend class chunked_vector;
+    };
+    using iterator = iterator_type<T>;
+    using const_iterator = iterator_type<const T>;
+public:
+    const T& front() const { return *cbegin(); }
+    T& front() { return *begin(); }
+    iterator begin() { return iterator(_chunks.data(), 0); }
+    iterator end() { return iterator(_chunks.data(), _size); }
+    const_iterator begin() const { return const_iterator(_chunks.data(), 0); }
+    const_iterator end() const { return const_iterator(_chunks.data(), _size); }
+    const_iterator cbegin() const { return const_iterator(_chunks.data(), 0); }
+    const_iterator cend() const { return const_iterator(_chunks.data(), _size); }
+    std::reverse_iterator<iterator> rbegin() { return std::reverse_iterator(end()); }
+    std::reverse_iterator<iterator> rend() { return std::reverse_iterator(begin()); }
+    std::reverse_iterator<const_iterator> rbegin() const { return std::reverse_iterator(end()); }
+    std::reverse_iterator<const_iterator> rend() const { return std::reverse_iterator(begin()); }
+    std::reverse_iterator<const_iterator> crbegin() const { return std::reverse_iterator(cend()); }
+    std::reverse_iterator<const_iterator> crend() const { return std::reverse_iterator(cbegin()); }
+public:
+    bool operator==(const chunked_vector& x) const {
+        return boost::equal(*this, x);
+    }
+};
+
+template<typename T, size_t max_contiguous_allocation>
+size_t chunked_vector<T, max_contiguous_allocation>::external_memory_usage() const {
+    size_t result = 0;
+    for (auto&& chunk : _chunks) {
+        result += ::malloc_usable_size(chunk.get());
+    }
+    return result;
+}
+
+template <typename T, size_t max_contiguous_allocation>
+chunked_vector<T, max_contiguous_allocation>::chunked_vector(const chunked_vector& x)
+        : chunked_vector() {
+    reserve(x.size());
+    std::copy(x.begin(), x.end(), std::back_inserter(*this));
+}
+
+template <typename T, size_t max_contiguous_allocation>
+chunked_vector<T, max_contiguous_allocation>::chunked_vector(chunked_vector&& x) noexcept
+        : _chunks(std::exchange(x._chunks, {}))
+        , _size(std::exchange(x._size, 0))
+        , _capacity(std::exchange(x._capacity, 0)) {
+}
+
+template <typename T, size_t max_contiguous_allocation>
+template <typename Iterator>
+chunked_vector<T, max_contiguous_allocation>::chunked_vector(Iterator begin, Iterator end)
+        : chunked_vector() {
+    auto is_random_access = std::is_base_of<std::random_access_iterator_tag, typename std::iterator_traits<Iterator>::iterator_category>::value;
+    if (is_random_access) {
+        reserve(std::distance(begin, end));
+    }
+    std::copy(begin, end, std::back_inserter(*this));
+    if (!is_random_access) {
+        shrink_to_fit();
+    }
+}
+
+template <typename T, size_t max_contiguous_allocation>
+chunked_vector<T, max_contiguous_allocation>::chunked_vector(size_t n, const T& value) {
+    reserve(n);
+    std::fill_n(std::back_inserter(*this), n, value);
+}
+
+
+template <typename T, size_t max_contiguous_allocation>
+chunked_vector<T, max_contiguous_allocation>&
+chunked_vector<T, max_contiguous_allocation>::operator=(const chunked_vector& x) {
+    auto tmp = chunked_vector(x);
+    return *this = std::move(tmp);
+}
+
+template <typename T, size_t max_contiguous_allocation>
+inline
+chunked_vector<T, max_contiguous_allocation>&
+chunked_vector<T, max_contiguous_allocation>::operator=(chunked_vector&& x) noexcept {
+    if (this != &x) {
+        this->~chunked_vector();
+        new (this) chunked_vector(std::move(x));
+    }
+    return *this;
+}
+
+template <typename T, size_t max_contiguous_allocation>
+chunked_vector<T, max_contiguous_allocation>::~chunked_vector() {
+    if constexpr (!std::is_trivially_destructible_v<T>) {
+        for (auto i = size_t(0); i != _size; ++i) {
+            addr(i)->~T();
+        }
+    }
+}
+
+template <typename T, size_t max_contiguous_allocation>
+typename chunked_vector<T, max_contiguous_allocation>::chunk_ptr
+chunked_vector<T, max_contiguous_allocation>::new_chunk(size_t n) {
+    auto p = malloc(n * sizeof(T));
+    if (!p) {
+        throw std::bad_alloc();
+    }
+    return chunk_ptr(reinterpret_cast<T*>(p));
+}
+
+template <typename T, size_t max_contiguous_allocation>
+void
+chunked_vector<T, max_contiguous_allocation>::migrate(T* begin, T* end, T* result) {
+    while (begin != end) {
+        new (result) T(std::move(*begin));
+        begin->~T();
+        ++begin;
+        ++result;
+    }
+}
+
+template <typename T, size_t max_contiguous_allocation>
+size_t
+chunked_vector<T, max_contiguous_allocation>::make_room(size_t n, bool stop_after_one) {
+    // First, if the last chunk is below max_chunk_capacity(), enlarge it
+
+    auto last_chunk_capacity_deficit = _chunks.size() * max_chunk_capacity() - _capacity;
+    if (last_chunk_capacity_deficit) {
+        auto last_chunk_capacity = max_chunk_capacity() - last_chunk_capacity_deficit;
+        auto capacity_increase = std::min(last_chunk_capacity_deficit, n - _capacity);
+        auto new_last_chunk_capacity = last_chunk_capacity + capacity_increase;
+        // FIXME: realloc? maybe not worth the complication; only works for PODs
+        auto new_last_chunk = new_chunk(new_last_chunk_capacity);
+        if (_size > _capacity - last_chunk_capacity) {
+            migrate(addr(_capacity - last_chunk_capacity), addr(_size), new_last_chunk.get());
+        }
+        _chunks.back() = std::move(new_last_chunk);
+        _capacity += capacity_increase;
+    }
+
+    // Reduce reallocations in the _chunks vector
+
+    auto nr_chunks = (n + max_chunk_capacity() - 1) / max_chunk_capacity();
+    _chunks.reserve(nr_chunks);
+
+    // Add more chunks as needed
+
+    bool stop = false;
+    while (_capacity < n && !stop) {
+        auto now = std::min(n - _capacity, max_chunk_capacity());
+        _chunks.push_back(new_chunk(now));
+        _capacity += now;
+        stop = stop_after_one;
+    }
+    return (n - _capacity);
+}
+
+template <typename T, size_t max_contiguous_allocation>
+void
+chunked_vector<T, max_contiguous_allocation>::do_reserve_for_push_back() {
+    if (_capacity == 0) {
+        // allocate a bit of room in case utilization will be low
+        reserve(boost::algorithm::clamp(512 / sizeof(T), 1, max_chunk_capacity()));
+    } else if (_capacity < max_chunk_capacity() / 2) {
+        // exponential increase when only one chunk to reduce copying
+        reserve(_capacity * 2);
+    } else {
+        // add a chunk at a time later, since no copying will take place
+        reserve((_capacity / max_chunk_capacity() + 1) * max_chunk_capacity());
+    }
+}
+
+template <typename T, size_t max_contiguous_allocation>
+void
+chunked_vector<T, max_contiguous_allocation>::resize(size_t n) {
+    reserve(n);
+    // FIXME: construct whole chunks at once
+    while (_size > n) {
+        pop_back();
+    }
+    while (_size < n) {
+        push_back(T{});
+    }
+    shrink_to_fit();
+}
+
+template <typename T, size_t max_contiguous_allocation>
+void
+chunked_vector<T, max_contiguous_allocation>::shrink_to_fit() {
+    if (_chunks.empty()) {
+        return;
+    }
+    while (!_chunks.empty() && _size <= (_chunks.size() - 1) * max_chunk_capacity()) {
+        _chunks.pop_back();
+        _capacity = _chunks.size() * max_chunk_capacity();
+    }
+
+    auto overcapacity = _size - _capacity;
+    if (overcapacity) {
+        auto new_last_chunk_capacity = _size - (_chunks.size() - 1) * max_chunk_capacity();
+        // FIXME: realloc? maybe not worth the complication; only works for PODs
+        auto new_last_chunk = new_chunk(new_last_chunk_capacity);
+        migrate(addr((_chunks.size() - 1) * max_chunk_capacity()), addr(_size), new_last_chunk.get());
+        _chunks.back() = std::move(new_last_chunk);
+        _capacity = _size;
+    }
+}
+
+template <typename T, size_t max_contiguous_allocation>
+void
+chunked_vector<T, max_contiguous_allocation>::clear() {
+    while (_size > 0) {
+        pop_back();
+    }
+    shrink_to_fit();
+}
+
+template <typename T, size_t max_contiguous_allocation>
+std::ostream& operator<<(std::ostream& os, const chunked_vector<T, max_contiguous_allocation>& v) {
+    return utils::format_range(os, v);
+}
+
+}
+
+
+
+#include <limits>
+#include <seastar/core/preempt.hh>
+
+using namespace seastar;
+
+class large_bitset {
+    using int_type = uint64_t;
+    static constexpr size_t bits_per_int() {
+        return std::numeric_limits<int_type>::digits;
+    }
+    size_t _nr_bits = 0;
+    utils::chunked_vector<int_type> _storage;
+public:
+    explicit large_bitset(size_t nr_bits);
+    explicit large_bitset(size_t nr_bits, utils::chunked_vector<int_type> storage) : _nr_bits(nr_bits), _storage(std::move(storage)) {}
+    large_bitset(large_bitset&&) = default;
+    large_bitset(const large_bitset&) = delete;
+    large_bitset& operator=(const large_bitset&) = delete;
+    size_t size() const {
+        return _nr_bits;
+    }
+
+    size_t memory_size() const {
+        return _storage.memory_size();
+    }
+
+    bool test(size_t idx) const {
+        auto idx1 = idx / bits_per_int();
+        idx %= bits_per_int();
+        auto idx2 = idx;
+        return (_storage[idx1] >> idx2) & 1;
+    }
+    void set(size_t idx) {
+        auto idx1 = idx / bits_per_int();
+        idx %= bits_per_int();
+        auto idx2 = idx;
+        _storage[idx1] |= int_type(1) << idx2;
+    }
+    void clear(size_t idx) {
+        auto idx1 = idx / bits_per_int();
+        idx %= bits_per_int();
+        auto idx2 = idx;
+        _storage[idx1] &= ~(int_type(1) << idx2);
+    }
+    void clear();
+
+    const utils::chunked_vector<int_type>& get_storage() const {
+        return _storage;
+    }
+};
 
 #include <vector>
 
