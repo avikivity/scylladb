@@ -55670,6 +55670,420 @@ public:
 } // namespace gms
 
 
+#include <boost/signals2.hpp>
+
+
+#include <boost/signals2/dummy_mutex.hpp>
+
+namespace gms { class inet_address; }
+
+namespace netw {
+
+struct msg_addr;
+enum class messaging_verb;
+class messaging_service;
+
+using connection_drop_signal_t = boost::signals2::signal_type<void (gms::inet_address), boost::signals2::keywords::mutex_type<boost::signals2::dummy_mutex>>::type;
+using connection_drop_slot_t = std::function<void(gms::inet_address)>;
+using connection_drop_registration_t = boost::signals2::scoped_connection;
+
+}
+
+
+namespace streaming {
+
+enum class stream_session_state {
+    INITIALIZED,
+    PREPARING,
+    STREAMING,
+    WAIT_COMPLETE,
+    COMPLETE,
+    FAILED,
+};
+
+std::ostream& operator<<(std::ostream& os, const stream_session_state& s);
+
+} // namespace
+
+#include <ostream>
+
+namespace streaming {
+
+/**
+ * Summary of streaming.
+ */
+class stream_summary {
+public:
+    table_id cf_id;
+
+    /**
+     * Number of files to transfer. Can be 0 if nothing to transfer for some streaming request.
+     */
+    int files;
+    long total_size;
+
+    stream_summary() = default;
+    stream_summary(table_id _cf_id, int _files, long _total_size)
+        : cf_id (_cf_id)
+        , files(_files)
+        , total_size(_total_size) {
+    }
+    friend std::ostream& operator<<(std::ostream& os, const stream_summary& r);
+};
+
+} // namespace streaming
+
+#include <memory>
+#include <seastar/core/shared_ptr.hh>
+
+namespace streaming {
+
+class stream_session;
+
+/**
+ * StreamTask is an abstraction of the streaming task performed over specific ColumnFamily.
+ */
+class stream_task {
+public:
+    /** StreamSession that this task belongs */
+    shared_ptr<stream_session> session;
+
+    table_id cf_id;
+
+    stream_task(shared_ptr<stream_session> _session, table_id _cf_id);
+    virtual ~stream_task();
+
+public:
+    /**
+     * @return total number of files this task receives/streams.
+     */
+    virtual int get_total_number_of_files() const = 0;
+
+    /**
+     * @return total bytes expected to receive
+     */
+    virtual long get_total_size() const = 0;
+
+    /**
+     * Abort the task.
+     * Subclass should implement cleaning up resources.
+     */
+    virtual void abort() = 0;
+
+    /**
+     * @return StreamSummary that describes this task
+     */
+    virtual stream_summary get_summary() const {
+        return stream_summary(this->cf_id, this->get_total_number_of_files(), this->get_total_size());
+    }
+};
+
+} // namespace streaming
+
+#include <vector>
+
+namespace streaming {
+
+struct stream_detail {
+    table_id cf_id;
+    stream_detail() = default;
+    stream_detail(table_id cf_id_)
+        : cf_id(std::move(cf_id_)) {
+    }
+};
+
+} // namespace streaming
+
+
+#include <map>
+#include <seastar/core/semaphore.hh>
+
+namespace streaming {
+
+class send_info;
+
+/**
+ * StreamTransferTask sends sections of SSTable files in certain ColumnFamily.
+ */
+class stream_transfer_task : public stream_task {
+private:
+    // A stream_transfer_task always contains the same range to stream
+    dht::token_range_vector _ranges;
+    std::map<unsigned, dht::partition_range_vector> _shard_ranges;
+    long _total_size;
+    bool _mutation_done_sent = false;
+public:
+    stream_transfer_task(stream_transfer_task&&) = default;
+    stream_transfer_task(shared_ptr<stream_session> session, table_id cf_id, dht::token_range_vector ranges, long total_size = 0);
+    ~stream_transfer_task();
+public:
+    virtual void abort() override {
+    }
+
+    virtual int get_total_number_of_files() const override {
+        return 1;
+    }
+
+    virtual long get_total_size() const override {
+        return _total_size;
+    }
+
+    future<> execute();
+
+    void append_ranges(const dht::token_range_vector& ranges);
+    void sort_and_merge_ranges();
+};
+
+} // namespace streaming
+
+
+#include <memory>
+
+namespace streaming {
+
+/**
+ * Task that manages receiving files for the session for certain ColumnFamily.
+ */
+class stream_receive_task : public stream_task {
+private:
+    // number of files to receive
+    int total_files;
+    // total size of files to receive
+    long total_size;
+public:
+    stream_receive_task(shared_ptr<stream_session> _session, table_id _cf_id, int _total_files, long _total_size);
+    ~stream_receive_task();
+
+    virtual int get_total_number_of_files() const override {
+        return total_files;
+    }
+
+    virtual long get_total_size() const override {
+        return total_size;
+    }
+
+
+    /**
+     * Abort this task.
+     * If the task already received all files and
+     * {@link org.apache.cassandra.streaming.StreamReceiveTask.OnCompletionRunnable} task is submitted,
+     * then task cannot be aborted.
+     */
+    virtual void abort() override {
+    }
+};
+
+} // namespace streaming
+
+
+
+#include <vector>
+
+namespace compat {
+
+using wrapping_partition_range = wrapping_range<dht::ring_position>;
+
+
+// unwraps a vector of wrapping ranges into a vector of nonwrapping ranges
+// if the vector happens to be sorted by the left bound, it remains sorted
+template <typename T, typename Comparator>
+std::vector<nonwrapping_range<T>>
+unwrap(std::vector<wrapping_range<T>>&& v, Comparator&& cmp) {
+    std::vector<nonwrapping_range<T>> ret;
+    ret.reserve(v.size() + 1);
+    for (auto&& wr : v) {
+        if (wr.is_wrap_around(cmp)) {
+            auto&& p = std::move(wr).unwrap();
+            ret.insert(ret.begin(), nonwrapping_range<T>(std::move(p.first)));
+            ret.emplace_back(std::move(p.second));
+        } else {
+            ret.emplace_back(std::move(wr));
+        }
+    }
+    return ret;
+}
+
+// unwraps a vector of wrapping ranges into a vector of nonwrapping ranges
+// if the vector happens to be sorted by the left bound, it remains sorted
+template <typename T, typename Comparator>
+std::vector<nonwrapping_range<T>>
+unwrap(const std::vector<wrapping_range<T>>& v, Comparator&& cmp) {
+    std::vector<nonwrapping_range<T>> ret;
+    ret.reserve(v.size() + 1);
+    for (auto&& wr : v) {
+        if (wr.is_wrap_around(cmp)) {
+            auto&& p = wr.unwrap();
+            ret.insert(ret.begin(), nonwrapping_range<T>(p.first));
+            ret.emplace_back(p.second);
+        } else {
+            ret.emplace_back(wr);
+        }
+    }
+    return ret;
+}
+
+template <typename T>
+std::vector<wrapping_range<T>>
+wrap(const std::vector<nonwrapping_range<T>>& v) {
+    // re-wrap (-inf,x) ... (y, +inf) into (y, x):
+    if (v.size() >= 2 && !v.front().start() && !v.back().end()) {
+        auto ret = std::vector<wrapping_range<T>>();
+        ret.reserve(v.size() - 1);
+        std::copy(v.begin() + 1, v.end() - 1, std::back_inserter(ret));
+        ret.emplace_back(v.back().start(), v.front().end());
+        return ret;
+    }
+    return boost::copy_range<std::vector<wrapping_range<T>>>(v);
+}
+
+template <typename T>
+std::vector<wrapping_range<T>>
+wrap(std::vector<nonwrapping_range<T>>&& v) {
+    // re-wrap (-inf,x) ... (y, +inf) into (y, x):
+    if (v.size() >= 2 && !v.front().start() && !v.back().end()) {
+        auto ret = std::vector<wrapping_range<T>>();
+        ret.reserve(v.size() - 1);
+        std::move(v.begin() + 1, v.end() - 1, std::back_inserter(ret));
+        ret.emplace_back(std::move(v.back()).start(), std::move(v.front()).end());
+        return ret;
+    }
+    // want boost::adaptor::moved ...
+    return boost::copy_range<std::vector<wrapping_range<T>>>(v);
+}
+
+inline
+dht::token_range_vector
+unwrap(const std::vector<wrapping_range<dht::token>>& v) {
+    return unwrap(v, dht::token_comparator());
+}
+
+inline
+dht::token_range_vector
+unwrap(std::vector<wrapping_range<dht::token>>&& v) {
+    return unwrap(std::move(v), dht::token_comparator());
+}
+
+
+class one_or_two_partition_ranges : public std::pair<dht::partition_range, std::optional<dht::partition_range>> {
+    using pair = std::pair<dht::partition_range, std::optional<dht::partition_range>>;
+public:
+    explicit one_or_two_partition_ranges(dht::partition_range&& f)
+        : pair(std::move(f), std::nullopt) {
+    }
+    explicit one_or_two_partition_ranges(dht::partition_range&& f, dht::partition_range&& s)
+        : pair(std::move(f), std::move(s)) {
+    }
+    operator dht::partition_range_vector() const & {
+        auto ret = dht::partition_range_vector();
+        // not reserving, since ret.size() is likely to be 1
+        ret.push_back(first);
+        if (second) {
+            ret.push_back(*second);
+        }
+        return ret;
+    }
+    operator dht::partition_range_vector() && {
+        auto ret = dht::partition_range_vector();
+        // not reserving, since ret.size() is likely to be 1
+        ret.push_back(std::move(first));
+        if (second) {
+            ret.push_back(std::move(*second));
+        }
+        return ret;
+    }
+};
+
+inline
+one_or_two_partition_ranges
+unwrap(wrapping_partition_range pr, const schema& s) {
+    if (pr.is_wrap_around(dht::ring_position_comparator(s))) {
+        auto unw = std::move(pr).unwrap();
+        // Preserve ring order
+        return one_or_two_partition_ranges(
+                dht::partition_range(std::move(unw.second)),
+                dht::partition_range(std::move(unw.first)));
+    } else {
+        return one_or_two_partition_ranges(dht::partition_range(std::move(pr)));
+    }
+}
+
+// Unwraps `range` and calls `func` with its components, with an unwrapped
+// range type, as a parameter (once or twice)
+template <typename T, typename Comparator, typename Func>
+void
+unwrap_into(wrapping_range<T>&& range, const Comparator& cmp, Func&& func) {
+    if (range.is_wrap_around(cmp)) {
+        auto&& unw = range.unwrap();
+        // Preserve ring order
+        func(nonwrapping_range<T>(std::move(unw.second)));
+        func(nonwrapping_range<T>(std::move(unw.first)));
+    } else {
+        func(nonwrapping_range<T>(std::move(range)));
+    }
+}
+
+}
+
+
+#include <seastar/core/sstring.hh>
+#include <vector>
+
+namespace streaming {
+
+class stream_request {
+public:
+    using token = dht::token;
+    sstring keyspace;
+    dht::token_range_vector ranges;
+    // For compatibility with <= 1.5, we send wrapping ranges (though they will never wrap).
+    std::vector<wrapping_range<token>> ranges_compat() const {
+        return ::compat::wrap(ranges);
+    }
+    std::vector<sstring> column_families;
+    stream_request() = default;
+    stream_request(sstring _keyspace, dht::token_range_vector _ranges, std::vector<sstring> _column_families)
+        : keyspace(std::move(_keyspace))
+        , ranges(std::move(_ranges))
+        , column_families(std::move(_column_families)) {
+    }
+    stream_request(sstring _keyspace, std::vector<wrapping_range<token>> _ranges, std::vector<sstring> _column_families)
+        : stream_request(std::move(_keyspace), ::compat::unwrap(std::move(_ranges)), std::move(_column_families)) {
+    }
+    friend std::ostream& operator<<(std::ostream& os, const stream_request& r);
+};
+
+} // namespace streaming
+
+
+namespace streaming {
+
+class prepare_message {
+public:
+    /**
+     * Streaming requests
+     */
+    std::vector<stream_request> requests;
+
+    /**
+     * Summaries of streaming out
+     */
+    std::vector<stream_summary> summaries;
+
+    uint32_t dst_cpu_id;
+
+    prepare_message() = default;
+    prepare_message(std::vector<stream_request> reqs, std::vector<stream_summary> sums, uint32_t dst_cpu_id_ = -1)
+        : requests(std::move(reqs))
+        , summaries(std::move(sums))
+        , dst_cpu_id(dst_cpu_id_) {
+    }
+};
+
+} // namespace streaming
+
+
+
+
 
 
 
