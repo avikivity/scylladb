@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "gms/i_endpoint_state_change_subscriber.hh"
 #include <seastar/core/distributed.hh>
 #include "message/messaging_service_fwd.hh"
 #include "streaming/stream_session_state.hh"

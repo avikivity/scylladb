@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "locator/abstract_replication_strategy.hh"
 #include "streaming/stream_plan.hh"
 #include "streaming/stream_state.hh"
 #include "streaming/stream_reason.hh"

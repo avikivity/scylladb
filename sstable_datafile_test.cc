@@ -54741,6 +54741,938 @@ protected:
 
 } // namespace locator
 
+#include <vector>
+#include <unordered_set>
+#include <cstddef>
+#include <iostream>
+
+namespace utils {
+/**
+ * This class implements an add-only vector that ensures that the elements are
+ * unique.
+ *
+ * This class provides a similar functionality to the Java's LinkedHashSet
+ * class.
+ */
+template<typename T, typename VectorType>
+class basic_sequenced_set {
+public:
+    using value_type = T;
+    using size_type = size_t;
+    using iterator = typename VectorType::iterator;
+    using const_iterator = typename VectorType::const_iterator;
+
+    basic_sequenced_set() = default;
+
+    basic_sequenced_set(std::initializer_list<T> init)
+        : _set(init)
+        , _vec(init)
+    { }
+
+    explicit basic_sequenced_set(VectorType v)
+        : _set(v.begin(), v.end())
+        , _vec(std::move(v))
+    { }
+
+    template <typename InputIt>
+    explicit basic_sequenced_set(InputIt first, InputIt last)
+        : _set(first, last)
+        , _vec(first, last)
+    { }
+
+    const T& operator[](size_t i) const noexcept {
+        return _vec[i];
+    }
+
+    T& operator[](size_t i) noexcept {
+        return _vec[i];
+    }
+
+    bool empty() const noexcept {
+        return _vec.empty();
+    }
+
+    void push_back(const T& val) {
+        insert(val);
+    }
+
+    std::pair<iterator, bool> insert(const T& t) {
+        auto r = _set.insert(t);
+        if (r.second) {
+            try {
+                _vec.push_back(t);
+                return std::make_pair(std::prev(_vec.end()), true);
+            } catch (...) {
+                _set.erase(r.first);
+                throw;
+            }
+        }
+        return std::make_pair(_vec.end(), false);
+    }
+
+    size_type size() const noexcept {
+        return _vec.size();
+    }
+
+    iterator begin() noexcept {
+        return _vec.begin();
+    }
+
+    iterator end() noexcept {
+        return _vec.end();
+    }
+
+    const_iterator begin() const noexcept {
+        return _vec.begin();
+    }
+
+    const_iterator end() const noexcept {
+        return _vec.end();
+    }
+
+    const_iterator cbegin() const noexcept {
+        return _vec.cbegin();
+    }
+
+    const_iterator cend() const noexcept {
+        return _vec.cend();
+    }
+
+    auto& front() const noexcept {
+        return _vec.front();
+    }
+
+    auto& front() noexcept {
+        return _vec.front();
+    }
+
+    auto& back() const noexcept {
+        return _vec.back();
+    }
+
+    auto& back() noexcept {
+        return _vec.back();
+    }
+
+    const auto& get_vector() const noexcept {
+        return _vec;
+    }
+
+    const auto& get_set() const noexcept {
+        return _set;
+    }
+
+    auto extract_set() && noexcept {
+        return std::move(_set);
+    }
+
+    bool contains(const T& t) const noexcept {
+        return _set.contains(t);
+    }
+
+    void reserve(size_type sz) {
+        _set.reserve(sz);
+        _vec.reserve(sz);
+    }
+
+    iterator erase(const_iterator pos) {
+        auto val = *pos;
+        auto it = _vec.erase(pos);
+        _set.erase(val);
+        return it;
+    }
+
+    // The implementation is not exception safe
+    // so mark the method noexcept to terminate in case anything throws
+    iterator erase(const_iterator first, const_iterator last) noexcept {
+        for (auto it = first; it != last; ++it) {
+            _set.erase(*it);
+        }
+        return _vec.erase(first, last);
+    }
+
+private:
+    std::unordered_set<T> _set;
+    VectorType _vec;
+};
+
+template <typename T>
+using sequenced_set = basic_sequenced_set<T, std::vector<T>>;
+
+} // namespace utils
+
+namespace std {
+
+template <typename T, typename VectorType>
+ostream& operator<<(ostream& os, const utils::basic_sequenced_set<T, VectorType>& s) {
+    return os << s.get_vector();
+}
+
+} // namespace std
+
+
+#include <memory>
+#include <functional>
+#include <unordered_map>
+#include <seastar/util/bool_class.hh>
+
+// forward declaration since replica/database.hh includes this file
+namespace replica {
+class database;
+class keyspace;
+}
+
+namespace locator {
+
+extern logging::logger rslogger;
+
+using inet_address = gms::inet_address;
+using token = dht::token;
+
+enum class replication_strategy_type {
+    simple,
+    local,
+    network_topology,
+    everywhere_topology,
+};
+
+using can_yield = utils::can_yield;
+
+using replication_strategy_config_options = std::map<sstring, sstring>;
+
+using replication_map = std::unordered_map<token, inet_address_vector_replica_set>;
+
+using endpoint_set = utils::basic_sequenced_set<inet_address, inet_address_vector_replica_set>;
+
+class vnode_effective_replication_map;
+class effective_replication_map_factory;
+class per_table_replication_strategy;
+class tablet_aware_replication_strategy;
+
+class abstract_replication_strategy : public seastar::enable_shared_from_this<abstract_replication_strategy> {
+    friend class vnode_effective_replication_map;
+    friend class per_table_replication_strategy;
+    friend class tablet_aware_replication_strategy;
+protected:
+    replication_strategy_config_options _config_options;
+    replication_strategy_type _my_type;
+    bool _per_table = false;
+    bool _uses_tablets = false;
+
+    template <typename... Args>
+    void err(const char* fmt, Args&&... args) const {
+        rslogger.error(fmt, std::forward<Args>(args)...);
+    }
+
+    template <typename... Args>
+    void warn(const char* fmt, Args&&... args) const {
+        rslogger.warn(fmt, std::forward<Args>(args)...);
+    }
+
+    template <typename... Args>
+    void debug(const char* fmt, Args&&... args) const {
+        rslogger.debug(fmt, std::forward<Args>(args)...);
+    }
+
+public:
+    using ptr_type = seastar::shared_ptr<abstract_replication_strategy>;
+
+    abstract_replication_strategy(
+        const replication_strategy_config_options& config_options,
+        replication_strategy_type my_type);
+
+    // Evaluates to true iff calculate_natural_endpoints
+    // returns different results for different tokens.
+    virtual bool natural_endpoints_depend_on_token() const noexcept { return true; }
+
+    // The returned vector has size O(number of normal token owners), which is O(number of nodes in the cluster).
+    // Note: it is not guaranteed that the function will actually yield. If the complexity of a particular implementation
+    // is small, that implementation may not yield since by itself it won't cause a reactor stall (assuming practical
+    // cluster sizes and number of tokens per node). The caller is responsible for yielding if they call this function
+    // in a loop.
+    virtual future<endpoint_set> calculate_natural_endpoints(const token& search_token, const token_metadata& tm) const  = 0;
+
+    virtual ~abstract_replication_strategy() {}
+    static ptr_type create_replication_strategy(const sstring& strategy_name, const replication_strategy_config_options& config_options);
+    static void validate_replication_strategy(const sstring& ks_name,
+                                              const sstring& strategy_name,
+                                              const replication_strategy_config_options& config_options,
+                                              const gms::feature_service& fs,
+                                              const topology& topology);
+    static void validate_replication_factor(sstring rf);
+
+    static sstring to_qualified_class_name(std::string_view strategy_class_name);
+
+    virtual inet_address_vector_replica_set get_natural_endpoints(const token& search_token, const vnode_effective_replication_map& erm) const;
+    // Returns the last stop_iteration result of the called func
+    virtual stop_iteration for_each_natural_endpoint_until(const token& search_token, const vnode_effective_replication_map& erm, const noncopyable_function<stop_iteration(const inet_address&)>& func) const;
+    virtual void validate_options(const gms::feature_service&) const = 0;
+    virtual std::optional<std::unordered_set<sstring>> recognized_options(const topology&) const = 0;
+    virtual size_t get_replication_factor(const token_metadata& tm) const = 0;
+    // Decide if the replication strategy allow removing the node being
+    // replaced from the natural endpoints when a node is being replaced in the
+    // cluster. LocalStrategy is the not allowed to do so because it always
+    // returns the node itself as the natural_endpoints and the node will not
+    // appear in the pending_endpoints.
+    virtual bool allow_remove_node_being_replaced_from_natural_endpoints() const = 0;
+    replication_strategy_type get_type() const noexcept { return _my_type; }
+    const replication_strategy_config_options get_config_options() const noexcept { return _config_options; }
+
+    // If returns true then tables governed by this replication strategy have separate
+    // effective_replication_maps.
+    // If returns false, they share the same effective_replication_map, which is per keyspace.
+    // If returns true, then this replication strategy extends per_table_replication_strategy.
+    // Note, a replication strategy may extend per_table_replication_strategy while !is_per_table(),
+    // depending on actual strategy options.
+    bool is_per_table() const { return _per_table; }
+    const per_table_replication_strategy* maybe_as_per_table() const;
+
+    // Returns true iff this replication strategy is based on vnodes.
+    // If this is the case, all tables governed by this replication strategy share the effective replication map.
+    bool is_vnode_based() const {
+        return !is_per_table();
+    }
+
+    bool uses_tablets() const { return _uses_tablets; }
+    const tablet_aware_replication_strategy* maybe_as_tablet_aware() const;
+
+    // Use the token_metadata provided by the caller instead of _token_metadata
+    // Note: must be called with initialized, non-empty token_metadata.
+    future<dht::token_range_vector> get_ranges(inet_address ep, token_metadata_ptr tmptr) const;
+    future<dht::token_range_vector> get_ranges(inet_address ep, const token_metadata& tm) const;
+
+    // Caller must ensure that token_metadata will not change throughout the call.
+    future<std::unordered_map<dht::token_range, inet_address_vector_replica_set>> get_range_addresses(const token_metadata& tm) const;
+
+    future<dht::token_range_vector> get_pending_address_ranges(const token_metadata_ptr tmptr, std::unordered_set<token> pending_tokens, inet_address pending_address, locator::endpoint_dc_rack dr) const;
+};
+
+using replication_strategy_ptr = seastar::shared_ptr<const abstract_replication_strategy>;
+using mutable_replication_strategy_ptr = seastar::shared_ptr<abstract_replication_strategy>;
+
+/// \brief Represents effective replication (assignment of replicas to keys).
+///
+/// It's a result of application of a given replication strategy instance
+/// over a particular token metadata version, for a given table.
+/// Can be shared by multiple tables if they have the same replication.
+///
+/// Immutable, users can assume that it doesn't change.
+///
+/// Holding to this object keeps the associated token_metadata_ptr alive,
+/// keeping the token metadata version alive and seen as in use.
+class effective_replication_map {
+protected:
+    replication_strategy_ptr _rs;
+    token_metadata_ptr _tmptr;
+    size_t _replication_factor;
+public:
+    effective_replication_map(replication_strategy_ptr, token_metadata_ptr, size_t replication_factor) noexcept;
+    virtual ~effective_replication_map() = default;
+
+    const abstract_replication_strategy& get_replication_strategy() const noexcept { return *_rs; }
+    const token_metadata& get_token_metadata() const noexcept { return *_tmptr; }
+    const token_metadata_ptr& get_token_metadata_ptr() const noexcept { return _tmptr; }
+    const topology& get_topology() const noexcept { return _tmptr->get_topology(); }
+    size_t get_replication_factor() const noexcept { return _replication_factor; }
+
+    /// Returns addresses of replicas for a given token.
+    /// Does not include pending replicas except for a pending replica which
+    /// has the same address as one of the old replicas. This can be the case during "nodetool replace"
+    /// operation which adds a replica which has the same address as the replaced replica.
+    /// Use get_natural_endpoints_without_node_being_replaced() to get replicas without any pending replicas.
+    /// This won't be necessary after we implement https://github.com/scylladb/scylladb/issues/6403.
+    virtual inet_address_vector_replica_set get_natural_endpoints(const token& search_token) const = 0;
+
+    /// Returns addresses of replicas for a given token.
+    /// Does not include pending replicas.
+    virtual inet_address_vector_replica_set get_natural_endpoints_without_node_being_replaced(const token& search_token) const = 0;
+
+    /// Returns the set of pending replicas for a given token.
+    /// Pending replica is a replica which gains ownership of data.
+    /// Non-empty only during topology change.
+    virtual inet_address_vector_topology_change get_pending_endpoints(const token& search_token, const sstring& ks_name) const = 0;
+
+    /// Returns a token_range_splitter which is line with the replica assignment of this replication map.
+    /// The splitter can live longer than this instance.
+    virtual std::unique_ptr<token_range_splitter> make_splitter() const = 0;
+};
+
+using effective_replication_map_ptr = seastar::shared_ptr<const effective_replication_map>;
+using mutable_effective_replication_map_ptr = seastar::shared_ptr<effective_replication_map>;
+
+/// Replication strategies which support per-table replication extend this trait.
+///
+/// It will be accessed only if the replication strategy actually works in per-table mode,
+/// that is after mark_as_per_table() is called, and as a result
+/// abstract_replication_strategy::is_per_table() returns true.
+class per_table_replication_strategy {
+protected:
+    void mark_as_per_table(abstract_replication_strategy& self) {
+        self._per_table = true;
+    }
+public:
+    virtual ~per_table_replication_strategy() = default;
+    virtual effective_replication_map_ptr make_replication_map(table_id, token_metadata_ptr) const = 0;
+};
+
+// Holds the full replication_map resulting from applying the
+// effective replication strategy over the given token_metadata
+// and replication_strategy_config_options.
+// Used for token-based replication strategies.
+class vnode_effective_replication_map : public enable_shared_from_this<vnode_effective_replication_map>
+                                      , public effective_replication_map {
+public:
+    struct factory_key {
+        replication_strategy_type rs_type;
+        long ring_version;
+        replication_strategy_config_options rs_config_options;
+
+        factory_key(replication_strategy_type rs_type_, const replication_strategy_config_options& rs_config_options_, long ring_version_)
+            : rs_type(std::move(rs_type_))
+            , ring_version(ring_version_)
+            , rs_config_options(std::move(rs_config_options_))
+        {}
+
+        factory_key(factory_key&&) = default;
+        factory_key(const factory_key&) = default;
+
+        bool operator==(const factory_key& o) const = default;
+
+        sstring to_sstring() const;
+    };
+
+private:
+    replication_map _replication_map;
+    std::optional<factory_key> _factory_key = std::nullopt;
+    effective_replication_map_factory* _factory = nullptr;
+
+    friend class abstract_replication_strategy;
+    friend class effective_replication_map_factory;
+public: // effective_replication_map
+    inet_address_vector_replica_set get_natural_endpoints(const token& search_token) const override;
+    inet_address_vector_replica_set get_natural_endpoints_without_node_being_replaced(const token& search_token) const override;
+    inet_address_vector_topology_change get_pending_endpoints(const token& search_token, const sstring& ks_name) const override;
+    std::unique_ptr<token_range_splitter> make_splitter() const override;
+public:
+    explicit vnode_effective_replication_map(replication_strategy_ptr rs, token_metadata_ptr tmptr, replication_map replication_map, size_t replication_factor) noexcept
+        : effective_replication_map(std::move(rs), std::move(tmptr), replication_factor)
+        , _replication_map(std::move(replication_map))
+    { }
+    vnode_effective_replication_map() = delete;
+    vnode_effective_replication_map(vnode_effective_replication_map&&) = default;
+    ~vnode_effective_replication_map();
+
+    const replication_map& get_replication_map() const noexcept {
+        return _replication_map;
+    }
+
+    future<> clear_gently() noexcept;
+
+    future<replication_map> clone_endpoints_gently() const;
+
+    stop_iteration for_each_natural_endpoint_until(const token& search_token, const noncopyable_function<stop_iteration(const inet_address&)>& func) const;
+
+    // get_ranges() returns the list of ranges held by the given endpoint.
+    // The list is sorted, and its elements are non overlapping and non wrap-around.
+    // It the analogue of Origin's getAddressRanges().get(endpoint).
+    // This function is not efficient, and not meant for the fast path.
+    //
+    // Note: must be called after token_metadata has been initialized.
+    dht::token_range_vector get_ranges(inet_address ep) const;
+
+    // get_primary_ranges() returns the list of "primary ranges" for the given
+    // endpoint. "Primary ranges" are the ranges that the node is responsible
+    // for storing replica primarily, which means this is the first node
+    // returned calculate_natural_endpoints().
+    // This function is the analogue of Origin's
+    // StorageService.getPrimaryRangesForEndpoint().
+    //
+    // Note: must be called after token_metadata has been initialized.
+    dht::token_range_vector get_primary_ranges(inet_address ep) const;
+
+    // get_primary_ranges_within_dc() is similar to get_primary_ranges()
+    // except it assigns a primary node for each range within each dc,
+    // instead of one node globally.
+    //
+    // Note: must be called after token_metadata has been initialized.
+    dht::token_range_vector get_primary_ranges_within_dc(inet_address ep) const;
+
+    future<std::unordered_map<dht::token_range, inet_address_vector_replica_set>>
+    get_range_addresses() const;
+
+private:
+    dht::token_range_vector do_get_ranges(noncopyable_function<stop_iteration(bool& add_range, const inet_address& natural_endpoint)> consider_range_for_endpoint) const;
+
+public:
+    static factory_key make_factory_key(const replication_strategy_ptr& rs, const token_metadata_ptr& tmptr);
+
+    const factory_key& get_factory_key() const noexcept {
+        return *_factory_key;
+    }
+
+    void set_factory(effective_replication_map_factory& factory, factory_key key) noexcept {
+        _factory = &factory;
+        _factory_key.emplace(std::move(key));
+    }
+
+    bool is_registered() const noexcept {
+        return _factory != nullptr;
+    }
+
+    void unregister() noexcept {
+        _factory = nullptr;
+    }
+};
+
+using vnode_effective_replication_map_ptr = shared_ptr<const vnode_effective_replication_map>;
+using mutable_vnode_effective_replication_map_ptr = shared_ptr<vnode_effective_replication_map>;
+using vnode_erm_ptr = vnode_effective_replication_map_ptr;
+using mutable_vnode_erm_ptr = mutable_vnode_effective_replication_map_ptr;
+
+inline mutable_vnode_erm_ptr make_effective_replication_map(replication_strategy_ptr rs, token_metadata_ptr tmptr, replication_map replication_map, size_t replication_factor) {
+    return seastar::make_shared<vnode_effective_replication_map>(
+            std::move(rs), std::move(tmptr), std::move(replication_map), replication_factor);
+}
+
+// Apply the replication strategy over the current configuration and the given token_metadata.
+future<mutable_vnode_erm_ptr> calculate_effective_replication_map(replication_strategy_ptr rs, token_metadata_ptr tmptr);
+
+// Class to hold a coherent view of a keyspace
+// effective replication map on all shards
+class global_vnode_effective_replication_map {
+    std::vector<foreign_ptr<vnode_erm_ptr>> _erms;
+
+public:
+    global_vnode_effective_replication_map() : _erms(smp::count) {}
+    global_vnode_effective_replication_map(global_vnode_effective_replication_map&&) = default;
+    global_vnode_effective_replication_map& operator=(global_vnode_effective_replication_map&&) = default;
+
+    future<> get_keyspace_erms(sharded<replica::database>& sharded_db, std::string_view keyspace_name);
+
+    const vnode_effective_replication_map& get() const noexcept {
+        return *_erms[this_shard_id()];
+    }
+
+    const vnode_effective_replication_map& operator*() const noexcept {
+        return get();
+    }
+
+    const vnode_effective_replication_map* operator->() const noexcept {
+        return &get();
+    }
+};
+
+future<global_vnode_effective_replication_map> make_global_effective_replication_map(sharded<replica::database>& sharded_db, std::string_view keyspace_name);
+
+} // namespace locator
+
+std::ostream& operator<<(std::ostream& os, locator::replication_strategy_type);
+std::ostream& operator<<(std::ostream& os, const locator::vnode_effective_replication_map::factory_key& key);
+
+template <>
+struct fmt::formatter<locator::vnode_effective_replication_map::factory_key> {
+    constexpr auto parse(format_parse_context& ctx) {
+        return ctx.end();
+    }
+
+    template <typename FormatContext>
+    auto format(const locator::vnode_effective_replication_map::factory_key& key, FormatContext& ctx) {
+        std::ostringstream os;
+        os << key;
+        return fmt::format_to(ctx.out(), "{}", os.str());
+    }
+};
+
+template<>
+struct appending_hash<locator::vnode_effective_replication_map::factory_key> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const locator::vnode_effective_replication_map::factory_key& key) const {
+        feed_hash(h, key.rs_type);
+        feed_hash(h, key.ring_version);
+        for (const auto& [opt, val] : key.rs_config_options) {
+            h.update(opt.c_str(), opt.size());
+            h.update(val.c_str(), val.size());
+        }
+    }
+};
+
+namespace std {
+
+template <>
+struct hash<locator::vnode_effective_replication_map::factory_key> {
+    size_t operator()(const locator::vnode_effective_replication_map::factory_key& key) const {
+        simple_xx_hasher h;
+        appending_hash<locator::vnode_effective_replication_map::factory_key>{}(h, key);
+        return h.finalize();
+    }
+};
+
+} // namespace std
+
+namespace locator {
+
+class effective_replication_map_factory : public peering_sharded_service<effective_replication_map_factory> {
+    std::unordered_map<vnode_effective_replication_map::factory_key, vnode_effective_replication_map*> _effective_replication_maps;
+    future<> _background_work = make_ready_future<>();
+    bool _stopped = false;
+
+public:
+    // looks up the vnode_effective_replication_map on the local shard.
+    // If not found, tries to look one up for reference on shard 0
+    // so its replication map can be cloned.  Otherwise, calculates the
+    // vnode_effective_replication_map for the local shard.
+    //
+    // Therefore create should be called first on shard 0, then on all other shards.
+    future<vnode_erm_ptr> create_effective_replication_map(replication_strategy_ptr rs, token_metadata_ptr tmptr);
+
+    future<> stop() noexcept;
+
+    bool stopped() const noexcept {
+        return _stopped;
+    }
+
+private:
+    vnode_erm_ptr find_effective_replication_map(const vnode_effective_replication_map::factory_key& key) const;
+    vnode_erm_ptr insert_effective_replication_map(mutable_vnode_erm_ptr erm, vnode_effective_replication_map::factory_key key);
+
+    bool erase_effective_replication_map(vnode_effective_replication_map* erm);
+
+    void submit_background_work(future<> fut);
+
+    friend class vnode_effective_replication_map;
+};
+
+void maybe_remove_node_being_replaced(const token_metadata&,
+                                      const abstract_replication_strategy&,
+                                      inet_address_vector_replica_set& natural_endpoints);
+
+}
+
+namespace streaming {
+
+class stream_event_handler;
+class stream_manager;
+class stream_result_future;
+class stream_session;
+class stream_state;
+
+using plan_id = utils::tagged_uuid<struct plan_id_tag>;
+
+} // namespace streaming
+
+
+namespace gms {
+
+using generation_type = utils::tagged_integer<struct generation_type_tag, int32_t>;
+
+generation_type get_generation_number();
+
+void validate_gossip_generation(int64_t generation_number);
+inline void debug_validate_gossip_generation([[maybe_unused]] int64_t generation_number) {
+#ifndef SCYLLA_BUILD_MODE_RELEASE
+    validate_gossip_generation(generation_number);
+#endif
+}
+
+}
+
+
+#include <ostream>
+#include <limits>
+
+namespace gms {
+/**
+ * HeartBeat State associated with any given endpoint.
+ */
+class heart_beat_state {
+private:
+    generation_type _generation;
+    version_type _version;
+public:
+    bool operator==(const heart_beat_state& other) const noexcept {
+        return _generation == other._generation && _version == other._version;
+    }
+
+    heart_beat_state() noexcept : heart_beat_state(generation_type(0)) {}
+
+    explicit heart_beat_state(generation_type gen) noexcept
+        : _generation(gen)
+    {
+    }
+
+    heart_beat_state(generation_type gen, version_type ver) noexcept
+        : _generation(gen)
+        , _version(ver) {
+    }
+
+    generation_type get_generation() const noexcept {
+        return _generation;
+    }
+
+    void update_heart_beat() noexcept {
+        _version = version_generator::get_next_version();
+    }
+
+    version_type get_heart_beat_version() const noexcept {
+        return _version;
+    }
+
+    void force_newer_generation_unsafe() noexcept {
+        ++_generation;
+    }
+
+    void force_highest_possible_version_unsafe() noexcept {
+        static_assert(std::numeric_limits<version_type>::is_bounded);
+        _version = std::numeric_limits<version_type>::max();
+    }
+
+    friend inline std::ostream& operator<<(std::ostream& os, const heart_beat_state& h) {
+        return os << "{ generation = " << h._generation << ", version = " << h._version << " }";
+    }
+};
+
+} // gms
+
+
+#include <ostream>
+
+namespace gms {
+
+enum class application_state {
+    STATUS = 0,
+    LOAD,
+    SCHEMA,
+    DC,
+    RACK,
+    RELEASE_VERSION,
+    REMOVAL_COORDINATOR,
+    INTERNAL_IP,
+    RPC_ADDRESS,
+    X_11_PADDING, // padding specifically for 1.1
+    SEVERITY,
+    NET_VERSION,
+    HOST_ID,
+    TOKENS,
+    SUPPORTED_FEATURES,
+    CACHE_HITRATES,
+    SCHEMA_TABLES_VERSION,
+    RPC_READY,
+    VIEW_BACKLOG,
+    SHARD_COUNT,
+    IGNORE_MSB_BITS,
+    CDC_GENERATION_ID,
+    SNITCH_NAME,
+};
+
+std::ostream& operator<<(std::ostream& os, const application_state& m);
+
+}
+
+#include <optional>
+#include <chrono>
+
+namespace gms {
+
+/**
+ * This abstraction represents both the HeartBeatState and the ApplicationState in an EndpointState
+ * instance. Any state for a given endpoint can be retrieved from this instance.
+ */
+class endpoint_state {
+public:
+    using clk = seastar::lowres_system_clock;
+private:
+    heart_beat_state _heart_beat_state;
+    std::map<application_state, versioned_value> _application_state;
+    /* fields below do not get serialized */
+    clk::time_point _update_timestamp;
+    bool _is_alive;
+    bool _is_normal = false;
+
+public:
+    bool operator==(const endpoint_state& other) const {
+        return _heart_beat_state  == other._heart_beat_state &&
+               _application_state == other._application_state &&
+               _update_timestamp  == other._update_timestamp &&
+               _is_alive          == other._is_alive;
+    }
+
+    endpoint_state() noexcept
+        : _heart_beat_state()
+        , _update_timestamp(clk::now())
+        , _is_alive(true) {
+        update_is_normal();
+    }
+
+    endpoint_state(heart_beat_state initial_hb_state) noexcept
+        : _heart_beat_state(initial_hb_state)
+        , _update_timestamp(clk::now())
+        , _is_alive(true) {
+        update_is_normal();
+    }
+
+    endpoint_state(heart_beat_state&& initial_hb_state,
+            const std::map<application_state, versioned_value>& application_state)
+        : _heart_beat_state(std::move(initial_hb_state))
+        , _application_state(application_state)
+        , _update_timestamp(clk::now())
+        , _is_alive(true) {
+        update_is_normal();
+    }
+
+    // Valid only on shard 0
+    heart_beat_state& get_heart_beat_state() noexcept {
+        return _heart_beat_state;
+    }
+
+    // Valid only on shard 0
+    const heart_beat_state& get_heart_beat_state() const noexcept {
+        return _heart_beat_state;
+    }
+
+    void set_heart_beat_state_and_update_timestamp(heart_beat_state hbs) noexcept {
+        update_timestamp();
+        _heart_beat_state = hbs;
+    }
+
+    const versioned_value* get_application_state_ptr(application_state key) const noexcept;
+
+    /**
+     * TODO replace this with operations that don't expose private state
+     */
+    // @Deprecated
+    std::map<application_state, versioned_value>& get_application_state_map() noexcept {
+        return _application_state;
+    }
+
+    const std::map<application_state, versioned_value>& get_application_state_map() const noexcept {
+        return _application_state;
+    }
+
+    void add_application_state(application_state key, versioned_value value) {
+        _application_state[key] = std::move(value);
+        update_is_normal();
+    }
+
+    void add_application_state(const endpoint_state& es) {
+        _application_state = es._application_state;
+        update_is_normal();
+    }
+
+    /* getters and setters */
+    /**
+     * @return System.nanoTime() when state was updated last time.
+     *
+     * Valid only on shard 0.
+     */
+    clk::time_point get_update_timestamp() const noexcept {
+        return _update_timestamp;
+    }
+
+    void update_timestamp() noexcept {
+        _update_timestamp = clk::now();
+    }
+
+    bool is_alive() const noexcept {
+        return _is_alive;
+    }
+
+    void set_alive(bool alive) noexcept {
+        _is_alive = alive;
+    }
+
+    void mark_alive() noexcept {
+        set_alive(true);
+    }
+
+    void mark_dead() noexcept {
+        set_alive(false);
+    }
+
+    std::string_view get_status() const noexcept {
+        constexpr std::string_view empty = "";
+        auto* app_state = get_application_state_ptr(application_state::STATUS);
+        if (!app_state) {
+            return empty;
+        }
+        const auto& value = app_state->value();
+        if (value.empty()) {
+            return empty;
+        }
+        auto pos = value.find(',');
+        if (pos == sstring::npos) {
+            return std::string_view(value);
+        }
+        return std::string_view(value.c_str(), pos);
+    }
+
+    bool is_shutdown() const noexcept {
+        return get_status() == versioned_value::SHUTDOWN;
+    }
+
+    bool is_normal() const noexcept {
+        return _is_normal;
+    }
+
+    void update_is_normal() noexcept {
+        _is_normal = get_status() == versioned_value::STATUS_NORMAL;
+    }
+
+    bool is_cql_ready() const noexcept;
+
+    friend std::ostream& operator<<(std::ostream& os, const endpoint_state& x);
+};
+
+} // gms
+
+
+
+namespace gms {
+
+/**
+ * This is called by an instance of the IEndpointStateChangePublisher to notify
+ * interested parties about changes in the the state associated with any endpoint.
+ * For instance if node A figures there is a changes in state for an endpoint B
+ * it notifies all interested parties of this change. It is upto to the registered
+ * instance to decide what he does with this change. Not all modules maybe interested
+ * in all state changes.
+ */
+class i_endpoint_state_change_subscriber {
+public:
+    virtual ~i_endpoint_state_change_subscriber() {}
+    /**
+     * Use to inform interested parties about the change in the state
+     * for specified endpoint
+     *
+     * @param endpoint endpoint for which the state change occurred.
+     * @param epState  state that actually changed for the above endpoint.
+     */
+    virtual future<> on_join(inet_address endpoint, endpoint_state ep_state) = 0;
+
+    virtual future<> before_change(inet_address endpoint, endpoint_state current_state, application_state new_statekey, const versioned_value& newvalue) = 0;
+
+    virtual future<> on_change(inet_address endpoint, application_state state, const versioned_value& value) = 0;
+
+    virtual future<> on_alive(inet_address endpoint, endpoint_state state) = 0;
+
+    virtual future<> on_dead(inet_address endpoint, endpoint_state state) = 0;
+
+    virtual future<> on_remove(inet_address endpoint) = 0;
+
+    /**
+     * Called whenever a node is restarted.
+     * Note that there is no guarantee when that happens that the node was
+     * previously marked down. It will have only if {@code state.isAlive() == false}
+     * as {@code state} is from before the restarted node is marked up.
+     */
+    virtual future<> on_restart(inet_address endpoint, endpoint_state state) = 0;
+};
+
+} // namespace gms
+
+
+
+
+
 
 
 
