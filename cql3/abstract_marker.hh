@@ -9,10 +9,3 @@
  */
 
 #pragma once
-
-namespace cql3 {
-
-class column_specification;
-class prepare_context;
-
-}

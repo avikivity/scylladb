@@ -12,9 +12,6 @@
 
 #include <concepts>
 #include <initializer_list>
-#include "timestamp.hh"
-#include "bytes.hh"
-#include "db/consistency_level_type.hh"
 #include "service/query_state.hh"
 #include "service/pager/paging_state.hh"
 #include "cql3/values.hh"

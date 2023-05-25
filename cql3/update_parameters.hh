@@ -10,12 +10,6 @@
 
 #pragma once
 
-#include "gc_clock.hh"
-#include "timestamp.hh"
-#include "schema/schema_fwd.hh"
-#include "mutation/atomic_cell.hh"
-#include "mutation/tombstone.hh"
-#include "exceptions/exceptions.hh"
 #include "cql3/query_options.hh"
 #include "cql3/selection/selection.hh"
 #include "query-request.hh"
