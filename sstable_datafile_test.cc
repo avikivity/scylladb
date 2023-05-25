@@ -57032,19 +57032,306 @@ private:
 
 
 
+#include <memory>
+#include <ostream>
+#include <filesystem>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/future.hh>
+
+
+namespace fs = std::filesystem;
+
+namespace utils {
+    class file_lock {
+    public:
+        file_lock() = delete;
+        file_lock(const file_lock&) = delete;
+        file_lock(file_lock&&) noexcept;
+        ~file_lock();
+
+        file_lock& operator=(file_lock&&) = default;
+
+        static future<file_lock> acquire(fs::path);
+
+        fs::path path() const;
+        sstring to_string() const {
+            return path().native();
+        }
+    private:
+        class impl;
+        file_lock(fs::path);
+        std::unique_ptr<impl> _impl;
+    };
+
+    std::ostream& operator<<(std::ostream& out, const file_lock& f);
+}
+
+
+
+#include <set>
+#include <vector>
+#include <seastar/core/future.hh>
+#include <seastar/core/smp.hh>
+
+using namespace seastar;
+
+namespace db {
+class config;
+}
+
+namespace utils {
+
+class directories {
+public:
+    class set {
+    public:
+        void add(fs::path path);
+        void add(sstring path);
+        void add(std::vector<sstring> path);
+        void add_sharded(sstring path);
+
+        const std::set<fs::path> get_paths() const {
+            return _paths;
+        }
+
+    private:
+        std::set<fs::path> _paths;
+    };
+
+    directories(bool developer_mode);
+    future<> create_and_verify(set dir_set);
+    static future<> verify_owner_and_mode(std::filesystem::path path);
+private:
+    bool _developer_mode;
+    std::vector<file_lock> _locks;
+};
+
+} // namespace utils
 
 
 
 
-#include "dht/range_streamer.hh"
-#include "dht/token.hh"
-#include "dht/token-sharding.hh"
-#include "directories.hh"
-#include "duration.hh"
 #include <exception>
-#include "exceptions/exceptions.hh"
-#include "exceptions.hh"
-#include "fb_utilities.hh"
+
+#if defined(__GLIBCXX__) && (defined(__x86_64__) || defined(__aarch64__))
+  #define OPTIMIZED_EXCEPTION_HANDLING_AVAILABLE
+#endif
+
+#if !defined(NO_OPTIMIZED_EXCEPTION_HANDLING)
+  #if defined(OPTIMIZED_EXCEPTION_HANDLING_AVAILABLE)
+    #define USE_OPTIMIZED_EXCEPTION_HANDLING
+  #else
+    #warn "Fast implementation of some of the exception handling routines is not available for this platform. Expect poor exception handling performance."
+  #endif
+#endif
+
+#include <seastar/core/sstring.hh>
+#include <seastar/core/on_internal_error.hh>
+#include <seastar/core/align.hh>
+
+#include <functional>
+#include <system_error>
+#include <type_traits>
+
+namespace seastar { class logger; }
+
+typedef std::function<bool (const std::system_error &)> system_error_lambda_t;
+
+bool check_exception(system_error_lambda_t f);
+bool is_system_error_errno(int err_no);
+bool is_timeout_exception(std::exception_ptr e);
+
+class storage_io_error : public std::exception {
+private:
+    std::error_code _code;
+    std::string _what;
+public:
+    storage_io_error(std::system_error& e) noexcept
+        : _code{e.code()}
+        , _what{std::string("Storage I/O error: ") + std::to_string(e.code().value()) + ": " + e.what()}
+    { }
+
+    virtual const char* what() const noexcept override {
+        return _what.c_str();
+    }
+
+    const std::error_code& code() const noexcept { return _code; }
+};
+
+// Rethrow exception if not null
+//
+// Helps with the common coroutine exception-handling idiom:
+//
+//  std::exception_ptr ex;
+//  try {
+//      ...
+//  } catch (...) {
+//      ex = std::current_exception();
+//  }
+//
+//  // release resource(s)
+//  maybe_rethrow_exception(std::move(ex));
+//
+//  return result;
+//
+inline void maybe_rethrow_exception(std::exception_ptr ex) {
+    if (ex) {
+        std::rethrow_exception(std::move(ex));
+    }
+}
+
+namespace utils::internal {
+
+#if defined(OPTIMIZED_EXCEPTION_HANDLING_AVAILABLE)
+void* try_catch_dynamic(std::exception_ptr& eptr, const std::type_info* catch_type) noexcept;
+
+template<typename Ex>
+class nested_exception : public Ex, public std::nested_exception {
+private:
+    void set_nested_exception(std::exception_ptr nested_eptr) {
+        // Hack: libstdc++'s std::nested_exception has just one field
+        // which is a std::exception_ptr. It is initialized
+        // to std::current_exception on its construction, but we override
+        // it here.
+        auto* nex = dynamic_cast<std::nested_exception*>(this);
+
+        // std::nested_exception is virtual without any base classes,
+        // so according to the ABI we just need to skip the vtable pointer
+        // and align
+        auto* nptr = reinterpret_cast<std::exception_ptr*>(
+                seastar::align_up(
+                        reinterpret_cast<char*>(nex) + sizeof(void*),
+                        alignof(std::nested_exception)));
+        *nptr = std::move(nested_eptr);
+    }
+
+public:
+    explicit nested_exception(const Ex& ex, std::exception_ptr&& nested_eptr)
+            : Ex(ex) {
+        set_nested_exception(std::move(nested_eptr));
+    }
+
+    explicit nested_exception(Ex&& ex, std::exception&& nested_eptr)
+            : Ex(std::move(ex)) {
+        set_nested_exception(std::move(nested_eptr));
+    }
+};
+#endif
+
+} // utils::internal
+
+/// If the exception_ptr holds an exception which would match on a `catch (T&)`
+/// clause, returns a pointer to it. Otherwise, returns `nullptr`.
+///
+/// The exception behind the pointer is valid as long as the exception
+/// behind the exception_ptr is valid.
+template<typename T>
+inline T* try_catch(std::exception_ptr& eptr) noexcept {
+    static_assert(!std::is_pointer_v<T>, "catching pointers is not supported");
+    static_assert(!std::is_lvalue_reference_v<T> && !std::is_rvalue_reference_v<T>,
+            "T must not be a reference");
+
+#if defined(USE_OPTIMIZED_EXCEPTION_HANDLING)
+    void* opt_ptr = utils::internal::try_catch_dynamic(eptr, &typeid(std::remove_const_t<T>));
+    return reinterpret_cast<T*>(opt_ptr);
+#else
+    try {
+        std::rethrow_exception(eptr);
+    } catch (T& t) {
+        return &t;
+    } catch (...) {
+    }
+    return nullptr;
+#endif
+}
+
+/// Analogous to std::throw_with_nested, but instead of capturing the currently
+/// thrown exception, takes the exception to be nested inside as an argument,
+/// and does not throw the new exception but rather returns it.
+template<typename Ex>
+inline std::exception_ptr make_nested_exception_ptr(Ex&& ex, std::exception_ptr nested) {
+    using ExDecayed = std::decay_t<Ex>;
+
+    static_assert(std::is_copy_constructible_v<ExDecayed> && std::is_move_constructible_v<ExDecayed>,
+            "make_nested_exception_ptr argument must be CopyConstructible");
+
+#if defined(USE_OPTIMIZED_EXCEPTION_HANDLING)
+    // std::rethrow_with_nested wraps the exception type if and only if
+    // it is a non-final non-union class type
+    // and is neither std::nested_exception nor derived from it.
+    // Ref: https://en.cppreference.com/w/cpp/error/throw_with_nested
+    constexpr bool wrap = std::is_class_v<ExDecayed>
+            && !std::is_final_v<ExDecayed>
+            && !std::is_base_of_v<std::nested_exception, ExDecayed>;
+
+    if constexpr (wrap) {
+        return std::make_exception_ptr(utils::internal::nested_exception<ExDecayed>(
+                std::forward<Ex>(ex), std::move(nested)));
+    } else {
+        return std::make_exception_ptr<Ex>(std::forward<Ex>(ex));
+    }
+#else
+    try {
+        std::rethrow_exception(std::move(nested));
+    } catch (...) {
+        try {
+            std::throw_with_nested(std::forward<Ex>(ex));
+        } catch (...) {
+            return std::current_exception();
+        }
+    }
+#endif
+}
+
+
+
+#include <cstdint>
+#include <optional>
+
+namespace utils {
+
+using inet_address = gms::inet_address;
+
+class fb_utilities {
+private:
+    static std::optional<inet_address>& broadcast_address() noexcept {
+        static std::optional<inet_address> _broadcast_address;
+
+        return _broadcast_address;
+    }
+    static std::optional<inet_address>& broadcast_rpc_address() noexcept {
+        static std::optional<inet_address> _broadcast_rpc_address;
+
+        return _broadcast_rpc_address;
+    }
+public:
+   static constexpr int32_t MAX_UNSIGNED_SHORT = 0xFFFF;
+
+   static void set_broadcast_address(inet_address addr) noexcept {
+       broadcast_address() = addr;
+   }
+
+   static void set_broadcast_rpc_address(inet_address addr) noexcept {
+       broadcast_rpc_address() = addr;
+   }
+
+
+   static const inet_address get_broadcast_address() noexcept {
+       assert(broadcast_address());
+       return *broadcast_address();
+   }
+
+   static const inet_address get_broadcast_rpc_address() noexcept {
+       assert(broadcast_rpc_address());
+       return *broadcast_rpc_address();
+   }
+
+    static bool is_me(gms::inet_address addr) noexcept {
+        return addr == get_broadcast_address();
+    }
+};
+}
+
 #include <fcntl.h>
 #include "file_lock.hh"
 #include <fmt/chrono.h>
