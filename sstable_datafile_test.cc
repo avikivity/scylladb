@@ -1,13 +1,6 @@
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-#include "atomic_cell.hh"
 #include "barrett.hh"
-#include "base64.hh"
-#include "big_decimal.hh"
-#include "bloom_calculations.hh"
 #include "bloom_filter.hh"
-#include <boost/algorithm/cxx11/any_of.hpp>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/erase.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/split.hpp>
