@@ -41144,7 +41144,688 @@ public:
 }
 
 
-#include "db/schema_tables.hh"
+#include <stdint.h>
+#include <seastar/core/shared_ptr.hh>
+
+
+namespace db {
+
+using segment_id_type = uint64_t;
+using position_type = uint32_t;
+
+struct replay_position {
+    static constexpr size_t max_cpu_bits = 10; // 1024 cpus. should be enough for anyone
+    static constexpr size_t max_ts_bits = 8 * sizeof(segment_id_type) - max_cpu_bits;
+    static constexpr segment_id_type ts_mask = (segment_id_type(1) << max_ts_bits) - 1;
+    static constexpr segment_id_type cpu_mask = ~ts_mask;
+
+    segment_id_type id;
+    position_type pos;
+
+    replay_position(segment_id_type i = 0, position_type p = 0)
+        : id(i), pos(p)
+    {}
+
+    replay_position(unsigned shard, segment_id_type i, position_type p = 0)
+            : id((segment_id_type(shard) << max_ts_bits) | i), pos(p)
+    {
+        if (i & cpu_mask) {
+            throw std::invalid_argument("base id overflow: " + std::to_string(i));
+        }
+    }
+
+    auto operator<=>(const replay_position&) const noexcept = default;
+
+    unsigned shard_id() const {
+        return unsigned(id >> max_ts_bits);
+    }
+    segment_id_type base_id() const {
+        return id & ts_mask;
+    }
+    replay_position base() const {
+        return replay_position(base_id(), pos);
+    }
+
+    template <typename Describer>
+    auto describe_type(sstables::sstable_version_types v, Describer f) { return f(id, pos); }
+};
+
+class commitlog;
+class cf_holder;
+
+using cf_id_type = table_id;
+
+class rp_handle {
+public:
+    rp_handle() noexcept;
+    rp_handle(rp_handle&&) noexcept;
+    rp_handle& operator=(rp_handle&&) noexcept;
+    ~rp_handle();
+
+    replay_position release();
+
+    operator bool() const {
+        return _h && _rp != replay_position();
+    }
+    operator const replay_position&() const {
+        return _rp;
+    }
+    const replay_position& rp() const {
+        return _rp;
+    }
+private:
+    friend class commitlog;
+
+    rp_handle(shared_ptr<cf_holder>, cf_id_type, replay_position) noexcept;
+
+    ::shared_ptr<cf_holder> _h;
+    cf_id_type _cf;
+    replay_position _rp;
+};
+
+
+std::ostream& operator<<(std::ostream& out, const replay_position& s);
+
+}
+
+namespace std {
+template <>
+struct hash<db::replay_position> {
+    size_t operator()(const db::replay_position& v) const {
+        return utils::tuple_hash()(v.id, v.pos);
+    }
+};
+}
+
+
+namespace db {
+
+enum class schema_feature {
+    VIEW_VIRTUAL_COLUMNS,
+
+    // When set, the schema digest is calcualted in a way such that it doesn't change after all
+    // tombstones in an empty partition expire.
+    // See https://github.com/scylladb/scylla/issues/4485
+    DIGEST_INSENSITIVE_TO_EXPIRY,
+    COMPUTED_COLUMNS,
+    CDC_OPTIONS,
+    PER_TABLE_PARTITIONERS,
+    SCYLLA_KEYSPACES,
+    SCYLLA_AGGREGATES,
+};
+
+using schema_features = enum_set<super_enum<schema_feature,
+    schema_feature::VIEW_VIRTUAL_COLUMNS,
+    schema_feature::DIGEST_INSENSITIVE_TO_EXPIRY,
+    schema_feature::COMPUTED_COLUMNS,
+    schema_feature::CDC_OPTIONS,
+    schema_feature::PER_TABLE_PARTITIONERS,
+    schema_feature::SCYLLA_KEYSPACES,
+    schema_feature::SCYLLA_AGGREGATES
+    >>;
+
+}
+
+#include <iosfwd>
+
+// Immutable mutation form which can be read using any schema version of the same table.
+// Safe to access from other shards via const&.
+// Safe to pass serialized across nodes.
+class canonical_mutation {
+    bytes_ostream _data;
+public:
+    canonical_mutation() {}
+    explicit canonical_mutation(bytes_ostream);
+    explicit canonical_mutation(const mutation&);
+
+    canonical_mutation(canonical_mutation&&) = default;
+    canonical_mutation(const canonical_mutation&) = default;
+    canonical_mutation& operator=(const canonical_mutation&) = default;
+    canonical_mutation& operator=(canonical_mutation&&) = default;
+
+    // Create a mutation object interpreting this canonical mutation using
+    // given schema.
+    //
+    // Data which is not representable in the target schema is dropped. If this
+    // is not intended, user should sync the schema first.
+    mutation to_mutation(schema_ptr) const;
+
+    table_id column_family_id() const;
+
+    const bytes_ostream& representation() const { return _data; }
+
+    friend std::ostream& operator<<(std::ostream& os, const canonical_mutation& cm);
+};
+
+
+#include <vector>
+
+// Commutative representation of table schema
+// Equality ignores tombstones.
+class schema_mutations {
+    mutation _columnfamilies;
+    mutation _columns;
+    mutation_opt _view_virtual_columns;
+    mutation_opt _computed_columns;
+    mutation_opt _indices;
+    mutation_opt _dropped_columns;
+    mutation_opt _scylla_tables;
+public:
+    schema_mutations(mutation columnfamilies, mutation columns, mutation_opt view_virtual_columns, mutation_opt computed_columns, mutation_opt indices, mutation_opt dropped_columns,
+        mutation_opt scylla_tables)
+            : _columnfamilies(std::move(columnfamilies))
+            , _columns(std::move(columns))
+            , _view_virtual_columns(std::move(view_virtual_columns))
+            , _computed_columns(std::move(computed_columns))
+            , _indices(std::move(indices))
+            , _dropped_columns(std::move(dropped_columns))
+            , _scylla_tables(std::move(scylla_tables))
+    { }
+    schema_mutations(canonical_mutation columnfamilies,
+                     canonical_mutation columns,
+                     bool is_view,
+                     std::optional<canonical_mutation> indices,
+                     std::optional<canonical_mutation> dropped_columns,
+                     std::optional<canonical_mutation> scylla_tables,
+                     std::optional<canonical_mutation> view_virtual_columns,
+                     std::optional<canonical_mutation> computed_columns);
+
+    schema_mutations(schema_mutations&&) = default;
+    schema_mutations& operator=(schema_mutations&&) = default;
+    schema_mutations(const schema_mutations&) = default;
+    schema_mutations& operator=(const schema_mutations&) = default;
+
+    void copy_to(std::vector<mutation>& dst) const;
+
+    const mutation& columnfamilies_mutation() const {
+        return _columnfamilies;
+    }
+
+    const mutation& columns_mutation() const {
+        return _columns;
+    }
+
+    const mutation_opt& view_virtual_columns_mutation() const {
+        return _view_virtual_columns;
+    }
+
+    const mutation_opt& computed_columns_mutation() const {
+        return _computed_columns;
+    }
+
+    const mutation_opt& scylla_tables() const {
+        return _scylla_tables;
+    }
+
+    mutation_opt& scylla_tables() {
+        return _scylla_tables;
+    }
+
+    const mutation_opt& indices_mutation() const {
+        return _indices;
+    }
+    const mutation_opt& dropped_columns_mutation() const {
+        return _dropped_columns;
+    }
+
+    canonical_mutation columnfamilies_canonical_mutation() const {
+        return canonical_mutation(_columnfamilies);
+    }
+
+    canonical_mutation columns_canonical_mutation() const {
+        return canonical_mutation(_columns);
+    }
+
+    std::optional<canonical_mutation> view_virtual_columns_canonical_mutation() const {
+        if (_view_virtual_columns) {
+            return canonical_mutation(*_view_virtual_columns);
+        }
+        return {};
+    }
+
+    std::optional<canonical_mutation> computed_columns_canonical_mutation() const {
+        if (_computed_columns) {
+            return canonical_mutation(*_computed_columns);
+        }
+        return {};
+    }
+
+    std::optional<canonical_mutation> indices_canonical_mutation() const {
+        if (_indices) {
+            return canonical_mutation(*_indices);
+        }
+        return {};
+    }
+    std::optional<canonical_mutation> dropped_columns_canonical_mutation() const {
+        if (_dropped_columns) {
+            return canonical_mutation(*_dropped_columns);
+        }
+        return {};
+    }
+    std::optional<canonical_mutation> scylla_tables_canonical_mutation() const {
+        if (_scylla_tables) {
+            return canonical_mutation(*_scylla_tables);
+        }
+        return {};
+    }
+
+    bool is_view() const;
+
+    table_schema_version digest() const;
+    std::optional<sstring> partitioner() const;
+
+    bool operator==(const schema_mutations&) const;
+    schema_mutations& operator+=(schema_mutations&&);
+
+    // Returns true iff any mutations contain any live cells
+    bool live() const;
+
+    friend std::ostream& operator<<(std::ostream&, const schema_mutations&);
+};
+
+
+
+#include <seastar/core/shared_ptr.hh>
+
+#include <optional>
+#include <stdexcept>
+
+class mutation;
+
+namespace query {
+
+class result;
+
+class no_value : public std::runtime_error {
+public:
+    using runtime_error::runtime_error;
+};
+
+class non_null_data_value {
+    data_value _v;
+
+public:
+    explicit non_null_data_value(data_value&& v);
+    operator const data_value&() const {
+        return _v;
+    }
+};
+
+inline bool operator==(const non_null_data_value& x, const non_null_data_value& y) {
+    return static_cast<const data_value&>(x) == static_cast<const data_value&>(y);
+}
+
+// Result set row is a set of cells that are associated with a row
+// including regular column cells, partition keys, as well as static values.
+class result_set_row {
+    schema_ptr _schema;
+    const std::unordered_map<sstring, non_null_data_value> _cells;
+public:
+    result_set_row(schema_ptr schema, std::unordered_map<sstring, non_null_data_value>&& cells)
+        : _schema{schema}
+        , _cells{std::move(cells)}
+    { }
+    // Look up a deserialized row cell value by column name
+    const data_value*
+    get_data_value(const sstring& column_name) const {
+        auto it = _cells.find(column_name);
+        if (it == _cells.end()) {
+            return nullptr;
+        }
+        return &static_cast<const data_value&>(it->second);
+    }
+    // Look up a deserialized row cell value by column name
+    template<typename T>
+    std::optional<T>
+    get(const sstring& column_name) const {
+        if (const auto *value = get_ptr<T>(column_name)) {
+            return std::optional(*value);
+        }
+        return std::nullopt;
+    }
+    template<typename T>
+    const T*
+    get_ptr(const sstring& column_name) const {
+        const auto *value = get_data_value(column_name);
+        if (value == nullptr) {
+            return nullptr;
+        }
+        return &value_cast<T>(*value);
+    }
+    // throws no_value on error
+    template<typename T>
+    const T& get_nonnull(const sstring& column_name) const {
+        auto v = get_ptr<std::remove_reference_t<T>>(column_name);
+        if (v) {
+            return *v;
+        }
+        throw no_value(column_name);
+    }
+    const std::unordered_map<sstring, non_null_data_value>& cells() const { return _cells; }
+    friend inline bool operator==(const result_set_row& x, const result_set_row& y) = default;
+    friend std::ostream& operator<<(std::ostream& out, const result_set_row& row);
+};
+
+// Result set is an in-memory representation of query results in
+// deserialized format. To obtain a result set, use the result_set_builder
+// class as a visitor to query_result::consume() function.
+class result_set {
+    schema_ptr _schema;
+    std::vector<result_set_row> _rows;
+public:
+    static result_set from_raw_result(schema_ptr, const partition_slice&, const result&);
+    result_set(schema_ptr s, std::vector<result_set_row>&& rows)
+        : _schema(std::move(s)), _rows{std::move(rows)}
+    { }
+    explicit result_set(const mutation&);
+    bool empty() const {
+        return _rows.empty();
+    }
+    // throws std::out_of_range on error
+    const result_set_row& row(size_t idx) const {
+        if (idx >= _rows.size()) {
+            throw std::out_of_range("no such row in result set: " + std::to_string(idx));
+        }
+        return _rows[idx];
+    }
+    const std::vector<result_set_row>& rows() const {
+        return _rows;
+    }
+    const schema_ptr& schema() const {
+        return _schema;
+    }
+    friend inline bool operator==(const result_set& x, const result_set& y);
+    friend std::ostream& operator<<(std::ostream& out, const result_set& rs);
+};
+
+inline bool operator==(const result_set& x, const result_set& y) {
+    return x._rows == y._rows;
+}
+
+}
+
+
+#include <seastar/core/distributed.hh>
+
+#include <vector>
+#include <map>
+
+namespace data_dictionary {
+class keyspace_metadata;
+class user_types_storage;
+}
+
+using keyspace_metadata = data_dictionary::keyspace_metadata;
+
+namespace replica {
+class database;
+}
+
+namespace query {
+class result_set;
+}
+
+namespace service {
+
+class storage_service;
+class storage_proxy;
+
+}
+
+namespace gms {
+
+class feature_service;
+
+}
+
+namespace cql3::functions {
+
+class user_function;
+class user_aggregate;
+
+}
+
+namespace db {
+
+class system_keyspace;
+class extensions;
+class config;
+
+class schema_ctxt {
+public:
+    schema_ctxt(const config&, std::shared_ptr<data_dictionary::user_types_storage> uts);
+    schema_ctxt(const replica::database&);
+    schema_ctxt(distributed<replica::database>&);
+    schema_ctxt(distributed<service::storage_proxy>&);
+
+    const db::extensions& extensions() const {
+        return _extensions;
+    }
+
+    const unsigned murmur3_partitioner_ignore_msb_bits() const {
+        return _murmur3_partitioner_ignore_msb_bits;
+    }
+
+    uint32_t schema_registry_grace_period() const {
+        return _schema_registry_grace_period;
+    }
+
+    const data_dictionary::user_types_storage& user_types() const noexcept {
+        return *_user_types;
+    }
+
+private:
+    const db::extensions& _extensions;
+    const unsigned _murmur3_partitioner_ignore_msb_bits;
+    const uint32_t _schema_registry_grace_period;
+    const std::shared_ptr<data_dictionary::user_types_storage> _user_types;
+};
+
+namespace schema_tables {
+
+using schema_result = std::map<sstring, lw_shared_ptr<query::result_set>>;
+using schema_result_value_type = std::pair<sstring, lw_shared_ptr<query::result_set>>;
+
+const std::string COMMITLOG_FILENAME_PREFIX("SchemaLog-");
+
+namespace v3 {
+
+static constexpr auto NAME = "system_schema";
+static constexpr auto KEYSPACES = "keyspaces";
+static constexpr auto SCYLLA_KEYSPACES = "scylla_keyspaces";
+static constexpr auto TABLES = "tables";
+static constexpr auto SCYLLA_TABLES = "scylla_tables";
+static constexpr auto COLUMNS = "columns";
+static constexpr auto DROPPED_COLUMNS = "dropped_columns";
+static constexpr auto TRIGGERS = "triggers";
+static constexpr auto VIEWS = "views";
+static constexpr auto TYPES = "types";
+static constexpr auto FUNCTIONS = "functions";
+static constexpr auto AGGREGATES = "aggregates";
+static constexpr auto SCYLLA_AGGREGATES = "scylla_aggregates";
+static constexpr auto INDEXES = "indexes";
+static constexpr auto VIEW_VIRTUAL_COLUMNS = "view_virtual_columns"; // Scylla specific
+static constexpr auto COMPUTED_COLUMNS = "computed_columns"; // Scylla specific
+static constexpr auto SCYLLA_TABLE_SCHEMA_HISTORY = "scylla_table_schema_history"; // Scylla specific;
+
+schema_ptr columns();
+schema_ptr view_virtual_columns();
+schema_ptr dropped_columns();
+schema_ptr indexes();
+schema_ptr tables();
+schema_ptr scylla_tables(schema_features features = schema_features::full());
+schema_ptr views();
+schema_ptr types();
+schema_ptr computed_columns();
+// Belongs to the "system" keyspace
+schema_ptr scylla_table_schema_history();
+
+}
+
+namespace legacy {
+
+class schema_mutations {
+    mutation _columnfamilies;
+    mutation _columns;
+public:
+    schema_mutations(mutation columnfamilies, mutation columns)
+        : _columnfamilies(std::move(columnfamilies))
+        , _columns(std::move(columns))
+    { }
+    table_schema_version digest() const;
+};
+
+future<schema_mutations> read_table_mutations(distributed<service::storage_proxy>& proxy,
+    sstring keyspace_name, sstring table_name, schema_ptr s);
+
+}
+
+using namespace v3;
+
+// Change on non-backwards compatible changes of schema mutations.
+// Replication of schema between nodes with different version is inhibited.
+extern const sstring version;
+
+// Returns schema_ptrs for all schema tables supported by given schema_features.
+std::vector<schema_ptr> all_tables(schema_features);
+
+// Like all_tables(), but returns schema::cf_name() of each table.
+std::vector<sstring> all_table_names(schema_features);
+
+// saves/creates "ks" + all tables etc, while first deleting all old schema entries (will be rewritten)
+future<> save_system_schema(cql3::query_processor& qp, const sstring & ks);
+
+// saves/creates "system_schema" keyspace
+future<> save_system_keyspace_schema(cql3::query_processor& qp);
+
+future<table_schema_version> calculate_schema_digest(distributed<service::storage_proxy>& proxy, schema_features, noncopyable_function<bool(std::string_view)> accept_keyspace);
+// Calculates schema digest for all non-system keyspaces
+future<table_schema_version> calculate_schema_digest(distributed<service::storage_proxy>& proxy, schema_features);
+
+future<std::vector<canonical_mutation>> convert_schema_to_mutations(distributed<service::storage_proxy>& proxy, schema_features);
+std::vector<mutation> adjust_schema_for_schema_features(std::vector<mutation> schema, schema_features features);
+
+future<schema_result_value_type>
+read_schema_partition_for_keyspace(distributed<service::storage_proxy>& proxy, sstring schema_table_name, sstring keyspace_name);
+future<mutation> read_keyspace_mutation(distributed<service::storage_proxy>&, const sstring& keyspace_name);
+
+// Must be called on shard 0.
+future<semaphore_units<>> hold_merge_lock() noexcept;
+
+future<> merge_schema(sharded<db::system_keyspace>& sys_ks, distributed<service::storage_proxy>& proxy, gms::feature_service& feat, std::vector<mutation> mutations);
+
+// Recalculates the local schema version.
+//
+// It is safe to call concurrently with recalculate_schema_version() and merge_schema() in which case it
+// is guaranteed that the schema version we end up with after all calls will reflect the most recent state
+// of feature_service and schema tables.
+future<> recalculate_schema_version(sharded<db::system_keyspace>& sys_ks, distributed<service::storage_proxy>& proxy, gms::feature_service& feat);
+
+future<std::set<sstring>> merge_keyspaces(distributed<service::storage_proxy>& proxy, schema_result&& before, schema_result&& after);
+
+std::vector<mutation> make_create_keyspace_mutations(schema_features features, lw_shared_ptr<keyspace_metadata> keyspace, api::timestamp_type timestamp, bool with_tables_and_types_and_functions = true);
+
+std::vector<mutation> make_drop_keyspace_mutations(schema_features features, lw_shared_ptr<keyspace_metadata> keyspace, api::timestamp_type timestamp);
+
+lw_shared_ptr<keyspace_metadata> create_keyspace_from_schema_partition(const schema_result_value_type& partition, lw_shared_ptr<query::result_set> scylla_specific);
+
+future<lw_shared_ptr<query::result_set>> extract_scylla_specific_keyspace_info(distributed<service::storage_proxy>& proxy, const schema_result_value_type& partition);
+
+std::vector<mutation> make_create_type_mutations(lw_shared_ptr<keyspace_metadata> keyspace, user_type type, api::timestamp_type timestamp);
+
+std::vector<user_type> create_types_from_schema_partition(keyspace_metadata& ks, lw_shared_ptr<query::result_set> result);
+
+seastar::future<std::vector<shared_ptr<cql3::functions::user_function>>> create_functions_from_schema_partition(replica::database& db, lw_shared_ptr<query::result_set> result);
+
+std::vector<shared_ptr<cql3::functions::user_aggregate>> create_aggregates_from_schema_partition(replica::database& db, lw_shared_ptr<query::result_set> result, lw_shared_ptr<query::result_set> scylla_result);
+
+std::vector<mutation> make_create_function_mutations(shared_ptr<cql3::functions::user_function> func, api::timestamp_type timestamp);
+
+std::vector<mutation> make_drop_function_mutations(shared_ptr<cql3::functions::user_function> func, api::timestamp_type timestamp);
+
+std::vector<mutation> make_create_aggregate_mutations(schema_features features, shared_ptr<cql3::functions::user_aggregate> func, api::timestamp_type timestamp);
+
+std::vector<mutation> make_drop_aggregate_mutations(schema_features features, shared_ptr<cql3::functions::user_aggregate> aggregate, api::timestamp_type timestamp);
+
+std::vector<mutation> make_drop_type_mutations(lw_shared_ptr<keyspace_metadata> keyspace, user_type type, api::timestamp_type timestamp);
+
+void add_type_to_schema_mutation(user_type type, api::timestamp_type timestamp, std::vector<mutation>& mutations);
+
+std::vector<mutation> make_create_table_mutations(schema_ptr table, api::timestamp_type timestamp);
+
+std::vector<mutation> make_update_table_mutations(
+    replica::database& db,
+    lw_shared_ptr<keyspace_metadata> keyspace,
+    schema_ptr old_table,
+    schema_ptr new_table,
+    api::timestamp_type timestamp,
+    bool from_thrift);
+
+future<std::map<sstring, schema_ptr>> create_tables_from_tables_partition(distributed<service::storage_proxy>& proxy, const schema_result::mapped_type& result);
+
+std::vector<mutation> make_drop_table_mutations(lw_shared_ptr<keyspace_metadata> keyspace, schema_ptr table, api::timestamp_type timestamp);
+
+schema_ptr create_table_from_mutations(const schema_ctxt&, schema_mutations, std::optional<table_schema_version> version = {});
+
+view_ptr create_view_from_mutations(const schema_ctxt&, schema_mutations, std::optional<table_schema_version> version = {});
+
+future<std::vector<view_ptr>> create_views_from_schema_partition(distributed<service::storage_proxy>& proxy, const schema_result::mapped_type& result);
+
+schema_mutations make_schema_mutations(schema_ptr s, api::timestamp_type timestamp, bool with_columns);
+mutation make_scylla_tables_mutation(schema_ptr, api::timestamp_type timestamp);
+
+void add_table_or_view_to_schema_mutation(schema_ptr view, api::timestamp_type timestamp, bool with_columns, std::vector<mutation>& mutations);
+
+std::vector<mutation> make_create_view_mutations(lw_shared_ptr<keyspace_metadata> keyspace, view_ptr view, api::timestamp_type timestamp);
+
+std::vector<mutation> make_update_view_mutations(lw_shared_ptr<keyspace_metadata> keyspace, view_ptr old_view, view_ptr new_view, api::timestamp_type timestamp, bool include_base);
+
+std::vector<mutation> make_drop_view_mutations(lw_shared_ptr<keyspace_metadata> keyspace, view_ptr view, api::timestamp_type timestamp);
+
+class preserve_version_tag {};
+using preserve_version = bool_class<preserve_version_tag>;
+view_ptr maybe_fix_legacy_secondary_index_mv_schema(replica::database& db, const view_ptr& v, schema_ptr base_schema, preserve_version preserve_version);
+
+sstring serialize_kind(column_kind kind);
+column_kind deserialize_kind(sstring kind);
+data_type parse_type(sstring str);
+
+sstring serialize_index_kind(index_metadata_kind kind);
+index_metadata_kind deserialize_index_kind(sstring kind);
+
+mutation compact_for_schema_digest(const mutation& m);
+
+void feed_hash_for_schema_digest(hasher&, const mutation&, schema_features);
+
+template<typename K, typename V>
+std::optional<std::map<K, V>> get_map(const query::result_set_row& row, const sstring& name) {
+    if (auto values = row.get<map_type_impl::native_type>(name)) {
+        std::map<K, V> map;
+        for (auto&& entry : *values) {
+            map.emplace(value_cast<K>(entry.first), value_cast<V>(entry.second));
+        };
+        return map;
+    }
+    return std::nullopt;
+}
+
+/// Stores the column mapping for the table being created or altered in the system table
+/// which holds a history of schema versions alongside with their column mappings.
+/// Can be used to insert entries with TTL (equal to DEFAULT_GC_GRACE_SECONDS) in case we are
+/// overwriting an existing column mapping to garbage collect obsolete entries.
+future<> store_column_mapping(distributed<service::storage_proxy>& proxy, schema_ptr s, bool with_ttl);
+/// Query column mapping for a given version of the table locally.
+future<column_mapping> get_column_mapping(table_id table_id, table_schema_version version);
+/// Check that column mapping exists for a given version of the table
+future<bool> column_mapping_exists(table_id table_id, table_schema_version version);
+/// Delete matching column mapping entries from the `system.scylla_table_schema_history` table
+future<> drop_column_mapping(table_id table_id, table_schema_version version);
+
+} // namespace schema_tables
+} // namespace db
+
+
+
 #include "db/view/view.hh"
 #include <deque>
 #include "dht/boot_strapper.hh"
