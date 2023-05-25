@@ -68567,7 +68567,33 @@ using rate_limiter = generic_rate_limiter<seastar::lowres_clock>;
 }
 
 
-#include "rate_limiter.hh"
+#include <seastar/core/timer.hh>
+#include <seastar/core/semaphore.hh>
+#include <seastar/core/seastar.hh>
+
+namespace utils {
+
+/**
+ * 100% naive rate limiter. Consider it a placeholder
+ * Will let you process X "units" per second, then reset this every s.
+ * Obviously, accuracy is virtually non-existant and steady rate will fluctuate.
+ */
+class rate_limiter {
+private:
+    timer<lowres_clock> _timer;
+    size_t _units_per_s;
+    semaphore _sem {0};
+
+    void on_timer();
+public:
+    rate_limiter(size_t rate);
+    future<> reserve(size_t u);
+};
+
+}
+
+
+
 #include "readers/flat_mutation_reader_v2.hh"
 #include "readers/mutation_source.hh"
 #include "real_dirty_memory_accounter.hh"
