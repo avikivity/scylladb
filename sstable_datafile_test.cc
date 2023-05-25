@@ -51116,7 +51116,644 @@ public:
 };
 
 
-#include "db/view/view.hh"
+
+class mutation;
+class flat_mutation_reader_v2;
+
+namespace ser {
+class mutation_view;
+}
+
+template<typename Result>
+struct frozen_mutation_consume_result {
+    stop_iteration stop;
+    Result result;
+};
+
+template<>
+struct frozen_mutation_consume_result<void> {
+    stop_iteration stop;
+};
+
+// mutation_partition_view visitor which consumes a frozen_mutation.
+template<FlattenedConsumerV2 Consumer>
+class frozen_mutation_consumer_adaptor final : public mutation_partition_view_virtual_visitor {
+private:
+    const schema& _schema;
+    std::optional<dht::decorated_key> _dk;
+    lazy_row _static_row;
+    range_tombstone_change_generator _rt_gen;
+    alloc_strategy_unique_ptr<rows_entry> _current_row_entry;
+    deletable_row* _current_row = nullptr;
+    Consumer& _consumer;
+    stop_iteration _stop_consuming = stop_iteration::no;
+
+    stop_iteration flush_rows_and_tombstones(position_in_partition_view pos) {
+        if (!_static_row.empty()) {
+            auto row = std::move(_static_row.get_existing());
+            _stop_consuming = _consumer.consume(static_row(std::move(row)));
+            if (_stop_consuming) {
+                return _stop_consuming;
+            }
+        }
+        if (_current_row) {
+            auto row_entry = std::move(_current_row_entry);
+            _current_row = nullptr;
+            _stop_consuming = _consumer.consume(clustering_row(std::move(*row_entry)));
+            if (_stop_consuming) {
+                return _stop_consuming;
+            }
+        }
+        _rt_gen.flush(pos, [this] (range_tombstone_change rtc) {
+            _stop_consuming = _consumer.consume(std::move(rtc));
+        });
+        return _stop_consuming;
+    }
+
+public:
+    frozen_mutation_consumer_adaptor(schema_ptr s, Consumer& consumer)
+        : _schema(*s)
+        , _rt_gen(_schema)
+        , _consumer(consumer)
+    {
+    }
+
+    Consumer& consumer() {
+        return _consumer;
+    }
+
+    void on_new_partition(const partition_key& key) {
+        _rt_gen.reset();
+        _dk = dht::decorate_key(_schema, key);
+        _consumer.consume_new_partition(*_dk);
+    }
+
+    virtual void accept_partition_tombstone(tombstone t) override {
+        _consumer.consume(t);
+    }
+
+    virtual void accept_static_cell(column_id id, atomic_cell cell) override {
+        row& r = _static_row.maybe_create();
+        r.append_cell(id, atomic_cell_or_collection(std::move(cell)));
+    }
+
+    virtual void accept_static_cell(column_id id, collection_mutation_view collection) override {
+        row& r = _static_row.maybe_create();
+        r.append_cell(id, collection_mutation(*_schema.static_column_at(id).type, std::move(collection)));
+    }
+
+    virtual stop_iteration accept_row_tombstone(range_tombstone rt) override {
+        flush_rows_and_tombstones(rt.position());
+        _rt_gen.consume(std::move(rt));
+        return _stop_consuming;
+    }
+
+    virtual stop_iteration accept_row(position_in_partition_view key, row_tombstone deleted_at, row_marker rm, is_dummy dummy, is_continuous continuous) override {
+        if (flush_rows_and_tombstones(key)) {
+            return stop_iteration::yes;
+        }
+        _current_row_entry = alloc_strategy_unique_ptr<rows_entry>(current_allocator().construct<rows_entry>(_schema, key, dummy, continuous));
+        deletable_row& r = _current_row_entry->row();
+        r.apply(rm);
+        r.apply(deleted_at);
+        _current_row = &r;
+        return stop_iteration::no;
+    }
+
+    void accept_row_cell(column_id id, atomic_cell cell) override {
+        row& r = _current_row->cells();
+        r.append_cell(id, std::move(cell));
+    }
+
+    virtual void accept_row_cell(column_id id, collection_mutation_view collection) override {
+        row& r = _current_row->cells();
+        r.append_cell(id, collection_mutation(*_schema.regular_column_at(id).type, std::move(collection)));
+    }
+
+    auto on_end_of_partition() {
+        flush_rows_and_tombstones(position_in_partition::after_all_clustered_rows());
+        if (_consumer.consume_end_of_partition()) {
+            _stop_consuming = stop_iteration::yes;
+        }
+        using consume_res_type = decltype(_consumer.consume_end_of_stream());
+        if constexpr (std::is_same_v<consume_res_type, void>) {
+            _consumer.consume_end_of_stream();
+            return frozen_mutation_consume_result<void>{_stop_consuming};
+        } else {
+            return frozen_mutation_consume_result<consume_res_type>{_stop_consuming, _consumer.consume_end_of_stream()};
+        }
+    }
+};
+
+// Immutable, compact form of mutation.
+//
+// This form is primarily destined to be sent over the network channel.
+// Regular mutation can't be deserialized because its complex data structures
+// need schema reference at the time object is constructed. We can't lookup
+// schema before we deserialize column family ID. Another problem is that even
+// if we had the ID somehow, low level RPC layer doesn't know how to lookup
+// the schema. Data can be wrapped in frozen_mutation without schema
+// information, the schema is only needed to access some of the fields.
+//
+class frozen_mutation final {
+private:
+    bytes_ostream _bytes;
+    partition_key _pk;
+private:
+    partition_key deserialize_key() const;
+    ser::mutation_view mutation_view() const;
+public:
+    explicit frozen_mutation(const mutation& m);
+    explicit frozen_mutation(bytes_ostream&& b);
+    frozen_mutation(bytes_ostream&& b, partition_key key);
+    frozen_mutation(frozen_mutation&& m) = default;
+    frozen_mutation(const frozen_mutation& m) = default;
+    frozen_mutation& operator=(frozen_mutation&&) = default;
+    frozen_mutation& operator=(const frozen_mutation&) = default;
+    const bytes_ostream& representation() const { return _bytes; }
+    table_id column_family_id() const;
+    table_schema_version schema_version() const; // FIXME: Should replace column_family_id()
+    partition_key_view key() const;
+    dht::decorated_key decorated_key(const schema& s) const;
+    mutation_partition_view partition() const;
+    // The supplied schema must be of the same version as the schema of
+    // the mutation which was used to create this instance.
+    // throws schema_mismatch_error otherwise.
+    mutation unfreeze(schema_ptr s) const;
+    future<mutation> unfreeze_gently(schema_ptr s) const;
+
+    // Automatically upgrades the stored mutation to the supplied schema with custom column mapping.
+    mutation unfreeze_upgrading(schema_ptr schema, const column_mapping& cm) const;
+
+    // Consumes the frozen mutation's content.
+    //
+    // The consume operation is stoppable:
+    // * To stop, return stop_iteration::yes from one of the consume() methods;
+    // * The consume will now stop and return;
+    //
+    // Note that `consume_end_of_partition()` and `consume_end_of_stream()`
+    // will be called each time the consume is stopping, regardless of whether
+    // you are pausing or the consumption is ending for good.
+    template<FlattenedConsumerV2 Consumer>
+    auto consume(schema_ptr s, Consumer& consumer) const -> frozen_mutation_consume_result<decltype(consumer.consume_end_of_stream())>;
+
+    template<FlattenedConsumerV2 Consumer>
+    auto consume(schema_ptr s, frozen_mutation_consumer_adaptor<Consumer>& adaptor) const -> frozen_mutation_consume_result<decltype(adaptor.consumer().consume_end_of_stream())>;
+
+    // Consumes the frozen mutation's content.
+    //
+    // The consume operation is stoppable:
+    // * To stop, return stop_iteration::yes from one of the consume() methods;
+    // * The consume will now stop and return;
+    //
+    // Note that `consume_end_of_partition()` and `consume_end_of_stream()`
+    // will be called each time the consume is stopping, regardless of whether
+    // you are pausing or the consumption is ending for good.
+    template<FlattenedConsumerV2 Consumer>
+    auto consume_gently(schema_ptr s, Consumer& consumer) const -> future<frozen_mutation_consume_result<decltype(consumer.consume_end_of_stream())>>;
+
+    template<FlattenedConsumerV2 Consumer>
+    auto consume_gently(schema_ptr s, frozen_mutation_consumer_adaptor<Consumer>& adaptor) const -> future<frozen_mutation_consume_result<decltype(adaptor.consumer().consume_end_of_stream())>>;
+
+    unsigned shard_of(const schema& s) const {
+        return dht::shard_of(s, dht::get_token(s, key()));
+    }
+
+    struct printer {
+        const frozen_mutation& self;
+        schema_ptr schema;
+        friend std::ostream& operator<<(std::ostream&, const printer&);
+    };
+
+    // Same requirements about the schema as unfreeze().
+    printer pretty_printer(schema_ptr) const;
+};
+
+frozen_mutation freeze(const mutation& m);
+std::vector<frozen_mutation> freeze(const std::vector<mutation>&);
+std::vector<mutation> unfreeze(const std::vector<frozen_mutation>&);
+
+struct frozen_mutation_and_schema {
+    frozen_mutation fm;
+    schema_ptr s;
+};
+
+// Can receive streamed_mutation in reversed order.
+class streamed_mutation_freezer {
+    const schema& _schema;
+    partition_key _key;
+    bool _reversed;
+
+    tombstone _partition_tombstone;
+    std::optional<static_row> _sr;
+    std::deque<clustering_row> _crs;
+    range_tombstone_list _rts;
+public:
+    streamed_mutation_freezer(const schema& s, const partition_key& key, bool reversed = false)
+        : _schema(s), _key(key), _reversed(reversed), _rts(s) { }
+
+    stop_iteration consume(tombstone pt);
+
+    stop_iteration consume(static_row&& sr);
+    stop_iteration consume(clustering_row&& cr);
+
+    stop_iteration consume(range_tombstone&& rt);
+
+    frozen_mutation consume_end_of_stream();
+};
+
+static constexpr size_t default_frozen_fragment_size = 128 * 1024;
+
+using frozen_mutation_consumer_fn = std::function<future<stop_iteration>(frozen_mutation, bool)>;
+future<> fragment_and_freeze(flat_mutation_reader_v2 mr, frozen_mutation_consumer_fn c,
+                             size_t fragment_size = default_frozen_fragment_size);
+
+class reader_permit;
+
+class frozen_mutation_fragment {
+    bytes_ostream _bytes;
+public:
+    explicit frozen_mutation_fragment(bytes_ostream bytes) : _bytes(std::move(bytes)) { }
+    const bytes_ostream& representation() const { return _bytes; }
+
+    mutation_fragment unfreeze(const schema& s, reader_permit permit);
+
+    future<> clear_gently() noexcept {
+        return _bytes.clear_gently();
+    }
+};
+
+frozen_mutation_fragment freeze(const schema& s, const mutation_fragment& mf);
+
+template<FlattenedConsumerV2 Consumer>
+auto frozen_mutation::consume(schema_ptr s, frozen_mutation_consumer_adaptor<Consumer>& adaptor) const -> frozen_mutation_consume_result<decltype(adaptor.consumer().consume_end_of_stream())> {
+    check_schema_version(schema_version(), *s);
+    try {
+        adaptor.on_new_partition(_pk);
+        partition().accept_ordered(*s, adaptor);
+        return adaptor.on_end_of_partition();
+    } catch (...) {
+        std::throw_with_nested(std::runtime_error(format(
+                "frozen_mutation::consume(): failed consuming mutation {} of {}.{}", key(), s->ks_name(), s->cf_name())));
+    }
+}
+
+template<FlattenedConsumerV2 Consumer>
+auto frozen_mutation::consume(schema_ptr s, Consumer& consumer) const -> frozen_mutation_consume_result<decltype(consumer.consume_end_of_stream())> {
+    frozen_mutation_consumer_adaptor adaptor(s, consumer);
+    return consume(s, adaptor);
+}
+
+template<FlattenedConsumerV2 Consumer>
+auto frozen_mutation::consume_gently(schema_ptr s, frozen_mutation_consumer_adaptor<Consumer>& adaptor) const -> future<frozen_mutation_consume_result<decltype(adaptor.consumer().consume_end_of_stream())>> {
+    check_schema_version(schema_version(), *s);
+    try {
+        adaptor.on_new_partition(_pk);
+        auto p = partition();
+        co_await p.accept_gently_ordered(*s, adaptor);
+        co_return adaptor.on_end_of_partition();
+    } catch (...) {
+        std::throw_with_nested(std::runtime_error(format(
+                "frozen_mutation::consume_gently(): failed consuming mutation {} of {}.{}", key(), s->ks_name(), s->cf_name())));
+    }
+}
+
+template<FlattenedConsumerV2 Consumer>
+auto frozen_mutation::consume_gently(schema_ptr s, Consumer& consumer) const -> future<frozen_mutation_consume_result<decltype(consumer.consume_end_of_stream())>> {
+    frozen_mutation_consumer_adaptor adaptor(s, consumer);
+    co_return co_await consume_gently(s, adaptor);
+}
+
+
+
+class frozen_mutation_and_schema;
+
+namespace replica {
+struct cf_stats;
+}
+
+namespace db {
+
+namespace view {
+
+class stats;
+
+// Part of the view description which depends on the base schema version.
+//
+// This structure may change even though the view schema doesn't change, so
+// it needs to live outside view_ptr.
+struct base_dependent_view_info {
+private:
+    schema_ptr _base_schema;
+    // Id of a regular base table column included in the view's PK, if any.
+    // Scylla views only allow one such column, alternator can have up to two.
+    std::vector<column_id> _base_regular_columns_in_view_pk;
+    std::vector<column_id> _base_static_columns_in_view_pk;
+    // For tracing purposes, if the view is out of sync with its base table
+    // and there exists a column which is not in base, its name is stored
+    // and added to debug messages.
+    std::optional<bytes> _column_missing_in_base = {};
+public:
+    const std::vector<column_id>& base_regular_columns_in_view_pk() const;
+    const std::vector<column_id>& base_static_columns_in_view_pk() const;
+    const schema_ptr& base_schema() const;
+
+    // Indicates if the view hase pk columns which are not part of the base
+    // pk, it seems that !base_non_pk_columns_in_view_pk.empty() is the same,
+    // but actually there are cases where we can compute this boolean without
+    // succeeding to reliably build the former.
+    const bool has_base_non_pk_columns_in_view_pk;
+
+    // If base_non_pk_columns_in_view_pk couldn't reliably be built, this base
+    // info can't be used for computing view updates, only for reading the materialized
+    // view.
+    const bool use_only_for_reads;
+
+    // A constructor for a base info that can facilitate reads and writes from the materialized view.
+    base_dependent_view_info(schema_ptr base_schema,
+            std::vector<column_id>&& base_regular_columns_in_view_pk,
+            std::vector<column_id>&& base_static_columns_in_view_pk);
+    // A constructor for a base info that can facilitate only reads from the materialized view.
+    base_dependent_view_info(bool has_base_non_pk_columns_in_view_pk, std::optional<bytes>&& column_missing_in_base);
+};
+
+// Immutable snapshot of view's base-schema-dependent part.
+using base_info_ptr = lw_shared_ptr<const base_dependent_view_info>;
+
+// Snapshot of the view schema and its base-schema-dependent part.
+struct view_and_base {
+    view_ptr view;
+    base_info_ptr base;
+};
+
+// An immutable representation of a clustering or static row of the base table.
+struct clustering_or_static_row {
+private:
+    std::optional<clustering_key_prefix> _key;
+    deletable_row _row;
+
+public:
+    explicit clustering_or_static_row(clustering_row&& cr)
+            : _key(std::move(cr.key()))
+            , _row(std::move(cr).as_deletable_row())
+    {}
+
+    explicit clustering_or_static_row(static_row&& sr)
+            : _key()
+            , _row(row_tombstone(), row_marker(), std::move(sr.cells()))
+    {}
+
+    bool is_static_row() const { return !_key.has_value(); }
+    bool is_clustering_row() const { return _key.has_value(); }
+
+    const std::optional<clustering_key_prefix>& key() const { return _key; }
+
+    row_tombstone tomb() const { return _row.deleted_at(); }
+    const row_marker& marker() const { return _row.marker(); }
+    const row& cells() const { return _row.cells(); }
+
+    bool empty() const { return _row.empty(); }
+    bool is_live(const schema& s, tombstone base_tombstone = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const {
+        return _row.is_live(s, column_kind(), base_tombstone, now);
+    }
+
+    ::column_kind column_kind() const {
+        return _key.has_value()
+                ? column_kind::regular_column : column_kind::static_column;
+    }
+
+    clustering_row as_clustering_row(const schema& s) const;
+    static_row as_static_row(const schema& s) const;
+};
+
+/**
+ * Whether the view filter considers the specified partition key.
+ *
+ * @param base the base table schema.
+ * @param view_info the view info.
+ * @param key the partition key that is updated.
+ * @return false if we can guarantee that inserting an update for specified key
+ * won't affect the view in any way, true otherwise.
+ */
+bool partition_key_matches(data_dictionary::database, const schema& base, const view_info& view, const dht::decorated_key& key);
+
+/**
+ * Whether the view might be affected by the provided update.
+ *
+ * Note that having this method return true is not an absolute guarantee that the view will be
+ * updated, just that it most likely will, but a false return guarantees it won't be affected.
+ *
+ * @param base the base table schema.
+ * @param view_info the view info.
+ * @param key the partition key that is updated.
+ * @param update the base table update being applied.
+ * @return false if we can guarantee that inserting update for key
+ * won't affect the view in any way, true otherwise.
+ */
+bool may_be_affected_by(data_dictionary::database, const schema& base, const view_info& view, const dht::decorated_key& key, const rows_entry& update);
+
+/**
+ * Whether a given base row matches the view filter (and thus if the view should have a corresponding entry).
+ *
+ * Note that this differs from may_be_affected_by in that the provide row must be the current
+ * state of the base row, not just some updates to it. This function also has no false positive: a base
+ * row either does or doesn't match the view filter.
+ *
+ * Also note that this function doesn't check the partition key, as it assumes the upper layers
+ * have already filtered out the views that are not affected.
+ *
+ * @param base the base table schema.
+ * @param view_info the view info.
+ * @param key the partition key that is updated.
+ * @param update the current state of a particular base row.
+ * @param now the current time in seconds (to decide what is live and what isn't).
+ * @return whether the base row matches the view filter.
+ */
+bool matches_view_filter(data_dictionary::database, const schema& base, const view_info& view, const partition_key& key, const clustering_or_static_row& update, gc_clock::time_point now);
+
+bool clustering_prefix_matches(data_dictionary::database, const schema& base, const partition_key& key, const clustering_key_prefix& ck);
+
+/*
+ * When a base-table update modifies a value in a materialized view's key
+ * key column, Scylla needs to create a new view row. When indexing a
+ * collection - Scylla needs to add multiple almost-identical rows with just
+ * a different key. Scylla may also need to take additional "actions" for each
+ * of those rows - namely deleting an old row or adding a row marker.
+ *
+ * So the following struct view_key_and_action holds one such row key and
+ * one action. The action can be:
+ * 1. "no_action" - Do nothing beyond adding the view row under the given
+ *     key. The row's key is given, but its other columns are derived from
+ *     the base table's existing row and and the update mutation..
+ * 2. a row_marker - also add a CQL row marker, to allow a view row to live
+ *    even if there is nothing in it besides the key.
+ * 3. a (shadowable) tombstone, to remove and old view row that this one
+ *    replaces.
+ */
+struct view_key_and_action {
+    struct no_action {};
+    struct shadowable_tombstone_tag {
+        api::timestamp_type ts;
+        shadowable_tombstone into_shadowable_tombstone(gc_clock::time_point now) const {
+            return shadowable_tombstone{ts, now};
+        }
+    };
+    using action = std::variant<no_action, row_marker, shadowable_tombstone_tag>;
+
+    bytes _key_bytes;
+    action _action = no_action{};
+
+    view_key_and_action(bytes key_bytes)
+        : _key_bytes(std::move(key_bytes))
+    {}
+    view_key_and_action(bytes key_bytes, action action)
+        : _key_bytes(std::move(key_bytes))
+        , _action(action)
+    {}
+
+};
+
+class view_updates final {
+    view_ptr _view;
+    const view_info& _view_info;
+    schema_ptr _base;
+    base_info_ptr _base_info;
+    std::unordered_map<partition_key, mutation_partition, partition_key::hashing, partition_key::equality> _updates;
+    mutable size_t _op_count = 0;
+    const bool _backing_secondary_index;
+public:
+    explicit view_updates(view_and_base vab, bool backing_secondary_index)
+            : _view(std::move(vab.view))
+            , _view_info(*_view->view_info())
+            , _base(vab.base->base_schema())
+            , _base_info(vab.base)
+            , _updates(8, partition_key::hashing(*_view), partition_key::equality(*_view))
+            , _backing_secondary_index(backing_secondary_index)
+    {
+    }
+
+    future<> move_to(utils::chunked_vector<frozen_mutation_and_schema>& mutations);
+
+    void generate_update(data_dictionary::database db, const partition_key& base_key, const clustering_or_static_row& update, const std::optional<clustering_or_static_row>& existing, gc_clock::time_point now);
+
+    size_t op_count() const;
+
+private:
+    mutation_partition& partition_for(partition_key&& key);
+    row_marker compute_row_marker(const clustering_or_static_row& base_row) const;
+    struct view_row_entry {
+        deletable_row* _row;
+        view_key_and_action::action _action;
+    };
+    std::vector<view_row_entry> get_view_rows(const partition_key& base_key, const clustering_or_static_row& update, const std::optional<clustering_or_static_row>& existing);
+    bool can_skip_view_updates(const clustering_or_static_row& update, const clustering_or_static_row& existing) const;
+    void create_entry(data_dictionary::database db, const partition_key& base_key, const clustering_or_static_row& update, gc_clock::time_point now);
+    void delete_old_entry(data_dictionary::database db, const partition_key& base_key, const clustering_or_static_row& existing, const clustering_or_static_row& update, gc_clock::time_point now);
+    void do_delete_old_entry(const partition_key& base_key, const clustering_or_static_row& existing, const clustering_or_static_row& update, gc_clock::time_point now);
+    void update_entry(data_dictionary::database db, const partition_key& base_key, const clustering_or_static_row& update, const clustering_or_static_row& existing, gc_clock::time_point now);
+    void update_entry_for_computed_column(const partition_key& base_key, const clustering_or_static_row& update, const std::optional<clustering_or_static_row>& existing, gc_clock::time_point now);
+};
+
+class view_update_builder {
+    data_dictionary::database _db;
+    const replica::table& _base;
+    schema_ptr _schema; // The base schema
+    std::vector<view_updates> _view_updates;
+    flat_mutation_reader_v2 _updates;
+    flat_mutation_reader_v2_opt _existings;
+    tombstone _update_partition_tombstone;
+    tombstone _update_current_tombstone;
+    tombstone _existing_partition_tombstone;
+    tombstone _existing_current_tombstone;
+    mutation_fragment_v2_opt _update;
+    mutation_fragment_v2_opt _existing;
+    gc_clock::time_point _now;
+    partition_key _key = partition_key::make_empty();
+public:
+
+    view_update_builder(data_dictionary::database db, const replica::table& base, schema_ptr s,
+        std::vector<view_updates>&& views_to_update,
+        flat_mutation_reader_v2&& updates,
+        flat_mutation_reader_v2_opt&& existings,
+        gc_clock::time_point now)
+            : _db(std::move(db))
+            , _base(base)
+            , _schema(std::move(s))
+            , _view_updates(std::move(views_to_update))
+            , _updates(std::move(updates))
+            , _existings(std::move(existings))
+            , _now(now) {
+    }
+    view_update_builder(view_update_builder&& other) noexcept = default;
+
+
+    // build_some() works on batches of 100 (max_rows_for_view_updates)
+    // updated rows, but can_skip_view_updates() can decide that some of
+    // these rows do not effect the view, and as a result build_some() can
+    // fewer than 100 rows - in extreme cases even zero (see issue #12297).
+    // So we can't use an empty returned vector to signify that the view
+    // update building is done - and we wrap the return value in an
+    // std::optional, which is disengaged when the iteration is done.
+    future<std::optional<utils::chunked_vector<frozen_mutation_and_schema>>> build_some();
+
+    future<> close() noexcept;
+
+private:
+    void generate_update(clustering_row&& update, std::optional<clustering_row>&& existing);
+    void generate_update(static_row&& update, const tombstone& update_tomb, std::optional<static_row>&& existing, const tombstone& existing_tomb);
+    future<stop_iteration> on_results();
+
+    future<stop_iteration> advance_all();
+    future<stop_iteration> advance_updates();
+    future<stop_iteration> advance_existings();
+
+    future<stop_iteration> stop() const;
+};
+
+view_update_builder make_view_update_builder(
+        data_dictionary::database db,
+        const replica::table& base_table,
+        const schema_ptr& base_schema,
+        std::vector<view_and_base>&& views_to_update,
+        flat_mutation_reader_v2&& updates,
+        flat_mutation_reader_v2_opt&& existings,
+        gc_clock::time_point now);
+
+future<query::clustering_row_ranges> calculate_affected_clustering_ranges(
+        data_dictionary::database db,
+        const schema& base,
+        const dht::decorated_key& key,
+        const mutation_partition& mp,
+        const std::vector<view_and_base>& views);
+
+bool needs_static_row(const mutation_partition& mp, const std::vector<view_and_base>& views);
+
+/**
+ * create_virtual_column() adds a "virtual column" to a schema builder.
+ * The definition of a "virtual column" is based on the given definition
+ * of a regular column, except that any value types are replaced by the
+ * empty type - and only the information needed to track column liveness
+ * is kept: timestamp, deletion, ttl, and keys in maps.
+ * In some cases we add such virtual columns for unselected columns in
+ * materialized views, for reasons explained in issue #3362.
+ * @param builder the schema_builder where we want to add the virtual column.
+ * @param name the name of the virtual column to be created.
+ * @param type of the base column for which we want to build a virtual column.
+ *        When type is a multi-cell collection, so will be the virtual column.
+ */
+ void create_virtual_column(schema_builder& builder, const bytes& name, const data_type& type);
+
+/**
+ * Converts a collection of view schema snapshots into a collection of
+ * view_and_base objects, which are snapshots of both the view schema
+ * and the base-schema-dependent part of view description.
+ */
+std::vector<view_and_base> with_base_info_snapshot(std::vector<view_ptr>);
+
+}
+
+}
+
 #include <deque>
 #include "dht/boot_strapper.hh"
 #include "dht/i_partitioner.hh"
