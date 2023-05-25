@@ -78387,7 +78387,2523 @@ struct hash<cql3::prepared_cache_key_type> final {
 }
 
 
-#include "test/lib/cql_test_env.hh"
+namespace cql3 {
+
+struct authorized_prepared_statements_cache_size {
+    size_t operator()(const statements::prepared_statement::checked_weak_ptr& val) {
+        // TODO: improve the size approximation - most of the entry is occupied by the key here.
+        return 100;
+    }
+};
+
+class authorized_prepared_statements_cache_key {
+public:
+    using cache_key_type = std::pair<auth::authenticated_user, typename cql3::prepared_cache_key_type::cache_key_type>;
+
+    struct view {
+        const auth::authenticated_user& user_ref;
+        const cql3::prepared_cache_key_type& prep_cache_key_ref;
+    };
+
+    struct view_hasher {
+        size_t operator()(const view& kv) {
+            return cql3::authorized_prepared_statements_cache_key::hash(kv.user_ref, kv.prep_cache_key_ref.key());
+        }
+    };
+
+    struct view_equal {
+        bool operator()(const authorized_prepared_statements_cache_key& k1, const view& k2) {
+            return k1.key().first == k2.user_ref && k1.key().second == k2.prep_cache_key_ref.key();
+        }
+
+        bool operator()(const view& k2, const authorized_prepared_statements_cache_key& k1) {
+            return operator()(k1, k2);
+        }
+    };
+
+private:
+    cache_key_type _key;
+
+public:
+    authorized_prepared_statements_cache_key(auth::authenticated_user user, cql3::prepared_cache_key_type prepared_cache_key)
+        : _key(std::move(user), std::move(prepared_cache_key.key())) {}
+
+    cache_key_type& key() { return _key; }
+
+    const cache_key_type& key() const { return _key; }
+
+    bool operator==(const authorized_prepared_statements_cache_key&) const = default;
+
+    static size_t hash(const auth::authenticated_user& user, const cql3::prepared_cache_key_type::cache_key_type& prep_cache_key) {
+        return utils::hash_combine(std::hash<auth::authenticated_user>()(user), utils::tuple_hash()(prep_cache_key));
+    }
+};
+
+/// \class authorized_prepared_statements_cache
+/// \brief A cache of previously authorized statements.
+///
+/// Entries are inserted every time a new statement is authorized.
+/// Entries are evicted in any of the following cases:
+///    - When the corresponding prepared statement is not valid anymore.
+///    - Periodically, with the same period as the permission cache is refreshed.
+///    - If the corresponding entry hasn't been used for \ref entry_expiry.
+class authorized_prepared_statements_cache {
+public:
+    struct stats {
+        uint64_t authorized_prepared_statements_cache_evictions = 0;
+        uint64_t authorized_prepared_statements_privileged_entries_evictions_on_size = 0;
+        uint64_t authorized_prepared_statements_unprivileged_entries_evictions_on_size = 0;
+    };
+
+    static stats& shard_stats() {
+        static thread_local stats _stats;
+        return _stats;
+    }
+
+    struct authorized_prepared_statements_cache_stats_updater {
+        static void inc_hits() noexcept {}
+        static void inc_misses() noexcept {}
+        static void inc_blocks() noexcept {}
+        static void inc_evictions() noexcept {
+            ++shard_stats().authorized_prepared_statements_cache_evictions;
+        }
+
+        static void inc_privileged_on_cache_size_eviction() noexcept {
+            ++shard_stats().authorized_prepared_statements_privileged_entries_evictions_on_size;
+        }
+
+        static void inc_unprivileged_on_cache_size_eviction() noexcept {
+            ++shard_stats().authorized_prepared_statements_unprivileged_entries_evictions_on_size;
+        }
+    };
+
+private:
+    using cache_key_type = authorized_prepared_statements_cache_key;
+    using checked_weak_ptr = typename statements::prepared_statement::checked_weak_ptr;
+    using cache_type = utils::loading_cache<cache_key_type,
+                                            checked_weak_ptr,
+                                            1,
+                                            utils::loading_cache_reload_enabled::yes,
+                                            authorized_prepared_statements_cache_size,
+                                            std::hash<cache_key_type>,
+                                            std::equal_to<cache_key_type>,
+                                            authorized_prepared_statements_cache_stats_updater,
+                                            authorized_prepared_statements_cache_stats_updater>;
+
+public:
+    using key_type = cache_key_type;
+    using key_view_type = typename key_type::view;
+    using key_view_hasher = typename key_type::view_hasher;
+    using key_view_equal = typename key_type::view_equal;
+    using value_type = checked_weak_ptr;
+    using entry_is_too_big = typename cache_type::entry_is_too_big;
+    using value_ptr = typename cache_type::value_ptr;
+private:
+    cache_type _cache;
+
+public:
+    // Choose the memory budget such that would allow us ~4K entries when a shard gets 1GB of RAM
+    authorized_prepared_statements_cache(utils::loading_cache_config c, logging::logger& logger)
+        : _cache(std::move(c), logger, [this] (const key_type& k) {
+            _cache.remove(k);
+            return make_ready_future<value_type>();
+        })
+    {}
+
+    future<> insert(auth::authenticated_user user, cql3::prepared_cache_key_type prep_cache_key, value_type v) noexcept {
+        return _cache.get_ptr(key_type(std::move(user), std::move(prep_cache_key)), [v = std::move(v)] (const cache_key_type&) mutable {
+            return make_ready_future<value_type>(std::move(v));
+        }).discard_result();
+    }
+
+    value_ptr find(const auth::authenticated_user& user, const cql3::prepared_cache_key_type& prep_cache_key) {
+        return _cache.find(key_view_type{user, prep_cache_key}, key_view_hasher(), key_view_equal());
+    }
+
+    void remove(const auth::authenticated_user& user, const cql3::prepared_cache_key_type& prep_cache_key) {
+        _cache.remove(key_view_type{user, prep_cache_key}, key_view_hasher(), key_view_equal());
+    }
+
+    size_t size() const {
+        return _cache.size();
+    }
+
+    size_t memory_footprint() const {
+        return _cache.memory_footprint();
+    }
+
+    bool update_config(utils::loading_cache_config c) {
+        return _cache.update_config(std::move(c));
+    }
+
+    void reset() {
+        _cache.reset();
+    }
+
+    future<> stop() {
+        return _cache.stop();
+    }
+};
+
+}
+
+namespace std {
+template <>
+struct hash<cql3::authorized_prepared_statements_cache_key> final {
+    size_t operator()(const cql3::authorized_prepared_statements_cache_key& k) const {
+        return cql3::authorized_prepared_statements_cache_key::hash(k.key().first, k.key().second);
+    }
+};
+
+inline std::ostream& operator<<(std::ostream& out, const cql3::authorized_prepared_statements_cache_key& k) {
+    fmt::print(out, "{{{}, {}}}", k.key().first, k.key().second);
+    return out;
+}
+}
+
+#include <functional>
+#include <mutex>
+#include <queue>
+#include <condition_variable>
+#include <thread>
+
+#include <seastar/core/future.hh>
+#include <seastar/util/noncopyable_function.hh>
+
+
+namespace wasm {
+
+struct wasm_compile_task {
+    seastar::noncopyable_function<void()> func;
+    seastar::promise<rust::Box<wasmtime::Module>>& done;
+    unsigned shard;
+};
+
+struct task_queue {
+    std::mutex _mut;
+    std::condition_variable _cv;
+    std::queue<std::optional<wasm_compile_task>> _pending;
+public:
+    std::optional<wasm_compile_task> pop_front();
+    void push_back(std::optional<wasm_compile_task> work_item);
+};
+
+class alien_thread_runner {
+    task_queue _pending_queue;
+    std::thread _thread;
+public:
+    alien_thread_runner();
+    ~alien_thread_runner();
+    alien_thread_runner(const alien_thread_runner&) = delete;
+    alien_thread_runner& operator=(const alien_thread_runner&) = delete;
+    void submit(seastar::promise<rust::Box<wasmtime::Module>>& p, std::function<rust::Box<wasmtime::Module>()> f);
+};
+
+} // namespace wasm
+
+
+#include <span>
+#include <seastar/core/future.hh>
+
+namespace wasm {
+
+class instance_cache;
+
+struct exception : public std::exception {
+    std::string _msg;
+public:
+    explicit exception(std::string_view msg) : _msg(msg) {}
+    const char* what() const noexcept {
+        return _msg.c_str();
+    }
+};
+
+struct instance_corrupting_exception : public exception {
+    explicit instance_corrupting_exception(std::string_view msg) : exception(msg) {}
+};
+
+struct startup_context {
+    std::shared_ptr<alien_thread_runner> alien_runner;
+    std::shared_ptr<rust::Box<wasmtime::Engine>> engine;
+    size_t cache_size;
+    size_t instance_size;
+    seastar::lowres_clock::duration timer_period;
+
+    startup_context(db::config& cfg, replica::database_config& dbcfg);
+};
+
+struct context {
+    wasmtime::Engine& engine_ptr;
+    std::optional<rust::Box<wasmtime::Module>> module;
+    std::string function_name;
+    instance_cache& cache;
+    uint64_t yield_fuel;
+    uint64_t total_fuel;
+
+    context(wasmtime::Engine& engine_ptr, std::string name, instance_cache& cache, uint64_t yield_fuel, uint64_t total_fuel);
+};
+
+seastar::future<> precompile(alien_thread_runner& alien_runner, context& ctx, const std::vector<sstring>& arg_names, std::string script);
+
+seastar::future<bytes_opt> run_script(const db::functions::function_name& name, context& ctx, const std::vector<data_type>& arg_types, std::span<const bytes_opt> params, data_type return_type, bool allow_null_input);
+
+}
+
+
+
+#include <list>
+#include <seastar/core/metrics_registration.hh>
+#include <seastar/core/scheduling.hh>
+#include <seastar/core/shared_mutex.hh>
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/timer.hh>
+#include <unordered_map>
+
+namespace wasm {
+
+class module_handle {
+    wasmtime::Module& _module;
+    instance_cache& _cache;
+public:
+    module_handle(wasmtime::Module& module, instance_cache& cache, wasmtime::Engine& engine);
+    module_handle(const module_handle&) noexcept;
+    ~module_handle() noexcept;
+};
+
+struct wasm_instance {
+    rust::Box<wasmtime::Store> store;
+    rust::Box<wasmtime::Instance> instance;
+    rust::Box<wasmtime::Func> func;
+    rust::Box<wasmtime::Memory> memory;
+    module_handle mh;
+};
+
+// For each UDF full name and a scheduling group, we store a wasmtime instance
+// that is usable after acquiring a corresponding mutex. This way, the instance
+// can't be used in multiple continuations from the same scheduling group at the
+// same time.
+// The instance may be evicted only when it is not used, i.e. when the corresponding
+// mutex is not held. When the instance is used, its size is not tracked, but
+// it's limited by the size of its memory - it can't exceed a set value (1MB).
+// After the instance stops being used, a timestamp of last use is recorded,
+// and its size is added to the total size of all instances. Other, older instances
+// may be evicted if the total size of all instances exceeds a set value (100MB).
+// If the instance is not used for at least _timer_period, it is evicted after
+// at most another _timer_period.
+// Entries in the cache are created on the first use of a UDF in a given scheduling
+// and they are stored in memory until the UDF is dropped. The number of such
+// entries is limited by the number of stored UDFs multiplied by the number of
+// scheduling groups.
+class instance_cache {
+public:
+    struct stats {
+        uint64_t cache_hits = 0;
+        uint64_t cache_misses = 0;
+        uint64_t cache_blocks = 0;
+    };
+
+private:
+    stats _stats;
+    seastar::metrics::metric_groups _metrics;
+
+public:
+    stats& shard_stats();
+
+    void setup_metrics();
+
+private:
+    using cache_key_type = db::functions::function_name;
+
+    struct lru_entry_type;
+
+    struct cache_entry_type {
+        seastar::scheduling_group scheduling_group;
+        std::vector<data_type> arg_types;
+        seastar::shared_mutex mutex;
+        std::optional<wasm_instance> instance;
+        // iterator points to _lru.end() when the entry is being used (at that point, it is not in lru)
+        std::list<lru_entry_type>::iterator it;
+        wasmtime::Module& module;
+    };
+
+public:
+    using value_type = lw_shared_ptr<cache_entry_type>;
+
+private:
+    struct lru_entry_type {
+        value_type cache_entry;
+        seastar::lowres_clock::time_point timestamp;
+        size_t instance_size;
+    };
+
+private:
+    std::unordered_multimap<cache_key_type, value_type> _cache;
+    std::list<lru_entry_type> _lru;
+    seastar::timer<seastar::lowres_clock> _timer;
+    // The instance in cache time out after up to 2*_timer_period.
+    seastar::lowres_clock::duration _timer_period;
+    size_t _total_size = 0;
+    size_t _max_size;
+    size_t _max_instance_size;
+    size_t _compiled_size = 0;
+    // The reserved size for compiled code (which is not allocated by the seastar allocator)
+    // is 50MB. We always leave some of this space free for the compilation of new instances
+    // - we only find out the real compiled size after the compilation finishes. (During
+    // the verification of the compiled code, we also allocate a new stack using this memory)
+    size_t _max_compiled_size = 40 * 1024 * 1024;
+
+public:
+    explicit instance_cache(size_t size, size_t instance_size, seastar::lowres_clock::duration timer_period);
+
+private:
+    wasm_instance load(wasm::context& ctx);
+
+    void evict_lru() noexcept;
+
+    void on_timer() noexcept;
+
+public:
+    seastar::future<value_type> get(const db::functions::function_name& name, const std::vector<data_type>& arg_types, wasm::context& ctx);
+
+    void recycle(value_type inst) noexcept;
+
+    void remove(const db::functions::function_name& name, const std::vector<data_type>& arg_types) noexcept;
+
+private:
+    friend class module_handle;
+
+    // Wasmtime instances hold references to modules, so the module can only be dropped
+    // when all instances are dropped. For a given module, we can have at most one
+    // instance for each scheduling group.
+    // This function is called each time a new instance is created for a given module.
+    // If there were no instances for the module before, i.e. this module was not
+    // compiled, the module is compiled and the size of the compiled code is added
+    // to the total size of compiled code. If the total size of compiled code exceeds
+    // the maximum size as a result of this, the function will evict modules until
+    // there is enough space for the new module. If it is not possible, the function
+    // will throw an exception. If this function succeeds, the counter of instances
+    // for the module is increased by one.
+    void track_module_ref(wasmtime::Module& module, wasmtime::Engine& engine);
+
+    // This function is called each time an instance for a given module is dropped.
+    // If the counter of instances for the module reaches zero, the module is dropped
+    // and the size of the compiled code is subtracted from the total size of compiled code.
+    void remove_module_ref(wasmtime::Module& module) noexcept;
+
+    // When a WASM UDF is executed, a separate stack is first allocated for it.
+    // This stack is used by the WASM code and it is not tracked by the seastar allocator.
+    // This function will evict cached modules until the stack can be allocated. If enough
+    // memory can't be freed, the function will throw an exception.
+    void reserve_wasm_stack();
+
+    // This function should be called after a WASM UDF finishes execution. Its stack is then
+    // destroyed and this function accounts for the freed memory.
+    void free_wasm_stack() noexcept;
+
+    // Evicts instances using lru until a module is no longer referenced by any of them.
+    void evict_modules() noexcept;
+
+public:
+
+    size_t size() const;
+
+    size_t max_size() const;
+
+    size_t memory_footprint() const;
+
+    future<> stop();
+};
+
+}
+
+
+#include <vector>
+#include <seastar/core/rwlock.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/shared_ptr.hh>
+
+namespace data_dictionary {
+class keyspace_metadata;
+}
+using keyspace_metadata = data_dictionary::keyspace_metadata;
+class view_ptr;
+class user_type_impl;
+using user_type = seastar::shared_ptr<const user_type_impl>;
+class schema;
+using schema_ptr = seastar::lw_shared_ptr<const schema>;
+class abstract_type;
+using data_type = seastar::shared_ptr<const abstract_type>;
+namespace db::functions {
+class function_name;
+}
+
+#include "timestamp.hh"
+
+#include "seastarx.hh"
+
+class mutation;
+class schema;
+
+namespace service {
+
+class migration_listener {
+public:
+    virtual ~migration_listener()
+    {}
+
+    // The callback runs inside seastar thread
+    virtual void on_create_keyspace(const sstring& ks_name) = 0;
+    virtual void on_create_column_family(const sstring& ks_name, const sstring& cf_name) = 0;
+    virtual void on_create_user_type(const sstring& ks_name, const sstring& type_name) = 0;
+    virtual void on_create_function(const sstring& ks_name, const sstring& function_name) = 0;
+    virtual void on_create_aggregate(const sstring& ks_name, const sstring& aggregate_name) = 0;
+    virtual void on_create_view(const sstring& ks_name, const sstring& view_name) = 0;
+
+    // The callback runs inside seastar thread
+    virtual void on_update_keyspace(const sstring& ks_name) = 0;
+    virtual void on_update_column_family(const sstring& ks_name, const sstring& cf_name, bool columns_changed) = 0;
+    virtual void on_update_user_type(const sstring& ks_name, const sstring& type_name) = 0;
+    virtual void on_update_function(const sstring& ks_name, const sstring& function_name) = 0;
+    virtual void on_update_aggregate(const sstring& ks_name, const sstring& aggregate_name) = 0;
+    virtual void on_update_view(const sstring& ks_name, const sstring& view_name, bool columns_changed) = 0;
+    virtual void on_update_tablet_metadata() = 0;
+
+    // The callback runs inside seastar thread
+    virtual void on_drop_keyspace(const sstring& ks_name) = 0;
+    virtual void on_drop_column_family(const sstring& ks_name, const sstring& cf_name) = 0;
+    virtual void on_drop_user_type(const sstring& ks_name, const sstring& type_name) = 0;
+    virtual void on_drop_function(const sstring& ks_name, const sstring& function_name) = 0;
+    virtual void on_drop_aggregate(const sstring& ks_name, const sstring& aggregate_name) = 0;
+    virtual void on_drop_view(const sstring& ks_name, const sstring& view_name) = 0;
+
+    // The callback runs inside seastar thread
+    // called before adding/updating/dropping column family. 
+    // listener can add additional type altering mutations if he knows what he is doing. 
+    virtual void on_before_create_column_family(const schema&, std::vector<mutation>&, api::timestamp_type) {}
+    virtual void on_before_update_column_family(const schema& new_schema, const schema& old_schema, std::vector<mutation>&, api::timestamp_type) {}
+    virtual void on_before_drop_column_family(const schema&, std::vector<mutation>&, api::timestamp_type) {}
+    virtual void on_before_drop_keyspace(const sstring& keyspace_name, std::vector<mutation>&, api::timestamp_type) {}
+
+    class only_view_notifications;
+    class empty_listener;
+};
+
+class migration_listener::only_view_notifications : public migration_listener {
+public:
+    void on_create_keyspace(const sstring& ks_name) override {}
+    void on_create_column_family(const sstring& ks_name, const sstring& cf_name) override {}
+    void on_create_user_type(const sstring& ks_name, const sstring& type_name) override {}
+    void on_create_function(const sstring& ks_name, const sstring& function_name) override {}
+    void on_create_aggregate(const sstring& ks_name, const sstring& aggregate_name) override {}
+
+    void on_update_keyspace(const sstring& ks_name) override {}
+    void on_update_column_family(const sstring& ks_name, const sstring& cf_name, bool columns_changed) override {}
+    void on_update_user_type(const sstring& ks_name, const sstring& type_name) override {}
+    void on_update_function(const sstring& ks_name, const sstring& function_name) override {}
+    void on_update_aggregate(const sstring& ks_name, const sstring& aggregate_name) override {}
+    void on_update_tablet_metadata() override {}
+
+    void on_drop_keyspace(const sstring& ks_name) override {}
+    void on_drop_column_family(const sstring& ks_name, const sstring& cf_name) override {}
+    void on_drop_user_type(const sstring& ks_name, const sstring& type_name) override {}
+    void on_drop_function(const sstring& ks_name, const sstring& function_name) override {}
+    void on_drop_aggregate(const sstring& ks_name, const sstring& aggregate_name) override {}
+};
+
+class migration_listener::empty_listener : public only_view_notifications {
+public:
+    void on_create_view(const sstring& ks_name, const sstring& view_name) override {};
+    void on_update_view(const sstring& ks_name, const sstring& view_name, bool columns_changed) override {};
+    void on_drop_view(const sstring& ks_name, const sstring& view_name) override {};
+};
+
+class migration_notifier {
+private:
+    atomic_vector<migration_listener*> _listeners;
+
+public:
+    /// Register a migration listener on current shard.
+    void register_listener(migration_listener* listener);
+
+    /// Unregister a migration listener on current shard.
+    future<> unregister_listener(migration_listener* listener);
+
+    future<> create_keyspace(const lw_shared_ptr<keyspace_metadata>& ksm);
+    future<> create_column_family(const schema_ptr& cfm);
+    future<> create_user_type(const user_type& type);
+    future<> create_view(const view_ptr& view);
+    future<> update_keyspace(const lw_shared_ptr<keyspace_metadata>& ksm);
+    future<> update_column_family(const schema_ptr& cfm, bool columns_changed);
+    future<> update_user_type(const user_type& type);
+    future<> update_view(const view_ptr& view, bool columns_changed);
+    future<> update_tablet_metadata();
+    future<> drop_keyspace(const sstring& ks_name);
+    future<> drop_column_family(const schema_ptr& cfm);
+    future<> drop_user_type(const user_type& type);
+    future<> drop_view(const view_ptr& view);
+    future<> drop_function(const db::functions::function_name& fun_name, const std::vector<data_type>& arg_types);
+    future<> drop_aggregate(const db::functions::function_name& fun_name, const std::vector<data_type>& arg_types);
+
+    void before_create_column_family(const schema&, std::vector<mutation>&, api::timestamp_type);
+    void before_update_column_family(const schema& new_schema, const schema& old_schema, std::vector<mutation>&, api::timestamp_type);
+    void before_drop_column_family(const schema&, std::vector<mutation>&, api::timestamp_type);
+    void before_drop_keyspace(const sstring& keyspace_name, std::vector<mutation>&, api::timestamp_type);
+};
+
+}
+
+
+#include <ostream>
+
+namespace cql3 {
+
+namespace statements {
+
+class statement_type final {
+    enum class type : size_t {
+        insert = 0,
+        update,
+        del,
+        select,
+
+        last  // Keep me as last entry
+    };
+    const type _type;
+
+    statement_type(type t) : _type(t) {
+    }
+public:
+    statement_type() = delete;
+
+    bool is_insert() const {
+        return _type == type::insert;
+    }
+    bool is_update() const {
+        return _type == type::update;
+    }
+    bool is_delete() const {
+        return _type == type::del;
+    }
+    bool is_select() const {
+        return _type == type::select;
+    }
+
+    static const statement_type INSERT;
+    static const statement_type UPDATE;
+    static const statement_type DELETE;
+    static const statement_type SELECT;
+
+    static constexpr size_t MAX_VALUE = size_t(type::last) - 1;
+
+    explicit operator size_t() const {
+        return size_t(_type);
+    }
+
+    bool operator==(const statement_type&) const = default;
+
+    friend std::ostream &operator<<(std::ostream &os, const statement_type& t) {
+        switch (t._type) {
+        case type::insert: return os << "INSERT";
+        case type::update: return os << "UPDATE";
+        case type::del: return os << "DELETE";
+        case type::select : return os << "SELECT";
+
+        case type::last : return os << "LAST";
+        }
+        return os;
+    }
+};
+
+}
+}
+
+
+#include <cstdint>
+
+namespace cql3 {
+
+/** Enums for selecting counters in `cql_stats', like:
+ *      stats.query_cnt(source_selector::USER, ks_selector::NONSYSTEM, cond_selector::NO_CONDITIONS, statement_type::INSERT)
+ */
+enum class source_selector : size_t {
+    INTERNAL = 0u,
+    USER,
+
+    SIZE  // Keep me as the last entry
+};
+enum class ks_selector : size_t {
+    SYSTEM = 0u,
+    NONSYSTEM,
+
+    SIZE  // Keep me as the last entry
+};
+enum class cond_selector : size_t {
+    NO_CONDITIONS = 0u,
+    WITH_CONDITIONS,
+
+    SIZE  // Keep me as the last entry
+};
+
+// Shard-local CQL statistics
+// @sa cql3/query_processor.cc explains the meaning of each counter
+struct cql_stats {
+    uint64_t& query_cnt(source_selector ss, ks_selector kss, cond_selector cs, statements::statement_type st) {
+        return _query_cnt[(size_t)ss][(size_t)kss][(size_t)cs][(size_t)st];
+    }
+    const uint64_t& query_cnt(source_selector ss, ks_selector kss, cond_selector cs, statements::statement_type st) const {
+        return _query_cnt[(size_t)ss][(size_t)kss][(size_t)cs][(size_t)st];
+    }
+
+    uint64_t& unpaged_select_queries(ks_selector kss) {
+        return _unpaged_select_queries[(size_t)kss];
+    }
+    const uint64_t& unpaged_select_queries(ks_selector kss) const {
+        return _unpaged_select_queries[(size_t)kss];
+    }
+
+    uint64_t batches = 0;
+    uint64_t cas_batches = 0;
+    uint64_t statements_in_batches = 0;
+    uint64_t statements_in_cas_batches = 0;
+    uint64_t batches_pure_logged = 0;
+    uint64_t batches_pure_unlogged = 0;
+    uint64_t batches_unlogged_from_logged = 0;
+    uint64_t rows_read = 0;
+    uint64_t reverse_queries = 0;
+
+    int64_t secondary_index_creates = 0;
+    int64_t secondary_index_drops = 0;
+    int64_t secondary_index_reads = 0;
+    int64_t secondary_index_rows_read = 0;
+
+    int64_t filtered_reads = 0;
+    int64_t filtered_rows_matched_total = 0;
+    int64_t filtered_rows_read_total = 0;
+
+    int64_t select_bypass_caches = 0;
+    int64_t select_allow_filtering = 0;
+    int64_t select_partition_range_scan = 0;
+    int64_t select_partition_range_scan_no_bypass_cache = 0;
+    int64_t select_parallelized = 0;
+
+private:
+    uint64_t _unpaged_select_queries[(size_t)ks_selector::SIZE] = {0ul};
+    uint64_t _query_cnt[(size_t)source_selector::SIZE]
+            [(size_t)ks_selector::SIZE]
+            [(size_t)cond_selector::SIZE]
+            [statements::statement_type::MAX_VALUE + 1] = {};
+};
+
+}
+
+namespace utils {
+
+managed_bytes_view
+buffer_view_to_managed_bytes_view(ser::buffer_view<bytes_ostream::fragment_iterator> bv);
+
+managed_bytes_view_opt
+buffer_view_to_managed_bytes_view(std::optional<ser::buffer_view<bytes_ostream::fragment_iterator>> bvo);
+
+}
+
+
+
+namespace cql3 {
+class untyped_result_set;
+
+class result_generator {
+    schema_ptr _schema;
+    foreign_ptr<lw_shared_ptr<query::result>> _result;
+    lw_shared_ptr<const query::read_command> _command;
+    shared_ptr<const selection::selection> _selection;
+    cql_stats* _stats;
+private:
+    friend class untyped_result_set;
+    template<typename Visitor>
+    class query_result_visitor {
+        const schema& _schema;
+        std::vector<bytes> _partition_key;
+        std::vector<bytes> _clustering_key;
+        uint64_t _partition_row_count = 0;
+        uint64_t _total_row_count = 0;
+        Visitor& _visitor;
+        const selection::selection& _selection;
+    private:
+        void accept_cell_value(const column_definition& def, query::result_row_view::iterator_type& i) {
+            if (def.is_multi_cell()) {
+                _visitor.accept_value(utils::buffer_view_to_managed_bytes_view(i.next_collection_cell()));
+            } else {
+                auto cell = i.next_atomic_cell();
+                _visitor.accept_value(cell ? utils::buffer_view_to_managed_bytes_view(cell->value()) : managed_bytes_view_opt());
+            }
+        }
+    public:
+        query_result_visitor(const schema& s, Visitor& visitor, const selection::selection& select)
+            : _schema(s), _visitor(visitor), _selection(select) { }
+
+        void accept_new_partition(const partition_key& key, uint64_t row_count) {
+            _partition_key = key.explode(_schema);
+            accept_new_partition(row_count);
+        }
+        void accept_new_partition(uint64_t row_count) {
+            _partition_row_count = row_count;
+            _total_row_count += row_count;
+        }
+
+        void accept_new_row(const clustering_key& key, query::result_row_view static_row,
+                            query::result_row_view row) {
+            _clustering_key = key.explode(_schema);
+            accept_new_row(static_row, row);
+        }
+        void accept_new_row(query::result_row_view static_row, query::result_row_view row) {
+            auto static_row_iterator = static_row.iterator();
+            auto row_iterator = row.iterator();
+            _visitor.start_row();
+            for (auto&& def : _selection.get_columns()) {
+                switch (def->kind) {
+                case column_kind::partition_key:
+                    _visitor.accept_value(bytes_view(_partition_key[def->component_index()]));
+                    break;
+                case column_kind::clustering_key:
+                    if (_clustering_key.size() > def->component_index()) {
+                        _visitor.accept_value(bytes_view(_clustering_key[def->component_index()]));
+                    } else {
+                        _visitor.accept_value(std::nullopt);
+                    }
+                    break;
+                case column_kind::regular_column:
+                    accept_cell_value(*def, row_iterator);
+                    break;
+                case column_kind::static_column:
+                    accept_cell_value(*def, static_row_iterator);
+                    break;
+                }
+            }
+            _visitor.end_row();
+        }
+
+        void accept_partition_end(const query::result_row_view& static_row) {
+            if (_partition_row_count == 0) {
+                _total_row_count++;
+                _visitor.start_row();
+                auto static_row_iterator = static_row.iterator();
+                for (auto&& def : _selection.get_columns()) {
+                    if (def->is_partition_key()) {
+                        _visitor.accept_value(bytes_view(_partition_key[def->component_index()]));
+                    } else if (def->is_static()) {
+                        accept_cell_value(*def, static_row_iterator);
+                    } else {
+                        _visitor.accept_value(std::nullopt);
+                    }
+                }
+                _visitor.end_row();
+            }
+        }
+
+        uint64_t rows_read() const { return _total_row_count; }
+    };
+public:
+    result_generator() = default;
+
+    result_generator(schema_ptr s, foreign_ptr<lw_shared_ptr<query::result>> result, lw_shared_ptr<const query::read_command> cmd,
+                     ::shared_ptr<const selection::selection> select, cql_stats& stats)
+        : _schema(std::move(s))
+        , _result(std::move(result))
+        , _command(std::move(cmd))
+        , _selection(std::move(select))
+        , _stats(&stats)
+    { }
+
+    template<typename Visitor>
+    void visit(Visitor&& visitor) const {
+        query_result_visitor<Visitor> v(*_schema, visitor, *_selection);
+        query::result_view::consume(*_result, _command->slice, v);
+        _stats->rows_read += v.rows_read();
+    }
+};
+
+}
+
+
+
+
+namespace cql3 {
+
+class metadata {
+public:
+    enum class flag : uint8_t {
+        GLOBAL_TABLES_SPEC = 0,
+        HAS_MORE_PAGES = 1,
+        NO_METADATA = 2,
+    };
+
+    using flag_enum = super_enum<flag,
+        flag::GLOBAL_TABLES_SPEC,
+        flag::HAS_MORE_PAGES,
+        flag::NO_METADATA>;
+
+    using flag_enum_set = enum_set<flag_enum>;
+
+    struct column_info {
+    // Please note that columnCount can actually be smaller than names, even if names is not null. This is
+    // used to include columns in the resultSet that we need to do post-query re-orderings
+    // (SelectStatement.orderResults) but that shouldn't be sent to the user as they haven't been requested
+    // (CASSANDRA-4911). So the serialization code will exclude any columns in name whose index is >= columnCount.
+        std::vector<lw_shared_ptr<column_specification>> _names;
+        uint32_t _column_count;
+
+        column_info(std::vector<lw_shared_ptr<column_specification>> names, uint32_t column_count)
+            : _names(std::move(names))
+            , _column_count(column_count)
+        { }
+
+        explicit column_info(std::vector<lw_shared_ptr<column_specification>> names)
+            : _names(std::move(names))
+            , _column_count(_names.size())
+        { }
+    };
+private:
+    flag_enum_set _flags;
+
+private:
+    lw_shared_ptr<column_info> _column_info;
+    lw_shared_ptr<const service::pager::paging_state> _paging_state;
+
+public:
+    metadata(std::vector<lw_shared_ptr<column_specification>> names_);
+
+    metadata(flag_enum_set flags, std::vector<lw_shared_ptr<column_specification>> names_, uint32_t column_count,
+            lw_shared_ptr<const service::pager::paging_state> paging_state);
+
+    // The maximum number of values that the ResultSet can hold. This can be bigger than columnCount due to CASSANDRA-4911
+    uint32_t value_count() const;
+
+    void add_non_serialized_column(lw_shared_ptr<column_specification> name);
+
+private:
+    bool all_in_same_cf() const;
+
+public:
+    void set_paging_state(lw_shared_ptr<const service::pager::paging_state> paging_state);
+    void maybe_set_paging_state(lw_shared_ptr<const service::pager::paging_state> paging_state);
+
+    void set_skip_metadata();
+
+    flag_enum_set flags() const;
+
+    uint32_t column_count() const { return _column_info->_column_count; }
+
+    lw_shared_ptr<const service::pager::paging_state> paging_state() const;
+
+    const std::vector<lw_shared_ptr<column_specification>>& get_names() const {
+        return _column_info->_names;
+    }
+};
+
+::shared_ptr<const cql3::metadata> make_empty_metadata();
+
+class prepared_metadata {
+public:
+    enum class flag : uint32_t {
+        GLOBAL_TABLES_SPEC = 0,
+        // Denotes whether the prepared statement at hand is an LWT statement.
+        //
+        // Use the last available bit in the flags since we don't want to clash
+        // with C* in case they add some other flag in one the next versions of binary protocol.
+        LWT = 31
+    };
+
+    using flag_enum = super_enum<flag,
+        flag::GLOBAL_TABLES_SPEC,
+        flag::LWT>;
+
+    using flag_enum_set = enum_set<flag_enum>;
+
+    static constexpr flag_enum_set::mask_type LWT_FLAG_MASK = flag_enum_set::mask_for<flag::LWT>();
+
+private:
+    flag_enum_set _flags;
+    std::vector<lw_shared_ptr<column_specification>> _names;
+    std::vector<uint16_t> _partition_key_bind_indices;
+public:
+    prepared_metadata(const std::vector<lw_shared_ptr<column_specification>>& names,
+                      const std::vector<uint16_t>& partition_key_bind_indices,
+                      bool is_conditional);
+
+    flag_enum_set flags() const;
+    const std::vector<lw_shared_ptr<column_specification>>& names() const;
+    const std::vector<uint16_t>& partition_key_bind_indices() const;
+};
+
+template<typename Visitor>
+concept ResultVisitor = requires(Visitor& visitor, managed_bytes_view_opt val) {
+    visitor.start_row();
+    visitor.accept_value(std::move(val));
+    visitor.end_row();
+};
+
+class result_set {
+    using col_type = managed_bytes_opt;
+    using row_type = std::vector<col_type>;
+    using rows_type = utils::chunked_vector<row_type>;
+
+    ::shared_ptr<metadata> _metadata;
+    rows_type _rows;
+
+    friend class result;
+public:
+    result_set(std::vector<lw_shared_ptr<column_specification>> metadata_);
+
+    result_set(::shared_ptr<metadata> metadata);
+
+    result_set(result_set&& other) = default;
+    result_set(const result_set& other) = delete;
+
+    size_t size() const;
+
+    bool empty() const;
+
+    void add_row(row_type row);
+    void add_row(std::vector<bytes_opt> row);
+
+    void add_column_value(col_type value);
+    void add_column_value(bytes_opt value);
+
+    void reverse();
+
+    void trim(size_t limit);
+
+    template<typename RowComparator>
+    requires requires (RowComparator cmp, const row_type& row) {
+        { cmp(row, row) } -> std::same_as<bool>;
+    }
+    void sort(const RowComparator& cmp) {
+        std::sort(_rows.begin(), _rows.end(), cmp);
+    }
+
+    metadata& get_metadata();
+
+    const metadata& get_metadata() const;
+
+    // Returns a range of rows. A row is a range of bytes_opt.
+    const rows_type& rows() const;
+
+    template<typename Visitor>
+    requires ResultVisitor<Visitor>
+    void visit(Visitor&& visitor) const {
+        auto column_count = get_metadata().column_count();
+        for (auto& row : _rows) {
+            visitor.start_row();
+            for (auto i = 0u; i < column_count; i++) {
+                auto& cell = row[i];
+                visitor.accept_value(cell ? managed_bytes_view_opt(*cell) : managed_bytes_view_opt());
+            }
+            visitor.end_row();
+        }
+    }
+
+    class builder;
+};
+
+class result_set::builder {
+    result_set _result;
+    row_type _current_row;
+public:
+    explicit builder(shared_ptr<metadata> mtd)
+        : _result(std::move(mtd)) { }
+
+    void start_row() { }
+    void accept_value(managed_bytes_view_opt value) {
+        if (!value) {
+            _current_row.emplace_back();
+            return;
+        }
+        _current_row.emplace_back(value);
+    }
+    void end_row() {
+        _result.add_row(std::exchange(_current_row, { }));
+    }
+    result_set get_result_set() && { return std::move(_result); }
+};
+
+class result {
+    mutable std::unique_ptr<cql3::result_set> _result_set;
+    result_generator _result_generator;
+    shared_ptr<const cql3::metadata> _metadata;
+public:
+    explicit result(std::unique_ptr<cql3::result_set> rs)
+        : _result_set(std::move(rs))
+        , _metadata(_result_set->_metadata)
+    { }
+
+    explicit result(result_generator generator, shared_ptr<const metadata> m)
+        : _result_generator(std::move(generator))
+        , _metadata(std::move(m))
+    { }
+
+    const cql3::metadata& get_metadata() const { return *_metadata; }
+    const cql3::result_set& result_set() const {
+        if (_result_set) {
+            return *_result_set;
+        }
+        auto builder = result_set::builder(make_shared<cql3::metadata>(*_metadata));
+        _result_generator.visit(builder);
+        auto tmp_rs = std::make_unique<cql3::result_set>(std::move(builder).get_result_set());
+        _result_set.swap(tmp_rs);
+        return *_result_set;
+    }
+
+    template<typename Visitor>
+    requires ResultVisitor<Visitor>
+    void visit(Visitor&& visitor) const {
+        if (_result_set) {
+            _result_set->visit(std::forward<Visitor>(visitor));
+        } else {
+            _result_generator.visit(std::forward<Visitor>(visitor));
+        }
+    }
+};
+
+}
+
+
+
+namespace service {
+
+class storage_proxy;
+class query_state;
+class client_state;
+
+}
+
+namespace cql_transport {
+
+namespace messages {
+
+class result_message;
+
+}
+
+}
+
+namespace cql3 {
+
+class query_processor;
+
+class metadata;
+seastar::shared_ptr<const metadata> make_empty_metadata();
+
+class query_options;
+
+class cql_statement {
+    timeout_config_selector _timeout_config_selector;
+public:
+    // CQL statement text
+    seastar::sstring raw_cql_statement;
+
+    explicit cql_statement(timeout_config_selector timeout_selector) : _timeout_config_selector(timeout_selector) {}
+
+    virtual ~cql_statement()
+    { }
+
+    timeout_config_selector get_timeout_config_selector() const { return _timeout_config_selector; }
+
+    virtual uint32_t get_bound_terms() const = 0;
+
+    /**
+     * Perform any access verification necessary for the statement.
+     *
+     * @param state the current client state
+     */
+    virtual seastar::future<> check_access(query_processor& qp, const service::client_state& state) const = 0;
+
+    /**
+     * Perform additional validation required by the statment.
+     * To be overriden by subclasses if needed.
+     *
+     * @param state the current client state
+     */
+    virtual void validate(query_processor& qp, const service::client_state& state) const = 0;
+
+    /**
+     * Execute the statement and return the resulting result or null if there is no result.
+     *
+     * In case of a failure, it must return an exceptional future. It must not use
+     * the result_message::exception to indicate failure.
+     *
+     * @param state the current query state
+     * @param options options for this query (consistency, variables, pageSize, ...)
+     */
+    virtual seastar::future<seastar::shared_ptr<cql_transport::messages::result_message>>
+        execute(query_processor& qp, service::query_state& state, const query_options& options) const = 0;
+
+    /**
+     * Execute the statement and return the resulting result or null if there is no result.
+     *
+     * Unlike execute(), it is allowed to return a result_message::exception which contains
+     * an exception that needs to be explicitly handled.
+     *
+     * @param state the current query state
+     * @param options options for this query (consistency, variables, pageSize, ...)
+     */
+    virtual seastar::future<seastar::shared_ptr<cql_transport::messages::result_message>>
+            execute_without_checking_exception_message(query_processor& qp, service::query_state& state, const query_options& options) const {
+        return execute(qp, state, options);
+    }
+
+    virtual bool depends_on(std::string_view ks_name, std::optional<std::string_view> cf_name) const = 0;
+
+    virtual seastar::shared_ptr<const metadata> get_result_metadata() const = 0;
+
+    virtual bool is_conditional() const {
+        return false;
+    }
+};
+
+class cql_statement_no_metadata : public cql_statement {
+public:
+    using cql_statement::cql_statement;
+    virtual seastar::shared_ptr<const metadata> get_result_metadata() const override {
+        return make_empty_metadata();
+    }
+};
+
+// Conditional modification statements and batches
+// return a result set and have metadata, while same
+// statements without conditions do not.
+class cql_statement_opt_metadata : public cql_statement {
+protected:
+    // Result set metadata, may be empty for simple updates and batches
+    seastar::shared_ptr<metadata> _metadata;
+public:
+    using cql_statement::cql_statement;
+    virtual seastar::shared_ptr<const metadata> get_result_metadata() const override {
+        if (_metadata) {
+            return _metadata;
+        }
+        return make_empty_metadata();
+    }
+};
+
+}
+
+
+
+#include <seastar/core/sstring.hh>
+#include <seastar/net/api.hh>
+
+#include <optional>
+#include <stdexcept>
+
+namespace cql_transport {
+
+class event {
+public:
+    enum class event_type { TOPOLOGY_CHANGE, STATUS_CHANGE, SCHEMA_CHANGE };
+
+    event_type type;
+private:
+    event(const event_type& type_) {}
+public:
+    event() = default;
+    class topology_change;
+    class status_change;
+    class schema_change;
+};
+
+class event::topology_change : public event {
+public:
+    enum class change_type { NEW_NODE, REMOVED_NODE, MOVED_NODE };
+
+    change_type change;
+    socket_address node;
+
+    topology_change() = default;
+
+    topology_change(change_type change, const socket_address& node) {}
+
+    static topology_change new_node(const gms::inet_address& host, uint16_t port) { return {}; }
+
+    static topology_change removed_node(const gms::inet_address& host, uint16_t port) { return {}; }
+};
+
+class event::status_change : public event {
+public:
+    enum class status_type { UP, DOWN };
+
+    status_type status;
+    socket_address node;
+
+    status_change() = default;
+    status_change(status_type status, const socket_address& node) {}
+
+    static status_change node_up(const gms::inet_address& host, uint16_t port) { return {}; }
+
+    static status_change node_down(const gms::inet_address& host, uint16_t port) { return {}; }
+};
+
+class event::schema_change : public event {
+public:
+    enum class change_type { CREATED, UPDATED, DROPPED };
+    enum class target_type { KEYSPACE, TABLE, TYPE, FUNCTION, AGGREGATE };
+
+    change_type change;
+    target_type target;
+
+    // Every target is followed by at least a keyspace.
+    sstring keyspace;
+
+    // Target types other than keyspace have a list of arguments.
+    std::vector<sstring> arguments;
+
+    schema_change(change_type change, target_type target, sstring keyspace, std::vector<sstring> arguments) {}
+
+    template <typename... Ts>
+    schema_change(change_type change, target_type target, sstring keyspace, Ts... arguments)
+        : schema_change(change, target, keyspace, std::vector<sstring>{std::move(arguments)...}) {}
+};
+
+}
+#include <exception>
+#include <typeinfo>
+#include <type_traits>
+#include <memory>
+#include <ostream>
+#include <variant>
+#include <seastar/core/future.hh>
+#include <seastar/core/distributed.hh>
+#include <seastar/util/log.hh>
+
+namespace utils {
+
+class bad_exception_container_access : public std::exception {
+public:
+    const char* what() const noexcept override {
+        return "bad exception container access";
+    }
+};
+
+// A variant-like type capable of holding one of the allowed exception types.
+// This allows inspecting the exception in the error handling code without
+// having to resort to costly rethrowing of std::exception_ptr, as is
+// in the case of the usual exception handling.
+//
+// It's not as ergonomic as using exceptions with seastar, but allows for
+// fast inspection and manipulation.
+//
+// The exception is held behind a std::shared_ptr. In order to minimize use
+// of atomic operations, the copy constructor is deleted and copying is only
+// possible by using the `clone()` method.
+//
+// This means that the moved-out exception container becomes "empty" and
+// does not contain a valid exception.
+template<typename... Exs>
+struct exception_container {
+private:
+    using exception_variant = std::variant<Exs...>;
+
+    // TODO: Idea for a possible improvement: get rid of the variant
+    // and just store a pointer to an error allocated on the heap.
+    // Keep an integer which identifies the variant.
+    // Bonus points: if each error type has a unique, globally-assigned
+    // identified integer, then conversion of the exception_container
+    // to a container supporting a superset of errors becomes very cheap.
+    std::shared_ptr<exception_variant> _eptr;
+
+    // Users should use `clone()` in order to copy the exception container.
+    // The copy constructor is made private in order to make copying explicit.
+    exception_container(const exception_container&) = default;
+
+    void check_nonempty() const {
+        if (empty()) {
+            throw bad_exception_container_access();
+        }
+    }
+
+public:
+    // Constructs an exception_container which does not contain any exception.
+    exception_container() = default;
+
+    exception_container(exception_container&&) = default;
+    exception_container& operator=(exception_container&&) = default;
+    exception_container& operator=(const exception_container&) = delete; // Must be explicitly copied with `clone()`
+
+    template<typename Ex>
+    requires VariantElement<Ex, exception_variant>
+    exception_container(Ex&& ex)
+            : _eptr(std::make_shared<exception_variant>(std::forward<Ex>(ex)))
+    { }
+
+    inline bool empty() const {
+        return __builtin_expect(!_eptr, false);
+    }
+
+    inline operator bool() const {
+        return !empty();
+    }
+
+    // Accepts a visitor.
+    // If the container is empty, the visitor is called with
+    // a bad_exception_container_access.
+    auto accept(auto f) const {
+        if (empty()) {
+            return f(bad_exception_container_access());
+        }
+        return std::visit(std::move(f), *_eptr);
+    }
+
+    // Explicitly clones the exception container.
+    exception_container clone() const noexcept {
+        return exception_container(*this);
+    }
+
+    // Throws currently held exception as a C++ exception.
+    // If the container is empty, it throws bad_exception_container_access.
+    [[noreturn]] void throw_me() const {
+        check_nonempty();
+        std::visit([] (const auto& ex) { throw ex; }, *_eptr);
+        std::terminate(); // Should be unreachable
+    }
+
+    // Creates an exceptional future from this error.
+    // The exception is copied into the new exceptional future.
+    // If the container is empty, returns an exceptional future
+    // with the bad_exception_container_access exception.
+    template<typename T = void>
+    seastar::future<T> as_exception_future() const & {
+        if (!_eptr) {
+            return seastar::make_exception_future<T>(bad_exception_container_access());
+        }
+        return std::visit([] (const auto& ex) {
+            return seastar::make_exception_future<T>(ex);
+        }, *_eptr);
+    }
+
+    // Transforms this exception future into an exceptional future.
+    // The exception is moved out and the container becomes empty.
+    // If the container was empty, returns an exceptional future
+    // with the bad_exception_container_access exception.
+    template<typename T = void>
+    seastar::future<T> into_exception_future() && {
+        if (!_eptr) {
+            return seastar::make_exception_future<T>(bad_exception_container_access());
+        }
+        auto f = std::visit([] (auto&& ex) {
+            return seastar::make_exception_future<T>(std::move(ex));
+        }, *_eptr);
+        _eptr.reset();
+        return f;
+    }
+};
+
+template<typename... Exs>
+inline std::ostream& operator<<(std::ostream& os, const exception_container<Exs...>& ec) {
+    ec.accept([&os] (const auto& ex) { os << ex; });
+    return os;
+}
+
+template<typename T>
+struct is_exception_container : std::false_type {};
+
+template<typename... Exs>
+struct is_exception_container<exception_container<Exs...>> : std::true_type {};
+
+template<typename T>
+concept ExceptionContainer = is_exception_container<T>::value;
+
+}
+
+
+
+// Basic utilities which allow to start working with boost::outcome::result
+// in conjunction with our exception_container.
+
+#include <boost/outcome/success_failure.hpp>
+#include <boost/outcome/trait.hpp>
+#include <boost/outcome/policy/base.hpp>
+#include <boost/outcome/result.hpp>
+
+namespace bo = BOOST_OUTCOME_V2_NAMESPACE;
+
+namespace utils {
+
+// A policy which throws the container_error associated with the result
+// if there was an attempt to access value while it was not present.
+struct exception_container_throw_policy : bo::policy::base {
+    template<class Impl> static constexpr void wide_value_check(Impl&& self) {
+        if (!base::_has_value(self)) {
+            base::_error(self).throw_me();
+        }
+    }
+
+    template<class Impl> static constexpr void wide_error_check(Impl&& self) {
+        if (!base::_has_error(self)) {
+            throw bo::bad_result_access("no error");
+        }
+    }
+};
+
+template<typename T, typename... Exs>
+using result_with_exception = bo::result<T, exception_container<Exs...>, exception_container_throw_policy>;
+
+template<typename R>
+concept ExceptionContainerResult = bo::is_basic_result<R>::value && ExceptionContainer<typename R::error_type>;
+
+template<typename F>
+concept ExceptionContainerResultFuture = seastar::is_future<F>::value && ExceptionContainerResult<typename F::value_type>;
+
+template<typename L, typename R>
+concept ResultRebindableTo =
+    bo::is_basic_result<L>::value &&
+    bo::is_basic_result<R>::value &&
+    std::same_as<typename L::error_type, typename R::error_type> &&
+    std::same_as<typename L::no_value_policy_type, typename R::no_value_policy_type>;
+
+// Creates a result type which has the same error type as R, but has a different value type.
+// The name was inspired by std::allocator::rebind.
+template<typename T, ExceptionContainerResult R>
+using rebind_result = bo::result<T, typename R::error_type, exception_container_throw_policy>;
+
+}
+
+
+#include <boost/outcome/result.hpp>
+
+namespace exceptions {
+
+// Allows to pass a coordinator exception as a value. With coordinator_result,
+// it is possible to handle exceptions and inspect their type/value without
+// resorting to costly rethrows. On the other hand, using them is more
+// cumbersome than just using exceptions and exception futures.
+//
+// Not all exceptions are passed in this way, therefore the container
+// does not allow all types of coordinator exceptions. On the other hand,
+// an exception being listed here does not mean it is _always_ passed
+// in an exception_container - it can be thrown in a regular fashion
+// as well.
+//
+// It is advised to use this mechanism mainly for exceptions which can
+// happen frequently, e.g. signalling timeouts, overloads or rate limits.
+using coordinator_exception_container = utils::exception_container<
+    mutation_write_timeout_exception,
+    read_timeout_exception,
+    read_failure_exception,
+    rate_limit_exception
+>;
+
+template<typename T = void>
+using coordinator_result = bo::result<T,
+    coordinator_exception_container,
+    utils::exception_container_throw_policy
+>;
+
+}
+
+
+
+#include <concepts>
+
+
+
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/sstring.hh>
+
+namespace cql_transport {
+
+namespace messages {
+
+class result_message::prepared : public result_message {
+private:
+    cql3::statements::prepared_statement::checked_weak_ptr _prepared;
+    cql3::prepared_metadata _metadata;
+    ::shared_ptr<const cql3::metadata> _result_metadata;
+protected:
+    prepared(cql3::statements::prepared_statement::checked_weak_ptr prepared, bool support_lwt_opt)
+        : _prepared(std::move(prepared))
+        , _metadata(
+            _prepared->bound_names,
+            _prepared->partition_key_bind_indices,
+            support_lwt_opt ? _prepared->statement->is_conditional() : false)
+        , _result_metadata{extract_result_metadata(_prepared->statement)}
+    { }
+public:
+    cql3::statements::prepared_statement::checked_weak_ptr& get_prepared() {
+        return _prepared;
+    }
+
+    const cql3::prepared_metadata& metadata() const {
+        return _metadata;
+    }
+
+    ::shared_ptr<const cql3::metadata> result_metadata() const {
+        return _result_metadata;
+    }
+
+    class cql;
+    class thrift;
+private:
+    static ::shared_ptr<const cql3::metadata> extract_result_metadata(::shared_ptr<cql3::cql_statement> statement) {
+        return statement->get_result_metadata();
+    }
+};
+
+class result_message::visitor {
+public:
+    virtual void visit(const result_message::void_message&) = 0;
+    virtual void visit(const result_message::set_keyspace&) = 0;
+    virtual void visit(const result_message::prepared::cql&) = 0;
+    virtual void visit(const result_message::prepared::thrift&) = 0;
+    virtual void visit(const result_message::schema_change&) = 0;
+    virtual void visit(const result_message::rows&) = 0;
+    virtual void visit(const result_message::bounce_to_shard&) = 0;
+    virtual void visit(const result_message::exception&) = 0;
+};
+
+class result_message::visitor_base : public visitor {
+public:
+    void visit(const result_message::void_message&) override {};
+    void visit(const result_message::set_keyspace&) override {};
+    void visit(const result_message::prepared::cql&) override {};
+    void visit(const result_message::prepared::thrift&) override {};
+    void visit(const result_message::schema_change&) override {};
+    void visit(const result_message::rows&) override {};
+    void visit(const result_message::bounce_to_shard&) override { assert(false); };
+    void visit(const result_message::exception&) override {}
+};
+
+class result_message::void_message : public result_message {
+public:
+    virtual void accept(result_message::visitor& v) const override {
+        v.visit(*this);
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const result_message::void_message& msg);
+
+// This result is handled internally and should never be returned
+// to a client. Any visitor should abort while handling it since
+// it is a sure sign of a error.
+class result_message::bounce_to_shard : public result_message {
+    unsigned _shard;
+    cql3::computed_function_values _cached_fn_calls;
+public:
+    bounce_to_shard(unsigned shard, cql3::computed_function_values cached_fn_calls)
+        : _shard(shard), _cached_fn_calls(std::move(cached_fn_calls))
+    {}
+    virtual void accept(result_message::visitor& v) const override {
+        v.visit(*this);
+    }
+    virtual std::optional<unsigned> move_to_shard() const override {
+        return _shard;
+    }
+
+    cql3::computed_function_values&& take_cached_pk_function_calls() {
+        return std::move(_cached_fn_calls);
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const result_message::bounce_to_shard& msg);
+
+// This result is handled internally. It can be used to indicate an exception
+// which needs to be handled without involving the C++ exception machinery,
+// e.g. when a rate limit is reached.
+class result_message::exception : public result_message {
+private:
+    exceptions::coordinator_exception_container _ex;
+public:
+    exception(exceptions::coordinator_exception_container ex) : _ex(std::move(ex)) {}
+    virtual void accept(result_message::visitor& v) const override {
+        v.visit(*this);
+    }
+    [[noreturn]] void throw_me() const {
+        _ex.throw_me();
+    }
+    const exceptions::coordinator_exception_container& get_exception() const & {
+        return _ex;
+    }
+    exceptions::coordinator_exception_container&& get_exception() && {
+        return std::move(_ex);
+    }
+
+    virtual bool is_exception() const override {
+        return true;
+    }
+
+    virtual void throw_if_exception() const override {
+        throw_me();
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const result_message::exception& msg);
+
+class result_message::set_keyspace : public result_message {
+private:
+    sstring _keyspace;
+public:
+    set_keyspace(const sstring& keyspace)
+        : _keyspace{keyspace}
+    { }
+
+    const sstring& get_keyspace() const {
+        return _keyspace;
+    }
+
+    virtual void accept(result_message::visitor& v) const override {
+        v.visit(*this);
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const result_message::set_keyspace& msg);
+
+class result_message::prepared::cql : public result_message::prepared {
+    bytes _id;
+public:
+    cql(const bytes& id, cql3::statements::prepared_statement::checked_weak_ptr p, bool support_lwt_opt)
+        : result_message::prepared(std::move(p), support_lwt_opt)
+        , _id{id}
+    { }
+
+    const bytes& get_id() const {
+        return _id;
+    }
+
+    static const bytes& get_id(::shared_ptr<cql_transport::messages::result_message::prepared> prepared) {
+        auto msg_cql = dynamic_pointer_cast<const messages::result_message::prepared::cql>(prepared);
+        if (msg_cql == nullptr) {
+            throw std::bad_cast();
+        }
+        return msg_cql->get_id();
+    }
+
+    virtual void accept(result_message::visitor& v) const override {
+        v.visit(*this);
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const result_message::prepared::cql& msg);
+
+class result_message::prepared::thrift : public result_message::prepared {
+    int32_t _id;
+public:
+    thrift(int32_t id, cql3::statements::prepared_statement::checked_weak_ptr prepared, bool support_lwt_opt)
+        : result_message::prepared(std::move(prepared), support_lwt_opt)
+        , _id{id}
+    { }
+
+    const int32_t get_id() const {
+        return _id;
+    }
+
+    virtual void accept(result_message::visitor& v) const override {
+        v.visit(*this);
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const result_message::prepared::thrift& msg);
+
+class result_message::schema_change : public result_message {
+private:
+    shared_ptr<event::schema_change> _change;
+public:
+    schema_change(shared_ptr<event::schema_change> change)
+        : _change{change}
+    { }
+
+    shared_ptr<event::schema_change> get_change() const {
+        return _change;
+    }
+
+    virtual void accept(result_message::visitor& v) const override {
+        v.visit(*this);
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const result_message::schema_change& msg);
+
+class result_message::rows : public result_message {
+private:
+    cql3::result _result;
+public:
+    rows(cql3::result rs) : _result(std::move(rs)) {}
+
+    const cql3::result& rs() const {
+        return _result;
+    }
+
+    virtual void accept(result_message::visitor& v) const override {
+        v.visit(*this);
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const result_message::rows& msg);
+
+
+template<typename ResultMessagePtr>
+requires requires (ResultMessagePtr ptr) {
+    { ptr.operator->() } -> std::convertible_to<result_message*>;
+    { ptr.get() }        -> std::convertible_to<result_message*>;
+}
+inline future<ResultMessagePtr> propagate_exception_as_future(ResultMessagePtr&& ptr) {
+    if (!ptr.get() || !ptr->is_exception()) {
+        return make_ready_future<ResultMessagePtr>(std::move(ptr));
+    }
+    auto eptr = dynamic_cast<result_message::exception*>(ptr.get());
+    return std::move(*eptr).get_exception().into_exception_future<ResultMessagePtr>();
+}
+
+}
+
+}
+
+
+
+#include <string_view>
+#include <unordered_map>
+
+#include <seastar/core/metrics_registration.hh>
+#include <seastar/core/sharded.hh>
+#include <seastar/core/shared_ptr.hh>
+
+
+
+namespace service {
+class migration_manager;
+class query_state;
+class forward_service;
+class raft_group0_client;
+}
+
+namespace cql3 {
+
+namespace statements {
+class batch_statement;
+
+namespace raw {
+
+class parsed_statement;
+
+}
+}
+
+class untyped_result_set;
+class untyped_result_set_row;
+
+/*!
+ * \brief to allow paging, holds
+ * internal state, that needs to be passed to the execute statement.
+ *
+ */
+struct internal_query_state;
+
+class prepared_statement_is_too_big : public std::exception {
+    sstring _msg;
+
+public:
+    static constexpr int max_query_prefix = 100;
+
+    prepared_statement_is_too_big(const sstring& query_string)
+        : _msg(seastar::format("Prepared statement is too big: {}", query_string.substr(0, max_query_prefix)))
+    {
+        // mark that we clipped the query string
+        if (query_string.size() > max_query_prefix) {
+            _msg += "...";
+        }
+    }
+
+    virtual const char* what() const noexcept override {
+        return _msg.c_str();
+    }
+};
+
+class cql_config;
+class query_options;
+class cql_statement;
+
+class query_processor : public seastar::peering_sharded_service<query_processor> {
+public:
+    class migration_subscriber;
+    struct memory_config {
+        size_t prepared_statment_cache_size = 0;
+        size_t authorized_prepared_cache_size = 0;
+    };
+
+private:
+    std::unique_ptr<migration_subscriber> _migration_subscriber;
+    service::storage_proxy& _proxy;
+    service::forward_service& _forwarder;
+    data_dictionary::database _db;
+    service::migration_notifier& _mnotifier;
+    service::migration_manager& _mm;
+    memory_config _mcfg;
+    const cql_config& _cql_config;
+    service::raft_group0_client& _group0_client;
+
+    struct stats {
+        uint64_t prepare_invocations = 0;
+        uint64_t queries_by_cl[size_t(db::consistency_level::MAX_VALUE) + 1] = {};
+    } _stats;
+
+    cql_stats _cql_stats;
+
+    seastar::metrics::metric_groups _metrics;
+
+    class internal_state;
+    std::unique_ptr<internal_state> _internal_state;
+
+    prepared_statements_cache _prepared_cache;
+    authorized_prepared_statements_cache _authorized_prepared_cache;
+
+    std::function<void(uint32_t)> _auth_prepared_cache_cfg_cb;
+    serialized_action _authorized_prepared_cache_config_action;
+    utils::observer<uint32_t> _authorized_prepared_cache_update_interval_in_ms_observer;
+    utils::observer<uint32_t> _authorized_prepared_cache_validity_in_ms_observer;
+
+    // A map for prepared statements used internally (which we don't want to mix with user statement, in particular we
+    // don't bother with expiration on those.
+    std::unordered_map<sstring, std::unique_ptr<statements::prepared_statement>> _internal_statements;
+
+    std::shared_ptr<rust::Box<wasmtime::Engine>> _wasm_engine;
+    std::optional<wasm::instance_cache> _wasm_instance_cache;
+    std::shared_ptr<wasm::alien_thread_runner> _alien_runner;
+public:
+    static const sstring CQL_VERSION;
+
+    static prepared_cache_key_type compute_id(
+            std::string_view query_string,
+            std::string_view keyspace);
+
+    static prepared_cache_key_type compute_thrift_id(
+            const std::string_view& query_string,
+            const sstring& keyspace);
+
+    static std::unique_ptr<statements::raw::parsed_statement> parse_statement(const std::string_view& query);
+    static std::vector<std::unique_ptr<statements::raw::parsed_statement>> parse_statements(std::string_view queries);
+
+    query_processor(service::storage_proxy& proxy, service::forward_service& forwarder, data_dictionary::database db, service::migration_notifier& mn, service::migration_manager& mm, memory_config mcfg, cql_config& cql_cfg, utils::loading_cache_config auth_prep_cache_cfg, service::raft_group0_client& group0_client, std::optional<wasm::startup_context> wasm_ctx);
+
+    ~query_processor();
+
+    data_dictionary::database db() {
+        return _db;
+    }
+
+    const cql_config& get_cql_config() const {
+        return _cql_config;
+    }
+
+    service::storage_proxy& proxy() {
+        return _proxy;
+    }
+
+    service::forward_service& forwarder() {
+        return _forwarder;
+    }
+
+    const service::migration_manager& get_migration_manager() const noexcept { return _mm; }
+    service::migration_manager& get_migration_manager() noexcept { return _mm; }
+
+    cql_stats& get_cql_stats() {
+        return _cql_stats;
+    }
+
+    wasmtime::Engine& wasm_engine() {
+        return **_wasm_engine;
+    }
+
+    wasm::instance_cache& wasm_instance_cache() {
+        return *_wasm_instance_cache;
+    }
+
+    wasm::alien_thread_runner& alien_runner() {
+        return *_alien_runner;
+    }
+
+    statements::prepared_statement::checked_weak_ptr get_prepared(const std::optional<auth::authenticated_user>& user, const prepared_cache_key_type& key) {
+        if (user) {
+            auto vp = _authorized_prepared_cache.find(*user, key);
+            if (vp) {
+                try {
+                    // Touch the corresponding prepared_statements_cache entry to make sure its last_read timestamp
+                    // corresponds to the last time its value has been read.
+                    //
+                    // If we don't do this it may turn out that the most recently used prepared statement doesn't have
+                    // the newest last_read timestamp and can get evicted before the not-so-recently-read statement if
+                    // we need to create space in the prepared statements cache for a new entry.
+                    //
+                    // And this is going to trigger an eviction of the corresponding entry from the authorized_prepared_cache
+                    // breaking the LRU paradigm of these caches.
+                    _prepared_cache.touch(key);
+                    return vp->get()->checked_weak_from_this();
+                } catch (seastar::checked_ptr_is_null_exception&) {
+                    // If the prepared statement got invalidated - remove the corresponding authorized_prepared_statements_cache entry as well.
+                    _authorized_prepared_cache.remove(*user, key);
+                }
+            }
+        }
+        return statements::prepared_statement::checked_weak_ptr();
+    }
+
+    statements::prepared_statement::checked_weak_ptr get_prepared(const prepared_cache_key_type& key) {
+        return _prepared_cache.find(key);
+    }
+
+    service::raft_group0_client& get_group0_client() {
+        return _group0_client;
+    }
+
+    inline
+    future<::shared_ptr<cql_transport::messages::result_message>>
+    execute_prepared(
+            statements::prepared_statement::checked_weak_ptr statement,
+            cql3::prepared_cache_key_type cache_key,
+            service::query_state& query_state,
+            const query_options& options,
+            bool needs_authorization) {
+        return execute_prepared_without_checking_exception_message(
+                std::move(statement),
+                std::move(cache_key),
+                query_state,
+                options,
+                needs_authorization)
+                .then(cql_transport::messages::propagate_exception_as_future<::shared_ptr<cql_transport::messages::result_message>>);
+    }
+
+    // Like execute_prepared, but is allowed to return exceptions as result_message::exception.
+    // The result_message::exception must be explicitly handled.
+    future<::shared_ptr<cql_transport::messages::result_message>>
+    execute_prepared_without_checking_exception_message(
+            statements::prepared_statement::checked_weak_ptr statement,
+            cql3::prepared_cache_key_type cache_key,
+            service::query_state& query_state,
+            const query_options& options,
+            bool needs_authorization);
+
+    /// Execute a client statement that was not prepared.
+    inline
+    future<::shared_ptr<cql_transport::messages::result_message>>
+    execute_direct(
+            const std::string_view& query_string,
+            service::query_state& query_state,
+            query_options& options) {
+        return execute_direct_without_checking_exception_message(
+                query_string,
+                query_state,
+                options)
+                .then(cql_transport::messages::propagate_exception_as_future<::shared_ptr<cql_transport::messages::result_message>>);
+    }
+
+    // Like execute_direct, but is allowed to return exceptions as result_message::exception.
+    // The result_message::exception must be explicitly handled.
+    future<::shared_ptr<cql_transport::messages::result_message>>
+    execute_direct_without_checking_exception_message(
+            const std::string_view& query_string,
+            service::query_state& query_state,
+            query_options& options);
+
+    statements::prepared_statement::checked_weak_ptr prepare_internal(const sstring& query);
+
+    /*!
+     * \brief iterate over all cql results using paging
+     *
+     * You create a statement with optional parameters and pass
+     * a function that goes over the result rows.
+     *
+     * The passed function would be called for all rows; return future<stop_iteration::yes>
+     * to stop iteration.
+     *
+     * For example:
+            return query_internal(
+                    "SELECT * from system.compaction_history",
+                    db::consistency_level::ONE,
+                    {},
+                    [&history] (const cql3::untyped_result_set::row& row) mutable {
+                ....
+                ....
+                return make_ready_future<stop_iteration>(stop_iteration::no);
+            });
+
+     * You can use placeholders in the query, the statement will only be prepared once.
+     *
+     * query_string - the cql string, can contain placeholders
+     * cl - consistency level of the query
+     * values - values to be substituted for the placeholders in the query
+     * page_size - maximum page size
+     * f - a function to be run on each row of the query result,
+     *     if the function returns stop_iteration::yes the iteration will stop
+     *
+     * \note This function is optimized for convenience, not performance.
+     */
+    future<> query_internal(
+            const sstring& query_string,
+            db::consistency_level cl,
+            const std::initializer_list<data_value>& values,
+            int32_t page_size,
+            noncopyable_function<future<stop_iteration>(const cql3::untyped_result_set_row&)>&& f);
+
+    /*
+     * \brief iterate over all cql results using paging
+     * An overload of query_internal without query parameters
+     * using CL = ONE, no timeout, and page size = 1000.
+     *
+     * query_string - the cql string, can contain placeholders
+     * f - a function to be run on each row of the query result,
+     *     if the function returns stop_iteration::yes the iteration will stop
+     *
+     * \note This function is optimized for convenience, not performance.
+     */
+    future<> query_internal(
+            const sstring& query_string,
+            noncopyable_function<future<stop_iteration>(const cql3::untyped_result_set_row&)>&& f);
+
+    class cache_internal_tag;
+    using cache_internal = bool_class<cache_internal_tag>;
+    
+    // NOTICE: Internal queries should be used with care, as they are expected
+    // to be used for local tables (e.g. from the `system` keyspace).
+    // Data modifications will usually be performed with consistency level ONE
+    // and schema changes will not be announced to other nodes.
+    // Because of that, changing global schema state (e.g. modifying non-local tables,
+    // creating namespaces, etc) is explicitly forbidden via this interface.
+    //
+    // note: optimized for convenience, not performance.
+    future<::shared_ptr<untyped_result_set>> execute_internal(
+            const sstring& query_string,
+            db::consistency_level,
+            const std::initializer_list<data_value>&,
+            cache_internal cache);
+    future<::shared_ptr<untyped_result_set>> execute_internal(
+            const sstring& query_string,
+            db::consistency_level,
+            service::query_state& query_state,
+            const std::initializer_list<data_value>&,
+            cache_internal cache);
+    future<::shared_ptr<untyped_result_set>> execute_internal(
+            const sstring& query_string,
+            db::consistency_level cl,
+            cache_internal cache) {
+        return execute_internal(query_string, cl, {}, cache);
+    }
+    future<::shared_ptr<untyped_result_set>> execute_internal(
+            const sstring& query_string,
+            db::consistency_level cl,
+            service::query_state& query_state,
+            cache_internal cache) {
+        return execute_internal(query_string, cl, query_state, {}, cache);
+    }
+    future<::shared_ptr<untyped_result_set>>
+    execute_internal(const sstring& query_string, const std::initializer_list<data_value>& values, cache_internal cache) {
+        return execute_internal(query_string, db::consistency_level::ONE, values, cache);
+    }
+    future<::shared_ptr<untyped_result_set>>
+    execute_internal(const sstring& query_string, cache_internal cache) {
+        return execute_internal(query_string, db::consistency_level::ONE, {}, cache);
+    }
+    future<::shared_ptr<untyped_result_set>> execute_with_params(
+            statements::prepared_statement::checked_weak_ptr p,
+            db::consistency_level,
+            service::query_state& query_state,
+            const std::initializer_list<data_value>& = { });
+
+    future<::shared_ptr<cql_transport::messages::result_message::prepared>>
+    prepare(sstring query_string, service::query_state& query_state);
+
+    future<::shared_ptr<cql_transport::messages::result_message::prepared>>
+    prepare(sstring query_string, const service::client_state& client_state, bool for_thrift);
+
+    future<> stop();
+
+    inline
+    future<::shared_ptr<cql_transport::messages::result_message>>
+    execute_batch(
+            ::shared_ptr<statements::batch_statement> stmt,
+            service::query_state& query_state,
+            query_options& options,
+            std::unordered_map<prepared_cache_key_type, authorized_prepared_statements_cache::value_type> pending_authorization_entries) {
+        return execute_batch_without_checking_exception_message(
+                std::move(stmt),
+                query_state,
+                options,
+                std::move(pending_authorization_entries))
+                .then(cql_transport::messages::propagate_exception_as_future<::shared_ptr<cql_transport::messages::result_message>>);
+    }
+
+    // Like execute_batch, but is allowed to return exceptions as result_message::exception.
+    // The result_message::exception must be explicitly handled.
+    future<::shared_ptr<cql_transport::messages::result_message>>
+    execute_batch_without_checking_exception_message(
+            ::shared_ptr<statements::batch_statement>,
+            service::query_state& query_state,
+            query_options& options,
+            std::unordered_map<prepared_cache_key_type, authorized_prepared_statements_cache::value_type> pending_authorization_entries);
+
+    std::unique_ptr<statements::prepared_statement> get_statement(
+            const std::string_view& query,
+            const service::client_state& client_state);
+
+    friend class migration_subscriber;
+
+    shared_ptr<cql_transport::messages::result_message> bounce_to_shard(unsigned shard, cql3::computed_function_values cached_fn_calls);
+
+    void update_authorized_prepared_cache_config();
+
+    void reset_cache();
+
+private:
+    query_options make_internal_options(
+            const statements::prepared_statement::checked_weak_ptr& p,
+            const std::initializer_list<data_value>&,
+            db::consistency_level,
+            int32_t page_size = -1) const;
+
+    future<::shared_ptr<cql_transport::messages::result_message>>
+    process_authorized_statement(const ::shared_ptr<cql_statement> statement, service::query_state& query_state, const query_options& options);
+
+    /*!
+     * \brief created a state object for paging
+     *
+     * When using paging internally a state object is needed.
+     */
+    ::shared_ptr<internal_query_state> create_paged_state(
+            const sstring& query_string,
+            db::consistency_level,
+            const std::initializer_list<data_value>&,
+            int32_t page_size);
+
+    /*!
+     * \brief run a query using paging
+     *
+     * \note Optimized for convenience, not performance.
+     */
+    future<::shared_ptr<untyped_result_set>> execute_paged_internal(::shared_ptr<internal_query_state> state);
+
+    /*!
+     * \brief iterate over all results using paging, accept a function that returns a future
+     *
+     * \note Optimized for convenience, not performance.
+     */
+    future<> for_each_cql_result(
+            ::shared_ptr<cql3::internal_query_state> state,
+             noncopyable_function<future<stop_iteration>(const cql3::untyped_result_set_row&)>&& f);
+
+    /*!
+     * \brief check, based on the state if there are additional results
+     * Users of the paging, should not use the internal_query_state directly
+     */
+    bool has_more_results(::shared_ptr<cql3::internal_query_state> state) const;
+
+    ///
+    /// \tparam ResultMsgType type of the returned result message (CQL or Thrift)
+    /// \tparam PreparedKeyGenerator a function that generates the prepared statement cache key for given query and
+    ///         keyspace
+    /// \tparam IdGetter a function that returns the corresponding prepared statement ID (CQL or Thrift) for a given
+    ////        prepared statement cache key
+    /// \param query_string
+    /// \param client_state
+    /// \param id_gen prepared ID generator, called before the first deferring
+    /// \param id_getter prepared ID getter, passed to deferred context by reference. The caller must ensure its
+    ////       liveness.
+    /// \return
+    template <typename ResultMsgType, typename PreparedKeyGenerator, typename IdGetter>
+    future<::shared_ptr<cql_transport::messages::result_message::prepared>>
+    prepare_one(
+            sstring query_string,
+            const service::client_state& client_state,
+            PreparedKeyGenerator&& id_gen,
+            IdGetter&& id_getter) {
+        return do_with(
+                id_gen(query_string, client_state.get_raw_keyspace()),
+                std::move(query_string),
+                [this, &client_state, &id_getter](const prepared_cache_key_type& key, const sstring& query_string) {
+            return _prepared_cache.get(key, [this, &query_string, &client_state] {
+                auto prepared = get_statement(query_string, client_state);
+                auto bound_terms = prepared->statement->get_bound_terms();
+                if (bound_terms > std::numeric_limits<uint16_t>::max()) {
+                    throw exceptions::invalid_request_exception(
+                            format("Too many markers(?). {:d} markers exceed the allowed maximum of {:d}",
+                                   bound_terms,
+                                   std::numeric_limits<uint16_t>::max()));
+                }
+                assert(bound_terms == prepared->bound_names.size());
+                return make_ready_future<std::unique_ptr<statements::prepared_statement>>(std::move(prepared));
+            }).then([&key, &id_getter, &client_state] (auto prep_ptr) {
+                const auto& warnings = prep_ptr->warnings;
+                const auto msg =
+                        ::make_shared<ResultMsgType>(id_getter(key), std::move(prep_ptr),
+                            client_state.is_protocol_extension_set(cql_transport::cql_protocol_extension::LWT_ADD_METADATA_MARK));
+                for (const auto& w : warnings) {
+                    msg->add_warning(w);
+                }
+                return make_ready_future<::shared_ptr<cql_transport::messages::result_message::prepared>>(std::move(msg));
+            }).handle_exception_type([&query_string] (typename prepared_statements_cache::statement_is_too_big&) {
+                return make_exception_future<::shared_ptr<cql_transport::messages::result_message::prepared>>(
+                        prepared_statement_is_too_big(query_string));
+            });
+        });
+    };
+};
+
+class query_processor::migration_subscriber : public service::migration_listener {
+    query_processor* _qp;
+
+public:
+    migration_subscriber(query_processor* qp);
+
+    virtual void on_create_keyspace(const sstring& ks_name) override;
+    virtual void on_create_column_family(const sstring& ks_name, const sstring& cf_name) override;
+    virtual void on_create_user_type(const sstring& ks_name, const sstring& type_name) override;
+    virtual void on_create_function(const sstring& ks_name, const sstring& function_name) override;
+    virtual void on_create_aggregate(const sstring& ks_name, const sstring& aggregate_name) override;
+    virtual void on_create_view(const sstring& ks_name, const sstring& view_name) override;
+
+    virtual void on_update_keyspace(const sstring& ks_name) override;
+    virtual void on_update_column_family(const sstring& ks_name, const sstring& cf_name, bool columns_changed) override;
+    virtual void on_update_user_type(const sstring& ks_name, const sstring& type_name) override;
+    virtual void on_update_function(const sstring& ks_name, const sstring& function_name) override;
+    virtual void on_update_aggregate(const sstring& ks_name, const sstring& aggregate_name) override;
+    virtual void on_update_view(const sstring& ks_name, const sstring& view_name, bool columns_changed) override;
+    virtual void on_update_tablet_metadata() override;
+
+    virtual void on_drop_keyspace(const sstring& ks_name) override;
+    virtual void on_drop_column_family(const sstring& ks_name, const sstring& cf_name) override;
+    virtual void on_drop_user_type(const sstring& ks_name, const sstring& type_name) override;
+    virtual void on_drop_function(const sstring& ks_name, const sstring& function_name) override;
+    virtual void on_drop_aggregate(const sstring& ks_name, const sstring& aggregate_name) override;
+    virtual void on_drop_view(const sstring& ks_name, const sstring& view_name) override;
+
+private:
+    void remove_invalid_prepared_statements(sstring ks_name, std::optional<sstring> cf_name);
+
+    bool should_invalidate(
+            sstring ks_name,
+            std::optional<sstring> cf_name,
+            ::shared_ptr<cql_statement> statement);
+};
+
+}
+
+
+#include <seastar/core/sleep.hh>
+#include <seastar/util/noncopyable_function.hh>
+
+
+inline
+void eventually(noncopyable_function<void ()> f, size_t max_attempts = 17) {
+    size_t attempts = 0;
+    while (true) {
+        try {
+            f();
+            break;
+        } catch (...) {
+            if (++attempts < max_attempts) {
+                sleep(std::chrono::milliseconds(1 << attempts)).get0();
+            } else {
+                throw;
+            }
+        }
+    }
+}
+
+inline
+bool eventually_true(noncopyable_function<bool ()> f) {
+    const unsigned max_attempts = 15;
+    unsigned attempts = 0;
+    while (true) {
+        if (f()) {
+            return true;
+        }
+
+        if (++attempts < max_attempts) {
+            seastar::sleep(std::chrono::milliseconds(1 << attempts)).get0();
+        } else {
+            return false;
+        }
+    }
+
+    return false;
+}
+
+#define REQUIRE_EVENTUALLY_EQUAL(a, b) BOOST_REQUIRE(eventually_true([&] { return a == b; }))
+#define CHECK_EVENTUALLY_EQUAL(a, b) BOOST_CHECK(eventually_true([&] { return a == b; }))
+
+
+#include <functional>
+#include <vector>
+
+#include <seastar/core/distributed.hh>
+#include <seastar/core/sstring.hh>
+#include <seastar/core/future.hh>
+#include <seastar/core/shared_ptr.hh>
+
+
+namespace replica {
+class database;
+}
+
+namespace db {
+class batchlog_manager;
+}
+
+namespace db::view {
+class view_builder;
+class view_update_generator;
+}
+
+namespace auth {
+class service;
+}
+
+namespace cql3 {
+    class query_processor;
+}
+
+namespace service {
+
+class client_state;
+class migration_manager;
+class raft_group0_client;
+class raft_group_registry;
+
+}
+
+class not_prepared_exception : public std::runtime_error {
+public:
+    not_prepared_exception(const cql3::prepared_cache_key_type& id) : std::runtime_error(format("Not prepared: {}", id)) {}
+};
+
+namespace db {
+    class config;
+}
+
+struct scheduling_groups {
+    scheduling_group compaction_scheduling_group;
+    scheduling_group memory_compaction_scheduling_group;
+    scheduling_group streaming_scheduling_group;
+    scheduling_group statement_scheduling_group;
+    scheduling_group memtable_scheduling_group;
+    scheduling_group memtable_to_cache_scheduling_group;
+    scheduling_group gossip_scheduling_group;
+};
+
+// Creating and destroying scheduling groups on each env setup and teardown
+// doesn't work because it messes up execution stages due to scheduling groups
+// having the same name but not having the same id on each run. So they are
+// created once and used across all envs. This method allows retrieving them to
+// be used in tests.
+// Not thread safe!
+future<scheduling_groups> get_scheduling_groups();
+
+class cql_test_config {
+public:
+    seastar::shared_ptr<db::config> db_config;
+    // Scheduling groups are overwritten unconditionally, see get_scheduling_groups().
+    std::optional<replica::database_config> dbcfg;
+    std::set<sstring> disabled_features;
+    std::optional<cql3::query_processor::memory_config> qp_mcfg;
+
+    cql_test_config();
+    cql_test_config(const cql_test_config&);
+    cql_test_config(shared_ptr<db::config>);
+    ~cql_test_config();
+};
+
+struct cql_test_init_configurables {
+    db::extensions& extensions;
+};
+
+class cql_test_env {
+public:
+    virtual ~cql_test_env() {};
+
+    virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_cql(sstring_view text) = 0;
+
+    virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_cql(
+            sstring_view text, std::unique_ptr<cql3::query_options> qo) = 0;
+
+    /// Processes queries (which must be modifying queries) as a batch.
+    virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_batch(
+        const std::vector<sstring_view>& queries, std::unique_ptr<cql3::query_options> qo) = 0;
+
+    virtual future<cql3::prepared_cache_key_type> prepare(sstring query) = 0;
+
+    virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_prepared(
+        cql3::prepared_cache_key_type id,
+        cql3::raw_value_vector_with_unset values,
+        db::consistency_level cl = db::consistency_level::ONE) = 0;
+
+    virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_prepared_with_qo(
+        cql3::prepared_cache_key_type id,
+        std::unique_ptr<cql3::query_options> qo) = 0;
+
+    virtual future<std::vector<mutation>> get_modification_mutations(const sstring& text) = 0;
+
+    virtual future<> create_table(std::function<schema(std::string_view)> schema_maker) = 0;
+
+    virtual future<> require_keyspace_exists(const sstring& ks_name) = 0;
+
+    virtual future<> require_table_exists(const sstring& ks_name, const sstring& cf_name) = 0;
+    virtual future<> require_table_exists(std::string_view qualified_name) = 0;
+    virtual future<> require_table_does_not_exist(const sstring& ks_name, const sstring& cf_name) = 0;
+
+    virtual future<> require_column_has_value(
+        const sstring& table_name,
+        std::vector<data_value> pk,
+        std::vector<data_value> ck,
+        const sstring& column_name,
+        data_value expected) = 0;
+
+    virtual future<> stop() = 0;
+
+    virtual service::client_state& local_client_state() = 0;
+
+    virtual replica::database& local_db() = 0;
+
+    virtual cql3::query_processor& local_qp() = 0;
+
+    virtual distributed<replica::database>& db() = 0;
+
+    virtual distributed<cql3::query_processor> & qp() = 0;
+
+    virtual auth::service& local_auth_service() = 0;
+
+    virtual db::view::view_builder& local_view_builder() = 0;
+
+    virtual db::view::view_update_generator& local_view_update_generator() = 0;
+
+    virtual service::migration_notifier& local_mnotifier() = 0;
+
+    virtual sharded<service::migration_manager>& migration_manager() = 0;
+
+    virtual sharded<db::batchlog_manager>& batchlog_manager() = 0;
+
+    virtual sharded<gms::gossiper>& gossiper() = 0;
+
+    virtual future<> refresh_client_state() = 0;
+
+    virtual service::raft_group0_client& get_raft_group0_client() = 0;
+
+    virtual sharded<service::raft_group_registry>& get_raft_group_registry() = 0;
+
+    virtual sharded<db::system_keyspace>& get_system_keyspace() = 0;
+
+    virtual sharded<service::storage_proxy>& get_storage_proxy() = 0;
+
+    virtual sharded<sstables::storage_manager>& get_sstorage_manager() = 0;
+
+    data_dictionary::database data_dictionary();
+};
+
+future<> do_with_cql_env(std::function<future<>(cql_test_env&)> func, cql_test_config = {}, std::optional<cql_test_init_configurables> = {});
+future<> do_with_cql_env_thread(std::function<void(cql_test_env&)> func, cql_test_config = {}, thread_attributes thread_attr = {}, std::optional<cql_test_init_configurables> = {});
+
+reader_permit make_reader_permit(cql_test_env&);
+
+// CQL test config with raft experimental feature enabled
+cql_test_config raft_cql_test_config();
+
+
+
+
+
 
 
 #include "test/lib/data_model.hh"
