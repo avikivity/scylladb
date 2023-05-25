@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include "readers/flat_mutation_reader_v2.hh"
-#include "mutation_fragment.hh"
-#include "mutation_fragment_v2.hh"
 #include "mutation_partition_view.hh"
 #include "mutation_consumer_concepts.hh"
 #include "range_tombstone_change_generator.hh"
