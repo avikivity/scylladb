@@ -9,7 +9,6 @@
  */
 
 #pragma once
-#include "mutation/mutation.hh"
 #include <seastar/core/shared_ptr.hh>
 
 namespace service::broadcast_tables {

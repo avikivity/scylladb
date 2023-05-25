@@ -36899,6 +36899,1922 @@ bool has_any_live_data(const schema& s, column_kind kind, const row& cells, tomb
                        gc_clock::time_point now = gc_clock::time_point::min());
 
 
+#include <seastar/util/optimized_optional.hh>
+
+namespace seastar {
+    class file;
+} // namespace seastar
+
+struct reader_resources {
+    int count = 0;
+    ssize_t memory = 0;
+
+    static reader_resources with_memory(ssize_t memory) { return reader_resources(0, memory); }
+
+    reader_resources() = default;
+
+    reader_resources(int count, ssize_t memory)
+        : count(count)
+        , memory(memory) {
+    }
+
+    reader_resources operator-(const reader_resources& other) const {
+        return reader_resources{count - other.count, memory - other.memory};
+    }
+
+    reader_resources& operator-=(const reader_resources& other) {
+        count -= other.count;
+        memory -= other.memory;
+        return *this;
+    }
+
+    reader_resources operator+(const reader_resources& other) const {
+        return reader_resources{count + other.count, memory + other.memory};
+    }
+
+    reader_resources& operator+=(const reader_resources& other) {
+        count += other.count;
+        memory += other.memory;
+        return *this;
+    }
+
+    bool non_zero() const {
+        return count > 0 || memory > 0;
+    }
+};
+
+inline bool operator==(const reader_resources& a, const reader_resources& b) {
+    return a.count == b.count && a.memory == b.memory;
+}
+
+std::ostream& operator<<(std::ostream& os, const reader_resources& r);
+
+class reader_concurrency_semaphore;
+
+/// A permit for a specific read.
+///
+/// Used to track the read's resource consumption. Use `consume_memory()` to
+/// register memory usage, which returns a `resource_units` RAII object that
+/// should be held onto while the respective resources are in use.
+class reader_permit {
+    friend class reader_concurrency_semaphore;
+    friend class tracking_allocator_base;
+
+public:
+    class resource_units;
+    class need_cpu_guard;
+    class awaits_guard;
+
+    enum class state {
+        waiting_for_admission,
+        waiting_for_memory,
+        waiting_for_execution,
+        active,
+        active_need_cpu,
+        active_await,
+        inactive,
+        evicted,
+    };
+
+    class impl;
+
+private:
+    shared_ptr<impl> _impl;
+
+private:
+    reader_permit() = default;
+    reader_permit(shared_ptr<impl>);
+    explicit reader_permit(reader_concurrency_semaphore& semaphore, const schema* const schema, std::string_view op_name,
+            reader_resources base_resources, db::timeout_clock::time_point timeout, tracing::trace_state_ptr trace_ptr);
+    explicit reader_permit(reader_concurrency_semaphore& semaphore, const schema* const schema, sstring&& op_name,
+            reader_resources base_resources, db::timeout_clock::time_point timeout, tracing::trace_state_ptr trace_ptr);
+
+    reader_permit::impl& operator*() { return *_impl; }
+    reader_permit::impl* operator->() { return _impl.get(); }
+
+    void mark_need_cpu() noexcept;
+
+    void mark_not_need_cpu() noexcept;
+
+    void mark_awaits() noexcept;
+
+    void mark_not_awaits() noexcept;
+
+    operator bool() const { return bool(_impl); }
+
+    friend class optimized_optional<reader_permit>;
+
+    void consume(reader_resources res);
+
+    void signal(reader_resources res);
+
+public:
+    ~reader_permit();
+
+    reader_permit(const reader_permit&) = default;
+    reader_permit(reader_permit&&) = default;
+
+    reader_permit& operator=(const reader_permit&) = default;
+    reader_permit& operator=(reader_permit&&) = default;
+
+    bool operator==(const reader_permit& o) const {
+        return _impl == o._impl;
+    }
+
+    reader_concurrency_semaphore& semaphore();
+
+    const ::schema* get_schema() const;
+    std::string_view get_op_name() const;
+    state get_state() const;
+
+    bool needs_readmission() const;
+
+    // Call only when needs_readmission() = true.
+    future<> wait_readmission();
+
+    resource_units consume_memory(size_t memory = 0);
+
+    resource_units consume_resources(reader_resources res);
+
+    future<resource_units> request_memory(size_t memory);
+
+    reader_resources consumed_resources() const;
+
+    reader_resources base_resources() const;
+
+    void release_base_resources() noexcept;
+
+    sstring description() const;
+
+    db::timeout_clock::time_point timeout() const noexcept;
+
+    void set_timeout(db::timeout_clock::time_point timeout) noexcept;
+
+    const tracing::trace_state_ptr& trace_state() const noexcept;
+
+    void set_trace_state(tracing::trace_state_ptr trace_ptr) noexcept;
+
+    // If the read was aborted, throw the exception the read was aborted with.
+    // Otherwise no-op.
+    void check_abort();
+
+    query::max_result_size max_result_size() const;
+    void set_max_result_size(query::max_result_size);
+
+    void on_start_sstable_read() noexcept;
+    void on_finish_sstable_read() noexcept;
+
+    uintptr_t id() { return reinterpret_cast<uintptr_t>(_impl.get()); }
+};
+
+using reader_permit_opt = optimized_optional<reader_permit>;
+
+class reader_permit::resource_units {
+    reader_permit _permit;
+    reader_resources _resources;
+
+    friend class reader_permit;
+    friend class reader_concurrency_semaphore;
+private:
+    class already_consumed_tag {};
+    resource_units(reader_permit permit, reader_resources res, already_consumed_tag);
+    resource_units(reader_permit permit, reader_resources res);
+public:
+    resource_units(const resource_units&) = delete;
+    resource_units(resource_units&&) noexcept;
+    ~resource_units();
+    resource_units& operator=(const resource_units&) = delete;
+    resource_units& operator=(resource_units&&) noexcept;
+    void add(resource_units&& o);
+    void reset_to(reader_resources res);
+    void reset_to_zero() noexcept;
+    reader_permit permit() const { return _permit; }
+    reader_resources resources() const { return _resources; }
+};
+
+std::ostream& operator<<(std::ostream& os, reader_permit::state s);
+
+/// Mark a permit as needing CPU.
+///
+/// Conceptually, a permit is considered as needing CPU, when at least one reader
+/// associated with it has an ongoing foreground operation initiated by
+/// its consumer. E.g. a pending `fill_buffer()` call.
+/// This class is an RAII need_cpu marker meant to be used by keeping it alive
+/// while the reader is in need of CPU.
+class reader_permit::need_cpu_guard {
+    reader_permit_opt _permit;
+public:
+    explicit need_cpu_guard(reader_permit permit) noexcept : _permit(std::move(permit)) {
+        _permit->mark_need_cpu();
+    }
+    need_cpu_guard(need_cpu_guard&&) noexcept = default;
+    need_cpu_guard(const need_cpu_guard&) = delete;
+    ~need_cpu_guard() {
+        if (_permit) {
+            _permit->mark_not_need_cpu();
+        }
+    }
+    need_cpu_guard& operator=(need_cpu_guard&&) = delete;
+    need_cpu_guard& operator=(const need_cpu_guard&) = delete;
+};
+
+/// Mark a permit as awaiting I/O or an operation running on a remote shard.
+///
+/// Conceptually, a permit is considered awaiting, when at least one reader
+/// associated with it is waiting on I/O or a remote shard as part of a
+/// foreground operation initiated by its consumer. E.g. an sstable reader
+/// waiting on a disk read as part of its `fill_buffer()` call.
+/// This class is an RAII awaits marker meant to be used by keeping it alive
+/// until said awaited event completes.
+class reader_permit::awaits_guard {
+    reader_permit_opt _permit;
+public:
+    explicit awaits_guard(reader_permit permit) noexcept : _permit(std::move(permit)) {
+        _permit->mark_awaits();
+    }
+    awaits_guard(awaits_guard&&) noexcept = default;
+    awaits_guard(const awaits_guard&) = delete;
+    ~awaits_guard() {
+        if (_permit) {
+            _permit->mark_not_awaits();
+        }
+    }
+    awaits_guard& operator=(awaits_guard&&) = delete;
+    awaits_guard& operator=(const awaits_guard&) = delete;
+};
+
+template <typename Char>
+temporary_buffer<Char> make_tracked_temporary_buffer(temporary_buffer<Char> buf, reader_permit::resource_units units) {
+    return temporary_buffer<Char>(buf.get_write(), buf.size(), make_object_deleter(buf.release(), std::move(units)));
+}
+
+inline temporary_buffer<char> make_new_tracked_temporary_buffer(size_t size, reader_permit& permit) {
+    auto buf = temporary_buffer<char>(size);
+    return temporary_buffer<char>(buf.get_write(), buf.size(), make_object_deleter(buf.release(), permit.consume_memory(size)));
+}
+
+file make_tracked_file(file f, reader_permit p);
+
+class tracking_allocator_base {
+    reader_permit _permit;
+protected:
+    tracking_allocator_base(reader_permit permit) noexcept : _permit(std::move(permit)) { }
+    void consume(size_t memory) {
+        _permit.consume(reader_resources::with_memory(memory));
+    }
+    void signal(size_t memory) {
+        _permit.signal(reader_resources::with_memory(memory));
+    }
+};
+
+template <typename T>
+class tracking_allocator : public tracking_allocator_base {
+public:
+    using value_type = T;
+    using propagate_on_container_move_assignment = std::true_type;
+    using is_always_equal = std::false_type;
+
+private:
+    std::allocator<T> _alloc;
+
+public:
+    tracking_allocator(reader_permit permit) noexcept : tracking_allocator_base(std::move(permit)) { }
+
+    T* allocate(size_t n) {
+        auto p = _alloc.allocate(n);
+        try {
+            consume(n * sizeof(T));
+        } catch (...) {
+            _alloc.deallocate(p, n);
+            throw;
+        }
+        return p;
+    }
+    void deallocate(T* p, size_t n) {
+        _alloc.deallocate(p, n);
+        if (n) {
+            signal(n * sizeof(T));
+        }
+    }
+
+    template <typename U>
+    friend bool operator==(const tracking_allocator<U>& a, const tracking_allocator<U>& b);
+};
+
+template <typename T>
+bool operator==(const tracking_allocator<T>& a, const tracking_allocator<T>& b) {
+    return a._semaphore == b._semaphore;
+}
+
+
+#include <seastar/util/bool_class.hh>
+#include <seastar/util/optimized_optional.hh>
+
+using namespace seastar;
+
+class mutation_fragment;
+class mutation_fragment_v2;
+
+using mutation_fragment_opt = optimized_optional<mutation_fragment>;
+using mutation_fragment_v2_opt = optimized_optional<mutation_fragment_v2>;
+
+
+
+#include <optional>
+#include <seastar/util/optimized_optional.hh>
+
+#include <seastar/core/future-util.hh>
+
+
+// mutation_fragments are the objects that streamed_mutation are going to
+// stream. They can represent:
+//  - a static row
+//  - a clustering row
+//  - a range tombstone
+//
+// There exists an ordering (implemented in position_in_partition class) between
+// mutation_fragment objects. It reflects the order in which content of
+// partition appears in the sstables.
+
+class clustering_row {
+    clustering_key_prefix _ck;
+    deletable_row _row;
+public:
+    explicit clustering_row(clustering_key_prefix ck) : _ck(std::move(ck)) { }
+    clustering_row(clustering_key_prefix ck, row_tombstone t, row_marker marker, row cells)
+            : _ck(std::move(ck)), _row(std::move(t), std::move(marker), std::move(cells)) {
+        _row.maybe_shadow();
+    }
+    clustering_row(clustering_key_prefix ck, deletable_row&& row)
+        : _ck(std::move(ck)), _row(std::move(row)) { }
+    clustering_row(const schema& s, const clustering_row& other)
+        : _ck(other._ck), _row(s, other._row) { }
+    clustering_row(const schema& s, const rows_entry& re)
+        : _ck(re.key()), _row(s, re.row()) { }
+    clustering_row(rows_entry&& re)
+        : _ck(std::move(re.key())), _row(std::move(re.row())) {}
+
+    clustering_key_prefix& key() { return _ck; }
+    const clustering_key_prefix& key() const { return _ck; }
+
+    void remove_tombstone() { _row.remove_tombstone(); }
+    row_tombstone tomb() const { return _row.deleted_at(); }
+
+    const row_marker& marker() const { return _row.marker(); }
+    row_marker& marker() { return _row.marker(); }
+
+    const row& cells() const { return _row.cells(); }
+    row& cells() { return _row.cells(); }
+
+    bool empty() const { return _row.empty(); }
+
+    bool is_live(const schema& s, tombstone base_tombstone = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const {
+        return _row.is_live(s, column_kind::regular_column, std::move(base_tombstone), std::move(now));
+    }
+
+    void apply(const schema& s, clustering_row&& cr) {
+        _row.apply(s, std::move(cr._row));
+    }
+    void apply(const schema& s, const clustering_row& cr) {
+        _row.apply(s, deletable_row(s, cr._row));
+    }
+    void set_cell(const column_definition& def, atomic_cell_or_collection&& value) {
+        _row.cells().apply(def, std::move(value));
+    }
+    void apply(row_marker rm) {
+        _row.apply(std::move(rm));
+    }
+    void apply(tombstone t) {
+        _row.apply(std::move(t));
+    }
+    void apply(shadowable_tombstone t) {
+        _row.apply(std::move(t));
+    }
+    void apply(const schema& s, const rows_entry& r) {
+        _row.apply(s, deletable_row(s, r.row()));
+    }
+    void apply(const schema& s, const deletable_row& r) {
+        _row.apply(s, r);
+    }
+
+    position_in_partition_view position() const;
+
+    size_t external_memory_usage(const schema& s) const {
+        return _ck.external_memory_usage() + _row.cells().external_memory_usage(s, column_kind::regular_column);
+    }
+
+    size_t minimal_external_memory_usage(const schema& s) const {
+        return _ck.minimal_external_memory_usage() + _row.cells().external_memory_usage(s, column_kind::regular_column);
+    }
+
+    size_t memory_usage(const schema& s) const {
+        return sizeof(clustering_row) + external_memory_usage(s);
+    }
+
+    bool equal(const schema& s, const clustering_row& other) const {
+        return _ck.equal(s, other._ck)
+                && _row.equal(column_kind::regular_column, s, other._row, s);
+    }
+
+    class printer {
+        const schema& _schema;
+        const clustering_row& _clustering_row;
+    public:
+        printer(const schema& s, const clustering_row& r) : _schema(s), _clustering_row(r) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+
+    deletable_row as_deletable_row() && { return std::move(_row); }
+    const deletable_row& as_deletable_row() const & { return _row; }
+};
+
+class static_row {
+    row _cells;
+public:
+    static_row() = default;
+    static_row(const schema& s, const static_row& other) : static_row(s, other._cells) { }
+    explicit static_row(const schema& s, const row& r) : _cells(s, column_kind::static_column, r) { }
+    explicit static_row(row&& r) : _cells(std::move(r)) { }
+
+    row& cells() { return _cells; }
+    const row& cells() const { return _cells; }
+
+    bool empty() const {
+        return _cells.empty();
+    }
+
+    bool is_live(const schema& s, gc_clock::time_point now = gc_clock::time_point::min()) const {
+        return _cells.is_live(s, column_kind::static_column, tombstone(), now);
+    }
+
+    void apply(const schema& s, const row& r) {
+        _cells.apply(s, column_kind::static_column, r);
+    }
+    void apply(const schema& s, static_row&& sr) {
+        _cells.apply(s, column_kind::static_column, std::move(sr._cells));
+    }
+    void set_cell(const column_definition& def, atomic_cell_or_collection&& value) {
+        _cells.apply(def, std::move(value));
+    }
+
+    position_in_partition_view position() const;
+
+    size_t external_memory_usage(const schema& s) const {
+        return _cells.external_memory_usage(s, column_kind::static_column);
+    }
+
+    size_t memory_usage(const schema& s) const {
+        return sizeof(static_row) + external_memory_usage(s);
+    }
+
+    bool equal(const schema& s, const static_row& other) const {
+        return _cells.equal(column_kind::static_column, s, other._cells, s);
+    }
+
+    class printer {
+        const schema& _schema;
+        const static_row& _static_row;
+    public:
+        printer(const schema& s, const static_row& r) : _schema(s), _static_row(r) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+};
+
+class partition_start final {
+    dht::decorated_key _key;
+    tombstone _partition_tombstone;
+public:
+    partition_start(dht::decorated_key pk, tombstone pt)
+        : _key(std::move(pk))
+        , _partition_tombstone(std::move(pt))
+    { }
+
+    dht::decorated_key& key() { return _key; }
+    const dht::decorated_key& key() const { return _key; }
+    const tombstone& partition_tombstone() const { return _partition_tombstone; }
+    tombstone& partition_tombstone() { return _partition_tombstone; }
+
+    position_in_partition_view position() const;
+
+    size_t external_memory_usage(const schema&) const {
+        return _key.external_memory_usage();
+    }
+
+    size_t memory_usage(const schema& s) const {
+        return sizeof(partition_start) + external_memory_usage(s);
+    }
+
+    bool equal(const schema& s, const partition_start& other) const {
+        return _key.equal(s, other._key) && _partition_tombstone == other._partition_tombstone;
+    }
+
+    friend std::ostream& operator<<(std::ostream& is, const partition_start& row);
+};
+
+class partition_end final {
+public:
+    position_in_partition_view position() const;
+
+    size_t external_memory_usage(const schema&) const {
+        return 0;
+    }
+
+    size_t memory_usage(const schema& s) const {
+        return sizeof(partition_end) + external_memory_usage(s);
+    }
+
+    bool equal(const schema& s, const partition_end& other) const {
+        return true;
+    }
+
+    friend std::ostream& operator<<(std::ostream& is, const partition_end& row);
+};
+
+template<typename T, typename ReturnType>
+concept MutationFragmentConsumer =
+    requires(T& t, static_row sr, clustering_row cr, range_tombstone rt, partition_start ph, partition_end pe) {
+        { t.consume(std::move(sr)) } -> std::same_as<ReturnType>;
+        { t.consume(std::move(cr)) } -> std::same_as<ReturnType>;
+        { t.consume(std::move(rt)) } -> std::same_as<ReturnType>;
+        { t.consume(std::move(ph)) } -> std::same_as<ReturnType>;
+        { t.consume(std::move(pe)) } -> std::same_as<ReturnType>;
+    };
+
+template<typename T, typename ReturnType>
+concept FragmentConsumerReturning =
+    requires(T t, static_row sr, clustering_row cr, range_tombstone rt, tombstone tomb) {
+        { t.consume(std::move(sr)) } -> std::same_as<ReturnType>;
+        { t.consume(std::move(cr)) } -> std::same_as<ReturnType>;
+        { t.consume(std::move(rt)) } -> std::same_as<ReturnType>;
+    };
+
+template<typename T>
+concept FragmentConsumer =
+    FragmentConsumerReturning<T, stop_iteration> || FragmentConsumerReturning<T, future<stop_iteration>>;
+
+template<typename T>
+concept StreamedMutationConsumer =
+    FragmentConsumer<T> && requires(T t, static_row sr, clustering_row cr, range_tombstone rt, tombstone tomb) {
+        t.consume(tomb);
+        t.consume_end_of_stream();
+    };
+
+template<typename T, typename ReturnType>
+concept MutationFragmentVisitor =
+    requires(T t, const static_row& sr, const clustering_row& cr, const range_tombstone& rt, const partition_start& ph, const partition_end& eop) {
+        { t(sr) } -> std::same_as<ReturnType>;
+        { t(cr) } -> std::same_as<ReturnType>;
+        { t(rt) } -> std::same_as<ReturnType>;
+        { t(ph) } -> std::same_as<ReturnType>;
+        { t(eop) } -> std::same_as<ReturnType>;
+    };
+
+class mutation_fragment {
+public:
+    enum class kind {
+        static_row,
+        clustering_row,
+        range_tombstone,
+        partition_start,
+        partition_end,
+    };
+private:
+    struct data {
+        data(reader_permit permit) :  _memory(permit.consume_memory()) { }
+        ~data() { }
+
+        reader_permit::resource_units _memory;
+        union {
+            static_row _static_row;
+            clustering_row _clustering_row;
+            range_tombstone _range_tombstone;
+            partition_start _partition_start;
+            partition_end _partition_end;
+        };
+    };
+private:
+    kind _kind;
+    std::unique_ptr<data> _data;
+
+    mutation_fragment() = default;
+    explicit operator bool() const noexcept { return bool(_data); }
+    void destroy_data() noexcept;
+    void reset_memory(const schema& s, std::optional<reader_resources> res = {});
+    friend class optimized_optional<mutation_fragment>;
+
+    friend class position_in_partition;
+public:
+    struct clustering_row_tag_t { };
+
+    template<typename... Args>
+    mutation_fragment(clustering_row_tag_t, const schema& s, reader_permit permit, Args&&... args)
+        : _kind(kind::clustering_row)
+        , _data(std::make_unique<data>(std::move(permit)))
+    {
+        new (&_data->_clustering_row) clustering_row(std::forward<Args>(args)...);
+        reset_memory(s);
+    }
+
+    mutation_fragment(const schema& s, reader_permit permit, static_row&& r);
+    mutation_fragment(const schema& s, reader_permit permit, clustering_row&& r);
+    mutation_fragment(const schema& s, reader_permit permit, range_tombstone&& r);
+    mutation_fragment(const schema& s, reader_permit permit, partition_start&& r);
+    mutation_fragment(const schema& s, reader_permit permit, partition_end&& r);
+
+    mutation_fragment(const schema& s, reader_permit permit, const mutation_fragment& o)
+        : _kind(o._kind), _data(std::make_unique<data>(std::move(permit))) {
+        switch (_kind) {
+            case kind::static_row:
+                new (&_data->_static_row) static_row(s, o._data->_static_row);
+                break;
+            case kind::clustering_row:
+                new (&_data->_clustering_row) clustering_row(s, o._data->_clustering_row);
+                break;
+            case kind::range_tombstone:
+                new (&_data->_range_tombstone) range_tombstone(o._data->_range_tombstone);
+                break;
+            case kind::partition_start:
+                new (&_data->_partition_start) partition_start(o._data->_partition_start);
+                break;
+            case kind::partition_end:
+                new (&_data->_partition_end) partition_end(o._data->_partition_end);
+                break;
+        }
+        reset_memory(s, o._data->_memory.resources());
+    }
+    mutation_fragment(mutation_fragment&& other) = default;
+    mutation_fragment& operator=(mutation_fragment&& other) noexcept {
+        if (this != &other) {
+            this->~mutation_fragment();
+            new (this) mutation_fragment(std::move(other));
+        }
+        return *this;
+    }
+    [[gnu::always_inline]]
+    ~mutation_fragment() {
+        if (_data) {
+            destroy_data();
+        }
+    }
+
+    position_in_partition_view position() const;
+
+    // Returns the range of positions for which this fragment holds relevant information.
+    position_range range(const schema& s) const;
+
+    // Checks if this fragment may be relevant for any range starting at given position.
+    bool relevant_for_range(const schema& s, position_in_partition_view pos) const;
+
+    // Like relevant_for_range() but makes use of assumption that pos is greater
+    // than the starting position of this fragment.
+    bool relevant_for_range_assuming_after(const schema& s, position_in_partition_view pos) const;
+
+    bool has_key() const { return is_clustering_row() || is_range_tombstone(); }
+    // Requirements: has_key() == true
+    const clustering_key_prefix& key() const;
+
+    kind mutation_fragment_kind() const { return _kind; }
+
+    bool is_static_row() const { return _kind == kind::static_row; }
+    bool is_clustering_row() const { return _kind == kind::clustering_row; }
+    bool is_range_tombstone() const { return _kind == kind::range_tombstone; }
+    bool is_partition_start() const { return _kind == kind::partition_start; }
+    bool is_end_of_partition() const { return _kind == kind::partition_end; }
+
+    void mutate_as_static_row(const schema& s, std::invocable<static_row&> auto&& fn) {
+        fn(_data->_static_row);
+        reset_memory(s);
+    }
+    void mutate_as_clustering_row(const schema& s, std::invocable<clustering_row&> auto&& fn) {
+        fn(_data->_clustering_row);
+        reset_memory(s);
+    }
+    void mutate_as_range_tombstone(const schema& s, std::invocable<range_tombstone&> auto&& fn) {
+        fn(_data->_range_tombstone);
+        reset_memory(s);
+    }
+    void mutate_as_partition_start(const schema& s, std::invocable<partition_start&> auto&& fn) {
+        fn(_data->_partition_start);
+        reset_memory(s);
+    }
+
+    static_row&& as_static_row() && { return std::move(_data->_static_row); }
+    clustering_row&& as_clustering_row() && { return std::move(_data->_clustering_row); }
+    range_tombstone&& as_range_tombstone() && { return std::move(_data->_range_tombstone); }
+    partition_start&& as_partition_start() && { return std::move(_data->_partition_start); }
+    partition_end&& as_end_of_partition() && { return std::move(_data->_partition_end); }
+
+    const static_row& as_static_row() const & { return _data->_static_row; }
+    const clustering_row& as_clustering_row() const & { return _data->_clustering_row; }
+    const range_tombstone& as_range_tombstone() const & { return _data->_range_tombstone; }
+    const partition_start& as_partition_start() const & { return _data->_partition_start; }
+    const partition_end& as_end_of_partition() const & { return _data->_partition_end; }
+
+    // Requirements: mergeable_with(mf)
+    void apply(const schema& s, mutation_fragment&& mf);
+
+    template<typename Consumer>
+    requires MutationFragmentConsumer<Consumer, decltype(std::declval<Consumer>().consume(std::declval<range_tombstone>()))>
+    decltype(auto) consume(Consumer& consumer) && {
+        _data->_memory.reset_to_zero();
+        switch (_kind) {
+        case kind::static_row:
+            return consumer.consume(std::move(_data->_static_row));
+        case kind::clustering_row:
+            return consumer.consume(std::move(_data->_clustering_row));
+        case kind::range_tombstone:
+            return consumer.consume(std::move(_data->_range_tombstone));
+        case kind::partition_start:
+            return consumer.consume(std::move(_data->_partition_start));
+        case kind::partition_end:
+            return consumer.consume(std::move(_data->_partition_end));
+        }
+        abort();
+    }
+
+    template<typename Visitor>
+    requires MutationFragmentVisitor<Visitor, decltype(std::declval<Visitor>()(std::declval<static_row&>()))>
+    decltype(auto) visit(Visitor&& visitor) const {
+        switch (_kind) {
+        case kind::static_row:
+            return visitor(as_static_row());
+        case kind::clustering_row:
+            return visitor(as_clustering_row());
+        case kind::range_tombstone:
+            return visitor(as_range_tombstone());
+        case kind::partition_start:
+            return visitor(as_partition_start());
+        case kind::partition_end:
+            return visitor(as_end_of_partition());
+        }
+        abort();
+    }
+
+    size_t memory_usage() const {
+        return _data->_memory.resources().memory;
+    }
+
+    reader_permit permit() const {
+        return _data->_memory.permit();
+    }
+
+    bool equal(const schema& s, const mutation_fragment& other) const {
+        if (other._kind != _kind) {
+            return false;
+        }
+        switch (_kind) {
+        case kind::static_row:
+            return as_static_row().equal(s, other.as_static_row());
+        case kind::clustering_row:
+            return as_clustering_row().equal(s, other.as_clustering_row());
+        case kind::range_tombstone:
+            return as_range_tombstone().equal(s, other.as_range_tombstone());
+        case kind::partition_start:
+            return as_partition_start().equal(s, other.as_partition_start());
+        case kind::partition_end:
+            return as_end_of_partition().equal(s, other.as_end_of_partition());
+        }
+        abort();
+    }
+
+    // Fragments which have the same position() and are mergeable can be
+    // merged into one fragment with apply() which represents the sum of
+    // writes represented by each of the fragments.
+    // Fragments which have the same position() but are not mergeable
+    // can be emitted one after the other in the stream.
+    bool mergeable_with(const mutation_fragment& mf) const {
+        return _kind == mf._kind && _kind != kind::range_tombstone;
+    }
+
+    class printer {
+        const schema& _schema;
+        const mutation_fragment& _mutation_fragment;
+    public:
+        printer(const schema& s, const mutation_fragment& mf) : _schema(s), _mutation_fragment(mf) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+
+private:
+    size_t calculate_memory_usage(const schema& s) const {
+        return sizeof(data) + visit([&s] (auto& mf) -> size_t { return mf.external_memory_usage(s); });
+    }
+};
+
+inline position_in_partition_view static_row::position() const
+{
+    return position_in_partition_view(position_in_partition_view::static_row_tag_t());
+}
+
+inline position_in_partition_view clustering_row::position() const
+{
+    return position_in_partition_view(position_in_partition_view::clustering_row_tag_t(), _ck);
+}
+
+inline position_in_partition_view partition_start::position() const
+{
+    return position_in_partition_view::for_partition_start();
+}
+
+inline position_in_partition_view partition_end::position() const
+{
+    return position_in_partition_view::for_partition_end();
+}
+
+std::ostream& operator<<(std::ostream&, mutation_fragment::kind);
+
+
+// range_tombstone_stream is a helper object that simplifies producing a stream
+// of range tombstones and merging it with a stream of clustering rows.
+// Tombstones are added using apply() and retrieved using get_next().
+//
+// get_next(const rows_entry&) and get_next(const mutation_fragment&) allow
+// merging the stream of tombstones with a stream of clustering rows. If these
+// overloads return disengaged optional it means that there is no tombstone
+// in the stream that should be emitted before the object given as an argument.
+// (And, consequently, if the optional is engaged that tombstone should be
+// emitted first). After calling any of these overloads with a mutation_fragment
+// which is at some position in partition P no range tombstone can be added to
+// the stream which start bound is before that position.
+//
+// get_next() overload which doesn't take any arguments is used to return the
+// remaining tombstones. After it was called no new tombstones can be added
+// to the stream.
+class range_tombstone_stream {
+    const schema& _schema;
+    reader_permit _permit;
+    position_in_partition::less_compare _cmp;
+    range_tombstone_list _list;
+private:
+    mutation_fragment_opt do_get_next();
+public:
+    range_tombstone_stream(const schema& s, reader_permit permit) : _schema(s), _permit(std::move(permit)), _cmp(s), _list(s) { }
+    mutation_fragment_opt get_next(const rows_entry&);
+    mutation_fragment_opt get_next(const mutation_fragment&);
+    // Returns next fragment with position before upper_bound or disengaged optional if no such fragments are left.
+    mutation_fragment_opt get_next(position_in_partition_view upper_bound);
+    mutation_fragment_opt get_next();
+    // Precondition: !empty()
+    const range_tombstone& peek_next() const;
+    // Forgets all tombstones which are not relevant for any range starting at given position.
+    void forward_to(position_in_partition_view);
+
+    void apply(range_tombstone&& rt) {
+        _list.apply(_schema, std::move(rt));
+    }
+    void reset();
+    bool empty() const;
+    friend std::ostream& operator<<(std::ostream& out, const range_tombstone_stream&);
+};
+
+// F gets a stream element as an argument and returns the new value which replaces that element
+// in the transformed stream.
+template<typename F>
+concept StreamedMutationTranformer =
+    requires(F f, mutation_fragment mf, schema_ptr s) {
+        { f(std::move(mf)) } -> std::same_as<mutation_fragment>;
+        { f(s) } -> std::same_as<schema_ptr>;
+    };
+
+class xx_hasher;
+
+template<>
+struct appending_hash<mutation_fragment> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const mutation_fragment& mf, const schema& s) const;
+};
+
+
+
+#include <fmt/core.h>
+#include <optional>
+#include <seastar/util/optimized_optional.hh>
+
+#include <seastar/core/future-util.hh>
+
+
+// Mutation fragment which represents a range tombstone boundary.
+//
+// The range_tombstone_change::tombstone() method returns the tombstone which takes effect
+// for positions >= range_tombstone_change::position() in the stream, until the next
+// range_tombstone_change is encountered.
+//
+// Note, a range_tombstone_change with an empty tombstone() ends the range tombstone.
+// An empty tombstone naturally does not cover any timestamp.
+class range_tombstone_change {
+    position_in_partition _pos;
+    ::tombstone _tomb;
+public:
+    range_tombstone_change(position_in_partition pos, tombstone tomb)
+        : _pos(std::move(pos))
+        , _tomb(tomb)
+    { }
+    range_tombstone_change(position_in_partition_view pos, tombstone tomb)
+        : _pos(pos)
+        , _tomb(tomb)
+    { }
+    const position_in_partition& position() const & {
+        return _pos;
+    }
+    position_in_partition position() && {
+        return std::move(_pos);
+    }
+    void set_position(position_in_partition pos) {
+        _pos = std::move(pos);
+    }
+    ::tombstone tombstone() const {
+        return _tomb;
+    }
+    void set_tombstone(::tombstone tomb) {
+        _tomb = tomb;
+    }
+    size_t external_memory_usage(const schema& s) const {
+        return _pos.external_memory_usage();
+    }
+    size_t minimal_external_memory_usage(const schema&) const noexcept {
+        if (_pos.has_key()) {
+            return _pos.key().minimal_external_memory_usage();
+        }
+        return 0;
+    }
+    size_t memory_usage(const schema& s) const noexcept {
+        return sizeof(range_tombstone_change) + external_memory_usage(s);
+    }
+    size_t minimal_memory_usage(const schema& s) const noexcept {
+        return sizeof(range_tombstone_change) + minimal_external_memory_usage(s);
+    }
+    bool equal(const schema& s, const range_tombstone_change& other) const {
+        position_in_partition::equal_compare eq(s);
+        return _tomb == other._tomb && eq(_pos, other._pos);
+    }
+};
+
+template<>
+struct fmt::formatter<range_tombstone_change> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const range_tombstone_change& rt, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{{range_tombstone_change: pos={}, {}}}", rt.position(), rt.tombstone());
+    }
+};
+
+template<typename T, typename ReturnType>
+concept MutationFragmentConsumerV2 =
+    requires(T& t,
+            static_row sr,
+            clustering_row cr,
+            range_tombstone_change rt_chg,
+            partition_start ph,
+            partition_end pe) {
+        { t.consume(std::move(sr)) } -> std::same_as<ReturnType>;
+        { t.consume(std::move(cr)) } -> std::same_as<ReturnType>;
+        { t.consume(std::move(rt_chg)) } -> std::same_as<ReturnType>;
+        { t.consume(std::move(ph)) } -> std::same_as<ReturnType>;
+        { t.consume(std::move(pe)) } -> std::same_as<ReturnType>;
+    };
+
+template<typename T, typename ReturnType>
+concept MutationFragmentVisitorV2 =
+    requires(T t,
+            const static_row& sr,
+            const clustering_row& cr,
+            const range_tombstone_change& rt,
+            const partition_start& ph,
+            const partition_end& eop) {
+        { t(sr) } -> std::same_as<ReturnType>;
+        { t(cr) } -> std::same_as<ReturnType>;
+        { t(rt) } -> std::same_as<ReturnType>;
+        { t(ph) } -> std::same_as<ReturnType>;
+        { t(eop) } -> std::same_as<ReturnType>;
+    };
+
+template<typename T, typename ReturnType>
+concept FragmentConsumerReturningV2 =
+requires(T t, static_row sr, clustering_row cr, range_tombstone_change rt, tombstone tomb) {
+    { t.consume(std::move(sr)) } -> std::same_as<ReturnType>;
+    { t.consume(std::move(cr)) } -> std::same_as<ReturnType>;
+    { t.consume(std::move(rt)) } -> std::same_as<ReturnType>;
+};
+
+template<typename T>
+concept FragmentConsumerV2 =
+FragmentConsumerReturningV2<T, stop_iteration> || FragmentConsumerReturningV2<T, future<stop_iteration>>;
+
+template<typename T>
+concept StreamedMutationConsumerV2 =
+FragmentConsumerV2<T> && requires(T t, tombstone tomb) {
+    t.consume(tomb);
+    t.consume_end_of_stream();
+};
+
+class mutation_fragment_v2 {
+public:
+    enum class kind {
+        static_row,
+        clustering_row,
+        range_tombstone_change,
+        partition_start,
+        partition_end,
+    };
+private:
+    struct data {
+        data(reader_permit permit) :  _memory(permit.consume_memory()) { }
+        ~data() { }
+
+        reader_permit::resource_units _memory;
+        union {
+            static_row _static_row;
+            clustering_row _clustering_row;
+            range_tombstone_change _range_tombstone_chg;
+            partition_start _partition_start;
+            partition_end _partition_end;
+        };
+    };
+private:
+    kind _kind;
+    std::unique_ptr<data> _data;
+
+    mutation_fragment_v2() = default;
+    explicit operator bool() const noexcept { return bool(_data); }
+    void destroy_data() noexcept;
+    void reset_memory(const schema& s, std::optional<reader_resources> res = {});
+    friend class optimized_optional<mutation_fragment_v2>;
+
+    friend class position_in_partition;
+public:
+    struct clustering_row_tag_t { };
+
+    template<typename... Args>
+    mutation_fragment_v2(clustering_row_tag_t, const schema& s, reader_permit permit, Args&&... args)
+        : _kind(kind::clustering_row)
+        , _data(std::make_unique<data>(std::move(permit)))
+    {
+        new (&_data->_clustering_row) clustering_row(std::forward<Args>(args)...);
+        _data->_memory.reset_to(reader_resources::with_memory(calculate_memory_usage(s)));
+    }
+
+    mutation_fragment_v2(const schema& s, reader_permit permit, static_row&& r);
+    mutation_fragment_v2(const schema& s, reader_permit permit, clustering_row&& r);
+    mutation_fragment_v2(const schema& s, reader_permit permit, range_tombstone_change&& r);
+    mutation_fragment_v2(const schema& s, reader_permit permit, partition_start&& r);
+    mutation_fragment_v2(const schema& s, reader_permit permit, partition_end&& r);
+
+    mutation_fragment_v2(const schema& s, reader_permit permit, const mutation_fragment_v2& o)
+        : _kind(o._kind), _data(std::make_unique<data>(std::move(permit))) {
+        switch (_kind) {
+            case kind::static_row:
+                new (&_data->_static_row) static_row(s, o._data->_static_row);
+                break;
+            case kind::clustering_row:
+                new (&_data->_clustering_row) clustering_row(s, o._data->_clustering_row);
+                break;
+            case kind::range_tombstone_change:
+                new (&_data->_range_tombstone_chg) range_tombstone_change(o._data->_range_tombstone_chg);
+                break;
+            case kind::partition_start:
+                new (&_data->_partition_start) partition_start(o._data->_partition_start);
+                break;
+            case kind::partition_end:
+                new (&_data->_partition_end) partition_end(o._data->_partition_end);
+                break;
+        }
+        _data->_memory.reset_to(o._data->_memory.resources());
+    }
+    mutation_fragment_v2(mutation_fragment_v2&& other) = default;
+    mutation_fragment_v2& operator=(mutation_fragment_v2&& other) noexcept {
+        if (this != &other) {
+            this->~mutation_fragment_v2();
+            new (this) mutation_fragment_v2(std::move(other));
+        }
+        return *this;
+    }
+    [[gnu::always_inline]]
+    ~mutation_fragment_v2() {
+        if (_data) {
+            destroy_data();
+        }
+    }
+
+    position_in_partition_view position() const;
+
+    // Checks if this fragment may be relevant for any range starting at given position.
+    bool relevant_for_range(const schema& s, position_in_partition_view pos) const;
+
+    bool has_key() const { return is_clustering_row() || is_range_tombstone_change(); }
+
+    // Requirements: has_key() == true
+    const clustering_key_prefix& key() const;
+
+    kind mutation_fragment_kind() const { return _kind; }
+
+    bool is_static_row() const { return _kind == kind::static_row; }
+    bool is_clustering_row() const { return _kind == kind::clustering_row; }
+    bool is_range_tombstone_change() const { return _kind == kind::range_tombstone_change; }
+    bool is_partition_start() const { return _kind == kind::partition_start; }
+    bool is_end_of_partition() const { return _kind == kind::partition_end; }
+
+    void mutate_as_static_row(const schema& s, std::invocable<static_row&> auto&& fn) {
+        fn(_data->_static_row);
+        _data->_memory.reset_to(reader_resources::with_memory(calculate_memory_usage(s)));
+    }
+    void mutate_as_clustering_row(const schema& s, std::invocable<clustering_row&> auto&& fn) {
+        fn(_data->_clustering_row);
+        _data->_memory.reset_to(reader_resources::with_memory(calculate_memory_usage(s)));
+    }
+    void mutate_as_range_tombstone_change(const schema& s, std::invocable<range_tombstone_change&> auto&& fn) {
+        fn(_data->_range_tombstone_chg);
+        _data->_memory.reset_to(reader_resources::with_memory(calculate_memory_usage(s)));
+    }
+    void mutate_as_partition_start(const schema& s, std::invocable<partition_start&> auto&& fn) {
+        fn(_data->_partition_start);
+        _data->_memory.reset_to(reader_resources::with_memory(calculate_memory_usage(s)));
+    }
+
+    static_row&& as_static_row() && { return std::move(_data->_static_row); }
+    clustering_row&& as_clustering_row() && { return std::move(_data->_clustering_row); }
+    range_tombstone_change&& as_range_tombstone_change() && { return std::move(_data->_range_tombstone_chg); }
+    partition_start&& as_partition_start() && { return std::move(_data->_partition_start); }
+    partition_end&& as_end_of_partition() && { return std::move(_data->_partition_end); }
+
+    const static_row& as_static_row() const & { return _data->_static_row; }
+    const clustering_row& as_clustering_row() const & { return _data->_clustering_row; }
+    const range_tombstone_change& as_range_tombstone_change() const & { return _data->_range_tombstone_chg; }
+    const partition_start& as_partition_start() const & { return _data->_partition_start; }
+    const partition_end& as_end_of_partition() const & { return _data->_partition_end; }
+
+    // Requirements: mergeable_with(mf)
+    void apply(const schema& s, mutation_fragment_v2&& mf);
+
+    template<typename Consumer>
+    requires MutationFragmentConsumerV2<Consumer, decltype(std::declval<Consumer>().consume(std::declval<range_tombstone_change>()))>
+    decltype(auto) consume(Consumer& consumer) && {
+        _data->_memory.reset_to_zero();
+        switch (_kind) {
+        case kind::static_row:
+            return consumer.consume(std::move(_data->_static_row));
+        case kind::clustering_row:
+            return consumer.consume(std::move(_data->_clustering_row));
+        case kind::range_tombstone_change:
+            return consumer.consume(std::move(_data->_range_tombstone_chg));
+        case kind::partition_start:
+            return consumer.consume(std::move(_data->_partition_start));
+        case kind::partition_end:
+            return consumer.consume(std::move(_data->_partition_end));
+        }
+        abort();
+    }
+
+    template<typename Visitor>
+    requires MutationFragmentVisitorV2<Visitor, decltype(std::declval<Visitor>()(std::declval<static_row&>()))>
+    decltype(auto) visit(Visitor&& visitor) const {
+        switch (_kind) {
+        case kind::static_row:
+            return visitor(as_static_row());
+        case kind::clustering_row:
+            return visitor(as_clustering_row());
+        case kind::range_tombstone_change:
+            return visitor(as_range_tombstone_change());
+        case kind::partition_start:
+            return visitor(as_partition_start());
+        case kind::partition_end:
+            return visitor(as_end_of_partition());
+        }
+        abort();
+    }
+
+    size_t memory_usage() const {
+        return _data->_memory.resources().memory;
+    }
+
+    reader_permit permit() const {
+        return _data->_memory.permit();
+    }
+
+    bool equal(const schema& s, const mutation_fragment_v2& other) const {
+        if (other._kind != _kind) {
+            return false;
+        }
+        switch (_kind) {
+        case kind::static_row:
+            return as_static_row().equal(s, other.as_static_row());
+        case kind::clustering_row:
+            return as_clustering_row().equal(s, other.as_clustering_row());
+        case kind::range_tombstone_change:
+            return as_range_tombstone_change().equal(s, other.as_range_tombstone_change());
+        case kind::partition_start:
+            return as_partition_start().equal(s, other.as_partition_start());
+        case kind::partition_end:
+            return as_end_of_partition().equal(s, other.as_end_of_partition());
+        }
+        abort();
+    }
+
+    // Fragments which have the same position() and are mergeable can be
+    // merged into one fragment with apply() which represents the sum of
+    // writes represented by each of the fragments.
+    // Fragments which have the same position() but are not mergeable
+    // and at least one of them is not a range_tombstone_change can be emitted one after the other in the stream.
+    //
+    // Undefined for range_tombstone_change.
+    // Merging range tombstones requires a more complicated handling
+    // because range_tombstone_change doesn't represent a write on its own, only
+    // with a matching change for the end bound. It's not enough to chose one fragment over another,
+    // the upper bound of the winning tombstone needs to be taken into account when merging
+    // later range_tombstone_change fragments in the stream.
+    bool mergeable_with(const mutation_fragment_v2& mf) const {
+        return _kind == mf._kind && _kind != kind::range_tombstone_change;
+    }
+
+    class printer {
+        const schema& _schema;
+        const mutation_fragment_v2& _mutation_fragment;
+    public:
+        printer(const schema& s, const mutation_fragment_v2& mf) : _schema(s), _mutation_fragment(mf) { }
+        printer(const printer&) = delete;
+        printer(printer&&) = delete;
+
+        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    };
+    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+
+private:
+    size_t calculate_memory_usage(const schema& s) const {
+        return sizeof(data) + visit([&s] (auto& mf) -> size_t { return mf.external_memory_usage(s); });
+    }
+};
+
+std::ostream& operator<<(std::ostream&, mutation_fragment_v2::kind);
+
+// F gets a stream element as an argument and returns the new value which replaces that element
+// in the transformed stream.
+template<typename F>
+concept StreamedMutationTranformerV2 =
+requires(F f, mutation_fragment_v2 mf, schema_ptr s) {
+    { f(std::move(mf)) } -> std::same_as<mutation_fragment_v2>;
+    { f(s) } -> std::same_as<schema_ptr>;
+};
+
+
+template<typename Consumer>
+concept FlatMutationReaderConsumer =
+    requires(Consumer c, mutation_fragment mf) {
+        { c(std::move(mf)) } -> std::same_as<stop_iteration>;
+    } || requires(Consumer c, mutation_fragment mf) {
+        { c(std::move(mf)) } -> std::same_as<future<stop_iteration>>;
+    };
+
+
+template<typename T>
+concept FlattenedConsumer =
+    StreamedMutationConsumer<T> && requires(T obj, const dht::decorated_key& dk) {
+        { obj.consume_new_partition(dk) };
+        { obj.consume_end_of_partition() };
+    };
+
+template<typename T>
+concept FlattenedConsumerFilter =
+    requires(T filter, const dht::decorated_key& dk, const mutation_fragment& mf) {
+        { filter(dk) } -> std::same_as<bool>;
+        { filter(mf) } -> std::same_as<bool>;
+        { filter.on_end_of_stream() } -> std::same_as<void>;
+    };
+
+template<typename Consumer>
+concept FlatMutationReaderConsumerV2 =
+    requires(Consumer c, mutation_fragment_v2 mf) {
+        { c(std::move(mf)) } -> std::same_as<stop_iteration>;
+    } || requires(Consumer c, mutation_fragment_v2 mf) {
+        { c(std::move(mf)) } -> std::same_as<future<stop_iteration>>;
+    };
+
+template<typename Consumer>
+concept MutationConsumer =
+    requires(Consumer c, mutation m) {
+        { c(std::move(m)) } -> std::same_as<stop_iteration>;
+    } || requires(Consumer c, mutation m) {
+        { c(std::move(m)) } -> std::same_as<future<stop_iteration>>;
+    };
+
+template<typename T>
+concept FlattenedConsumerV2 =
+    StreamedMutationConsumerV2<T> && requires(T obj, const dht::decorated_key& dk) {
+        { obj.consume_new_partition(dk) };
+        { obj.consume_end_of_partition() };
+    };
+
+template<typename T>
+concept FlattenedConsumerFilterV2 =
+    requires(T filter, const dht::decorated_key& dk, const mutation_fragment_v2& mf) {
+        { filter(dk) } -> std::same_as<bool>;
+        { filter(mf) } -> std::same_as<bool>;
+        { filter.on_end_of_stream() } -> std::same_as<void>;
+    };
+
+
+enum class consume_in_reverse {
+    no = 0,
+    yes,
+};
+
+
+
+template<typename T>
+concept RangeTombstoneChangeConsumer = std::invocable<T, range_tombstone_change>;
+
+/// Generates range_tombstone_change fragments for a stream of range_tombstone fragments.
+///
+/// The input range_tombstones passed to consume() may be overlapping, but must be weakly ordered by position().
+/// It's ok to pass consecutive range_tombstone objects with the same position.
+///
+/// Generated range_tombstone_change fragments will have strictly monotonic positions.
+///
+/// Example usage:
+///
+///   consume(range_tombstone(1, +inf, t));
+///   flush(2, consumer);
+///   consume(range_tombstone(2, +inf, t));
+///   flush(3, consumer);
+///   consume(range_tombstone(4, +inf, t));
+///   consume(range_tombstone(4, 7, t));
+///   flush(5, consumer);
+///   flush(6, consumer);
+///
+class range_tombstone_change_generator {
+    range_tombstone_list _range_tombstones;
+    // All range_tombstone_change fragments with positions < than this have been emitted.
+    position_in_partition _lower_bound = position_in_partition::before_all_clustered_rows();
+    const schema& _schema;
+public:
+    range_tombstone_change_generator(const schema& s)
+        : _range_tombstones(s)
+        , _schema(s)
+    { }
+
+    // Discards deletion information for positions < lower_bound.
+    // After this, the lowest position of emitted range_tombstone_change will be before_key(lower_bound).
+    void trim(const position_in_partition& lower_bound) {
+        position_in_partition::less_compare less(_schema);
+
+        if (lower_bound.is_clustering_row()) {
+            _lower_bound = position_in_partition::before_key(lower_bound.key());
+        } else {
+            _lower_bound = lower_bound;
+        }
+
+        while (!_range_tombstones.empty() && !less(lower_bound, _range_tombstones.begin()->end_position())) {
+            _range_tombstones.pop(_range_tombstones.begin());
+        }
+
+        if (!_range_tombstones.empty() && less(_range_tombstones.begin()->position(), _lower_bound)) {
+            // _range_tombstones.begin()->end_position() < lower_bound is guaranteed by previous loop.
+            _range_tombstones.begin()->tombstone().set_start(_lower_bound);
+        }
+    }
+
+    // Emits range_tombstone_change fragments with positions smaller than upper_bound
+    // for accumulated range tombstones. If end_of_range = true, range tombstone
+    // change fragments with position equal to upper_bound may also be emitted.
+    // After this, only range_tombstones with positions >= upper_bound may be added,
+    // which guarantees that they won't affect the output of this flush.
+    //
+    // If upper_bound == position_in_partition::after_all_clustered_rows(),
+    // emits all remaining range_tombstone_changes.
+    // No range_tombstones may be added after this.
+    //
+    // FIXME: respect preemption
+    template<RangeTombstoneChangeConsumer C>
+    void flush(const position_in_partition_view upper_bound, C consumer, bool end_of_range = false) {
+        if (_range_tombstones.empty()) {
+            return;
+        }
+
+        position_in_partition::tri_compare cmp(_schema);
+        std::optional<range_tombstone> prev;
+        const bool allow_eq = upper_bound.is_after_all_clustered_rows(_schema);
+        const auto should_flush = [&] (position_in_partition_view pos) {
+            const auto res = cmp(pos, upper_bound);
+            if (allow_eq) {
+                return res <= 0;
+            } else {
+                return res < 0;
+            }
+        };
+
+        while (!_range_tombstones.empty() && should_flush(_range_tombstones.begin()->end_position())) {
+            auto rt = _range_tombstones.pop(_range_tombstones.begin());
+
+            if (prev && (cmp(prev->end_position(), rt.position()) < 0)) { // [1]
+                // previous range tombstone not adjacent, emit gap.
+                consumer(range_tombstone_change(prev->end_position(), tombstone()));
+            }
+
+            // Check if start of rt was already emitted, emit if not.
+            if (cmp(rt.position(), _lower_bound) >= 0) {
+                consumer(range_tombstone_change(rt.position(), rt.tomb));
+            }
+
+            // Delay emitting end bound in case it's adjacent with the next tombstone. See [1] and [2]
+            prev = std::move(rt);
+        }
+
+        // If previous range tombstone not adjacent with current, emit gap.
+        // It cannot get adjacent later because prev->end_position() < upper_bound,
+        // so nothing == prev->end_position() can be added after this invocation.
+        if (prev && (_range_tombstones.empty()
+                     || (cmp(prev->end_position(), _range_tombstones.begin()->position()) < 0))) {
+            consumer(range_tombstone_change(prev->end_position(), tombstone())); // [2]
+        }
+
+        // Emit the fragment for start bound of a range_tombstone which is overlapping with upper_bound,
+        // unless no such fragment or already emitted.
+        if (!_range_tombstones.empty()
+            && (cmp(_range_tombstones.begin()->position(), upper_bound) < 0)
+            && (cmp(_range_tombstones.begin()->position(), _lower_bound) >= 0)) {
+            consumer(range_tombstone_change(
+                    _range_tombstones.begin()->position(), _range_tombstones.begin()->tombstone().tomb));
+        }
+
+        // Close current tombstone (if any) at upper_bound if end_of_range is
+        // set, so a sliced read will have properly closed range tombstone bounds
+        // at each range end
+        if (!_range_tombstones.empty()
+                && end_of_range
+                && (cmp(_range_tombstones.begin()->position(), upper_bound) < 0)) {
+            consumer(range_tombstone_change(upper_bound, tombstone()));
+        }
+
+        _lower_bound = upper_bound;
+    }
+
+    void consume(range_tombstone rt) {
+        _range_tombstones.apply(_schema, std::move(rt));
+    }
+
+    void reset() {
+        _range_tombstones.clear();
+        _lower_bound = position_in_partition::before_all_clustered_rows();
+    }
+
+    bool discardable() const {
+        return _range_tombstones.empty();
+    }
+};
+
+#include <seastar/util/optimized_optional.hh>
+#include <seastar/core/coroutine.hh>
+#include <seastar/coroutine/maybe_yield.hh>
+
+struct mutation_consume_cookie {
+    using crs_iterator_type = mutation_partition::rows_type::iterator;
+    using rts_iterator_type = range_tombstone_list::iterator;
+
+    struct clustering_iterators {
+        crs_iterator_type crs_begin;
+        crs_iterator_type crs_end;
+        rts_iterator_type rts_begin;
+        rts_iterator_type rts_end;
+        range_tombstone_change_generator rt_gen;
+
+        clustering_iterators(const schema& s, crs_iterator_type crs_b, crs_iterator_type crs_e, rts_iterator_type rts_b, rts_iterator_type rts_e)
+            : crs_begin(std::move(crs_b)), crs_end(std::move(crs_e)), rts_begin(std::move(rts_b)), rts_end(std::move(rts_e)), rt_gen(s) { }
+    };
+
+    schema_ptr schema;
+    bool partition_start_consumed = false;
+    bool static_row_consumed = false;
+    // only used when reverse == consume_in_reverse::yes
+    bool reversed_range_tombstone = false;
+    std::unique_ptr<clustering_iterators> iterators;
+};
+
+template<typename Result>
+struct mutation_consume_result {
+    stop_iteration stop;
+    Result result;
+    mutation_consume_cookie cookie;
+};
+
+template<>
+struct mutation_consume_result<void> {
+    stop_iteration stop;
+    mutation_consume_cookie cookie;
+};
+
+class mutation final {
+private:
+    struct data {
+        schema_ptr _schema;
+        dht::decorated_key _dk;
+        mutation_partition _p;
+
+        data(dht::decorated_key&& key, schema_ptr&& schema);
+        data(partition_key&& key, schema_ptr&& schema);
+        data(schema_ptr&& schema, dht::decorated_key&& key, const mutation_partition& mp);
+        data(schema_ptr&& schema, dht::decorated_key&& key, mutation_partition&& mp);
+    };
+    std::unique_ptr<data> _ptr;
+private:
+    mutation() = default;
+    explicit operator bool() const { return bool(_ptr); }
+    friend class optimized_optional<mutation>;
+public:
+    mutation(schema_ptr schema, dht::decorated_key key)
+        : _ptr(std::make_unique<data>(std::move(key), std::move(schema)))
+    { }
+    mutation(schema_ptr schema, partition_key key_)
+        : _ptr(std::make_unique<data>(std::move(key_), std::move(schema)))
+    { }
+    mutation(schema_ptr schema, dht::decorated_key key, const mutation_partition& mp)
+        : _ptr(std::make_unique<data>(std::move(schema), std::move(key), mp))
+    { }
+    mutation(schema_ptr schema, dht::decorated_key key, mutation_partition&& mp)
+        : _ptr(std::make_unique<data>(std::move(schema), std::move(key), std::move(mp)))
+    { }
+    mutation(const mutation& m)
+    {
+        if (m._ptr) {
+            _ptr = std::make_unique<data>(schema_ptr(m.schema()), dht::decorated_key(m.decorated_key()), m.partition());
+        }
+    }
+    mutation(mutation&&) = default;
+    mutation& operator=(mutation&& x) = default;
+    mutation& operator=(const mutation& m);
+
+    void set_static_cell(const column_definition& def, atomic_cell_or_collection&& value);
+    void set_static_cell(const bytes& name, const data_value& value, api::timestamp_type timestamp, ttl_opt ttl = {});
+    void set_clustered_cell(const clustering_key& key, const bytes& name, const data_value& value, api::timestamp_type timestamp, ttl_opt ttl = {});
+    void set_clustered_cell(const clustering_key& key, const column_definition& def, atomic_cell_or_collection&& value);
+    void set_cell(const clustering_key_prefix& prefix, const bytes& name, const data_value& value, api::timestamp_type timestamp, ttl_opt ttl = {});
+    void set_cell(const clustering_key_prefix& prefix, const column_definition& def, atomic_cell_or_collection&& value);
+
+    // Upgrades this mutation to a newer schema. The new schema must
+    // be obtained using only valid schema transformation:
+    //  * primary key column count must not change
+    //  * column types may only change to those with compatible representations
+    //
+    // After upgrade, mutation's partition should only be accessed using the new schema. User must
+    // ensure proper isolation of accesses.
+    //
+    // Strong exception guarantees.
+    //
+    // Note that the conversion may lose information, it's possible that m1 != m2 after:
+    //
+    //   auto m2 = m1;
+    //   m2.upgrade(s2);
+    //   m2.upgrade(m1.schema());
+    //
+    void upgrade(const schema_ptr&);
+
+    const partition_key& key() const { return _ptr->_dk._key; };
+    const dht::decorated_key& decorated_key() const { return _ptr->_dk; };
+    dht::ring_position ring_position() const { return { decorated_key() }; }
+    const dht::token& token() const { return _ptr->_dk._token; }
+    const schema_ptr& schema() const { return _ptr->_schema; }
+    const mutation_partition& partition() const { return _ptr->_p; }
+    mutation_partition& partition() { return _ptr->_p; }
+    const table_id& column_family_id() const { return _ptr->_schema->id(); }
+    // Consistent with hash<canonical_mutation>
+    bool operator==(const mutation&) const;
+public:
+    // Consumes the mutation's content.
+    //
+    // The mutation is in a moved-from alike state after consumption.
+    // There are tree ways to consume the mutation:
+    // * consume_in_reverse::no - consume in forward order, as defined by the
+    //   schema.
+    // * consume_in_reverse::yes - consume in reverse order, as if the schema
+    //   had the opposite clustering order. This effectively reverses the
+    //   mutation's content, according to the native reverse order[1].
+    //
+    // For definition of [1] and [2] see docs/dev/reverse-reads.md.
+    //
+    // The consume operation is pausable and resumable:
+    // * To pause return stop_iteration::yes from one of the consume() methods;
+    // * The consume will now stop and return;
+    // * To resume call consume again and pass the cookie member of the returned
+    //   mutation_consume_result as the cookie parameter;
+    //
+    // Note that `consume_end_of_partition()` and `consume_end_of_stream()`
+    // will be called each time the consume is stopping, regardless of whether
+    // you are pausing or the consumption is ending for good.
+    template<FlattenedConsumerV2 Consumer>
+    auto consume(Consumer& consumer, consume_in_reverse reverse, mutation_consume_cookie cookie = {}) && -> mutation_consume_result<decltype(consumer.consume_end_of_stream())>;
+
+    template<FlattenedConsumerV2 Consumer>
+    auto consume_gently(Consumer& consumer, consume_in_reverse reverse, mutation_consume_cookie cookie = {}) && -> future<mutation_consume_result<decltype(consumer.consume_end_of_stream())>>;
+
+    // See mutation_partition::live_row_count()
+    uint64_t live_row_count(gc_clock::time_point query_time = gc_clock::time_point::min()) const;
+
+    void apply(mutation&&);
+    void apply(const mutation&);
+    void apply(const mutation_fragment&);
+
+    mutation operator+(const mutation& other) const;
+    mutation& operator+=(const mutation& other);
+    mutation& operator+=(mutation&& other);
+
+    // Returns a subset of this mutation holding only information relevant for given clustering ranges.
+    // Range tombstones will be trimmed to the boundaries of the clustering ranges.
+    mutation sliced(const query::clustering_row_ranges&) const;
+
+    unsigned shard_of() const {
+        return dht::shard_of(*schema(), token());
+    }
+
+    // Returns a mutation which contains the same writes but in a minimal form.
+    // Drops data covered by tombstones.
+    // Does not drop expired tombstones.
+    // Does not expire TTLed data.
+    mutation compacted() const;
+private:
+    friend std::ostream& operator<<(std::ostream& os, const mutation& m);
+};
+
+namespace {
+
+template<consume_in_reverse reverse, FlattenedConsumerV2 Consumer>
+std::optional<stop_iteration> consume_clustering_fragments(schema_ptr s, mutation_partition& partition, Consumer& consumer, mutation_consume_cookie& cookie, is_preemptible preempt = is_preemptible::no) {
+    constexpr bool crs_in_reverse = reverse == consume_in_reverse::yes;
+    // We can read the range_tombstone_list in reverse order in consume_in_reverse::yes mode
+    // since we deoverlap range_tombstones on insertion.
+    constexpr bool rts_in_reverse = reverse == consume_in_reverse::yes;
+
+    using crs_type = mutation_partition::rows_type;
+    using crs_iterator_type = std::conditional_t<crs_in_reverse, std::reverse_iterator<crs_type::iterator>, crs_type::iterator>;
+    using rts_type = range_tombstone_list;
+    using rts_iterator_type = std::conditional_t<rts_in_reverse, std::reverse_iterator<rts_type::iterator>, rts_type::iterator>;
+
+    if (!cookie.schema) {
+        if constexpr (reverse == consume_in_reverse::yes) {
+            cookie.schema = s->make_reversed();
+        } else {
+            cookie.schema = s;
+        }
+    }
+    s = cookie.schema;
+
+    if (!cookie.iterators) {
+        auto& crs = partition.mutable_clustered_rows();
+        auto& rts = partition.mutable_row_tombstones();
+        cookie.iterators = std::make_unique<mutation_consume_cookie::clustering_iterators>(*s, crs.begin(), crs.end(), rts.begin(), rts.end());
+    }
+
+    crs_iterator_type crs_it, crs_end;
+    rts_iterator_type rts_it, rts_end;
+
+    if constexpr (crs_in_reverse) {
+        crs_it = std::reverse_iterator(cookie.iterators->crs_end);
+        crs_end = std::reverse_iterator(cookie.iterators->crs_begin);
+    } else {
+        crs_it = cookie.iterators->crs_begin;
+        crs_end = cookie.iterators->crs_end;
+    }
+
+    if constexpr (rts_in_reverse) {
+        rts_it = std::reverse_iterator(cookie.iterators->rts_end);
+        rts_end = std::reverse_iterator(cookie.iterators->rts_begin);
+    } else {
+        rts_it = cookie.iterators->rts_begin;
+        rts_end = cookie.iterators->rts_end;
+    }
+
+    auto flush_tombstones = [&] (position_in_partition_view pos) {
+        cookie.iterators->rt_gen.flush(pos, [&] (range_tombstone_change rt) {
+            consumer.consume(std::move(rt));
+        });
+    };
+
+    stop_iteration stop = stop_iteration::no;
+
+    position_in_partition::tri_compare cmp(*s);
+
+    while (!stop && (crs_it != crs_end || rts_it != rts_end)) {
+        // Dummy rows are part of the in-memory representation but should be
+        // invisible to reads.
+        if (crs_it != crs_end && crs_it->dummy()) {
+            ++crs_it;
+            continue;
+        }
+        bool emit_rt = rts_it != rts_end;
+        if (rts_it != rts_end) {
+            if (reverse == consume_in_reverse::yes && !cookie.reversed_range_tombstone) {
+                rts_it->tombstone().reverse();
+                cookie.reversed_range_tombstone = true;
+            }
+            if (crs_it != crs_end) {
+                const auto cmp_res = cmp(rts_it->position(), crs_it->position());
+                emit_rt = cmp_res < 0;
+            }
+        }
+        if (emit_rt) {
+            flush_tombstones(rts_it->position());
+            cookie.iterators->rt_gen.consume(std::move(rts_it->tombstone()));
+            ++rts_it;
+            cookie.reversed_range_tombstone = false;
+        } else {
+            flush_tombstones(crs_it->position());
+            stop = consumer.consume(clustering_row(std::move(*crs_it)));
+            ++crs_it;
+        }
+        if (preempt && need_preempt()) {
+            break;
+        }
+    }
+
+    if constexpr (crs_in_reverse) {
+        cookie.iterators->crs_begin = crs_end.base();
+        cookie.iterators->crs_end = crs_it.base();
+    } else {
+        cookie.iterators->crs_begin = crs_it;
+        cookie.iterators->crs_end = crs_end;
+    }
+
+    if constexpr (rts_in_reverse) {
+        cookie.iterators->rts_begin = rts_end.base();
+        cookie.iterators->rts_end = rts_it.base();
+    } else {
+        cookie.iterators->rts_begin = rts_it;
+        cookie.iterators->rts_end = rts_end;
+    }
+
+    if (!stop) {
+      if (crs_it == crs_end && rts_it == rts_end) {
+        flush_tombstones(position_in_partition::after_all_clustered_rows());
+      } else {
+        assert(preempt && need_preempt());
+        return std::nullopt;
+      }
+    }
+
+    return stop;
+}
+
+} // anonymous namespace
+
+template<FlattenedConsumerV2 Consumer>
+auto mutation::consume(Consumer& consumer, consume_in_reverse reverse, mutation_consume_cookie cookie) &&
+        -> mutation_consume_result<decltype(consumer.consume_end_of_stream())> {
+    auto& partition = _ptr->_p;
+
+    if (!cookie.partition_start_consumed) {
+        consumer.consume_new_partition(_ptr->_dk);
+        if (partition.partition_tombstone()) {
+            consumer.consume(partition.partition_tombstone());
+        }
+        cookie.partition_start_consumed = true;
+    }
+
+    stop_iteration stop = stop_iteration::no;
+    if (!cookie.static_row_consumed && !partition.static_row().empty()) {
+        stop = consumer.consume(static_row(std::move(partition.static_row().get_existing())));
+    }
+
+    cookie.static_row_consumed = true;
+
+    if (reverse == consume_in_reverse::yes) {
+        stop = *consume_clustering_fragments<consume_in_reverse::yes>(_ptr->_schema, partition, consumer, cookie);
+    } else {
+        stop = *consume_clustering_fragments<consume_in_reverse::no>(_ptr->_schema, partition, consumer, cookie);
+    }
+
+    const auto stop_consuming = consumer.consume_end_of_partition();
+    using consume_res_type = decltype(consumer.consume_end_of_stream());
+    if constexpr (std::is_same_v<consume_res_type, void>) {
+        consumer.consume_end_of_stream();
+        return mutation_consume_result<void>{stop_consuming, std::move(cookie)};
+    } else {
+        return mutation_consume_result<consume_res_type>{stop_consuming, consumer.consume_end_of_stream(), std::move(cookie)};
+    }
+}
+
+template<FlattenedConsumerV2 Consumer>
+auto mutation::consume_gently(Consumer& consumer, consume_in_reverse reverse, mutation_consume_cookie cookie) &&
+        -> future<mutation_consume_result<decltype(consumer.consume_end_of_stream())>> {
+    auto& partition = _ptr->_p;
+
+    if (!cookie.partition_start_consumed) {
+        consumer.consume_new_partition(_ptr->_dk);
+        if (partition.partition_tombstone()) {
+            consumer.consume(partition.partition_tombstone());
+        }
+        cookie.partition_start_consumed = true;
+    }
+
+    stop_iteration stop = stop_iteration::no;
+    if (!cookie.static_row_consumed && !partition.static_row().empty()) {
+        stop = consumer.consume(static_row(std::move(partition.static_row().get_existing())));
+    }
+
+    cookie.static_row_consumed = true;
+
+    std::optional<stop_iteration> stop_opt;
+    if (reverse == consume_in_reverse::yes) {
+        while (!(stop_opt = consume_clustering_fragments<consume_in_reverse::yes>(_ptr->_schema, partition, consumer, cookie, is_preemptible::yes))) {
+            co_await yield();
+        }
+    } else {
+        while (!(stop_opt = consume_clustering_fragments<consume_in_reverse::no>(_ptr->_schema, partition, consumer, cookie, is_preemptible::yes))) {
+            co_await yield();
+        }
+    }
+    stop = *stop_opt;
+
+    const auto stop_consuming = consumer.consume_end_of_partition();
+    using consume_res_type = decltype(consumer.consume_end_of_stream());
+    if constexpr (std::is_same_v<consume_res_type, void>) {
+        consumer.consume_end_of_stream();
+        co_return mutation_consume_result<void>{stop_consuming, std::move(cookie)};
+    } else {
+        co_return mutation_consume_result<consume_res_type>{stop_consuming, consumer.consume_end_of_stream(), std::move(cookie)};
+    }
+}
+
+struct mutation_equals_by_key {
+    bool operator()(const mutation& m1, const mutation& m2) const {
+        return m1.schema() == m2.schema()
+                && m1.decorated_key().equal(*m1.schema(), m2.decorated_key());
+    }
+};
+
+struct mutation_hash_by_key {
+    size_t operator()(const mutation& m) const {
+        auto dk_hash = std::hash<dht::decorated_key>();
+        return dk_hash(m.decorated_key());
+    }
+};
+
+struct mutation_decorated_key_less_comparator {
+    bool operator()(const mutation& m1, const mutation& m2) const;
+};
+
+using mutation_opt = optimized_optional<mutation>;
+
+// Consistent with operator==()
+// Consistent across the cluster, so should not rely on particular
+// serialization format, only on actual data stored.
+template<>
+struct appending_hash<mutation> {
+    template<typename Hasher>
+    void operator()(Hasher& h, const mutation& m) const {
+        const schema& s = *m.schema();
+        feed_hash(h, m.key(), s);
+        m.partition().feed_hash(h, s);
+    }
+};
+
+inline
+void apply(mutation_opt& dst, mutation&& src) {
+    if (!dst) {
+        dst = std::move(src);
+    } else {
+        dst->apply(std::move(src));
+    }
+}
+
+inline
+void apply(mutation_opt& dst, mutation_opt&& src) {
+    if (src) {
+        apply(dst, std::move(*src));
+    }
+}
+
+inline
+void apply(mutation& dst, mutation_opt&& src) {
+    if (src) {
+        dst.apply(std::move(*src));
+    }
+}
+
+inline
+void apply(mutation& dst, const mutation_opt& src) {
+    if (src) {
+        dst.apply(*src);
+    }
+}
+
+// Returns a range into partitions containing mutations covered by the range.
+// partitions must be sorted according to decorated key.
+// range must not wrap around.
+boost::iterator_range<std::vector<mutation>::const_iterator> slice(
+    const std::vector<mutation>& partitions,
+    const dht::partition_range&);
+
+// Reverses the mutation as if it was created with a schema with reverse
+// clustering order. The resulting mutation will contain a reverse schema too.
+mutation reverse(mutation mut);
+
+
 
 
 #include "cql3/maps.hh"
