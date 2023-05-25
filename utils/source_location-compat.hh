@@ -14,11 +14,3 @@
 
 #pragma once
 
-#if defined(__clang_major__) && __clang_major__ <= 14
-
-#include <experimental/source_location>
-
-namespace std {
-    using source_location = std::experimental::source_location;
-}
-#endif

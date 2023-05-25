@@ -52376,7 +52376,16 @@ inline std::ostream& operator<<(std::ostream& os, const raft::logical_clock::dur
 #include <unordered_set>
 #include <functional>
 #include <source_location>
-#include "utils/source_location-compat.hh"
+
+#if defined(__clang_major__) && __clang_major__ <= 14
+
+#include <experimental/source_location>
+
+namespace std {
+    using source_location = std::experimental::source_location;
+}
+#endif
+
 #include <boost/container/deque.hpp>
 #include <seastar/core/lowres_clock.hh>
 #include <seastar/core/future.hh>
@@ -53164,7 +53173,7 @@ public:
 
 
 #include <boost/range/algorithm/find_if.hpp>
-#include "boost/range/join.hpp"
+#include <boost/range/join.hpp>
 #include <iostream>
 #include <unordered_set>
 #include <unordered_map>
@@ -57333,13 +57342,10 @@ public:
 }
 
 #include <fcntl.h>
-#include "file_lock.hh"
 #include <fmt/chrono.h>
 #include <fmt/format.h>
 #include <fmt/ostream.h>
-#include "frozen_mutation.hh"
-#include "frozen_schema.hh"
-#include "gc_clock.hh"
+
 #include "gms/gossiper.hh"
 #include <gnutls/crypto.h>
 #include "hashing_partition_visitor.hh"
