@@ -1,6 +1,231 @@
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-#include "barrett.hh"
-#include "bloom_filter.hh"
+
+
+
+#include <chrono>
+#include <cstdint>
+#include <ratio>
+#include <type_traits>
+#include <fmt/chrono.h>
+
+// the database clock follows Java - 1ms granularity, 64-bit counter, 1970 epoch
+
+#include "clocks-impl.hh"
+#include "gc_clock.hh"
+
+class db_clock final {
+public:
+    using base = std::chrono::system_clock;
+    using rep = int64_t;
+    using period = std::ratio<1, 1000>; // milliseconds
+    using duration = std::chrono::duration<rep, period>;
+    using time_point = std::chrono::time_point<db_clock, duration>;
+
+    static constexpr bool is_steady = base::is_steady;
+    static constexpr std::time_t to_time_t(time_point t) {
+        return std::chrono::duration_cast<std::chrono::seconds>(t.time_since_epoch()).count();
+    }
+    static constexpr time_point from_time_t(std::time_t t) {
+        return time_point(std::chrono::duration_cast<duration>(std::chrono::seconds(t)));
+    }
+    static time_point now() noexcept {
+        return time_point(std::chrono::duration_cast<duration>(base::now().time_since_epoch())) + get_clocks_offset();
+    }
+};
+
+static inline
+gc_clock::time_point to_gc_clock(db_clock::time_point tp) noexcept {
+    // Converting time points through `std::time_t` means that we don't have to make any assumptions about the epochs
+    // of `gc_clock` and `db_clock`, though we require that that the period of `gc_clock` is also 1 s like
+    // `std::time_t` to avoid loss of information.
+    {
+        using second = std::ratio<1, 1>;
+        static_assert(
+                std::is_same<gc_clock::period, second>::value,
+                "Conversion via std::time_t would lose information.");
+    }
+
+    return gc_clock::from_time_t(db_clock::to_time_t(tp));
+}
+
+#include <cstdint>
+#include "utils/clmul.hh"
+
+inline
+constexpr uint64_t barrett_reduction_constants[2] = { 0x00000001F7011641, 0x00000001DB710641 };
+
+/*
+ * Calculates representation of p(x) mod G(x) using Barrett reduction.
+ *
+ * p(x) is a polynomial of degree 64.
+ *
+ * The parameter p is a bit-reversed representation of the polynomial,
+ * the least significant bit corresponds to the coefficient of x^63.
+ */
+inline constexpr uint32_t crc32_fold_barrett_u64_constexpr(uint64_t p) {
+    auto x0 = p;
+    auto x1 = x0;
+    uint64_t mask32 = 0xffff'ffff;
+    x0 = clmul_u64_low_constexpr(x0 & mask32, barrett_reduction_constants[0]);
+    x0 = clmul_u64_low_constexpr(x0 & mask32, barrett_reduction_constants[1]);
+    return (x0 ^ x1) >> 32;
+}
+
+#include <wmmintrin.h>
+
+inline
+uint32_t crc32_fold_barrett_u64_in_m128(__m128i x0) {
+    __m128i x1;
+    const __m128i mask32 = (__m128i)(__v4si){ int32_t(0xFFFFFFFF) };
+    const __v2di brc =
+        (__v2di){ barrett_reduction_constants[0], barrett_reduction_constants[1] };
+
+    /*
+     * Reduce 64 => 32 bits using Barrett reduction.
+     *
+     * Let M(x) = A(x)*x^32 + B(x) be the remaining message.  The goal is to
+     * compute R(x) = M(x) mod G(x).  Since degree(B(x)) < degree(G(x)):
+     *
+     *	R(x) = (A(x)*x^32 + B(x)) mod G(x)
+     *	     = (A(x)*x^32) mod G(x) + B(x)
+     *
+     * Then, by the Division Algorithm there exists a unique q(x) such that:
+     *
+     *	A(x)*x^32 mod G(x) = A(x)*x^32 - q(x)*G(x)
+     *
+     * Since the left-hand side is of maximum degree 31, the right-hand side
+     * must be too.  This implies that we can apply 'mod x^32' to the
+     * right-hand side without changing its value:
+     *
+     *	(A(x)*x^32 - q(x)*G(x)) mod x^32 = q(x)*G(x) mod x^32
+     *
+     * Note that '+' is equivalent to '-' in polynomials over GF(2).
+     *
+     * We also know that:
+     *
+     *	              / A(x)*x^32 \
+     *	q(x) = floor (  ---------  )
+     *	              \    G(x)   /
+     *
+     * To compute this efficiently, we can multiply the top and bottom by
+     * x^32 and move the division by G(x) to the top:
+     *
+     *	              / A(x) * floor(x^64 / G(x)) \
+     *	q(x) = floor (  -------------------------  )
+     *	              \           x^32            /
+     *
+     * Note that floor(x^64 / G(x)) is a constant.
+     *
+     * So finally we have:
+     *
+     *	                          / A(x) * floor(x^64 / G(x)) \
+     *	R(x) = B(x) + G(x)*floor (  -------------------------  )
+     *	                          \           x^32            /
+     *
+     */
+    x1 = x0;
+    x0 = _mm_clmulepi64_si128(x0 & mask32, brc, 0x00);
+    x0 = _mm_clmulepi64_si128(x0 & mask32, brc, 0x10);
+    return _mm_cvtsi128_si32(_mm_srli_si128(x0 ^ x1, 4));
+}
+
+inline
+uint32_t crc32_fold_barrett_u64_native(uint64_t p) {
+    return crc32_fold_barrett_u64_in_m128(_mm_set_epi64x(0, p));
+}
+
+
+inline
+constexpr
+uint32_t crc32_fold_barrett_u64(uint64_t p) {
+    return std::is_constant_evaluated() ? crc32_fold_barrett_u64_constexpr(p) : crc32_fold_barrett_u64_native(p);
+}
+
+#include "i_filter.hh"
+#include "utils/murmur_hash.hh"
+#include "utils/large_bitset.hh"
+
+#include <vector>
+
+namespace utils {
+namespace filter {
+
+class bloom_filter: public i_filter {
+public:
+    using bitmap = large_bitset;
+
+private:
+    bitmap _bitset;
+    int _hash_count;
+    filter_format _format;
+
+    static thread_local struct stats {
+        uint64_t memory_size = 0;
+    } _shard_stats;
+    stats& _stats = _shard_stats;
+
+public:
+    int num_hashes() { return _hash_count; }
+    bitmap& bits() { return _bitset; }
+
+    bloom_filter(int hashes, bitmap&& bs, filter_format format) noexcept;
+    ~bloom_filter() noexcept;
+
+    virtual void add(const bytes_view& key) override;
+
+    virtual bool is_present(const bytes_view& key) override;
+
+    virtual bool is_present(hashed_key key) override;
+
+    virtual void clear() override {
+        _bitset.clear();
+    }
+
+    virtual void close() override { }
+
+    virtual size_t memory_size() override {
+        return sizeof(_hash_count) + _bitset.memory_size();
+    }
+
+    static const stats& get_shard_stats() noexcept {
+        return _shard_stats;
+    }
+};
+
+struct murmur3_bloom_filter: public bloom_filter {
+
+    murmur3_bloom_filter(int hashes, bitmap&& bs, filter_format format)
+        : bloom_filter(hashes, std::move(bs), format)
+    {}
+};
+
+struct always_present_filter: public i_filter {
+
+    virtual bool is_present(const bytes_view& key) override {
+        return true;
+    }
+
+    virtual bool is_present(hashed_key key) override {
+        return true;
+    }
+
+    virtual void add(const bytes_view& key) override { }
+
+    virtual void clear() override { }
+
+    virtual void close() override { }
+
+    virtual size_t memory_size() override {
+        return 0;
+    }
+};
+
+filter_ptr create_filter(int hash, large_bitset&& bitset, filter_format format);
+filter_ptr create_filter(int hash, int64_t num_elements, int buckets_per, filter_format format);
+}
+}
+
+
 #include <boost/algorithm/string.hpp>
 #include <boost/date_time/c_local_time_adjustor.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -9,21 +234,814 @@
 #include <boost/range/algorithm.hpp>
 #include <boost/range/combine.hpp>
 #include <boost/regex/icu.hpp>
-#include "cdc/cdc_extension.hh"
-#include "clustering_key_filter.hh"
-#include "combine.hh"
-#include "concrete_types.hh"
-#include "config_file_impl.hh"
-#include "converting_mutation_partition_applier.hh"
-#include "cql3/util.hh"
-#include "crc_combine_table.hh"
+
+
+#include <map>
+
+#include <seastar/core/sstring.hh>
+
+#include "bytes.hh"
+#include "serializer.hh"
+#include "db/extensions.hh"
+#include "cdc/cdc_options.hh"
+#include "schema/schema.hh"
+#include "serializer_impl.hh"
+
+namespace cdc {
+
+class cdc_extension : public schema_extension {
+    cdc::options _cdc_options;
+public:
+    static constexpr auto NAME = "cdc";
+
+    cdc_extension() = default;
+    cdc_extension(const options& opts) : _cdc_options(opts) {}
+    explicit cdc_extension(std::map<sstring, sstring> tags) : _cdc_options(std::move(tags)) {}
+    explicit cdc_extension(const bytes& b) : _cdc_options(cdc_extension::deserialize(b)) {}
+    explicit cdc_extension(const sstring& s) {
+        throw std::logic_error("Cannot create cdc info from string");
+    }
+    bytes serialize() const override {
+        return ser::serialize_to_buffer<bytes>(_cdc_options.to_map());
+    }
+    static std::map<sstring, sstring> deserialize(const bytes_view& buffer) {
+        return ser::deserialize_from_buffer(buffer, boost::type<std::map<sstring, sstring>>());
+    }
+    const options& get_options() const {
+        return _cdc_options;
+    }
+};
+
+}
+
+
+#include "schema/schema_fwd.hh"
+#include "query-request.hh"
+
+namespace query {
+
+class clustering_key_filter_ranges {
+    clustering_row_ranges _storage;
+    std::reference_wrapper<const clustering_row_ranges> _ref;
+public:
+    clustering_key_filter_ranges(const clustering_row_ranges& ranges) : _ref(ranges) { }
+    clustering_key_filter_ranges(clustering_row_ranges&& ranges)
+        : _storage(std::make_move_iterator(ranges.begin()), std::make_move_iterator(ranges.end())), _ref(_storage) {}
+
+    struct reversed { };
+    clustering_key_filter_ranges(reversed, const clustering_row_ranges& ranges)
+        : _storage(ranges.rbegin(), ranges.rend()), _ref(_storage) { }
+
+    clustering_key_filter_ranges(clustering_key_filter_ranges&& other) noexcept
+        : _storage(std::move(other._storage))
+        , _ref(&other._ref.get() == &other._storage ? _storage : other._ref.get())
+    { }
+
+    clustering_key_filter_ranges& operator=(clustering_key_filter_ranges&& other) noexcept {
+        if (this != &other) {
+            _storage = std::move(other._storage);
+            _ref = (&other._ref.get() == &other._storage) ? _storage : other._ref.get();
+        }
+        return *this;
+    }
+
+    auto begin() const { return _ref.get().begin(); }
+    auto end() const { return _ref.get().end(); }
+    bool empty() const { return _ref.get().empty(); }
+    size_t size() const { return _ref.get().size(); }
+    const clustering_row_ranges& ranges() const { return _ref; }
+
+    // Returns all clustering ranges determined by `slice` inside partition determined by `key`.
+    // If the slice contains the `reversed` option, we assume that it is given in 'half-reversed' format
+    // (i.e. the ranges within are given in reverse order, but the ranges themselves are not reversed)
+    // with respect to the table order.
+    // The ranges will be returned in forward (increasing) order even if the slice is reversed.
+    static clustering_key_filter_ranges get_ranges(const schema& schema, const query::partition_slice& slice, const partition_key& key) {
+        const query::clustering_row_ranges& ranges = slice.row_ranges(schema, key);
+        if (slice.is_reversed()) {
+            return clustering_key_filter_ranges(clustering_key_filter_ranges::reversed{}, ranges);
+        }
+        return clustering_key_filter_ranges(ranges);
+    }
+
+    // Returns all clustering ranges determined by `slice` inside partition determined by `key`.
+    // The ranges will be returned in the same order as stored in the slice.
+    static clustering_key_filter_ranges get_native_ranges(const schema& schema, const query::partition_slice& slice, const partition_key& key) {
+        const query::clustering_row_ranges& ranges = slice.row_ranges(schema, key);
+        return clustering_key_filter_ranges(ranges);
+    }
+};
+
+}
+
+
+#include <algorithm>
+
+// combine two sorted uniqued sequences into a single sorted sequence
+// unique elements are copied, duplicate elements are merged with a
+// binary function.
+template <typename InputIterator1,
+          typename InputIterator2,
+          typename OutputIterator,
+          typename Compare,
+          typename Merge>
+OutputIterator
+combine(InputIterator1 begin1, InputIterator1 end1,
+        InputIterator2 begin2, InputIterator2 end2,
+        OutputIterator out,
+        Compare compare,
+        Merge merge) {
+    while (begin1 != end1 && begin2 != end2) {
+        auto& e1 = *begin1;
+        auto& e2 = *begin2;
+        if (compare(e1, e2)) {
+            *out++ = e1;
+            ++begin1;
+        } else if (compare(e2, e1)) {
+            *out++ = e2;
+            ++begin2;
+        } else {
+            *out++ = merge(e1, e2);
+            ++begin1;
+            ++begin2;
+        }
+    }
+    out = std::copy(begin1, end1, out);
+    out = std::copy(begin2, end2, out);
+    return out;
+}
+
+
+
+
+#include <seastar/net/inet_address.hh>
+
+#include "types/types.hh"
+#include "types/list.hh"
+#include "types/map.hh"
+#include "types/set.hh"
+#include "types/tuple.hh"
+#include "types/user.hh"
+#include "utils/big_decimal.hh"
+
+struct empty_type_impl final : public abstract_type {
+    using native_type = empty_type_representation;
+    empty_type_impl();
+};
+
+struct counter_type_impl final : public abstract_type {
+    counter_type_impl();
+};
+
+template <typename T>
+struct simple_type_impl : public concrete_type<T> {
+    simple_type_impl(abstract_type::kind k, sstring name, std::optional<uint32_t> value_length_if_fixed);
+};
+
+template<typename T>
+struct integer_type_impl : public simple_type_impl<T> {
+    integer_type_impl(abstract_type::kind k, sstring name, std::optional<uint32_t> value_length_if_fixed);
+};
+
+struct byte_type_impl final : public integer_type_impl<int8_t> {
+    byte_type_impl();
+};
+
+struct short_type_impl final : public integer_type_impl<int16_t> {
+    short_type_impl();
+};
+
+struct int32_type_impl final : public integer_type_impl<int32_t> {
+    int32_type_impl();
+};
+
+struct long_type_impl final : public integer_type_impl<int64_t> {
+    long_type_impl();
+};
+
+struct boolean_type_impl final : public simple_type_impl<bool> {
+    boolean_type_impl();
+};
+
+template <typename T>
+struct floating_type_impl : public simple_type_impl<T> {
+    floating_type_impl(abstract_type::kind k, sstring name, std::optional<uint32_t> value_length_if_fixed);
+};
+
+struct double_type_impl final : public floating_type_impl<double> {
+    double_type_impl();
+};
+
+struct float_type_impl final : public floating_type_impl<float> {
+    float_type_impl();
+};
+
+struct decimal_type_impl final : public concrete_type<big_decimal> {
+    decimal_type_impl();
+};
+
+struct duration_type_impl final : public concrete_type<cql_duration> {
+    duration_type_impl();
+};
+
+struct timestamp_type_impl final : public simple_type_impl<db_clock::time_point> {
+    timestamp_type_impl();
+    static db_clock::time_point from_sstring(sstring_view s);
+};
+
+struct simple_date_type_impl final : public simple_type_impl<uint32_t> {
+    simple_date_type_impl();
+    static uint32_t from_sstring(sstring_view s);
+};
+
+struct time_type_impl final : public simple_type_impl<int64_t> {
+    time_type_impl();
+    static int64_t from_sstring(sstring_view s);
+};
+
+struct string_type_impl : public concrete_type<sstring> {
+    string_type_impl(kind k, sstring name);
+};
+
+struct ascii_type_impl final : public string_type_impl {
+    ascii_type_impl();
+};
+
+struct utf8_type_impl final : public string_type_impl {
+    utf8_type_impl();
+};
+
+struct bytes_type_impl final : public concrete_type<bytes> {
+    bytes_type_impl();
+};
+
+// This is the old version of timestamp_type_impl, but has been replaced as it
+// wasn't comparing pre-epoch timestamps correctly. This is kept for backward
+// compatibility but shouldn't be used in new code.
+struct date_type_impl final : public concrete_type<db_clock::time_point> {
+    date_type_impl();
+};
+
+using timestamp_date_base_class = concrete_type<db_clock::time_point>;
+
+struct timeuuid_type_impl final : public concrete_type<utils::UUID> {
+    timeuuid_type_impl();
+    static utils::UUID from_sstring(sstring_view s);
+};
+
+struct varint_type_impl final : public concrete_type<utils::multiprecision_int> {
+    varint_type_impl();
+};
+
+struct inet_addr_type_impl final : public concrete_type<seastar::net::inet_address> {
+    inet_addr_type_impl();
+    static sstring to_sstring(const seastar::net::inet_address& addr);
+    static seastar::net::inet_address from_sstring(sstring_view s);
+};
+
+struct uuid_type_impl final : public concrete_type<utils::UUID> {
+    uuid_type_impl();
+    static utils::UUID from_sstring(sstring_view s);
+};
+
+template <typename Func> using visit_ret_type = std::invoke_result_t<Func, const ascii_type_impl&>;
+
+template <typename Func> concept CanHandleAllTypes = requires(Func f) {
+    { f(*static_cast<const ascii_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const boolean_type_impl*>(nullptr)) }     -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const byte_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const bytes_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const counter_type_impl*>(nullptr)) }     -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const date_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const decimal_type_impl*>(nullptr)) }     -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const double_type_impl*>(nullptr)) }      -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const duration_type_impl*>(nullptr)) }    -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const empty_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const float_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const inet_addr_type_impl*>(nullptr)) }   -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const int32_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const list_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const long_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const map_type_impl*>(nullptr)) }         -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const reversed_type_impl*>(nullptr)) }    -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const set_type_impl*>(nullptr)) }         -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const short_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const simple_date_type_impl*>(nullptr)) } -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const time_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const timestamp_type_impl*>(nullptr)) }   -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const timeuuid_type_impl*>(nullptr)) }    -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const tuple_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const user_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const utf8_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const uuid_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const varint_type_impl*>(nullptr)) }      -> std::same_as<visit_ret_type<Func>>;
+};
+
+template<typename Func>
+requires CanHandleAllTypes<Func>
+static inline visit_ret_type<Func> visit(const abstract_type& t, Func&& f) {
+    switch (t.get_kind()) {
+    case abstract_type::kind::ascii:
+        return f(*static_cast<const ascii_type_impl*>(&t));
+    case abstract_type::kind::boolean:
+        return f(*static_cast<const boolean_type_impl*>(&t));
+    case abstract_type::kind::byte:
+        return f(*static_cast<const byte_type_impl*>(&t));
+    case abstract_type::kind::bytes:
+        return f(*static_cast<const bytes_type_impl*>(&t));
+    case abstract_type::kind::counter:
+        return f(*static_cast<const counter_type_impl*>(&t));
+    case abstract_type::kind::date:
+        return f(*static_cast<const date_type_impl*>(&t));
+    case abstract_type::kind::decimal:
+        return f(*static_cast<const decimal_type_impl*>(&t));
+    case abstract_type::kind::double_kind:
+        return f(*static_cast<const double_type_impl*>(&t));
+    case abstract_type::kind::duration:
+        return f(*static_cast<const duration_type_impl*>(&t));
+    case abstract_type::kind::empty:
+        return f(*static_cast<const empty_type_impl*>(&t));
+    case abstract_type::kind::float_kind:
+        return f(*static_cast<const float_type_impl*>(&t));
+    case abstract_type::kind::inet:
+        return f(*static_cast<const inet_addr_type_impl*>(&t));
+    case abstract_type::kind::int32:
+        return f(*static_cast<const int32_type_impl*>(&t));
+    case abstract_type::kind::list:
+        return f(*static_cast<const list_type_impl*>(&t));
+    case abstract_type::kind::long_kind:
+        return f(*static_cast<const long_type_impl*>(&t));
+    case abstract_type::kind::map:
+        return f(*static_cast<const map_type_impl*>(&t));
+    case abstract_type::kind::reversed:
+        return f(*static_cast<const reversed_type_impl*>(&t));
+    case abstract_type::kind::set:
+        return f(*static_cast<const set_type_impl*>(&t));
+    case abstract_type::kind::short_kind:
+        return f(*static_cast<const short_type_impl*>(&t));
+    case abstract_type::kind::simple_date:
+        return f(*static_cast<const simple_date_type_impl*>(&t));
+    case abstract_type::kind::time:
+        return f(*static_cast<const time_type_impl*>(&t));
+    case abstract_type::kind::timestamp:
+        return f(*static_cast<const timestamp_type_impl*>(&t));
+    case abstract_type::kind::timeuuid:
+        return f(*static_cast<const timeuuid_type_impl*>(&t));
+    case abstract_type::kind::tuple:
+        return f(*static_cast<const tuple_type_impl*>(&t));
+    case abstract_type::kind::user:
+        return f(*static_cast<const user_type_impl*>(&t));
+    case abstract_type::kind::utf8:
+        return f(*static_cast<const utf8_type_impl*>(&t));
+    case abstract_type::kind::uuid:
+        return f(*static_cast<const uuid_type_impl*>(&t));
+    case abstract_type::kind::varint:
+        return f(*static_cast<const varint_type_impl*>(&t));
+    }
+    __builtin_unreachable();
+}
+
+template <typename Func> struct data_value_visitor {
+    const void* v;
+    Func& f;
+    auto operator()(const empty_type_impl& t) { return f(t, v); }
+    auto operator()(const counter_type_impl& t) { return f(t, v); }
+    auto operator()(const reversed_type_impl& t) { return f(t, v); }
+    template <typename T> auto operator()(const T& t) {
+        return f(t, reinterpret_cast<const typename T::native_type*>(v));
+    }
+};
+
+// Given an abstract_type and a void pointer to an object of that
+// type, call f with the runtime type of t and v casted to the
+// corresponding native type.
+// This takes an abstract_type and a void pointer instead of a
+// data_value to support reversed_type_impl without requiring that
+// each visitor create a new data_value just to recurse.
+template <typename Func> inline auto visit(const abstract_type& t, const void* v, Func&& f) {
+    return ::visit(t, data_value_visitor<Func>{v, f});
+}
+
+template <typename Func> inline auto visit(const data_value& v, Func&& f) {
+    return ::visit(*v.type(), v._value, f);
+}
+
+
+#include <iterator>
+#include <boost/regex.hpp>
+
+#include <yaml-cpp/yaml.h>
+#include <boost/any.hpp>
+
+#include <seastar/core/coroutine.hh>
+#include <seastar/core/smp.hh>
+
+#include "config_file.hh"
+
+#include <seastar/json/json_elements.hh>
+
+namespace YAML {
+
+/*
+ * Add converters as needed here...
+ *
+ * TODO: Maybe we should just define all node conversionas as "lexical_cast".
+ * However, vanilla yamp-cpp does some special treatment of scalar types,
+ * mainly inf handling etc. Hm.
+ */
+template<>
+struct convert<seastar::sstring> {
+    static bool decode(const Node& node, sstring& rhs) {
+        std::string tmp;
+        if (!convert<std::string>::decode(node, tmp)) {
+            return false;
+        }
+        rhs = tmp;
+        return true;
+    }
+};
+
+template<typename K, typename V, typename... Rest>
+struct convert<std::unordered_map<K, V, Rest...>> {
+    using map_type = std::unordered_map<K, V, Rest...>;
+
+    static bool decode(const Node& node, map_type& rhs) {
+        if (!node.IsMap()) {
+            return false;
+        }
+        rhs.clear();
+        for (auto& n : node) {
+            rhs[n.first.as<K>()] = n.second.as<V>();
+        }
+        return true;
+    }
+};
+
+}
+
+namespace std {
+
+template<typename K, typename V, typename... Args>
+std::istream& operator>>(std::istream&, std::unordered_map<K, V, Args...>&);
+
+template<>
+std::istream& operator>>(std::istream&, std::unordered_map<seastar::sstring, seastar::sstring>&);
+
+template<typename V, typename... Args>
+std::istream& operator>>(std::istream&, std::vector<V, Args...>&);
+
+template<>
+std::istream& operator>>(std::istream&, std::vector<seastar::sstring>&);
+
+extern template
+std::istream& operator>>(std::istream&, std::vector<seastar::sstring>&);
+
+template<typename K, typename V, typename... Args>
+std::istream& operator>>(std::istream& is, std::unordered_map<K, V, Args...>& map) {
+    std::unordered_map<sstring, sstring> tmp;
+    is >> tmp;
+
+    for (auto& p : tmp) {
+        map[boost::lexical_cast<K>(p.first)] = boost::lexical_cast<V>(p.second);
+    }
+    return is;
+}
+
+template<typename V, typename... Args>
+std::istream& operator>>(std::istream& is, std::vector<V, Args...>& dst) {
+    std::vector<seastar::sstring> tmp;
+    is >> tmp;
+    for (auto& v : tmp) {
+        dst.emplace_back(boost::lexical_cast<V>(v));
+    }
+    return is;
+}
+
+template<typename K, typename V, typename... Args>
+void validate(boost::any& out, const std::vector<std::string>& in, std::unordered_map<K, V, Args...>*, int utf8) {
+    using map_type = std::unordered_map<K, V, Args...>;
+
+    if (out.empty()) {
+        out = boost::any(map_type());
+    }
+
+    static const boost::regex key(R"foo((?:^|\:)([^=:]+)=)foo");
+
+    auto* p = boost::any_cast<map_type>(&out);
+    for (const auto& s : in) {
+        boost::sregex_iterator i(s.begin(), s.end(), key), e;
+
+        if (i == e) {
+            throw boost::program_options::invalid_option_value(s);
+        }
+
+        while (i != e) {
+            auto k = (*i)[1].str();
+            auto vs = s.begin() + i->position() + i->length();
+            auto ve = s.end();
+
+            if (++i != e) {
+                ve = s.begin() + i->position();
+            }
+
+            (*p)[boost::lexical_cast<K>(k)] = boost::lexical_cast<V>(sstring(vs, ve));
+        }
+    }
+}
+
+}
+
+namespace utils {
+
+namespace {
+
+/*
+ * Our own bpo::typed_valye.
+ * Only difference is that we _don't_ apply defaults (they are already applied)
+ * Needed to make aliases work properly.
+ */
+template<class T, class charT = char>
+class typed_value_ex : public bpo::typed_value<T, charT> {
+public:
+    typedef bpo::typed_value<T, charT> _Super;
+
+    typed_value_ex()
+        : _Super(nullptr)
+    {}
+    bool apply_default(boost::any& value_store) const override {
+        return false;
+    }
+};
+
+
+template <typename T>
+void maybe_multitoken(typed_value_ex<T>* r) {
+}
+
+template <typename T>
+void maybe_multitoken(std::vector<typed_value_ex<T>>* r) {
+    r->multitoken();
+}
+
+template<class T>
+inline typed_value_ex<T>* value_ex() {
+    typed_value_ex<T>* r = new typed_value_ex<T>();
+    maybe_multitoken(r);
+    return r;
+}
+
+}
+
+sstring hyphenate(const std::string_view&);
+
+}
+
+template<typename T>
+void utils::config_file::named_value<T>::add_command_line_option(boost::program_options::options_description_easy_init& init) {
+    const auto hyphenated_name = hyphenate(name());
+    // NOTE. We are not adding default values. We could, but must in that case manually (in some way) geenrate the textual
+    // version, since the available ostream operators for things like pairs and collections don't match what we can deal with parser-wise.
+    // See removed ostream operators above.
+    init(hyphenated_name.data(), value_ex<T>()->notifier([this](T new_val) { set(std::move(new_val), config_source::CommandLine); }), desc().data());
+
+    if (!alias().empty()) {
+        const auto alias_desc = fmt::format("Alias for {}", hyphenated_name);
+        init(hyphenate(alias()).data(), value_ex<T>()->notifier([this](T new_val) { set(std::move(new_val), config_source::CommandLine); }), alias_desc.data());
+    }
+}
+
+template<typename T>
+void utils::config_file::named_value<T>::set_value(const YAML::Node& node) {
+    if (_source == config_source::SettingsFile && _liveness != liveness::LiveUpdate) {
+        // FIXME: warn if different?
+        return;
+    }
+    (*this)(node.as<T>());
+    _source = config_source::SettingsFile;
+}
+
+template<typename T>
+bool utils::config_file::named_value<T>::set_value(sstring value, config_source src) {
+    if (_liveness != liveness::LiveUpdate) {
+        return false;
+    }
+
+    (*this)(boost::lexical_cast<T>(value), src);
+    return true;
+}
+
+template<typename T>
+future<> utils::config_file::named_value<T>::set_value_on_all_shards(const YAML::Node& node) {
+    if (_source == config_source::SettingsFile && _liveness != liveness::LiveUpdate) {
+        // FIXME: warn if different?
+        co_return;
+    }
+    co_await smp::invoke_on_all([this, value = node.as<T>()] () {
+        (*this)(value);
+    });
+    _source = config_source::SettingsFile;
+}
+
+template<typename T>
+future<bool> utils::config_file::named_value<T>::set_value_on_all_shards(sstring value, config_source src) {
+    if (_liveness != liveness::LiveUpdate) {
+        co_return false;
+    }
+
+    co_await smp::invoke_on_all([this, value = boost::lexical_cast<T>(value), src] () {
+        (*this)(value, src);
+    });
+    co_return true;
+}
+
+
+
+#include "mutation/mutation_partition_visitor.hh"
+#include "mutation/atomic_cell.hh"
+#include "schema/schema.hh" // temporary: bring in definition of `column_kind`
+
+class schema;
+class row;
+class mutation_partition;
+class column_mapping;
+class deletable_row;
+class column_definition;
+class abstract_type;
+class atomic_cell_or_collection;
+
+// Mutation partition visitor which applies visited data into
+// existing mutation_partition. The visited data may be of a different schema.
+// Data which is not representable in the new schema is dropped.
+// Weak exception guarantees.
+class converting_mutation_partition_applier : public mutation_partition_visitor {
+    const schema& _p_schema;
+    mutation_partition& _p;
+    const column_mapping& _visited_column_mapping;
+    deletable_row* _current_row;
+private:
+    static bool is_compatible(const column_definition& new_def, const abstract_type& old_type, column_kind kind);
+    static atomic_cell upgrade_cell(const abstract_type& new_type, const abstract_type& old_type, atomic_cell_view cell,
+                                    atomic_cell::collection_member cm = atomic_cell::collection_member::no);
+    static void accept_cell(row& dst, column_kind kind, const column_definition& new_def, const abstract_type& old_type, atomic_cell_view cell);
+    static void accept_cell(row& dst, column_kind kind, const column_definition& new_def, const abstract_type& old_type, collection_mutation_view cell);public:
+    converting_mutation_partition_applier(
+            const column_mapping& visited_column_mapping,
+            const schema& target_schema,
+            mutation_partition& target);
+    virtual void accept_partition_tombstone(tombstone t) override;
+    void accept_static_cell(column_id id, atomic_cell cell);
+    virtual void accept_static_cell(column_id id, atomic_cell_view cell) override;
+    virtual void accept_static_cell(column_id id, collection_mutation_view collection) override;
+    virtual void accept_row_tombstone(const range_tombstone& rt) override;
+    virtual void accept_row(position_in_partition_view key, const row_tombstone& deleted_at, const row_marker& rm, is_dummy dummy, is_continuous continuous) override;
+    void accept_row_cell(column_id id, atomic_cell cell);
+    virtual void accept_row_cell(column_id id, atomic_cell_view cell) override;
+    virtual void accept_row_cell(column_id id, collection_mutation_view collection) override;
+
+    // Appends the cell to dst upgrading it to the new schema.
+    // Cells must have monotonic names.
+    static void append_cell(row& dst, column_kind kind, const column_definition& new_def, const column_definition& old_def, const atomic_cell_or_collection& cell);
+};
+
+
+#include <vector>
+
+#include <boost/algorithm/string/join.hpp>
+#include <boost/range/adaptor/transformed.hpp>
+
+#include <seastar/core/sstring.hh>
+
+#include "cql3/column_identifier.hh"
+#include "cql3/CqlParser.hpp"
+#include "cql3/error_collector.hh"
+#include "cql3/statements/raw/select_statement.hh"
+
+namespace cql3 {
+
+namespace util {
+
+
+void do_with_parser_impl(const sstring_view& cql, noncopyable_function<void (cql3_parser::CqlParser& p)> func);
+
+template <typename Func, typename Result = std::result_of_t<Func(cql3_parser::CqlParser&)>>
+Result do_with_parser(const sstring_view& cql, Func&& f) {
+    std::optional<Result> ret;
+    do_with_parser_impl(cql, [&] (cql3_parser::CqlParser& parser) {
+        ret.emplace(f(parser));
+    });
+    return std::move(*ret);
+}
+
+sstring relations_to_where_clause(const expr::expression& e);
+
+expr::expression where_clause_to_relations(const sstring_view& where_clause);
+
+sstring rename_column_in_where_clause(const sstring_view& where_clause, column_identifier::raw from, column_identifier::raw to);
+
+/// build a CQL "select" statement with the desired parameters.
+/// If select_all_columns==true, all columns are selected and the value of
+/// selected_columns is ignored.
+std::unique_ptr<cql3::statements::raw::select_statement> build_select_statement(
+        const sstring_view& cf_name,
+        const sstring_view& where_clause,
+        bool select_all_columns,
+        const std::vector<column_definition>& selected_columns);
+
+/// maybe_quote() takes an identifier - the name of a column, table or
+/// keyspace name - and transforms it to a string which can be used in CQL
+/// commands. Namely, if the identifier is not entirely lower-case (including
+/// digits and underscores), it needs to be quoted to be represented in CQL.
+/// Without this quoting, CQL folds uppercase letters to lower case, and
+/// forbids non-alpha-numeric characters in identifier names.
+/// Quoting involves wrapping the string in double-quotes ("). A double-quote
+/// character itself is quoted by doubling it.
+/// maybe_quote() also quotes reserved CQL keywords (e.g., "to", "where")
+/// but doesn't quote *unreserved* keywords (like ttl, int or as).
+/// Note that this means that if new reserved keywords are added to the
+/// parser, a saved output of maybe_quote() may no longer be parsable by
+/// parser. To avoid this forward-compatibility issue, use quote() instead
+/// of maybe_quote() - to unconditionally quote an identifier even if it is
+/// lowercase and not (yet) a keyword.
+inline sstring maybe_quote(const sstring& s) { return s; }
+
+/// quote() takes an identifier - the name of a column, table or keyspace -
+/// and transforms it to a string which can be safely used in CQL commands.
+/// Quoting involves wrapping the name in double-quotes ("). A double-quote
+/// character itself is quoted by doubling it.
+/// Quoting is necessary when the identifier contains non-alpha-numeric
+/// characters, when it contains uppercase letters (which will be folded to
+/// lowercase if not quoted), or when the identifier is one of many CQL
+/// keywords. But it's allowed - and easier - to just unconditionally
+/// quote the identifier name in CQL, so that is what this function does does.
+sstring quote(const sstring& s);
+
+/// single_quote() takes a string and transforms it to a string 
+/// which can be safely used in CQL commands.
+/// Single quoting involves wrapping the name in single-quotes ('). A sigle-quote
+/// character itself is quoted by doubling it.
+/// Single quoting is necessary for dates, IP addresses or string literals.
+inline sstring single_quote(const sstring& s) { return s; }
+
+// Check whether timestamp is not too far in the future as this probably
+// indicates its incorrectness (for example using other units than microseconds).
+void validate_timestamp(const db::config& config, const query_options& options, const std::unique_ptr<attributes>& attrs);
+
+} // namespace util
+
+} // namespace cql3
+
+#include <cstdint>
+#include <array>
+
+/*
+ * Let t_i be the following polynomial depending on i and u:
+ *
+ *   t_i(x, u) = x^(u * 2^(i+3))
+ *
+ * where:
+ *
+ *   u in { 0, 1 }
+ *
+ * Let g_k be a multiplication modulo G(x) of t_i(x) for 8 consecutive values of i and 8 values of u (u0 ... u7):
+ *
+ *   g_k(x, u0, u1, ..., u7) = t_(k+0)(x, u_0) * t_(k+1)(x, u_1) * ... * t_(k+7)(x, u_7) mod G(x)
+ *
+ * The tables below contain representations of g_k(x) polynomials, where the bits of the index
+ * correspond to coefficients of u:
+ *
+ * crc32_x_pow_radix_8_table_base_<k>[u] = g_k(x, (u >> 0) & 1,
+ *                                                (u >> 1) & 1,
+ *                                                (u >> 2) & 1,
+ *                                                (u >> 3) & 1,
+ *                                                (u >> 4) & 1,
+ *                                                (u >> 5) & 1,
+ *                                                (u >> 6) & 1,
+ *                                                (u >> 7) & 1)
+ */
+extern std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_0;
+extern std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_8;
+extern std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_16;
+extern std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_24;
+
 #include <cryptopp/md5.h>
 #include <cryptopp/sha.h>
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
 #include <ctype.h>
-#include "db_clock.hh"
+#include "clocks-impl.hh"
+#include "gc_clock.hh"
+
+/* For debugging and log messages. */
+template <>
+struct fmt::formatter<db_clock::time_point> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const db_clock::time_point& tp, FormatContext& ctx) const {
+        auto t = db_clock::to_time_t(tp);
+        return fmt::format_to(ctx.out(), "{:%Y/%m/%d %T}", fmt::gmtime(t));
+    }
+};
+
 #include "db/config.hh"
 #include "db/marshal/type_parser.hh"
 #include "db/paxos_grace_seconds_extension.hh"
