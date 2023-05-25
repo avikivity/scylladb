@@ -42840,6 +42840,8282 @@ future<> consume_partitions(flat_mutation_reader_v2& reader, Consumer consumer) 
 using reader_consumer_v2 = noncopyable_function<future<> (flat_mutation_reader_v2)>;
 
 
+namespace ser {
+
+
+template <typename Output>
+void serializer<counter_id>::write(Output& buf, const counter_id& obj) {
+  static_assert(is_equivalent<decltype(obj.uuid()), utils::UUID>::value, "member value has a wrong type");
+  serialize(buf, obj.uuid());
+}
+
+
+template <typename Input>
+counter_id serializer<counter_id>::read(Input& buf) {
+ return seastar::with_serialized_stream(buf, [] (auto& buf) {
+  auto& in = buf;
+  auto __local_0 = deserialize(in, boost::type<utils::UUID>());
+
+  counter_id res {std::move(__local_0)};
+  return res;
+ });
+}
+
+
+template <typename Input>
+void serializer<counter_id>::skip(Input& buf) {
+ seastar::with_serialized_stream(buf, [] (auto& buf) {
+  ser::skip(buf, boost::type<utils::UUID>());
+ });
+}
+
+
+template <typename Output>
+void serializer<counter_shard>::write(Output& buf, const counter_shard& obj) {
+  static_assert(is_equivalent<decltype(obj.id()), counter_id>::value, "member value has a wrong type");
+  serialize(buf, obj.id());
+  static_assert(is_equivalent<decltype(obj.value()), int64_t>::value, "member value has a wrong type");
+  serialize(buf, obj.value());
+  static_assert(is_equivalent<decltype(obj.logical_clock()), int64_t>::value, "member value has a wrong type");
+  serialize(buf, obj.logical_clock());
+}
+
+
+template <typename Input>
+counter_shard serializer<counter_shard>::read(Input& buf) {
+ return seastar::with_serialized_stream(buf, [] (auto& buf) {
+  auto& in = buf;
+  auto __local_0 = deserialize(in, boost::type<counter_id>());
+  auto __local_1 = deserialize(in, boost::type<int64_t>());
+  auto __local_2 = deserialize(in, boost::type<int64_t>());
+
+  counter_shard res {std::move(__local_0), std::move(__local_1), std::move(__local_2)};
+  return res;
+ });
+}
+
+
+template <typename Input>
+void serializer<counter_shard>::skip(Input& buf) {
+ seastar::with_serialized_stream(buf, [] (auto& buf) {
+  ser::skip(buf, boost::type<counter_id>());
+  ser::skip(buf, boost::type<int64_t>());
+  ser::skip(buf, boost::type<int64_t>());
+ });
+}
+
+
+template <typename Output>
+void serializer<tombstone>::write(Output& buf, const tombstone& obj) {
+  set_size(buf, obj);
+  static_assert(is_equivalent<decltype(obj.timestamp), api::timestamp_type>::value, "member value has a wrong type");
+  serialize(buf, obj.timestamp);
+  static_assert(is_equivalent<decltype(obj.deletion_time), gc_clock::time_point>::value, "member value has a wrong type");
+  serialize(buf, obj.deletion_time);
+}
+
+
+template <typename Input>
+tombstone serializer<tombstone>::read(Input& buf) {
+ return seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  auto in = buf.read_substream(size - sizeof(size_type));
+  auto __local_0 = deserialize(in, boost::type<api::timestamp_type>());
+  auto __local_1 = deserialize(in, boost::type<gc_clock::time_point>());
+
+  tombstone res {std::move(__local_0), std::move(__local_1)};
+  return res;
+ });
+}
+
+
+template <typename Input>
+void serializer<tombstone>::skip(Input& buf) {
+ seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  buf.skip(size - sizeof(size_type));
+ });
+}
+
+
+template <typename Output>
+void serializer<bound_kind>::write(Output& buf, const bound_kind& v) {
+  serialize(buf, static_cast<uint8_t>(v));
+}
+
+
+template<typename Input>
+bound_kind serializer<bound_kind>::read(Input& buf) {
+  return static_cast<bound_kind>(deserialize(buf, boost::type<uint8_t>()));
+}
+
+
+template <typename Output>
+void serializer<range_tombstone>::write(Output& buf, const range_tombstone& obj) {
+  set_size(buf, obj);
+  static_assert(is_equivalent<decltype(obj.start), clustering_key_prefix>::value, "member value has a wrong type");
+  serialize(buf, obj.start);
+  static_assert(is_equivalent<decltype(obj.tomb), tombstone>::value, "member value has a wrong type");
+  serialize(buf, obj.tomb);
+  static_assert(is_equivalent<decltype(obj.start_kind), bound_kind>::value, "member value has a wrong type");
+  serialize(buf, obj.start_kind);
+  static_assert(is_equivalent<decltype(obj.end), clustering_key_prefix>::value, "member value has a wrong type");
+  serialize(buf, obj.end);
+  static_assert(is_equivalent<decltype(obj.end_kind), bound_kind>::value, "member value has a wrong type");
+  serialize(buf, obj.end_kind);
+}
+
+
+template <typename Input>
+range_tombstone serializer<range_tombstone>::read(Input& buf) {
+ return seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  auto in = buf.read_substream(size - sizeof(size_type));
+  auto __local_0 = deserialize(in, boost::type<clustering_key_prefix>());
+  auto __local_1 = deserialize(in, boost::type<tombstone>());
+  auto __local_2 = (in.size()>0) ?
+    deserialize(in, boost::type<bound_kind>()) : bound_kind::incl_start;
+  auto __local_3 = (in.size()>0) ?
+    deserialize(in, boost::type<clustering_key_prefix>()) : __local_0;
+  auto __local_4 = (in.size()>0) ?
+    deserialize(in, boost::type<bound_kind>()) : bound_kind::incl_end;
+
+  range_tombstone res {std::move(__local_0), std::move(__local_1), std::move(__local_2), std::move(__local_3), std::move(__local_4)};
+  return res;
+ });
+}
+
+
+template <typename Input>
+void serializer<range_tombstone>::skip(Input& buf) {
+ seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  buf.skip(size - sizeof(size_type));
+ });
+}
+
+
+template <typename Output>
+void serializer<column_mapping_entry>::write(Output& buf, const column_mapping_entry& obj) {
+  set_size(buf, obj);
+  static_assert(is_equivalent<decltype(obj.name()), bytes>::value, "member value has a wrong type");
+  serialize(buf, obj.name());
+  static_assert(is_equivalent<decltype(obj.type_name()), sstring>::value, "member value has a wrong type");
+  serialize(buf, obj.type_name());
+}
+
+
+template <typename Input>
+column_mapping_entry serializer<column_mapping_entry>::read(Input& buf) {
+ return seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  auto in = buf.read_substream(size - sizeof(size_type));
+  auto __local_0 = deserialize(in, boost::type<bytes>());
+  auto __local_1 = deserialize(in, boost::type<sstring>());
+
+  column_mapping_entry res {std::move(__local_0), std::move(__local_1)};
+  return res;
+ });
+}
+
+
+template <typename Input>
+void serializer<column_mapping_entry>::skip(Input& buf) {
+ seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  buf.skip(size - sizeof(size_type));
+ });
+}
+
+
+template <typename Output>
+void serializer<column_mapping>::write(Output& buf, const column_mapping& obj) {
+  set_size(buf, obj);
+  static_assert(is_equivalent<decltype(obj.columns()), std::vector<column_mapping_entry>>::value, "member value has a wrong type");
+  serialize(buf, obj.columns());
+  static_assert(is_equivalent<decltype(obj.n_static()), uint32_t>::value, "member value has a wrong type");
+  serialize(buf, obj.n_static());
+}
+
+
+template <typename Input>
+column_mapping serializer<column_mapping>::read(Input& buf) {
+ return seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  auto in = buf.read_substream(size - sizeof(size_type));
+  auto __local_0 = deserialize(in, boost::type<std::vector<column_mapping_entry>>());
+  auto __local_1 = deserialize(in, boost::type<uint32_t>());
+
+  column_mapping res {std::move(__local_0), std::move(__local_1)};
+  return res;
+ });
+}
+
+
+template <typename Input>
+void serializer<column_mapping>::skip(Input& buf) {
+ seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  buf.skip(size - sizeof(size_type));
+ });
+}
+
+
+template <typename Output>
+void serializer<partition_end>::write(Output& buf, const partition_end& obj) {
+  set_size(buf, obj);
+}
+
+
+template <typename Input>
+partition_end serializer<partition_end>::read(Input& buf) {
+ return seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  buf.skip(size - sizeof(size_type));
+
+  partition_end res {};
+  return res;
+ });
+}
+
+
+template <typename Input>
+void serializer<partition_end>::skip(Input& buf) {
+ seastar::with_serialized_stream(buf, [] (auto& buf) {
+  size_type size = deserialize(buf, boost::type<size_type>());
+  buf.skip(size - sizeof(size_type));
+ });
+}
+struct counter_cell_full_view {
+    utils::input_stream v;
+    
+
+    auto shards() const {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+       auto in = v;
+       
+       return vector_deserializer<counter_shard>(in);
+      });
+    }
+
+};
+
+template<>
+struct serializer<counter_cell_full_view> {
+    template<typename Input>
+    static counter_cell_full_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return counter_cell_full_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, counter_cell_full_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto& in = v;
+       
+       ser::skip(in, boost::type<std::vector<counter_shard>>());
+      });
+    }
+};
+
+struct counter_cell_update_view {
+    utils::input_stream v;
+    
+
+    auto delta() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<int64_t>())) {
+       std::ignore = this;
+       auto in = v;
+       
+       return deserialize(in, boost::type<int64_t>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<counter_cell_update_view> {
+    template<typename Input>
+    static counter_cell_update_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return counter_cell_update_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, counter_cell_update_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto& in = v;
+       
+       ser::skip(in, boost::type<int64_t>());
+      });
+    }
+};
+
+struct live_cell_view {
+    utils::input_stream v;
+    
+
+    auto created_at() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<api::timestamp_type>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<api::timestamp_type>());
+      });
+    }
+
+
+    auto value() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<bytes>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<api::timestamp_type>());
+       return deserialize(in, boost::type<bytes>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<live_cell_view> {
+    template<typename Input>
+    static live_cell_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return live_cell_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, live_cell_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct live_marker_view {
+    utils::input_stream v;
+    
+
+    auto created_at() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<api::timestamp_type>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<api::timestamp_type>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<live_marker_view> {
+    template<typename Input>
+    static live_marker_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return live_marker_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, live_marker_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct no_marker_view {
+    utils::input_stream v;
+    
+};
+
+template<>
+struct serializer<no_marker_view> {
+    template<typename Input>
+    static no_marker_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return no_marker_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, no_marker_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        
+      });
+    }
+};
+
+struct tombstone_view {
+    utils::input_stream v;
+    
+
+    operator tombstone() const {
+       auto in = v;
+       return deserialize(in, boost::type<tombstone>());
+    }
+
+
+    auto timestamp() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<api::timestamp_type>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<api::timestamp_type>());
+      });
+    }
+
+
+    auto deletion_time() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<gc_clock::time_point>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<api::timestamp_type>());
+       return deserialize(in, boost::type<gc_clock::time_point>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<tombstone_view> {
+    template<typename Input>
+    static tombstone_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return tombstone_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, tombstone_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+
+template<typename Input>
+inline void skip(Input& v, boost::type<boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>>) {
+  return seastar::with_serialized_stream(v, [] (auto& v) {
+    size_type ln = deserialize(v, boost::type<size_type>());
+    v.skip(ln - sizeof(size_type));
+  });
+}
+
+template<typename Input>
+boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type> deserialize(Input& v, boost::type<boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>>) {
+  return seastar::with_serialized_stream(v, [] (auto& v) {
+    auto in = v;
+    deserialize(in, boost::type<size_type>());
+    size_type o = deserialize(in, boost::type<size_type>());
+    
+
+    if (o == 0) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>(deserialize(v, boost::type<counter_cell_full_view>()));
+    }
+
+    if (o == 1) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>(deserialize(v, boost::type<counter_cell_update_view>()));
+    }
+    return boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>(deserialize(v, boost::type<unknown_variant_type>()));
+  });
+}
+struct counter_cell_view {
+    utils::input_stream v;
+    
+
+    auto created_at() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<api::timestamp_type>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<api::timestamp_type>());
+      });
+    }
+
+
+    auto value() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<api::timestamp_type>());
+       return deserialize(in, boost::type<boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<counter_cell_view> {
+    template<typename Input>
+    static counter_cell_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return counter_cell_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, counter_cell_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct dead_cell_view {
+    utils::input_stream v;
+    
+
+    auto tomb() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<tombstone_view>())) {
+       std::ignore = this;
+       auto in = v;
+       
+       return deserialize(in, boost::type<tombstone_view>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<dead_cell_view> {
+    template<typename Input>
+    static dead_cell_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return dead_cell_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, dead_cell_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto& in = v;
+       
+       ser::skip(in, boost::type<tombstone_view>());
+      });
+    }
+};
+
+struct dead_marker_view {
+    utils::input_stream v;
+    
+
+    auto tomb() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<tombstone_view>())) {
+       std::ignore = this;
+       auto in = v;
+       
+       return deserialize(in, boost::type<tombstone_view>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<dead_marker_view> {
+    template<typename Input>
+    static dead_marker_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return dead_marker_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, dead_marker_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto& in = v;
+       
+       ser::skip(in, boost::type<tombstone_view>());
+      });
+    }
+};
+
+struct expiring_cell_view {
+    utils::input_stream v;
+    
+
+    auto ttl() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<gc_clock::duration>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<gc_clock::duration>());
+      });
+    }
+
+
+    auto expiry() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<gc_clock::time_point>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<gc_clock::duration>());
+       return deserialize(in, boost::type<gc_clock::time_point>());
+      });
+    }
+
+
+    auto c() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<live_cell_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<gc_clock::duration>());
+       ser::skip(in, boost::type<gc_clock::time_point>());
+       return deserialize(in, boost::type<live_cell_view>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<expiring_cell_view> {
+    template<typename Input>
+    static expiring_cell_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return expiring_cell_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, expiring_cell_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct expiring_marker_view {
+    utils::input_stream v;
+    
+
+    auto lm() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<live_marker_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<live_marker_view>());
+      });
+    }
+
+
+    auto ttl() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<gc_clock::duration>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<live_marker_view>());
+       return deserialize(in, boost::type<gc_clock::duration>());
+      });
+    }
+
+
+    auto expiry() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<gc_clock::time_point>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<live_marker_view>());
+       ser::skip(in, boost::type<gc_clock::duration>());
+       return deserialize(in, boost::type<gc_clock::time_point>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<expiring_marker_view> {
+    template<typename Input>
+    static expiring_marker_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return expiring_marker_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, expiring_marker_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct partition_start_view {
+    utils::input_stream v;
+    
+
+    auto key() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<partition_key>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<partition_key>());
+      });
+    }
+
+
+    auto partition_tombstone() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<tombstone_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<partition_key>());
+       return deserialize(in, boost::type<tombstone_view>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<partition_start_view> {
+    template<typename Input>
+    static partition_start_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return partition_start_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, partition_start_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct range_tombstone_view {
+    utils::input_stream v;
+    
+
+    operator range_tombstone() const {
+       auto in = v;
+       return deserialize(in, boost::type<range_tombstone>());
+    }
+
+
+    auto start() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<clustering_key_prefix>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<clustering_key_prefix>());
+      });
+    }
+
+
+    auto tomb() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<tombstone_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<clustering_key_prefix>());
+       return deserialize(in, boost::type<tombstone_view>());
+      });
+    }
+
+
+    auto start_kind() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<bound_kind>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<clustering_key_prefix>());
+       ser::skip(in, boost::type<tombstone_view>());
+       return (in.size()>0) ? deserialize(in, boost::type<bound_kind>()) : bound_kind::incl_start;
+      });
+    }
+
+
+    auto end() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<clustering_key_prefix>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<clustering_key_prefix>());
+       ser::skip(in, boost::type<tombstone_view>());
+       ser::skip(in, boost::type<bound_kind>());
+       return (in.size()>0) ? deserialize(in, boost::type<clustering_key_prefix>()) : this->start();
+      });
+    }
+
+
+    auto end_kind() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<bound_kind>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<clustering_key_prefix>());
+       ser::skip(in, boost::type<tombstone_view>());
+       ser::skip(in, boost::type<bound_kind>());
+       ser::skip(in, boost::type<clustering_key_prefix>());
+       return (in.size()>0) ? deserialize(in, boost::type<bound_kind>()) : bound_kind::incl_end;
+      });
+    }
+
+};
+
+template<>
+struct serializer<range_tombstone_view> {
+    template<typename Input>
+    static range_tombstone_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return range_tombstone_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, range_tombstone_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+
+template<typename Input>
+inline void skip(Input& v, boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type>>) {
+  return seastar::with_serialized_stream(v, [] (auto& v) {
+    size_type ln = deserialize(v, boost::type<size_type>());
+    v.skip(ln - sizeof(size_type));
+  });
+}
+
+template<typename Input>
+boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type> deserialize(Input& v, boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type>>) {
+  return seastar::with_serialized_stream(v, [] (auto& v) {
+    auto in = v;
+    deserialize(in, boost::type<size_type>());
+    size_type o = deserialize(in, boost::type<size_type>());
+    
+
+    if (o == 0) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type>(deserialize(v, boost::type<live_cell_view>()));
+    }
+
+    if (o == 1) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type>(deserialize(v, boost::type<expiring_cell_view>()));
+    }
+
+    if (o == 2) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type>(deserialize(v, boost::type<dead_cell_view>()));
+    }
+    return boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type>(deserialize(v, boost::type<unknown_variant_type>()));
+  });
+}
+struct collection_element_view {
+    utils::input_stream v;
+    
+
+    auto key() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<bytes>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<bytes>());
+      });
+    }
+
+
+    auto value() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type>>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<bytes>());
+       return deserialize(in, boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type>>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<collection_element_view> {
+    template<typename Input>
+    static collection_element_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return collection_element_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, collection_element_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct collection_cell_view {
+    utils::input_stream v;
+    
+
+    auto tomb() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<tombstone_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<tombstone_view>());
+      });
+    }
+
+
+    auto elements() const {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<tombstone_view>());
+       return vector_deserializer<collection_element_view>(in);
+      });
+    }
+
+};
+
+template<>
+struct serializer<collection_cell_view> {
+    template<typename Input>
+    static collection_cell_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return collection_cell_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, collection_cell_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+
+template<typename Input>
+inline void skip(Input& v, boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>>) {
+  return seastar::with_serialized_stream(v, [] (auto& v) {
+    size_type ln = deserialize(v, boost::type<size_type>());
+    v.skip(ln - sizeof(size_type));
+  });
+}
+
+template<typename Input>
+boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type> deserialize(Input& v, boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>>) {
+  return seastar::with_serialized_stream(v, [] (auto& v) {
+    auto in = v;
+    deserialize(in, boost::type<size_type>());
+    size_type o = deserialize(in, boost::type<size_type>());
+    
+
+    if (o == 0) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>(deserialize(v, boost::type<live_cell_view>()));
+    }
+
+    if (o == 1) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>(deserialize(v, boost::type<expiring_cell_view>()));
+    }
+
+    if (o == 2) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>(deserialize(v, boost::type<dead_cell_view>()));
+    }
+
+    if (o == 3) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>(deserialize(v, boost::type<counter_cell_view>()));
+    }
+    return boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>(deserialize(v, boost::type<unknown_variant_type>()));
+  });
+}
+
+template<typename Input>
+inline void skip(Input& v, boost::type<boost::variant<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>, collection_cell_view, unknown_variant_type>>) {
+  return seastar::with_serialized_stream(v, [] (auto& v) {
+    size_type ln = deserialize(v, boost::type<size_type>());
+    v.skip(ln - sizeof(size_type));
+  });
+}
+
+template<typename Input>
+boost::variant<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>, collection_cell_view, unknown_variant_type> deserialize(Input& v, boost::type<boost::variant<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>, collection_cell_view, unknown_variant_type>>) {
+  return seastar::with_serialized_stream(v, [] (auto& v) {
+    auto in = v;
+    deserialize(in, boost::type<size_type>());
+    size_type o = deserialize(in, boost::type<size_type>());
+    
+
+    if (o == 0) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>, collection_cell_view, unknown_variant_type>(deserialize(v, boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>>()));
+    }
+
+    if (o == 1) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>, collection_cell_view, unknown_variant_type>(deserialize(v, boost::type<collection_cell_view>()));
+    }
+    return boost::variant<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>, collection_cell_view, unknown_variant_type>(deserialize(v, boost::type<unknown_variant_type>()));
+  });
+}
+struct column_view {
+    utils::input_stream v;
+    
+
+    auto id() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<uint32_t>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<uint32_t>());
+      });
+    }
+
+
+    auto c() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<boost::variant<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>, collection_cell_view, unknown_variant_type>>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<uint32_t>());
+       return deserialize(in, boost::type<boost::variant<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>, collection_cell_view, unknown_variant_type>>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<column_view> {
+    template<typename Input>
+    static column_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return column_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, column_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct row_view {
+    utils::input_stream v;
+    
+
+    auto columns() const {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return vector_deserializer<column_view>(in);
+      });
+    }
+
+};
+
+template<>
+struct serializer<row_view> {
+    template<typename Input>
+    static row_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return row_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, row_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+
+template<typename Input>
+inline void skip(Input& v, boost::type<boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>>) {
+  return seastar::with_serialized_stream(v, [] (auto& v) {
+    size_type ln = deserialize(v, boost::type<size_type>());
+    v.skip(ln - sizeof(size_type));
+  });
+}
+
+template<typename Input>
+boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type> deserialize(Input& v, boost::type<boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>>) {
+  return seastar::with_serialized_stream(v, [] (auto& v) {
+    auto in = v;
+    deserialize(in, boost::type<size_type>());
+    size_type o = deserialize(in, boost::type<size_type>());
+    
+
+    if (o == 0) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>(deserialize(v, boost::type<live_marker_view>()));
+    }
+
+    if (o == 1) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>(deserialize(v, boost::type<expiring_marker_view>()));
+    }
+
+    if (o == 2) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>(deserialize(v, boost::type<dead_marker_view>()));
+    }
+
+    if (o == 3) {
+        v.skip(sizeof(size_type)*2);
+        return boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>(deserialize(v, boost::type<no_marker_view>()));
+    }
+    return boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>(deserialize(v, boost::type<unknown_variant_type>()));
+  });
+}
+struct deletable_row_view {
+    utils::input_stream v;
+    
+
+    auto key() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<clustering_key>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<clustering_key>());
+      });
+    }
+
+
+    auto marker() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<clustering_key>());
+       return deserialize(in, boost::type<boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>>());
+      });
+    }
+
+
+    auto deleted_at() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<tombstone_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<clustering_key>());
+       ser::skip(in, boost::type<boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>>());
+       return deserialize(in, boost::type<tombstone_view>());
+      });
+    }
+
+
+    auto cells() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<row_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<clustering_key>());
+       ser::skip(in, boost::type<boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>>());
+       ser::skip(in, boost::type<tombstone_view>());
+       return deserialize(in, boost::type<row_view>());
+      });
+    }
+
+
+    auto shadowable_deleted_at() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<tombstone_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<clustering_key>());
+       ser::skip(in, boost::type<boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>>());
+       ser::skip(in, boost::type<tombstone_view>());
+       ser::skip(in, boost::type<row_view>());
+       return (in.size()>0) ? deserialize(in, boost::type<tombstone_view>()) : this->deleted_at();
+      });
+    }
+
+};
+
+template<>
+struct serializer<deletable_row_view> {
+    template<typename Input>
+    static deletable_row_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return deletable_row_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, deletable_row_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct static_row_view {
+    utils::input_stream v;
+    
+
+    auto cells() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<row_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<row_view>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<static_row_view> {
+    template<typename Input>
+    static static_row_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return static_row_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, static_row_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct clustering_row_view {
+    utils::input_stream v;
+    
+
+    auto row() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<deletable_row_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<deletable_row_view>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<clustering_row_view> {
+    template<typename Input>
+    static clustering_row_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return clustering_row_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, clustering_row_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct mutation_partition_view {
+    utils::input_stream v;
+    
+
+    auto tomb() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<tombstone_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<tombstone_view>());
+      });
+    }
+
+
+    auto static_row() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<row_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<tombstone_view>());
+       return deserialize(in, boost::type<row_view>());
+      });
+    }
+
+
+    auto range_tombstones() const {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<tombstone_view>());
+       ser::skip(in, boost::type<row_view>());
+       return vector_deserializer<range_tombstone_view>(in);
+      });
+    }
+
+
+    auto rows() const {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<tombstone_view>());
+       ser::skip(in, boost::type<row_view>());
+       ser::skip(in, boost::type<std::vector<range_tombstone_view>>());
+       return vector_deserializer<deletable_row_view>(in);
+      });
+    }
+
+};
+
+template<>
+struct serializer<mutation_partition_view> {
+    template<typename Input>
+    static mutation_partition_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return mutation_partition_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, mutation_partition_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct canonical_mutation_view {
+    utils::input_stream v;
+    
+
+    auto table_id() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<::table_id>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<::table_id>());
+      });
+    }
+
+
+    auto schema_version() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<table_schema_version>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<::table_id>());
+       return deserialize(in, boost::type<table_schema_version>());
+      });
+    }
+
+
+    auto key() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<partition_key>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<::table_id>());
+       ser::skip(in, boost::type<table_schema_version>());
+       return deserialize(in, boost::type<partition_key>());
+      });
+    }
+
+
+    auto mapping() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<column_mapping>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<::table_id>());
+       ser::skip(in, boost::type<table_schema_version>());
+       ser::skip(in, boost::type<partition_key>());
+       return deserialize(in, boost::type<column_mapping>());
+      });
+    }
+
+
+    auto partition() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<mutation_partition_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<::table_id>());
+       ser::skip(in, boost::type<table_schema_version>());
+       ser::skip(in, boost::type<partition_key>());
+       ser::skip(in, boost::type<column_mapping>());
+       return deserialize(in, boost::type<mutation_partition_view>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<canonical_mutation_view> {
+    template<typename Input>
+    static canonical_mutation_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return canonical_mutation_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, canonical_mutation_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+struct mutation_view {
+    utils::input_stream v;
+    
+
+    auto table_id() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<::table_id>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<::table_id>());
+      });
+    }
+
+
+    auto schema_version() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<table_schema_version>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<::table_id>());
+       return deserialize(in, boost::type<table_schema_version>());
+      });
+    }
+
+
+    auto key() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<partition_key>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<::table_id>());
+       ser::skip(in, boost::type<table_schema_version>());
+       return deserialize(in, boost::type<partition_key>());
+      });
+    }
+
+
+    auto partition() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<mutation_partition_view>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       ser::skip(in, boost::type<::table_id>());
+       ser::skip(in, boost::type<table_schema_version>());
+       ser::skip(in, boost::type<partition_key>());
+       return deserialize(in, boost::type<mutation_partition_view>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<mutation_view> {
+    template<typename Input>
+    static mutation_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return mutation_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, mutation_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+
+template<typename Input>
+inline void skip(Input& v, boost::type<std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>>) {
+  return seastar::with_serialized_stream(v, [] (auto& v) {
+    size_type ln = deserialize(v, boost::type<size_type>());
+    v.skip(ln - sizeof(size_type));
+  });
+}
+
+template<typename Input>
+std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type> deserialize(Input& v, boost::type<std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>>) {
+  return seastar::with_serialized_stream(v, [] (auto& v) {
+    auto in = v;
+    deserialize(in, boost::type<size_type>());
+    size_type o = deserialize(in, boost::type<size_type>());
+    
+
+    if (o == 0) {
+        v.skip(sizeof(size_type)*2);
+        return std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>(deserialize(v, boost::type<clustering_row_view>()));
+    }
+
+    if (o == 1) {
+        v.skip(sizeof(size_type)*2);
+        return std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>(deserialize(v, boost::type<static_row_view>()));
+    }
+
+    if (o == 2) {
+        v.skip(sizeof(size_type)*2);
+        return std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>(deserialize(v, boost::type<range_tombstone_view>()));
+    }
+
+    if (o == 3) {
+        v.skip(sizeof(size_type)*2);
+        return std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>(deserialize(v, boost::type<partition_start_view>()));
+    }
+
+    if (o == 4) {
+        v.skip(sizeof(size_type)*2);
+        return std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>(deserialize(v, boost::type<partition_end>()));
+    }
+    return std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>(deserialize(v, boost::type<unknown_variant_type>()));
+  });
+}
+struct mutation_fragment_view {
+    utils::input_stream v;
+    
+
+    auto fragment() const {
+      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>>())) {
+       std::ignore = this;
+       auto in = v;
+       ser::skip(in, boost::type<size_type>());
+       return deserialize(in, boost::type<std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>>());
+      });
+    }
+
+};
+
+template<>
+struct serializer<mutation_fragment_view> {
+    template<typename Input>
+    static mutation_fragment_view read(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        auto v_start = v;
+        auto start_size = v.size();
+        skip(v);
+        return mutation_fragment_view{v_start.read_substream(start_size - v.size())};
+      });
+    }
+    template<typename Output>
+    static void write(Output& out, mutation_fragment_view v) {
+        v.v.copy_to(out);
+    }
+    template<typename Input>
+    static void skip(Input& v) {
+      return seastar::with_serialized_stream(v, [] (auto& v) {
+        v.skip(read_frame_size(v));
+      });
+    }
+};
+
+
+////// State holders
+
+template<typename Output>
+struct state_of_counter_cell_full {
+    empty_frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_counter_cell_update {
+    empty_frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_counter_cell {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_counter_cell__value {
+    frame<Output> f;
+    state_of_counter_cell<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_counter_cell__value__counter_cell_full {
+    empty_frame<Output> f;
+    state_of_counter_cell__value<Output> _parent;
+    state_of_counter_cell__value__counter_cell_full(state_of_counter_cell__value<Output> parent) : _parent(parent) {}
+};
+
+template<typename Output>
+struct state_of_counter_cell__value__counter_cell_update {
+    empty_frame<Output> f;
+    state_of_counter_cell__value<Output> _parent;
+    state_of_counter_cell__value__counter_cell_update(state_of_counter_cell__value<Output> parent) : _parent(parent) {}
+};
+
+template<typename Output>
+struct state_of_tombstone {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_live_cell {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_expiring_cell {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_expiring_cell__c {
+    frame<Output> f;
+    state_of_expiring_cell<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_dead_cell {
+    empty_frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_dead_cell__tomb {
+    frame<Output> f;
+    state_of_dead_cell<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_collection_element {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_collection_element__value {
+    frame<Output> f;
+    state_of_collection_element<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_collection_element__value__live_cell {
+    frame<Output> f;
+    state_of_collection_element__value<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_collection_element__value__expiring_cell {
+    frame<Output> f;
+    state_of_collection_element__value<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_collection_element__value__expiring_cell__c {
+    frame<Output> f;
+    state_of_collection_element__value__expiring_cell<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_collection_element__value__dead_cell {
+    empty_frame<Output> f;
+    state_of_collection_element__value<Output> _parent;
+    state_of_collection_element__value__dead_cell(state_of_collection_element__value<Output> parent) : _parent(parent) {}
+};
+
+template<typename Output>
+struct state_of_collection_element__value__dead_cell__tomb {
+    frame<Output> f;
+    state_of_collection_element__value__dead_cell<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_collection_cell {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_collection_cell__tomb {
+    frame<Output> f;
+    state_of_collection_cell<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_column {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_column__c {
+    frame<Output> f;
+    state_of_column<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_column__c__variant {
+    frame<Output> f;
+    state_of_column__c<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_column__c__variant__live_cell {
+    frame<Output> f;
+    state_of_column__c__variant<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_column__c__variant__expiring_cell {
+    frame<Output> f;
+    state_of_column__c__variant<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_column__c__variant__expiring_cell__c {
+    frame<Output> f;
+    state_of_column__c__variant__expiring_cell<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_column__c__variant__dead_cell {
+    empty_frame<Output> f;
+    state_of_column__c__variant<Output> _parent;
+    state_of_column__c__variant__dead_cell(state_of_column__c__variant<Output> parent) : _parent(parent) {}
+};
+
+template<typename Output>
+struct state_of_column__c__variant__dead_cell__tomb {
+    frame<Output> f;
+    state_of_column__c__variant__dead_cell<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_column__c__variant__counter_cell {
+    frame<Output> f;
+    state_of_column__c__variant<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_column__c__variant__counter_cell__value {
+    frame<Output> f;
+    state_of_column__c__variant__counter_cell<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_column__c__variant__counter_cell__value__counter_cell_full {
+    empty_frame<Output> f;
+    state_of_column__c__variant__counter_cell__value<Output> _parent;
+    state_of_column__c__variant__counter_cell__value__counter_cell_full(state_of_column__c__variant__counter_cell__value<Output> parent) : _parent(parent) {}
+};
+
+template<typename Output>
+struct state_of_column__c__variant__counter_cell__value__counter_cell_update {
+    empty_frame<Output> f;
+    state_of_column__c__variant__counter_cell__value<Output> _parent;
+    state_of_column__c__variant__counter_cell__value__counter_cell_update(state_of_column__c__variant__counter_cell__value<Output> parent) : _parent(parent) {}
+};
+
+template<typename Output>
+struct state_of_column__c__collection_cell {
+    frame<Output> f;
+    state_of_column__c<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_column__c__collection_cell__tomb {
+    frame<Output> f;
+    state_of_column__c__collection_cell<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_row {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_no_marker {
+    empty_frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_live_marker {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_expiring_marker {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_expiring_marker__lm {
+    frame<Output> f;
+    state_of_expiring_marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_dead_marker {
+    empty_frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_dead_marker__tomb {
+    frame<Output> f;
+    state_of_dead_marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_deletable_row {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_deletable_row__marker {
+    frame<Output> f;
+    state_of_deletable_row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_deletable_row__marker__live_marker {
+    frame<Output> f;
+    state_of_deletable_row__marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_deletable_row__marker__expiring_marker {
+    frame<Output> f;
+    state_of_deletable_row__marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_deletable_row__marker__expiring_marker__lm {
+    frame<Output> f;
+    state_of_deletable_row__marker__expiring_marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_deletable_row__marker__dead_marker {
+    empty_frame<Output> f;
+    state_of_deletable_row__marker<Output> _parent;
+    state_of_deletable_row__marker__dead_marker(state_of_deletable_row__marker<Output> parent) : _parent(parent) {}
+};
+
+template<typename Output>
+struct state_of_deletable_row__marker__dead_marker__tomb {
+    frame<Output> f;
+    state_of_deletable_row__marker__dead_marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_deletable_row__marker__no_marker {
+    empty_frame<Output> f;
+    state_of_deletable_row__marker<Output> _parent;
+    state_of_deletable_row__marker__no_marker(state_of_deletable_row__marker<Output> parent) : _parent(parent) {}
+};
+
+template<typename Output>
+struct state_of_deletable_row__deleted_at {
+    frame<Output> f;
+    state_of_deletable_row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_deletable_row__cells {
+    frame<Output> f;
+    state_of_deletable_row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_deletable_row__shadowable_deleted_at {
+    frame<Output> f;
+    state_of_deletable_row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_range_tombstone {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_range_tombstone__tomb {
+    frame<Output> f;
+    state_of_range_tombstone<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_partition {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_mutation_partition__tomb {
+    frame<Output> f;
+    state_of_mutation_partition<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_partition__static_row {
+    frame<Output> f;
+    state_of_mutation_partition<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_mutation__partition {
+    frame<Output> f;
+    state_of_mutation<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation__partition__tomb {
+    frame<Output> f;
+    state_of_mutation__partition<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation__partition__static_row {
+    frame<Output> f;
+    state_of_mutation__partition<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_canonical_mutation {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_canonical_mutation__partition {
+    frame<Output> f;
+    state_of_canonical_mutation<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_canonical_mutation__partition__tomb {
+    frame<Output> f;
+    state_of_canonical_mutation__partition<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_canonical_mutation__partition__static_row {
+    frame<Output> f;
+    state_of_canonical_mutation__partition<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_clustering_row {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_clustering_row__row {
+    frame<Output> f;
+    state_of_clustering_row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_clustering_row__row__marker {
+    frame<Output> f;
+    state_of_clustering_row__row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_clustering_row__row__marker__live_marker {
+    frame<Output> f;
+    state_of_clustering_row__row__marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_clustering_row__row__marker__expiring_marker {
+    frame<Output> f;
+    state_of_clustering_row__row__marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_clustering_row__row__marker__expiring_marker__lm {
+    frame<Output> f;
+    state_of_clustering_row__row__marker__expiring_marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_clustering_row__row__marker__dead_marker {
+    empty_frame<Output> f;
+    state_of_clustering_row__row__marker<Output> _parent;
+    state_of_clustering_row__row__marker__dead_marker(state_of_clustering_row__row__marker<Output> parent) : _parent(parent) {}
+};
+
+template<typename Output>
+struct state_of_clustering_row__row__marker__dead_marker__tomb {
+    frame<Output> f;
+    state_of_clustering_row__row__marker__dead_marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_clustering_row__row__marker__no_marker {
+    empty_frame<Output> f;
+    state_of_clustering_row__row__marker<Output> _parent;
+    state_of_clustering_row__row__marker__no_marker(state_of_clustering_row__row__marker<Output> parent) : _parent(parent) {}
+};
+
+template<typename Output>
+struct state_of_clustering_row__row__deleted_at {
+    frame<Output> f;
+    state_of_clustering_row__row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_clustering_row__row__cells {
+    frame<Output> f;
+    state_of_clustering_row__row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_clustering_row__row__shadowable_deleted_at {
+    frame<Output> f;
+    state_of_clustering_row__row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_static_row {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_static_row__cells {
+    frame<Output> f;
+    state_of_static_row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_partition_start {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_partition_start__partition_tombstone {
+    frame<Output> f;
+    state_of_partition_start<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment {
+    frame<Output> f;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment {
+    frame<Output> f;
+    state_of_mutation_fragment<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__clustering_row {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__clustering_row__row {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment__clustering_row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__clustering_row__row__marker {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment__clustering_row__row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__clustering_row__row__marker__live_marker {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker {
+    empty_frame<Output> f;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> _parent;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker(state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> parent) : _parent(parent) {}
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__clustering_row__row__marker__no_marker {
+    empty_frame<Output> f;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> _parent;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__no_marker(state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> parent) : _parent(parent) {}
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__clustering_row__row__deleted_at {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment__clustering_row__row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__clustering_row__row__cells {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment__clustering_row__row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment__clustering_row__row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__static_row {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__static_row__cells {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment__static_row<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__range_tombstone {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__range_tombstone__tomb {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment__range_tombstone<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__partition_start {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment<Output> _parent;
+};
+
+template<typename Output>
+struct state_of_mutation_fragment__fragment__partition_start__partition_tombstone {
+    frame<Output> f;
+    state_of_mutation_fragment__fragment__partition_start<Output> _parent;
+};
+
+////// Nodes
+
+template<typename Output>
+struct after_counter_cell_full__shards {
+    Output& _out;
+    state_of_counter_cell_full<Output> _state;
+    
+    
+    
+    void  end_counter_cell_full() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct counter_cell_full__shards {
+    Output& _out;
+    state_of_counter_cell_full<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    counter_cell_full__shards(Output& out, state_of_counter_cell_full<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  void add_shards(counter_shard t)  {
+        serialize(_out, t);
+        _count++;
+  }
+  after_counter_cell_full__shards<Output> end_shards() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct writer_of_counter_cell_full {
+    Output& _out;
+    state_of_counter_cell_full<Output> _state;
+    
+    writer_of_counter_cell_full(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    counter_cell_full__shards<Output> start_shards() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_counter_cell_full__shards<Output> skip_shards() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_counter_cell_update__delta {
+    Output& _out;
+    state_of_counter_cell_update<Output> _state;
+    
+    
+    
+    void  end_counter_cell_update() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct writer_of_counter_cell_update {
+    Output& _out;
+    state_of_counter_cell_update<Output> _state;
+    
+    writer_of_counter_cell_update(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_counter_cell_update__delta<Output> write_delta(const int64_t& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_live_cell__value {
+    Output& _out;
+    state_of_live_cell<Output> _state;
+    
+    
+    
+    void  end_live_cell() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_live_cell__created_at {
+    Output& _out;
+    state_of_live_cell<Output> _state;
+    
+    
+    
+    after_live_cell__value<Output> write_value(bytes_view t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+    template<typename FragmentedBuffer>
+    requires FragmentRange<FragmentedBuffer>
+    after_live_cell__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && {
+        
+        serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_live_cell {
+    Output& _out;
+    state_of_live_cell<Output> _state;
+    
+    writer_of_live_cell(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_live_cell__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_live_marker__created_at {
+    Output& _out;
+    state_of_live_marker<Output> _state;
+    
+    
+    
+    void  end_live_marker() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct writer_of_live_marker {
+    Output& _out;
+    state_of_live_marker<Output> _state;
+    
+    writer_of_live_marker(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_live_marker__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_no_marker {
+    Output& _out;
+    state_of_no_marker<Output> _state;
+    
+    writer_of_no_marker(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    void  end_no_marker() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_tombstone__deletion_time {
+    Output& _out;
+    state_of_tombstone<Output> _state;
+    
+    
+    
+    void  end_tombstone() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_tombstone__timestamp {
+    Output& _out;
+    state_of_tombstone<Output> _state;
+    
+    
+    
+    after_tombstone__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_tombstone {
+    Output& _out;
+    state_of_tombstone<Output> _state;
+    
+    writer_of_tombstone(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_tombstone__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_counter_cell__value {
+    Output& _out;
+    state_of_counter_cell<Output> _state;
+    
+    
+    
+    void  end_counter_cell() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_counter_cell__value__counter_cell_full__shards {
+    Output& _out;
+    state_of_counter_cell__value__counter_cell_full<Output> _state;
+    
+    
+    
+    after_counter_cell__value<Output>  end_counter_cell_full() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct counter_cell__value__counter_cell_full__shards {
+    Output& _out;
+    state_of_counter_cell__value__counter_cell_full<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    counter_cell__value__counter_cell_full__shards(Output& out, state_of_counter_cell__value__counter_cell_full<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  void add_shards(counter_shard t)  {
+        serialize(_out, t);
+        _count++;
+  }
+  after_counter_cell__value__counter_cell_full__shards<Output> end_shards() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct counter_cell__value__counter_cell_full {
+    Output& _out;
+    state_of_counter_cell__value__counter_cell_full<Output> _state;
+    
+    counter_cell__value__counter_cell_full(Output& out, state_of_counter_cell__value<Output> state)
+            : _out(out)
+            , _state(state)
+            {}
+    
+    counter_cell__value__counter_cell_full__shards<Output> start_shards() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_counter_cell__value__counter_cell_full__shards<Output> skip_shards() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_counter_cell__value__counter_cell_update__delta {
+    Output& _out;
+    state_of_counter_cell__value__counter_cell_update<Output> _state;
+    
+    
+    
+    after_counter_cell__value<Output>  end_counter_cell_update() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct counter_cell__value__counter_cell_update {
+    Output& _out;
+    state_of_counter_cell__value__counter_cell_update<Output> _state;
+    
+    counter_cell__value__counter_cell_update(Output& out, state_of_counter_cell__value<Output> state)
+            : _out(out)
+            , _state(state)
+            {}
+    
+    after_counter_cell__value__counter_cell_update__delta<Output> write_delta(const int64_t& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_counter_cell__created_at {
+    Output& _out;
+    state_of_counter_cell__value<Output> _state;
+    
+    after_counter_cell__created_at(Output& out, state_of_counter_cell<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    counter_cell__value__counter_cell_full<Output> start_value_counter_cell_full() && {
+        
+        serialize(_out, uint32_t(0));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_counter_cell__value<Output> value_counter_cell_full(Serializer&& f) && {
+        serialize(_out, uint32_t(0));
+
+        f(writer_of_counter_cell_full<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    counter_cell__value__counter_cell_update<Output> start_value_counter_cell_update() && {
+        
+        serialize(_out, uint32_t(1));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_counter_cell__value<Output> value_counter_cell_update(Serializer&& f) && {
+        serialize(_out, uint32_t(1));
+
+        f(writer_of_counter_cell_update<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+};
+
+template<typename Output>
+struct writer_of_counter_cell {
+    Output& _out;
+    state_of_counter_cell<Output> _state;
+    
+    writer_of_counter_cell(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_counter_cell__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_dead_cell__tomb {
+    Output& _out;
+    state_of_dead_cell<Output> _state;
+    
+    
+    
+    void  end_dead_cell() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_dead_cell__tomb__deletion_time {
+    Output& _out;
+    state_of_dead_cell__tomb<Output> _state;
+    
+    
+    
+    after_dead_cell__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_dead_cell__tomb__timestamp {
+    Output& _out;
+    state_of_dead_cell__tomb<Output> _state;
+    
+    
+    
+    after_dead_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct dead_cell__tomb {
+    Output& _out;
+    state_of_dead_cell__tomb<Output> _state;
+    
+    dead_cell__tomb(Output& out, state_of_dead_cell<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_dead_cell__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_dead_cell {
+    Output& _out;
+    state_of_dead_cell<Output> _state;
+    
+    writer_of_dead_cell(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    dead_cell__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_dead_cell__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_dead_marker__tomb {
+    Output& _out;
+    state_of_dead_marker<Output> _state;
+    
+    
+    
+    void  end_dead_marker() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_dead_marker__tomb__deletion_time {
+    Output& _out;
+    state_of_dead_marker__tomb<Output> _state;
+    
+    
+    
+    after_dead_marker__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_dead_marker__tomb__timestamp {
+    Output& _out;
+    state_of_dead_marker__tomb<Output> _state;
+    
+    
+    
+    after_dead_marker__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct dead_marker__tomb {
+    Output& _out;
+    state_of_dead_marker__tomb<Output> _state;
+    
+    dead_marker__tomb(Output& out, state_of_dead_marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_dead_marker {
+    Output& _out;
+    state_of_dead_marker<Output> _state;
+    
+    writer_of_dead_marker(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    dead_marker__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_dead_marker__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_expiring_cell__c {
+    Output& _out;
+    state_of_expiring_cell<Output> _state;
+    
+    
+    
+    void  end_expiring_cell() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_expiring_cell__c__value {
+    Output& _out;
+    state_of_expiring_cell__c<Output> _state;
+    
+    
+    
+    after_expiring_cell__c<Output>  end_c() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_expiring_cell__c__created_at {
+    Output& _out;
+    state_of_expiring_cell__c<Output> _state;
+    
+    
+    
+    after_expiring_cell__c__value<Output> write_value(bytes_view t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+    template<typename FragmentedBuffer>
+    requires FragmentRange<FragmentedBuffer>
+    after_expiring_cell__c__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && {
+        
+        serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct expiring_cell__c {
+    Output& _out;
+    state_of_expiring_cell__c<Output> _state;
+    
+    expiring_cell__c(Output& out, state_of_expiring_cell<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_expiring_cell__c__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_expiring_cell__expiry {
+    Output& _out;
+    state_of_expiring_cell<Output> _state;
+    
+    
+    
+    expiring_cell__c<Output> start_c() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_expiring_cell__c<Output> c(Serializer&& f) && {
+        
+        f(writer_of_live_cell<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_expiring_cell__ttl {
+    Output& _out;
+    state_of_expiring_cell<Output> _state;
+    
+    
+    
+    after_expiring_cell__expiry<Output> write_expiry(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_expiring_cell {
+    Output& _out;
+    state_of_expiring_cell<Output> _state;
+    
+    writer_of_expiring_cell(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_expiring_cell__ttl<Output> write_ttl(const gc_clock::duration& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_expiring_marker__expiry {
+    Output& _out;
+    state_of_expiring_marker<Output> _state;
+    
+    
+    
+    void  end_expiring_marker() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_expiring_marker__ttl {
+    Output& _out;
+    state_of_expiring_marker<Output> _state;
+    
+    
+    
+    after_expiring_marker__expiry<Output> write_expiry(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_expiring_marker__lm {
+    Output& _out;
+    state_of_expiring_marker<Output> _state;
+    
+    
+    
+    after_expiring_marker__ttl<Output> write_ttl(const gc_clock::duration& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_expiring_marker__lm__created_at {
+    Output& _out;
+    state_of_expiring_marker__lm<Output> _state;
+    
+    
+    
+    after_expiring_marker__lm<Output>  end_lm() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct expiring_marker__lm {
+    Output& _out;
+    state_of_expiring_marker__lm<Output> _state;
+    
+    expiring_marker__lm(Output& out, state_of_expiring_marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_expiring_marker__lm__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_expiring_marker {
+    Output& _out;
+    state_of_expiring_marker<Output> _state;
+    
+    writer_of_expiring_marker(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    expiring_marker__lm<Output> start_lm() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_expiring_marker__lm<Output> lm(Serializer&& f) && {
+        
+        f(writer_of_live_marker<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_partition_start__partition_tombstone {
+    Output& _out;
+    state_of_partition_start<Output> _state;
+    
+    
+    
+    void  end_partition_start() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_partition_start__partition_tombstone__deletion_time {
+    Output& _out;
+    state_of_partition_start__partition_tombstone<Output> _state;
+    
+    
+    
+    after_partition_start__partition_tombstone<Output>  end_partition_tombstone() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_partition_start__partition_tombstone__timestamp {
+    Output& _out;
+    state_of_partition_start__partition_tombstone<Output> _state;
+    
+    
+    
+    after_partition_start__partition_tombstone__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct partition_start__partition_tombstone {
+    Output& _out;
+    state_of_partition_start__partition_tombstone<Output> _state;
+    
+    partition_start__partition_tombstone(Output& out, state_of_partition_start<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_partition_start__partition_tombstone__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_partition_start__key {
+    Output& _out;
+    state_of_partition_start<Output> _state;
+    
+    
+    
+    partition_start__partition_tombstone<Output> start_partition_tombstone() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_partition_start__partition_tombstone<Output> write_partition_tombstone(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_partition_start {
+    Output& _out;
+    state_of_partition_start<Output> _state;
+    
+    writer_of_partition_start(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_partition_start__key<Output> write_key(const partition_key& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_range_tombstone__end_kind {
+    Output& _out;
+    state_of_range_tombstone<Output> _state;
+    
+    
+    
+    void  end_range_tombstone() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_range_tombstone__end {
+    Output& _out;
+    state_of_range_tombstone<Output> _state;
+    
+    
+    
+    after_range_tombstone__end_kind<Output> write_end_kind(const bound_kind& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_range_tombstone__start_kind {
+    Output& _out;
+    state_of_range_tombstone<Output> _state;
+    
+    
+    
+    after_range_tombstone__end<Output> write_end(const clustering_key_prefix& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_range_tombstone__tomb {
+    Output& _out;
+    state_of_range_tombstone<Output> _state;
+    
+    
+    
+    after_range_tombstone__start_kind<Output> write_start_kind(const bound_kind& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_range_tombstone__tomb__deletion_time {
+    Output& _out;
+    state_of_range_tombstone__tomb<Output> _state;
+    
+    
+    
+    after_range_tombstone__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_range_tombstone__tomb__timestamp {
+    Output& _out;
+    state_of_range_tombstone__tomb<Output> _state;
+    
+    
+    
+    after_range_tombstone__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct range_tombstone__tomb {
+    Output& _out;
+    state_of_range_tombstone__tomb<Output> _state;
+    
+    range_tombstone__tomb(Output& out, state_of_range_tombstone<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_range_tombstone__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_range_tombstone__start {
+    Output& _out;
+    state_of_range_tombstone<Output> _state;
+    
+    
+    
+    range_tombstone__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_range_tombstone__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_range_tombstone {
+    Output& _out;
+    state_of_range_tombstone<Output> _state;
+    
+    writer_of_range_tombstone(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_range_tombstone__start<Output> write_start(const clustering_key_prefix& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_collection_element__value {
+    Output& _out;
+    state_of_collection_element<Output> _state;
+    
+    
+    
+    void  end_collection_element() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_collection_element__value__live_cell__value {
+    Output& _out;
+    state_of_collection_element__value__live_cell<Output> _state;
+    
+    
+    
+    after_collection_element__value<Output>  end_live_cell() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_collection_element__value__live_cell__created_at {
+    Output& _out;
+    state_of_collection_element__value__live_cell<Output> _state;
+    
+    
+    
+    after_collection_element__value__live_cell__value<Output> write_value(bytes_view t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+    template<typename FragmentedBuffer>
+    requires FragmentRange<FragmentedBuffer>
+    after_collection_element__value__live_cell__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && {
+        
+        serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct collection_element__value__live_cell {
+    Output& _out;
+    state_of_collection_element__value__live_cell<Output> _state;
+    
+    collection_element__value__live_cell(Output& out, state_of_collection_element__value<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_collection_element__value__live_cell__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_collection_element__value__expiring_cell__c {
+    Output& _out;
+    state_of_collection_element__value__expiring_cell<Output> _state;
+    
+    
+    
+    after_collection_element__value<Output>  end_expiring_cell() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_collection_element__value__expiring_cell__c__value {
+    Output& _out;
+    state_of_collection_element__value__expiring_cell__c<Output> _state;
+    
+    
+    
+    after_collection_element__value__expiring_cell__c<Output>  end_c() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_collection_element__value__expiring_cell__c__created_at {
+    Output& _out;
+    state_of_collection_element__value__expiring_cell__c<Output> _state;
+    
+    
+    
+    after_collection_element__value__expiring_cell__c__value<Output> write_value(bytes_view t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+    template<typename FragmentedBuffer>
+    requires FragmentRange<FragmentedBuffer>
+    after_collection_element__value__expiring_cell__c__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && {
+        
+        serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct collection_element__value__expiring_cell__c {
+    Output& _out;
+    state_of_collection_element__value__expiring_cell__c<Output> _state;
+    
+    collection_element__value__expiring_cell__c(Output& out, state_of_collection_element__value__expiring_cell<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_collection_element__value__expiring_cell__c__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_collection_element__value__expiring_cell__expiry {
+    Output& _out;
+    state_of_collection_element__value__expiring_cell<Output> _state;
+    
+    
+    
+    collection_element__value__expiring_cell__c<Output> start_c() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_collection_element__value__expiring_cell__c<Output> c(Serializer&& f) && {
+        
+        f(writer_of_live_cell<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_collection_element__value__expiring_cell__ttl {
+    Output& _out;
+    state_of_collection_element__value__expiring_cell<Output> _state;
+    
+    
+    
+    after_collection_element__value__expiring_cell__expiry<Output> write_expiry(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct collection_element__value__expiring_cell {
+    Output& _out;
+    state_of_collection_element__value__expiring_cell<Output> _state;
+    
+    collection_element__value__expiring_cell(Output& out, state_of_collection_element__value<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_collection_element__value__expiring_cell__ttl<Output> write_ttl(const gc_clock::duration& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_collection_element__value__dead_cell__tomb {
+    Output& _out;
+    state_of_collection_element__value__dead_cell<Output> _state;
+    
+    
+    
+    after_collection_element__value<Output>  end_dead_cell() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_collection_element__value__dead_cell__tomb__deletion_time {
+    Output& _out;
+    state_of_collection_element__value__dead_cell__tomb<Output> _state;
+    
+    
+    
+    after_collection_element__value__dead_cell__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_collection_element__value__dead_cell__tomb__timestamp {
+    Output& _out;
+    state_of_collection_element__value__dead_cell__tomb<Output> _state;
+    
+    
+    
+    after_collection_element__value__dead_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct collection_element__value__dead_cell__tomb {
+    Output& _out;
+    state_of_collection_element__value__dead_cell__tomb<Output> _state;
+    
+    collection_element__value__dead_cell__tomb(Output& out, state_of_collection_element__value__dead_cell<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_collection_element__value__dead_cell__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct collection_element__value__dead_cell {
+    Output& _out;
+    state_of_collection_element__value__dead_cell<Output> _state;
+    
+    collection_element__value__dead_cell(Output& out, state_of_collection_element__value<Output> state)
+            : _out(out)
+            , _state(state)
+            {}
+    
+    collection_element__value__dead_cell__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_collection_element__value__dead_cell__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_collection_element__key {
+    Output& _out;
+    state_of_collection_element__value<Output> _state;
+    
+    after_collection_element__key(Output& out, state_of_collection_element<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    collection_element__value__live_cell<Output> start_value_live_cell() && {
+        
+        serialize(_out, uint32_t(0));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_collection_element__value<Output> value_live_cell(Serializer&& f) && {
+        serialize(_out, uint32_t(0));
+
+        f(writer_of_live_cell<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    collection_element__value__expiring_cell<Output> start_value_expiring_cell() && {
+        
+        serialize(_out, uint32_t(1));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_collection_element__value<Output> value_expiring_cell(Serializer&& f) && {
+        serialize(_out, uint32_t(1));
+
+        f(writer_of_expiring_cell<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    collection_element__value__dead_cell<Output> start_value_dead_cell() && {
+        
+        serialize(_out, uint32_t(2));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_collection_element__value<Output> value_dead_cell(Serializer&& f) && {
+        serialize(_out, uint32_t(2));
+
+        f(writer_of_dead_cell<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+};
+
+template<typename Output>
+struct writer_of_collection_element {
+    Output& _out;
+    state_of_collection_element<Output> _state;
+    
+    writer_of_collection_element(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_collection_element__key<Output> write_key(bytes_view t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+    template<typename FragmentedBuffer>
+    requires FragmentRange<FragmentedBuffer>
+    after_collection_element__key<Output> write_fragmented_key(FragmentedBuffer&& fragments) && {
+        
+        serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_collection_cell__elements {
+    Output& _out;
+    state_of_collection_cell<Output> _state;
+    
+    
+    
+    void  end_collection_cell() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct collection_cell__elements {
+    Output& _out;
+    state_of_collection_cell<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    collection_cell__elements(Output& out, state_of_collection_cell<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_collection_element<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(collection_element_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_collection_cell__elements<Output> end_elements() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct after_collection_cell__tomb {
+    Output& _out;
+    state_of_collection_cell<Output> _state;
+    
+    
+    
+    collection_cell__elements<Output> start_elements() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_collection_cell__elements<Output> skip_elements() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_collection_cell__tomb__deletion_time {
+    Output& _out;
+    state_of_collection_cell__tomb<Output> _state;
+    
+    
+    
+    after_collection_cell__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_collection_cell__tomb__timestamp {
+    Output& _out;
+    state_of_collection_cell__tomb<Output> _state;
+    
+    
+    
+    after_collection_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct collection_cell__tomb {
+    Output& _out;
+    state_of_collection_cell__tomb<Output> _state;
+    
+    collection_cell__tomb(Output& out, state_of_collection_cell<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_collection_cell__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_collection_cell {
+    Output& _out;
+    state_of_collection_cell<Output> _state;
+    
+    writer_of_collection_cell(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    collection_cell__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_collection_cell__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_column__c {
+    Output& _out;
+    state_of_column<Output> _state;
+    
+    
+    
+    void  end_column() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_column__c__variant {
+    Output& _out;
+    state_of_column__c<Output> _state;
+    
+    
+    
+    after_column__c<Output>  end_variant() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_column__c__variant__live_cell__value {
+    Output& _out;
+    state_of_column__c__variant__live_cell<Output> _state;
+    
+    
+    
+    after_column__c__variant<Output>  end_live_cell() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_column__c__variant__live_cell__created_at {
+    Output& _out;
+    state_of_column__c__variant__live_cell<Output> _state;
+    
+    
+    
+    after_column__c__variant__live_cell__value<Output> write_value(bytes_view t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+    template<typename FragmentedBuffer>
+    requires FragmentRange<FragmentedBuffer>
+    after_column__c__variant__live_cell__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && {
+        
+        serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct column__c__variant__live_cell {
+    Output& _out;
+    state_of_column__c__variant__live_cell<Output> _state;
+    
+    column__c__variant__live_cell(Output& out, state_of_column__c__variant<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_column__c__variant__live_cell__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_column__c__variant__expiring_cell__c {
+    Output& _out;
+    state_of_column__c__variant__expiring_cell<Output> _state;
+    
+    
+    
+    after_column__c__variant<Output>  end_expiring_cell() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_column__c__variant__expiring_cell__c__value {
+    Output& _out;
+    state_of_column__c__variant__expiring_cell__c<Output> _state;
+    
+    
+    
+    after_column__c__variant__expiring_cell__c<Output>  end_c() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_column__c__variant__expiring_cell__c__created_at {
+    Output& _out;
+    state_of_column__c__variant__expiring_cell__c<Output> _state;
+    
+    
+    
+    after_column__c__variant__expiring_cell__c__value<Output> write_value(bytes_view t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+    template<typename FragmentedBuffer>
+    requires FragmentRange<FragmentedBuffer>
+    after_column__c__variant__expiring_cell__c__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && {
+        
+        serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct column__c__variant__expiring_cell__c {
+    Output& _out;
+    state_of_column__c__variant__expiring_cell__c<Output> _state;
+    
+    column__c__variant__expiring_cell__c(Output& out, state_of_column__c__variant__expiring_cell<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_column__c__variant__expiring_cell__c__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_column__c__variant__expiring_cell__expiry {
+    Output& _out;
+    state_of_column__c__variant__expiring_cell<Output> _state;
+    
+    
+    
+    column__c__variant__expiring_cell__c<Output> start_c() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_column__c__variant__expiring_cell__c<Output> c(Serializer&& f) && {
+        
+        f(writer_of_live_cell<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_column__c__variant__expiring_cell__ttl {
+    Output& _out;
+    state_of_column__c__variant__expiring_cell<Output> _state;
+    
+    
+    
+    after_column__c__variant__expiring_cell__expiry<Output> write_expiry(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct column__c__variant__expiring_cell {
+    Output& _out;
+    state_of_column__c__variant__expiring_cell<Output> _state;
+    
+    column__c__variant__expiring_cell(Output& out, state_of_column__c__variant<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_column__c__variant__expiring_cell__ttl<Output> write_ttl(const gc_clock::duration& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_column__c__variant__dead_cell__tomb {
+    Output& _out;
+    state_of_column__c__variant__dead_cell<Output> _state;
+    
+    
+    
+    after_column__c__variant<Output>  end_dead_cell() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_column__c__variant__dead_cell__tomb__deletion_time {
+    Output& _out;
+    state_of_column__c__variant__dead_cell__tomb<Output> _state;
+    
+    
+    
+    after_column__c__variant__dead_cell__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_column__c__variant__dead_cell__tomb__timestamp {
+    Output& _out;
+    state_of_column__c__variant__dead_cell__tomb<Output> _state;
+    
+    
+    
+    after_column__c__variant__dead_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct column__c__variant__dead_cell__tomb {
+    Output& _out;
+    state_of_column__c__variant__dead_cell__tomb<Output> _state;
+    
+    column__c__variant__dead_cell__tomb(Output& out, state_of_column__c__variant__dead_cell<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_column__c__variant__dead_cell__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct column__c__variant__dead_cell {
+    Output& _out;
+    state_of_column__c__variant__dead_cell<Output> _state;
+    
+    column__c__variant__dead_cell(Output& out, state_of_column__c__variant<Output> state)
+            : _out(out)
+            , _state(state)
+            {}
+    
+    column__c__variant__dead_cell__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_column__c__variant__dead_cell__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_column__c__variant__counter_cell__value {
+    Output& _out;
+    state_of_column__c__variant__counter_cell<Output> _state;
+    
+    
+    
+    after_column__c__variant<Output>  end_counter_cell() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_column__c__variant__counter_cell__value__counter_cell_full__shards {
+    Output& _out;
+    state_of_column__c__variant__counter_cell__value__counter_cell_full<Output> _state;
+    
+    
+    
+    after_column__c__variant__counter_cell__value<Output>  end_counter_cell_full() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct column__c__variant__counter_cell__value__counter_cell_full__shards {
+    Output& _out;
+    state_of_column__c__variant__counter_cell__value__counter_cell_full<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    column__c__variant__counter_cell__value__counter_cell_full__shards(Output& out, state_of_column__c__variant__counter_cell__value__counter_cell_full<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  void add_shards(counter_shard t)  {
+        serialize(_out, t);
+        _count++;
+  }
+  after_column__c__variant__counter_cell__value__counter_cell_full__shards<Output> end_shards() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct column__c__variant__counter_cell__value__counter_cell_full {
+    Output& _out;
+    state_of_column__c__variant__counter_cell__value__counter_cell_full<Output> _state;
+    
+    column__c__variant__counter_cell__value__counter_cell_full(Output& out, state_of_column__c__variant__counter_cell__value<Output> state)
+            : _out(out)
+            , _state(state)
+            {}
+    
+    column__c__variant__counter_cell__value__counter_cell_full__shards<Output> start_shards() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_column__c__variant__counter_cell__value__counter_cell_full__shards<Output> skip_shards() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_column__c__variant__counter_cell__value__counter_cell_update__delta {
+    Output& _out;
+    state_of_column__c__variant__counter_cell__value__counter_cell_update<Output> _state;
+    
+    
+    
+    after_column__c__variant__counter_cell__value<Output>  end_counter_cell_update() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct column__c__variant__counter_cell__value__counter_cell_update {
+    Output& _out;
+    state_of_column__c__variant__counter_cell__value__counter_cell_update<Output> _state;
+    
+    column__c__variant__counter_cell__value__counter_cell_update(Output& out, state_of_column__c__variant__counter_cell__value<Output> state)
+            : _out(out)
+            , _state(state)
+            {}
+    
+    after_column__c__variant__counter_cell__value__counter_cell_update__delta<Output> write_delta(const int64_t& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_column__c__variant__counter_cell__created_at {
+    Output& _out;
+    state_of_column__c__variant__counter_cell__value<Output> _state;
+    
+    after_column__c__variant__counter_cell__created_at(Output& out, state_of_column__c__variant__counter_cell<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    column__c__variant__counter_cell__value__counter_cell_full<Output> start_value_counter_cell_full() && {
+        
+        serialize(_out, uint32_t(0));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_column__c__variant__counter_cell__value<Output> value_counter_cell_full(Serializer&& f) && {
+        serialize(_out, uint32_t(0));
+
+        f(writer_of_counter_cell_full<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    column__c__variant__counter_cell__value__counter_cell_update<Output> start_value_counter_cell_update() && {
+        
+        serialize(_out, uint32_t(1));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_column__c__variant__counter_cell__value<Output> value_counter_cell_update(Serializer&& f) && {
+        serialize(_out, uint32_t(1));
+
+        f(writer_of_counter_cell_update<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+};
+
+template<typename Output>
+struct column__c__variant__counter_cell {
+    Output& _out;
+    state_of_column__c__variant__counter_cell<Output> _state;
+    
+    column__c__variant__counter_cell(Output& out, state_of_column__c__variant<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_column__c__variant__counter_cell__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct column__c__variant {
+    Output& _out;
+    state_of_column__c__variant<Output> _state;
+    
+    column__c__variant(Output& out, state_of_column__c<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    column__c__variant__live_cell<Output> start_variant_live_cell() && {
+        
+        serialize(_out, uint32_t(0));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_column__c__variant<Output> variant_live_cell(Serializer&& f) && {
+        serialize(_out, uint32_t(0));
+
+        f(writer_of_live_cell<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    column__c__variant__expiring_cell<Output> start_variant_expiring_cell() && {
+        
+        serialize(_out, uint32_t(1));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_column__c__variant<Output> variant_expiring_cell(Serializer&& f) && {
+        serialize(_out, uint32_t(1));
+
+        f(writer_of_expiring_cell<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    column__c__variant__dead_cell<Output> start_variant_dead_cell() && {
+        
+        serialize(_out, uint32_t(2));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_column__c__variant<Output> variant_dead_cell(Serializer&& f) && {
+        serialize(_out, uint32_t(2));
+
+        f(writer_of_dead_cell<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    column__c__variant__counter_cell<Output> start_variant_counter_cell() && {
+        
+        serialize(_out, uint32_t(3));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_column__c__variant<Output> variant_counter_cell(Serializer&& f) && {
+        serialize(_out, uint32_t(3));
+
+        f(writer_of_counter_cell<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+};
+
+template<typename Output>
+struct after_column__c__collection_cell__elements {
+    Output& _out;
+    state_of_column__c__collection_cell<Output> _state;
+    
+    
+    
+    after_column__c<Output>  end_collection_cell() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct column__c__collection_cell__elements {
+    Output& _out;
+    state_of_column__c__collection_cell<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    column__c__collection_cell__elements(Output& out, state_of_column__c__collection_cell<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_collection_element<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(collection_element_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_column__c__collection_cell__elements<Output> end_elements() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct after_column__c__collection_cell__tomb {
+    Output& _out;
+    state_of_column__c__collection_cell<Output> _state;
+    
+    
+    
+    column__c__collection_cell__elements<Output> start_elements() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_column__c__collection_cell__elements<Output> skip_elements() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_column__c__collection_cell__tomb__deletion_time {
+    Output& _out;
+    state_of_column__c__collection_cell__tomb<Output> _state;
+    
+    
+    
+    after_column__c__collection_cell__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_column__c__collection_cell__tomb__timestamp {
+    Output& _out;
+    state_of_column__c__collection_cell__tomb<Output> _state;
+    
+    
+    
+    after_column__c__collection_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct column__c__collection_cell__tomb {
+    Output& _out;
+    state_of_column__c__collection_cell__tomb<Output> _state;
+    
+    column__c__collection_cell__tomb(Output& out, state_of_column__c__collection_cell<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_column__c__collection_cell__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct column__c__collection_cell {
+    Output& _out;
+    state_of_column__c__collection_cell<Output> _state;
+    
+    column__c__collection_cell(Output& out, state_of_column__c<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    column__c__collection_cell__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_column__c__collection_cell__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_column__id {
+    Output& _out;
+    state_of_column__c<Output> _state;
+    
+    after_column__id(Output& out, state_of_column<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    column__c__variant<Output> start_c_variant() && {
+        
+        serialize(_out, uint32_t(0));
+
+        return { _out, std::move(_state) };
+    }
+
+    column__c__collection_cell<Output> start_c_collection_cell() && {
+        
+        serialize(_out, uint32_t(1));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_column__c<Output> c_collection_cell(Serializer&& f) && {
+        serialize(_out, uint32_t(1));
+
+        f(writer_of_collection_cell<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+};
+
+template<typename Output>
+struct writer_of_column {
+    Output& _out;
+    state_of_column<Output> _state;
+    
+    writer_of_column(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_column__id<Output> write_id(const uint32_t& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_row__columns {
+    Output& _out;
+    state_of_row<Output> _state;
+    
+    
+    
+    void  end_row() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct row__columns {
+    Output& _out;
+    state_of_row<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    row__columns(Output& out, state_of_row<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_column<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(column_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_row__columns<Output> end_columns() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct writer_of_row {
+    Output& _out;
+    state_of_row<Output> _state;
+    
+    writer_of_row(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    row__columns<Output> start_columns() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_row__columns<Output> skip_columns() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_deletable_row__shadowable_deleted_at {
+    Output& _out;
+    state_of_deletable_row<Output> _state;
+    
+    
+    
+    void  end_deletable_row() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_deletable_row__shadowable_deleted_at__deletion_time {
+    Output& _out;
+    state_of_deletable_row__shadowable_deleted_at<Output> _state;
+    
+    
+    
+    after_deletable_row__shadowable_deleted_at<Output>  end_shadowable_deleted_at() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_deletable_row__shadowable_deleted_at__timestamp {
+    Output& _out;
+    state_of_deletable_row__shadowable_deleted_at<Output> _state;
+    
+    
+    
+    after_deletable_row__shadowable_deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct deletable_row__shadowable_deleted_at {
+    Output& _out;
+    state_of_deletable_row__shadowable_deleted_at<Output> _state;
+    
+    deletable_row__shadowable_deleted_at(Output& out, state_of_deletable_row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_deletable_row__shadowable_deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_deletable_row__cells {
+    Output& _out;
+    state_of_deletable_row<Output> _state;
+    
+    
+    
+    deletable_row__shadowable_deleted_at<Output> start_shadowable_deleted_at() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_deletable_row__shadowable_deleted_at<Output> write_shadowable_deleted_at(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_deletable_row__cells__columns {
+    Output& _out;
+    state_of_deletable_row__cells<Output> _state;
+    
+    
+    
+    after_deletable_row__cells<Output>  end_cells() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct deletable_row__cells__columns {
+    Output& _out;
+    state_of_deletable_row__cells<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    deletable_row__cells__columns(Output& out, state_of_deletable_row__cells<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_column<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(column_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_deletable_row__cells__columns<Output> end_columns() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct deletable_row__cells {
+    Output& _out;
+    state_of_deletable_row__cells<Output> _state;
+    
+    deletable_row__cells(Output& out, state_of_deletable_row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    deletable_row__cells__columns<Output> start_columns() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_deletable_row__cells__columns<Output> skip_columns() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_deletable_row__deleted_at {
+    Output& _out;
+    state_of_deletable_row<Output> _state;
+    
+    
+    
+    deletable_row__cells<Output> start_cells() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_deletable_row__cells<Output> cells(Serializer&& f) && {
+        
+        f(writer_of_row<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_deletable_row__deleted_at__deletion_time {
+    Output& _out;
+    state_of_deletable_row__deleted_at<Output> _state;
+    
+    
+    
+    after_deletable_row__deleted_at<Output>  end_deleted_at() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_deletable_row__deleted_at__timestamp {
+    Output& _out;
+    state_of_deletable_row__deleted_at<Output> _state;
+    
+    
+    
+    after_deletable_row__deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct deletable_row__deleted_at {
+    Output& _out;
+    state_of_deletable_row__deleted_at<Output> _state;
+    
+    deletable_row__deleted_at(Output& out, state_of_deletable_row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_deletable_row__deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_deletable_row__marker {
+    Output& _out;
+    state_of_deletable_row<Output> _state;
+    
+    
+    
+    deletable_row__deleted_at<Output> start_deleted_at() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_deletable_row__deleted_at<Output> write_deleted_at(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_deletable_row__marker__live_marker__created_at {
+    Output& _out;
+    state_of_deletable_row__marker__live_marker<Output> _state;
+    
+    
+    
+    after_deletable_row__marker<Output>  end_live_marker() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct deletable_row__marker__live_marker {
+    Output& _out;
+    state_of_deletable_row__marker__live_marker<Output> _state;
+    
+    deletable_row__marker__live_marker(Output& out, state_of_deletable_row__marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_deletable_row__marker__live_marker__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_deletable_row__marker__expiring_marker__expiry {
+    Output& _out;
+    state_of_deletable_row__marker__expiring_marker<Output> _state;
+    
+    
+    
+    after_deletable_row__marker<Output>  end_expiring_marker() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_deletable_row__marker__expiring_marker__ttl {
+    Output& _out;
+    state_of_deletable_row__marker__expiring_marker<Output> _state;
+    
+    
+    
+    after_deletable_row__marker__expiring_marker__expiry<Output> write_expiry(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_deletable_row__marker__expiring_marker__lm {
+    Output& _out;
+    state_of_deletable_row__marker__expiring_marker<Output> _state;
+    
+    
+    
+    after_deletable_row__marker__expiring_marker__ttl<Output> write_ttl(const gc_clock::duration& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_deletable_row__marker__expiring_marker__lm__created_at {
+    Output& _out;
+    state_of_deletable_row__marker__expiring_marker__lm<Output> _state;
+    
+    
+    
+    after_deletable_row__marker__expiring_marker__lm<Output>  end_lm() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct deletable_row__marker__expiring_marker__lm {
+    Output& _out;
+    state_of_deletable_row__marker__expiring_marker__lm<Output> _state;
+    
+    deletable_row__marker__expiring_marker__lm(Output& out, state_of_deletable_row__marker__expiring_marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_deletable_row__marker__expiring_marker__lm__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct deletable_row__marker__expiring_marker {
+    Output& _out;
+    state_of_deletable_row__marker__expiring_marker<Output> _state;
+    
+    deletable_row__marker__expiring_marker(Output& out, state_of_deletable_row__marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    deletable_row__marker__expiring_marker__lm<Output> start_lm() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_deletable_row__marker__expiring_marker__lm<Output> lm(Serializer&& f) && {
+        
+        f(writer_of_live_marker<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_deletable_row__marker__dead_marker__tomb {
+    Output& _out;
+    state_of_deletable_row__marker__dead_marker<Output> _state;
+    
+    
+    
+    after_deletable_row__marker<Output>  end_dead_marker() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_deletable_row__marker__dead_marker__tomb__deletion_time {
+    Output& _out;
+    state_of_deletable_row__marker__dead_marker__tomb<Output> _state;
+    
+    
+    
+    after_deletable_row__marker__dead_marker__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_deletable_row__marker__dead_marker__tomb__timestamp {
+    Output& _out;
+    state_of_deletable_row__marker__dead_marker__tomb<Output> _state;
+    
+    
+    
+    after_deletable_row__marker__dead_marker__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct deletable_row__marker__dead_marker__tomb {
+    Output& _out;
+    state_of_deletable_row__marker__dead_marker__tomb<Output> _state;
+    
+    deletable_row__marker__dead_marker__tomb(Output& out, state_of_deletable_row__marker__dead_marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_deletable_row__marker__dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct deletable_row__marker__dead_marker {
+    Output& _out;
+    state_of_deletable_row__marker__dead_marker<Output> _state;
+    
+    deletable_row__marker__dead_marker(Output& out, state_of_deletable_row__marker<Output> state)
+            : _out(out)
+            , _state(state)
+            {}
+    
+    deletable_row__marker__dead_marker__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_deletable_row__marker__dead_marker__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct deletable_row__marker__no_marker {
+    Output& _out;
+    state_of_deletable_row__marker__no_marker<Output> _state;
+    
+    deletable_row__marker__no_marker(Output& out, state_of_deletable_row__marker<Output> state)
+            : _out(out)
+            , _state(state)
+            {}
+    
+    after_deletable_row__marker<Output>  end_no_marker() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_deletable_row__key {
+    Output& _out;
+    state_of_deletable_row__marker<Output> _state;
+    
+    after_deletable_row__key(Output& out, state_of_deletable_row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    deletable_row__marker__live_marker<Output> start_marker_live_marker() && {
+        
+        serialize(_out, uint32_t(0));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_deletable_row__marker<Output> marker_live_marker(Serializer&& f) && {
+        serialize(_out, uint32_t(0));
+
+        f(writer_of_live_marker<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    deletable_row__marker__expiring_marker<Output> start_marker_expiring_marker() && {
+        
+        serialize(_out, uint32_t(1));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_deletable_row__marker<Output> marker_expiring_marker(Serializer&& f) && {
+        serialize(_out, uint32_t(1));
+
+        f(writer_of_expiring_marker<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    deletable_row__marker__dead_marker<Output> start_marker_dead_marker() && {
+        
+        serialize(_out, uint32_t(2));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_deletable_row__marker<Output> marker_dead_marker(Serializer&& f) && {
+        serialize(_out, uint32_t(2));
+
+        f(writer_of_dead_marker<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    deletable_row__marker__no_marker<Output> start_marker_no_marker() && {
+        
+        serialize(_out, uint32_t(3));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_deletable_row__marker<Output> marker_no_marker(Serializer&& f) && {
+        serialize(_out, uint32_t(3));
+
+        f(writer_of_no_marker<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+};
+
+template<typename Output>
+struct writer_of_deletable_row {
+    Output& _out;
+    state_of_deletable_row<Output> _state;
+    
+    writer_of_deletable_row(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_deletable_row__key<Output> write_key(const clustering_key& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_static_row__cells {
+    Output& _out;
+    state_of_static_row<Output> _state;
+    
+    
+    
+    void  end_static_row() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_static_row__cells__columns {
+    Output& _out;
+    state_of_static_row__cells<Output> _state;
+    
+    
+    
+    after_static_row__cells<Output>  end_cells() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct static_row__cells__columns {
+    Output& _out;
+    state_of_static_row__cells<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    static_row__cells__columns(Output& out, state_of_static_row__cells<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_column<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(column_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_static_row__cells__columns<Output> end_columns() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct static_row__cells {
+    Output& _out;
+    state_of_static_row__cells<Output> _state;
+    
+    static_row__cells(Output& out, state_of_static_row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    static_row__cells__columns<Output> start_columns() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_static_row__cells__columns<Output> skip_columns() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct writer_of_static_row {
+    Output& _out;
+    state_of_static_row<Output> _state;
+    
+    writer_of_static_row(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    static_row__cells<Output> start_cells() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_static_row__cells<Output> cells(Serializer&& f) && {
+        
+        f(writer_of_row<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_clustering_row__row {
+    Output& _out;
+    state_of_clustering_row<Output> _state;
+    
+    
+    
+    void  end_clustering_row() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_clustering_row__row__shadowable_deleted_at {
+    Output& _out;
+    state_of_clustering_row__row<Output> _state;
+    
+    
+    
+    after_clustering_row__row<Output>  end_row() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_clustering_row__row__shadowable_deleted_at__deletion_time {
+    Output& _out;
+    state_of_clustering_row__row__shadowable_deleted_at<Output> _state;
+    
+    
+    
+    after_clustering_row__row__shadowable_deleted_at<Output>  end_shadowable_deleted_at() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_clustering_row__row__shadowable_deleted_at__timestamp {
+    Output& _out;
+    state_of_clustering_row__row__shadowable_deleted_at<Output> _state;
+    
+    
+    
+    after_clustering_row__row__shadowable_deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct clustering_row__row__shadowable_deleted_at {
+    Output& _out;
+    state_of_clustering_row__row__shadowable_deleted_at<Output> _state;
+    
+    clustering_row__row__shadowable_deleted_at(Output& out, state_of_clustering_row__row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_clustering_row__row__shadowable_deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_clustering_row__row__cells {
+    Output& _out;
+    state_of_clustering_row__row<Output> _state;
+    
+    
+    
+    clustering_row__row__shadowable_deleted_at<Output> start_shadowable_deleted_at() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_clustering_row__row__shadowable_deleted_at<Output> write_shadowable_deleted_at(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_clustering_row__row__cells__columns {
+    Output& _out;
+    state_of_clustering_row__row__cells<Output> _state;
+    
+    
+    
+    after_clustering_row__row__cells<Output>  end_cells() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct clustering_row__row__cells__columns {
+    Output& _out;
+    state_of_clustering_row__row__cells<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    clustering_row__row__cells__columns(Output& out, state_of_clustering_row__row__cells<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_column<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(column_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_clustering_row__row__cells__columns<Output> end_columns() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct clustering_row__row__cells {
+    Output& _out;
+    state_of_clustering_row__row__cells<Output> _state;
+    
+    clustering_row__row__cells(Output& out, state_of_clustering_row__row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    clustering_row__row__cells__columns<Output> start_columns() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_clustering_row__row__cells__columns<Output> skip_columns() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_clustering_row__row__deleted_at {
+    Output& _out;
+    state_of_clustering_row__row<Output> _state;
+    
+    
+    
+    clustering_row__row__cells<Output> start_cells() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_clustering_row__row__cells<Output> cells(Serializer&& f) && {
+        
+        f(writer_of_row<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_clustering_row__row__deleted_at__deletion_time {
+    Output& _out;
+    state_of_clustering_row__row__deleted_at<Output> _state;
+    
+    
+    
+    after_clustering_row__row__deleted_at<Output>  end_deleted_at() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_clustering_row__row__deleted_at__timestamp {
+    Output& _out;
+    state_of_clustering_row__row__deleted_at<Output> _state;
+    
+    
+    
+    after_clustering_row__row__deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct clustering_row__row__deleted_at {
+    Output& _out;
+    state_of_clustering_row__row__deleted_at<Output> _state;
+    
+    clustering_row__row__deleted_at(Output& out, state_of_clustering_row__row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_clustering_row__row__deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_clustering_row__row__marker {
+    Output& _out;
+    state_of_clustering_row__row<Output> _state;
+    
+    
+    
+    clustering_row__row__deleted_at<Output> start_deleted_at() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_clustering_row__row__deleted_at<Output> write_deleted_at(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_clustering_row__row__marker__live_marker__created_at {
+    Output& _out;
+    state_of_clustering_row__row__marker__live_marker<Output> _state;
+    
+    
+    
+    after_clustering_row__row__marker<Output>  end_live_marker() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct clustering_row__row__marker__live_marker {
+    Output& _out;
+    state_of_clustering_row__row__marker__live_marker<Output> _state;
+    
+    clustering_row__row__marker__live_marker(Output& out, state_of_clustering_row__row__marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_clustering_row__row__marker__live_marker__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_clustering_row__row__marker__expiring_marker__expiry {
+    Output& _out;
+    state_of_clustering_row__row__marker__expiring_marker<Output> _state;
+    
+    
+    
+    after_clustering_row__row__marker<Output>  end_expiring_marker() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_clustering_row__row__marker__expiring_marker__ttl {
+    Output& _out;
+    state_of_clustering_row__row__marker__expiring_marker<Output> _state;
+    
+    
+    
+    after_clustering_row__row__marker__expiring_marker__expiry<Output> write_expiry(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_clustering_row__row__marker__expiring_marker__lm {
+    Output& _out;
+    state_of_clustering_row__row__marker__expiring_marker<Output> _state;
+    
+    
+    
+    after_clustering_row__row__marker__expiring_marker__ttl<Output> write_ttl(const gc_clock::duration& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_clustering_row__row__marker__expiring_marker__lm__created_at {
+    Output& _out;
+    state_of_clustering_row__row__marker__expiring_marker__lm<Output> _state;
+    
+    
+    
+    after_clustering_row__row__marker__expiring_marker__lm<Output>  end_lm() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct clustering_row__row__marker__expiring_marker__lm {
+    Output& _out;
+    state_of_clustering_row__row__marker__expiring_marker__lm<Output> _state;
+    
+    clustering_row__row__marker__expiring_marker__lm(Output& out, state_of_clustering_row__row__marker__expiring_marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_clustering_row__row__marker__expiring_marker__lm__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct clustering_row__row__marker__expiring_marker {
+    Output& _out;
+    state_of_clustering_row__row__marker__expiring_marker<Output> _state;
+    
+    clustering_row__row__marker__expiring_marker(Output& out, state_of_clustering_row__row__marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    clustering_row__row__marker__expiring_marker__lm<Output> start_lm() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_clustering_row__row__marker__expiring_marker__lm<Output> lm(Serializer&& f) && {
+        
+        f(writer_of_live_marker<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_clustering_row__row__marker__dead_marker__tomb {
+    Output& _out;
+    state_of_clustering_row__row__marker__dead_marker<Output> _state;
+    
+    
+    
+    after_clustering_row__row__marker<Output>  end_dead_marker() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_clustering_row__row__marker__dead_marker__tomb__deletion_time {
+    Output& _out;
+    state_of_clustering_row__row__marker__dead_marker__tomb<Output> _state;
+    
+    
+    
+    after_clustering_row__row__marker__dead_marker__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_clustering_row__row__marker__dead_marker__tomb__timestamp {
+    Output& _out;
+    state_of_clustering_row__row__marker__dead_marker__tomb<Output> _state;
+    
+    
+    
+    after_clustering_row__row__marker__dead_marker__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct clustering_row__row__marker__dead_marker__tomb {
+    Output& _out;
+    state_of_clustering_row__row__marker__dead_marker__tomb<Output> _state;
+    
+    clustering_row__row__marker__dead_marker__tomb(Output& out, state_of_clustering_row__row__marker__dead_marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_clustering_row__row__marker__dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct clustering_row__row__marker__dead_marker {
+    Output& _out;
+    state_of_clustering_row__row__marker__dead_marker<Output> _state;
+    
+    clustering_row__row__marker__dead_marker(Output& out, state_of_clustering_row__row__marker<Output> state)
+            : _out(out)
+            , _state(state)
+            {}
+    
+    clustering_row__row__marker__dead_marker__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_clustering_row__row__marker__dead_marker__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct clustering_row__row__marker__no_marker {
+    Output& _out;
+    state_of_clustering_row__row__marker__no_marker<Output> _state;
+    
+    clustering_row__row__marker__no_marker(Output& out, state_of_clustering_row__row__marker<Output> state)
+            : _out(out)
+            , _state(state)
+            {}
+    
+    after_clustering_row__row__marker<Output>  end_no_marker() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_clustering_row__row__key {
+    Output& _out;
+    state_of_clustering_row__row__marker<Output> _state;
+    
+    after_clustering_row__row__key(Output& out, state_of_clustering_row__row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    clustering_row__row__marker__live_marker<Output> start_marker_live_marker() && {
+        
+        serialize(_out, uint32_t(0));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_clustering_row__row__marker<Output> marker_live_marker(Serializer&& f) && {
+        serialize(_out, uint32_t(0));
+
+        f(writer_of_live_marker<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    clustering_row__row__marker__expiring_marker<Output> start_marker_expiring_marker() && {
+        
+        serialize(_out, uint32_t(1));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_clustering_row__row__marker<Output> marker_expiring_marker(Serializer&& f) && {
+        serialize(_out, uint32_t(1));
+
+        f(writer_of_expiring_marker<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    clustering_row__row__marker__dead_marker<Output> start_marker_dead_marker() && {
+        
+        serialize(_out, uint32_t(2));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_clustering_row__row__marker<Output> marker_dead_marker(Serializer&& f) && {
+        serialize(_out, uint32_t(2));
+
+        f(writer_of_dead_marker<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    clustering_row__row__marker__no_marker<Output> start_marker_no_marker() && {
+        
+        serialize(_out, uint32_t(3));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_clustering_row__row__marker<Output> marker_no_marker(Serializer&& f) && {
+        serialize(_out, uint32_t(3));
+
+        f(writer_of_no_marker<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+};
+
+template<typename Output>
+struct clustering_row__row {
+    Output& _out;
+    state_of_clustering_row__row<Output> _state;
+    
+    clustering_row__row(Output& out, state_of_clustering_row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_clustering_row__row__key<Output> write_key(const clustering_key& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_clustering_row {
+    Output& _out;
+    state_of_clustering_row<Output> _state;
+    
+    writer_of_clustering_row(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    clustering_row__row<Output> start_row() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_clustering_row__row<Output> row(Serializer&& f) && {
+        
+        f(writer_of_deletable_row<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_partition__rows {
+    Output& _out;
+    state_of_mutation_partition<Output> _state;
+    
+    
+    
+    void  end_mutation_partition() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct mutation_partition__rows {
+    Output& _out;
+    state_of_mutation_partition<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    mutation_partition__rows(Output& out, state_of_mutation_partition<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_deletable_row<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(deletable_row_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_mutation_partition__rows<Output> end_rows() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct after_mutation_partition__range_tombstones {
+    Output& _out;
+    state_of_mutation_partition<Output> _state;
+    
+    
+    
+    mutation_partition__rows<Output> start_rows() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation_partition__rows<Output> skip_rows() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct mutation_partition__range_tombstones {
+    Output& _out;
+    state_of_mutation_partition<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    mutation_partition__range_tombstones(Output& out, state_of_mutation_partition<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_range_tombstone<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(range_tombstone_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_mutation_partition__range_tombstones<Output> end_range_tombstones() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct after_mutation_partition__static_row {
+    Output& _out;
+    state_of_mutation_partition<Output> _state;
+    
+    
+    
+    mutation_partition__range_tombstones<Output> start_range_tombstones() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation_partition__range_tombstones<Output> skip_range_tombstones() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_partition__static_row__columns {
+    Output& _out;
+    state_of_mutation_partition__static_row<Output> _state;
+    
+    
+    
+    after_mutation_partition__static_row<Output>  end_static_row() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct mutation_partition__static_row__columns {
+    Output& _out;
+    state_of_mutation_partition__static_row<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    mutation_partition__static_row__columns(Output& out, state_of_mutation_partition__static_row<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_column<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(column_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_mutation_partition__static_row__columns<Output> end_columns() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct mutation_partition__static_row {
+    Output& _out;
+    state_of_mutation_partition__static_row<Output> _state;
+    
+    mutation_partition__static_row(Output& out, state_of_mutation_partition<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    mutation_partition__static_row__columns<Output> start_columns() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation_partition__static_row__columns<Output> skip_columns() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_partition__tomb {
+    Output& _out;
+    state_of_mutation_partition<Output> _state;
+    
+    
+    
+    mutation_partition__static_row<Output> start_static_row() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_mutation_partition__static_row<Output> static_row(Serializer&& f) && {
+        
+        f(writer_of_row<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_partition__tomb__deletion_time {
+    Output& _out;
+    state_of_mutation_partition__tomb<Output> _state;
+    
+    
+    
+    after_mutation_partition__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_partition__tomb__timestamp {
+    Output& _out;
+    state_of_mutation_partition__tomb<Output> _state;
+    
+    
+    
+    after_mutation_partition__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation_partition__tomb {
+    Output& _out;
+    state_of_mutation_partition__tomb<Output> _state;
+    
+    mutation_partition__tomb(Output& out, state_of_mutation_partition<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_mutation_partition__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_mutation_partition {
+    Output& _out;
+    state_of_mutation_partition<Output> _state;
+    
+    writer_of_mutation_partition(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    mutation_partition__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation_partition__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_canonical_mutation__partition {
+    Output& _out;
+    state_of_canonical_mutation<Output> _state;
+    
+    
+    
+    void  end_canonical_mutation() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_canonical_mutation__partition__rows {
+    Output& _out;
+    state_of_canonical_mutation__partition<Output> _state;
+    
+    
+    
+    after_canonical_mutation__partition<Output>  end_partition() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct canonical_mutation__partition__rows {
+    Output& _out;
+    state_of_canonical_mutation__partition<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    canonical_mutation__partition__rows(Output& out, state_of_canonical_mutation__partition<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_deletable_row<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(deletable_row_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_canonical_mutation__partition__rows<Output> end_rows() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct after_canonical_mutation__partition__range_tombstones {
+    Output& _out;
+    state_of_canonical_mutation__partition<Output> _state;
+    
+    
+    
+    canonical_mutation__partition__rows<Output> start_rows() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_canonical_mutation__partition__rows<Output> skip_rows() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct canonical_mutation__partition__range_tombstones {
+    Output& _out;
+    state_of_canonical_mutation__partition<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    canonical_mutation__partition__range_tombstones(Output& out, state_of_canonical_mutation__partition<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_range_tombstone<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(range_tombstone_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_canonical_mutation__partition__range_tombstones<Output> end_range_tombstones() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct after_canonical_mutation__partition__static_row {
+    Output& _out;
+    state_of_canonical_mutation__partition<Output> _state;
+    
+    
+    
+    canonical_mutation__partition__range_tombstones<Output> start_range_tombstones() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_canonical_mutation__partition__range_tombstones<Output> skip_range_tombstones() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_canonical_mutation__partition__static_row__columns {
+    Output& _out;
+    state_of_canonical_mutation__partition__static_row<Output> _state;
+    
+    
+    
+    after_canonical_mutation__partition__static_row<Output>  end_static_row() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct canonical_mutation__partition__static_row__columns {
+    Output& _out;
+    state_of_canonical_mutation__partition__static_row<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    canonical_mutation__partition__static_row__columns(Output& out, state_of_canonical_mutation__partition__static_row<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_column<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(column_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_canonical_mutation__partition__static_row__columns<Output> end_columns() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct canonical_mutation__partition__static_row {
+    Output& _out;
+    state_of_canonical_mutation__partition__static_row<Output> _state;
+    
+    canonical_mutation__partition__static_row(Output& out, state_of_canonical_mutation__partition<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    canonical_mutation__partition__static_row__columns<Output> start_columns() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_canonical_mutation__partition__static_row__columns<Output> skip_columns() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_canonical_mutation__partition__tomb {
+    Output& _out;
+    state_of_canonical_mutation__partition<Output> _state;
+    
+    
+    
+    canonical_mutation__partition__static_row<Output> start_static_row() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_canonical_mutation__partition__static_row<Output> static_row(Serializer&& f) && {
+        
+        f(writer_of_row<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_canonical_mutation__partition__tomb__deletion_time {
+    Output& _out;
+    state_of_canonical_mutation__partition__tomb<Output> _state;
+    
+    
+    
+    after_canonical_mutation__partition__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_canonical_mutation__partition__tomb__timestamp {
+    Output& _out;
+    state_of_canonical_mutation__partition__tomb<Output> _state;
+    
+    
+    
+    after_canonical_mutation__partition__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct canonical_mutation__partition__tomb {
+    Output& _out;
+    state_of_canonical_mutation__partition__tomb<Output> _state;
+    
+    canonical_mutation__partition__tomb(Output& out, state_of_canonical_mutation__partition<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_canonical_mutation__partition__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct canonical_mutation__partition {
+    Output& _out;
+    state_of_canonical_mutation__partition<Output> _state;
+    
+    canonical_mutation__partition(Output& out, state_of_canonical_mutation<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    canonical_mutation__partition__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_canonical_mutation__partition__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_canonical_mutation__mapping {
+    Output& _out;
+    state_of_canonical_mutation<Output> _state;
+    
+    
+    
+    canonical_mutation__partition<Output> start_partition() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_canonical_mutation__partition<Output> partition(Serializer&& f) && {
+        
+        f(writer_of_mutation_partition<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_canonical_mutation__key {
+    Output& _out;
+    state_of_canonical_mutation<Output> _state;
+    
+    
+    
+    after_canonical_mutation__mapping<Output> write_mapping(const column_mapping& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_canonical_mutation__schema_version {
+    Output& _out;
+    state_of_canonical_mutation<Output> _state;
+    
+    
+    
+    after_canonical_mutation__key<Output> write_key(const partition_key& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_canonical_mutation__table_id {
+    Output& _out;
+    state_of_canonical_mutation<Output> _state;
+    
+    
+    
+    after_canonical_mutation__schema_version<Output> write_schema_version(const table_schema_version& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_canonical_mutation {
+    Output& _out;
+    state_of_canonical_mutation<Output> _state;
+    
+    writer_of_canonical_mutation(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_canonical_mutation__table_id<Output> write_table_id(const ::table_id& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation__partition {
+    Output& _out;
+    state_of_mutation<Output> _state;
+    
+    
+    
+    void  end_mutation() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_mutation__partition__rows {
+    Output& _out;
+    state_of_mutation__partition<Output> _state;
+    
+    
+    
+    after_mutation__partition<Output>  end_partition() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct mutation__partition__rows {
+    Output& _out;
+    state_of_mutation__partition<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    mutation__partition__rows(Output& out, state_of_mutation__partition<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_deletable_row<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(deletable_row_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_mutation__partition__rows<Output> end_rows() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct after_mutation__partition__range_tombstones {
+    Output& _out;
+    state_of_mutation__partition<Output> _state;
+    
+    
+    
+    mutation__partition__rows<Output> start_rows() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation__partition__rows<Output> skip_rows() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct mutation__partition__range_tombstones {
+    Output& _out;
+    state_of_mutation__partition<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    mutation__partition__range_tombstones(Output& out, state_of_mutation__partition<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_range_tombstone<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(range_tombstone_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_mutation__partition__range_tombstones<Output> end_range_tombstones() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct after_mutation__partition__static_row {
+    Output& _out;
+    state_of_mutation__partition<Output> _state;
+    
+    
+    
+    mutation__partition__range_tombstones<Output> start_range_tombstones() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation__partition__range_tombstones<Output> skip_range_tombstones() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation__partition__static_row__columns {
+    Output& _out;
+    state_of_mutation__partition__static_row<Output> _state;
+    
+    
+    
+    after_mutation__partition__static_row<Output>  end_static_row() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct mutation__partition__static_row__columns {
+    Output& _out;
+    state_of_mutation__partition__static_row<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    mutation__partition__static_row__columns(Output& out, state_of_mutation__partition__static_row<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_column<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(column_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_mutation__partition__static_row__columns<Output> end_columns() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct mutation__partition__static_row {
+    Output& _out;
+    state_of_mutation__partition__static_row<Output> _state;
+    
+    mutation__partition__static_row(Output& out, state_of_mutation__partition<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    mutation__partition__static_row__columns<Output> start_columns() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation__partition__static_row__columns<Output> skip_columns() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation__partition__tomb {
+    Output& _out;
+    state_of_mutation__partition<Output> _state;
+    
+    
+    
+    mutation__partition__static_row<Output> start_static_row() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_mutation__partition__static_row<Output> static_row(Serializer&& f) && {
+        
+        f(writer_of_row<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation__partition__tomb__deletion_time {
+    Output& _out;
+    state_of_mutation__partition__tomb<Output> _state;
+    
+    
+    
+    after_mutation__partition__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation__partition__tomb__timestamp {
+    Output& _out;
+    state_of_mutation__partition__tomb<Output> _state;
+    
+    
+    
+    after_mutation__partition__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation__partition__tomb {
+    Output& _out;
+    state_of_mutation__partition__tomb<Output> _state;
+    
+    mutation__partition__tomb(Output& out, state_of_mutation__partition<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_mutation__partition__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation__partition {
+    Output& _out;
+    state_of_mutation__partition<Output> _state;
+    
+    mutation__partition(Output& out, state_of_mutation<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    mutation__partition__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation__partition__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation__key {
+    Output& _out;
+    state_of_mutation<Output> _state;
+    
+    
+    
+    mutation__partition<Output> start_partition() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_mutation__partition<Output> partition(Serializer&& f) && {
+        
+        f(writer_of_mutation_partition<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation__schema_version {
+    Output& _out;
+    state_of_mutation<Output> _state;
+    
+    
+    
+    after_mutation__key<Output> write_key(const partition_key& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation__table_id {
+    Output& _out;
+    state_of_mutation<Output> _state;
+    
+    
+    
+    after_mutation__schema_version<Output> write_schema_version(const table_schema_version& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_mutation {
+    Output& _out;
+    state_of_mutation<Output> _state;
+    
+    writer_of_mutation(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    after_mutation__table_id<Output> write_table_id(const ::table_id& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment {
+    Output& _out;
+    state_of_mutation_fragment<Output> _state;
+    
+    
+    
+    void  end_mutation_fragment() {
+        _state.f.end(_out);
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment<Output>  end_clustering_row() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row<Output>  end_row() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__deletion_time {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output>  end_shadowable_deleted_at() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__timestamp {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> _state;
+    
+    mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at(Output& out, state_of_mutation_fragment__fragment__clustering_row__row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__cells {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
+    
+    
+    
+    mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> start_shadowable_deleted_at() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> write_shadowable_deleted_at(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__cells__columns {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__cells<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__cells<Output>  end_cells() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__clustering_row__row__cells__columns {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__cells<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    mutation_fragment__fragment__clustering_row__row__cells__columns(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__cells<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_column<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(column_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_mutation_fragment__fragment__clustering_row__row__cells__columns<Output> end_columns() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__clustering_row__row__cells {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__cells<Output> _state;
+    
+    mutation_fragment__fragment__clustering_row__row__cells(Output& out, state_of_mutation_fragment__fragment__clustering_row__row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    mutation_fragment__fragment__clustering_row__row__cells__columns<Output> start_columns() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation_fragment__fragment__clustering_row__row__cells__columns<Output> skip_columns() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__deleted_at {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
+    
+    
+    
+    mutation_fragment__fragment__clustering_row__row__cells<Output> start_cells() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_mutation_fragment__fragment__clustering_row__row__cells<Output> cells(Serializer&& f) && {
+        
+        f(writer_of_row<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__deleted_at__deletion_time {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__deleted_at<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__deleted_at<Output>  end_deleted_at() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__deleted_at__timestamp {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__deleted_at<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__clustering_row__row__deleted_at {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__deleted_at<Output> _state;
+    
+    mutation_fragment__fragment__clustering_row__row__deleted_at(Output& out, state_of_mutation_fragment__fragment__clustering_row__row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_mutation_fragment__fragment__clustering_row__row__deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__marker {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
+    
+    
+    
+    mutation_fragment__fragment__clustering_row__row__deleted_at<Output> start_deleted_at() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation_fragment__fragment__clustering_row__row__deleted_at<Output> write_deleted_at(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__marker__live_marker__created_at {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__live_marker<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__marker<Output>  end_live_marker() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__clustering_row__row__marker__live_marker {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__live_marker<Output> _state;
+    
+    mutation_fragment__fragment__clustering_row__row__marker__live_marker(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_mutation_fragment__fragment__clustering_row__row__marker__live_marker__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__expiry {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__marker<Output>  end_expiring_marker() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__ttl {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__expiry<Output> write_expiry(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__ttl<Output> write_ttl(const gc_clock::duration& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm__created_at {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output>  end_lm() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> _state;
+    
+    mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm__created_at<Output> write_created_at(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__clustering_row__row__marker__expiring_marker {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
+    
+    mutation_fragment__fragment__clustering_row__row__marker__expiring_marker(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> start_lm() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> lm(Serializer&& f) && {
+        
+        f(writer_of_live_marker<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__marker<Output>  end_dead_marker() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__deletion_time {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__timestamp {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> _state;
+    
+    mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__clustering_row__row__marker__dead_marker {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker<Output> _state;
+    
+    mutation_fragment__fragment__clustering_row__row__marker__dead_marker(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> state)
+            : _out(out)
+            , _state(state)
+            {}
+    
+    mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__clustering_row__row__marker__no_marker {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker__no_marker<Output> _state;
+    
+    mutation_fragment__fragment__clustering_row__row__marker__no_marker(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> state)
+            : _out(out)
+            , _state(state)
+            {}
+    
+    after_mutation_fragment__fragment__clustering_row__row__marker<Output>  end_no_marker() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__clustering_row__row__key {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> _state;
+    
+    after_mutation_fragment__fragment__clustering_row__row__key(Output& out, state_of_mutation_fragment__fragment__clustering_row__row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    mutation_fragment__fragment__clustering_row__row__marker__live_marker<Output> start_marker_live_marker() && {
+        
+        serialize(_out, uint32_t(0));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_mutation_fragment__fragment__clustering_row__row__marker<Output> marker_live_marker(Serializer&& f) && {
+        serialize(_out, uint32_t(0));
+
+        f(writer_of_live_marker<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> start_marker_expiring_marker() && {
+        
+        serialize(_out, uint32_t(1));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_mutation_fragment__fragment__clustering_row__row__marker<Output> marker_expiring_marker(Serializer&& f) && {
+        serialize(_out, uint32_t(1));
+
+        f(writer_of_expiring_marker<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    mutation_fragment__fragment__clustering_row__row__marker__dead_marker<Output> start_marker_dead_marker() && {
+        
+        serialize(_out, uint32_t(2));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_mutation_fragment__fragment__clustering_row__row__marker<Output> marker_dead_marker(Serializer&& f) && {
+        serialize(_out, uint32_t(2));
+
+        f(writer_of_dead_marker<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+    mutation_fragment__fragment__clustering_row__row__marker__no_marker<Output> start_marker_no_marker() && {
+        
+        serialize(_out, uint32_t(3));
+
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_mutation_fragment__fragment__clustering_row__row__marker<Output> marker_no_marker(Serializer&& f) && {
+        serialize(_out, uint32_t(3));
+
+        f(writer_of_no_marker<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__clustering_row__row {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
+    
+    mutation_fragment__fragment__clustering_row__row(Output& out, state_of_mutation_fragment__fragment__clustering_row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_mutation_fragment__fragment__clustering_row__row__key<Output> write_key(const clustering_key& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__clustering_row {
+    Output& _out;
+    state_of_mutation_fragment__fragment__clustering_row<Output> _state;
+    
+    mutation_fragment__fragment__clustering_row(Output& out, state_of_mutation_fragment__fragment<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    mutation_fragment__fragment__clustering_row__row<Output> start_row() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_mutation_fragment__fragment__clustering_row__row<Output> row(Serializer&& f) && {
+        
+        f(writer_of_deletable_row<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__static_row__cells {
+    Output& _out;
+    state_of_mutation_fragment__fragment__static_row<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment<Output>  end_static_row() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__static_row__cells__columns {
+    Output& _out;
+    state_of_mutation_fragment__fragment__static_row__cells<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__static_row__cells<Output>  end_cells() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__static_row__cells__columns {
+    Output& _out;
+    state_of_mutation_fragment__fragment__static_row__cells<Output> _state;
+        place_holder<Output> _size;
+    size_type _count = 0;
+    mutation_fragment__fragment__static_row__cells__columns(Output& out, state_of_mutation_fragment__fragment__static_row__cells<Output> state)
+            : _out(out)
+            , _state(state)
+            , _size(start_place_holder(out))
+            {}
+    
+  writer_of_column<Output> add() {
+        _count++;
+        return {_out};
+  }
+  void add(column_view v) {
+        serialize(_out, v);
+        _count++;
+  }
+  after_mutation_fragment__fragment__static_row__cells__columns<Output> end_columns() && {
+        _size.set(_out, _count);
+        return { _out, std::move(_state) };
+  }
+
+  vector_position pos() const {
+        return vector_position{_out.pos(), _count};
+  }
+
+  void rollback(const vector_position& vp) {
+        _out.retract(vp.pos);
+        _count = vp.count;
+  }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__static_row__cells {
+    Output& _out;
+    state_of_mutation_fragment__fragment__static_row__cells<Output> _state;
+    
+    mutation_fragment__fragment__static_row__cells(Output& out, state_of_mutation_fragment__fragment__static_row<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    mutation_fragment__fragment__static_row__cells__columns<Output> start_columns() && {
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation_fragment__fragment__static_row__cells__columns<Output> skip_columns() && {
+        serialize(_out, size_type(0));
+        return { _out, std::move(_state) };
+    }
+
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__static_row {
+    Output& _out;
+    state_of_mutation_fragment__fragment__static_row<Output> _state;
+    
+    mutation_fragment__fragment__static_row(Output& out, state_of_mutation_fragment__fragment<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    mutation_fragment__fragment__static_row__cells<Output> start_cells() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    template<typename Serializer>
+    after_mutation_fragment__fragment__static_row__cells<Output> cells(Serializer&& f) && {
+        
+        f(writer_of_row<Output>(_out));
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__range_tombstone__end_kind {
+    Output& _out;
+    state_of_mutation_fragment__fragment__range_tombstone<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment<Output>  end_range_tombstone() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__range_tombstone__end {
+    Output& _out;
+    state_of_mutation_fragment__fragment__range_tombstone<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__range_tombstone__end_kind<Output> write_end_kind(const bound_kind& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__range_tombstone__start_kind {
+    Output& _out;
+    state_of_mutation_fragment__fragment__range_tombstone<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__range_tombstone__end<Output> write_end(const clustering_key_prefix& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__range_tombstone__tomb {
+    Output& _out;
+    state_of_mutation_fragment__fragment__range_tombstone<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__range_tombstone__start_kind<Output> write_start_kind(const bound_kind& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__range_tombstone__tomb__deletion_time {
+    Output& _out;
+    state_of_mutation_fragment__fragment__range_tombstone__tomb<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__range_tombstone__tomb<Output>  end_tomb() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__range_tombstone__tomb__timestamp {
+    Output& _out;
+    state_of_mutation_fragment__fragment__range_tombstone__tomb<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__range_tombstone__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__range_tombstone__tomb {
+    Output& _out;
+    state_of_mutation_fragment__fragment__range_tombstone__tomb<Output> _state;
+    
+    mutation_fragment__fragment__range_tombstone__tomb(Output& out, state_of_mutation_fragment__fragment__range_tombstone<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_mutation_fragment__fragment__range_tombstone__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__range_tombstone__start {
+    Output& _out;
+    state_of_mutation_fragment__fragment__range_tombstone<Output> _state;
+    
+    
+    
+    mutation_fragment__fragment__range_tombstone__tomb<Output> start_tomb() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation_fragment__fragment__range_tombstone__tomb<Output> write_tomb(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__range_tombstone {
+    Output& _out;
+    state_of_mutation_fragment__fragment__range_tombstone<Output> _state;
+    
+    mutation_fragment__fragment__range_tombstone(Output& out, state_of_mutation_fragment__fragment<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_mutation_fragment__fragment__range_tombstone__start<Output> write_start(const clustering_key_prefix& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__partition_start__partition_tombstone {
+    Output& _out;
+    state_of_mutation_fragment__fragment__partition_start<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment<Output>  end_partition_start() && {
+        _state.f.end(_out);
+        _state._parent.f.end(_out);
+        return { _out, std::move(_state._parent._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__partition_start__partition_tombstone__deletion_time {
+    Output& _out;
+    state_of_mutation_fragment__fragment__partition_start__partition_tombstone<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__partition_start__partition_tombstone<Output>  end_partition_tombstone() && {
+        _state.f.end(_out);
+        return { _out, std::move(_state._parent) };
+    }
+
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__partition_start__partition_tombstone__timestamp {
+    Output& _out;
+    state_of_mutation_fragment__fragment__partition_start__partition_tombstone<Output> _state;
+    
+    
+    
+    after_mutation_fragment__fragment__partition_start__partition_tombstone__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__partition_start__partition_tombstone {
+    Output& _out;
+    state_of_mutation_fragment__fragment__partition_start__partition_tombstone<Output> _state;
+    
+    mutation_fragment__fragment__partition_start__partition_tombstone(Output& out, state_of_mutation_fragment__fragment__partition_start<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_mutation_fragment__fragment__partition_start__partition_tombstone__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct after_mutation_fragment__fragment__partition_start__key {
+    Output& _out;
+    state_of_mutation_fragment__fragment__partition_start<Output> _state;
+    
+    
+    
+    mutation_fragment__fragment__partition_start__partition_tombstone<Output> start_partition_tombstone() && {
+        
+        
+        return { _out, std::move(_state) };
+    }
+
+    after_mutation_fragment__fragment__partition_start__partition_tombstone<Output> write_partition_tombstone(const tombstone& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct mutation_fragment__fragment__partition_start {
+    Output& _out;
+    state_of_mutation_fragment__fragment__partition_start<Output> _state;
+    
+    mutation_fragment__fragment__partition_start(Output& out, state_of_mutation_fragment__fragment<Output> state)
+            : _out(out)
+            , _state{start_frame(out), std::move(state)}
+            {}
+    
+    after_mutation_fragment__fragment__partition_start__key<Output> write_key(const partition_key& t) && {
+        
+        
+        serialize(_out, t);
+        
+        return { _out, std::move(_state) };
+    }
+};
+
+template<typename Output>
+struct writer_of_mutation_fragment {
+    Output& _out;
+    state_of_mutation_fragment<Output> _state;
+    
+    writer_of_mutation_fragment(Output& out)
+            : _out(out)
+            , _state{start_frame(out)}
+            {}
+    
+    mutation_fragment__fragment__clustering_row<Output> start_fragment_clustering_row() && {
+        auto state = state_of_mutation_fragment__fragment<Output> { start_frame(_out), std::move(_state) };
+        serialize(_out, uint32_t(0));
+
+        return { _out, std::move(state) };
+    }
+
+    template<typename Serializer>
+    after_mutation_fragment__fragment<Output> fragment_clustering_row(Serializer&& f) && {
+        serialize(_out, uint32_t(0));
+
+        f(writer_of_clustering_row<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state) };
+    }
+    mutation_fragment__fragment__static_row<Output> start_fragment_static_row() && {
+        auto state = state_of_mutation_fragment__fragment<Output> { start_frame(_out), std::move(_state) };
+        serialize(_out, uint32_t(1));
+
+        return { _out, std::move(state) };
+    }
+
+    template<typename Serializer>
+    after_mutation_fragment__fragment<Output> fragment_static_row(Serializer&& f) && {
+        serialize(_out, uint32_t(1));
+
+        f(writer_of_static_row<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state) };
+    }
+    mutation_fragment__fragment__range_tombstone<Output> start_fragment_range_tombstone() && {
+        auto state = state_of_mutation_fragment__fragment<Output> { start_frame(_out), std::move(_state) };
+        serialize(_out, uint32_t(2));
+
+        return { _out, std::move(state) };
+    }
+
+    after_mutation_fragment__fragment<Output> write_fragment_range_tombstone(const range_tombstone& t) && {
+        auto state = state_of_mutation_fragment__fragment<Output> { start_frame(_out), std::move(_state) };
+        serialize(_out, uint32_t(2));
+
+        serialize(_out, t);
+        state.f.end(_out);
+        return { _out, std::move(_state) };
+    }
+    mutation_fragment__fragment__partition_start<Output> start_fragment_partition_start() && {
+        auto state = state_of_mutation_fragment__fragment<Output> { start_frame(_out), std::move(_state) };
+        serialize(_out, uint32_t(3));
+
+        return { _out, std::move(state) };
+    }
+
+    template<typename Serializer>
+    after_mutation_fragment__fragment<Output> fragment_partition_start(Serializer&& f) && {
+        serialize(_out, uint32_t(3));
+
+        f(writer_of_partition_start<Output>(_out));
+        _state.f.end(_out);
+        return { _out, std::move(_state) };
+    }
+    after_mutation_fragment__fragment<Output> write_fragment_partition_end(const partition_end& t) && {
+        auto state = state_of_mutation_fragment__fragment<Output> { start_frame(_out), std::move(_state) };
+        serialize(_out, uint32_t(4));
+
+        serialize(_out, t);
+        state.f.end(_out);
+        return { _out, std::move(_state) };
+    }
+};
+} // ser
+
+
+
+namespace ser {
+class mutation_partition_view;
+}
+
+class partition_builder;
+class converting_mutation_partition_applier;
+
+template<typename T>
+concept MutationViewVisitor = requires (T& visitor, tombstone t, atomic_cell ac,
+                                             collection_mutation_view cmv, range_tombstone rt,
+                                             position_in_partition_view pipv, row_tombstone row_tomb,
+                                             row_marker rm) {
+    visitor.accept_partition_tombstone(t);
+    visitor.accept_static_cell(column_id(), std::move(ac));
+    visitor.accept_static_cell(column_id(), cmv);
+    visitor.accept_row_tombstone(rt);
+    visitor.accept_row(pipv, row_tomb, rm,
+            is_dummy::no, is_continuous::yes);
+    visitor.accept_row_cell(column_id(), std::move(ac));
+    visitor.accept_row_cell(column_id(), cmv);
+};
+
+class mutation_partition_view_virtual_visitor {
+public:
+    virtual ~mutation_partition_view_virtual_visitor();
+    virtual void accept_partition_tombstone(tombstone t) = 0;
+    virtual void accept_static_cell(column_id, atomic_cell ac) = 0;
+    virtual void accept_static_cell(column_id, collection_mutation_view cmv) = 0;
+    virtual stop_iteration accept_row_tombstone(range_tombstone rt) = 0;
+    virtual stop_iteration accept_row(position_in_partition_view pipv, row_tombstone rt, row_marker rm, is_dummy, is_continuous) = 0;
+    virtual void accept_row_cell(column_id, atomic_cell ac) = 0;
+    virtual void accept_row_cell(column_id, collection_mutation_view cmv) = 0;
+};
+
+// View on serialized mutation partition. See mutation_partition_serializer.
+class mutation_partition_view {
+    utils::input_stream _in;
+private:
+    mutation_partition_view(utils::input_stream v)
+        : _in(v)
+    { }
+
+    template<typename Visitor>
+    requires MutationViewVisitor<Visitor>
+    void do_accept(const column_mapping&, Visitor& visitor) const;
+
+    template<typename Visitor>
+    requires MutationViewVisitor<Visitor>
+    future<> do_accept_gently(const column_mapping&, Visitor& visitor) const;
+
+    struct accept_ordered_cookie {
+        bool accepted_partition_tombstone = false;
+        bool accepted_static_row = false;
+
+        struct rts_crs_iterators {
+            ser::vector_deserializer<ser::range_tombstone_view>::const_iterator rts_begin;
+            ser::vector_deserializer<ser::range_tombstone_view>::const_iterator rts_end;
+            ser::vector_deserializer<ser::deletable_row_view>::const_iterator crs_begin;
+            ser::vector_deserializer<ser::deletable_row_view>::const_iterator crs_end;
+        };
+        std::optional<rts_crs_iterators> iterators;
+    };
+
+    struct accept_ordered_result {
+        stop_iteration stop = stop_iteration::no;
+        accept_ordered_cookie cookie;
+    };
+
+    template <bool is_preemptible>
+    accept_ordered_result do_accept_ordered(const schema& schema, mutation_partition_view_virtual_visitor& mpvvv, accept_ordered_cookie cookie) const;
+
+public:
+    static mutation_partition_view from_stream(utils::input_stream v) {
+        return { v };
+    }
+    static mutation_partition_view from_view(ser::mutation_partition_view v);
+    void accept(const schema& schema, partition_builder& visitor) const;
+    future<> accept_gently(const schema& schema, partition_builder& visitor) const;
+    void accept(const column_mapping&, converting_mutation_partition_applier& visitor) const;
+    future<> accept_gently(const column_mapping&, converting_mutation_partition_applier& visitor) const;
+    void accept(const column_mapping&, mutation_partition_view_virtual_visitor& mpvvv) const;
+    void accept_ordered(const schema& schema, mutation_partition_view_virtual_visitor& mpvvv) const;
+    future<> accept_gently_ordered(const schema&, mutation_partition_view_virtual_visitor& mpvvv) const;
+
+    std::optional<clustering_key> first_row_key() const;
+    std::optional<clustering_key> last_row_key() const;
+};
+
+
 #include "db/view/view.hh"
 #include <deque>
 #include "dht/boot_strapper.hh"
