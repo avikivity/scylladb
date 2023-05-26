@@ -16019,15 +16019,9 @@ public:
     gms::inet_address get_client_address() const {
         return gms::inet_address(_remote_address);
     }
-    ::in_port_t get_client_port() const {
-        return _remote_address.port();
-    }
-    const socket_address& get_remote_address() const {
-        return _remote_address;
-    }
-    const timeout_config& get_timeout_config() const {
-        return _timeout_config;
-    }
+    ::in_port_t get_client_port() const ;
+    const socket_address& get_remote_address() const ;
+    const timeout_config& get_timeout_config() const ;
     qos::service_level_controller& get_service_level_controller() const {
         return *_sl_controller;
     }
@@ -16040,39 +16034,18 @@ public:
             , _default_timeout_config(config)
             , _timeout_config(config)
     {}
-    client_state(internal_tag, auth::service& auth_service, qos::service_level_controller& sl_controller, sstring username)
-        : _user(auth::authenticated_user(username))
-        , _auth_state(auth_state::READY)
-        , _is_internal(true)
-        , _is_thrift(false)
-        , _auth_service(&auth_service)
-        , _sl_controller(&sl_controller)
-    {}
+    client_state(internal_tag, auth::service& auth_service, qos::service_level_controller& sl_controller, sstring username) 
+    ;
     client_state(const client_state&) = delete;
     client_state(client_state&&) = default;
     ///
     /// `nullptr` for internal instances.
     ///
-    const auth::service* get_auth_service() const {
-        return _auth_service;
-    }
-    bool is_thrift() const {
-        return _is_thrift;
-    }
-    bool is_internal() const {
-        return _is_internal;
-    }
-    static client_state& for_internal_calls() {
-        static thread_local client_state s(internal_tag{});
-        return s;
-    }
-    api::timestamp_type get_timestamp() {
-        auto current = api::new_timestamp();
-        auto last = _last_timestamp_micros;
-        auto result = last >= current ? last + 1 : current;
-        _last_timestamp_micros = result;
-        return result;
-    }
+    const auth::service* get_auth_service() const ;
+    bool is_thrift() const ;
+    bool is_internal() const ;
+    static client_state& for_internal_calls() ;
+    api::timestamp_type get_timestamp() ;
     api::timestamp_type get_timestamp_for_paxos(api::timestamp_type min_timestamp_to_use) ;
 #if 0
     public SocketAddress getRemoteAddress()
@@ -16276,15 +16249,9 @@ public:
             auto d2 = p2.size(_s);
             return ((d1 <= d2) ? w1 << 1 : 1) <=> ((d2 <= d1) ? w2 << 1 : 1);
         }
-        std::strong_ordering operator()(const bound_view b, const clustering_key_prefix& p) const {
-            return operator()(b._prefix, weight(b._kind), p, 0);
-        }
-        std::strong_ordering operator()(const clustering_key_prefix& p, const bound_view b) const {
-            return operator()(p, 0, b._prefix, weight(b._kind));
-        }
-        std::strong_ordering operator()(const bound_view b1, const bound_view b2) const {
-            return operator()(b1._prefix, weight(b1._kind), b2._prefix, weight(b2._kind));
-        }
+        std::strong_ordering operator()(const bound_view b, const clustering_key_prefix& p) const ;
+        std::strong_ordering operator()(const clustering_key_prefix& p, const bound_view b) const ;
+        std::strong_ordering operator()(const bound_view b1, const bound_view b2) const ;
     };
     struct compare {
         // To make it assignable and to avoid taking a schema_ptr, we
@@ -16349,46 +16316,17 @@ public:
         return out << "{bound: prefix=" << b._prefix.get() << ", kind=" << b._kind << "}";
     }
 };
-inline
-lexicographical_relation relation_for_lower_bound(composite_view v) {
-    switch (v.last_eoc()) {
-        case composite::eoc::start:
-        case composite::eoc::none:
-            return lexicographical_relation::before_all_prefixed;
-        case composite::eoc::end:
-            return lexicographical_relation::after_all_prefixed;
-    }
-    abort();
-}
-inline
-lexicographical_relation relation_for_upper_bound(composite_view v) {
-    switch (v.last_eoc()) {
-        case composite::eoc::start:
-            return lexicographical_relation::before_all_prefixed;
-        case composite::eoc::none:
-            return lexicographical_relation::before_all_strictly_prefixed;
-        case composite::eoc::end:
-            return lexicographical_relation::after_all_prefixed;
-    }
-    abort();
-}
+
+lexicographical_relation relation_for_lower_bound(composite_view v) ;
+
+lexicographical_relation relation_for_upper_bound(composite_view v) ;
 enum class bound_weight : int8_t {
     before_all_prefixed = -1,
     equal = 0,
     after_all_prefixed = 1,
 };
-inline
-bound_weight reversed(bound_weight w) {
-    switch (w) {
-        case bound_weight::equal:
-            return w;
-        case bound_weight::before_all_prefixed:
-            return bound_weight::after_all_prefixed;
-        case bound_weight::after_all_prefixed:
-            return bound_weight::before_all_prefixed;
-    }
-    std::abort();
-}
+
+bound_weight reversed(bound_weight w) ;
 inline
 bound_weight position_weight(bound_kind k) {
     switch (k) {
@@ -16440,23 +16378,11 @@ public:
     bool is_before_key() const {
         return _bound_weight == bound_weight::before_all_prefixed;
     }
-    bool is_after_key() const {
-        return _bound_weight == bound_weight::after_all_prefixed;
-    }
+    bool is_after_key() const ;
 private:
     // Returns placement of this position_in_partition relative to *_ck,
     // or lexicographical_relation::at_prefix if !_ck.
-    lexicographical_relation relation() const {
-        // FIXME: Currently position_range cannot represent a range end bound which
-        // includes just the prefix key or a range start which excludes just a prefix key.
-        // In both cases we should return lexicographical_relation::before_all_strictly_prefixed here.
-        // Refs #1446.
-        if (_bound_weight == bound_weight::after_all_prefixed) {
-            return lexicographical_relation::after_all_prefixed;
-        } else {
-            return lexicographical_relation::before_all_prefixed;
-        }
-    }
+    lexicographical_relation relation() const ;
 public:
     struct partition_start_tag_t { };
     struct end_of_partition_tag_t { };
@@ -16464,7 +16390,7 @@ public:
     struct clustering_row_tag_t { };
     struct range_tag_t { };
     using range_tombstone_tag_t = range_tag_t;
-    explicit position_in_partition_view(partition_start_tag_t) : _type(partition_region::partition_start), _ck(nullptr) { }
+    explicit position_in_partition_view(partition_start_tag_t)  ;
     explicit position_in_partition_view(end_of_partition_tag_t) : _type(partition_region::partition_end), _ck(nullptr) { }
     explicit position_in_partition_view(static_row_tag_t) : _type(partition_region::static_row), _ck(nullptr) { }
     position_in_partition_view(clustering_row_tag_t, const clustering_key_prefix& ck)
@@ -16498,14 +16424,10 @@ public:
     static position_in_partition_view after_all_prefixed(position_in_partition_view pos) {
         return {partition_region::clustered, pos._bound_weight == bound_weight::equal ? bound_weight::after_all_prefixed : pos._bound_weight, pos._ck};
     }
-    static position_in_partition_view before_key(const clustering_key& ck) {
-        return {partition_region::clustered, bound_weight::before_all_prefixed, &ck};
-    }
+    static position_in_partition_view before_key(const clustering_key& ck) ;
     // Returns a view to before_key(pos._ck) if pos.is_clustering_row() else returns pos as-is.
-    static position_in_partition_view before_key(position_in_partition_view pos) {
-        return {partition_region::clustered, pos._bound_weight == bound_weight::equal ? bound_weight::before_all_prefixed : pos._bound_weight, pos._ck};
-    }
-    partition_region region() const { return _type; }
+    static position_in_partition_view before_key(position_in_partition_view pos) ;
+    partition_region region() const ;
     bound_weight get_bound_weight() const ;
     bool is_partition_start() const ;
     bool is_partition_end() const ;
@@ -16515,14 +16437,10 @@ public:
     // Returns true if all fragments that can be seen for given schema have
     // positions >= than this. partition_start is ignored.
     bool is_before_all_fragments(const schema& s) const ;
-    bool is_after_all_clustered_rows(const schema& s) const {
-        return is_partition_end() || (_ck && _ck->is_empty(s) && _bound_weight == bound_weight::after_all_prefixed);
-    }
-    bool has_key() const { return bool(_ck); }
+    bool is_after_all_clustered_rows(const schema& s) const ;
+    bool has_key() const ;
     // Valid when has_key() == true
-    const clustering_key_prefix& key() const {
-        return *_ck;
-    }
+    const clustering_key_prefix& key() const ;
     // Can be called only when !is_static_row && !is_clustering_row().
     bound_view as_start_bound_view() const {
         assert(_bound_weight != bound_weight::equal);
@@ -16540,9 +16458,7 @@ public:
         friend fmt::formatter<printer>;
     };
     // Create a position which is the same as this one but governed by a schema with reversed clustering key order.
-    position_in_partition_view reversed() const {
-        return position_in_partition_view(_type, ::reversed(_bound_weight), _ck);
-    }
+    position_in_partition_view reversed() const ;
     friend fmt::formatter<printer>;
     friend fmt::formatter<position_in_partition_view>;
     friend bool no_clustering_row_between(const schema&, position_in_partition_view, position_in_partition_view);
@@ -16589,8 +16505,8 @@ public:
     struct before_clustering_row_tag_t { };
     struct range_tag_t { };
     using range_tombstone_tag_t = range_tag_t;
-    partition_region get_type() const { return _type; }
-    bound_weight get_bound_weight() const { return _bound_weight; }
+    partition_region get_type() const ;
+    bound_weight get_bound_weight() const ;
     const std::optional<clustering_key_prefix>& get_clustering_key_prefix() const { return _ck; }
     position_in_partition(partition_region type, bound_weight weight, std::optional<clustering_key_prefix> ck)
         : _type(type), _bound_weight(weight), _ck(std::move(ck)) { }
@@ -16658,9 +16574,7 @@ public:
     // If given position is a clustering row position, returns a position
     // right before it. Otherwise, returns it unchanged.
     // The position "pos" must be a clustering position.
-    static position_in_partition before_key(position_in_partition_view pos) {
-        return {before_clustering_row_tag_t(), pos};
-    }
+    static position_in_partition before_key(position_in_partition_view pos) ;
     static position_in_partition before_key(clustering_key ck) ;
     static position_in_partition after_key(const schema& s, clustering_key ck) ;
     // If given position is a clustering row position, returns a position
@@ -16680,25 +16594,12 @@ public:
     bool is_partition_end() const ;
     bool is_static_row() const ;
     bool is_clustering_row() const ;
-    bool has_clustering_key() const { return _type == partition_region::clustered; }
-    bool is_after_all_clustered_rows(const schema& s) const {
-        return is_partition_end() || (_ck && _ck->is_empty(s) && _bound_weight == bound_weight::after_all_prefixed);
-    }
-    bool is_before_all_clustered_rows(const schema& s) const {
-        return _type < partition_region::clustered
-               || (_type == partition_region::clustered && _ck->is_empty(s) && _bound_weight == bound_weight::before_all_prefixed);
-    }
+    bool has_clustering_key() const ;
+    bool is_after_all_clustered_rows(const schema& s) const ;
+    bool is_before_all_clustered_rows(const schema& s) const ;
     template<typename Hasher>
-    void feed_hash(Hasher& hasher, const schema& s) const {
-        ::feed_hash(hasher, _bound_weight);
-        if (_ck) {
-            ::feed_hash(hasher, true);
-            ::feed_hash(hasher, *_ck, s);
-        } else {
-            ::feed_hash(hasher, false);
-        }
-    }
-    bool has_key() const { return bool(_ck); }
+    void feed_hash(Hasher& hasher, const schema& s) const ;
+    bool has_key() const ;
     const clustering_key_prefix& key() const {
         return *_ck;
     }
@@ -16741,43 +16642,9 @@ public:
                 b._ck->begin(_s), b._ck->end(_s),
                 cmp, a.relation(), b.relation());
         }
-        std::strong_ordering operator()(position_in_partition_view a, composite_view b) const {
-            if (b.empty()) {
-                return std::strong_ordering::greater; // a cannot be empty.
-            }
-            partition_region b_type = b.is_static() ? partition_region::static_row : partition_region::clustered;
-            if (a._type != b_type) {
-                return rank(a._type) <=> rank(b_type);
-            }
-            if (!a._ck) {
-                return std::strong_ordering::equal;
-            }
-            auto&& types = _s.clustering_key_type()->types();
-            auto b_values = b.values();
-            auto cmp = [&] (const data_type& t, managed_bytes_view c1, managed_bytes_view c2) { return t->compare(c1, c2); };
-            return lexicographical_tri_compare(types.begin(), types.end(),
-                a._ck->begin(_s), a._ck->end(_s),
-                b_values.begin(), b_values.end(),
-                cmp, a.relation(), relation_for_lower_bound(b));
-        }
-        std::strong_ordering operator()(composite_view a, position_in_partition_view b) const {
-            return 0 <=> (*this)(b, a);
-        }
-        std::strong_ordering operator()(composite_view a, composite_view b) const {
-            if (a.is_static() != b.is_static()) {
-                return a.is_static() ? std::strong_ordering::less : std::strong_ordering::greater;
-            }
-            auto&& types = _s.clustering_key_type()->types();
-            auto a_values = a.values();
-            auto b_values = b.values();
-            auto cmp = [&] (const data_type& t, bytes_view c1, bytes_view c2) { return t->compare(c1, c2); };
-            return lexicographical_tri_compare(types.begin(), types.end(),
-                a_values.begin(), a_values.end(),
-                b_values.begin(), b_values.end(),
-                cmp,
-                relation_for_lower_bound(a),
-                relation_for_lower_bound(b));
-        }
+        std::strong_ordering operator()(position_in_partition_view a, composite_view b) const ;
+        std::strong_ordering operator()(composite_view a, position_in_partition_view b) const ;
+        std::strong_ordering operator()(composite_view a, composite_view b) const ;
     };
     // Less comparator giving the same order as composite_tri_compare.
     class composite_less_compare {
@@ -16848,15 +16715,9 @@ public:
         }
     public:
         equal_compare(const schema& s) : _equal(s) { }
-        bool operator()(const position_in_partition& a, const position_in_partition& b) const {
-            return compare(a, b);
-        }
-        bool operator()(const position_in_partition_view& a, const position_in_partition_view& b) const {
-            return compare(a, b);
-        }
-        bool operator()(const position_in_partition_view& a, const position_in_partition& b) const {
-            return compare(a, b);
-        }
+        bool operator()(const position_in_partition& a, const position_in_partition& b) const ;
+        bool operator()(const position_in_partition_view& a, const position_in_partition_view& b) const ;
+        bool operator()(const position_in_partition_view& a, const position_in_partition& b) const ;
         bool operator()(const position_in_partition& a, const position_in_partition_view& b) const {
             return compare(a, b);
         }
@@ -16892,55 +16753,19 @@ struct view_and_holder {
         : holder(std::move(other.holder))
         , view(holder ? *holder : other.view)
     { }
-    view_and_holder& operator=(view_and_holder&& other) noexcept {
-        holder = std::move(other.holder);
-        view = holder ? *holder: other.view;
-        return *this;
-    }
+    view_and_holder& operator=(view_and_holder&& other) noexcept ;
 };
-inline
-view_and_holder position_in_partition_view::after_key(const schema& s, position_in_partition_view pos) {
-    if (!pos.is_clustering_row()) {
-        return view_and_holder(pos);
-    }
-    if (pos.key().is_full(s)) {
-        return view_and_holder(position_in_partition_view::after_all_prefixed(pos.key()));
-    }
-    // FIXME: This wouldn't be needed if we had a bound weight to represent this.
-    return view_and_holder(position_in_partition::after_key(s, clustering_key(pos.key())));
-}
-inline
-position_in_partition position_in_partition::for_range_start(const query::clustering_range& r) {
-    return {position_in_partition::range_tag_t(), bound_view::from_range_start(r)};
-}
-inline
-position_in_partition position_in_partition::for_range_end(const query::clustering_range& r) {
-    return {position_in_partition::range_tag_t(), bound_view::from_range_end(r)};
-}
+
+
+
 // Returns true if and only if there can't be any clustering_row with position > a and < b.
 // It is assumed that a <= b.
-inline
-bool no_clustering_row_between(const schema& s, position_in_partition_view a, position_in_partition_view b) {
-    clustering_key_prefix::equality eq(s);
-    if (a._ck && b._ck) {
-        return eq(*a._ck, *b._ck) && (a._bound_weight != bound_weight::before_all_prefixed || b._bound_weight != bound_weight::after_all_prefixed);
-    } else {
-        return !a._ck && !b._ck;
-    }
-}
+
+bool no_clustering_row_between(const schema& s, position_in_partition_view a, position_in_partition_view b) ;
 // Returns true if and only if there can't be any clustering_row with position >= a and < b.
 // It is assumed that a <= b.
-inline
-bool no_clustering_row_between_weak(const schema& s, position_in_partition_view a, position_in_partition_view b) {
-    clustering_key_prefix::equality eq(s);
-    if (a.has_key() && b.has_key()) {
-        return eq(a.key(), b.key())
-               && (a.get_bound_weight() == bound_weight::after_all_prefixed
-                   || b.get_bound_weight() != bound_weight::after_all_prefixed);
-    } else {
-        return !a.has_key() && !b.has_key();
-    }
-}
+
+bool no_clustering_row_between_weak(const schema& s, position_in_partition_view a, position_in_partition_view b) ;
 // Includes all position_in_partition objects "p" for which: start <= p < end
 // And only those.
 class position_range {
@@ -16949,24 +16774,9 @@ private:
     position_in_partition _end;
 public:
     static position_range from_range(const query::clustering_range&);
-    static position_range for_static_row() {
-        return {
-            position_in_partition(position_in_partition::static_row_tag_t()),
-            position_in_partition(position_in_partition::after_static_row_tag_t())
-        };
-    }
-    static position_range full() {
-        return {
-            position_in_partition(position_in_partition::static_row_tag_t()),
-            position_in_partition::after_all_clustered_rows()
-        };
-    }
-    static position_range all_clustered_rows() {
-        return {
-            position_in_partition::before_all_clustered_rows(),
-            position_in_partition::after_all_clustered_rows()
-        };
-    }
+    static position_range for_static_row() ;
+    static position_range full() ;
+    static position_range all_clustered_rows() ;
     position_range(position_range&&) = default;
     position_range& operator=(position_range&&) = default;
     position_range(const position_range&) = default;
@@ -17058,15 +16868,9 @@ public:
     uint64_t get_remaining() const {
         return (static_cast<uint64_t>(_remaining_high_bits) << 32) | _remaining_low_bits;
     }
-    uint64_t get_rows_fetched_for_last_partition() const {
-        return (static_cast<uint64_t>(_rows_fetched_for_last_partition_high_bits) << 32) | _rows_fetched_for_last_partition_low_bits;
-    }
-    query_id get_query_uuid() const {
-        return _query_uuid;
-    }
-    replicas_per_token_range get_last_replicas() const {
-        return _last_replicas;
-    }
+    uint64_t get_rows_fetched_for_last_partition() const ;
+    query_id get_query_uuid() const ;
+    replicas_per_token_range get_last_replicas() const ;
     std::optional<db::read_repair_decision> get_query_read_repair_decision() const {
         return _query_read_repair_decision;
     }
@@ -17113,30 +16917,15 @@ public:
     static raw_value_view make_null() {
         return raw_value_view{null_value{}};
     }
-    static raw_value_view make_value(fragmented_temporary_buffer::view view) {
-        return raw_value_view{view};
-    }
-    static raw_value_view make_value(managed_bytes_view view) {
-        return raw_value_view{view};
-    }
-    static raw_value_view make_value(bytes_view view) {
-        return raw_value_view{managed_bytes_view(view)};
-    }
+    static raw_value_view make_value(fragmented_temporary_buffer::view view) ;
+    static raw_value_view make_value(managed_bytes_view view) ;
+    static raw_value_view make_value(bytes_view view) ;
     static raw_value_view make_temporary(raw_value&& value);
-    bool is_null() const {
-        return std::holds_alternative<null_value>(_data);
-    }
+    bool is_null() const ;
     // An empty value is not null, but it has 0 bytes of data.
     // An empty int value can be created in CQL using blobasint(0x).
-    bool is_empty_value() const {
-        if (is_null()) {
-            return false;
-        }
-        return size_bytes() == 0;
-    }
-    bool is_value() const {
-        return _data.index() <= 1;
-    }
+    bool is_empty_value() const ;
+    bool is_value() const ;
     explicit operator bool() const {
         return is_value();
     }
@@ -17223,28 +17012,13 @@ class raw_value {
         : _data{data}
     {}
 public:
-    static raw_value make_null() {
-        return raw_value{null_value{}};
-    }
+    static raw_value make_null() ;
     static raw_value make_value(const raw_value_view& view);
-    static raw_value make_value(managed_bytes&& mb) {
-        return raw_value{std::move(mb)};
-    }
-    static raw_value make_value(managed_bytes_opt&& mbo) {
-        return mbo ? make_value(std::move(*mbo)) : make_null();
-    }
-    static raw_value make_value(const managed_bytes& mb) {
-        return raw_value{mb};
-    }
-    static raw_value make_value(const managed_bytes_opt& mbo) {
-        if (mbo) {
-            return make_value(*mbo);
-        }
-        return make_null();
-    }
-    static raw_value make_value(bytes&& bytes) {
-        return raw_value{std::move(bytes)};
-    }
+    static raw_value make_value(managed_bytes&& mb) ;
+    static raw_value make_value(managed_bytes_opt&& mbo) ;
+    static raw_value make_value(const managed_bytes& mb) ;
+    static raw_value make_value(const managed_bytes_opt& mbo) ;
+    static raw_value make_value(bytes&& bytes) ;
     static raw_value make_value(const bytes& bytes) ;
     static raw_value make_value(const bytes_opt& bytes) ;
     bool is_null() const ;
@@ -17254,54 +17028,19 @@ public:
     bool is_value() const ;
     explicit operator bool() const ;
     bytes to_bytes() && ;
-    bytes_opt to_bytes_opt() && {
-        return std::visit(overloaded_functor{
-            [](bytes&& bytes_val) { return bytes_opt(bytes_val); },
-            [](managed_bytes&& managed_bytes_val) { return bytes_opt(::to_bytes(managed_bytes_val)); },
-            [](null_value&&) -> bytes_opt {
-                return std::nullopt;
-            },
-        }, std::move(_data));
-    }
-    managed_bytes to_managed_bytes() && {
-        return std::visit(overloaded_functor{
-            [](bytes&& bytes_val) { return managed_bytes(bytes_val); },
-            [](managed_bytes&& managed_bytes_val) { return std::move(managed_bytes_val); },
-            [](null_value&&) -> managed_bytes {
-                throw std::runtime_error("to_managed_bytes() called on raw value that is null");
-            },
-        }, std::move(_data));
-    }
-    managed_bytes_opt to_managed_bytes_opt() && {
-        return std::visit(overloaded_functor{
-            [](bytes&& bytes_val) { return managed_bytes_opt(bytes_val); },
-            [](managed_bytes&& managed_bytes_val) { return managed_bytes_opt(std::move(managed_bytes_val)); },
-            [](null_value&&) -> managed_bytes_opt {
-                return std::nullopt;
-            },
-        }, std::move(_data));
-    }
+    bytes_opt to_bytes_opt() && ;
+    managed_bytes to_managed_bytes() && ;
+    managed_bytes_opt to_managed_bytes_opt() && ;
     raw_value_view view() const;
     friend class raw_value_view;
     friend bool operator==(const raw_value& v1, const raw_value& v2);
     friend std::ostream& operator<<(std::ostream& os, const raw_value& value);
 };
 }
-inline bytes to_bytes(const cql3::raw_value_view& view)
-{
-    return view.with_value([] (const FragmentedView auto& v) {
-        return linearized(v);
-    });
-}
-inline bytes_opt to_bytes_opt(const cql3::raw_value_view& view) {
-    if (view.is_value()) {
-        return to_bytes(view);
-    }
-    return bytes_opt();
-}
-inline bytes_opt to_bytes_opt(const cql3::raw_value& value) {
-    return to_bytes_opt(value.view());
-}
+ bytes to_bytes(const cql3::raw_value_view& view)
+;
+ bytes_opt to_bytes_opt(const cql3::raw_value_view& view) ;
+ bytes_opt to_bytes_opt(const cql3::raw_value& value) ;
 namespace cql3 {
 class cql_config;
 extern const cql_config default_cql_config;
@@ -17567,9 +17306,7 @@ public:
     { }
     result_memory_limiter(const result_memory_limiter&) = delete;
     result_memory_limiter(result_memory_limiter&&) = delete;
-    ssize_t total_used_memory() const {
-        return _maximum_total_result_memory - _memory_limiter.available_units();
-    }
+    ssize_t total_used_memory() const ;
     // Reserves minimum_result_size and creates new memory accounter for
     // mutation query. Uses the specified maximum result size and may be
     // stopped before reaching it due to memory pressure on shard.
@@ -17585,15 +17322,10 @@ public:
     future<result_memory_accounter> new_digest_read(query::max_result_size max_result_size, short_read short_read_allowed);
     // Checks whether the result can grow any more, takes into account only
     // the per shard limit.
-    stop_iteration check() const {
-        return stop_iteration(_memory_limiter.current() <= 0);
-    }
+    stop_iteration check() const ;
     // Consumes n bytes from memory limiter and checks whether the result
     // can grow any more (considering just the per-shard limit).
-    stop_iteration update_and_check(size_t n) {
-        _memory_limiter.consume(n);
-        return check();
-    }
+    stop_iteration update_and_check(size_t n) ;
     void release(size_t n) noexcept {
         _memory_limiter.signal(n);
     }
@@ -17688,9 +17420,7 @@ inline future<result_memory_accounter> result_memory_limiter::new_data_read(quer
         return result_memory_accounter(result_memory_accounter::data_query_tag(), *this, max_size, short_read_allowed);
     });
 }
-inline future<result_memory_accounter> result_memory_limiter::new_digest_read(query::max_result_size max_size, short_read short_read_allowed) {
-    return make_ready_future<result_memory_accounter>(result_memory_accounter(result_memory_accounter::digest_query_tag(), *this, max_size, short_read_allowed));
-}
+
 enum class result_request {
     only_result,
     only_digest,
@@ -17699,12 +17429,8 @@ enum class result_request {
 struct result_options {
     result_request request = result_request::only_result;
     digest_algorithm digest_algo = query::digest_algorithm::none;
-    static result_options only_result() {
-        return result_options{};
-    }
-    static result_options only_digest(digest_algorithm da) {
-        return {result_request::only_digest, da};
-    }
+    static result_options only_result() ;
+    static result_options only_digest(digest_algorithm da) ;
 };
 class result_digest {
 public:
@@ -17822,15 +17548,9 @@ public:
     }
     result(result&&) = default;
     result& operator=(result&&) = default;
-    const bytes_ostream& buf() const {
-        return _w;
-    }
-    const std::optional<result_digest>& digest() const {
-        return _digest;
-    }
-    const std::optional<uint32_t> row_count_low_bits() const {
-        return _row_count_low_bits;
-    }
+    const bytes_ostream& buf() const ;
+    const std::optional<result_digest>& digest() const ;
+    const std::optional<uint32_t> row_count_low_bits() const ;
     const std::optional<uint32_t> row_count_high_bits() const ;
     const std::optional<uint64_t> row_count() const ;
     void set_row_count(std::optional<uint64_t> row_count) ;
@@ -18059,24 +17779,11 @@ struct qr_cell_view {
 template<>
 struct serializer<qr_cell_view> {
     template<typename Input>
-    static qr_cell_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return qr_cell_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static qr_cell_view read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, qr_cell_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, qr_cell_view v) ;
     template<typename Input>
-    static void skip(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        v.skip(read_frame_size(v));
-      });
-    }
+    static void skip(Input& v) ;
 };
 struct qr_row_view {
     utils::input_stream v;
@@ -18133,24 +17840,11 @@ struct qr_clustered_row_view {
 template<>
 struct serializer<qr_clustered_row_view> {
     template<typename Input>
-    static qr_clustered_row_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return qr_clustered_row_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static qr_clustered_row_view read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, qr_clustered_row_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, qr_clustered_row_view v) ;
     template<typename Input>
-    static void skip(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        v.skip(read_frame_size(v));
-      });
-    }
+    static void skip(Input& v) ;
 };
 struct qr_partition_view {
     utils::input_stream v;
@@ -18184,24 +17878,11 @@ struct qr_partition_view {
 template<>
 struct serializer<qr_partition_view> {
     template<typename Input>
-    static qr_partition_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return qr_partition_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static qr_partition_view read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, qr_partition_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, qr_partition_view v) ;
     template<typename Input>
-    static void skip(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        v.skip(read_frame_size(v));
-      });
-    }
+    static void skip(Input& v) ;
 };
 struct query_result_view {
     utils::input_stream v;
@@ -18229,11 +17910,7 @@ struct serializer<query_result_view> {
         v.v.copy_to(out);
     }
     template<typename Input>
-    static void skip(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        v.skip(read_frame_size(v));
-      });
-    }
+    static void skip(Input& v) ;
 };
 ////// State holders
 template<typename Output>
@@ -18271,9 +17948,7 @@ template<typename Output>
 struct after_qr_cell__ttl {
     Output& _out;
     state_of_qr_cell<Output> _state;
-    void  end_qr_cell() {
-        _state.f.end(_out);
-    }
+    void  end_qr_cell() ;
 };
 template<typename Output>
 struct after_qr_cell__value {
@@ -18366,9 +18041,7 @@ struct qr_clustered_row__cells__cells {
   writer_of_std__optional__qr_cell<Output> add() ;
   void add(std::optional<qr_cell_view> v) ;
   after_qr_clustered_row__cells__cells<Output> end_cells() && ;
-  vector_position pos() const {
-        return vector_position{_out.pos(), _count};
-  }
+  vector_position pos() const ;
   void rollback(const vector_position& vp) {
         _out.retract(vp.pos);
         _count = vp.count;
@@ -18385,23 +18058,15 @@ struct qr_clustered_row__cells {
     qr_clustered_row__cells__cells<Output> start_cells() && {
         return { _out, std::move(_state) };
     }
-    after_qr_clustered_row__cells__cells<Output> skip_cells() && {
-        serialize(_out, size_type(0));
-        return { _out, std::move(_state) };
-    }
+    after_qr_clustered_row__cells__cells<Output> skip_cells() && ;
 };
 template<typename Output>
 struct after_qr_clustered_row__key {
     Output& _out;
     state_of_qr_clustered_row<Output> _state;
-    qr_clustered_row__cells<Output> start_cells() && {
-        return { _out, std::move(_state) };
-    }
+    qr_clustered_row__cells<Output> start_cells() && ;
     template<typename Serializer>
-    after_qr_clustered_row__cells<Output> cells(Serializer&& f) && {
-        f(writer_of_qr_row<Output>(_out));
-        return { _out, std::move(_state) };
-    }
+    after_qr_clustered_row__cells<Output> cells(Serializer&& f) && ;
 };
 template<typename Output>
 struct writer_of_qr_clustered_row {
@@ -18453,18 +18118,9 @@ struct qr_partition__static_row__cells {
     size_type _count = 0;
     qr_partition__static_row__cells(Output& out, state_of_qr_partition__static_row<Output> state) 
             ;
-  writer_of_std__optional__qr_cell<Output> add() {
-        _count++;
-        return {_out};
-  }
-  void add(std::optional<qr_cell_view> v) {
-        serialize(_out, v);
-        _count++;
-  }
-  after_qr_partition__static_row__cells<Output> end_cells() && {
-        _size.set(_out, _count);
-        return { _out, std::move(_state) };
-  }
+  writer_of_std__optional__qr_cell<Output> add() ;
+  void add(std::optional<qr_cell_view> v) ;
+  after_qr_partition__static_row__cells<Output> end_cells() && ;
   vector_position pos() const {
         return vector_position{_out.pos(), _count};
   }
@@ -18481,9 +18137,7 @@ struct qr_partition__static_row {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    qr_partition__static_row__cells<Output> start_cells() && {
-        return { _out, std::move(_state) };
-    }
+    qr_partition__static_row__cells<Output> start_cells() && ;
     after_qr_partition__static_row__cells<Output> skip_cells() && ;
 };
 template<typename Output>
@@ -18529,13 +18183,8 @@ struct writer_of_query_result {
     state_of_query_result<Output> _state;
     writer_of_query_result(Output& out) 
             ;
-    query_result__partitions<Output> start_partitions() && {
-        return { _out, std::move(_state) };
-    }
-    after_query_result__partitions<Output> skip_partitions() && {
-        serialize(_out, size_type(0));
-        return { _out, std::move(_state) };
-    }
+    query_result__partitions<Output> start_partitions() && ;
+    after_query_result__partitions<Output> skip_partitions() && ;
 };
 } // ser
 namespace query {
@@ -18588,13 +18237,9 @@ public:
             ser::qr_cell_view v = *cell_opt;
             return {v.value().view()};
         };
-        void skip(const column_definition& def) {
-            ++_i;
-        }
+        void skip(const column_definition& def) ;
     };
-    iterator_type iterator() const {
-        return iterator_type(_v);
-    }
+    iterator_type iterator() const ;
 };
 // Describes expectations about the ResultVisitor concept.
 //
@@ -18613,13 +18258,13 @@ public:
 struct result_visitor {
     void accept_new_partition(
         const partition_key& key, // FIXME: use view for the key
-        uint64_t row_count) {}
-    void accept_new_partition(uint64_t row_count) {}
+        uint64_t row_count) ;
+    void accept_new_partition(uint64_t row_count) ;
     void accept_new_row(
         const clustering_key& key, // FIXME: use view for the key
         const result_row_view& static_row,
-        const result_row_view& row) {}
-    void accept_new_row(const result_row_view& static_row, const result_row_view& row) {}
+        const result_row_view& row) ;
+    void accept_new_row(const result_row_view& static_row, const result_row_view& row) ;
     void accept_partition_end(const result_row_view& static_row) {}
 };
 template<typename Visitor>
@@ -18639,104 +18284,38 @@ class result_view {
 public:
     result_view(const bytes_ostream& v) : _v(ser::query_result_view{ser::as_input_stream(v)}) {}
     result_view(ser::query_result_view v) : _v(v) {}
-    explicit result_view(const query::result& res) : result_view(res.buf()) { }
+    explicit result_view(const query::result& res)  ;
     template <typename Func>
-    static auto do_with(const query::result& res, Func&& func) {
-        result_view view(res.buf());
-        return func(view);
-    }
+    static auto do_with(const query::result& res, Func&& func) ;
     template <typename ResultVisitor>
-    static void consume(const query::result& res, const partition_slice& slice, ResultVisitor&& visitor) {
-        result_view(res).consume(slice, visitor);
-    }
+    static void consume(const query::result& res, const partition_slice& slice, ResultVisitor&& visitor) ;
     template <typename Visitor>
     requires ResultVisitor<Visitor>
-    void consume(const partition_slice& slice, Visitor&& visitor) const {
-        for (auto&& p : _v.partitions()) {
-            auto rows = p.rows();
-            auto row_count = rows.size();
-            if (slice.options.contains<partition_slice::option::send_partition_key>()) {
-                auto key = *p.key();
-                visitor.accept_new_partition(key, row_count);
-            } else {
-                visitor.accept_new_partition(row_count);
-            }
-            result_row_view static_row(p.static_row());
-            for (auto&& row : rows) {
-                result_row_view view(row.cells());
-                if (slice.options.contains<partition_slice::option::send_clustering_key>()) {
-                    visitor.accept_new_row(*row.key(), static_row, view);
-                } else {
-                    visitor.accept_new_row(static_row, view);
-                }
-            }
-            visitor.accept_partition_end(static_row);
-        }
-    }
-    std::tuple<uint32_t, uint64_t> count_partitions_and_rows() const {
-        auto ps = _v.partitions();
-        uint64_t rows = 0;
-        for (auto p : ps) {
-            rows += std::max(p.rows().size(), size_t(1));
-        }
-        return std::make_tuple(ps.size(), rows);
-    }
-    full_position calculate_last_position() const {
-        auto ps = _v.partitions();
-        assert(!ps.empty());
-        auto pit = ps.begin();
-        auto pnext = pit;
-        while (++pnext != ps.end()) {
-            pit = pnext;
-        }
-        auto p = *pit;
-        auto rs = p.rows();
-        auto pos = position_in_partition::for_partition_start();
-        if (!rs.empty()) {
-            auto rit = rs.begin();
-            auto rnext = rit;
-            while (++rnext != rs.end()) {
-                rit = rnext;
-            }
-            const auto& key_opt = (*rit).key();
-            if (key_opt) {
-                pos = position_in_partition::for_key(*key_opt);
-            }
-        }
-        return { p.key().value(), std::move(pos) };
-    }
+    void consume(const partition_slice& slice, Visitor&& visitor) const ;
+    std::tuple<uint32_t, uint64_t> count_partitions_and_rows() const ;
+    full_position calculate_last_position() const ;
 };
 }
 namespace cql3 {
 class assignment_testable {
 public:
-    virtual ~assignment_testable() {}
+    virtual ~assignment_testable() ;
     enum class test_result {
         EXACT_MATCH,
         WEAKLY_ASSIGNABLE,
         NOT_ASSIGNABLE,
     };
-    static bool is_assignable(test_result tr) {
-        return tr != test_result::NOT_ASSIGNABLE;
-    }
-    static bool is_exact_match(test_result tr) {
-        return tr != test_result::EXACT_MATCH;
-    }
+    static bool is_assignable(test_result tr) ;
+    static bool is_exact_match(test_result tr) ;
     virtual test_result test_assignment(data_dictionary::database db, const sstring& keyspace, const column_specification& receiver) const = 0;
     // for error reporting
     virtual sstring assignment_testable_source_context() const = 0;
 };
-inline bool is_assignable(assignment_testable::test_result tr) {
-    return assignment_testable::is_assignable(tr);
-}
-inline bool is_exact_match(assignment_testable::test_result tr) {
-    return assignment_testable::is_exact_match(tr);
-}
-inline
+ bool is_assignable(assignment_testable::test_result tr) ;
+ bool is_exact_match(assignment_testable::test_result tr) ;
+
 std::ostream&
-operator<<(std::ostream& os, const assignment_testable& at) {
-    return os << at.assignment_testable_source_context();
-}
+operator<<(std::ostream& os, const assignment_testable& at) ;
 }
 class mutation;
 class atomic_cell_or_collection;
