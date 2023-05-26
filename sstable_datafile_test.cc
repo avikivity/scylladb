@@ -16,35 +16,20 @@
 #include <absl/container/flat_hash_map.h>
 #include <antlr3.hpp>
 #include <any>
-#include <bitset>
 #include <boost/algorithm/clamp.hpp>
 #include <boost/algorithm/cxx11/any_of.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/join.hpp>
-#include <boost/any.hpp>
-#include <boost/asio/ip/address_v4.hpp>  // avoid conflict between ::socket and seastar::socket
 #include <boost/circular_buffer.hpp>
-#include <boost/container/deque.hpp>
 #include <boost/date_time/c_local_time_adjustor.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/dynamic_bitset.hpp>
-#include <boost/functional/hash.hpp>
 #include <boost/heap/binomial_heap.hpp>
-#include <boost/icl/interval.hpp>
 #include <boost/icl/interval_set.hpp>
-#include <boost/intrusive/list.hpp>
-#include <boost/intrusive/parent_from_member.hpp>
 #include <boost/intrusive/set.hpp>
-#include <boost/intrusive/slist.hpp>
 #include <boost/intrusive/unordered_set.hpp>
-#include <boost/iterator/transform_iterator.hpp>
-#include <boost/iterator/zip_iterator.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/locale/encoding_utf.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/outcome/success_failure.hpp>
 #include <boost/outcome/trait.hpp>
-#include <boost/outcome/policy/base.hpp>
 #include <boost/outcome/result.hpp>
 #include <boost/program_options/errors.hpp>
 #include <boost/program_options.hpp>
@@ -53015,9 +53000,7 @@ CONSTCD11
 inline
 To
 trunc(const std::chrono::duration<Rep, Period>& d)
-{
-    return To{detail::trunc(std::chrono::duration_cast<To>(d).count())};
-}
+;
 #ifndef HAS_CHRONO_ROUNDING
 #  if defined(_MSC_FULL_VER) && _MSC_FULL_VER >= 190023918
 #    define HAS_CHRONO_ROUNDING 1
@@ -53036,35 +53019,14 @@ CONSTCD14
 inline
 To
 floor(const std::chrono::duration<Rep, Period>& d)
-{
-    auto t = trunc<To>(d);
-    if (t > d)
-        return t - To{1};
-    return t;
-}
+;
 // round to nearest, to even on tie
 template <class To, class Rep, class Period>
 CONSTCD14
 inline
 To
 round(const std::chrono::duration<Rep, Period>& d)
-{
-    auto t0 = floor<To>(d);
-    auto t1 = t0 + To{1};
-    if (t1 == To{0} && t0 < To{0})
-        t1 = -t1;
-    auto diff0 = d - t0;
-    auto diff1 = t1 - d;
-    if (diff0 == diff1)
-    {
-        if (t0 - trunc<To>(t0/2)*2 == To{0})
-            return t0;
-        return t1;
-    }
-    if (diff0 < diff1)
-        return t0;
-    return t1;
-}
+;
 // round up
 template <class To, class Rep, class Period>
 CONSTCD14
@@ -55260,42 +55222,14 @@ protected:
     unsigned char mode_;
     bool          neg_;
     enum {is24hr};
-    CONSTCD11 time_of_day_base(std::chrono::hours h, bool neg, unsigned m) NOEXCEPT
-        : h_(abs(h))
-        , mode_(static_cast<decltype(mode_)>(m))
-        , neg_(neg)
-        {}
+    CONSTCD11 time_of_day_base(std::chrono::hours h, bool neg, unsigned m) 
+        ;
     CONSTCD14 void make24() NOEXCEPT;
     CONSTCD14 void make12() NOEXCEPT;
     CONSTCD14 std::chrono::hours to24hr() const;
 };
-CONSTCD14
-inline
-std::chrono::hours
-time_of_day_base::to24hr() const
-{
-    auto h = h_;
-    if (mode_ == am || mode_ == pm)
-    {
-        CONSTDATA auto h12 = std::chrono::hours(12);
-        if (mode_ == pm)
-        {
-            if (h != h12)
-                h = h + h12;
-        }
-        else if (h == h12)
-            h = std::chrono::hours(0);
-    }
-    return h;
-}
-CONSTCD14
-inline
-void
-time_of_day_base::make24() NOEXCEPT
-{
-    h_ = to24hr();
-    mode_ = is24hr;
-}
+
+
 CONSTCD14
 inline
 void
@@ -58413,15 +58347,9 @@ public:
     static future<> scan_dir(fs::path dir, dir_entry_types type, walker_type walker, filter_type filter) ;
     static future<> scan_dir(fs::path dir, dir_entry_types type, walker_type walker) ;
     static future<> scan_dir(fs::path dir, dir_entry_types type, show_hidden do_show_hidden, walker_type walker) ;
-    static future<> scan_dir(sstring dir, dir_entry_types type, show_hidden do_show_hidden, walker_type walker, filter_type filter) {
-        return scan_dir(fs::path(std::move(dir)), std::move(type), do_show_hidden, std::move(walker), std::move(filter));
-    }
-    static future<> scan_dir(sstring dir, dir_entry_types type, walker_type walker, filter_type filter) {
-        return scan_dir(fs::path(std::move(dir)), std::move(type), show_hidden::no, std::move(walker), std::move(filter));
-    }
-    static future<> scan_dir(sstring dir, dir_entry_types type, walker_type walker) {
-        return scan_dir(fs::path(std::move(dir)), std::move(type), show_hidden::no, std::move(walker), [] (const fs::path& parent_dir, const directory_entry& entry) { return true; });
-    }
+    static future<> scan_dir(sstring dir, dir_entry_types type, show_hidden do_show_hidden, walker_type walker, filter_type filter) ;
+    static future<> scan_dir(sstring dir, dir_entry_types type, walker_type walker, filter_type filter) ;
+    static future<> scan_dir(sstring dir, dir_entry_types type, walker_type walker) ;
     static future<> scan_dir(sstring dir, dir_entry_types type, show_hidden do_show_hidden, walker_type walker) {
         return scan_dir(fs::path(std::move(dir)), std::move(type), do_show_hidden, std::move(walker), [] (const fs::path& parent_dir, const directory_entry& entry) { return true; });
     }
@@ -58474,15 +58402,9 @@ public:
 static inline fs::path operator/(const fs::path& lhs, const char* rhs) {
     return lhs / fs::path(rhs);
 }
-static inline fs::path operator/(const fs::path& lhs, const sstring& rhs) {
-    return lhs / fs::path(rhs);
-}
-static inline fs::path operator/(const fs::path& lhs, std::string_view rhs) {
-    return lhs / fs::path(rhs);
-}
-static inline fs::path operator/(const fs::path& lhs, const std::string& rhs) {
-    return lhs / fs::path(rhs);
-}
+static fs::path operator/(const fs::path& lhs, const sstring& rhs) ;
+static fs::path operator/(const fs::path& lhs, std::string_view rhs) ;
+static fs::path operator/(const fs::path& lhs, const std::string& rhs) ;
 namespace bi = boost::intrusive;
 // Returns largest N such that 2^N <= v.
 // Undefined for v == 0.
@@ -58640,17 +58562,11 @@ public:
     const_iterator end() const noexcept {
         return const_iterator(*this, typename const_iterator::end_tag());
     }
-    iterator begin() noexcept {
-        return iterator(*this);
-    }
-    iterator end() noexcept {
-        return iterator(*this, typename iterator::end_tag());
-    }
+    iterator begin() noexcept ;
+    iterator end() noexcept ;
     // Returns a range of buckets starting from that with the smaller values.
     // Each bucket is a range of const T&.
-    const auto& buckets() const noexcept {
-        return _buckets;
-    }
+    const auto& buckets() const noexcept ;
     // Pops one of the largest elements in the histogram.
     void pop_one_of_largest() noexcept {
         _buckets[_watermark].pop_front();
@@ -58741,9 +58657,7 @@ public:
     friend bool operator==(const view_info& x, const view_info& y) {
         return x._raw == y._raw;
     }
-    friend std::ostream& operator<<(std::ostream& os, const view_info& view) {
-        return os << view._raw;
-    }
+    friend std::ostream& operator<<(std::ostream& os, const view_info& view) ;
 };
 // Accumulates data sent to the memory_data_sink allowing it
 // to be examined later.
@@ -58752,8 +58666,8 @@ class memory_data_sink_buffers {
     buffers_type _bufs;
     size_t _size = 0;
 public:
-    size_t size() const { return _size; }
-    buffers_type& buffers() { return _bufs; }
+    size_t size() const ;
+    buffers_type& buffers() ;
     // Strong exception guarantees
     void put(temporary_buffer<char>&& buf) {
         auto size = buf.size();
@@ -58774,24 +58688,12 @@ public:
 class memory_data_sink : public data_sink_impl {
     memory_data_sink_buffers& _bufs;
 public:
-    memory_data_sink(memory_data_sink_buffers& b) : _bufs(b) {}
-    virtual future<> put(net::packet data)  override {
-        abort();
-        return make_ready_future<>();
-    }
-    virtual future<> put(temporary_buffer<char> buf) override {
-        _bufs.put(std::move(buf));
-        return make_ready_future<>();
-    }
-    virtual future<> flush() override {
-        return make_ready_future<>();
-    }
-    virtual future<> close() override {
-        return make_ready_future<>();
-    }
-    size_t buffer_size() const noexcept override {
-        return 128*1024;
-    }
+    memory_data_sink(memory_data_sink_buffers& b)  ;
+    virtual future<> put(net::packet data)  override ;
+    virtual future<> put(temporary_buffer<char> buf) override ;
+    virtual future<> flush() override ;
+    virtual future<> close() override ;
+    size_t buffer_size() const noexcept override ;
 };
 namespace runtime {
 void init_uptime();
@@ -59259,7 +59161,7 @@ using namespace db;
  
  
  
- class fragmenting_mutation_freezer {     const schema& _schema;     std::optional<partition_key> _key;     tombstone _partition_tombstone;     std::optional<static_row> _sr;     std::deque<clustering_row> _crs;     range_tombstone_list _rts;     frozen_mutation_consumer_fn _consumer;     bool _fragmented = false;     size_t _dirty_size = 0;     size_t _fragment_size;     range_tombstone_change _current_rtc; private:     future<stop_iteration> flush() ;     future<stop_iteration> maybe_flush() ; public:     fragmenting_mutation_freezer(const schema& s, frozen_mutation_consumer_fn c, size_t fragment_size)         : _schema(s), _rts(s), _consumer(c), _fragment_size(fragment_size), _current_rtc(position_in_partition::before_all_clustered_rows(), {}) { }     future<stop_iteration> consume(partition_start&& ps) {         _key = std::move(ps.key().key());         _fragmented = false;         _dirty_size += sizeof(tombstone);         _partition_tombstone = ps.partition_tombstone();         return make_ready_future<stop_iteration>(stop_iteration::no);     }     future<stop_iteration> consume(static_row&& sr) {         _sr = std::move(sr);         _dirty_size += _sr->memory_usage(_schema);         return maybe_flush();     }     future<stop_iteration> consume(clustering_row&& cr) {         _dirty_size += cr.memory_usage(_schema);         _crs.emplace_back(std::move(cr));         return maybe_flush();     }     future<stop_iteration> consume(range_tombstone_change&& rtc) {         auto ret = make_ready_future<stop_iteration>(stop_iteration::no);         if (_current_rtc.tombstone()) {             auto rt = range_tombstone(_current_rtc.position(), rtc.position(), _current_rtc.tombstone());             _dirty_size += rt.memory_usage(_schema);             _rts.apply(_schema, std::move(rt));             ret = maybe_flush();         }         _current_rtc = std::move(rtc);         return ret;     }     future<stop_iteration> consume(partition_end&&) {         if (_dirty_size) {             return flush();         }         return make_ready_future<stop_iteration>(stop_iteration::no);     } };
+ class fragmenting_mutation_freezer {     const schema& _schema;     std::optional<partition_key> _key;     tombstone _partition_tombstone;     std::optional<static_row> _sr;     std::deque<clustering_row> _crs;     range_tombstone_list _rts;     frozen_mutation_consumer_fn _consumer;     bool _fragmented = false;     size_t _dirty_size = 0;     size_t _fragment_size;     range_tombstone_change _current_rtc; private:     future<stop_iteration> flush() ;     future<stop_iteration> maybe_flush() ; public:     fragmenting_mutation_freezer(const schema& s, frozen_mutation_consumer_fn c, size_t fragment_size)         : _schema(s), _rts(s), _consumer(c), _fragment_size(fragment_size), _current_rtc(position_in_partition::before_all_clustered_rows(), {}) { }     future<stop_iteration> consume(partition_start&& ps) {         _key = std::move(ps.key().key());         _fragmented = false;         _dirty_size += sizeof(tombstone);         _partition_tombstone = ps.partition_tombstone();         return make_ready_future<stop_iteration>(stop_iteration::no);     }     future<stop_iteration> consume(static_row&& sr) ;     future<stop_iteration> consume(clustering_row&& cr) ;     future<stop_iteration> consume(range_tombstone_change&& rtc) ;     future<stop_iteration> consume(partition_end&&) {         if (_dirty_size) {             return flush();         }         return make_ready_future<stop_iteration>(stop_iteration::no);     } };
   mutation::data::data(dht::decorated_key&& key, schema_ptr&& schema)     : _schema(std::move(schema))     , _dk(std::move(key))     , _p(_schema) { }
  mutation::data::data(partition_key&& key_, schema_ptr&& schema)     : _schema(std::move(schema))     , _dk(dht::decorate_key(*_schema, std::move(key_)))     , _p(_schema) { }
  mutation::data::data(schema_ptr&& schema, dht::decorated_key&& key, const mutation_partition& mp)     : _schema(schema)     , _dk(std::move(key))     , _p(*schema, mp) { }
@@ -59376,23 +59278,23 @@ template void appending_hash<mutation_fragment>::operator()<xx_hasher>(xx_hasher
  
  
  
- void mutation_fragment_stream_validating_filter::reset(const mutation_fragment_v2& mf) {     validator_log.debug("[validator {}] reset to {} @ {}{}", static_cast<const void*>(this), mf.mutation_fragment_kind(), mf.position(), value_of([&mf] () -> sstring {         if (!mf.is_range_tombstone_change()) {             return "";         }         return format(" (new tombstone: {})", mf.as_range_tombstone_change().tombstone());     }));     _validator.reset(mf); }
- bool mutation_fragment_stream_validating_filter::on_end_of_partition() {     return (*this)(mutation_fragment::kind::partition_end, position_in_partition_view(position_in_partition_view::end_of_partition_tag_t())); }
- void mutation_fragment_stream_validating_filter::on_end_of_stream() {     if (_validation_level < mutation_fragment_stream_validation_level::partition_region) {         return;     }     validator_log.debug("[validator {}] EOS", static_cast<const void*>(this));     if (auto res = _validator.on_end_of_stream(); !res) {         on_validation_error(validator_log, *this, res);     } }
+ 
+ 
+ 
  logging::logger mplog("mutation_partition");
  template<bool reversed> struct reversal_traits;
  template<> struct reversal_traits<false> {     template <typename Container>     static auto begin(Container& c) {         return c.begin();     }     template <typename Container>     static auto end(Container& c) {         return c.end();     }     template <typename Container, typename Disposer>     static typename Container::iterator erase_and_dispose(Container& c,         typename Container::iterator begin,         typename Container::iterator end,         Disposer disposer)     {         return c.erase_and_dispose(begin, end, std::move(disposer));     }     template<typename Container, typename Disposer>     static typename Container::iterator erase_dispose_and_update_end(Container& c,          typename Container::iterator it, Disposer&& disposer,          typename Container::iterator&)     {         return c.erase_and_dispose(it, std::forward<Disposer>(disposer));     }          template <typename Container>     static typename Container::iterator maybe_reverse(Container&, typename Container::iterator r) {         return r;     } };
  template<> struct reversal_traits<true> {     template <typename Container>     static auto begin(Container& c) {         return c.rbegin();     }     template <typename Container>     static auto end(Container& c) {         return c.rend();     }     template <typename Container, typename Disposer>     static typename Container::reverse_iterator erase_and_dispose(Container& c,         typename Container::reverse_iterator begin,         typename Container::reverse_iterator end,         Disposer disposer)     {         return typename Container::reverse_iterator(             c.erase_and_dispose(end.base(), begin.base(), disposer)         );     }     // Erases element pointed to by it and makes sure than iterator end is not
     // invalidated.
-    template<typename Container, typename Disposer>     static typename Container::reverse_iterator erase_dispose_and_update_end(Container& c,         typename Container::reverse_iterator it, Disposer&& disposer,         typename Container::reverse_iterator& end)     {         auto to_erase = std::next(it).base();         bool update_end = end.base() == to_erase;         auto ret = typename Container::reverse_iterator(             c.erase_and_dispose(to_erase, std::forward<Disposer>(disposer))         );         if (update_end) {             end = ret;         }         return ret;     }          template <typename Container>     static typename Container::reverse_iterator maybe_reverse(Container&, typename Container::iterator r) {         return typename Container::reverse_iterator(r);     } };
- mutation_partition::mutation_partition(const schema& s, const mutation_partition& x)         : _tombstone(x._tombstone)         , _static_row(s, column_kind::static_column, x._static_row)         , _static_row_continuous(x._static_row_continuous)         , _rows()         , _row_tombstones(x._row_tombstones) {     auto cloner = [&s] (const rows_entry* x) -> rows_entry* {         return current_allocator().construct<rows_entry>(s, *x);     };     _rows.clone_from(x._rows, cloner, current_deleter<rows_entry>()); }
- mutation_partition::mutation_partition(const mutation_partition& x, const schema& schema,         query::clustering_key_filter_ranges ck_ranges)         : _tombstone(x._tombstone)         , _static_row(schema, column_kind::static_column, x._static_row)         , _static_row_continuous(x._static_row_continuous)         , _rows()         , _row_tombstones(x._row_tombstones, range_tombstone_list::copy_comparator_only()) {     try {         for(auto&& r : ck_ranges) {             for (const rows_entry& e : x.range(schema, r)) {                 auto ce = alloc_strategy_unique_ptr<rows_entry>(current_allocator().construct<rows_entry>(schema, e));                 _rows.insert_before_hint(_rows.end(), std::move(ce), rows_entry::tri_compare(schema));             }             for (auto&& rt : x._row_tombstones.slice(schema, r)) {                 _row_tombstones.apply(schema, rt.tombstone());             }         }     } catch (...) {         _rows.clear_and_dispose(current_deleter<rows_entry>());         throw;     } }
+    template<typename Container, typename Disposer>     static typename Container::reverse_iterator erase_dispose_and_update_end(Container& c,         typename Container::reverse_iterator it, Disposer&& disposer,         typename Container::reverse_iterator& end)     {         auto to_erase = std::next(it).base();         bool update_end = end.base() == to_erase;         auto ret = typename Container::reverse_iterator(             c.erase_and_dispose(to_erase, std::forward<Disposer>(disposer))         );         if (update_end) {             end = ret;         }         return ret;     }          template <typename Container>     static typename Container::reverse_iterator maybe_reverse(Container&, typename Container::iterator r) ; };
+ 
+ 
  mutation_partition::mutation_partition(mutation_partition&& x, const schema& schema,     query::clustering_key_filter_ranges ck_ranges)     : _tombstone(x._tombstone)     , _static_row(std::move(x._static_row))     , _static_row_continuous(x._static_row_continuous)     , _rows(std::move(x._rows))     , _row_tombstones(schema) {     {         auto deleter = current_deleter<rows_entry>();         auto it = _rows.begin();         for (auto&& range : ck_ranges.ranges()) {             _rows.erase_and_dispose(it, lower_bound(schema, range), deleter);             it = upper_bound(schema, range);         }         _rows.erase_and_dispose(it, _rows.end(), deleter);     }     {         for (auto&& range : ck_ranges.ranges()) {             for (auto&& x_rt : x._row_tombstones.slice(schema, range)) {                 auto rt = x_rt.tombstone();                 rt.trim(schema,                         position_in_partition_view::for_range_start(range),                         position_in_partition_view::for_range_end(range));                 _row_tombstones.apply(schema, std::move(rt));             }         }     } }
  mutation_partition::~mutation_partition() {     _rows.clear_and_dispose(current_deleter<rows_entry>()); }
  mutation_partition& mutation_partition::operator=(mutation_partition&& x) noexcept {     if (this != &x) {         this->~mutation_partition();         new (this) mutation_partition(std::move(x));     }     return *this; }
- void mutation_partition::ensure_last_dummy(const schema& s) {     check_schema(s);     if (_rows.empty() || !_rows.rbegin()->is_last_dummy()) {         auto e = alloc_strategy_unique_ptr<rows_entry>(                 current_allocator().construct<rows_entry>(s, rows_entry::last_dummy_tag(), is_continuous::yes));         _rows.insert_before(_rows.end(), std::move(e));     } }
- void mutation_partition::apply(const schema& s, const mutation_partition& p, const schema& p_schema,         mutation_application_stats& app_stats) {     apply_weak(s, p, p_schema, app_stats); }
- void mutation_partition::apply(const schema& s, mutation_partition&& p,         mutation_application_stats& app_stats) {     apply_weak(s, std::move(p), app_stats); }
+ 
+ 
+ 
  
  struct mutation_fragment_applier {     const schema& _s;     mutation_partition& _mp;          void operator()(range_tombstone rt) ;     void operator()(const static_row& sr) ;     void operator()(partition_start ps) ;     void operator()(partition_end ps) ;     void operator()(const clustering_row& cr) ; };
  
@@ -59403,18 +59305,18 @@ template void appending_hash<mutation_fragment>::operator()<xx_hasher>(xx_hasher
  
  
  
- tombstone mutation_partition::range_tombstone_for_row(const schema& schema, const clustering_key& key) const {     check_schema(schema);     tombstone t = _tombstone;     if (!_row_tombstones.empty()) {         auto found = _row_tombstones.search_tombstone_covering(schema, key);         t.apply(found);     }     return t; }
- row_tombstone mutation_partition::tombstone_for_row(const schema& schema, const clustering_key& key) const {     check_schema(schema);     row_tombstone t = row_tombstone(range_tombstone_for_row(schema, key));     auto j = _rows.find(key, rows_entry::tri_compare(schema));     if (j != _rows.end()) {         t.apply(j->row().deleted_at(), j->row().marker());     }     return t; }
- row_tombstone mutation_partition::tombstone_for_row(const schema& schema, const rows_entry& e) const {     check_schema(schema);     row_tombstone t = e.row().deleted_at();     t.apply(range_tombstone_for_row(schema, e.key()));     return t; }
+ 
+ 
+ 
  void mutation_partition::apply_row_tombstone(const schema& schema, clustering_key_prefix prefix, tombstone t) {     check_schema(schema);     assert(!prefix.is_full(schema));     auto start = prefix;     _row_tombstones.apply(schema, {std::move(start), std::move(prefix), std::move(t)}); }
  void mutation_partition::apply_row_tombstone(const schema& schema, range_tombstone rt) {     check_schema(schema);     _row_tombstones.apply(schema, std::move(rt)); }
  void mutation_partition::apply_delete(const schema& schema, const clustering_key_prefix& prefix, tombstone t) {     check_schema(schema);     if (prefix.is_empty(schema)) {         apply(t);     } else if (prefix.is_full(schema)) {         clustered_row(schema, prefix).apply(t);     } else {         apply_row_tombstone(schema, prefix, t);     } }
  void mutation_partition::apply_delete(const schema& schema, range_tombstone rt) {     check_schema(schema);     if (range_tombstone::is_single_clustering_row_tombstone(schema, rt.start, rt.start_kind, rt.end, rt.end_kind)) {         apply_delete(schema, std::move(rt.start), std::move(rt.tomb));         return;     }     apply_row_tombstone(schema, std::move(rt)); }
  void mutation_partition::apply_delete(const schema& schema, clustering_key&& prefix, tombstone t) {     check_schema(schema);     if (prefix.is_empty(schema)) {         apply(t);     } else if (prefix.is_full(schema)) {         clustered_row(schema, std::move(prefix)).apply(t);     } else {         apply_row_tombstone(schema, std::move(prefix), t);     } }
  void mutation_partition::apply_delete(const schema& schema, clustering_key_prefix_view prefix, tombstone t) {     check_schema(schema);     if (prefix.is_empty(schema)) {         apply(t);     } else if (prefix.is_full(schema)) {         clustered_row(schema, prefix).apply(t);     } else {         apply_row_tombstone(schema, prefix, t);     } }
- void mutation_partition::apply_insert(const schema& s, clustering_key_view key, api::timestamp_type created_at) {     clustered_row(s, key).apply(row_marker(created_at)); }
- void mutation_partition::apply_insert(const schema& s, clustering_key_view key, api::timestamp_type created_at,         gc_clock::duration ttl, gc_clock::time_point expiry) {     clustered_row(s, key).apply(row_marker(created_at, ttl, expiry)); }
- void mutation_partition::insert_row(const schema& s, const clustering_key& key, deletable_row&& row) {     auto e = alloc_strategy_unique_ptr<rows_entry>(         current_allocator().construct<rows_entry>(key, std::move(row)));     _rows.insert_before_hint(_rows.end(), std::move(e), rows_entry::tri_compare(s)); }
+ 
+ 
+ 
  void mutation_partition::insert_row(const schema& s, const clustering_key& key, const deletable_row& row) {     check_schema(s);     auto e = alloc_strategy_unique_ptr<rows_entry>(         current_allocator().construct<rows_entry>(s, key, row));     _rows.insert_before_hint(_rows.end(), std::move(e), rows_entry::tri_compare(s)); }
  const row* mutation_partition::find_row(const schema& s, const clustering_key& key) const {     check_schema(s);     auto i = _rows.find(key, rows_entry::tri_compare(s));     if (i == _rows.end()) {         return nullptr;     }     return &i->row().cells(); }
  deletable_row& mutation_partition::clustered_row(const schema& s, clustering_key&& key) {     check_schema(s);     auto i = _rows.find(key, rows_entry::tri_compare(s));     if (i == _rows.end()) {         auto e = alloc_strategy_unique_ptr<rows_entry>(             current_allocator().construct<rows_entry>(std::move(key)));         i = _rows.insert_before_hint(i, std::move(e), rows_entry::tri_compare(s)).first;     }     return i->row(); }
