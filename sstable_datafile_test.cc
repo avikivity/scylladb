@@ -261,16 +261,10 @@
 // the database clock follows Java - 1ms granularity, 64-bit counter, 1970 epoch
 extern std::atomic<int64_t> clocks_offset;
 template<typename Duration>
-static inline void forward_jump_clocks(Duration delta)
-{
-    auto d = std::chrono::duration_cast<std::chrono::seconds>(delta).count();
-    clocks_offset.fetch_add(d, std::memory_order_relaxed);
-}
-static inline std::chrono::seconds get_clocks_offset()
-{
-    auto off = clocks_offset.load(std::memory_order_relaxed);
-    return std::chrono::seconds(off);
-}
+static void forward_jump_clocks(Duration delta)
+;
+static std::chrono::seconds get_clocks_offset()
+;
 // Returns a time point which is earlier from t by d, or minimum time point if it cannot be represented.
 template<typename Clock, typename Duration, typename Rep, typename Period>
 inline
@@ -435,26 +429,11 @@ public:
     using duration = std::chrono::duration<rep, period>;
     using time_point = std::chrono::time_point<gc_clock, duration>;
     static constexpr auto is_steady = base::is_steady;
-    static constexpr std::time_t to_time_t(time_point t) {
-        return std::chrono::duration_cast<std::chrono::seconds>(t.time_since_epoch()).count();
-    }
-    static constexpr time_point from_time_t(std::time_t t) {
-        return time_point(std::chrono::duration_cast<duration>(std::chrono::seconds(t)));
-    }
-    static time_point now() noexcept {
-        return time_point(std::chrono::duration_cast<duration>(base::now().time_since_epoch())) + get_clocks_offset();
-    }
-    static int32_t as_int32(duration d) {
-        auto count = d.count();
-        int32_t count_32 = static_cast<int32_t>(count);
-        if (count_32 != count) {
-            throw std::runtime_error("Duration too big");
-        }
-        return count_32;
-    }
-    static int32_t as_int32(time_point tp) {
-        return as_int32(tp.time_since_epoch());
-    }
+    static constexpr std::time_t to_time_t(time_point t) ;
+    static constexpr time_point from_time_t(std::time_t t) ;
+    static time_point now() noexcept ;
+    static int32_t as_int32(duration d) ;
+    static int32_t as_int32(time_point tp) ;
 };
 using expiry_opt = std::optional<gc_clock::time_point>;
 using ttl_opt = std::optional<gc_clock::duration>;
@@ -1876,24 +1855,15 @@ public:
     const_iterator cbegin() const { return const_iterator(_chunks.data(), 0); }
     const_iterator cend() const { return const_iterator(_chunks.data(), _size); }
     std::reverse_iterator<iterator> rbegin() { return std::reverse_iterator(end()); }
-    std::reverse_iterator<iterator> rend() { return std::reverse_iterator(begin()); }
-    std::reverse_iterator<const_iterator> rbegin() const { return std::reverse_iterator(end()); }
-    std::reverse_iterator<const_iterator> rend() const { return std::reverse_iterator(begin()); }
-    std::reverse_iterator<const_iterator> crbegin() const { return std::reverse_iterator(cend()); }
-    std::reverse_iterator<const_iterator> crend() const { return std::reverse_iterator(cbegin()); }
+    std::reverse_iterator<iterator> rend() ;
+    std::reverse_iterator<const_iterator> rbegin() const ;
+    std::reverse_iterator<const_iterator> rend() const ;
+    std::reverse_iterator<const_iterator> crbegin() const ;
+    std::reverse_iterator<const_iterator> crend() const ;
 public:
-    bool operator==(const chunked_vector& x) const {
-        return boost::equal(*this, x);
-    }
+    bool operator==(const chunked_vector& x) const ;
 };
-template<typename T, size_t max_contiguous_allocation>
-size_t chunked_vector<T, max_contiguous_allocation>::external_memory_usage() const {
-    size_t result = 0;
-    for (auto&& chunk : _chunks) {
-        result += ::malloc_usable_size(chunk.get());
-    }
-    return result;
-}
+
 template <typename T, size_t max_contiguous_allocation>
 chunked_vector<T, max_contiguous_allocation>::chunked_vector(const chunked_vector& x)
         : chunked_vector() {
@@ -2089,16 +2059,9 @@ public:
         auto idx2 = idx;
         _storage[idx1] |= int_type(1) << idx2;
     }
-    void clear(size_t idx) {
-        auto idx1 = idx / bits_per_int();
-        idx %= bits_per_int();
-        auto idx2 = idx;
-        _storage[idx1] &= ~(int_type(1) << idx2);
-    }
+    void clear(size_t idx) ;
     void clear();
-    const utils::chunked_vector<int_type>& get_storage() const {
-        return _storage;
-    }
+    const utils::chunked_vector<int_type>& get_storage() const ;
 };
 namespace utils {
 namespace filter {
@@ -2114,20 +2077,16 @@ private:
     } _shard_stats;
     stats& _stats = _shard_stats;
 public:
-    int num_hashes() { return _hash_count; }
-    bitmap& bits() { return _bitset; }
+    int num_hashes() ;
+    bitmap& bits() ;
     bloom_filter(int hashes, bitmap&& bs, filter_format format) noexcept;
     ~bloom_filter() noexcept;
     virtual void add(const bytes_view& key) override;
     virtual bool is_present(const bytes_view& key) override;
     virtual bool is_present(hashed_key key) override;
-    virtual void clear() override {
-        _bitset.clear();
-    }
-    virtual void close() override { }
-    virtual size_t memory_size() override {
-        return sizeof(_hash_count) + _bitset.memory_size();
-    }
+    virtual void clear() override ;
+    virtual void close() override ;
+    virtual size_t memory_size() override ;
     static const stats& get_shard_stats() noexcept {
         return _shard_stats;
     }
@@ -3543,27 +3502,12 @@ public:
         fragment_iterator(chunk* current) : _current(current) {}
         fragment_iterator(const fragment_iterator&) = default;
         fragment_iterator& operator=(const fragment_iterator&) = default;
-        bytes_view operator*() const {
-            return { _current->data, _current->frag_size };
-        }
-        bytes_view operator->() const {
-            return *(*this);
-        }
-        fragment_iterator& operator++() {
-            _current = _current->next;
-            return *this;
-        }
-        fragment_iterator operator++(int) {
-            fragment_iterator tmp(*this);
-            ++(*this);
-            return tmp;
-        }
+        bytes_view operator*() const ;
+        bytes_view operator->() const ;
+        fragment_iterator& operator++() ;
+        fragment_iterator operator++(int) ;
         bool operator==(const fragment_iterator&) const = default;
-        implementation extract_implementation() const {
-            return implementation {
-                .current_chunk = _current,
-            };
-        }
+        implementation extract_implementation() const ;
     };
     using const_iterator = fragment_iterator;
     class output_iterator {
@@ -3577,9 +3521,9 @@ public:
     private:
         bytes_ostream* _ostream = nullptr;
     private:
-        explicit output_iterator(bytes_ostream& os) : _ostream(&os) { }
+        explicit output_iterator(bytes_ostream& os)  ;
     public:
-        reference operator*() const { return *_ostream->write_place_holder(1); }
+        reference operator*() const ;
         output_iterator& operator++() ;
         output_iterator operator++(int) ;
     };
@@ -3869,44 +3813,13 @@ public:
             _first = bytes_view();
         }
     }
-    buffer_view prefix(size_t n) const {
-        auto tmp = *this;
-        tmp._total_size = std::min(tmp._total_size, n);
-        tmp._first = tmp._first.substr(0, n);
-        return tmp;
-    }
-    bytes_view current_fragment() {
-        return _first;
-    }
-    bytes linearize() const {
-        bytes b(bytes::initialized_later(), size_bytes());
-        using boost::range::for_each;
-        auto dst = b.begin();
-        for_each(*this, [&] (bytes_view fragment) {
-            dst = std::copy(fragment.begin(), fragment.end(), dst);
-        });
-        return b;
-    }
+    buffer_view prefix(size_t n) const ;
+    bytes_view current_fragment() ;
+    bytes linearize() const ;
     template<typename Function>
     decltype(auto) with_linearized(Function&& fn) const
-    {
-        bytes b;
-        bytes_view bv;
-        if (_first.size() != _total_size) {
-            b = linearize();
-            bv = b;
-        } else {
-            bv = _first;
-        }
-        return fn(bv);
-    }
-    implementation extract_implementation() const {
-        return implementation {
-            .current = _first,
-            .next = _next,
-            .size = _total_size,
-        };
-    }
+    ;
+    implementation extract_implementation() const ;
 };
 static_assert(FragmentedView<buffer_view<bytes_ostream::fragment_iterator>>);
 using size_type = uint32_t;
@@ -3928,13 +3841,9 @@ struct serializer;
 template<typename T>
 struct integral_serializer {
     template<typename Input>
-    static T read(Input& v) {
-        return deserialize_integral<T>(v);
-    }
+    static T read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, T v) {
-        serialize_integral(out, v);
-    }
+    static void write(Output& out, T v) ;
     template<typename Input>
     static void skip(Input& v) {
         read(v);
@@ -4492,13 +4401,7 @@ public:
         assert(uuid.is_timestamp());
         return uuid;
     }
-    static UUID get_random_time_UUID_from_micros(std::chrono::microseconds when_in_micros) {
-        static thread_local std::mt19937_64 rand_gen(std::random_device().operator()());
-        static thread_local std::uniform_int_distribution<int64_t> rand_dist(std::numeric_limits<int64_t>::min());
-        auto uuid = UUID(create_time(from_unix_timestamp(when_in_micros)), rand_dist(rand_gen));
-        assert(uuid.is_timestamp());
-        return uuid;
-    }
+    static UUID get_random_time_UUID_from_micros(std::chrono::microseconds when_in_micros) ;
     // Generate a time-based (Version 1) UUID using
     // a microsecond-precision Unix time and a unique number in
     // range [0, 131072).
@@ -4511,77 +4414,16 @@ public:
     // \throws timeuuid_submicro_out_of_range
     //
     static std::array<int8_t, 16>
-    get_time_UUID_bytes_from_micros_and_submicros(std::chrono::microseconds when_in_micros, int submicros) {
-        std::array<int8_t, 16> uuid_bytes;
-        if (submicros < 0 || submicros >= SUBMICRO_LIMIT) {
-            throw timeuuid_submicro_out_of_range("timeuuid submicro component does not fit into available bits");
-        }
-        auto dmc = from_unix_timestamp(when_in_micros);
-        // We have roughly 3 extra bits we will use to increase
-        // sub-microsecond component range from clockseq's 2^14 to 2^17.
-        int64_t msb = create_time(dmc + decimicroseconds((submicros >> 14) & 0b111));
-        // See RFC 4122 for details.
-        msb = net::hton(msb);
-        std::copy_n(reinterpret_cast<char*>(&msb), sizeof(msb), uuid_bytes.data());
-        // Use 14-bit clockseq to store the rest of sub-microsecond component.
-        int64_t clockseq = submicros & 0b11'1111'1111'1111;
-        // Scylla, like Cassandra, uses signed int8 compare to
-        // compare lower bits of timeuuid. It means 0xA0 > 0xFF.
-        // Bit-xor the sign bit to "fix" the order. See also
-        // https://issues.apache.org/jira/browse/CASSANDRA-8730
-        // and Cassandra commit 6d266253a5bdaf3a25eef14e54deb56aba9b2944
-        //
-        // Turn 0 into -127, 1 into -126, ... and 128 into 0, ...
-        clockseq ^=  0b0000'0000'1000'0000;
-        // Least significant bits: UUID variant (1), clockseq and node.
-        // To protect against the system clock back-adjustment,
-        // use a random (spoof) node identifier. Normally this
-        // protection is provided by clockseq component, but we've
-        // just stored sub-microsecond time in it.
-        int64_t lsb = ((clockseq | 0b1000'0000'0000'0000) << 48) | UUID_gen::spoof_node;
-        lsb = net::hton(lsb);
-        std::copy_n(reinterpret_cast<char*>(&lsb), sizeof(lsb), uuid_bytes.data() + sizeof(msb));
-        return uuid_bytes;
-    }
-    static bool is_valid_UUID(bytes raw) {
-        return raw.size() == 16;
-    }
-    static UUID get_UUID(bytes raw) {
-        assert(raw.size() == 16);
-        return get_UUID(raw.begin());
-    }
-    static UUID get_UUID(int8_t* src) {
-        struct tmp { uint64_t msb, lsb; } t;
-        std::copy(src, src + 16, reinterpret_cast<char*>(&t));
-        return UUID(net::ntoh(t.msb), net::ntoh(t.lsb));
-    }
+    get_time_UUID_bytes_from_micros_and_submicros(std::chrono::microseconds when_in_micros, int submicros) ;
+    static bool is_valid_UUID(bytes raw) ;
+    static UUID get_UUID(bytes raw) ;
+    static UUID get_UUID(int8_t* src) ;
     static UUID get_name_UUID(bytes_view b);
     static UUID get_name_UUID(sstring_view str);
     static UUID get_name_UUID(const unsigned char* s, size_t len);
     static std::array<int8_t, 16> decompose(const UUID& uuid)
-    {
-        uint64_t most = uuid.get_most_significant_bits();
-        uint64_t least = uuid.get_least_significant_bits();
-        std::array<int8_t, 16> b;
-        for (int i = 0; i < 8; i++)
-        {
-            b[i] = (char)(most >> ((7-i) * 8));
-            b[8+i] = (char)(least >> ((7-i) * 8));
-        }
-        return b;
-    }
-    static std::array<int8_t, 16> get_time_UUID_bytes() {
-        uint64_t msb = _instance.create_time_safe();
-        uint64_t lsb = clock_seq_and_node;
-        std::array<int8_t, 16> uuid_bytes;
-        for (int i = 0; i < 8; i++) {
-            uuid_bytes[i] = (int8_t) (msb >> 8 * (7 - i));
-        }
-        for (int i = 8; i < 16; i++) {
-            uuid_bytes[i] = (int8_t) (lsb >> 8 * (7 - (i - 8)));
-        }
-        return uuid_bytes;
-    }
+    ;
+    static std::array<int8_t, 16> get_time_UUID_bytes() ;
     static UUID min_time_UUID(decimicroseconds timestamp = decimicroseconds{0})
     {
         auto uuid = UUID(create_time(from_unix_timestamp(timestamp)), MIN_CLOCK_SEQ_AND_NODE);
@@ -4978,111 +4820,23 @@ public:
             , _current(current)
         { }
         reference operator*() const noexcept { return _current; }
-        pointer operator->() const noexcept { return &_current; }
-        iterator& operator++() noexcept {
-            _left -= _current.size();
-            if (_left) {
-                ++_it;
-                _current = bytes_view(reinterpret_cast<const bytes::value_type*>(_it->get()),
-                                      std::min(_left, _it->size()));
-            }
-            return *this;
-        }
-        iterator operator++(int) noexcept {
-            auto it = *this;
-            operator++();
-            return it;
-        }
-        bool operator==(const iterator& other) const noexcept {
-            return _left == other._left;
-        }
+        pointer operator->() const noexcept ;
+        iterator& operator++() noexcept ;
+        iterator operator++(int) noexcept ;
+        bool operator==(const iterator& other) const noexcept ;
     };
     using const_iterator = iterator;
-    iterator begin() const noexcept {
-        return iterator(_current,
-                        bytes_view(reinterpret_cast<const bytes::value_type*>(_current_position), _current_size),
-                        _total_size);
-    }
-    iterator end() const noexcept {
-        return iterator();
-    }
-    bool empty() const noexcept { return !size_bytes(); }
-    size_t size_bytes() const noexcept { return _total_size; }
-    void remove_prefix(size_t n) noexcept {
-        if (!_total_size) {
-            return;
-        }
-        while (n > _current_size) {
-            _total_size -= _current_size;
-            n -= _current_size;
-            ++_current;
-            _current_size = std::min(_current->size(), _total_size);
-            _current_position = _current->get();
-        }
-        _total_size -= n;
-        _current_size -= n;
-        _current_position += n;
-        if (!_current_size && _total_size) {
-            ++_current;
-            _current_size = std::min(_current->size(), _total_size);
-            _current_position = _current->get();
-        }
-    }
-    void remove_current() noexcept {
-        _total_size -= _current_size;
-        if (_total_size) {
-            ++_current;
-            _current_size = std::min(_current->size(), _total_size);
-            _current_position = _current->get();
-        } else {
-            _current_size = 0;
-            _current_position = nullptr;
-        }
-    }
-    view prefix(size_t n) const {
-        auto tmp = *this;
-        tmp._total_size = std::min(tmp._total_size, n);
-        tmp._current_size = std::min(tmp._current_size, n);
-        return tmp;
-    }
-    bytes_view current_fragment() const noexcept {
-        return bytes_view(reinterpret_cast<const bytes_view::value_type*>(_current_position), _current_size);
-    }
+    iterator begin() const noexcept ;
+    iterator end() const noexcept ;
+    bool empty() const noexcept ;
+    size_t size_bytes() const noexcept ;
+    void remove_prefix(size_t n) noexcept ;
+    void remove_current() noexcept ;
+    view prefix(size_t n) const ;
+    bytes_view current_fragment() const noexcept ;
     // Invalidates iterators
-    void remove_suffix(size_t n) noexcept {
-        _total_size -= n;
-        _current_size = std::min(_current_size, _total_size);
-    }
-    bool operator==(const fragmented_temporary_buffer::view& other) const noexcept {
-        auto this_it = begin();
-        auto other_it = other.begin();
-        if (empty() || other.empty()) {
-            return empty() && other.empty();
-        }
-        auto this_fragment = *this_it;
-        auto other_fragment = *other_it;
-        while (this_it != end() && other_it != other.end()) {
-            if (this_fragment.empty()) {
-                ++this_it;
-                if (this_it != end()) {
-                    this_fragment = *this_it;
-                }
-            }
-            if (other_fragment.empty()) {
-                ++other_it;
-                if (other_it != other.end()) {
-                    other_fragment = *other_it;
-                }
-            }
-            auto length = std::min(this_fragment.size(), other_fragment.size());
-            if (!std::equal(this_fragment.data(), this_fragment.data() + length, other_fragment.data())) {
-                return false;
-            }
-            this_fragment.remove_prefix(length);
-            other_fragment.remove_prefix(length);
-        }
-        return this_it == end() && other_it == other.end();
-    }
+    void remove_suffix(size_t n) noexcept ;
+    bool operator==(const fragmented_temporary_buffer::view& other) const noexcept ;
 };
 static_assert(FragmentRange<fragmented_temporary_buffer::view>);
 static_assert(FragmentedView<fragmented_temporary_buffer::view>);
@@ -6259,15 +6013,9 @@ public:
     std::strong_ordering operator()(const bytes_view& v1, const bytes_view& v2) const {
         return _type->compare(v1, v2);
     }
-    std::strong_ordering operator()(const managed_bytes_view& v1, const managed_bytes_view& v2) const {
-        return _type->compare(v1, v2);
-    }
+    std::strong_ordering operator()(const managed_bytes_view& v1, const managed_bytes_view& v2) const ;
 };
-inline
-serialized_tri_compare
-abstract_type::as_tri_comparator() const {
-    return serialized_tri_compare(shared_from_this());
-}
+
 using key_compare = serialized_compare;
 // Remember to update type_codec in transport/server.cc and cql3/cql3_type.cc
 extern thread_local const shared_ptr<const abstract_type> byte_type;
@@ -6318,35 +6066,22 @@ struct hash<shared_ptr<const abstract_type>> : boost::hash<shared_ptr<abstract_t
 };
 }
 // FIXME: make more explicit
-inline
+
 bytes
-to_bytes(const char* x) {
-    return bytes(reinterpret_cast<const int8_t*>(x), std::strlen(x));
-}
+to_bytes(const char* x) ;
 // FIXME: make more explicit
-inline
+
 bytes
-to_bytes(const std::string& x) {
-    return bytes(reinterpret_cast<const int8_t*>(x.data()), x.size());
-}
-inline
+to_bytes(const std::string& x) ;
+
 bytes_view
-to_bytes_view(const std::string& x) {
-    return bytes_view(reinterpret_cast<const int8_t*>(x.data()), x.size());
-}
-inline
+to_bytes_view(const std::string& x) ;
+
 bytes
-to_bytes(bytes_view x) {
-    return bytes(x.begin(), x.size());
-}
-inline
+to_bytes(bytes_view x) ;
+
 bytes_opt
-to_bytes_opt(bytes_view_opt bv) {
-    if (bv) {
-        return to_bytes(*bv);
-    }
-    return std::nullopt;
-}
+to_bytes_opt(bytes_view_opt bv) ;
 inline
 bytes_view_opt
 as_bytes_view_opt(const bytes_opt& bv) {
@@ -6392,32 +6127,12 @@ typename Type::value_type deserialize_value(Type& t, bytes_view v) {
     return t.deserialize_value(v);
 }
 template<typename T>
-T read_simple(bytes_view& v) {
-    if (v.size() < sizeof(T)) {
-        throw_with_backtrace<marshal_exception>(format("read_simple - not enough bytes (expected {:d}, got {:d})", sizeof(T), v.size()));
-    }
-    auto p = v.begin();
-    v.remove_prefix(sizeof(T));
-    return net::ntoh(read_unaligned<T>(p));
-}
+T read_simple(bytes_view& v) ;
 template<typename T>
-T read_simple_exactly(bytes_view v) {
-    if (v.size() != sizeof(T)) {
-        throw_with_backtrace<marshal_exception>(format("read_simple_exactly - size mismatch (expected {:d}, got {:d})", sizeof(T), v.size()));
-    }
-    auto p = v.begin();
-    return net::ntoh(read_unaligned<T>(p));
-}
-inline
+T read_simple_exactly(bytes_view v) ;
+
 bytes_view
-read_simple_bytes(bytes_view& v, size_t n) {
-    if (v.size() < n) {
-        throw_with_backtrace<marshal_exception>(format("read_simple_bytes - not enough bytes (requested {:d}, got {:d})", n, v.size()));
-    }
-    bytes_view ret(v.begin(), n);
-    v.remove_prefix(n);
-    return ret;
-}
+read_simple_bytes(bytes_view& v, size_t n) ;
 template<FragmentedView View>
 View read_simple_bytes(View& v, size_t n) {
     if (v.size_bytes() < n) {
@@ -6427,16 +6142,7 @@ View read_simple_bytes(View& v, size_t n) {
     v.remove_prefix(n);
     return prefix;
 }
-inline sstring read_simple_short_string(bytes_view& v) {
-    uint16_t len = read_simple<uint16_t>(v);
-    if (v.size() < len) {
-        throw_with_backtrace<marshal_exception>(format("read_simple_short_string - not enough bytes ({:d})", v.size()));
-    }
-    sstring ret = uninitialized_string(len);
-    std::copy(v.begin(), v.begin() + len, ret.begin());
-    v.remove_prefix(len);
-    return ret;
-}
+ sstring read_simple_short_string(bytes_view& v) ;
 size_t collection_size_len();
 size_t collection_value_len();
 void write_collection_size(bytes::iterator& out, int size);
@@ -6453,20 +6159,12 @@ template <FragmentedView View>
 std::vector<std::pair<managed_bytes, managed_bytes>> partially_deserialize_map(View in);
 using user_type = shared_ptr<const user_type_impl>;
 using tuple_type = shared_ptr<const tuple_type_impl>;
-inline
-data_value::data_value(std::optional<bytes> v)
-        : data_value(v ? data_value(*v) : data_value::make_null(data_type_for<bytes>())) {
-}
-template <typename NativeType>
-data_value::data_value(std::optional<NativeType> v)
-        : data_value(v ? data_value(*v) : data_value::make_null(data_type_for<NativeType>())) {
-}
+
+
 template<>
 struct appending_hash<data_type> {
     template<typename Hasher>
-    void operator()(Hasher& h, const data_type& v) const {
-        feed_hash(h, v->name());
-    }
+    void operator()(Hasher& h, const data_type& v) const ;
 };
 enum class allow_prefixes { no, yes };
 template<allow_prefixes AllowPrefixes = allow_prefixes::no>
@@ -6789,11 +6487,9 @@ public:
     int32_t chunk_length() const { return _chunk_length.value_or(int(DEFAULT_CHUNK_LENGTH)); }
     double crc_check_chance() const { return _crc_check_chance.value_or(double(DEFAULT_CRC_CHECK_CHANCE)); }
     void validate();
-    std::map<sstring, sstring> get_options() const { return {}; }
+    std::map<sstring, sstring> get_options() const ;
     bool operator==(const compression_parameters& other) const;
-    static compression_parameters no_compression() {
-        return compression_parameters(nullptr);
-    }
+    static compression_parameters no_compression() ;
 private:
     void validate_options(const std::map<sstring, sstring>&);
 };
@@ -6823,9 +6519,7 @@ class caching_options {
     friend class schema;
     caching_options();
 public:
-    bool enabled() const {
-        return _enabled;
-    }
+    bool enabled() const ;
     std::map<sstring, sstring> to_map() const;
     sstring to_sstring() const;
     static caching_options get_disabled_caching_options();
@@ -6850,23 +6544,17 @@ public:
     virtual column_computation_ptr clone() const = 0;
     virtual bytes serialize() const = 0;
     virtual bytes compute_value(const schema& schema, const partition_key& key) const = 0;
-    virtual bool depends_on_non_primary_key_column() const {
-        return false;
-    }
+    virtual bool depends_on_non_primary_key_column() const ;
 };
 class legacy_token_column_computation : public column_computation {
 public:
-    virtual column_computation_ptr clone() const override {
-        return std::make_unique<legacy_token_column_computation>(*this);
-    }
+    virtual column_computation_ptr clone() const override ;
     virtual bytes serialize() const override;
     virtual bytes compute_value(const schema& schema, const partition_key& key) const override;
 };
 class token_column_computation : public column_computation {
 public:
-    virtual column_computation_ptr clone() const override {
-        return std::make_unique<token_column_computation>(*this);
-    }
+    virtual column_computation_ptr clone() const override ;
     virtual bytes serialize() const override;
     virtual bytes compute_value(const schema& schema, const partition_key& key) const override;
 };
@@ -6878,7 +6566,7 @@ class collection_column_computation final : public column_computation {
     };
     const bytes _collection_name;
     const kind _kind;
-    collection_column_computation(const bytes& collection_name, kind kind) : _collection_name(collection_name), _kind(kind) {}
+    collection_column_computation(const bytes& collection_name, kind kind)  ;
     using collection_kv = std::pair<bytes_view, atomic_cell_view>;
     void operate_on_collection_entries(
             std::invocable<collection_kv*, collection_kv*, tombstone> auto&& old_and_new_row_func, const schema& schema,
@@ -7020,31 +6708,17 @@ public:
         : _mask(num_bits)
     {
     }
-    void resize(column_count_type num_bits) {
-        _mask.resize(num_bits);
-    }
+    void resize(column_count_type num_bits) ;
     // Set the appropriate bit for column id.
-    void set(ordinal_column_id id) {
-        column_count_type bit = static_cast<column_count_type>(id);
-        _mask.set(bit);
-    }
+    void set(ordinal_column_id id) ;
     // Test the mask for use of a given column id.
-    bool test(ordinal_column_id id) const {
-        column_count_type bit = static_cast<column_count_type>(id);
-        return _mask.test(bit);
-    }
+    bool test(ordinal_column_id id) const ;
     // @sa boost::dynamic_bistet docs
-    size_type count() const { return _mask.count(); }
-    ordinal_column_id find_first() const {
-        return static_cast<ordinal_column_id>(_mask.find_first());
-    }
-    ordinal_column_id find_next(ordinal_column_id pos) const {
-        return static_cast<ordinal_column_id>(_mask.find_next(static_cast<column_count_type>(pos)));
-    }
+    size_type count() const ;
+    ordinal_column_id find_first() const ;
+    ordinal_column_id find_next(ordinal_column_id pos) const ;
     // Logical or
-    void union_with(const column_set& with) {
-        _mask |= with._mask;
-    }
+    void union_with(const column_set& with) ;
 private:
     bitset _mask;
 };
@@ -7782,7 +7456,7 @@ public:
     }
     const schema& operator*() const noexcept { return *_schema; }
     const schema* operator->() const noexcept { return _schema.operator->(); }
-    const schema* get() const noexcept { return _schema.get(); }
+    const schema* get() const noexcept ;
     operator schema_ptr() const noexcept {
         return _schema;
     }
@@ -7801,11 +7475,7 @@ public:
 };
 // Throws schema_mismatch_error when a schema-dependent object of "expected" version
 // cannot be accessed using "access" schema.
-inline void check_schema_version(table_schema_version expected, const schema& access) {
-    if (expected != access.version()) {
-        throw_with_backtrace<schema_mismatch_error>(expected, access);
-    }
-}
+ void check_schema_version(table_schema_version expected, const schema& access) ;
 namespace logging {
 //
 // Seastar changed the names of some of these types. Maintain the old names here to avoid too much churn.
@@ -7813,13 +7483,9 @@ namespace logging {
 using log_level = seastar::log_level;
 using logger = seastar::logger;
 using registry = seastar::logger_registry;
-inline registry& logger_registry() noexcept {
-    return seastar::global_logger_registry();
-}
+ registry& logger_registry() noexcept ;
 using settings = seastar::logging_settings;
-inline void apply_settings(const settings& s) {
-    seastar::apply_logging_settings(s);
-}
+ void apply_settings(const settings& s) ;
 using seastar::pretty_type_name;
 using seastar::level_name;
 }
@@ -7828,20 +7494,11 @@ extern logger seastar_logger;
 }
 namespace ser {
 template<typename T>
-void set_size(seastar::measuring_output_stream& os, const T& obj) {
-    serialize(os, uint32_t(0));
-}
+void set_size(seastar::measuring_output_stream& os, const T& obj) ;
 template<typename Stream, typename T>
-void set_size(Stream& os, const T& obj) {
-    serialize(os, get_sizeof(obj));
-}
+void set_size(Stream& os, const T& obj) ;
 template<typename Output>
-void safe_serialize_as_uint32(Output& out, uint64_t data) {
-    if (data > std::numeric_limits<uint32_t>::max()) {
-        throw std::runtime_error("Size is too big for serialization");
-    }
-    serialize(out, uint32_t(data));
-}
+void safe_serialize_as_uint32(Output& out, uint64_t data) ;
 template<typename T>
 constexpr bool can_serialize_fast() {
     return !std::is_same<T, bool>::value && std::is_integral<T>::value && (sizeof(T) == 1 || __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
@@ -8462,20 +8119,9 @@ T deserialize_std_variant(Input& in, boost::type<T> t,  size_t idx, std::index_s
 template<typename Input, typename ...T>
 std::variant<T...> deserialize(Input& in, boost::type<std::variant<T...>> v) ;
 template<typename Output>
-void serialize(Output& out, const unknown_variant_type& v) {
-    out.write(v.data.begin(), v.data.size());
-}
+void serialize(Output& out, const unknown_variant_type& v) ;
 template<typename Input>
-unknown_variant_type deserialize(Input& in, boost::type<unknown_variant_type>) {
-    return seastar::with_serialized_stream(in, [] (auto& in) {
-        auto size = deserialize(in, boost::type<size_type>());
-        auto index = deserialize(in, boost::type<size_type>());
-        auto sz = size - sizeof(size_type) * 2;
-        sstring v = uninitialized_string(sz);
-        in.read(v.data(), sz);
-        return unknown_variant_type{ index, std::move(v) };
-    });
-}
+unknown_variant_type deserialize(Input& in, boost::type<unknown_variant_type>) ;
 // Class for iteratively deserializing a frozen vector
 // using a range.
 // Use begin() and end() to iterate through the frozen vector,
@@ -8489,35 +8135,16 @@ private:
     input_stream _in;
     size_t _size;
     utils::chunked_vector<input_stream> _substreams;
-    void fill_substreams() requires (!IsForward) {
-        input_stream in = _in;
-        input_stream in2 = _in;
-        for (size_t i = 0; i < size(); ++i) {
-            size_t old_size = in.size();
-            serializer<T>::skip(in);
-            size_t new_size = in.size();
-            _substreams.push_back(in2.read_substream(old_size - new_size));
-        }
-    }
+    void fill_substreams() requires (!IsForward) ;
     struct forward_iterator_data {
         input_stream _in = simple_input_stream();
-        void skip() {
-            serializer<T>::skip(_in);
-        }
-        value_type deserialize_next() {
-            return deserialize(_in, boost::type<T>());
-        }
+        void skip() ;
+        value_type deserialize_next() ;
     };
     struct reverse_iterator_data {
         std::reverse_iterator<utils::chunked_vector<input_stream>::const_iterator> _substream_it;
-        void skip() {
-            ++_substream_it;
-        }
-        value_type deserialize_next() {
-            input_stream is = *_substream_it;
-            ++_substream_it;
-            return deserialize(is, boost::type<T>());
-        }
+        void skip() ;
+        value_type deserialize_next() ;
     };
 public:
     vector_deserializer() noexcept
@@ -8565,63 +8192,24 @@ public:
             return _idx == it._idx;
         }
         // Deserializes and returns the item, effectively incrementing the iterator..
-        value_type operator*() const {
-            auto zis = const_cast<iterator*>(this);
-            zis->_idx++;
-            zis->_consumed = true;
-            return zis->_data.deserialize_next();
-        }
-        iterator& operator++() {
-            if (!_consumed) {
-                _data.skip();
-                ++_idx;
-            } else {
-                _consumed = false;
-            }
-            return *this;
-        }
-        iterator operator++(int) {
-            auto pre = *this;
-            ++*this;
-            return pre;
-        }
-        ssize_t operator-(const iterator& it) const noexcept {
-            return _idx - it._idx;
-        }
+        value_type operator*() const ;
+        iterator& operator++() ;
+        iterator operator++(int) ;
+        ssize_t operator-(const iterator& it) const noexcept ;
     };
     using const_iterator = iterator;
     static_assert(std::input_iterator<iterator>);
     static_assert(std::sentinel_for<iterator, iterator>);
-    iterator begin() noexcept requires(IsForward) {
-        return {_in, 0};
-    }
-    const_iterator begin() const noexcept requires(IsForward) {
-        return {_in, 0};
-    }
-    const_iterator cbegin() const noexcept requires(IsForward) {
-        return {_in, 0};
-    }
-    iterator end() noexcept requires(IsForward) {
-        return {_in, _size};
-    }
-    const_iterator end() const noexcept requires(IsForward) {
-        return {_in, _size};
-    }
-    const_iterator cend() const noexcept requires(IsForward) {
-        return {_in, _size};
-    }
-    iterator begin() noexcept requires(!IsForward) {
-        return {_substreams.crbegin(), 0};
-    }
-    const_iterator begin() const noexcept requires(!IsForward) {
-        return {_substreams.crbegin(), 0};
-    }
-    const_iterator cbegin() const noexcept requires(!IsForward) {
-        return {_substreams.crbegin(), 0};
-    }
-    iterator end() noexcept requires(!IsForward) {
-        return {_substreams.crend(), _size};
-    }
+    iterator begin() noexcept requires(IsForward) ;
+    const_iterator begin() const noexcept requires(IsForward) ;
+    const_iterator cbegin() const noexcept requires(IsForward) ;
+    iterator end() noexcept requires(IsForward) ;
+    const_iterator end() const noexcept requires(IsForward) ;
+    const_iterator cend() const noexcept requires(IsForward) ;
+    iterator begin() noexcept requires(!IsForward) ;
+    const_iterator begin() const noexcept requires(!IsForward) ;
+    const_iterator cbegin() const noexcept requires(!IsForward) ;
+    iterator end() noexcept requires(!IsForward) ;
     const_iterator end() const noexcept requires(!IsForward) {
         return {_substreams.crend(), _size};
     }
@@ -9466,29 +9054,19 @@ protected:
     compound_view_wrapper(managed_bytes_view v)
         : _bytes(v)
     { }
-    static inline const auto& get_compound_type(const schema& s) {
-        return TopLevelView::get_compound_type(s);
-    }
+    static const auto& get_compound_type(const schema& s) ;
 public:
-    std::vector<bytes> explode(const schema& s) const {
-        return get_compound_type(s)->deserialize_value(_bytes);
-    }
-    managed_bytes_view representation() const {
-        return _bytes;
-    }
+    std::vector<bytes> explode(const schema& s) const ;
+    managed_bytes_view representation() const ;
     struct less_compare {
         typename TopLevelView::compound _t;
-        less_compare(const schema& s) : _t(get_compound_type(s)) {}
-        bool operator()(const TopLevelView& k1, const TopLevelView& k2) const {
-            return _t->less(k1.representation(), k2.representation());
-        }
+        less_compare(const schema& s)  ;
+        bool operator()(const TopLevelView& k1, const TopLevelView& k2) const ;
     };
     struct tri_compare {
         typename TopLevelView::compound _t;
-        tri_compare(const schema &s) : _t(get_compound_type(s)) {}
-        std::strong_ordering operator()(const TopLevelView& k1, const TopLevelView& k2) const {
-            return _t->compare(k1.representation(), k2.representation());
-        }
+        tri_compare(const schema &s)  ;
+        std::strong_ordering operator()(const TopLevelView& k1, const TopLevelView& k2) const ;
     };
     struct hashing {
         typename TopLevelView::compound _t;
@@ -9858,13 +9436,7 @@ public:
                 prefix_type->begin(k2), prefix_type->end(k2),
                 tri_compare) < 0;
         }
-        bool operator()(const PrefixTopLevel& k1, const TopLevel& k2) const {
-            return lexicographical_tri_compare(
-                prefix_type->types().begin(), prefix_type->types().end(),
-                prefix_type->begin(k1), prefix_type->end(k1),
-                full_type->begin(k2), full_type->end(k2),
-                tri_compare) < 0;
-        }
+        bool operator()(const PrefixTopLevel& k1, const TopLevel& k2) const ;
     };
     // In prefix equality two sequences are equal if any of them is a prefix
     // of the other. Otherwise lexicographical ordering is applied.
@@ -9873,38 +9445,21 @@ public:
     struct prefix_equality_less_compare {
         typename PrefixTopLevel::compound prefix_type;
         typename TopLevel::compound full_type;
-        prefix_equality_less_compare(const schema& s)
-            : prefix_type(PrefixTopLevel::get_compound_type(s))
-            , full_type(TopLevel::get_compound_type(s))
-        { }
-        bool operator()(const TopLevel& k1, const PrefixTopLevel& k2) const {
-            return prefix_equality_tri_compare(prefix_type->types().begin(),
-                full_type->begin(k1), full_type->end(k1),
-                prefix_type->begin(k2), prefix_type->end(k2),
-                tri_compare) < 0;
-        }
-        bool operator()(const PrefixTopLevel& k1, const TopLevel& k2) const {
-            return prefix_equality_tri_compare(prefix_type->types().begin(),
-                prefix_type->begin(k1), prefix_type->end(k1),
-                full_type->begin(k2), full_type->end(k2),
-                tri_compare) < 0;
-        }
+        prefix_equality_less_compare(const schema& s) 
+        ;
+        bool operator()(const TopLevel& k1, const PrefixTopLevel& k2) const ;
+        bool operator()(const PrefixTopLevel& k1, const TopLevel& k2) const ;
     };
-    prefix_view_type prefix_view(const schema& s, unsigned prefix_len) const {
-        return { s, this->representation(), prefix_len };
-    }
+    prefix_view_type prefix_view(const schema& s, unsigned prefix_len) const ;
 };
 template <typename TopLevel, typename FullTopLevel>
 class prefix_compound_view_wrapper : public compound_view_wrapper<TopLevel> {
     using base = compound_view_wrapper<TopLevel>;
 protected:
-    prefix_compound_view_wrapper(managed_bytes_view v)
-        : compound_view_wrapper<TopLevel>(v)
-    { }
+    prefix_compound_view_wrapper(managed_bytes_view v) 
+    ;
 public:
-    bool is_full(const schema& s) const {
-        return TopLevel::get_compound_type(s)->is_full(base::_bytes);
-    }
+    bool is_full(const schema& s) const ;
 };
 template <typename TopLevel, typename TopLevelView, typename FullTopLevel>
 class prefix_compound_wrapper : public compound_wrapper<TopLevel, TopLevelView> {
@@ -10265,9 +9820,7 @@ public:
     bool operator==(const interval_bound& other) const {
         return (_value == other._value) && (_inclusive == other._inclusive);
     }
-    bool equal(const interval_bound& other, IntervalComparatorFor<T> auto&& cmp) const {
-        return _inclusive == other._inclusive && cmp(_value, other._value) == 0;
-    }
+    bool equal(const interval_bound& other, IntervalComparatorFor<T> auto&& cmp) const ;
 };
 template<typename T>
 class nonwrapping_interval;
@@ -10305,101 +9858,26 @@ private:
     // Bound wrappers for compile-time dispatch and safety.
     struct start_bound_ref { const optional<bound>& b; };
     struct end_bound_ref { const optional<bound>& b; };
-    start_bound_ref start_bound() const { return { start() }; }
-    end_bound_ref end_bound() const { return { end() }; }
-    static bool greater_than_or_equal(end_bound_ref end, start_bound_ref start, IntervalComparatorFor<T> auto&& cmp) {
-        return !end.b || !start.b || require_ordering_and_on_equal_return(
-                cmp(end.b->value(), start.b->value()),
-                std::strong_ordering::greater,
-                end.b->is_inclusive() && start.b->is_inclusive());
-    }
-    static bool less_than(end_bound_ref end, start_bound_ref start, IntervalComparatorFor<T> auto&& cmp) {
-        return !greater_than_or_equal(end, start, cmp);
-    }
-    static bool less_than_or_equal(start_bound_ref first, start_bound_ref second, IntervalComparatorFor<T> auto&& cmp) {
-        return !first.b || (second.b && require_ordering_and_on_equal_return(
-                cmp(first.b->value(), second.b->value()),
-                std::strong_ordering::less,
-                first.b->is_inclusive() || !second.b->is_inclusive()));
-    }
-    static bool less_than(start_bound_ref first, start_bound_ref second, IntervalComparatorFor<T> auto&& cmp) {
-        return second.b && (!first.b || require_ordering_and_on_equal_return(
-                cmp(first.b->value(), second.b->value()),
-                std::strong_ordering::less,
-                first.b->is_inclusive() && !second.b->is_inclusive()));
-    }
-    static bool greater_than_or_equal(end_bound_ref first, end_bound_ref second, IntervalComparatorFor<T> auto&& cmp) {
-        return !first.b || (second.b && require_ordering_and_on_equal_return(
-                cmp(first.b->value(), second.b->value()),
-                std::strong_ordering::greater,
-                first.b->is_inclusive() || !second.b->is_inclusive()));
-    }
+    start_bound_ref start_bound() const ;
+    end_bound_ref end_bound() const ;
+    static bool greater_than_or_equal(end_bound_ref end, start_bound_ref start, IntervalComparatorFor<T> auto&& cmp) ;
+    static bool less_than(end_bound_ref end, start_bound_ref start, IntervalComparatorFor<T> auto&& cmp) ;
+    static bool less_than_or_equal(start_bound_ref first, start_bound_ref second, IntervalComparatorFor<T> auto&& cmp) ;
+    static bool less_than(start_bound_ref first, start_bound_ref second, IntervalComparatorFor<T> auto&& cmp) ;
+    static bool greater_than_or_equal(end_bound_ref first, end_bound_ref second, IntervalComparatorFor<T> auto&& cmp) ;
 public:
     // the point is before the interval (works only for non wrapped intervals)
     // Comparator must define a total ordering on T.
-    bool before(const T& point, IntervalComparatorFor<T> auto&& cmp) const {
-        assert(!is_wrap_around(cmp));
-        if (!start()) {
-            return false; //open start, no points before
-        }
-        auto r = cmp(point, start()->value());
-        if (r < 0) {
-            return true;
-        }
-        if (!start()->is_inclusive() && r == 0) {
-            return true;
-        }
-        return false;
-    }
+    bool before(const T& point, IntervalComparatorFor<T> auto&& cmp) const ;
     // the point is after the interval (works only for non wrapped intervals)
     // Comparator must define a total ordering on T.
-    bool after(const T& point, IntervalComparatorFor<T> auto&& cmp) const {
-        assert(!is_wrap_around(cmp));
-        if (!end()) {
-            return false; //open end, no points after
-        }
-        auto r = cmp(end()->value(), point);
-        if (r < 0) {
-            return true;
-        }
-        if (!end()->is_inclusive() && r == 0) {
-            return true;
-        }
-        return false;
-    }
+    bool after(const T& point, IntervalComparatorFor<T> auto&& cmp) const ;
     // check if two intervals overlap.
     // Comparator must define a total ordering on T.
-    bool overlaps(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
-        bool this_wraps = is_wrap_around(cmp);
-        bool other_wraps = other.is_wrap_around(cmp);
-        if (this_wraps && other_wraps) {
-            return true;
-        } else if (this_wraps) {
-            auto unwrapped = unwrap();
-            return other.overlaps(unwrapped.first, cmp) || other.overlaps(unwrapped.second, cmp);
-        } else if (other_wraps) {
-            auto unwrapped = other.unwrap();
-            return overlaps(unwrapped.first, cmp) || overlaps(unwrapped.second, cmp);
-        }
-        // No interval should reach this point as wrap around.
-        assert(!this_wraps);
-        assert(!other_wraps);
-        // if both this and other have an open start, the two intervals will overlap.
-        if (!start() && !other.start()) {
-            return true;
-        }
-        return greater_than_or_equal(end_bound(), other.start_bound(), cmp)
-            && greater_than_or_equal(other.end_bound(), start_bound(), cmp);
-    }
-    static wrapping_interval make(bound start, bound end) {
-        return wrapping_interval({std::move(start)}, {std::move(end)});
-    }
-    static wrapping_interval make_open_ended_both_sides() {
-        return {{}, {}};
-    }
-    static wrapping_interval make_singular(T value) {
-        return {std::move(value)};
-    }
+    bool overlaps(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const ;
+    static wrapping_interval make(bound start, bound end) ;
+    static wrapping_interval make_open_ended_both_sides() ;
+    static wrapping_interval make_singular(T value) ;
     static wrapping_interval make_starting_with(bound b) {
         return {{std::move(b)}, {}};
     }
@@ -10426,137 +9904,29 @@ public:
     // Range is a wrap around if end value is smaller than the start value
     // or they're equal and at least one bound is not inclusive.
     // Comparator must define a total ordering on T.
-    bool is_wrap_around(IntervalComparatorFor<T> auto&& cmp) const {
-        if (_end && _start) {
-            auto r = cmp(end()->value(), start()->value());
-            return r < 0
-                   || (r == 0 && (!start()->is_inclusive() || !end()->is_inclusive()));
-        } else {
-            return false; // open ended interval or singular interval don't wrap around
-        }
-    }
+    bool is_wrap_around(IntervalComparatorFor<T> auto&& cmp) const ;
     // Converts a wrap-around interval to two non-wrap-around intervals.
     // The returned intervals are not overlapping and ordered.
     // Call only when is_wrap_around().
-    std::pair<wrapping_interval, wrapping_interval> unwrap() const {
-        return {
-            { {}, end() },
-            { start(), {} }
-        };
-    }
+    std::pair<wrapping_interval, wrapping_interval> unwrap() const ;
     // the point is inside the interval
     // Comparator must define a total ordering on T.
-    bool contains(const T& point, IntervalComparatorFor<T> auto&& cmp) const {
-        if (is_wrap_around(cmp)) {
-            auto unwrapped = unwrap();
-            return unwrapped.first.contains(point, cmp)
-                   || unwrapped.second.contains(point, cmp);
-        } else {
-            return !before(point, cmp) && !after(point, cmp);
-        }
-    }
+    bool contains(const T& point, IntervalComparatorFor<T> auto&& cmp) const ;
     // Returns true iff all values contained by other are also contained by this.
     // Comparator must define a total ordering on T.
-    bool contains(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
-        bool this_wraps = is_wrap_around(cmp);
-        bool other_wraps = other.is_wrap_around(cmp);
-        if (this_wraps && other_wraps) {
-            return require_ordering_and_on_equal_return(
-                            cmp(start()->value(), other.start()->value()),
-                            std::strong_ordering::less,
-                            start()->is_inclusive() || !other.start()->is_inclusive())
-                && require_ordering_and_on_equal_return(
-                            cmp(end()->value(), other.end()->value()),
-                            std::strong_ordering::greater,
-                            end()->is_inclusive() || !other.end()->is_inclusive());
-        }
-        if (!this_wraps && !other_wraps) {
-            return less_than_or_equal(start_bound(), other.start_bound(), cmp)
-                    && greater_than_or_equal(end_bound(), other.end_bound(), cmp);
-        }
-        if (other_wraps) { // && !this_wraps
-            return !start() && !end();
-        }
-        // !other_wraps && this_wraps
-        return (other.start() && require_ordering_and_on_equal_return(
-                                    cmp(start()->value(), other.start()->value()),
-                                    std::strong_ordering::less,
-                                    start()->is_inclusive() || !other.start()->is_inclusive()))
-                || (other.end() && (require_ordering_and_on_equal_return(
-                                        cmp(end()->value(), other.end()->value()),
-                                        std::strong_ordering::greater,
-                                        end()->is_inclusive() || !other.end()->is_inclusive())));
-    }
+    bool contains(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const ;
     // Returns intervals which cover all values covered by this interval but not covered by the other interval.
     // Ranges are not overlapping and ordered.
     // Comparator must define a total ordering on T.
-    std::vector<wrapping_interval> subtract(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
-        std::vector<wrapping_interval> result;
-        std::list<wrapping_interval> left;
-        std::list<wrapping_interval> right;
-        if (is_wrap_around(cmp)) {
-            auto u = unwrap();
-            left.emplace_back(std::move(u.first));
-            left.emplace_back(std::move(u.second));
-        } else {
-            left.push_back(*this);
-        }
-        if (other.is_wrap_around(cmp)) {
-            auto u = other.unwrap();
-            right.emplace_back(std::move(u.first));
-            right.emplace_back(std::move(u.second));
-        } else {
-            right.push_back(other);
-        }
-        // left and right contain now non-overlapping, ordered intervals
-        while (!left.empty() && !right.empty()) {
-            auto& r1 = left.front();
-            auto& r2 = right.front();
-            if (less_than(r2.end_bound(), r1.start_bound(), cmp)) {
-                right.pop_front();
-            } else if (less_than(r1.end_bound(), r2.start_bound(), cmp)) {
-                result.emplace_back(std::move(r1));
-                left.pop_front();
-            } else { // Overlap
-                auto tmp = std::move(r1);
-                left.pop_front();
-                if (!greater_than_or_equal(r2.end_bound(), tmp.end_bound(), cmp)) {
-                    left.push_front({bound(r2.end()->value(), !r2.end()->is_inclusive()), tmp.end()});
-                }
-                if (!less_than_or_equal(r2.start_bound(), tmp.start_bound(), cmp)) {
-                    left.push_front({tmp.start(), bound(r2.start()->value(), !r2.start()->is_inclusive())});
-                }
-            }
-        }
-        boost::copy(left, std::back_inserter(result));
-        // TODO: Merge adjacent intervals (optimization)
-        return result;
-    }
+    std::vector<wrapping_interval> subtract(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const ;
     // split interval in two around a split_point. split_point has to be inside the interval
     // split_point will belong to first interval
     // Comparator must define a total ordering on T.
-    std::pair<wrapping_interval<T>, wrapping_interval<T>> split(const T& split_point, IntervalComparatorFor<T> auto&& cmp) const {
-        assert(contains(split_point, std::forward<decltype(cmp)>(cmp)));
-        wrapping_interval left(start(), bound(split_point));
-        wrapping_interval right(bound(split_point, false), end());
-        return std::make_pair(std::move(left), std::move(right));
-    }
+    std::pair<wrapping_interval<T>, wrapping_interval<T>> split(const T& split_point, IntervalComparatorFor<T> auto&& cmp) const ;
     // Create a sub-interval including values greater than the split_point. Returns std::nullopt if
     // split_point is after the end (but not included in the interval, in case of wraparound intervals)
     // Comparator must define a total ordering on T.
-    std::optional<wrapping_interval<T>> split_after(const T& split_point, IntervalComparatorFor<T> auto&& cmp) const {
-        if (contains(split_point, std::forward<decltype(cmp)>(cmp))
-                && (!end() || cmp(split_point, end()->value()) != 0)) {
-            return wrapping_interval(bound(split_point, false), end());
-        } else if (end() && cmp(split_point, end()->value()) >= 0) {
-            // whether to return std::nullopt or the full interval is not
-            // well-defined for wraparound intervals; we return nullopt
-            // if split_point is after the end.
-            return std::nullopt;
-        } else {
-            return *this;
-        }
-    }
+    std::optional<wrapping_interval<T>> split_after(const T& split_point, IntervalComparatorFor<T> auto&& cmp) const ;
     template<typename Bound, typename Transformer, typename U = transformed_type<Transformer>>
     static std::optional<typename wrapping_interval<U>::bound> transform_bound(Bound&& b, Transformer&& transformer) {
         if (b) {
@@ -10991,21 +10361,13 @@ public:
         return _data;
     }
 };
-static inline std::strong_ordering tri_compare_raw(const int64_t l1, const int64_t l2) noexcept {
-    if (l1 == l2) {
-        return std::strong_ordering::equal;
-    } else {
-        return l1 < l2 ? std::strong_ordering::less : std::strong_ordering::greater;
-    }
-}
+static std::strong_ordering tri_compare_raw(const int64_t l1, const int64_t l2) noexcept ;
 template <typename T>
 concept TokenCarrier = requires (const T& v) {
     { v.token() } noexcept -> std::same_as<const token&>;
 };
 struct raw_token_less_comparator {
-    bool operator()(const int64_t k1, const int64_t k2) const noexcept {
-        return dht::tri_compare_raw(k1, k2) < 0;
-    }
+    bool operator()(const int64_t k1, const int64_t k2) const noexcept ;
     template <typename Key>
     requires TokenCarrier<Key>
     bool operator()(const Key& k1, const int64_t k2) const noexcept {
@@ -11028,23 +10390,18 @@ struct raw_token_less_comparator {
 const token& minimum_token() noexcept;
 const token& maximum_token() noexcept;
 std::strong_ordering operator<=>(const token& t1, const token& t2);
-inline bool operator==(const token& t1, const token& t2) { return t1 <=> t2 == 0; }
+ bool operator==(const token& t1, const token& t2) ;
 std::ostream& operator<<(std::ostream& out, const token& t);
 // Returns a successor for token t.
 // The caller must ensure there is a next token, otherwise
 // the result is unspecified.
 //
 // Precondition: t.kind() == dht::token::kind::key
-inline
-token next_token(const token& t) {
-    return {dht::token::kind::key, t._data + 1};
-}
+
+token next_token(const token& t) ;
 // Returns the smallest token in the ring which can be associated with a partition key.
-inline
-token first_token() {
-    // dht::token::normalize() does not allow std::numeric_limits<int64_t>::min()
-    return dht::token(dht::token_kind::key, std::numeric_limits<int64_t>::min() + 1);
-}
+
+token first_token() ;
 uint64_t unbias(const token& t);
 token bias(uint64_t n);
 size_t compaction_group_of(unsigned most_significant_bits, const token& t);
@@ -11064,9 +10421,7 @@ struct fmt::formatter<dht::token> : fmt::formatter<std::string_view> {
     }
 };
 namespace dht {
-inline sstring cpu_sharding_algorithm_name() {
-    return "biased-token-round-robin";
-}
+ sstring cpu_sharding_algorithm_name() ;
 std::vector<uint64_t> init_zero_based_shard_start(unsigned shards, unsigned sharding_ignore_msb_bits);
 unsigned shard_of(unsigned shard_count, unsigned sharding_ignore_msb_bits, const token& t);
 token token_for_next_shard(const std::vector<uint64_t>& shard_start, unsigned shard_count, unsigned sharding_ignore_msb_bits, const token& t, shard_id shard, unsigned spans);
@@ -11080,9 +10435,7 @@ public:
     virtual ~sharder() = default;
     virtual unsigned shard_of(const token& t) const;
     virtual token token_for_next_shard(const token& t, shard_id shard, unsigned spans = 1) const;
-    unsigned shard_count() const {
-        return _shard_count;
-    }
+    unsigned shard_count() const ;
     unsigned sharding_ignore_msb() const {
         return _sharding_ignore_msb_bits;
     }
@@ -11190,9 +10543,7 @@ public:
     // FIXME: token.tokenFactory
     //virtual token.tokenFactory gettokenFactory() = 0;
     virtual const sstring name() const = 0;
-    bool operator==(const i_partitioner& o) const {
-        return name() == o.name();
-    }
+    bool operator==(const i_partitioner& o) const ;
 };
 //
 // Represents position in the ring of partitions, where partitions are ordered
@@ -11231,24 +10582,12 @@ private:
     token_bound _token_bound{}; // valid when !_key
     std::optional<partition_key> _key;
 public:
-    static ring_position min() noexcept {
-        return { minimum_token(), token_bound::start };
-    }
-    static ring_position max() noexcept {
-        return { maximum_token(), token_bound::end };
-    }
-    bool is_min() const noexcept {
-        return _token.is_minimum();
-    }
-    bool is_max() const noexcept {
-        return _token.is_maximum();
-    }
-    static ring_position starting_at(dht::token token) {
-        return { std::move(token), token_bound::start };
-    }
-    static ring_position ending_at(dht::token token) {
-        return { std::move(token), token_bound::end };
-    }
+    static ring_position min() noexcept ;
+    static ring_position max() noexcept ;
+    bool is_min() const noexcept ;
+    bool is_max() const noexcept ;
+    static ring_position starting_at(dht::token token) ;
+    static ring_position ending_at(dht::token token) ;
     ring_position(dht::token token, token_bound bound)
         : _token(std::move(token))
         , _token_bound(bound)
@@ -11335,27 +10674,13 @@ public:
     static ring_position_view min() noexcept {
         return { minimum_token(), nullptr, -1 };
     }
-    static ring_position_view max() noexcept {
-        return { maximum_token(), nullptr, 1 };
-    }
-    bool is_min() const noexcept {
-        return _token->is_minimum();
-    }
-    bool is_max() const noexcept {
-        return _token->is_maximum();
-    }
-    static ring_position_view for_range_start(const partition_range& r) {
-        return r.start() ? ring_position_view(r.start()->value(), after_key(!r.start()->is_inclusive())) : min();
-    }
-    static ring_position_view for_range_end(const partition_range& r) {
-        return r.end() ? ring_position_view(r.end()->value(), after_key(r.end()->is_inclusive())) : max();
-    }
-    static ring_position_view for_after_key(const dht::decorated_key& dk) {
-        return ring_position_view(dk, after_key::yes);
-    }
-    static ring_position_view for_after_key(dht::ring_position_view view) {
-        return ring_position_view(after_key_tag(), view);
-    }
+    static ring_position_view max() noexcept ;
+    bool is_min() const noexcept ;
+    bool is_max() const noexcept ;
+    static ring_position_view for_range_start(const partition_range& r) ;
+    static ring_position_view for_range_end(const partition_range& r) ;
+    static ring_position_view for_after_key(const dht::decorated_key& dk) ;
+    static ring_position_view for_after_key(dht::ring_position_view view) ;
     static ring_position_view starting_at(const dht::token& t) {
         return ring_position_view(t, token_bound::start);
     }
@@ -11477,14 +10802,14 @@ public:
         , _key(std::nullopt)
         , _weight(static_cast<std::underlying_type_t<token_bound>>(bound))
     { }
-    const dht::token& token() const noexcept { return _token; }
-    const std::optional<partition_key>& key() const { return _key; }
-    int8_t weight() const { return _weight; }
+    const dht::token& token() const noexcept ;
+    const std::optional<partition_key>& key() const ;
+    int8_t weight() const ;
     // Only when key() == std::nullopt
-    token_bound get_token_bound() const { return token_bound(_weight); }
+    token_bound get_token_bound() const ;
     // Only when key() != std::nullopt
-    after_key is_after_key() const { return after_key(_weight == 1); }
-    operator ring_position_view() const { return { _token, _key ? &*_key : nullptr, _weight }; }
+    after_key is_after_key() const ;
+    operator ring_position_view() const ;
     friend std::ostream& operator<<(std::ostream&, const ring_position_ext&);
 };
 std::strong_ordering ring_position_tri_compare(const schema& s, ring_position_view lh, ring_position_view rh);
@@ -11515,7 +10840,7 @@ struct ring_position_comparator {
 };
 struct ring_position_comparator_for_sstables {
     const schema& s;
-    ring_position_comparator_for_sstables(const schema& s_) : s(s_) {}
+    ring_position_comparator_for_sstables(const schema& s_)  ;
     std::strong_ordering operator()(ring_position_view, sstables::decorated_key_view) const;
     std::strong_ordering operator()(sstables::decorated_key_view, ring_position_view) const;
 };
@@ -11938,26 +11263,12 @@ private:
     std::chrono::microseconds _slow_query_duration_threshold;
     std::chrono::seconds _slow_query_record_ttl;
 public:
-    uint64_t get_next_rand_uint64() {
-        return _gen();
-    }
-    i_tracing_backend_helper& backend_helper() {
-        return *_tracing_backend_helper_ptr;
-    }
-    const sstring& get_thread_name() const {
-        return _thread_name;
-    }
-    static seastar::sharded<tracing>& tracing_instance() {
-        // FIXME: leaked intentionally to avoid shutdown problems, see #293
-        static seastar::sharded<tracing>* tracing_inst = new seastar::sharded<tracing>();
-        return *tracing_inst;
-    }
-    static tracing& get_local_tracing_instance() {
-        return tracing_instance().local();
-    }
-    bool started() const {
-        return !_down;
-    }
+    uint64_t get_next_rand_uint64() ;
+    i_tracing_backend_helper& backend_helper() ;
+    const sstring& get_thread_name() const ;
+    static seastar::sharded<tracing>& tracing_instance() ;
+    static tracing& get_local_tracing_instance() ;
+    bool started() const ;
     static future<> create_tracing(sstring tracing_backend_helper_class_name);
     static future<> start_tracing(sharded<cql3::query_processor>& qp);
     static future<> stop_tracing();
@@ -11966,15 +11277,7 @@ public:
     future<> start(cql3::query_processor& qp);
     future<> stop();
     future<> shutdown();
-    void write_pending_records() {
-        if (_pending_for_write_records_bulk.size()) {
-            _flushing_records += _pending_for_write_records_count;
-            stats.trace_records_count += _pending_for_write_records_count;
-            _pending_for_write_records_count = 0;
-            _tracing_backend_helper_ptr->write_records_bulk(_pending_for_write_records_bulk);
-            _pending_for_write_records_bulk.clear();
-        }
-    }
+    void write_pending_records() ;
     void write_complete(uint64_t nr = 1) ;
     void write_maybe() ;
     void end_session() ;
@@ -11990,44 +11293,17 @@ public:
     void set_slow_query_enabled(bool enable = true) ;
     bool slow_query_tracing_enabled() const ;
     void set_ignore_trace_events(bool enable = true) ;
-    bool ignore_trace_events_enabled() const {
-        return _ignore_trace_events;
-    }
-    void set_slow_query_threshold(std::chrono::microseconds new_threshold) {
-        if (new_threshold.count() > std::numeric_limits<uint32_t>::max()) {
-            _slow_query_duration_threshold = std::chrono::microseconds(std::numeric_limits<uint32_t>::max());
-            return;
-        }
-        _slow_query_duration_threshold = new_threshold;
-    }
-    std::chrono::microseconds slow_query_threshold() const {
-        return _slow_query_duration_threshold;
-    }
-    void set_slow_query_record_ttl(std::chrono::seconds new_ttl) {
-        if (new_ttl.count() > std::numeric_limits<int32_t>::max()) {
-            _slow_query_record_ttl = std::chrono::seconds(std::numeric_limits<int32_t>::max());
-            return;
-        }
-        _slow_query_record_ttl = new_ttl;
-    }
-    std::chrono::seconds slow_query_record_ttl() const {
-        return _slow_query_record_ttl;
-    }
+    bool ignore_trace_events_enabled() const ;
+    void set_slow_query_threshold(std::chrono::microseconds new_threshold) ;
+    std::chrono::microseconds slow_query_threshold() const ;
+    void set_slow_query_record_ttl(std::chrono::seconds new_ttl) ;
+    std::chrono::seconds slow_query_record_ttl() const ;
 private:
     void write_timer_callback();
     bool may_create_new_session(const std::optional<utils::UUID>& session_id = std::nullopt);
 };
-void one_session_records::set_pending_for_write() {
-    _is_pending_for_write = true;
-    budget_ptr = _local_tracing_ptr->get_pending_records_ptr();
-}
-void one_session_records::data_consumed() {
-    if (session_rec.ready()) {
-        session_rec.set_consumed();
-    }
-    _is_pending_for_write = false;
-    budget_ptr = _local_tracing_ptr->get_cached_records_ptr();
-}
+
+
 inline span_id span_id::make_span_id() {
     // make sure the value is always greater than 0
     return 1 + (tracing::get_local_tracing_instance().get_next_rand_uint64() << 1);
@@ -12166,34 +11442,13 @@ public:
             : _pk(std::move(pk)), _ranges(std::move(ranges)) {
     }
     specific_ranges(const specific_ranges&) = default;
-    void add(const schema& s, partition_key pk, clustering_row_ranges ranges) {
-        if (!_pk.equal(s, pk)) {
-            throw std::runtime_error("Only single specific range supported currently");
-        }
-        _pk = std::move(pk);
-        _ranges = std::move(ranges);
-    }
-    bool contains(const schema& s, const partition_key& pk) {
-        return _pk.equal(s, pk);
-    }
-    size_t size() const {
-        return 1;
-    }
-    const clustering_row_ranges* range_for(const schema& s, const partition_key& key) const {
-        if (_pk.equal(s, key)) {
-            return &_ranges;
-        }
-        return nullptr;
-    }
-    const partition_key& pk() const {
-        return _pk;
-    }
-    const clustering_row_ranges& ranges() const {
-        return _ranges;
-    }
-    clustering_row_ranges& ranges() {
-        return _ranges;
-    }
+    void add(const schema& s, partition_key pk, clustering_row_ranges ranges) ;
+    bool contains(const schema& s, const partition_key& pk) ;
+    size_t size() const ;
+    const clustering_row_ranges* range_for(const schema& s, const partition_key& key) const ;
+    const partition_key& pk() const ;
+    const clustering_row_ranges& ranges() const ;
+    clustering_row_ranges& ranges() ;
 private:
     friend std::ostream& operator<<(std::ostream& out, const specific_ranges& r);
     partition_key _pk;
@@ -12278,29 +11533,15 @@ public:
     const clustering_row_ranges& row_ranges(const schema&, const partition_key&) const;
     void set_range(const schema&, const partition_key&, clustering_row_ranges);
     void clear_range(const schema&, const partition_key&);
-    void clear_ranges() {
-        _specific_ranges = nullptr;
-    }
+    void clear_ranges() ;
     // FIXME: possibly make this function return a const ref instead.
     clustering_row_ranges get_all_ranges() const;
-    const clustering_row_ranges& default_row_ranges() const {
-        return _row_ranges;
-    }
-    const std::unique_ptr<specific_ranges>& get_specific_ranges() const {
-        return _specific_ranges;
-    }
-    const cql_serialization_format cql_format() const {
-        return cql_serialization_format(4); // For IDL compatibility
-    }
-    const uint32_t partition_row_limit_low_bits() const {
-        return _partition_row_limit_low_bits;
-    }
-    const uint32_t partition_row_limit_high_bits() const {
-        return _partition_row_limit_high_bits;
-    }
-    const uint64_t partition_row_limit() const {
-        return (static_cast<uint64_t>(_partition_row_limit_high_bits) << 32) | _partition_row_limit_low_bits;
-    }
+    const clustering_row_ranges& default_row_ranges() const ;
+    const std::unique_ptr<specific_ranges>& get_specific_ranges() const ;
+    const cql_serialization_format cql_format() const ;
+    const uint32_t partition_row_limit_low_bits() const ;
+    const uint32_t partition_row_limit_high_bits() const ;
+    const uint64_t partition_row_limit() const ;
     void set_partition_row_limit(uint64_t limit) {
         _partition_row_limit_low_bits = static_cast<uint64_t>(limit);
         _partition_row_limit_high_bits = static_cast<uint64_t>(limit >> 32);
@@ -14240,9 +13481,9 @@ public:
     updateable_value& operator=(const updateable_value&);
     updateable_value(updateable_value&&) noexcept;
     updateable_value& operator=(updateable_value&&) noexcept;
-    const T& operator()() const { return _value; }
-    operator const T& () const { return _value; }
-    const T& get() const { return _value; }
+    const T& operator()() const ;
+    operator const T& () const ;
+    const T& get() const ;
     observer<T> observe(std::function<void (const T&)> callback) const;
     friend class updateable_value_source_base;
     template <typename U>
@@ -14269,21 +13510,11 @@ template <typename T>
 class updateable_value_source : public updateable_value_source_base {
     T _value;
     mutable observable<T> _updater;
-    void for_each_ref(std::function<void (updateable_value<T>*)> func) {
-        updateable_value_source_base::for_each_ref([func = std::move(func)] (updateable_value_base* ref) {
-            func(static_cast<updateable_value<T>*>(ref));
-        });
-    };
+    void for_each_ref(std::function<void (updateable_value<T>*)> func) ;;
 private:
-    void add_ref(updateable_value<T>* ref) const {
-        updateable_value_source_base::add_ref(ref);
-    }
-    void del_ref(updateable_value<T>* ref) const {
-        updateable_value_source_base::del_ref(ref);
-    }
-    void update_ref(updateable_value<T>* old_ref, updateable_value<T>* new_ref) const {
-        updateable_value_source_base::update_ref(old_ref, new_ref);
-    }
+    void add_ref(updateable_value<T>* ref) const ;
+    void del_ref(updateable_value<T>* ref) const ;
+    void update_ref(updateable_value<T>* old_ref, updateable_value<T>* new_ref) const ;
 public:
     explicit updateable_value_source(T value = T{})
             : _value(std::move(value)) {}
@@ -69783,10 +69014,10 @@ class partition_range_walker {     std::vector<dht::partition_range> _ranges;   
                 auto cell = _bool_dist(_gen) ? get_live_cell() : get_dead_cell();                 r.apply(_schema->column_at(kind, cid), std::move(cell));             }         };         auto random_row_marker = [&] {             static thread_local std::uniform_int_distribution<int> dist(0, 3);             switch (dist(_gen)) {                 case 0: return row_marker();                 case 1: return row_marker(random_tombstone(timestamp_level::row_marker_tombstone));                 case 2: return row_marker(gen_timestamp(timestamp_level::data));                 case 3: return row_marker(gen_timestamp(timestamp_level::data), std::chrono::seconds(1), new_expiry());                 default: assert(0);             }             abort();         };         if (tests::random::with_probability(0.11)) {             m.partition().apply(random_tombstone(timestamp_level::partition_tombstone));         }         m.partition().set_static_row_continuous(_bool_dist(_gen));         set_random_cells(m.partition().static_row().maybe_create(), column_kind::static_column);         auto row_count_dist = [&] (auto& gen) {             static thread_local std::normal_distribution<> dist(32, 1.5);             return static_cast<size_t>(std::min(100.0, std::max(0.0, dist(gen))));         };         size_t row_count = row_count_dist(_gen);         std::unordered_set<clustering_key, clustering_key::hashing, clustering_key::equality> keys(                 0, clustering_key::hashing(*_schema), clustering_key::equality(*_schema));         while (keys.size() < row_count) {             keys.emplace(make_random_key());         }         for (auto&& ckey : keys) {             is_continuous continuous = is_continuous(_bool_dist(_gen));             if (_not_dummy_dist(_gen)) {                 deletable_row& row = m.partition().clustered_row(*_schema, ckey, is_dummy::no, continuous);                 row.apply(random_row_marker());                 if (!row.marker().is_missing() && !row.marker().is_live()) {                     // Mutations are not associative if dead marker is not matched with a dead row
                     // due to shadowable tombstone merging rules. See #11307.
                     row.apply(tombstone(row.marker().timestamp(), row.marker().deletion_time()));                 }                 if (_bool_dist(_gen)) {                     set_random_cells(row.cells(), column_kind::regular_column);                 } else {                     bool is_regular = _bool_dist(_gen);                     if (is_regular) {                         row.apply(random_tombstone(timestamp_level::row_tombstone));                     } else {                         row.apply(shadowable_tombstone{random_tombstone(timestamp_level::row_shadowable_tombstone)});                     }                     bool second_tombstone = _bool_dist(_gen);                     if (second_tombstone) {                         // Need to add the opposite of what has been just added
-                        if (is_regular) {                             row.apply(shadowable_tombstone{random_tombstone(timestamp_level::row_shadowable_tombstone)});                         } else {                             row.apply(random_tombstone(timestamp_level::row_tombstone));                         }                     }                 }             } else {                 m.partition().clustered_row(*_schema, position_in_partition::after_key(*_schema, ckey), is_dummy::yes, continuous);             }         }         size_t range_tombstone_count = row_count_dist(_gen);         for (size_t i = 0; i < range_tombstone_count; ++i) {             m.partition().apply_row_tombstone(*_schema, make_random_range_tombstone());         }         if (_bool_dist(_gen)) {             m.partition().ensure_last_dummy(*_schema);             m.partition().clustered_rows().rbegin()->set_continuous(is_continuous(_bool_dist(_gen)));         }         return m;     }     std::vector<dht::decorated_key> make_partition_keys(size_t n) {         return tests::generate_partition_keys(n, _schema, _local_shard_only);     }     std::vector<mutation> operator()(size_t n) {         auto keys = make_partition_keys(n);         std::vector<mutation> mutations;         for (auto&& dkey : keys) {             auto m = operator()();             mutations.emplace_back(_schema, std::move(dkey), std::move(m.partition()));         }         return mutations;     } };
- random_mutation_generator::~random_mutation_generator() {}
- random_mutation_generator::random_mutation_generator(generate_counters counters, local_shard_only lso, generate_uncompactable uc, std::optional<uint32_t> seed_opt, const char* ks_name, const char* cf_name)     : _impl(std::make_unique<random_mutation_generator::impl>(counters, lso, uc, seed_opt,  ks_name, cf_name)) { }
- mutation random_mutation_generator::operator()() {     return (*_impl)(); }
+                        if (is_regular) {                             row.apply(shadowable_tombstone{random_tombstone(timestamp_level::row_shadowable_tombstone)});                         } else {                             row.apply(random_tombstone(timestamp_level::row_tombstone));                         }                     }                 }             } else {                 m.partition().clustered_row(*_schema, position_in_partition::after_key(*_schema, ckey), is_dummy::yes, continuous);             }         }         size_t range_tombstone_count = row_count_dist(_gen);         for (size_t i = 0; i < range_tombstone_count; ++i) {             m.partition().apply_row_tombstone(*_schema, make_random_range_tombstone());         }         if (_bool_dist(_gen)) {             m.partition().ensure_last_dummy(*_schema);             m.partition().clustered_rows().rbegin()->set_continuous(is_continuous(_bool_dist(_gen)));         }         return m;     }     std::vector<dht::decorated_key> make_partition_keys(size_t n) {         return tests::generate_partition_keys(n, _schema, _local_shard_only);     }     std::vector<mutation> operator()(size_t n) ; };
+ 
+ 
+ 
  
  
  
