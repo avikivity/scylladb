@@ -75,17 +75,9 @@
 #include <seastar/util/lazy.hh>
 #include <seastar/util/optimized_optional.hh>
 #include <seastar/util/short_streams.hh>
-#include <unordered_map>
-#include <unordered_set>
 #include <unwind.h>
-#include <utility>
-#include <variant>
-#include <vector>
-#include <wmmintrin.h>
-#include <x86intrin.h>
 #include <xxhash.h>
 #include <yaml-cpp/yaml.h>
-#include <zlib.h>
 // the database clock follows Java - 1ms granularity, 64-bit counter, 1970 epoch
 extern std::atomic<int64_t> clocks_offset;
 template<typename Duration>
@@ -52120,7 +52112,6 @@ public:
 // been invented (that woud involve another several millennia of evolution).
 // We did not mean to shout.
 #if !(__cplusplus >= 201402)
-#  include <cmath>
 #endif
 namespace date
 {
