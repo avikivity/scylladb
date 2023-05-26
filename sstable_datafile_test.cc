@@ -9919,9 +9919,7 @@ public:
     using token_bound = ring_position::token_bound;
     struct after_key_tag {};
     using after_key = bool_class<after_key_tag>;
-    static ring_position_view min() noexcept {
-        return { minimum_token(), nullptr, -1 };
-    }
+    static ring_position_view min() noexcept ;
     static ring_position_view max() noexcept ;
     bool is_min() const noexcept ;
     bool is_max() const noexcept ;
@@ -9929,12 +9927,8 @@ public:
     static ring_position_view for_range_end(const partition_range& r) ;
     static ring_position_view for_after_key(const dht::decorated_key& dk) ;
     static ring_position_view for_after_key(dht::ring_position_view view) ;
-    static ring_position_view starting_at(const dht::token& t) {
-        return ring_position_view(t, token_bound::start);
-    }
-    static ring_position_view ending_at(const dht::token& t) {
-        return ring_position_view(t, token_bound::end);
-    }
+    static ring_position_view starting_at(const dht::token& t) ;
+    static ring_position_view ending_at(const dht::token& t) ;
     ring_position_view(const dht::ring_position& pos, after_key after = after_key::no)
         : _token(&pos.token())
         , _key(pos.has_key() ? &*pos.key() : nullptr)
@@ -10116,9 +10110,9 @@ public:
     partition_ranges_view(const dht::partition_range_vector& ranges) : _data(ranges.data()), _size(ranges.size()) {}
     bool empty() const { return _size == 0; }
     size_t size() const { return _size; }
-    const dht::partition_range& front() const { return *_data; }
-    const dht::partition_range& back() const { return *(_data + _size - 1); }
-    const dht::partition_range* begin() const { return _data; }
+    const dht::partition_range& front() const ;
+    const dht::partition_range& back() const ;
+    const dht::partition_range* begin() const ;
     const dht::partition_range* end() const { return _data + _size; }
 };
 std::ostream& operator<<(std::ostream& out, partition_ranges_view v);
@@ -10206,9 +10200,7 @@ public:
     }
     sstring to_sstring() const;
     friend inline bool operator==(const inet_address& x, const inet_address& y) noexcept = default;
-    friend inline bool operator<(const inet_address& x, const inet_address& y) noexcept {
-        return x.bytes() < y.bytes();
-    }
+    friend bool operator<(const inet_address& x, const inet_address& y) noexcept ;
     friend struct std::hash<inet_address>;
     using opt_family = std::optional<net::inet_address::family>;
     static future<inet_address> lookup(sstring, opt_family family = {}, opt_family preferred = {});
@@ -10247,21 +10239,8 @@ enum class trace_type : uint8_t {
     REPAIR,
 };
 extern std::vector<sstring> trace_type_names;
-inline const sstring& type_to_string(trace_type t) {
-    return trace_type_names.at(static_cast<int>(t));
-}
-inline std::chrono::seconds ttl_by_type(const trace_type t) {
-    switch (t) {
-    case trace_type::NONE:
-    case trace_type::QUERY:
-        return std::chrono::seconds(86400);  // 1 day
-    case trace_type::REPAIR:
-        return std::chrono::seconds(604800); // 7 days
-    default:
-        // unknown type value - must be a SW bug
-        throw std::invalid_argument("unknown trace type: " + std::to_string(int(t)));
-    }
-}
+ const sstring& type_to_string(trace_type t) ;
+ std::chrono::seconds ttl_by_type(const trace_type t) ;
 class span_id {
 private:
     uint64_t _id = illegal_id;
@@ -10317,7 +10296,7 @@ public:
 struct one_session_records;
 using records_bulk = std::deque<lw_shared_ptr<one_session_records>>;
 struct backend_session_state_base {
-    virtual ~backend_session_state_base() {};
+    virtual ~backend_session_state_base() ;;
 };
 struct i_tracing_backend_helper {
     using wall_clock = std::chrono::system_clock;
@@ -10325,8 +10304,8 @@ protected:
     tracing& _local_tracing;
 public:
     using ptr_type = std::unique_ptr<i_tracing_backend_helper>;
-    i_tracing_backend_helper(tracing& tr) : _local_tracing(tr) {}
-    virtual ~i_tracing_backend_helper() {}
+    i_tracing_backend_helper(tracing& tr)  ;
+    virtual ~i_tracing_backend_helper() ;
     virtual future<> start(cql3::query_processor& qp) = 0;
     virtual future<> stop() = 0;
     virtual void write_records_bulk(records_bulk& bulk) = 0;
@@ -10370,9 +10349,7 @@ public:
     bool ready() const {
         return elapsed.count() >= 0 && !_consumed;
     }
-    void set_consumed() {
-        _consumed = true;
-    }
+    void set_consumed() ;
 };
 class one_session_records {
 private:
@@ -10396,22 +10373,12 @@ public:
     span_id my_span_id;
     one_session_records(trace_type type, std::chrono::seconds slow_query_ttl, std::chrono::seconds slow_query_rec_ttl,
             std::optional<utils::UUID> session_id = std::nullopt, span_id parent_id = span_id::illegal_id);
-    void consume_from_budget() {
-        ++(*budget_ptr);
-    }
-    void drop_records() {
-        (*budget_ptr) -= size();
-        events_recs.clear();
-        session_rec.set_consumed();
-    }
+    void consume_from_budget() ;
+    void drop_records() ;
     inline void set_pending_for_write();
     inline void data_consumed();
-    bool is_pending_for_write() const {
-        return _is_pending_for_write;
-    }
-    uint64_t size() const {
-        return events_recs.size() + session_rec.ready();
-    }
+    bool is_pending_for_write() const ;
+    uint64_t size() const ;
 private:
     bool _is_pending_for_write = false;
 };
@@ -10552,10 +10519,7 @@ private:
 };
 
 
-inline span_id span_id::make_span_id() {
-    // make sure the value is always greater than 0
-    return 1 + (tracing::get_local_tracing_instance().get_next_rand_uint64() << 1);
-}
+
 }
 namespace ser {
 template <typename T>
@@ -10576,15 +10540,11 @@ public:
             , hard_limit(hard_limit)
             , page_size(page_size)
     { }
-    uint64_t get_page_size() const {
-        return page_size == 0 ? hard_limit : page_size;
-    }
+    uint64_t get_page_size() const ;
     friend bool operator==(const max_result_size&, const max_result_size&);
     friend class ser::serializer<query::max_result_size>;
 };
-inline bool operator==(const max_result_size& a, const max_result_size& b) {
-    return a.soft_limit == b.soft_limit && a.hard_limit == b.hard_limit && a.page_size == b.page_size;
-}
+ bool operator==(const max_result_size& a, const max_result_size& b) ;
 }
 namespace db {
 using allow_per_partition_rate_limit = seastar::bool_class<class allow_per_partition_rate_limit_tag>;
@@ -10603,9 +10563,7 @@ struct account_and_enforce {
     // Replicas are supposed to use it in order to decide whether
     // to accept or reject.
     uint32_t random_variable;
-    inline double get_random_variable_as_double() const {
-        return double(random_variable) / double(1LL << 32);
-    }
+     double get_random_variable_as_double() const ;
 };
 // std::monostate -> do not count to the rate limit and never reject
 // account_and_enforce -> account to the rate limit and optionally reject
@@ -10978,25 +10936,16 @@ public:
     auto end() const { return _ref.get().end(); }
     bool empty() const { return _ref.get().empty(); }
     size_t size() const { return _ref.get().size(); }
-    const clustering_row_ranges& ranges() const { return _ref; }
+    const clustering_row_ranges& ranges() const ;
     // Returns all clustering ranges determined by `slice` inside partition determined by `key`.
     // If the slice contains the `reversed` option, we assume that it is given in 'half-reversed' format
     // (i.e. the ranges within are given in reverse order, but the ranges themselves are not reversed)
     // with respect to the table order.
     // The ranges will be returned in forward (increasing) order even if the slice is reversed.
-    static clustering_key_filter_ranges get_ranges(const schema& schema, const query::partition_slice& slice, const partition_key& key) {
-        const query::clustering_row_ranges& ranges = slice.row_ranges(schema, key);
-        if (slice.is_reversed()) {
-            return clustering_key_filter_ranges(clustering_key_filter_ranges::reversed{}, ranges);
-        }
-        return clustering_key_filter_ranges(ranges);
-    }
+    static clustering_key_filter_ranges get_ranges(const schema& schema, const query::partition_slice& slice, const partition_key& key) ;
     // Returns all clustering ranges determined by `slice` inside partition determined by `key`.
     // The ranges will be returned in the same order as stored in the slice.
-    static clustering_key_filter_ranges get_native_ranges(const schema& schema, const query::partition_slice& slice, const partition_key& key) {
-        const query::clustering_row_ranges& ranges = slice.row_ranges(schema, key);
-        return clustering_key_filter_ranges(ranges);
-    }
+    static clustering_key_filter_ranges get_native_ranges(const schema& schema, const query::partition_slice& slice, const partition_key& key) ;
 };
 }
 // combine two sorted uniqued sequences into a single sorted sequence
@@ -11058,14 +11007,8 @@ struct tombstone final {
         apply(t);
     }
     // See reversibly_mergeable.hh
-    void revert(tombstone& t) noexcept {
-        std::swap(*this, t);
-    }
-    tombstone operator+(const tombstone& t) {
-        auto result = *this;
-        result.apply(t);
-        return result;
-    }
+    void revert(tombstone& t) noexcept ;
+    tombstone operator+(const tombstone& t) ;
 };
 template <>
 struct fmt::formatter<tombstone> : fmt::formatter<std::string_view> {
@@ -11081,10 +11024,7 @@ struct fmt::formatter<tombstone> : fmt::formatter<std::string_view> {
         }
      }
 };
-static inline std::ostream& operator<<(std::ostream& out, const tombstone& t) {
-    fmt::print(out, "{}", t);
-    return out;
-}
+static std::ostream& operator<<(std::ostream& out, const tombstone& t) ;
 template<>
 struct appending_hash<tombstone> {
     template<typename Hasher>
@@ -11984,9 +11924,9 @@ public:
     static shared_ptr<const user_type_impl> get_instance(sstring keyspace, bytes name,
             std::vector<bytes> field_names, std::vector<data_type> field_types, bool multi_cell);
     data_type field_type(size_t i) const { return type(i); }
-    const std::vector<data_type>& field_types() const { return _types; }
-    bytes_view field_name(size_t i) const { return _field_names[i]; }
-    sstring field_name_as_string(size_t i) const { return _string_field_names[i]; }
+    const std::vector<data_type>& field_types() const ;
+    bytes_view field_name(size_t i) const ;
+    sstring field_name_as_string(size_t i) const ;
     const std::vector<bytes>& field_names() const { return _field_names; }
     const std::vector<sstring>& string_field_names() const { return _string_field_names; }
     std::optional<size_t> idx_of_field(const bytes& name) const;
@@ -12176,41 +12116,23 @@ public:
         return _v >= maybe_unwrap(x);
     }
     template <typename T>
-    bool operator<(const T& x) const {
-        return _v < maybe_unwrap(x);
-    }
+    bool operator<(const T& x) const ;
     template <typename T>
-    bool operator<=(const T& x) const {
-        return _v <= maybe_unwrap(x);
-    }
+    bool operator<=(const T& x) const ;
     template <typename T>
-    friend multiprecision_int operator+(const T& x, const multiprecision_int& y) {
-        return cpp_int(maybe_unwrap(x) + y._v);
-    }
+    friend multiprecision_int operator+(const T& x, const multiprecision_int& y) ;
     template <typename T>
-    friend multiprecision_int operator-(const T& x, const multiprecision_int& y) {
-        return cpp_int(maybe_unwrap(x) - y._v);
-    }
+    friend multiprecision_int operator-(const T& x, const multiprecision_int& y) ;
     template <typename T>
-    friend multiprecision_int operator*(const T& x, const multiprecision_int& y) {
-        return cpp_int(maybe_unwrap(x) * y._v);
-    }
+    friend multiprecision_int operator*(const T& x, const multiprecision_int& y) ;
     template <typename T>
-    friend multiprecision_int operator/(const T& x, const multiprecision_int& y) {
-        return cpp_int(maybe_unwrap(x) / y._v);
-    }
+    friend multiprecision_int operator/(const T& x, const multiprecision_int& y) ;
     template <typename T>
-    friend multiprecision_int operator%(const T& x, const multiprecision_int& y) {
-        return cpp_int(maybe_unwrap(x) % y._v);
-    }
+    friend multiprecision_int operator%(const T& x, const multiprecision_int& y) ;
     template <typename T>
-    friend multiprecision_int operator<<(const T& x, const multiprecision_int& y) {
-        return cpp_int(maybe_unwrap(x) << y._v);
-    }
+    friend multiprecision_int operator<<(const T& x, const multiprecision_int& y) ;
     template <typename T>
-    friend multiprecision_int operator>>(const T& x, const multiprecision_int& y) {
-        return cpp_int(maybe_unwrap(x) >> y._v);
-    }
+    friend multiprecision_int operator>>(const T& x, const multiprecision_int& y) ;
     std::string str() const;
     friend std::ostream& operator<<(std::ostream& os, const multiprecision_int& x);
 };
@@ -12510,23 +12432,14 @@ public:
             }
             return *this;
         }
-        ~observer() {
-            disconnect();
-        }
+        ~observer() ;
         // Stops observing the observable immediately, instead of
         // during destruction.
-        void disconnect() {
-            if (_observable) {
-                _observable->destroyed(this);
-            }
-            _observable = nullptr;
-        }
+        void disconnect() ;
     };
     friend class observer;
 private:
-    void destroyed(observer* dead) {
-        _observers.erase(boost::remove(_observers, dead), _observers.end());
-    }
+    void destroyed(observer* dead) ;
     void moved(observer* from, observer* to) {
         boost::replace(_observers, from, to);
     }
@@ -12541,48 +12454,19 @@ public:
             : _observers(std::move(o._observers)) {
         update_observers(this);
     }
-    observable& operator=(observable&& o) noexcept {
-        if (this != &o) {
-            update_observers(nullptr);
-            _observers = std::move(o._observers);
-            update_observers(this);
-        }
-        return *this;
-    }
-    ~observable() {
-        update_observers(nullptr);
-    }
+    observable& operator=(observable&& o) noexcept ;
+    ~observable() ;
     // Send args to all connected observers
-    void operator()(Args... args) const {
-        std::exception_ptr e;
-        for (auto&& ob : _observers) {
-            try {
-                ob->_callback(args...);
-            } catch (...) {
-                if (!e) {
-                    e = std::current_exception();
-                }
-            }
-        }
-        if (e) {
-            std::rethrow_exception(std::move(e));
-        }
-    }
+    void operator()(Args... args) const ;
     // Adds an observer to an observable
-    observer observe(std::function<void (Args...)> callback) {
-        observer ob(this, std::move(callback));
-        _observers.push_back(&ob);
-        return ob;
-    }
+    observer observe(std::function<void (Args...)> callback) ;
 };
 // An observer<Args...> can receive notifications about changes
 // in an observable<Args...>'s state.
 template <typename... Args>
 using observer = typename observable<Args...>::observer;
 template <typename... Args>
-inline observer<Args...> dummy_observer() {
-    return observer<Args...>(nullptr, seastar::noncopyable_function<void(Args...)>());
-}
+ observer<Args...> dummy_observer() ;
 }
 // An async action wrapper which ensures that at most one action
 // is running at any time.
@@ -12595,10 +12479,7 @@ private:
     seastar::shared_future<> _pending;
     seastar::semaphore _sem;
 private:
-    future<> do_trigger() {
-        _pending = {};
-        return futurize_invoke(_func);
-    }
+    future<> do_trigger() ;
 public:
     serialized_action(std::function<future<>()> func)
         : _func(std::move(func))
@@ -12655,13 +12536,9 @@ public:
     }
     // Like trigger(), but defers invocation of the action to allow for batching
     // more requests.
-    future<> trigger_later() {
-        return trigger(true);
-    }
+    future<> trigger_later() ;
     // Waits for all invocations initiated in the past.
-    future<> join() {
-        return get_units(_sem, 1).discard_result();
-    }
+    future<> join() ;
     // The adaptor is to be used as an argument to utils::observable.observe()
     // When the notification happens the adaptor just triggers the action
     // Note, that all arguments provided by the notification callback are lost,
@@ -12672,7 +12549,7 @@ public:
     class observing_adaptor {
         friend class serialized_action;
         serialized_action& _action;
-        observing_adaptor(serialized_action& act) noexcept : _action(act) {}
+        observing_adaptor(serialized_action& act)  ;
     public:
         template <typename... Args>
         void operator()(Args&&...) { (void)_action.trigger(); };
@@ -12781,15 +12658,9 @@ public:
         });
         _updater(_value);
     }
-    const T& get() const {
-        return _value;
-    }
-    const T& operator()() const {
-        return _value;
-    }
-    observable<T>& as_observable() const {
-        return _updater;
-    }
+    const T& get() const ;
+    const T& operator()() const ;
+    observable<T>& as_observable() const ;
     observer<T> observe(std::function<void (const T&)> callback) const {
         return _updater.observe(std::move(callback));
     }
@@ -12897,26 +12768,13 @@ public:
             , _desc(desc)
             , _type(type)
         {}
-        config_src(config_file* cf, std::string_view name, std::string_view alias, const config_type* type, std::string_view desc)
-            : _cf(cf)
-            , _name(name)
-            , _alias(alias)
-            , _desc(desc)
-            , _type(type)
-        {}
-        virtual ~config_src() {}
-        const std::string_view & name() const {
-            return _name;
-        }
-        std::string_view alias() const {
-            return _alias;
-        }
-        const std::string_view & desc() const {
-            return _desc;
-        }
-        std::string_view type_name() const {
-            return _type->name();
-        }
+        config_src(config_file* cf, std::string_view name, std::string_view alias, const config_type* type, std::string_view desc) 
+        ;
+        virtual ~config_src() ;
+        const std::string_view & name() const ;
+        std::string_view alias() const ;
+        const std::string_view & desc() const ;
+        std::string_view type_name() const ;
         config_file * get_config_file() const {
             return _cf;
         }
@@ -12943,21 +12801,13 @@ public:
             virtual std::unique_ptr<any_value> clone() const override {
                 return std::make_unique<the_value_type>(value());
             }
-            virtual void update_from(const any_value* source) override {
-                auto typed_source = static_cast<const the_value_type*>(source);
-                value.set(typed_source->value());
-            }
+            virtual void update_from(const any_value* source) override ;
         };
         liveness _liveness;
         std::vector<T> _allowed_values;
     protected:
-        updateable_value_source<T>& the_value() {
-            any_value* av = _cf->_per_shard_values[_cf->s_shard_id][_per_shard_values_offset].get();
-            return static_cast<the_value_type*>(av)->value;
-        }
-        const updateable_value_source<T>& the_value() const {
-            return const_cast<named_value*>(this)->the_value();
-        }
+        updateable_value_source<T>& the_value() ;
+        const updateable_value_source<T>& the_value() const ;
         virtual const void* current_value() const override {
             return &the_value().get();
         }
@@ -12987,35 +12837,11 @@ public:
         value_status status() const noexcept override {
             return _value_status;
         }
-        config_source source() const noexcept override {
-            return _source;
-        }
-        bool is_set() const {
-            return _source > config_source::None;
-        }
-        MyType & operator()(const T& t, config_source src = config_source::Internal) {
-            if (!_allowed_values.empty() && std::find(_allowed_values.begin(), _allowed_values.end(), t) == _allowed_values.end()) {
-                throw std::invalid_argument(format("Invalid value for {}: got {} which is not inside the set of allowed values {}", name(), t, _allowed_values));
-            }
-            the_value().set(t);
-            if (src > config_source::None) {
-                _source = src;
-            }
-            return *this;
-        }
-        MyType & operator()(T&& t, config_source src = config_source::Internal) {
-            if (!_allowed_values.empty() && std::find(_allowed_values.begin(), _allowed_values.end(), t) == _allowed_values.end()) {
-                throw std::invalid_argument(format("Invalid value for {}: got {} which is not inside the set of allowed values {}", name(), t, _allowed_values));
-            }
-            the_value().set(std::move(t));
-            if (src > config_source::None) {
-                _source = src;
-            }
-            return *this;
-        }
-        void set(T&& t, config_source src = config_source::None) {
-            operator()(std::move(t), src);
-        }
+        config_source source() const noexcept override ;
+        bool is_set() const ;
+        MyType & operator()(const T& t, config_source src = config_source::Internal) ;
+        MyType & operator()(T&& t, config_source src = config_source::Internal) ;
+        void set(T&& t, config_source src = config_source::None) ;
         const T& operator()() const ;
         operator updateable_value<T>() const & ;
         observer<T> observe(std::function<void (const T&)> callback) const ;
@@ -13097,29 +12923,7 @@ std::istream& operator>>(std::istream& is, std::unordered_map<K, V, Args...>& ma
 template<typename V, typename... Args>
 std::istream& operator>>(std::istream& is, std::vector<V, Args...>& dst) ;
 template<typename K, typename V, typename... Args>
-void validate(boost::any& out, const std::vector<std::string>& in, std::unordered_map<K, V, Args...>*, int utf8) {
-    using map_type = std::unordered_map<K, V, Args...>;
-    if (out.empty()) {
-        out = boost::any(map_type());
-    }
-    static const boost::regex key(R"foo((?:^|\:)([^=:]+)=)foo");
-    auto* p = boost::any_cast<map_type>(&out);
-    for (const auto& s : in) {
-        boost::sregex_iterator i(s.begin(), s.end(), key), e;
-        if (i == e) {
-            throw boost::program_options::invalid_option_value(s);
-        }
-        while (i != e) {
-            auto k = (*i)[1].str();
-            auto vs = s.begin() + i->position() + i->length();
-            auto ve = s.end();
-            if (++i != e) {
-                ve = s.begin() + i->position();
-            }
-            (*p)[boost::lexical_cast<K>(k)] = boost::lexical_cast<V>(sstring(vs, ve));
-        }
-    }
-}
+void validate(boost::any& out, const std::vector<std::string>& in, std::unordered_map<K, V, Args...>*, int utf8) ;
 }
 namespace utils {
 namespace {
@@ -13142,64 +12946,15 @@ void maybe_multitoken(std::vector<typed_value_ex<T>>* r) {
     r->multitoken();
 }
 template<class T>
-inline typed_value_ex<T>* value_ex() {
-    typed_value_ex<T>* r = new typed_value_ex<T>();
-    maybe_multitoken(r);
-    return r;
-}
+ typed_value_ex<T>* value_ex() ;
 }
 sstring hyphenate(const std::string_view&);
 }
-template<typename T>
-void utils::config_file::named_value<T>::add_command_line_option(boost::program_options::options_description_easy_init& init) {
-    const auto hyphenated_name = hyphenate(name());
-    // NOTE. We are not adding default values. We could, but must in that case manually (in some way) geenrate the textual
-    // version, since the available ostream operators for things like pairs and collections don't match what we can deal with parser-wise.
-    // See removed ostream operators above.
-    init(hyphenated_name.data(), value_ex<T>()->notifier([this](T new_val) { set(std::move(new_val), config_source::CommandLine); }), desc().data());
-    if (!alias().empty()) {
-        const auto alias_desc = fmt::format("Alias for {}", hyphenated_name);
-        init(hyphenate(alias()).data(), value_ex<T>()->notifier([this](T new_val) { set(std::move(new_val), config_source::CommandLine); }), alias_desc.data());
-    }
-}
-template<typename T>
-void utils::config_file::named_value<T>::set_value(const YAML::Node& node) {
-    if (_source == config_source::SettingsFile && _liveness != liveness::LiveUpdate) {
-        // FIXME: warn if different?
-        return;
-    }
-    (*this)(node.as<T>());
-    _source = config_source::SettingsFile;
-}
-template<typename T>
-bool utils::config_file::named_value<T>::set_value(sstring value, config_source src) {
-    if (_liveness != liveness::LiveUpdate) {
-        return false;
-    }
-    (*this)(boost::lexical_cast<T>(value), src);
-    return true;
-}
-template<typename T>
-future<> utils::config_file::named_value<T>::set_value_on_all_shards(const YAML::Node& node) {
-    if (_source == config_source::SettingsFile && _liveness != liveness::LiveUpdate) {
-        // FIXME: warn if different?
-        co_return;
-    }
-    co_await smp::invoke_on_all([this, value = node.as<T>()] () {
-        (*this)(value);
-    });
-    _source = config_source::SettingsFile;
-}
-template<typename T>
-future<bool> utils::config_file::named_value<T>::set_value_on_all_shards(sstring value, config_source src) {
-    if (_liveness != liveness::LiveUpdate) {
-        co_return false;
-    }
-    co_await smp::invoke_on_all([this, value = boost::lexical_cast<T>(value), src] () {
-        (*this)(value, src);
-    });
-    co_return true;
-}
+
+
+
+
+
 class atomic_cell_view;
 class collection_mutation_view;
 class row_marker;
@@ -13472,9 +13227,9 @@ class cql3_type final {
 public:
     cql3_type(data_type type) : _type(std::move(type)) {}
     bool is_collection() const { return _type->is_collection(); }
-    bool is_counter() const { return _type->is_counter(); }
-    bool is_native() const { return _type->is_native(); }
-    bool is_user_type() const { return _type->is_user_type(); }
+    bool is_counter() const ;
+    bool is_native() const ;
+    bool is_user_type() const ;
     data_type get_type() const { return _type; }
     const sstring& to_string() const { return _type->cql3_type_name(); }
     // For UserTypes, we need to know the current keyspace to resolve the
@@ -14039,12 +13794,8 @@ const resource& root_function_resource();
 inline resource make_functions_resource() {
     return resource(functions_resource_t{});
 }
-inline resource make_functions_resource(std::string_view keyspace) {
-    return resource(functions_resource_t{}, keyspace);
-}
-inline resource make_functions_resource(std::string_view keyspace, std::string_view function_signature) {
-    return resource(functions_resource_t{}, keyspace, function_signature);
-}
+ resource make_functions_resource(std::string_view keyspace) ;
+ resource make_functions_resource(std::string_view keyspace, std::string_view function_signature) ;
 inline resource make_functions_resource(std::string_view keyspace, std::string_view function_name, std::vector<::shared_ptr<cql3::cql3_type::raw>> function_signature) {
     return resource(functions_resource_t{}, keyspace, function_name, function_signature);
 }
@@ -14121,9 +13872,7 @@ public:
     friend bool operator==(const authenticated_user&, const authenticated_user&) noexcept = default;
 };
 const authenticated_user& anonymous_user() noexcept;
-inline bool is_anonymous(const authenticated_user& u) noexcept {
-    return u == anonymous_user();
-}
+ bool is_anonymous(const authenticated_user& u) noexcept ;
 }
 ///
 /// The user name, or "anonymous".
@@ -14349,8 +14098,8 @@ namespace utils {
 struct do_nothing_loading_shared_values_stats {
     static void inc_hits() noexcept {} // Increase the number of times entry was found ready
     static void inc_misses() noexcept {} // Increase the number of times entry was not found
-    static void inc_blocks() noexcept {} // Increase the number of times entry was not ready (>= misses)
-    static void inc_evictions() noexcept {} // Increase the number of times entry was evicted
+    static void inc_blocks() noexcept ; // Increase the number of times entry was not ready (>= misses)
+    static void inc_evictions() noexcept ; // Increase the number of times entry was evicted
 };
 // Entries stay around as long as there is any live external reference (entry_ptr) to them.
 // Supports asynchronous insertion, ensures that only one entry will be loaded.
@@ -14661,9 +14410,7 @@ struct loading_cache_config final {
 };
 template <typename Tp>
 struct simple_entry_size {
-    size_t operator()(const Tp& val) {
-        return 1;
-    }
+    size_t operator()(const Tp& val) ;
 };
 struct do_nothing_loading_cache_stats {
     // Accounts events when entries are evicted from the unprivileged cache section due to size restriction.
@@ -15233,12 +14980,10 @@ public:
     }
     value_ptr(std::nullptr_t) noexcept : _ts_val_ptr() {}
     bool operator==(const value_ptr&) const = default;
-    explicit operator bool() const noexcept { return bool(_ts_val_ptr); }
-    value_type& operator*() const noexcept { return _ts_val_ptr->value(); }
-    value_type* operator->() const noexcept { return &_ts_val_ptr->value(); }
-    friend std::ostream& operator<<(std::ostream& os, const value_ptr& vp) {
-        return os << vp._ts_val_ptr;
-    }
+    explicit operator bool() const noexcept ;
+    value_type& operator*() const noexcept ;
+    value_type* operator->() const noexcept ;
+    friend std::ostream& operator<<(std::ostream& os, const value_ptr& vp) ;
 };
 /// \brief This is and LRU list entry which is also an anchor for a loading_cache value.
 template<typename Key, typename Tp, int SectionHitThreshold, loading_cache_reload_enabled ReloadEnabled, typename EntrySize, typename Hash, typename EqualPred, typename LoadingSharedValuesStats, typename  LoadingCacheStats, typename Alloc>
@@ -15261,16 +15006,13 @@ public:
     size_t& owning_section_size() noexcept ;
     void touch() noexcept ;
     const Key& key() const noexcept ;
-    timestamped_val& timestamped_value() noexcept { return *_ts_val_ptr; }
-    const timestamped_val& timestamped_value() const noexcept { return *_ts_val_ptr; }
-    timestamped_val_ptr timestamped_value_ptr() noexcept { return _ts_val_ptr; }
+    timestamped_val& timestamped_value() noexcept ;
+    const timestamped_val& timestamped_value() const noexcept ;
+    timestamped_val_ptr timestamped_value_ptr() noexcept ;
 };
 }
 namespace std {
-inline std::ostream& operator<<(std::ostream& os, const pair<auth::role_or_anonymous, auth::resource>& p) {
-    os << "{role: " << p.first << ", resource: " << p.second << "}";
-    return os;
-}
+ std::ostream& operator<<(std::ostream& os, const pair<auth::role_or_anonymous, auth::resource>& p) ;
 }
 namespace db {
 class config;
@@ -15289,9 +15031,7 @@ class permissions_cache final {
     cache_type _cache;
 public:
     explicit permissions_cache(const utils::loading_cache_config&, service&, logging::logger&);
-    future <> stop() {
-        return _cache.stop();
-    }
+    future <> stop() ;
     bool update_config(utils::loading_cache_config);
     void reset();
     future<permission_set> get(const role_or_anonymous&, const resource&);
@@ -15530,9 +15270,7 @@ public:
     const authorizer& underlying_authorizer() const {
         return *_authorizer;
     }
-    role_manager& underlying_role_manager() const {
-        return *_role_manager;
-    }
+    role_manager& underlying_role_manager() const ;
 private:
     future<bool> has_existing_legacy_users() const;
     future<> create_keyspace_if_missing(::service::migration_manager& mm) const;
@@ -15781,30 +15519,18 @@ private:
     state _state = state::inactive;
     struct params_values;
     struct params_values_deleter {
-        void operator()(params_values* pv) {}
+        void operator()(params_values* pv) ;
     };
     class params_ptr {
     private:
         std::unique_ptr<params_values, params_values_deleter> _vals;
         params_values* get_ptr_safe();
     public:
-        explicit operator bool() const {
-            return (bool)_vals;
-        }
-        params_values* operator->() {
-            return get_ptr_safe();
-        }
-        params_values& operator*() {
-            return *get_ptr_safe();
-        }
+        explicit operator bool() const ;
+        params_values* operator->() ;
+        params_values& operator*() ;
     } _params_ptr;
-    static trace_state_props_set make_primary(trace_state_props_set props) {
-        if (!props.contains(trace_state_props::full_tracing) && !props.contains(trace_state_props::log_slow_query)) {
-            throw std::logic_error("A primary session has to be created for either full tracing or a slow query logging");
-        }
-        props.set(trace_state_props::primary);
-        return props;
-    }
+    static trace_state_props_set make_primary(trace_state_props_set props) ;
     static trace_state_props_set make_secondary(trace_state_props_set props) noexcept {
         props.remove(trace_state_props::primary);
         // Default a secondary session to a full tracing.
@@ -15832,7 +15558,7 @@ public:
             _supplied_start_ts_us = info.start_ts_us;
         }
     }
-    ~trace_state() {}
+    ~trace_state() ;
     const utils::UUID& session_id() const ;
     bool is_in_state(state s) const ;
     void set_state(state s) ;
@@ -15944,28 +15670,8 @@ template <typename... A>
  void begin(const trace_state_ptr& p, A&&... a) ;
 template <typename... A>
  void trace(const trace_state_ptr& p, A&&... a) noexcept ;
-inline std::optional<trace_info> make_trace_info(const trace_state_ptr& state) {
-    // We want to trace the remote replicas' operations only when a full tracing
-    // is requested or when a slow query logging is enabled and the session is
-    // still active and only if the session events tracing is not explicitly disabled.
-    //
-    // When only a slow query logging is enabled we don't really care what
-    // happens on a remote replica after a Client has received a response for
-    // his/her query.
-    if (state && !state->ignore_events() && (state->full_tracing() || (state->log_slow_query() && !state->is_in_state(trace_state::state::background)))) {
-        // When slow query logging is requested, secondary session will continue
-        // calculating time *since the start of the primary session*
-        const auto start_ts_us = state->log_slow_query() ? state->start_ts_us() : 0u;
-        return trace_info{state->session_id(), state->type(), state->write_on_close(), state->raw_props(),
-                state->slow_query_threshold_us(), state->slow_query_ttl_sec(), state->my_span_id(), start_ts_us};
-    }
-    return std::nullopt;
-}
-inline void stop_foreground(const trace_state_ptr& state) noexcept {
-    if (state) {
-        state->stop_foreground_and_write();
-    }
-}
+ std::optional<trace_info> make_trace_info(const trace_state_ptr& state) ;
+ void stop_foreground(const trace_state_ptr& state) noexcept ;
 inline void add_prepared_query_options(const trace_state_ptr& state, const cql3::query_options& prepared_options_ptr) {
     if (state) {
         state->add_prepared_query_options(prepared_options_ptr);
@@ -15996,16 +15702,13 @@ public:
             : global_trace_state_ptr(other.get())
     { }
     // May be invoked across shards.
-    global_trace_state_ptr(global_trace_state_ptr&& other)
-            : global_trace_state_ptr(other.get())
-    { }
+    global_trace_state_ptr(global_trace_state_ptr&& other) 
+    ;
     global_trace_state_ptr& operator=(const global_trace_state_ptr&) = delete;
     // May be invoked across shards.
-    trace_state_ptr get() const {
-        return nullptr;
-    }
+    trace_state_ptr get() const ;
     // May be invoked across shards.
-    operator trace_state_ptr() const { return get(); }
+    operator trace_state_ptr() const ;
 };
 }
 namespace cql_transport {
@@ -16069,52 +15772,27 @@ class atomic_vector {
     std::vector<T> _vec;
     seastar::rwlock _vec_lock;
 public:
-    void add(const T& value) {
-        _vec.push_back(value);
-    }
-    seastar::future<> remove(const T& value) {
-        return with_lock(_vec_lock.for_write(), [this, value] {
-            _vec.erase(std::remove(_vec.begin(), _vec.end(), value), _vec.end());
-        });
-    }
+    void add(const T& value) ;
+    seastar::future<> remove(const T& value) ;
     // This must be called on a thread. The callback function must not
     // call remove.
     //
     // We would take callbacks that take a T&, but we had bugs in the
     // past with some of those callbacks holding that reference past a
     // preemption.
-    void thread_for_each(seastar::noncopyable_function<void(T)> func) {
-        _vec_lock.for_read().lock().get();
-        auto unlock = seastar::defer([this] {
-            _vec_lock.for_read().unlock();
-        });
-        // We grab a lock in remove(), but not in add(), so we
-        // iterate using indexes to guard against the vector being
-        // reallocated.
-        for (size_t i = 0, n = _vec.size(); i < n; ++i) {
-            func(_vec[i]);
-        }
-    }
+    void thread_for_each(seastar::noncopyable_function<void(T)> func) ;
     // The callback function must not call remove.
     //
     // We would take callbacks that take a T&, but we had bugs in the
     // past with some of those callbacks holding that reference past a
     // preemption.
-    seastar::future<> for_each(seastar::noncopyable_function<seastar::future<>(T)> func) {
-        auto holder = co_await _vec_lock.hold_read_lock();
-        // We grab a lock in remove(), but not in add(), so we
-        // iterate using indexes to guard against the vector being
-        // reallocated.
-        for (size_t i = 0, n = _vec.size(); i < n; ++i) {
-            co_await func(_vec[i]);
-        }
-    }
+    seastar::future<> for_each(seastar::noncopyable_function<seastar::future<>(T)> func) ;
 };
 namespace service {
 class endpoint_lifecycle_subscriber {
 public:
     virtual ~endpoint_lifecycle_subscriber()
-    { }
+    ;
     virtual void on_join_cluster(const gms::inet_address& endpoint) = 0;
     virtual void on_leave_cluster(const gms::inet_address& endpoint) = 0;
     virtual void on_up(const gms::inet_address& endpoint) = 0;
@@ -16140,7 +15818,7 @@ namespace qos {
         virtual future<> on_before_service_level_add(service_level_options slo, service_level_info sl_info) = 0;
         virtual future<> on_after_service_level_remove(service_level_info sl_info) = 0;
         virtual future<> on_before_service_level_change(service_level_options slo_before, service_level_options slo_after, service_level_info sl_info) = 0;
-        virtual ~qos_configuration_change_subscriber() {};
+        virtual ~qos_configuration_change_subscriber() ;;
     };
 }
 namespace db {
