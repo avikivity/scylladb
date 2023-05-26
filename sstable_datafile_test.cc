@@ -26802,29 +26802,19 @@ public:
     { }
     dht::decorated_key& key() { return _key; }
     const dht::decorated_key& key() const { return _key; }
-    const tombstone& partition_tombstone() const { return _partition_tombstone; }
-    tombstone& partition_tombstone() { return _partition_tombstone; }
+    const tombstone& partition_tombstone() const ;
+    tombstone& partition_tombstone() ;
     position_in_partition_view position() const;
-    size_t external_memory_usage(const schema&) const {
-        return _key.external_memory_usage();
-    }
-    size_t memory_usage(const schema& s) const {
-        return sizeof(partition_start) + external_memory_usage(s);
-    }
-    bool equal(const schema& s, const partition_start& other) const {
-        return _key.equal(s, other._key) && _partition_tombstone == other._partition_tombstone;
-    }
+    size_t external_memory_usage(const schema&) const ;
+    size_t memory_usage(const schema& s) const ;
+    bool equal(const schema& s, const partition_start& other) const ;
     friend std::ostream& operator<<(std::ostream& is, const partition_start& row);
 };
 class partition_end final {
 public:
     position_in_partition_view position() const;
-    size_t external_memory_usage(const schema&) const {
-        return 0;
-    }
-    size_t memory_usage(const schema& s) const {
-        return sizeof(partition_end) + external_memory_usage(s);
-    }
+    size_t external_memory_usage(const schema&) const ;
+    size_t memory_usage(const schema& s) const ;
     bool equal(const schema& s, const partition_end& other) const {
         return true;
     }
@@ -26953,15 +26943,15 @@ public:
     // Like relevant_for_range() but makes use of assumption that pos is greater
     // than the starting position of this fragment.
     bool relevant_for_range_assuming_after(const schema& s, position_in_partition_view pos) const;
-    bool has_key() const { return is_clustering_row() || is_range_tombstone(); }
+    bool has_key() const ;
     // Requirements: has_key() == true
     const clustering_key_prefix& key() const;
-    kind mutation_fragment_kind() const { return _kind; }
-    bool is_static_row() const { return _kind == kind::static_row; }
-    bool is_clustering_row() const { return _kind == kind::clustering_row; }
-    bool is_range_tombstone() const { return _kind == kind::range_tombstone; }
-    bool is_partition_start() const { return _kind == kind::partition_start; }
-    bool is_end_of_partition() const { return _kind == kind::partition_end; }
+    kind mutation_fragment_kind() const ;
+    bool is_static_row() const ;
+    bool is_clustering_row() const ;
+    bool is_range_tombstone() const ;
+    bool is_partition_start() const ;
+    bool is_end_of_partition() const ;
     void mutate_as_static_row(const schema& s, std::invocable<static_row&> auto&& fn) ;
     void mutate_as_clustering_row(const schema& s, std::invocable<clustering_row&> auto&& fn) ;
     void mutate_as_range_tombstone(const schema& s, std::invocable<range_tombstone&> auto&& fn) ;
@@ -27327,36 +27317,24 @@ public:
     const clustering_key_prefix& key() const;
     kind mutation_fragment_kind() const { return _kind; }
     bool is_static_row() const { return _kind == kind::static_row; }
-    bool is_clustering_row() const { return _kind == kind::clustering_row; }
-    bool is_range_tombstone_change() const { return _kind == kind::range_tombstone_change; }
-    bool is_partition_start() const { return _kind == kind::partition_start; }
-    bool is_end_of_partition() const { return _kind == kind::partition_end; }
-    void mutate_as_static_row(const schema& s, std::invocable<static_row&> auto&& fn) {
-        fn(_data->_static_row);
-        _data->_memory.reset_to(reader_resources::with_memory(calculate_memory_usage(s)));
-    }
-    void mutate_as_clustering_row(const schema& s, std::invocable<clustering_row&> auto&& fn) {
-        fn(_data->_clustering_row);
-        _data->_memory.reset_to(reader_resources::with_memory(calculate_memory_usage(s)));
-    }
-    void mutate_as_range_tombstone_change(const schema& s, std::invocable<range_tombstone_change&> auto&& fn) {
-        fn(_data->_range_tombstone_chg);
-        _data->_memory.reset_to(reader_resources::with_memory(calculate_memory_usage(s)));
-    }
-    void mutate_as_partition_start(const schema& s, std::invocable<partition_start&> auto&& fn) {
-        fn(_data->_partition_start);
-        _data->_memory.reset_to(reader_resources::with_memory(calculate_memory_usage(s)));
-    }
-    static_row&& as_static_row() && { return std::move(_data->_static_row); }
-    clustering_row&& as_clustering_row() && { return std::move(_data->_clustering_row); }
-    range_tombstone_change&& as_range_tombstone_change() && { return std::move(_data->_range_tombstone_chg); }
-    partition_start&& as_partition_start() && { return std::move(_data->_partition_start); }
-    partition_end&& as_end_of_partition() && { return std::move(_data->_partition_end); }
-    const static_row& as_static_row() const & { return _data->_static_row; }
-    const clustering_row& as_clustering_row() const & { return _data->_clustering_row; }
-    const range_tombstone_change& as_range_tombstone_change() const & { return _data->_range_tombstone_chg; }
-    const partition_start& as_partition_start() const & { return _data->_partition_start; }
-    const partition_end& as_end_of_partition() const & { return _data->_partition_end; }
+    bool is_clustering_row() const ;
+    bool is_range_tombstone_change() const ;
+    bool is_partition_start() const ;
+    bool is_end_of_partition() const ;
+    void mutate_as_static_row(const schema& s, std::invocable<static_row&> auto&& fn) ;
+    void mutate_as_clustering_row(const schema& s, std::invocable<clustering_row&> auto&& fn) ;
+    void mutate_as_range_tombstone_change(const schema& s, std::invocable<range_tombstone_change&> auto&& fn) ;
+    void mutate_as_partition_start(const schema& s, std::invocable<partition_start&> auto&& fn) ;
+    static_row&& as_static_row() && ;
+    clustering_row&& as_clustering_row() && ;
+    range_tombstone_change&& as_range_tombstone_change() && ;
+    partition_start&& as_partition_start() && ;
+    partition_end&& as_end_of_partition() && ;
+    const static_row& as_static_row() const & ;
+    const clustering_row& as_clustering_row() const & ;
+    const range_tombstone_change& as_range_tombstone_change() const & ;
+    const partition_start& as_partition_start() const & ;
+    const partition_end& as_end_of_partition() const & ;
     // Requirements: mergeable_with(mf)
     void apply(const schema& s, mutation_fragment_v2&& mf);
     template<typename Consumer>
@@ -27444,9 +27422,7 @@ public:
     };
     friend std::ostream& operator<<(std::ostream& os, const printer& p);
 private:
-    size_t calculate_memory_usage(const schema& s) const {
-        return sizeof(data) + visit([&s] (auto& mf) -> size_t { return mf.external_memory_usage(s); });
-    }
+    size_t calculate_memory_usage(const schema& s) const ;
 };
 std::ostream& operator<<(std::ostream&, mutation_fragment_v2::kind);
 // F gets a stream element as an argument and returns the new value which replaces that element
@@ -27534,27 +27510,11 @@ class range_tombstone_change_generator {
     position_in_partition _lower_bound = position_in_partition::before_all_clustered_rows();
     const schema& _schema;
 public:
-    range_tombstone_change_generator(const schema& s)
-        : _range_tombstones(s)
-        , _schema(s)
-    { }
+    range_tombstone_change_generator(const schema& s) 
+    ;
     // Discards deletion information for positions < lower_bound.
     // After this, the lowest position of emitted range_tombstone_change will be before_key(lower_bound).
-    void trim(const position_in_partition& lower_bound) {
-        position_in_partition::less_compare less(_schema);
-        if (lower_bound.is_clustering_row()) {
-            _lower_bound = position_in_partition::before_key(lower_bound.key());
-        } else {
-            _lower_bound = lower_bound;
-        }
-        while (!_range_tombstones.empty() && !less(lower_bound, _range_tombstones.begin()->end_position())) {
-            _range_tombstones.pop(_range_tombstones.begin());
-        }
-        if (!_range_tombstones.empty() && less(_range_tombstones.begin()->position(), _lower_bound)) {
-            // _range_tombstones.begin()->end_position() < lower_bound is guaranteed by previous loop.
-            _range_tombstones.begin()->tombstone().set_start(_lower_bound);
-        }
-    }
+    void trim(const position_in_partition& lower_bound) ;
     // Emits range_tombstone_change fragments with positions smaller than upper_bound
     // for accumulated range tombstones. If end_of_range = true, range tombstone
     // change fragments with position equal to upper_bound may also be emitted.
@@ -27951,16 +27911,10 @@ auto mutation::consume_gently(Consumer& consumer, consume_in_reverse reverse, mu
     }
 }
 struct mutation_equals_by_key {
-    bool operator()(const mutation& m1, const mutation& m2) const {
-        return m1.schema() == m2.schema()
-                && m1.decorated_key().equal(*m1.schema(), m2.decorated_key());
-    }
+    bool operator()(const mutation& m1, const mutation& m2) const ;
 };
 struct mutation_hash_by_key {
-    size_t operator()(const mutation& m) const {
-        auto dk_hash = std::hash<dht::decorated_key>();
-        return dk_hash(m.decorated_key());
-    }
+    size_t operator()(const mutation& m) const ;
 };
 struct mutation_decorated_key_less_comparator {
     bool operator()(const mutation& m1, const mutation& m2) const;
@@ -27972,38 +27926,16 @@ using mutation_opt = optimized_optional<mutation>;
 template<>
 struct appending_hash<mutation> {
     template<typename Hasher>
-    void operator()(Hasher& h, const mutation& m) const {
-        const schema& s = *m.schema();
-        feed_hash(h, m.key(), s);
-        m.partition().feed_hash(h, s);
-    }
+    void operator()(Hasher& h, const mutation& m) const ;
 };
-inline
-void apply(mutation_opt& dst, mutation&& src) {
-    if (!dst) {
-        dst = std::move(src);
-    } else {
-        dst->apply(std::move(src));
-    }
-}
-inline
-void apply(mutation_opt& dst, mutation_opt&& src) {
-    if (src) {
-        apply(dst, std::move(*src));
-    }
-}
-inline
-void apply(mutation& dst, mutation_opt&& src) {
-    if (src) {
-        dst.apply(std::move(*src));
-    }
-}
-inline
-void apply(mutation& dst, const mutation_opt& src) {
-    if (src) {
-        dst.apply(*src);
-    }
-}
+
+void apply(mutation_opt& dst, mutation&& src) ;
+
+void apply(mutation_opt& dst, mutation_opt&& src) ;
+
+void apply(mutation& dst, mutation_opt&& src) ;
+
+void apply(mutation& dst, const mutation_opt& src) ;
 // Returns a range into partitions containing mutations covered by the range.
 // partitions must be sorted according to decorated key.
 // range must not wrap around.
@@ -28342,12 +28274,9 @@ public:
     const sstring& get_column_family() const;
     virtual sstring to_string() const override;
 };
-inline
+
 std::ostream&
-operator<<(std::ostream& os, const cf_name& n) {
-    os << n.to_string();
-    return os;
-}
+operator<<(std::ostream& os, const cf_name& n) ;
 }
 class schema;
 namespace cql3 {
@@ -28382,12 +28311,8 @@ public:
     void add_pk_function_call(cql3::expr::function_call& fn);
     // Inform the context object that it has started or ended processing the
     // partition key part of statement restrictions.
-    void set_processing_pk_restrictions(bool flag) noexcept {
-        _processing_pk_restrictions = flag;
-    }
-    bool is_processing_pk_restrictions() const noexcept {
-        return _processing_pk_restrictions;
-    }
+    void set_processing_pk_restrictions(bool flag) noexcept ;
+    bool is_processing_pk_restrictions() const noexcept ;
 };
 }
 namespace cql3 {
@@ -28433,9 +28358,7 @@ class column_specification;
 class cql_statement;
 namespace statements {
 struct invalidated_prepared_usage_attempt {
-    void operator()() const {
-        throw exceptions::invalidated_prepared_usage_attempt_exception();
-    }
+    void operator()() const ;
 };
 class prepared_statement : public seastar::weakly_referencable<prepared_statement> {
 public:
@@ -28451,9 +28374,7 @@ public:
                        std::vector<sstring> warnings = {});
     prepared_statement(seastar::shared_ptr<cql_statement> statement_, prepare_context&& ctx, std::vector<uint16_t>&& partition_key_bind_indices);
     prepared_statement(seastar::shared_ptr<cql_statement>&& statement_);
-    checked_weak_ptr checked_weak_from_this() {
-        return checked_weak_ptr(this->weak_from_this());
-    }
+    checked_weak_ptr checked_weak_from_this() ;
 };
 }
 }
@@ -28618,13 +28539,8 @@ public:
     // Parses hint filtering configuration from a list of DCs.
     static host_filter parse_from_dc_list(sstring opt);
     bool can_hint_for(const locator::topology& topo, gms::inet_address ep) const;
-    inline const std::unordered_set<sstring>& get_dcs() const {
-        return _dcs;
-    }
-    bool operator==(const host_filter& other) const noexcept {
-        return _enabled_kind == other._enabled_kind
-                && _dcs == other._dcs;
-    }
+     const std::unordered_set<sstring>& get_dcs() const ;
+    bool operator==(const host_filter& other) const noexcept ;
     inline bool is_enabled_for_all() const noexcept {
         return _enabled_kind == enabled_kind::enabled_for_all;
     }
@@ -29634,17 +29550,11 @@ struct replay_position {
         }
     }
     auto operator<=>(const replay_position&) const noexcept = default;
-    unsigned shard_id() const {
-        return unsigned(id >> max_ts_bits);
-    }
-    segment_id_type base_id() const {
-        return id & ts_mask;
-    }
-    replay_position base() const {
-        return replay_position(base_id(), pos);
-    }
+    unsigned shard_id() const ;
+    segment_id_type base_id() const ;
+    replay_position base() const ;
     template <typename Describer>
-    auto describe_type(sstables::sstable_version_types v, Describer f) { return f(id, pos); }
+    auto describe_type(sstables::sstable_version_types v, Describer f) ;
 };
 class commitlog;
 class cf_holder;
@@ -29656,15 +29566,9 @@ public:
     rp_handle& operator=(rp_handle&&) noexcept;
     ~rp_handle();
     replay_position release();
-    operator bool() const {
-        return _h && _rp != replay_position();
-    }
-    operator const replay_position&() const {
-        return _rp;
-    }
-    const replay_position& rp() const {
-        return _rp;
-    }
+    operator bool() const ;
+    operator const replay_position&() const ;
+    const replay_position& rp() const ;
 private:
     friend class commitlog;
     rp_handle(shared_ptr<cf_holder>, cf_id_type, replay_position) noexcept;
@@ -29774,30 +29678,13 @@ public:
     const mutation_opt& computed_columns_mutation() const {
         return _computed_columns;
     }
-    const mutation_opt& scylla_tables() const {
-        return _scylla_tables;
-    }
-    mutation_opt& scylla_tables() {
-        return _scylla_tables;
-    }
-    const mutation_opt& indices_mutation() const {
-        return _indices;
-    }
-    const mutation_opt& dropped_columns_mutation() const {
-        return _dropped_columns;
-    }
-    canonical_mutation columnfamilies_canonical_mutation() const {
-        return canonical_mutation(_columnfamilies);
-    }
-    canonical_mutation columns_canonical_mutation() const {
-        return canonical_mutation(_columns);
-    }
-    std::optional<canonical_mutation> view_virtual_columns_canonical_mutation() const {
-        if (_view_virtual_columns) {
-            return canonical_mutation(*_view_virtual_columns);
-        }
-        return {};
-    }
+    const mutation_opt& scylla_tables() const ;
+    mutation_opt& scylla_tables() ;
+    const mutation_opt& indices_mutation() const ;
+    const mutation_opt& dropped_columns_mutation() const ;
+    canonical_mutation columnfamilies_canonical_mutation() const ;
+    canonical_mutation columns_canonical_mutation() const ;
+    std::optional<canonical_mutation> view_virtual_columns_canonical_mutation() const ;
     std::optional<canonical_mutation> computed_columns_canonical_mutation() const {
         if (_computed_columns) {
             return canonical_mutation(*_computed_columns);
@@ -30543,34 +30430,11 @@ public:
             future<stop_iteration> consume(clustering_row&& cr) {
                 return handle_result(_consumer.consume(std::move(cr)));
             }
-            future<stop_iteration> consume(range_tombstone_change&& rt) {
-                return handle_result(_consumer.consume(std::move(rt)));
-            }
-            future<stop_iteration> consume(partition_start&& ps) {
-                _decorated_key.emplace(std::move(ps.key()));
-                _consumer.consume_new_partition(*_decorated_key);
-                if (ps.partition_tombstone()) {
-                    _consumer.consume(ps.partition_tombstone());
-                }
-                return make_ready_future<stop_iteration>(stop_iteration::no);
-            }
-            future<stop_iteration> consume(partition_end&& pe) {
-                return futurize_invoke([this] {
-                    return _consumer.consume_end_of_partition();
-                });
-            }
+            future<stop_iteration> consume(range_tombstone_change&& rt) ;
+            future<stop_iteration> consume(partition_start&& ps) ;
+            future<stop_iteration> consume(partition_end&& pe) ;
         private:
-            future<stop_iteration> handle_result(stop_iteration si) {
-                if (si) {
-                    if (_consumer.consume_end_of_partition()) {
-                        return make_ready_future<stop_iteration>(stop_iteration::yes);
-                    }
-                    return _reader.next_partition().then([] {
-                        return make_ready_future<stop_iteration>(stop_iteration::no);
-                    });
-                }
-                return make_ready_future<stop_iteration>(stop_iteration::no);
-            }
+            future<stop_iteration> handle_result(stop_iteration si) ;
         };
     public:
         template<typename Consumer>
@@ -30616,25 +30480,9 @@ public:
         //
         // Similar to destructors, close must never fail.
         virtual future<> close() noexcept = 0;
-        size_t buffer_size() const {
-            return _buffer_size;
-        }
-        tracked_buffer detach_buffer() noexcept {
-            _buffer_size = 0;
-            return std::exchange(_buffer, tracked_buffer(tracking_allocator<mutation_fragment_v2>(_permit)));
-        }
-        void move_buffer_content_to(impl& other) {
-            if (other._buffer.empty()) {
-                std::swap(_buffer, other._buffer);
-                other._buffer_size = std::exchange(_buffer_size, 0);
-            } else {
-                seastar::memory::on_alloc_point(); // for exception safety tests
-                other._buffer.reserve(other._buffer.size() + _buffer.size());
-                std::move(_buffer.begin(), _buffer.end(), std::back_inserter(other._buffer));
-                _buffer.clear();
-                other._buffer_size += std::exchange(_buffer_size, 0);
-            }
-        }
+        size_t buffer_size() const ;
+        tracked_buffer detach_buffer() noexcept ;
+        void move_buffer_content_to(impl& other) ;
         void check_abort() {
             _permit.check_abort();
         }
@@ -30702,10 +30550,8 @@ public:
         bool operator()(const dht::decorated_key& dk) const {
             return true;
         }
-        bool operator()(const mutation_fragment_v2& mf) const {
-            return true;
-        }
-        void on_end_of_stream() const { }
+        bool operator()(const mutation_fragment_v2& mf) const ;
+        void on_end_of_stream() const ;
     };
     template<typename Consumer, typename Filter>
     requires FlattenedConsumerV2<Consumer> && FlattenedConsumerFilterV2<Filter>
@@ -30875,9 +30721,7 @@ public:
 };
 using flat_mutation_reader_v2_opt = optimized_optional<flat_mutation_reader_v2>;
 template<typename Impl, typename... Args>
-flat_mutation_reader_v2 make_flat_mutation_reader_v2(Args &&... args) {
-    return flat_mutation_reader_v2(std::make_unique<Impl>(std::forward<Args>(args)...));
-}
+flat_mutation_reader_v2 make_flat_mutation_reader_v2(Args &&... args) ;
 // Consumes mutation fragments until StopCondition is true.
 // The consumer will stop iff StopCondition returns true, in particular
 // reaching the end of stream alone won't stop the reader.
@@ -30985,35 +30829,10 @@ future<> consume_partitions(flat_mutation_reader_v2& reader, Consumer consumer) 
 /// Note: the function assumes ownership of the reader and must close it in all cases.
 using reader_consumer_v2 = noncopyable_function<future<> (flat_mutation_reader_v2)>;
 namespace ser {
-template <typename Output>
-void serializer<counter_id>::write(Output& buf, const counter_id& obj) {
-  static_assert(is_equivalent<decltype(obj.uuid()), utils::UUID>::value, "member value has a wrong type");
-  serialize(buf, obj.uuid());
-}
-template <typename Input>
-counter_id serializer<counter_id>::read(Input& buf) {
- return seastar::with_serialized_stream(buf, [] (auto& buf) {
-  auto& in = buf;
-  auto __local_0 = deserialize(in, boost::type<utils::UUID>());
-  counter_id res {std::move(__local_0)};
-  return res;
- });
-}
-template <typename Input>
-void serializer<counter_id>::skip(Input& buf) {
- seastar::with_serialized_stream(buf, [] (auto& buf) {
-  ser::skip(buf, boost::type<utils::UUID>());
- });
-}
-template <typename Output>
-void serializer<counter_shard>::write(Output& buf, const counter_shard& obj) {
-  static_assert(is_equivalent<decltype(obj.id()), counter_id>::value, "member value has a wrong type");
-  serialize(buf, obj.id());
-  static_assert(is_equivalent<decltype(obj.value()), int64_t>::value, "member value has a wrong type");
-  serialize(buf, obj.value());
-  static_assert(is_equivalent<decltype(obj.logical_clock()), int64_t>::value, "member value has a wrong type");
-  serialize(buf, obj.logical_clock());
-}
+
+
+
+
 
 
 
@@ -31255,125 +31074,40 @@ struct serializer<no_marker_view> {
 };
 struct tombstone_view {
     utils::input_stream v;
-    operator tombstone() const {
-       auto in = v;
-       return deserialize(in, boost::type<tombstone>());
-    }
-    auto timestamp() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<api::timestamp_type>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       return deserialize(in, boost::type<api::timestamp_type>());
-      });
-    }
-    auto deletion_time() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<gc_clock::time_point>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<api::timestamp_type>());
-       return deserialize(in, boost::type<gc_clock::time_point>());
-      });
-    }
+    operator tombstone() const ;
+    auto timestamp() const ;
+    auto deletion_time() const ;
 };
 template<>
 struct serializer<tombstone_view> {
     template<typename Input>
-    static tombstone_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return tombstone_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static tombstone_view read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, tombstone_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, tombstone_view v) ;
     template<typename Input>
-    static void skip(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        v.skip(read_frame_size(v));
-      });
-    }
+    static void skip(Input& v) ;
 };
 template<typename Input>
-inline void skip(Input& v, boost::type<boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>>) {
-  return seastar::with_serialized_stream(v, [] (auto& v) {
-    size_type ln = deserialize(v, boost::type<size_type>());
-    v.skip(ln - sizeof(size_type));
-  });
-}
+ void skip(Input& v, boost::type<boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>>) ;
 template<typename Input>
-boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type> deserialize(Input& v, boost::type<boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>>) {
-  return seastar::with_serialized_stream(v, [] (auto& v) {
-    auto in = v;
-    deserialize(in, boost::type<size_type>());
-    size_type o = deserialize(in, boost::type<size_type>());
-    if (o == 0) {
-        v.skip(sizeof(size_type)*2);
-        return boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>(deserialize(v, boost::type<counter_cell_full_view>()));
-    }
-    if (o == 1) {
-        v.skip(sizeof(size_type)*2);
-        return boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>(deserialize(v, boost::type<counter_cell_update_view>()));
-    }
-    return boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>(deserialize(v, boost::type<unknown_variant_type>()));
-  });
-}
+boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type> deserialize(Input& v, boost::type<boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>>) ;
 struct counter_cell_view {
     utils::input_stream v;
-    auto created_at() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<api::timestamp_type>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       return deserialize(in, boost::type<api::timestamp_type>());
-      });
-    }
-    auto value() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<api::timestamp_type>());
-       return deserialize(in, boost::type<boost::variant<counter_cell_full_view, counter_cell_update_view, unknown_variant_type>>());
-      });
-    }
+    auto created_at() const ;
+    auto value() const ;
 };
 template<>
 struct serializer<counter_cell_view> {
     template<typename Input>
-    static counter_cell_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return counter_cell_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static counter_cell_view read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, counter_cell_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, counter_cell_view v) ;
     template<typename Input>
-    static void skip(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        v.skip(read_frame_size(v));
-      });
-    }
+    static void skip(Input& v) ;
 };
 struct dead_cell_view {
     utils::input_stream v;
-    auto tomb() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<tombstone_view>())) {
-       std::ignore = this;
-       auto in = v;
-       return deserialize(in, boost::type<tombstone_view>());
-      });
-    }
+    auto tomb() const ;
 };
 template<>
 struct serializer<dead_cell_view> {
@@ -31588,80 +31322,29 @@ template<typename Input>
 boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type> deserialize(Input& v, boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type>>) ;
 struct collection_element_view {
     utils::input_stream v;
-    auto key() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<bytes>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       return deserialize(in, boost::type<bytes>());
-      });
-    }
-    auto value() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type>>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<bytes>());
-       return deserialize(in, boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, unknown_variant_type>>());
-      });
-    }
+    auto key() const ;
+    auto value() const ;
 };
 template<>
 struct serializer<collection_element_view> {
     template<typename Input>
-    static collection_element_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return collection_element_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static collection_element_view read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, collection_element_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, collection_element_view v) ;
     template<typename Input>
-    static void skip(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        v.skip(read_frame_size(v));
-      });
-    }
+    static void skip(Input& v) ;
 };
 struct collection_cell_view {
     utils::input_stream v;
-    auto tomb() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<tombstone_view>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       return deserialize(in, boost::type<tombstone_view>());
-      });
-    }
-    auto elements() const {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<tombstone_view>());
-       return vector_deserializer<collection_element_view>(in);
-      });
-    }
+    auto tomb() const ;
+    auto elements() const ;
 };
 template<>
 struct serializer<collection_cell_view> {
     template<typename Input>
-    static collection_cell_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return collection_cell_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static collection_cell_view read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, collection_cell_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, collection_cell_view v) ;
     template<typename Input>
     static void skip(Input& v) ;
 };
@@ -31795,176 +31478,49 @@ struct mutation_partition_view {
     auto tomb() const ;
     auto static_row() const ;
     auto range_tombstones() const ;
-    auto rows() const {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<tombstone_view>());
-       ser::skip(in, boost::type<row_view>());
-       ser::skip(in, boost::type<std::vector<range_tombstone_view>>());
-       return vector_deserializer<deletable_row_view>(in);
-      });
-    }
+    auto rows() const ;
 };
 template<>
 struct serializer<mutation_partition_view> {
     template<typename Input>
-    static mutation_partition_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return mutation_partition_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static mutation_partition_view read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, mutation_partition_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, mutation_partition_view v) ;
     template<typename Input>
-    static void skip(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        v.skip(read_frame_size(v));
-      });
-    }
+    static void skip(Input& v) ;
 };
 struct canonical_mutation_view {
     utils::input_stream v;
-    auto table_id() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<::table_id>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       return deserialize(in, boost::type<::table_id>());
-      });
-    }
-    auto schema_version() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<table_schema_version>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<::table_id>());
-       return deserialize(in, boost::type<table_schema_version>());
-      });
-    }
-    auto key() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<partition_key>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<::table_id>());
-       ser::skip(in, boost::type<table_schema_version>());
-       return deserialize(in, boost::type<partition_key>());
-      });
-    }
-    auto mapping() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<column_mapping>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<::table_id>());
-       ser::skip(in, boost::type<table_schema_version>());
-       ser::skip(in, boost::type<partition_key>());
-       return deserialize(in, boost::type<column_mapping>());
-      });
-    }
-    auto partition() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<mutation_partition_view>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<::table_id>());
-       ser::skip(in, boost::type<table_schema_version>());
-       ser::skip(in, boost::type<partition_key>());
-       ser::skip(in, boost::type<column_mapping>());
-       return deserialize(in, boost::type<mutation_partition_view>());
-      });
-    }
+    auto table_id() const ;
+    auto schema_version() const ;
+    auto key() const ;
+    auto mapping() const ;
+    auto partition() const ;
 };
 template<>
 struct serializer<canonical_mutation_view> {
     template<typename Input>
-    static canonical_mutation_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return canonical_mutation_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static canonical_mutation_view read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, canonical_mutation_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, canonical_mutation_view v) ;
     template<typename Input>
-    static void skip(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        v.skip(read_frame_size(v));
-      });
-    }
+    static void skip(Input& v) ;
 };
 struct mutation_view {
     utils::input_stream v;
-    auto table_id() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<::table_id>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       return deserialize(in, boost::type<::table_id>());
-      });
-    }
-    auto schema_version() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<table_schema_version>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<::table_id>());
-       return deserialize(in, boost::type<table_schema_version>());
-      });
-    }
-    auto key() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<partition_key>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<::table_id>());
-       ser::skip(in, boost::type<table_schema_version>());
-       return deserialize(in, boost::type<partition_key>());
-      });
-    }
-    auto partition() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<mutation_partition_view>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<::table_id>());
-       ser::skip(in, boost::type<table_schema_version>());
-       ser::skip(in, boost::type<partition_key>());
-       return deserialize(in, boost::type<mutation_partition_view>());
-      });
-    }
+    auto table_id() const ;
+    auto schema_version() const ;
+    auto key() const ;
+    auto partition() const ;
 };
 template<>
 struct serializer<mutation_view> {
     template<typename Input>
-    static mutation_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return mutation_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static mutation_view read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, mutation_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, mutation_view v) ;
     template<typename Input>
-    static void skip(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        v.skip(read_frame_size(v));
-      });
-    }
+    static void skip(Input& v) ;
 };
 template<typename Input>
  void skip(Input& v, boost::type<std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>>) ;
@@ -32832,53 +32388,35 @@ struct expiring_cell__c {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_expiring_cell__c__created_at<Output> write_created_at(const api::timestamp_type& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_expiring_cell__c__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
 };
 template<typename Output>
 struct after_expiring_cell__expiry {
     Output& _out;
     state_of_expiring_cell<Output> _state;
-    expiring_cell__c<Output> start_c() && {
-        return { _out, std::move(_state) };
-    }
+    expiring_cell__c<Output> start_c() && ;
     template<typename Serializer>
-    after_expiring_cell__c<Output> c(Serializer&& f) && {
-        f(writer_of_live_cell<Output>(_out));
-        return { _out, std::move(_state) };
-    }
+    after_expiring_cell__c<Output> c(Serializer&& f) && ;
 };
 template<typename Output>
 struct after_expiring_cell__ttl {
     Output& _out;
     state_of_expiring_cell<Output> _state;
-    after_expiring_cell__expiry<Output> write_expiry(const gc_clock::time_point& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_expiring_cell__expiry<Output> write_expiry(const gc_clock::time_point& t) && ;
 };
 template<typename Output>
 struct writer_of_expiring_cell {
     Output& _out;
     state_of_expiring_cell<Output> _state;
-    writer_of_expiring_cell(Output& out)
-            : _out(out)
-            , _state{start_frame(out)}
-            {}
-    after_expiring_cell__ttl<Output> write_ttl(const gc_clock::duration& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    writer_of_expiring_cell(Output& out) 
+            ;
+    after_expiring_cell__ttl<Output> write_ttl(const gc_clock::duration& t) && ;
 };
 template<typename Output>
 struct after_expiring_marker__expiry {
     Output& _out;
     state_of_expiring_marker<Output> _state;
-    void  end_expiring_marker() {
-        _state.f.end(_out);
-    }
+    void  end_expiring_marker() ;
 };
 template<typename Output>
 struct after_expiring_marker__ttl {
@@ -32983,58 +32521,39 @@ struct after_partition_start__key {
     partition_start__partition_tombstone<Output> start_partition_tombstone() && {
         return { _out, std::move(_state) };
     }
-    after_partition_start__partition_tombstone<Output> write_partition_tombstone(const tombstone& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_partition_start__partition_tombstone<Output> write_partition_tombstone(const tombstone& t) && ;
 };
 template<typename Output>
 struct writer_of_partition_start {
     Output& _out;
     state_of_partition_start<Output> _state;
-    writer_of_partition_start(Output& out)
-            : _out(out)
-            , _state{start_frame(out)}
-            {}
-    after_partition_start__key<Output> write_key(const partition_key& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    writer_of_partition_start(Output& out) 
+            ;
+    after_partition_start__key<Output> write_key(const partition_key& t) && ;
 };
 template<typename Output>
 struct after_range_tombstone__end_kind {
     Output& _out;
     state_of_range_tombstone<Output> _state;
-    void  end_range_tombstone() {
-        _state.f.end(_out);
-    }
+    void  end_range_tombstone() ;
 };
 template<typename Output>
 struct after_range_tombstone__end {
     Output& _out;
     state_of_range_tombstone<Output> _state;
-    after_range_tombstone__end_kind<Output> write_end_kind(const bound_kind& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_range_tombstone__end_kind<Output> write_end_kind(const bound_kind& t) && ;
 };
 template<typename Output>
 struct after_range_tombstone__start_kind {
     Output& _out;
     state_of_range_tombstone<Output> _state;
-    after_range_tombstone__end<Output> write_end(const clustering_key_prefix& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_range_tombstone__end<Output> write_end(const clustering_key_prefix& t) && ;
 };
 template<typename Output>
 struct after_range_tombstone__tomb {
     Output& _out;
     state_of_range_tombstone<Output> _state;
-    after_range_tombstone__start_kind<Output> write_start_kind(const bound_kind& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_range_tombstone__start_kind<Output> write_start_kind(const bound_kind& t) && ;
 };
 template<typename Output>
 struct after_range_tombstone__tomb__deletion_time {
@@ -33290,61 +32809,30 @@ struct after_collection_element__key {
         return { _out, std::move(_state) };
     }
     template<typename Serializer>
-    after_collection_element__value<Output> value_live_cell(Serializer&& f) && {
-        serialize(_out, uint32_t(0));
-        f(writer_of_live_cell<Output>(_out));
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
-    collection_element__value__expiring_cell<Output> start_value_expiring_cell() && {
-        serialize(_out, uint32_t(1));
-        return { _out, std::move(_state) };
-    }
+    after_collection_element__value<Output> value_live_cell(Serializer&& f) && ;
+    collection_element__value__expiring_cell<Output> start_value_expiring_cell() && ;
     template<typename Serializer>
-    after_collection_element__value<Output> value_expiring_cell(Serializer&& f) && {
-        serialize(_out, uint32_t(1));
-        f(writer_of_expiring_cell<Output>(_out));
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
-    collection_element__value__dead_cell<Output> start_value_dead_cell() && {
-        serialize(_out, uint32_t(2));
-        return { _out, std::move(_state) };
-    }
+    after_collection_element__value<Output> value_expiring_cell(Serializer&& f) && ;
+    collection_element__value__dead_cell<Output> start_value_dead_cell() && ;
     template<typename Serializer>
-    after_collection_element__value<Output> value_dead_cell(Serializer&& f) && {
-        serialize(_out, uint32_t(2));
-        f(writer_of_dead_cell<Output>(_out));
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_collection_element__value<Output> value_dead_cell(Serializer&& f) && ;
 };
 template<typename Output>
 struct writer_of_collection_element {
     Output& _out;
     state_of_collection_element<Output> _state;
-    writer_of_collection_element(Output& out)
-            : _out(out)
-            , _state{start_frame(out)}
-            {}
-    after_collection_element__key<Output> write_key(bytes_view t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    writer_of_collection_element(Output& out) 
+            ;
+    after_collection_element__key<Output> write_key(bytes_view t) && ;
     template<typename FragmentedBuffer>
     requires FragmentRange<FragmentedBuffer>
-    after_collection_element__key<Output> write_fragmented_key(FragmentedBuffer&& fragments) && {
-        serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
-        return { _out, std::move(_state) };
-    }
+    after_collection_element__key<Output> write_fragmented_key(FragmentedBuffer&& fragments) && ;
 };
 template<typename Output>
 struct after_collection_cell__elements {
     Output& _out;
     state_of_collection_cell<Output> _state;
-    void  end_collection_cell() {
-        _state.f.end(_out);
-    }
+    void  end_collection_cell() ;
 };
 template<typename Output>
 struct collection_cell__elements {
@@ -33352,26 +32840,12 @@ struct collection_cell__elements {
     state_of_collection_cell<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    collection_cell__elements(Output& out, state_of_collection_cell<Output> state)
-            : _out(out)
-            , _state(state)
-            , _size(start_place_holder(out))
-            {}
-  writer_of_collection_element<Output> add() {
-        _count++;
-        return {_out};
-  }
-  void add(collection_element_view v) {
-        serialize(_out, v);
-        _count++;
-  }
-  after_collection_cell__elements<Output> end_elements() && {
-        _size.set(_out, _count);
-        return { _out, std::move(_state) };
-  }
-  vector_position pos() const {
-        return vector_position{_out.pos(), _count};
-  }
+    collection_cell__elements(Output& out, state_of_collection_cell<Output> state) 
+            ;
+  writer_of_collection_element<Output> add() ;
+  void add(collection_element_view v) ;
+  after_collection_cell__elements<Output> end_elements() && ;
+  vector_position pos() const ;
   void rollback(const vector_position& vp) {
         _out.retract(vp.pos);
         _count = vp.count;
@@ -33424,53 +32898,34 @@ template<typename Output>
 struct writer_of_collection_cell {
     Output& _out;
     state_of_collection_cell<Output> _state;
-    writer_of_collection_cell(Output& out)
-            : _out(out)
-            , _state{start_frame(out)}
-            {}
-    collection_cell__tomb<Output> start_tomb() && {
-        return { _out, std::move(_state) };
-    }
-    after_collection_cell__tomb<Output> write_tomb(const tombstone& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    writer_of_collection_cell(Output& out) 
+            ;
+    collection_cell__tomb<Output> start_tomb() && ;
+    after_collection_cell__tomb<Output> write_tomb(const tombstone& t) && ;
 };
 template<typename Output>
 struct after_column__c {
     Output& _out;
     state_of_column<Output> _state;
-    void  end_column() {
-        _state.f.end(_out);
-    }
+    void  end_column() ;
 };
 template<typename Output>
 struct after_column__c__variant {
     Output& _out;
     state_of_column__c<Output> _state;
-    after_column__c<Output>  end_variant() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_column__c<Output>  end_variant() && ;
 };
 template<typename Output>
 struct after_column__c__variant__live_cell__value {
     Output& _out;
     state_of_column__c__variant__live_cell<Output> _state;
-    after_column__c__variant<Output>  end_live_cell() && {
-        _state.f.end(_out);
-        _state._parent.f.end(_out);
-        return { _out, std::move(_state._parent._parent) };
-    }
+    after_column__c__variant<Output>  end_live_cell() && ;
 };
 template<typename Output>
 struct after_column__c__variant__live_cell__created_at {
     Output& _out;
     state_of_column__c__variant__live_cell<Output> _state;
-    after_column__c__variant__live_cell__value<Output> write_value(bytes_view t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_column__c__variant__live_cell__value<Output> write_value(bytes_view t) && ;
     template<typename FragmentedBuffer>
     requires FragmentRange<FragmentedBuffer>
     after_column__c__variant__live_cell__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && {
@@ -33760,27 +33215,15 @@ struct column__c__variant {
         _state.f.end(_out);
         return { _out, std::move(_state._parent) };
     }
-    column__c__variant__counter_cell<Output> start_variant_counter_cell() && {
-        serialize(_out, uint32_t(3));
-        return { _out, std::move(_state) };
-    }
+    column__c__variant__counter_cell<Output> start_variant_counter_cell() && ;
     template<typename Serializer>
-    after_column__c__variant<Output> variant_counter_cell(Serializer&& f) && {
-        serialize(_out, uint32_t(3));
-        f(writer_of_counter_cell<Output>(_out));
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_column__c__variant<Output> variant_counter_cell(Serializer&& f) && ;
 };
 template<typename Output>
 struct after_column__c__collection_cell__elements {
     Output& _out;
     state_of_column__c__collection_cell<Output> _state;
-    after_column__c<Output>  end_collection_cell() && {
-        _state.f.end(_out);
-        _state._parent.f.end(_out);
-        return { _out, std::move(_state._parent._parent) };
-    }
+    after_column__c<Output>  end_collection_cell() && ;
 };
 template<typename Output>
 struct column__c__collection_cell__elements {
@@ -33788,23 +33231,11 @@ struct column__c__collection_cell__elements {
     state_of_column__c__collection_cell<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    column__c__collection_cell__elements(Output& out, state_of_column__c__collection_cell<Output> state)
-            : _out(out)
-            , _state(state)
-            , _size(start_place_holder(out))
-            {}
-  writer_of_collection_element<Output> add() {
-        _count++;
-        return {_out};
-  }
-  void add(collection_element_view v) {
-        serialize(_out, v);
-        _count++;
-  }
-  after_column__c__collection_cell__elements<Output> end_elements() && {
-        _size.set(_out, _count);
-        return { _out, std::move(_state) };
-  }
+    column__c__collection_cell__elements(Output& out, state_of_column__c__collection_cell<Output> state) 
+            ;
+  writer_of_collection_element<Output> add() ;
+  void add(collection_element_view v) ;
+  after_column__c__collection_cell__elements<Output> end_elements() && ;
   vector_position pos() const {
         return vector_position{_out.pos(), _count};
   }
@@ -33889,33 +33320,21 @@ struct after_column__id {
         return { _out, std::move(_state) };
     }
     template<typename Serializer>
-    after_column__c<Output> c_collection_cell(Serializer&& f) && {
-        serialize(_out, uint32_t(1));
-        f(writer_of_collection_cell<Output>(_out));
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_column__c<Output> c_collection_cell(Serializer&& f) && ;
 };
 template<typename Output>
 struct writer_of_column {
     Output& _out;
     state_of_column<Output> _state;
-    writer_of_column(Output& out)
-            : _out(out)
-            , _state{start_frame(out)}
-            {}
-    after_column__id<Output> write_id(const uint32_t& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    writer_of_column(Output& out) 
+            ;
+    after_column__id<Output> write_id(const uint32_t& t) && ;
 };
 template<typename Output>
 struct after_row__columns {
     Output& _out;
     state_of_row<Output> _state;
-    void  end_row() {
-        _state.f.end(_out);
-    }
+    void  end_row() ;
 };
 template<typename Output>
 struct row__columns {
@@ -33923,54 +33342,28 @@ struct row__columns {
     state_of_row<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    row__columns(Output& out, state_of_row<Output> state)
-            : _out(out)
-            , _state(state)
-            , _size(start_place_holder(out))
-            {}
-  writer_of_column<Output> add() {
-        _count++;
-        return {_out};
-  }
-  void add(column_view v) {
-        serialize(_out, v);
-        _count++;
-  }
-  after_row__columns<Output> end_columns() && {
-        _size.set(_out, _count);
-        return { _out, std::move(_state) };
-  }
-  vector_position pos() const {
-        return vector_position{_out.pos(), _count};
-  }
-  void rollback(const vector_position& vp) {
-        _out.retract(vp.pos);
-        _count = vp.count;
-  }
+    row__columns(Output& out, state_of_row<Output> state) 
+            ;
+  writer_of_column<Output> add() ;
+  void add(column_view v) ;
+  after_row__columns<Output> end_columns() && ;
+  vector_position pos() const ;
+  void rollback(const vector_position& vp) ;
 };
 template<typename Output>
 struct writer_of_row {
     Output& _out;
     state_of_row<Output> _state;
-    writer_of_row(Output& out)
-            : _out(out)
-            , _state{start_frame(out)}
-            {}
-    row__columns<Output> start_columns() && {
-        return { _out, std::move(_state) };
-    }
-    after_row__columns<Output> skip_columns() && {
-        serialize(_out, size_type(0));
-        return { _out, std::move(_state) };
-    }
+    writer_of_row(Output& out) 
+            ;
+    row__columns<Output> start_columns() && ;
+    after_row__columns<Output> skip_columns() && ;
 };
 template<typename Output>
 struct after_deletable_row__shadowable_deleted_at {
     Output& _out;
     state_of_deletable_row<Output> _state;
-    void  end_deletable_row() {
-        _state.f.end(_out);
-    }
+    void  end_deletable_row() ;
 };
 template<typename Output>
 struct after_deletable_row__shadowable_deleted_at__deletion_time {
@@ -34441,22 +33834,14 @@ template<typename Output>
 struct after_clustering_row__row__cells {
     Output& _out;
     state_of_clustering_row__row<Output> _state;
-    clustering_row__row__shadowable_deleted_at<Output> start_shadowable_deleted_at() && {
-        return { _out, std::move(_state) };
-    }
-    after_clustering_row__row__shadowable_deleted_at<Output> write_shadowable_deleted_at(const tombstone& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    clustering_row__row__shadowable_deleted_at<Output> start_shadowable_deleted_at() && ;
+    after_clustering_row__row__shadowable_deleted_at<Output> write_shadowable_deleted_at(const tombstone& t) && ;
 };
 template<typename Output>
 struct after_clustering_row__row__cells__columns {
     Output& _out;
     state_of_clustering_row__row__cells<Output> _state;
-    after_clustering_row__row__cells<Output>  end_cells() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_clustering_row__row__cells<Output>  end_cells() && ;
 };
 template<typename Output>
 struct clustering_row__row__cells__columns {
@@ -34464,23 +33849,11 @@ struct clustering_row__row__cells__columns {
     state_of_clustering_row__row__cells<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    clustering_row__row__cells__columns(Output& out, state_of_clustering_row__row__cells<Output> state)
-            : _out(out)
-            , _state(state)
-            , _size(start_place_holder(out))
-            {}
-  writer_of_column<Output> add() {
-        _count++;
-        return {_out};
-  }
-  void add(column_view v) {
-        serialize(_out, v);
-        _count++;
-  }
-  after_clustering_row__row__cells__columns<Output> end_columns() && {
-        _size.set(_out, _count);
-        return { _out, std::move(_state) };
-  }
+    clustering_row__row__cells__columns(Output& out, state_of_clustering_row__row__cells<Output> state) 
+            ;
+  writer_of_column<Output> add() ;
+  void add(column_view v) ;
+  after_clustering_row__row__cells__columns<Output> end_columns() && ;
   vector_position pos() const {
         return vector_position{_out.pos(), _count};
   }
@@ -34844,31 +34217,20 @@ struct mutation_partition__range_tombstones {
   void add(range_tombstone_view v) ;
   after_mutation_partition__range_tombstones<Output> end_range_tombstones() && ;
   vector_position pos() const ;
-  void rollback(const vector_position& vp) {
-        _out.retract(vp.pos);
-        _count = vp.count;
-  }
+  void rollback(const vector_position& vp) ;
 };
 template<typename Output>
 struct after_mutation_partition__static_row {
     Output& _out;
     state_of_mutation_partition<Output> _state;
-    mutation_partition__range_tombstones<Output> start_range_tombstones() && {
-        return { _out, std::move(_state) };
-    }
-    after_mutation_partition__range_tombstones<Output> skip_range_tombstones() && {
-        serialize(_out, size_type(0));
-        return { _out, std::move(_state) };
-    }
+    mutation_partition__range_tombstones<Output> start_range_tombstones() && ;
+    after_mutation_partition__range_tombstones<Output> skip_range_tombstones() && ;
 };
 template<typename Output>
 struct after_mutation_partition__static_row__columns {
     Output& _out;
     state_of_mutation_partition__static_row<Output> _state;
-    after_mutation_partition__static_row<Output>  end_static_row() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_mutation_partition__static_row<Output>  end_static_row() && ;
 };
 template<typename Output>
 struct mutation_partition__static_row__columns {
@@ -34876,19 +34238,10 @@ struct mutation_partition__static_row__columns {
     state_of_mutation_partition__static_row<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    mutation_partition__static_row__columns(Output& out, state_of_mutation_partition__static_row<Output> state)
-            : _out(out)
-            , _state(state)
-            , _size(start_place_holder(out))
-            {}
-  writer_of_column<Output> add() {
-        _count++;
-        return {_out};
-  }
-  void add(column_view v) {
-        serialize(_out, v);
-        _count++;
-  }
+    mutation_partition__static_row__columns(Output& out, state_of_mutation_partition__static_row<Output> state) 
+            ;
+  writer_of_column<Output> add() ;
+  void add(column_view v) ;
   after_mutation_partition__static_row__columns<Output> end_columns() && {
         _size.set(_out, _count);
         return { _out, std::move(_state) };
@@ -34972,27 +34325,19 @@ struct writer_of_mutation_partition {
     mutation_partition__tomb<Output> start_tomb() && {
         return { _out, std::move(_state) };
     }
-    after_mutation_partition__tomb<Output> write_tomb(const tombstone& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_partition__tomb<Output> write_tomb(const tombstone& t) && ;
 };
 template<typename Output>
 struct after_canonical_mutation__partition {
     Output& _out;
     state_of_canonical_mutation<Output> _state;
-    void  end_canonical_mutation() {
-        _state.f.end(_out);
-    }
+    void  end_canonical_mutation() ;
 };
 template<typename Output>
 struct after_canonical_mutation__partition__rows {
     Output& _out;
     state_of_canonical_mutation__partition<Output> _state;
-    after_canonical_mutation__partition<Output>  end_partition() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_canonical_mutation__partition<Output>  end_partition() && ;
 };
 template<typename Output>
 struct canonical_mutation__partition__rows {
@@ -35000,23 +34345,11 @@ struct canonical_mutation__partition__rows {
     state_of_canonical_mutation__partition<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    canonical_mutation__partition__rows(Output& out, state_of_canonical_mutation__partition<Output> state)
-            : _out(out)
-            , _state(state)
-            , _size(start_place_holder(out))
-            {}
-  writer_of_deletable_row<Output> add() {
-        _count++;
-        return {_out};
-  }
-  void add(deletable_row_view v) {
-        serialize(_out, v);
-        _count++;
-  }
-  after_canonical_mutation__partition__rows<Output> end_rows() && {
-        _size.set(_out, _count);
-        return { _out, std::move(_state) };
-  }
+    canonical_mutation__partition__rows(Output& out, state_of_canonical_mutation__partition<Output> state) 
+            ;
+  writer_of_deletable_row<Output> add() ;
+  void add(deletable_row_view v) ;
+  after_canonical_mutation__partition__rows<Output> end_rows() && ;
   vector_position pos() const ;
   void rollback(const vector_position& vp) ;
 };
@@ -35193,40 +34526,27 @@ template<typename Output>
 struct after_canonical_mutation__table_id {
     Output& _out;
     state_of_canonical_mutation<Output> _state;
-    after_canonical_mutation__schema_version<Output> write_schema_version(const table_schema_version& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_canonical_mutation__schema_version<Output> write_schema_version(const table_schema_version& t) && ;
 };
 template<typename Output>
 struct writer_of_canonical_mutation {
     Output& _out;
     state_of_canonical_mutation<Output> _state;
-    writer_of_canonical_mutation(Output& out)
-            : _out(out)
-            , _state{start_frame(out)}
-            {}
-    after_canonical_mutation__table_id<Output> write_table_id(const ::table_id& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    writer_of_canonical_mutation(Output& out) 
+            ;
+    after_canonical_mutation__table_id<Output> write_table_id(const ::table_id& t) && ;
 };
 template<typename Output>
 struct after_mutation__partition {
     Output& _out;
     state_of_mutation<Output> _state;
-    void  end_mutation() {
-        _state.f.end(_out);
-    }
+    void  end_mutation() ;
 };
 template<typename Output>
 struct after_mutation__partition__rows {
     Output& _out;
     state_of_mutation__partition<Output> _state;
-    after_mutation__partition<Output>  end_partition() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_mutation__partition<Output>  end_partition() && ;
 };
 template<typename Output>
 struct mutation__partition__rows {
@@ -35234,15 +34554,9 @@ struct mutation__partition__rows {
     state_of_mutation__partition<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    mutation__partition__rows(Output& out, state_of_mutation__partition<Output> state)
-            : _out(out)
-            , _state(state)
-            , _size(start_place_holder(out))
-            {}
-  writer_of_deletable_row<Output> add() {
-        _count++;
-        return {_out};
-  }
+    mutation__partition__rows(Output& out, state_of_mutation__partition<Output> state) 
+            ;
+  writer_of_deletable_row<Output> add() ;
   void add(deletable_row_view v) ;
   after_mutation__partition__rows<Output> end_rows() && ;
   vector_position pos() const ;
@@ -35280,10 +34594,7 @@ template<typename Output>
 struct after_mutation__partition__static_row__columns {
     Output& _out;
     state_of_mutation__partition__static_row<Output> _state;
-    after_mutation__partition__static_row<Output>  end_static_row() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_mutation__partition__static_row<Output>  end_static_row() && ;
 };
 template<typename Output>
 struct mutation__partition__static_row__columns {
@@ -35291,30 +34602,13 @@ struct mutation__partition__static_row__columns {
     state_of_mutation__partition__static_row<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    mutation__partition__static_row__columns(Output& out, state_of_mutation__partition__static_row<Output> state)
-            : _out(out)
-            , _state(state)
-            , _size(start_place_holder(out))
-            {}
-  writer_of_column<Output> add() {
-        _count++;
-        return {_out};
-  }
-  void add(column_view v) {
-        serialize(_out, v);
-        _count++;
-  }
-  after_mutation__partition__static_row__columns<Output> end_columns() && {
-        _size.set(_out, _count);
-        return { _out, std::move(_state) };
-  }
-  vector_position pos() const {
-        return vector_position{_out.pos(), _count};
-  }
-  void rollback(const vector_position& vp) {
-        _out.retract(vp.pos);
-        _count = vp.count;
-  }
+    mutation__partition__static_row__columns(Output& out, state_of_mutation__partition__static_row<Output> state) 
+            ;
+  writer_of_column<Output> add() ;
+  void add(column_view v) ;
+  after_mutation__partition__static_row__columns<Output> end_columns() && ;
+  vector_position pos() const ;
+  void rollback(const vector_position& vp) ;
 };
 template<typename Output>
 struct mutation__partition__static_row {
@@ -35409,59 +34703,39 @@ template<typename Output>
 struct after_mutation__schema_version {
     Output& _out;
     state_of_mutation<Output> _state;
-    after_mutation__key<Output> write_key(const partition_key& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation__key<Output> write_key(const partition_key& t) && ;
 };
 template<typename Output>
 struct after_mutation__table_id {
     Output& _out;
     state_of_mutation<Output> _state;
-    after_mutation__schema_version<Output> write_schema_version(const table_schema_version& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation__schema_version<Output> write_schema_version(const table_schema_version& t) && ;
 };
 template<typename Output>
 struct writer_of_mutation {
     Output& _out;
     state_of_mutation<Output> _state;
-    writer_of_mutation(Output& out)
-            : _out(out)
-            , _state{start_frame(out)}
-            {}
-    after_mutation__table_id<Output> write_table_id(const ::table_id& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    writer_of_mutation(Output& out) 
+            ;
+    after_mutation__table_id<Output> write_table_id(const ::table_id& t) && ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment {
     Output& _out;
     state_of_mutation_fragment<Output> _state;
-    void  end_mutation_fragment() {
-        _state.f.end(_out);
-    }
+    void  end_mutation_fragment() ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row<Output> _state;
-    after_mutation_fragment__fragment<Output>  end_clustering_row() && {
-        _state.f.end(_out);
-        _state._parent.f.end(_out);
-        return { _out, std::move(_state._parent._parent) };
-    }
+    after_mutation_fragment__fragment<Output>  end_clustering_row() && ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row<Output>  end_row() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_mutation_fragment__fragment__clustering_row__row<Output>  end_row() && ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__deletion_time {
@@ -36571,18 +35845,13 @@ public:
     {}
     bool is_static_row() const { return !_key.has_value(); }
     bool is_clustering_row() const { return _key.has_value(); }
-    const std::optional<clustering_key_prefix>& key() const { return _key; }
-    row_tombstone tomb() const { return _row.deleted_at(); }
-    const row_marker& marker() const { return _row.marker(); }
-    const row& cells() const { return _row.cells(); }
-    bool empty() const { return _row.empty(); }
-    bool is_live(const schema& s, tombstone base_tombstone = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const {
-        return _row.is_live(s, column_kind(), base_tombstone, now);
-    }
-    ::column_kind column_kind() const {
-        return _key.has_value()
-                ? column_kind::regular_column : column_kind::static_column;
-    }
+    const std::optional<clustering_key_prefix>& key() const ;
+    row_tombstone tomb() const ;
+    const row_marker& marker() const ;
+    const row& cells() const ;
+    bool empty() const ;
+    bool is_live(const schema& s, tombstone base_tombstone = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const ;
+    ::column_kind column_kind() const ;
     clustering_row as_clustering_row(const schema& s) const;
     static_row as_static_row(const schema& s) const;
 };
