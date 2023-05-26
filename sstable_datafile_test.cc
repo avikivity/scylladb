@@ -6496,20 +6496,10 @@ public:
     sstring name_as_cql_string() const;
     friend std::ostream& operator<<(std::ostream& os, const column_definition& cd);
     bool has_component_index() const ;
-    uint32_t component_index() const {
-        assert(has_component_index());
-        return id;
-    }
-    uint32_t position() const {
-        if (has_component_index()) {
-            return component_index();
-        }
-        return 0;
-    }
+    uint32_t component_index() const ;
+    uint32_t position() const ;
     bool is_on_all_components() const;
-    bool is_part_of_cell_name() const {
-        return is_regular() || is_static();
-    }
+    bool is_part_of_cell_name() const ;
     api::timestamp_type dropped_at() const { return _dropped_at; }
     friend bool operator==(const column_definition&, const column_definition&);
 };
@@ -6542,9 +6532,9 @@ public:
     column_mapping_entry(column_mapping_entry&&) = default;
     column_mapping_entry& operator=(column_mapping_entry&&) = default;
     const bytes& name() const { return _name; }
-    const data_type& type() const { return _type; }
-    const sstring& type_name() const { return _type->name(); }
-    bool is_atomic() const { return _is_atomic; }
+    const data_type& type() const ;
+    const sstring& type_name() const ;
+    bool is_atomic() const ;
 };
 bool operator==(const column_mapping_entry& lhs, const column_mapping_entry& rhs);
 // Encapsulates information needed for converting mutations between different schema versions.
@@ -6565,24 +6555,10 @@ public:
             , _n_static(n_static)
     { }
     const std::vector<column_mapping_entry>& columns() const { return _columns; }
-    column_count_type n_static() const { return _n_static; }
-    const column_mapping_entry& column_at(column_kind kind, column_id id) const {
-        assert(kind == column_kind::regular_column || kind == column_kind::static_column);
-        return kind == column_kind::regular_column ? regular_column_at(id) : static_column_at(id);
-    }
-    const column_mapping_entry& static_column_at(column_id id) const {
-        if (id >= _n_static) {
-            throw std::out_of_range(format("static column id {:d} >= {:d}", id, _n_static));
-        }
-        return _columns[id];
-    }
-    const column_mapping_entry& regular_column_at(column_id id) const {
-        auto n_regular = _columns.size() - _n_static;
-        if (id >= n_regular) {
-            throw std::out_of_range(format("regular column id {:d} >= {:d}", id, n_regular));
-        }
-        return _columns[id + _n_static];
-    }
+    column_count_type n_static() const ;
+    const column_mapping_entry& column_at(column_kind kind, column_id id) const ;
+    const column_mapping_entry& static_column_at(column_id id) const ;
+    const column_mapping_entry& regular_column_at(column_id id) const ;
     friend std::ostream& operator<<(std::ostream& out, const column_mapping& cm);
 };
 bool operator==(const column_mapping& lhs, const column_mapping& rhs);
@@ -6593,12 +6569,8 @@ class raw_view_info final {
     sstring _where_clause;
 public:
     raw_view_info(table_id base_id, sstring base_name, bool include_all_columns, sstring where_clause);
-    const table_id& base_id() const {
-        return _base_id;
-    }
-    const sstring& base_name() const {
-        return _base_name;
-    }
+    const table_id& base_id() const ;
+    const sstring& base_name() const ;
     bool include_all_columns() const {
         return _include_all_columns;
     }
@@ -6745,9 +6717,7 @@ private:
     column_count_type _clustering_key_size;
     column_count_type _regular_column_count;
     column_count_type _static_column_count;
-    extensions_map& extensions() {
-        return _raw._extensions;
-    }
+    extensions_map& extensions() ;
     friend class db::extensions;
     friend class schema_builder;
 public:
@@ -6774,22 +6744,12 @@ public:
     // See \ref make_reversed().
     schema(reversed_tag, const schema&);
     ~schema();
-    const schema_static_props& static_props() const {
-        return _static_props;
-    }
-    table_schema_version version() const {
-        return _raw._version;
-    }
-    double bloom_filter_fp_chance() const {
-        return _raw._bloom_filter_fp_chance;
-    }
+    const schema_static_props& static_props() const ;
+    table_schema_version version() const ;
+    double bloom_filter_fp_chance() const ;
     sstring thrift_key_validator() const;
-    const compression_parameters& get_compressor_params() const {
-        return _raw._compressor_params;
-    }
-    const extensions_map& extensions() const {
-        return _raw._extensions;
-    }
+    const compression_parameters& get_compressor_params() const ;
+    const extensions_map& extensions() const ;
     bool is_dense() const {
         return _raw._is_dense;
     }
@@ -6808,15 +6768,9 @@ public:
     thrift_schema& thrift() {
         return _thrift;
     }
-    const thrift_schema& thrift() const {
-        return _thrift;
-    }
-    const table_id& id() const {
-        return _raw._id;
-    }
-    const sstring& comment() const {
-        return _raw._comment;
-    }
+    const thrift_schema& thrift() const ;
+    const table_id& id() const ;
+    const sstring& comment() const ;
     bool is_counter() const {
         return _raw._is_counter;
     }
@@ -6931,15 +6885,9 @@ public:
     const data_type& static_column_name_type() const {
         return utf8_type;
     }
-    const std::unique_ptr<::view_info>& view_info() const {
-        return _view_info;
-    }
-    bool is_view() const {
-        return bool(_view_info);
-    }
-    const query::partition_slice& full_slice() const {
-        return *_full_slice;
-    }
+    const std::unique_ptr<::view_info>& view_info() const ;
+    bool is_view() const ;
+    const query::partition_slice& full_slice() const ;
     // Returns all index names of this schema.
     std::vector<sstring> index_names() const;
     // Returns all indices of this schema.
@@ -7009,7 +6957,7 @@ public:
         }
     }
     const schema& operator*() const noexcept { return *_schema; }
-    const schema* operator->() const noexcept { return _schema.operator->(); }
+    const schema* operator->() const noexcept ;
     const schema* get() const noexcept ;
     operator schema_ptr() const noexcept {
         return _schema;
@@ -7054,31 +7002,21 @@ void set_size(Stream& os, const T& obj) ;
 template<typename Output>
 void safe_serialize_as_uint32(Output& out, uint64_t data) ;
 template<typename T>
-constexpr bool can_serialize_fast() {
-    return !std::is_same<T, bool>::value && std::is_integral<T>::value && (sizeof(T) == 1 || __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
-}
+constexpr bool can_serialize_fast() ;
 template<bool Fast, typename T>
 struct serialize_array_helper;
 template<typename T>
 struct serialize_array_helper<true, T> {
     template<typename Container, typename Output>
-    static void doit(Output& out, const Container& v) {
-        out.write(reinterpret_cast<const char*>(v.data()), v.size() * sizeof(T));
-    }
+    static void doit(Output& out, const Container& v) ;
 };
 template<typename T>
 struct serialize_array_helper<false, T> {
     template<typename Container, typename Output>
-    static void doit(Output& out, const Container& v) {
-        for (auto&& e : v) {
-            serialize(out, e);
-        }
-    }
+    static void doit(Output& out, const Container& v) ;
 };
 template<typename T, typename Container, typename Output>
-static inline void serialize_array(Output& out, const Container& v) {
-    serialize_array_helper<can_serialize_fast<T>(), T>::doit(out, v);
-}
+static void serialize_array(Output& out, const Container& v) ;
 template<typename Container>
 struct container_traits;
 template<typename T>
@@ -7144,14 +7082,10 @@ template<typename T>
 struct container_traits<utils::chunked_vector<T>> {
     struct back_emplacer {
         utils::chunked_vector<T>& c;
-        back_emplacer(utils::chunked_vector<T>& c_) : c(c_) {}
-        void operator()(T&& v) {
-            c.emplace_back(std::move(v));
-        }
+        back_emplacer(utils::chunked_vector<T>& c_)  ;
+        void operator()(T&& v) ;
     };
-    void resize(utils::chunked_vector<T>& c, size_t size) {
-        c.resize(size);
-    }
+    void resize(utils::chunked_vector<T>& c, size_t size) ;
 };
 template<typename T, size_t N>
 struct container_traits<std::array<T, N>> {
@@ -7170,52 +7104,27 @@ struct deserialize_array_helper;
 template<typename T>
 struct deserialize_array_helper<true, T> {
     template<typename Input, typename Container>
-    static void doit(Input& in, Container& v, size_t sz) {
-        container_traits<Container> t;
-        t.resize(v, sz);
-        in.read(reinterpret_cast<char*>(v.data()), v.size() * sizeof(T));
-    }
+    static void doit(Input& in, Container& v, size_t sz) ;
     template<typename Input>
-    static void skip(Input& in, size_t sz) {
-        in.skip(sz * sizeof(T));
-    }
+    static void skip(Input& in, size_t sz) ;
 };
 template<typename T>
 struct deserialize_array_helper<false, T> {
     template<typename Input, typename Container>
-    static void doit(Input& in, Container& v, size_t sz) {
-        typename container_traits<Container>::back_emplacer be(v);
-        while (sz--) {
-            be(deserialize(in, boost::type<T>()));
-        }
-    }
+    static void doit(Input& in, Container& v, size_t sz) ;
     template<typename Input>
-    static void skip(Input& in, size_t sz) {
-        while (sz--) {
-            serializer<T>::skip(in);
-        }
-    }
+    static void skip(Input& in, size_t sz) ;
 };
 template<typename T, typename Input, typename Container>
-static inline void deserialize_array(Input& in, Container& v, size_t sz) {
-    deserialize_array_helper<can_serialize_fast<T>(), T>::doit(in, v, sz);
-}
+static void deserialize_array(Input& in, Container& v, size_t sz) ;
 template<typename T, typename Input>
-static inline void skip_array(Input& in, size_t sz) {
-    deserialize_array_helper<can_serialize_fast<T>(), T>::skip(in, sz);
-}
+static void skip_array(Input& in, size_t sz) ;
 namespace idl::serializers::internal {
 template<typename Vector>
 struct vector_serializer {
     using value_type = typename Vector::value_type;
     template<typename Input>
-    static Vector read(Input& in) {
-        auto sz = deserialize(in, boost::type<uint32_t>());
-        Vector v;
-        v.reserve(sz);
-        deserialize_array<value_type>(in, v, sz);
-        return v;
-    }
+    static Vector read(Input& in) ;
     template<typename Output>
     static void write(Output& out, const Vector& v) {
         safe_serialize_as_uint32(out, v.size());
@@ -7522,17 +7431,11 @@ struct serializer<bytes> {
     }
 };
 template<typename Output>
-void serialize(Output& out, const bytes_view& v) {
-    serializer<bytes>::write(out, v);
-}
+void serialize(Output& out, const bytes_view& v) ;
 template<typename Output>
-void serialize(Output& out, const managed_bytes& v) {
-    serializer<bytes>::write(out, v);
-}
+void serialize(Output& out, const managed_bytes& v) ;
 template<typename Output>
-void serialize(Output& out, const bytes_ostream& v) {
-    serializer<bytes>::write(out, v);
-}
+void serialize(Output& out, const bytes_ostream& v) ;
 template<typename Input>
 bytes_ostream deserialize(Input& in, boost::type<bytes_ostream>) {
     return serializer<bytes>::read(in);
@@ -7788,12 +7691,8 @@ public:
     bytes serialize() const override {
         return ser::serialize_to_buffer<bytes>(_cdc_options.to_map());
     }
-    static std::map<sstring, sstring> deserialize(const bytes_view& buffer) {
-        return ser::deserialize_from_buffer(buffer, boost::type<std::map<sstring, sstring>>());
-    }
-    const options& get_options() const {
-        return _cdc_options;
-    }
+    static std::map<sstring, sstring> deserialize(const bytes_view& buffer) ;
+    const options& get_options() const ;
 };
 }
 namespace db {
@@ -7803,9 +7702,7 @@ class function_name final {
 public:
     sstring keyspace;
     sstring name;
-    static function_name native_function(sstring name) {
-        return function_name(db::system_keyspace_name(), name);
-    }
+    static function_name native_function(sstring name) ;
     function_name() = default; // for ANTLR
     function_name(sstring keyspace, sstring name)
             : keyspace(std::move(keyspace)), name(std::move(name)) {
@@ -7816,9 +7713,7 @@ public:
     bool has_keyspace() const {
         return !keyspace.empty();
     }
-    bool operator==(const function_name& x) const {
-        return keyspace == x.keyspace && name == x.name;
-    }
+    bool operator==(const function_name& x) const ;
 };
 }
 }
@@ -7847,7 +7742,7 @@ class function_name;
 class function {
 public:
     using opt_bytes = std::optional<bytes>;
-    virtual ~function() {}
+    virtual ~function() ;
     virtual const function_name& name() const = 0;
     virtual const std::vector<data_type>& arg_types() const = 0;
     virtual const data_type& return_type() const = 0;
@@ -7860,12 +7755,9 @@ public:
     friend class function_call;
     friend std::ostream& operator<<(std::ostream& os, const function& f);
 };
-inline
+
 std::ostream&
-operator<<(std::ostream& os, const function& f) {
-    f.print(os);
-    return os;
-}
+operator<<(std::ostream& os, const function& f) ;
 }
 }
 namespace db::functions {
@@ -8069,14 +7961,8 @@ public:
             }
             return *this;
         }
-        iterator operator++(int) {
-            iterator i(*this);
-            ++(*this);
-            return i;
-        }
-        bool operator==(const iterator& other) const {
-            return _offset == other._offset && other._i == _i;
-        }
+        iterator operator++(int) ;
+        bool operator==(const iterator& other) const ;
     };
     // A trichotomic comparator defined on @CompoundType representations which
     // orders them according to lexicographical ordering of their corresponding
@@ -8092,9 +7978,8 @@ public:
     //
     struct tri_comparator {
         const CompoundType& _type;
-        tri_comparator(const CompoundType& type)
-            : _type(type)
-        { }
+        tri_comparator(const CompoundType& type) 
+        ;
         // @k1 and @k2 must be serialized using @type, which was passed to the constructor.
         std::strong_ordering operator()(managed_bytes_view k1, managed_bytes_view k2) const {
             if (_type.is_singular()) {
@@ -8400,23 +8285,8 @@ public:
     bool empty() const {
         return _bytes.empty();
     }
-    bool is_static() const {
-        return composite::is_static(_bytes, _is_compound);
-    }
-    bool is_valid() const {
-        try {
-            auto it = composite::iterator(_bytes, _is_compound, is_static(), false);
-            const auto end = composite::iterator(composite::iterator::end_iterator_tag());
-            size_t s = 0;
-            for (; it != end; ++it) {
-                auto& c = *it;
-                s += c.first.size() + sizeof(composite::size_type) + sizeof(composite::eoc_type);
-            }
-            return s == _bytes.size();
-        } catch (marshal_exception&) {
-            return false;
-        }
-    }
+    bool is_static() const ;
+    bool is_valid() const ;
     explicit operator bytes_view() const {
         return _bytes;
     }
@@ -8431,10 +8301,7 @@ struct fmt::formatter<composite_view> : fmt::formatter<std::string_view> {
                               fmt::join(v.components(), ", "), v._is_compound, v.is_static());
     }
 };
-inline
-composite::composite(const composite_view& v)
-    : composite(bytes(v._bytes), v._is_compound)
-{ }
+
 template <>
 struct fmt::formatter<composite> : fmt::formatter<std::string_view> {
     template <typename FormatContext>
@@ -8484,22 +8351,12 @@ struct partial_validation_results {
 partial_validation_results validate_partial(const uint8_t* data, size_t len);
 }
 bool validate(const uint8_t *data, size_t len);
-inline bool validate(bytes_view string) {
-    const uint8_t *data = reinterpret_cast<const uint8_t*>(string.data());
-    size_t len = string.size();
-    return validate(data, len);
-}
+ bool validate(bytes_view string) ;
 // If data represents a correct UTF-8 string, return std::nullopt,
 // otherwise return a position of first error byte.
 std::optional<size_t> validate_with_error_position(const uint8_t *data, size_t len);
-inline std::optional<size_t> validate_with_error_position(bytes_view string) {
-    const uint8_t *data = reinterpret_cast<const uint8_t*>(string.data());
-    size_t len = string.size();
-    return validate_with_error_position(data, len);	
-}
-inline std::optional<size_t> validate_with_error_position_fragmented(single_fragmented_view fv) {
-    return validate_with_error_position(fv.current_fragment());
-}
+ std::optional<size_t> validate_with_error_position(bytes_view string) ;
+ std::optional<size_t> validate_with_error_position_fragmented(single_fragmented_view fv) ;
 std::optional<size_t> validate_with_error_position_fragmented(FragmentedView auto fv) {
     uint8_t partial_codepoint[4];
     size_t partial_filled = 0;
@@ -8625,29 +8482,19 @@ public:
     struct hashing {
         typename TopLevelView::compound _t;
         hashing(const schema& s) : _t(get_compound_type(s)) {}
-        size_t operator()(const TopLevelView& o) const {
-            return _t->hash(o.representation());
-        }
+        size_t operator()(const TopLevelView& o) const ;
     };
     struct equality {
         typename TopLevelView::compound _t;
-        equality(const schema& s) : _t(get_compound_type(s)) {}
-        bool operator()(const TopLevelView& o1, const TopLevelView& o2) const {
-            return _t->equal(o1.representation(), o2.representation());
-        }
+        equality(const schema& s)  ;
+        bool operator()(const TopLevelView& o1, const TopLevelView& o2) const ;
     };
-    bool equal(const schema& s, const TopLevelView& other) const {
-        return get_compound_type(s)->equal(representation(), other.representation());
-    }
+    bool equal(const schema& s, const TopLevelView& other) const ;
     // begin() and end() return iterators over components of this compound. The iterator yields a managed_bytes_view to the component.
     // The iterators satisfy InputIterator concept.
-    auto begin() const {
-        return TopLevelView::compound::element_type::begin(representation());
-    }
+    auto begin() const ;
     // See begin()
-    auto end() const {
-        return TopLevelView::compound::element_type::end(representation());
-    }
+    auto end() const ;
     // begin() and end() return iterators over components of this compound. The iterator yields a managed_bytes_view to the component.
     // The iterators satisfy InputIterator concept.
     auto begin(const schema& s) const {
@@ -8722,27 +8569,14 @@ public:
         return from_exploded(v);
     }
     // We don't allow optional values, but provide this method as an efficient adaptor
-    static TopLevel from_optional_exploded(const schema& s, std::span<const bytes_opt> v) {
-        return TopLevel::from_bytes(get_compound_type(s)->serialize_optionals(v));
-    }
-    static TopLevel from_optional_exploded(const schema& s, std::span<const managed_bytes_opt> v) {
-        return TopLevel::from_bytes(get_compound_type(s)->serialize_optionals(v));
-    }
-    static TopLevel from_deeply_exploded(const schema& s, const std::vector<data_value>& v) {
-        return TopLevel::from_bytes(get_compound_type(s)->serialize_value_deep(v));
-    }
-    static TopLevel from_single_value(const schema& s, const bytes& v) {
-        return TopLevel::from_bytes(get_compound_type(s)->serialize_single(v));
-    }
-    static TopLevel from_single_value(const schema& s, const managed_bytes& v) {
-        return TopLevel::from_bytes(get_compound_type(s)->serialize_single(v));
-    }
+    static TopLevel from_optional_exploded(const schema& s, std::span<const bytes_opt> v) ;
+    static TopLevel from_optional_exploded(const schema& s, std::span<const managed_bytes_opt> v) ;
+    static TopLevel from_deeply_exploded(const schema& s, const std::vector<data_value>& v) ;
+    static TopLevel from_single_value(const schema& s, const bytes& v) ;
+    static TopLevel from_single_value(const schema& s, const managed_bytes& v) ;
     template <typename T>
     static
-    TopLevel from_singular(const schema& s, const T& v) {
-        const auto& type = get_singular_type(s);
-        return from_single_value(s, type->decompose(v));
-    }
+    TopLevel from_singular(const schema& s, const T& v) ;
     static TopLevel from_singular_bytes(const schema& s, const bytes& b) {
         get_singular_type(s); // validation
         return from_single_value(s, b);
@@ -8773,13 +8607,9 @@ public:
     }
     struct tri_compare {
         typename TopLevel::compound _t;
-        tri_compare(const schema& s) : _t(get_compound_type(s)) {}
-        std::strong_ordering operator()(const TopLevel& k1, const TopLevel& k2) const {
-            return _t->compare(k1.representation(), k2.representation());
-        }
-        std::strong_ordering operator()(const TopLevelView& k1, const TopLevel& k2) const {
-            return _t->compare(k1.representation(), k2.representation());
-        }
+        tri_compare(const schema& s)  ;
+        std::strong_ordering operator()(const TopLevel& k1, const TopLevel& k2) const ;
+        std::strong_ordering operator()(const TopLevelView& k1, const TopLevel& k2) const ;
         std::strong_ordering operator()(const TopLevel& k1, const TopLevelView& k2) const {
             return _t->compare(k1.representation(), k2.representation());
         }
@@ -8790,35 +8620,21 @@ public:
         bool operator()(const TopLevel& k1, const TopLevel& k2) const {
             return _t->less(k1.representation(), k2.representation());
         }
-        bool operator()(const TopLevelView& k1, const TopLevel& k2) const {
-            return _t->less(k1.representation(), k2.representation());
-        }
-        bool operator()(const TopLevel& k1, const TopLevelView& k2) const {
-            return _t->less(k1.representation(), k2.representation());
-        }
+        bool operator()(const TopLevelView& k1, const TopLevel& k2) const ;
+        bool operator()(const TopLevel& k1, const TopLevelView& k2) const ;
     };
     struct hashing {
         typename TopLevel::compound _t;
-        hashing(const schema& s) : _t(get_compound_type(s)) {}
-        size_t operator()(const TopLevel& o) const {
-            return _t->hash(o.representation());
-        }
-        size_t operator()(const TopLevelView& o) const {
-            return _t->hash(o.representation());
-        }
+        hashing(const schema& s)  ;
+        size_t operator()(const TopLevel& o) const ;
+        size_t operator()(const TopLevelView& o) const ;
     };
     struct equality {
         typename TopLevel::compound _t;
-        equality(const schema& s) : _t(get_compound_type(s)) {}
-        bool operator()(const TopLevel& o1, const TopLevel& o2) const {
-            return _t->equal(o1.representation(), o2.representation());
-        }
-        bool operator()(const TopLevelView& o1, const TopLevel& o2) const {
-            return _t->equal(o1.representation(), o2.representation());
-        }
-        bool operator()(const TopLevel& o1, const TopLevelView& o2) const {
-            return _t->equal(o1.representation(), o2.representation());
-        }
+        equality(const schema& s)  ;
+        bool operator()(const TopLevel& o1, const TopLevel& o2) const ;
+        bool operator()(const TopLevelView& o1, const TopLevel& o2) const ;
+        bool operator()(const TopLevel& o1, const TopLevelView& o2) const ;
     };
     bool equal(const schema& s, const TopLevel& other) const {
         return get_compound_type(s)->equal(representation(), other.representation());
@@ -8898,19 +8714,12 @@ public:
         std::advance(_end, prefix_len);
     }
     iterator begin() const { return _begin; }
-    iterator end() const { return _end; }
+    iterator end() const ;
     struct less_compare_with_prefix {
         typename PrefixTopLevel::compound prefix_type;
-        less_compare_with_prefix(const schema& s)
-            : prefix_type(PrefixTopLevel::get_compound_type(s))
-        { }
-        bool operator()(const prefix_view_on_full_compound& k1, const PrefixTopLevel& k2) const {
-            return lexicographical_tri_compare(
-                prefix_type->types().begin(), prefix_type->types().end(),
-                k1.begin(), k1.end(),
-                prefix_type->begin(k2), prefix_type->end(k2),
-                tri_compare) < 0;
-        }
+        less_compare_with_prefix(const schema& s) 
+        ;
+        bool operator()(const prefix_view_on_full_compound& k1, const PrefixTopLevel& k2) const ;
         bool operator()(const PrefixTopLevel& k1, const prefix_view_on_full_compound& k2) const {
             return lexicographical_tri_compare(
                 prefix_type->types().begin(), prefix_type->types().end(),
@@ -8939,19 +8748,12 @@ public:
         std::advance(_end, prefix_len);
     }
     iterator begin() const { return _begin; }
-    iterator end() const { return _end; }
+    iterator end() const ;
     struct less_compare_with_prefix {
         typename TopLevel::compound prefix_type;
-        less_compare_with_prefix(const schema& s)
-            : prefix_type(TopLevel::get_compound_type(s))
-        { }
-        bool operator()(const prefix_view_on_prefix_compound& k1, const TopLevel& k2) const {
-            return lexicographical_tri_compare(
-                prefix_type->types().begin(), prefix_type->types().end(),
-                k1.begin(), k1.end(),
-                prefix_type->begin(k2), prefix_type->end(k2),
-                tri_compare) < 0;
-        }
+        less_compare_with_prefix(const schema& s) 
+        ;
+        bool operator()(const prefix_view_on_prefix_compound& k1, const TopLevel& k2) const ;
         bool operator()(const TopLevel& k1, const prefix_view_on_prefix_compound& k2) const {
             return lexicographical_tri_compare(
                 prefix_type->types().begin(), prefix_type->types().end(),
@@ -9032,28 +8834,16 @@ public:
     FullTopLevel to_full(const schema& s) const {
         return FullTopLevel::from_exploded(s, base::explode(s));
     }
-    bool is_prefixed_by(const schema& s, const TopLevel& prefix) const {
-        const auto& t = base::get_compound_type(s);
-        return ::is_prefixed_by(t->types().begin(),
-            t->begin(*this), t->end(*this),
-            t->begin(prefix), t->end(prefix),
-            equal);
-    }
+    bool is_prefixed_by(const schema& s, const TopLevel& prefix) const ;
     // In prefix equality two sequences are equal if any of them is a prefix
     // of the other. Otherwise lexicographical ordering is applied.
     // Note: full compounds sorted according to lexicographical ordering are also
     // sorted according to prefix equality ordering.
     struct prefix_equality_less_compare {
         typename TopLevel::compound prefix_type;
-        prefix_equality_less_compare(const schema& s)
-            : prefix_type(TopLevel::get_compound_type(s))
-        { }
-        bool operator()(const TopLevel& k1, const TopLevel& k2) const {
-            return prefix_equality_tri_compare(prefix_type->types().begin(),
-                prefix_type->begin(k1.representation()), prefix_type->end(k1.representation()),
-                prefix_type->begin(k2.representation()), prefix_type->end(k2.representation()),
-                tri_compare) < 0;
-        }
+        prefix_equality_less_compare(const schema& s) 
+        ;
+        bool operator()(const TopLevel& k1, const TopLevel& k2) const ;
     };
     // See prefix_equality_less_compare.
     struct prefix_equal_tri_compare {
@@ -9133,27 +8923,15 @@ public:
         : partition_key(managed_bytes(key.representation()))
     { }
     using compound = lw_shared_ptr<c_type>;
-    static partition_key from_bytes(managed_bytes_view b) {
-        return partition_key(managed_bytes(b));
-    }
-    static partition_key from_bytes(managed_bytes&& b) {
-        return partition_key(std::move(b));
-    }
-    static partition_key from_bytes(bytes_view b) {
-        return partition_key(managed_bytes(b));
-    }
-    static const compound& get_compound_type(const schema& s) {
-        return s.partition_key_type();
-    }
+    static partition_key from_bytes(managed_bytes_view b) ;
+    static partition_key from_bytes(managed_bytes&& b) ;
+    static partition_key from_bytes(bytes_view b) ;
+    static const compound& get_compound_type(const schema& s) ;
     // Returns key's representation which is compatible with Origin.
     // The result is valid as long as the schema is live.
-    const legacy_compound_view<c_type> legacy_form(const schema& s) const {
-        return view().legacy_form(s);
-    }
+    const legacy_compound_view<c_type> legacy_form(const schema& s) const ;
     // A trichotomic comparator for ordering compatible with Origin.
-    std::strong_ordering legacy_tri_compare(const schema& s, const partition_key& o) const {
-        return view().legacy_tri_compare(s, o);
-    }
+    std::strong_ordering legacy_tri_compare(const schema& s, const partition_key& o) const ;
     // Checks if keys are equal in a way which is compatible with Origin.
     bool legacy_equal(const schema& s, const partition_key& o) const {
         return view().legacy_equal(s, o);
@@ -9230,16 +9008,10 @@ public:
     static clustering_key_prefix_view from_bytes(managed_bytes_view v) {
         return { v };
     }
-    static clustering_key_prefix_view from_bytes(bytes_view v) {
-        return { v };
-    }
+    static clustering_key_prefix_view from_bytes(bytes_view v) ;
     using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
-    static const compound& get_compound_type(const schema& s) {
-        return s.clustering_key_prefix_type();
-    }
-    static clustering_key_prefix_view make_empty() {
-        return { bytes_view() };
-    }
+    static const compound& get_compound_type(const schema& s) ;
+    static clustering_key_prefix_view make_empty() ;
 };
 class clustering_key_prefix : public prefix_compound_wrapper<clustering_key_prefix, clustering_key_prefix_view, clustering_key> {
     explicit clustering_key_prefix(managed_bytes&& b)
@@ -9267,9 +9039,9 @@ public:
         : clustering_key_prefix(managed_bytes(v.representation()))
     { }
     using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
-    static clustering_key_prefix from_bytes(const managed_bytes& b) { return clustering_key_prefix(managed_bytes(b)); }
-    static clustering_key_prefix from_bytes(managed_bytes&& b) { return clustering_key_prefix(std::move(b)); }
-    static clustering_key_prefix from_bytes(managed_bytes_view b) { return clustering_key_prefix(managed_bytes(b)); }
+    static clustering_key_prefix from_bytes(const managed_bytes& b) ;
+    static clustering_key_prefix from_bytes(managed_bytes&& b) ;
+    static clustering_key_prefix from_bytes(managed_bytes_view b) ;
     static clustering_key_prefix from_bytes(bytes_view b) {
         return clustering_key_prefix(managed_bytes(b));
     }
@@ -9279,17 +9051,7 @@ public:
     static clustering_key_prefix from_clustering_prefix(const schema& s, const exploded_clustering_prefix& prefix) {
         return from_exploded(s, prefix.components());
     }
-    static bool make_full(const schema& s, clustering_key_prefix& ck) {
-        if (!ck.is_full(s)) {
-            // TODO: avoid unnecessary copy here
-            auto full_ck_size = s.clustering_key_columns().size();
-            auto exploded = ck.explode(s);
-            exploded.resize(full_ck_size);
-            ck = clustering_key_prefix::from_exploded(std::move(exploded));
-            return true;
-        }
-        return false;
-    }
+    static bool make_full(const schema& s, clustering_key_prefix& ck) ;
 };
 template <>
 struct fmt::formatter<clustering_key_prefix> : fmt::formatter<std::string_view> {
@@ -9308,34 +9070,22 @@ struct fmt::formatter<clustering_key_prefix::with_schema_wrapper> : fmt::formatt
 template<>
 struct appending_hash<partition_key_view> {
     template<typename Hasher>
-    void operator()(Hasher& h, const partition_key_view& pk, const schema& s) const {
-        for (managed_bytes_view v : pk.components(s)) {
-            ::feed_hash(h, v);
-        }
-    }
+    void operator()(Hasher& h, const partition_key_view& pk, const schema& s) const ;
 };
 template<>
 struct appending_hash<partition_key> {
     template<typename Hasher>
-    void operator()(Hasher& h, const partition_key& pk, const schema& s) const {
-        appending_hash<partition_key_view>()(h, pk.view(), s);
-    }
+    void operator()(Hasher& h, const partition_key& pk, const schema& s) const ;
 };
 template<>
 struct appending_hash<clustering_key_prefix_view> {
     template<typename Hasher>
-    void operator()(Hasher& h, const clustering_key_prefix_view& ck, const schema& s) const {
-        for (managed_bytes_view v : ck.components(s)) {
-            ::feed_hash(h, v);
-        }
-    }
+    void operator()(Hasher& h, const clustering_key_prefix_view& ck, const schema& s) const ;
 };
 template<>
 struct appending_hash<clustering_key_prefix> {
     template<typename Hasher>
-    void operator()(Hasher& h, const clustering_key_prefix& ck, const schema& s) const {
-        appending_hash<clustering_key_prefix_view>()(h, ck.view(), s);
-    }
+    void operator()(Hasher& h, const clustering_key_prefix& ck, const schema& s) const ;
 };
 template <typename Comparator, typename T>
 concept IntervalComparatorFor = requires (T a, T b, Comparator& cmp) {
@@ -9345,20 +9095,12 @@ template <typename LessComparator, typename T>
 concept IntervalLessComparatorFor = requires (T a, T b, LessComparator& cmp) {
     { cmp(a, b) } -> std::same_as<bool>;
 };
-inline
+
 bool
 require_ordering_and_on_equal_return(
         std::strong_ordering input,
         std::strong_ordering match_to_return_true,
-        bool return_if_equal) {
-    if (input == match_to_return_true) {
-        return true;
-    } else if (input == std::strong_ordering::equal) {
-        return return_if_equal;
-    } else {
-        return false;
-    }
-}
+        bool return_if_equal) ;
 template<typename T>
 class interval_bound {
     T _value;
@@ -9498,49 +9240,15 @@ public:
     wrapping_interval<U> transform(Transformer&& transformer) const & {
         return wrapping_interval<U>(transform_bound(_start, transformer), transform_bound(_end, transformer), _singular);
     }
-    bool equal(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
-        return bool(_start) == bool(other._start)
-               && bool(_end) == bool(other._end)
-               && (!_start || _start->equal(*other._start, cmp))
-               && (!_end || _end->equal(*other._end, cmp))
-               && _singular == other._singular;
-    }
-    bool operator==(const wrapping_interval& other) const {
-        return (_start == other._start) && (_end == other._end) && (_singular == other._singular);
-    }
+    bool equal(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const ;
+    bool operator==(const wrapping_interval& other) const ;
     template<typename U>
     friend std::ostream& operator<<(std::ostream& out, const wrapping_interval<U>& r);
 private:
     friend class nonwrapping_interval<T>;
 };
 template<typename U>
-std::ostream& operator<<(std::ostream& out, const wrapping_interval<U>& r) {
-    if (r.is_singular()) {
-        fmt::print(out, "{{{}}}", r.start()->value());
-        return out;
-    }
-    if (!r.start()) {
-        out << "(-inf, ";
-    } else {
-        if (r.start()->is_inclusive()) {
-            out << "[";
-        } else {
-            out << "(";
-        }
-        fmt::print(out, "{},", r.start()->value());
-    }
-    if (!r.end()) {
-        out << "+inf)";
-    } else {
-        fmt::print(out, "{}", r.end()->value());
-        if (r.end()->is_inclusive()) {
-            out << "]";
-        } else {
-            out << ")";
-        }
-    }
-    return out;
-}
+std::ostream& operator<<(std::ostream& out, const wrapping_interval<U>& r) ;
 // An interval which can have inclusive, exclusive or open-ended bounds on each end.
 // The end bound can never be smaller than the start bound.
 template<typename T>
@@ -9990,18 +9698,10 @@ public:
     virtual unsigned shard_of(const token& t) const;
     virtual token token_for_next_shard(const token& t, shard_id shard, unsigned spans = 1) const;
     unsigned shard_count() const ;
-    unsigned sharding_ignore_msb() const {
-        return _sharding_ignore_msb_bits;
-    }
-    bool operator==(const sharder& o) const {
-        return _shard_count == o._shard_count && _sharding_ignore_msb_bits == o._sharding_ignore_msb_bits;
-    }
+    unsigned sharding_ignore_msb() const ;
+    bool operator==(const sharder& o) const ;
 };
-inline std::ostream& operator<<(std::ostream& os, const sharder& sharder) {
-    os << "sharder[shard_count=" << sharder.shard_count()
-       << ", ignore_msb_bits="<< sharder.sharding_ignore_msb() << "]";
-    return os;
-}
+ std::ostream& operator<<(std::ostream& os, const sharder& sharder) ;
 dht::token find_first_token_for_shard(
         const dht::sharder& sharder, dht::token start, dht::token end, size_t shard_idx);
 } //namespace dht
@@ -10171,15 +9871,9 @@ public:
         return _token_bound;
     }
     // Returns -1 if smaller than keys with the same token, +1 if greater.
-    int relation_to_keys() const {
-        return _key ? 0 : static_cast<int>(_token_bound);
-    }
-    const std::optional<partition_key>& key() const {
-        return _key;
-    }
-    bool has_key() const {
-        return bool(_key);
-    }
+    int relation_to_keys() const ;
+    const std::optional<partition_key>& key() const ;
+    bool has_key() const ;
     // Call only when has_key()
     dht::decorated_key as_decorated_key() const {
         return { _token, *_key };
