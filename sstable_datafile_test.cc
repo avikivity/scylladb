@@ -42120,182 +42120,15 @@ class partition_snapshot_row_cursor final {
         }
     };
     // Removes the next row from _heap and puts it into _current_row
-    bool recreate_current_row() {
-        _current_row.clear();
-        _continuous = _background_continuity;
-        _range_tombstone = _background_rt;
-        _range_tombstone_for_row = _background_rt;
-        _dummy = true;
-        if (_heap.empty()) {
-            if (_reversed) {
-                _position = position_in_partition::before_all_clustered_rows();
-            } else {
-                _position = position_in_partition::after_all_clustered_rows();
-            }
-            return false;
-        }
-        version_heap_less_compare heap_less(*this);
-        position_in_partition::equal_compare eq(*_snp.schema());
-        do {
-            boost::range::pop_heap(_heap, heap_less);
-            memory::on_alloc_point();
-            position_in_version& v = _heap.back();
-            rows_entry& e = *v.it;
-            if (_digest_requested) {
-                e.row().cells().prepare_hash(_schema, column_kind::regular_column);
-            }
-            _dummy &= bool(e.dummy());
-            _continuous |= bool(v.continuous);
-            _range_tombstone_for_row.apply(e.range_tombstone());
-            if (v.continuous) {
-                _range_tombstone.apply(v.rt);
-            }
-            _current_row.push_back(v);
-            _heap.pop_back();
-        } while (!_heap.empty() && eq(_current_row[0].it->position(), _heap[0].it->position()));
-        // FIXME: Optimize by dropping dummy() entries.
-        for (position_in_version& v : _heap) {
-            _continuous |= bool(v.continuous);
-            if (v.continuous) {
-                _range_tombstone.apply(v.rt);
-                _range_tombstone_for_row.apply(v.rt);
-            }
-        }
-        _position = position_in_partition(_current_row[0].it->position());
-        return true;
-    }
+    bool recreate_current_row() ;
     // lower_bound is in the query schema domain
-    void prepare_heap(position_in_partition_view lower_bound) {
-        lower_bound = to_table_domain(lower_bound);
-        memory::on_alloc_point();
-        rows_entry::tri_compare cmp(*_snp.schema());
-        version_heap_less_compare heap_less(*this);
-        _heap.clear();
-        _latest_it.reset();
-        _background_continuity = false;
-        _background_rt = {};
-        int version_no = 0;
-        bool unique_owner = _unique_owner;
-        bool first = true;
-        for (auto&& v : _snp.versions()) {
-            unique_owner = unique_owner && (first || !v.is_referenced());
-            auto rows = v.partition().clustered_rows();
-            auto pos = rows.lower_bound(lower_bound, cmp);
-            if (first) {
-                _latest_it = pos;
-            }
-            if (pos) {
-                is_continuous cont;
-                tombstone rt;
-                if (_reversed) [[unlikely]] {
-                    if (cmp(pos->position(), lower_bound) != 0) {
-                        cont = pos->continuous();
-                        rt = pos->range_tombstone();
-                        if (pos != rows.begin()) {
-                            --pos;
-                        } else {
-                            _background_continuity |= bool(cont);
-                            if (cont) {
-                                _background_rt = rt;
-                            }
-                            pos = {};
-                        }
-                    } else {
-                        auto next_entry = std::next(pos);
-                        if (next_entry == rows.end()) {
-                            // Positions past last dummy are complete since mutation sources
-                            // can't contain any keys which are larger.
-                            cont = is_continuous::yes;
-                            rt = {};
-                        } else {
-                            cont = next_entry->continuous();
-                            rt = next_entry->range_tombstone();
-                        }
-                    }
-                } else {
-                    cont = pos->continuous();
-                    rt = pos->range_tombstone();
-                }
-                if (pos) [[likely]] {
-                    _heap.emplace_back(position_in_version{pos, std::move(rows), version_no, unique_owner, cont, rt});
-                }
-            } else {
-                if (_reversed) [[unlikely]] {
-                    if (!rows.empty()) {
-                        pos = std::prev(rows.end());
-                    } else {
-                        _background_continuity = true;
-                    }
-                } else {
-                    _background_continuity = true; // Default continuity past the last entry
-                }
-                if (pos) [[likely]] {
-                    _heap.emplace_back(position_in_version{pos, std::move(rows), version_no, unique_owner, is_continuous::yes});
-                }
-            }
-            ++version_no;
-            first = false;
-        }
-        boost::range::make_heap(_heap, heap_less);
-        _change_mark = _snp.get_change_mark();
-    }
+    void prepare_heap(position_in_partition_view lower_bound) ;
     // Advances the cursor to the next row.
     // The @keep denotes whether the entries should be kept in partition version.
     // If there is no next row, returns false and the cursor is no longer pointing at a row.
     // Can be only called on a valid cursor pointing at a row.
     // When throws, the cursor is invalidated and its position is not changed.
-    bool advance(bool keep) {
-        memory::on_alloc_point();
-        version_heap_less_compare heap_less(*this);
-        assert(iterators_valid());
-        for (auto&& curr : _current_row) {
-            if (!keep && curr.unique_owner) {
-                mutation_partition::rows_type::key_grabber kg(curr.it);
-                kg.release(current_deleter<rows_entry>());
-                if (_reversed && curr.it) [[unlikely]] {
-                    if (curr.rows.begin() == curr.it) {
-                        _background_continuity |= bool(curr.it->continuous());
-                        if (curr.it->continuous()) {
-                            _background_rt.apply(curr.it->range_tombstone());
-                        }
-                        curr.it = {};
-                    } else {
-                        curr.continuous = curr.it->continuous();
-                        curr.rt = curr.it->range_tombstone();
-                        --curr.it;
-                    }
-                }
-            } else {
-                if (_reversed) [[unlikely]] {
-                    if (curr.rows.begin() == curr.it) {
-                        _background_continuity |= bool(curr.it->continuous());
-                        if (curr.it->continuous()) {
-                            _background_rt.apply(curr.it->range_tombstone());
-                        }
-                        curr.it = {};
-                    } else {
-                        curr.continuous = curr.it->continuous();
-                        curr.rt = curr.it->range_tombstone();
-                        --curr.it;
-                    }
-                } else {
-                    ++curr.it;
-                    if (curr.it) {
-                        curr.continuous = curr.it->continuous();
-                        curr.rt = curr.it->range_tombstone();
-                    }
-                }
-            }
-            if (curr.it) {
-                if (curr.version_no == 0) {
-                    _latest_it = curr.it;
-                }
-                _heap.push_back(curr);
-                boost::range::push_heap(_heap, heap_less);
-            }
-        }
-        return recreate_current_row();
-    }
+    bool advance(bool keep) ;
     bool is_in_latest_version() const noexcept { return at_a_row() && _current_row[0].version_no == 0; }
 public:
     // When reversed is true then the cursor will operate in reversed direction.
@@ -42317,14 +42150,10 @@ public:
     }
     // Returns true iff the iterators obtained since the cursor was last made valid
     // are still valid. Note that this doesn't mean that the cursor itself is valid.
-    bool iterators_valid() const {
-        return _snp.get_change_mark() == _change_mark;
-    }
+    bool iterators_valid() const ;
     // Marks the iterators as valid without refreshing them.
     // Call only when the iterators are known to be valid.
-    void force_valid() {
-        _change_mark = _snp.get_change_mark();
-    }
+    void force_valid() ;
     // Advances cursor to the first entry with position >= pos, if such entry exists.
     // If no such entry exists, the cursor is positioned at an extreme position in the direction of
     // the cursor (min for reversed cursor, max for forward cursor) and not pointing at a row
@@ -42332,10 +42161,7 @@ public:
     //
     // continuous() is always valid after the call, even if not pointing at a row.
     // Returns true iff the cursor is pointing at a row after the call.
-    bool maybe_advance_to(position_in_partition_view pos) {
-        prepare_heap(pos);
-        return recreate_current_row();
-    }
+    bool maybe_advance_to(position_in_partition_view pos) ;
     // Brings back the cursor to validity.
     // Can be only called when cursor is pointing at a row.
     //
@@ -42346,76 +42172,7 @@ public:
     // but avoids work if not necessary.
     //
     // Changes to attributes of the current row (e.g. continuity) don't have to be reflected.
-    bool maybe_refresh() {
-        if (!iterators_valid()) {
-            auto pos = position_in_partition(position()); // advance_to() modifies position() so copy
-            return advance_to(pos);
-        }
-        // Refresh latest version's iterator in case there was an insertion
-        // before it and after cursor's position. There cannot be any
-        // insertions for non-latest versions, so we don't have to update them.
-        if (!is_in_latest_version()) {
-            rows_entry::tri_compare cmp(*_snp.schema());
-            version_heap_less_compare heap_less(*this);
-            auto rows = _snp.version()->partition().clustered_rows();
-            bool match;
-            auto it = rows.lower_bound(_position, match, cmp);
-            _latest_it = it;
-            auto heap_i = boost::find_if(_heap, [](auto&& v) { return v.version_no == 0; });
-            is_continuous cont;
-            tombstone rt;
-            if (it) {
-                cont = it->continuous();
-                rt = it->range_tombstone();
-                if (_reversed) [[unlikely]] {
-                    if (!match) {
-                        // lower_bound() in reverse order points to predecessor of it unless the keys are equal.
-                        if (it == rows.begin()) {
-                            if (it->continuous()) {
-                                _background_continuity = true;
-                                _background_rt.apply(it->range_tombstone());
-                            }
-                            it = {};
-                        } else {
-                            --it;
-                        }
-                    } else {
-                        // We can put anything in the match case since this continuity will not be used
-                        // when advancing the cursor. Same applies to rt.
-                        cont = is_continuous::no;
-                        rt = {};
-                    }
-                }
-            } else {
-                _background_continuity = true; // Default continuity
-            }
-            if (!it) {
-                if (heap_i != _heap.end()) {
-                    _heap.erase(heap_i);
-                    boost::range::make_heap(_heap, heap_less);
-                }
-            } else if (match) {
-                _current_row.insert(_current_row.begin(), position_in_version{
-                    it, std::move(rows), 0, _unique_owner, cont, rt});
-                if (heap_i != _heap.end()) {
-                    _heap.erase(heap_i);
-                    boost::range::make_heap(_heap, heap_less);
-                }
-            } else {
-                if (heap_i != _heap.end()) {
-                    heap_i->it = it;
-                    heap_i->continuous = cont;
-                    heap_i->rt = rt;
-                    boost::range::make_heap(_heap, heap_less);
-                } else {
-                    _heap.push_back(position_in_version{
-                        it, std::move(rows), 0, _unique_owner, cont, rt});
-                    boost::range::push_heap(_heap, heap_less);
-                }
-            }
-        }
-        return true;
-    }
+    bool maybe_refresh() ;
     // Brings back the cursor to validity, pointing at the first row with position not smaller
     // than the current position. Returns false iff no such row exists.
     // Assumes that rows are not inserted into the snapshot (static). They can be removed.
@@ -42522,78 +42279,16 @@ public:
     // Brings the entry pointed to by the cursor to the front of the LRU
     // Cursor must be valid and pointing at a row.
     // Use only with evictable snapshots.
-    void touch() {
-        // We cannot bring entries from non-latest versions to the front because that
-        // could result violate ordering invariant for the LRU, which states that older versions
-        // must be evicted first. Needed to keep the snapshot consistent.
-        if (_snp.at_latest_version() && is_in_latest_version()) {
-            _snp.tracker()->touch(*get_iterator_in_latest_version());
-        }
-    }
+    void touch() ;
     // Position of the cursor in the cursor schema domain.
     // Can be called when cursor is pointing at a row, even when invalid, or when valid.
-    position_in_partition_view position() const {
-        return to_query_domain(_position);
-    }
+    position_in_partition_view position() const ;
     // Position of the cursor in the table schema domain.
     // Can be called when cursor is pointing at a row, even when invalid, or when valid.
-    position_in_partition_view table_position() const {
-        return _position;
-    }
-    friend std::ostream& operator<<(std::ostream& out, const partition_snapshot_row_cursor& cur) {
-        fmt::print(out, "{{cursor: position={}, cont={}, rt={}}}",
-                   cur._position, cur.continuous(), cur.range_tombstone());
-        if (cur.range_tombstone() != cur.range_tombstone_for_row()) {
-            fmt::print(out, ", row_rt={}", cur.range_tombstone_for_row());
-        }
-        out << ", ";
-        if (cur._reversed) {
-            out << "reversed, ";
-        }
-        if (!cur.iterators_valid()) {
-            return out << " iterators invalid}";
-        }
-        out << "snp=" << &cur._snp << ", current=[";
-        bool first = true;
-        for (auto&& v : cur._current_row) {
-            if (!first) {
-                out << ", ";
-            }
-            first = false;
-            fmt::print(out, "{{v={}, pos={}, cont={}, rt={}, row_rt={}}}",
-                       v.version_no, v.it->position(), v.continuous, v.rt, v.it->range_tombstone());
-        }
-        out << "], heap=[\n  ";
-        first = true;
-        for (auto&& v : cur._heap) {
-            if (!first) {
-                out << ",\n  ";
-            }
-            first = false;
-            fmt::print(out, "{{v={}, pos={}, cont={}, rt={}, row_rt={}}}",
-                       v.version_no, v.it->position(), v.continuous, v.rt, v.it->range_tombstone());
-        }
-        out << "], latest_iterator=[";
-        if (cur._latest_it) {
-            mutation_partition::rows_type::iterator i = *cur._latest_it;
-            if (!i) {
-                fmt::print(out, "end");
-            } else {
-                fmt::print(out, "{}", i->position());
-            }
-        } else {
-            out << "<none>";
-        }
-        return out << "]}";
-    };
+    position_in_partition_view table_position() const ;
+    friend std::ostream& operator<<(std::ostream& out, const partition_snapshot_row_cursor& cur) ;;
 };
-inline
-partition_snapshot_row_weakref::partition_snapshot_row_weakref(const partition_snapshot_row_cursor& c)
-    : _it(c._current_row[0].it)
-    , _change_mark(c._change_mark)
-    , _pos(c._position)
-    , _in_latest(c.is_in_latest_version())
-{ }
+
 inline
 partition_snapshot_row_weakref& partition_snapshot_row_weakref::operator=(const partition_snapshot_row_cursor& c) {
     auto tmp = partition_snapshot_row_weakref(c);
@@ -42675,34 +42370,10 @@ struct noop_hasher {
 class digester final {
     std::variant<noop_hasher, md5_hasher, xx_hasher, legacy_xx_hasher_without_null_digest> _impl;
 public:
-    explicit digester(digest_algorithm algo) {
-        switch (algo) {
-        case digest_algorithm::MD5:
-            _impl = md5_hasher();
-            break;
-        case digest_algorithm::xxHash:
-            _impl = xx_hasher();
-            break;
-        case digest_algorithm::legacy_xxHash_without_null_digest:
-            _impl = legacy_xx_hasher_without_null_digest();
-            break;
-        case digest_algorithm ::none:
-            _impl = noop_hasher();
-            break;
-        }
-    }
+    explicit digester(digest_algorithm algo) ;
     template<typename T, typename... Args>
-    void feed_hash(const T& value, Args&&... args) {
-        // FIXME uncomment the noexcept marking once clang bug 50994 is fixed or gcc compilation is turned on
-        std::visit([&] (auto& hasher)  -> void {
-            ::feed_hash(hasher, value, std::forward<Args>(args)...);
-        }, _impl);
-    };
-    std::array<uint8_t, 16> finalize_array() {
-        return std::visit([&] (auto& hasher) {
-            return hasher.finalize_array();
-        }, _impl);
-    }
+    void feed_hash(const T& value, Args&&... args) ;;
+    std::array<uint8_t, 16> finalize_array() ;
 };
 using default_hasher = xx_hasher;
 template<typename Hasher>
@@ -42756,28 +42427,15 @@ public:
     bool requested_result() const {
         return _request != result_request::only_digest;
     }
-    ser::after_qr_partition__key<bytes_ostream> start() {
-        return std::move(_w);
-    }
+    ser::after_qr_partition__key<bytes_ostream> start() ;
     // Cancels the whole partition element.
     // Can be called at any stage of writing before this element is finalized.
     // Do not use this writer after that.
-    void retract() {
-        _digest = _digest_pos;
-        _pw.rollback(_pos);
-    }
-    const clustering_row_ranges& ranges() const {
-        return _ranges;
-    }
-    const partition_slice& slice() const {
-        return _slice;
-    }
-    digester& digest() {
-        return _digest;
-    }
-    uint64_t& row_count() {
-        return _row_count;
-    }
+    void retract() ;
+    const clustering_row_ranges& ranges() const ;
+    const partition_slice& slice() const ;
+    digester& digest() ;
+    uint64_t& row_count() ;
     uint32_t& partition_count() {
         return _partition_count;
     }
@@ -42808,8 +42466,8 @@ public:
         , _tombstone_limit(tombstone_limit)
     { }
     builder(builder&&) = delete; // _out is captured by reference
-    void mark_as_short_read() { _short_read = short_read::yes; }
-    short_read is_short_read() const { return _short_read; }
+    void mark_as_short_read() ;
+    short_read is_short_read() const ;
     result_memory_accounter& memory_accounter() ;
     stop_iteration bump_and_check_tombstone_limit() ;
     const partition_slice& slice() const ;
@@ -42840,7 +42498,7 @@ private:
 public:
     mutation_querier(const schema& s, query::result::partition_writer pw,
                      query::result_memory_accounter& memory_accounter);
-    void consume(tombstone) { }
+    void consume(tombstone) ;
     // Requires that sr.has_any_live_data()
     stop_iteration consume(static_row&& sr, tombstone current_tombstone);
     // Requires that cr.has_any_live_data()
@@ -43086,23 +42744,11 @@ public:
         , min_local_deletion_time(gc_clock::time_point::max())
         , min_ttl(gc_clock::duration::max())
     {}
-    void update_timestamp(api::timestamp_type ts) noexcept {
-        min_timestamp.update(ts);
-    }
-    void update_local_deletion_time(gc_clock::time_point local_deletion_time) noexcept {
-        min_local_deletion_time.update(local_deletion_time);
-    }
-    void update_ttl(gc_clock::duration ttl) noexcept {
-        min_ttl.update(ttl);
-    }
-    void update(const encoding_stats& other) noexcept {
-        update_timestamp(other.min_timestamp);
-        update_local_deletion_time(other.min_local_deletion_time);
-        update_ttl(other.min_ttl);
-    }
-    encoding_stats get() const noexcept {
-        return { min_timestamp.get(), min_local_deletion_time.get(), min_ttl.get() };
-    }
+    void update_timestamp(api::timestamp_type ts) noexcept ;
+    void update_local_deletion_time(gc_clock::time_point local_deletion_time) noexcept ;
+    void update_ttl(gc_clock::duration ttl) noexcept ;
+    void update(const encoding_stats& other) noexcept ;
+    encoding_stats get() const noexcept ;
 };
 class test_region_group;
 namespace replica {
@@ -43189,9 +42835,7 @@ private:
         typename futurator::promise_type pr;
         Func func;
     public:
-        void allocate() override {
-            futurator::invoke(func).forward_to(std::move(pr));
-        }
+        void allocate() override ;
         void fail(std::exception_ptr e) override {
             pr.set_exception(e);
         }
@@ -43240,29 +42884,16 @@ private:
     bool _shutdown_requested = false;
     future<> _releaser;
 private:
-    size_t real_throttle_threshold() const noexcept {
-        return _cfg.real_hard_limit;
-    }
+    size_t real_throttle_threshold() const noexcept ;
 public:
     void update_real(ssize_t delta);
-    size_t real_memory_used() const noexcept {
-        return _real_total_memory;
-    }
+    size_t real_memory_used() const noexcept ;
 private:
     bool do_update_real_and_check_relief(ssize_t delta);
 public:
-    bool under_unspooled_pressure() const noexcept {
-        return _under_unspooled_pressure;
-    }
-    bool over_unspooled_soft_limit() const noexcept {
-        return _under_unspooled_soft_pressure;
-    }
-    void notify_unspooled_soft_pressure() noexcept {
-        if (!_under_unspooled_soft_pressure) {
-            _under_unspooled_soft_pressure = true;
-            _cfg.start_reclaiming();
-        }
-    }
+    bool under_unspooled_pressure() const noexcept ;
+    bool over_unspooled_soft_limit() const noexcept ;
+    void notify_unspooled_soft_pressure() noexcept ;
 private:
     void notify_unspooled_soft_relief() noexcept ;
     void notify_unspooled_pressure() noexcept ;
@@ -43308,17 +42939,9 @@ public:
     // 2) some callers would like to pass delta = 0. For instance, when we are making a region
     //    evictable / non-evictable. Because the evictable occupancy changes, we would like to call
     //    the full update cycle even then.
-    virtual void increase_usage(logalloc::region* r, ssize_t delta) override { // From region_listener
-        _regions.increase(*static_cast<size_tracked_region*>(r)->_heap_handle);
-        update_unspooled(delta);
-    }
-    virtual void decrease_evictable_usage(logalloc::region* r) override { // From region_listener
-        _regions.decrease(*static_cast<size_tracked_region*>(r)->_heap_handle);
-    }
-    virtual void decrease_usage(logalloc::region* r, ssize_t delta) override { // From region_listener
-        decrease_evictable_usage(r);
-        update_unspooled(delta);
-    }
+    virtual void increase_usage(logalloc::region* r, ssize_t delta) override ;
+    virtual void decrease_evictable_usage(logalloc::region* r) override ;
+    virtual void decrease_usage(logalloc::region* r, ssize_t delta) override ;
     //
     // Make sure that the function specified by the parameter func only runs when this region_group,
     // as well as each of its ancestors have a memory_used() amount of memory that is lesser or
@@ -43370,9 +42993,7 @@ class sstable_write_permit final {
 public:
     sstable_write_permit(sstable_write_permit&&) noexcept = default;
     sstable_write_permit& operator=(sstable_write_permit&&) noexcept = default;
-    static sstable_write_permit unconditional() {
-        return sstable_write_permit();
-    }
+    static sstable_write_permit unconditional() ;
 };
 class flush_permit {
     friend class dirty_memory_manager;
@@ -43474,22 +43095,10 @@ public:
     static dirty_memory_manager& from_region_group(dirty_memory_manager_logalloc::region_group *rg) noexcept {
         return *(boost::intrusive::get_parent_from_member(rg, &dirty_memory_manager::_region_group));
     }
-    dirty_memory_manager_logalloc::region_group& region_group() noexcept {
-        return _region_group;
-    }
-    const dirty_memory_manager_logalloc::region_group& region_group() const noexcept {
-        return _region_group;
-    }
-    void revert_potentially_cleaned_up_memory(logalloc::region* from, int64_t delta) {
-        _region_group.update_real(-delta);
-        _region_group.update_unspooled(delta);
-        _dirty_bytes_released_pre_accounted -= delta;
-    }
-    void account_potentially_cleaned_up_memory(logalloc::region* from, int64_t delta) {
-        _region_group.update_real(delta);
-        _region_group.update_unspooled(-delta);
-        _dirty_bytes_released_pre_accounted += delta;
-    }
+    dirty_memory_manager_logalloc::region_group& region_group() noexcept ;
+    const dirty_memory_manager_logalloc::region_group& region_group() const noexcept ;
+    void revert_potentially_cleaned_up_memory(logalloc::region* from, int64_t delta) ;
+    void account_potentially_cleaned_up_memory(logalloc::region* from, int64_t delta) ;
     void pin_real_dirty_memory(int64_t delta) ;
     void unpin_real_dirty_memory(int64_t delta) ;
     size_t real_dirty_memory() const noexcept ;
@@ -43645,13 +43254,9 @@ struct disk_set_of_tagged_union {
     template <TagType Tag, typename T>
     T* get() ;
     template <TagType Tag, typename T>
-    const T* get() const {
-        return const_cast<disk_set_of_tagged_union*>(this)->get<Tag, T>();
-    }
+    const T* get() const ;
     template <TagType Tag, typename T>
-    void set(T&& value) {
-        data[Tag] = disk_tagged_union_member<TagType, Tag, T>{std::forward<T>(value)};
-    }
+    void set(T&& value) ;
     struct serdes;
     static struct serdes s_serdes;
 };
@@ -43680,83 +43285,9 @@ struct streaming_histogram {
     void update(double p) {
         update(p, 1);
     }
-    void update(double p, uint64_t m) {
-        auto it = bin.find(p);
-        if (it != bin.end()) {
-            bin[p] = it->second + m;
-        } else {
-            bin[p] = m;
-            // if bin size exceeds maximum bin size then trim down to max size
-            while (bin.size() > max_bin_size) {
-                // find points p1, p2 which have smallest difference
-                auto it = bin.begin();
-                double p1 = it->first;
-                it++;
-                double p2 = it->first;
-                it++;
-                double smallestDiff = p2 - p1;
-                double q1 = p1, q2 = p2;
-                while(it != bin.end()) {
-                    p1 = p2;
-                    p2 = it->first;
-                    it++;
-                    double diff = p2 - p1;
-                    if (diff < smallestDiff)
-                    {
-                        smallestDiff = diff;
-                        q1 = p1;
-                        q2 = p2;
-                    }
-                }
-                // merge those two
-                uint64_t k1 = bin.at(q1);
-                uint64_t k2 = bin.at(q2);
-                bin.erase(q1);
-                bin.erase(q2);
-                bin.insert({(q1 * k1 + q2 * k2) / (k1 + k2), k1 + k2});
-            }
-        }
-    }
-    void merge(streaming_histogram& other) {
-        if (!other.bin.size()) {
-            return;
-        }
-        for (auto& it : other.bin) {
-            update(it.first, it.second);
-        }
-    }
-    double sum(double b) const {
-        double sum = 0;
-        // find the points pi, pnext which satisfy pi <= b < pnext
-        auto pnext = bin.upper_bound(b);
-        if (pnext == bin.end()) {
-            // if b is greater than any key in this histogram,
-            // just count all appearance and return
-            for (auto& e : bin) {
-                sum += e.second;
-            }
-        } else {
-            // return key-value mapping associated with the greatest key less than or equal to the given key
-            auto pi = bin.lower_bound(b);
-            if (pi == bin.end() || (pi == bin.begin() && b < pi->first)) {
-                return 0;
-            }
-            if (pi->first != b) {
-                --pi;
-            }
-            // calculate estimated count mb for point b
-            double weight = (b - pi->first) / (pnext->first - pi->first);
-            double mb = pi->second + (int64_t(pnext->second) - int64_t(pi->second)) * weight;
-            sum += (pi->second + mb) * weight / 2;
-            sum += pi->second / 2.0;
-            // iterate through portion of map whose keys are less than pi->first
-            auto it_end = bin.lower_bound(pi->first);
-            for (auto it = bin.begin(); it != it_end; it++) {
-                sum += it->second;
-            }
-        }
-        return sum;
-    }
+    void update(double p, uint64_t m) ;
+    void merge(streaming_histogram& other) ;
+    double sum(double b) const ;
     // FIXME: convert Java code below.
 #if 0
     public Map<Double, Long> getAsMap()
@@ -43835,18 +43366,9 @@ public:
         return partition_key::from_exploded_view(explode(s));
     }
     bool operator==(const key_view& k) const = default;
-    bool empty() const { return _bytes.empty(); }
-    std::strong_ordering tri_compare(key_view other) const {
-        return compare_unsigned(_bytes, other._bytes);
-    }
-    std::strong_ordering tri_compare(const schema& s, partition_key_view other) const {
-        return with_linearized([&] (bytes_view v) {
-            auto lf = other.legacy_form(s);
-            return std::lexicographical_compare_three_way(
-                    v.begin(), v.end(), lf.begin(), lf.end(),
-                    [](uint8_t b1, uint8_t b2) { return  b1 <=> b2; });
-        });
-    }
+    bool empty() const ;
+    std::strong_ordering tri_compare(key_view other) const ;
+    std::strong_ordering tri_compare(const schema& s, partition_key_view other) const ;
 };
 // Our internal representation differs slightly (in the way it serializes) from Origin.
 // In order to be able to achieve read and write compatibility for sstables - so they can
@@ -43867,9 +43389,7 @@ private:
 public:
     key(bytes&& b) : _kind(kind::regular), _bytes(std::move(b)) {}
     key(kind k) : _kind(k) {}
-    static key from_bytes(bytes b) {
-        return key(std::move(b));
-    }
+    static key from_bytes(bytes b) ;
     template <typename RangeOfSerializedComponents>
     static key make_key(const schema& s, RangeOfSerializedComponents&& values) ;
     static key from_deeply_exploded(const schema& s, const std::vector<data_value>& v) ;
@@ -43879,18 +43399,8 @@ public:
     static key from_partition_key(const schema& s, partition_key_view pk) ;
     partition_key to_partition_key(const schema& s) const ;
     std::vector<bytes_view> explode(const schema& s) const ;
-    std::strong_ordering tri_compare(key_view k) const {
-        if (_kind == kind::before_all_keys) {
-            return std::strong_ordering::less;
-        }
-        if (_kind == kind::after_all_keys) {
-            return std::strong_ordering::greater;
-        }
-        return key_view(_bytes).tri_compare(k);
-    }
-    operator key_view() const {
-        return key_view(_bytes);
-    }
+    std::strong_ordering tri_compare(key_view k) const ;
+    operator key_view() const ;
     explicit operator bytes_view() const {
         return _bytes;
     }
@@ -44024,15 +43534,9 @@ public:
     key_view get_key() const {
         return key_view{key};
     }
-    dht::token get_token() const {
-        return dht::token::from_int64(raw_token);
-    }
-    decorated_key_view get_decorated_key() const {
-        return decorated_key_view(get_token(), get_key());
-    }
-    bool operator==(const summary_entry& x) const {
-        return position ==  x.position && key == x.key;
-    }
+    dht::token get_token() const ;
+    decorated_key_view get_decorated_key() const ;
+    bool operator==(const summary_entry& x) const ;
 };
 // Note: Sampling level is present in versions ka and higher. We ATM only support ka,
 // so it's always there. But we need to make this conditional if we ever want to support
@@ -44071,29 +43575,9 @@ struct summary_ka {
     // filled with the same data. It's too early to judge that the data is useless.
     // However, it was tested that Cassandra loads successfully a Summary file with
     // this structure removed from it. Anyway, let's pay attention to it.
-    uint64_t memory_footprint() const {
-        auto sz = sizeof(summary_entry) * entries.size() + sizeof(uint32_t) * positions.size() + sizeof(*this);
-        sz += first_key.value.size() + last_key.value.size();
-        for (auto& sd : _summary_data) {
-            sz += sd.size();
-        }
-        return sz;
-    }
-    explicit operator bool() const {
-        return entries.size();
-    }
-    bytes_view add_summary_data(bytes_view data) {
-        if (_summary_data.empty() || (_summary_index_pos + data.size() > _buffer_size)) {
-            _buffer_size = std::min(_buffer_size << 1, 128u << 10);
-            // Keys are 64kB max, so it might be one key may not fit in a buffer
-            _buffer_size = std::max(_buffer_size, unsigned(data.size()));
-            _summary_data.emplace_back(_buffer_size);
-            _summary_index_pos = 0;
-        }
-        auto ret = _summary_data.back().store_at(_summary_index_pos, data);
-        _summary_index_pos += data.size();
-        return ret;
-    }
+    uint64_t memory_footprint() const ;
+    explicit operator bool() const ;
+    bytes_view add_summary_data(bytes_view data) ;
 private:
     class summary_data_memory {
         unsigned _size;
@@ -44351,24 +43835,12 @@ public:
     bool is_end_of_partition() const {
         return check_flag(END_OF_PARTITION);
     }
-    bool is_range_tombstone() const {
-        return check_flag(IS_MARKER);
-    }
-    bool has_extended_flags() const {
-        return check_flag(HAS_EXTENDED_FLAGS);
-    }
-    bool has_timestamp() const {
-        return check_flag(HAS_TIMESTAMP);
-    }
-    bool has_ttl() const {
-        return check_flag(HAS_TTL);
-    }
-    bool has_deletion() const {
-        return check_flag(HAS_DELETION);
-    }
-    bool has_all_columns() const {
-        return check_flag(HAS_ALL_COLUMNS);
-    }
+    bool is_range_tombstone() const ;
+    bool has_extended_flags() const ;
+    bool has_timestamp() const ;
+    bool has_ttl() const ;
+    bool has_deletion() const ;
+    bool has_all_columns() const ;
     bool has_complex_deletion() const {
         return check_flag(HAS_COMPLEX_DELETION);
     }
@@ -44387,15 +43859,9 @@ class unfiltered_extended_flags_m final {
     }
 public:
     explicit unfiltered_extended_flags_m(uint8_t flags) : _flags(flags) { }
-    bool is_static() const {
-        return check_flag(IS_STATIC);
-    }
-    bool has_cassandra_shadowable_deletion() const {
-        return check_flag(HAS_CASSANDRA_SHADOWABLE_DELETION);
-    }
-    bool has_scylla_shadowable_deletion() const {
-        return check_flag(HAS_SCYLLA_SHADOWABLE_DELETION);
-    }
+    bool is_static() const ;
+    bool has_cassandra_shadowable_deletion() const ;
+    bool has_scylla_shadowable_deletion() const ;
 };
 class column_flags_m final {
     static const uint8_t IS_DELETED = 0x01u;
@@ -44412,18 +43878,10 @@ public:
     bool use_row_timestamp() const {
         return check_flag(USE_ROW_TIMESTAMP);
     }
-    bool use_row_ttl() const {
-        return check_flag(USE_ROW_TTL);
-    }
-    bool is_deleted() const {
-        return check_flag(IS_DELETED);
-    }
-    bool is_expiring() const {
-        return check_flag(IS_EXPIRING);
-    }
-    bool has_value() const {
-        return !check_flag(HAS_EMPTY_VALUE);
-    }
+    bool use_row_ttl() const ;
+    bool is_deleted() const ;
+    bool is_expiring() const ;
+    bool has_value() const ;
 };
 }
 class frozen_mutation;
@@ -44440,11 +43898,11 @@ class memtable_entry {
         bool _train : 1;
     } _flags{};
 public:
-    bool is_head() const noexcept { return _flags._head; }
-    void set_head(bool v) noexcept { _flags._head = v; }
-    bool is_tail() const noexcept { return _flags._tail; }
-    void set_tail(bool v) noexcept { _flags._tail = v; }
-    bool with_train() const noexcept { return _flags._train; }
+    bool is_head() const noexcept ;
+    void set_head(bool v) noexcept ;
+    bool is_tail() const noexcept ;
+    void set_tail(bool v) noexcept ;
+    bool with_train() const noexcept ;
     void set_train(bool v) noexcept { _flags._train = v; }
     friend class memtable;
     memtable_entry(schema_ptr s, dht::decorated_key key, mutation_partition p)
@@ -45043,14 +44501,10 @@ public:
     static compaction_type_options make_upgrade() {
         return compaction_type_options(upgrade{});
     }
-    static compaction_type_options make_scrub(scrub::mode mode) {
-        return compaction_type_options(scrub{mode});
-    }
+    static compaction_type_options make_scrub(scrub::mode mode) ;
     template <typename... Visitor>
-    auto visit(Visitor&&... visitor) const {
-        return std::visit(std::forward<Visitor>(visitor)..., _options);
-    }
-    const options_variant& options() const { return _options; }
+    auto visit(Visitor&&... visitor) const ;
+    const options_variant& options() const ;
     compaction_type type() const;
 };
 std::string_view to_string(compaction_type_options::scrub::mode);
@@ -45134,7 +44588,7 @@ class compaction_strategy_state;
 namespace compaction {
 class table_state {
 public:
-    virtual ~table_state() {}
+    virtual ~table_state() ;
     virtual const schema_ptr& schema() const noexcept = 0;
     // min threshold as defined by table.
     virtual unsigned min_compaction_threshold() const noexcept = 0;
@@ -45395,12 +44849,8 @@ struct update_backlog {
     size_t max;
     float relative_size() const ;
     std::partial_ordering operator<=>(const update_backlog &rhs) const ;
-    bool operator==(const update_backlog& rhs) const {
-        return relative_size() == rhs.relative_size();
-    }
-    static update_backlog no_backlog() {
-        return update_backlog{0, std::numeric_limits<size_t>::max()};
-    }
+    bool operator==(const update_backlog& rhs) const ;
+    static update_backlog no_backlog() ;
 };
 }
 // row_locker provides a mechanism needed by the Materialized Views code to
@@ -45475,16 +44925,12 @@ private:
             : _row_locks(locker) { }
     };
     struct decorated_key_hash {
-        size_t operator()(const dht::decorated_key& k) const {
-            return std::hash<dht::token>()(k.token());
-        }
+        size_t operator()(const dht::decorated_key& k) const ;
     };
     struct decorated_key_equals_comparator {
         const row_locker* locker;
-        explicit decorated_key_equals_comparator(const row_locker* rl) : locker(rl) {}
-        bool operator()(const dht::decorated_key& k1, const dht::decorated_key& k2) const {
-            return k1.equal(*locker->_schema, k2);
-        }
+        explicit decorated_key_equals_comparator(const row_locker* rl)  ;
+        bool operator()(const dht::decorated_key& k1, const dht::decorated_key& k2) const ;
     };
     std::unordered_map<dht::decorated_key, two_level_lock, decorated_key_hash, decorated_key_equals_comparator> _two_level_locks;
     void unlock(const dht::decorated_key* pk, bool partition_exclusive, const clustering_key_prefix* cpk, bool row_exclusive);
@@ -45509,7 +44955,7 @@ public:
     // got a schema with the key, and not sure it's not a new version of the
     // schema, call upgrade() before taking the lock.
     future<lock_holder> lock_ck(const dht::decorated_key& pk, const clustering_key_prefix& ckp, bool exclusive, db::timeout_clock::time_point timeout, stats& stats);
-    bool empty() const { return _two_level_locks.empty(); }
+    bool empty() const ;
 };
 // Simple proportional controller to adjust shares for processes for which a backlog can be clearly
 // defined.
@@ -45536,14 +44982,8 @@ public:
         seastar::scheduling_group cpu = default_scheduling_group();
         seastar::io_priority_class io = default_priority_class();
     };
-    future<> shutdown() {
-        _update_timer.cancel();
-        return std::move(_inflight_update);
-    }
-    future<> update_static_shares(float static_shares) {
-        _static_shares = static_shares;
-        return make_ready_future<>();
-    }
+    future<> shutdown() ;
+    future<> update_static_shares(float static_shares) ;
 protected:
     struct control_point {
         float input;
@@ -45739,12 +45179,8 @@ public:
         inactive_read_handle() = default;
         inactive_read_handle(inactive_read_handle&& o) noexcept;
         inactive_read_handle& operator=(inactive_read_handle&& o) noexcept;
-        ~inactive_read_handle() {
-            abandon();
-        }
-        explicit operator bool() const noexcept {
-            return bool(_permit);
-        }
+        ~inactive_read_handle() ;
+        explicit operator bool() const noexcept ;
     };
 private:
     resources _initial_resources;
@@ -45755,9 +45191,7 @@ private:
         // Stores entries for serialized permits waiting to obtain memory.
         permit_list_type _memory_queue;
     public:
-        bool empty() const {
-            return _admission_queue.empty() && _memory_queue.empty();
-        }
+        bool empty() const ;
         void push_to_admission_queue(reader_permit::impl& p);
         void push_to_memory_queue(reader_permit::impl& p);
         reader_permit::impl& front();
@@ -45994,15 +45428,11 @@ public:
     /// Use max-lines to cap the number of (permit) lines in the report.
     /// Use 0 for unlimited.
     std::string dump_diagnostics(unsigned max_lines = 0) const;
-    void set_max_queue_length(size_t size) {
-        _max_queue_length = size;
-    }
-    uint64_t active_reads() const noexcept {
-        return _stats.current_permits - _stats.inactive_reads - _stats.waiters;
-    }
+    void set_max_queue_length(size_t size) ;
+    uint64_t active_reads() const noexcept ;
     void foreach_permit(noncopyable_function<void(const reader_permit::impl&)> func) const;
     void foreach_permit(noncopyable_function<void(const reader_permit&)> func) const;
-    uintptr_t get_blessed_permit() const noexcept { return reinterpret_cast<uintptr_t>(_blessed_permit); }
+    uintptr_t get_blessed_permit() const noexcept ;
 };
 namespace query {
 extern logging::logger qrlogger;
@@ -46077,16 +45507,10 @@ public:
     reader_permit& permit() {
         return _permit;
     }
-    bool is_reversed() const {
-        return _slice->options.contains(query::partition_slice::option::reversed);
-    }
+    bool is_reversed() const ;
     virtual std::optional<full_position_view> current_position() const = 0;
-    dht::partition_ranges_view ranges() const {
-        return _query_ranges;
-    }
-    size_t memory_usage() const {
-        return _permit.consumed_resources().memory;
-    }
+    dht::partition_ranges_view ranges() const ;
+    size_t memory_usage() const ;
     future<> close() noexcept;
 };
 /// One-stop object for serving queries.
@@ -46203,15 +45627,9 @@ public:
         : shard_mutation_querier(std::make_unique<const dht::partition_range_vector>(std::move(query_ranges)), std::move(reader_range),
                 std::move(reader_slice), std::move(reader), std::move(permit), std::move(nominal_pos)) {
     }
-    virtual std::optional<full_position_view> current_position() const override {
-        return _nominal_pos;
-    }
-    lw_shared_ptr<const dht::partition_range> reader_range() && {
-        return std::move(_range);
-    }
-    std::unique_ptr<const query::partition_slice> reader_slice() && {
-        return std::move(_slice);
-    }
+    virtual std::optional<full_position_view> current_position() const override ;
+    lw_shared_ptr<const dht::partition_range> reader_range() && ;
+    std::unique_ptr<const query::partition_slice> reader_slice() && ;
     flat_mutation_reader_v2 reader() && {
         return std::move(std::get<flat_mutation_reader_v2>(_reader));
     }
@@ -46361,10 +45779,8 @@ class cache_temperature {
     float hit_rate;
     explicit cache_temperature(uint8_t hr) : hit_rate(hr/255.0f) {}
 public:
-    uint8_t get_serialized_temperature() const {
-        return hit_rate * 255;
-    }
-    cache_temperature() : hit_rate(0) {}
+    uint8_t get_serialized_temperature() const ;
+    cache_temperature()  ;
     explicit cache_temperature(float hr)  ;
     explicit operator float() const ;
     static cache_temperature invalid() ;
@@ -46470,8 +45886,8 @@ public:
     std::vector<schema_ptr> tables() const;
     std::vector<view_ptr> views() const;
     virtual sstring keypace_name() const override ;
-    virtual sstring element_name() const override { return name(); }
-    virtual sstring element_type() const override { return "keyspace"; }
+    virtual sstring element_name() const override ;
+    virtual sstring element_type() const override ;
     virtual std::ostream& describe(std::ostream& os) const override;
     friend std::ostream& operator<<(std::ostream& os, const keyspace_metadata& m);
 };
@@ -46483,9 +45899,7 @@ struct sstring_hash {
 };
 struct sstring_eq {
     using is_transparent = void;
-    bool operator()(std::string_view a, std::string_view b) const noexcept {
-        return a == b;
-    }
+    bool operator()(std::string_view a, std::string_view b) const noexcept ;
 };
 template <typename K, typename V, typename... Ts>
 struct flat_hash_map : public absl::flat_hash_map<K, V, Ts...> {
@@ -46497,9 +45911,7 @@ using namespace seastar;
 namespace utils {
 class barrier_aborted_exception : public std::exception {
 public:
-    virtual const char* what() const noexcept override {
-        return "barrier aborted";
-    }
+    virtual const char* what() const noexcept override ;
 };
 // Shards-coordination mechanism that allows shards to wait each other at
 // certain points. The barrier should be copied to each shard, then when
@@ -46622,21 +46034,8 @@ public:
     // and use the least_sig_bits to encode the value of generation identifier.
     explicit constexpr generation_type(int_t value) noexcept
         : _value(utils::UUID_gen::create_time(std::chrono::milliseconds::zero()), value) {}
-    constexpr int_t as_int() const noexcept {
-        if (_value.timestamp() != 0) {
-            on_internal_error(sstlog, "UUID generation used as an int");
-        }
-        return _value.get_least_significant_bits();
-    }
-    static generation_type from_string(const std::string& s) {
-        int64_t int_value;
-        if (auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), int_value);
-            ec == std::errc() && ptr == s.data() + s.size()) {
-            return generation_type(int_value);
-        } else {
-            throw std::invalid_argument(fmt::format("invalid UUID: {}", s));
-        }
-    }
+    constexpr int_t as_int() const noexcept ;
+    static generation_type from_string(const std::string& s) ;
     // convert to data_value
     //
     // this function is used when performing queries to SSTABLES_REGISTRY in
@@ -46649,27 +46048,13 @@ public:
     // should always be greater than zero, we use this fact to tell a regular
     // timeuuid from a timeuuid converted from a bigint -- we just use zero
     // for its timestamp of the latter.
-    explicit operator data_value() const noexcept {
-        return _value;
-    }
-    static generation_type from_uuid(utils::UUID value) {
-        // if the encoded value is an int64_t, the UUID's timestamp must be
-        // zero, and the least significant bits is used to encode the value
-        // of the int64_t.
-        assert(value.timestamp() == 0);
-        return generation_type(value);
-    }
+    explicit operator data_value() const noexcept ;
+    static generation_type from_uuid(utils::UUID value) ;
     std::strong_ordering operator<=>(const generation_type& other) const noexcept = default;
 };
-constexpr generation_type generation_from_value(generation_type::int_t value) {
-    return generation_type{value};
-}
+constexpr generation_type generation_from_value(generation_type::int_t value) ;
 template <std::ranges::range Range, typename Target = std::vector<sstables::generation_type>>
-Target generations_from_values(const Range& values) {
-    return boost::copy_range<Target>(values | boost::adaptors::transformed([] (auto value) {
-        return generation_type(value);
-    }));
-}
+Target generations_from_values(const Range& values) ;
 template <typename Target = std::vector<sstables::generation_type>>
 Target generations_from_values(std::initializer_list<generation_type::int_t> values) {
     return boost::copy_range<Target>(values | boost::adaptors::transformed([] (auto value) {
@@ -47964,20 +47349,9 @@ public:
             seastar::scheduling_group compaction_scheduling_group = seastar::current_scheduling_group())
         : memtable_list({}, std::move(cs), dirty_memory_manager, table_stats, compaction_scheduling_group) {
     }
-    bool may_flush() const noexcept {
-        return bool(_seal_immediate_fn);
-    }
-    bool can_flush() const noexcept {
-        return may_flush() && !empty();
-    }
-    bool empty() const noexcept {
-        for (auto& m : _memtables) {
-           if (!m->empty()) {
-               return false;
-            }
-        }
-        return true;
-    }
+    bool may_flush() const noexcept ;
+    bool can_flush() const noexcept ;
+    bool empty() const noexcept ;
     shared_memtable back() const noexcept ;
     // # 8904 - this method is akin to std::set::erase(key_type), not
     // erase(iterator). Should be tolerant against non-existing.
@@ -47991,15 +47365,9 @@ public:
     auto begin() noexcept ;
     auto begin() const noexcept ;
     auto end() noexcept ;
-    auto end() const noexcept {
-        return _memtables.end();
-    }
-    memtable& active_memtable() noexcept {
-        return *_memtables.back();
-    }
-    void add_memtable() {
-        _memtables.emplace_back(new_memtable());
-    }
+    auto end() const noexcept ;
+    memtable& active_memtable() noexcept ;
+    void add_memtable() ;
     dirty_memory_manager_logalloc::region_group& region_group() noexcept {
         return _dirty_memory_manager->region_group();
     }
