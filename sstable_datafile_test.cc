@@ -2035,19 +2035,13 @@ struct super_enum {
     using sequence_type = typename std::underlying_type<enum_type>::type;
     template <enum_type first, enum_type... rest>
     struct valid_sequence {
-        static constexpr bool apply(sequence_type v) noexcept {
-            return (v == static_cast<sequence_type>(first)) || valid_sequence<rest...>::apply(v);
-        }
+        static constexpr bool apply(sequence_type v) noexcept ;
     };
     template <enum_type first>
     struct valid_sequence<first> {
-        static constexpr bool apply(sequence_type v) noexcept {
-            return v == static_cast<sequence_type>(first);
-        }
+        static constexpr bool apply(sequence_type v) noexcept ;
     };
-    static constexpr bool is_valid_sequence(sequence_type v) noexcept {
-        return valid_sequence<Items...>::apply(v);
-    }
+    static constexpr bool is_valid_sequence(sequence_type v) noexcept ;
     template<enum_type Elem>
     static constexpr sequence_type sequence_for() {
         return static_cast<sequence_type>(Elem);
@@ -2108,29 +2102,17 @@ public:
     }
     struct prepared {
         mask_type mask;
-        bool operator==(const prepared& o) const {
-            return mask == o.mask;
-        }
+        bool operator==(const prepared& o) const ;
     };
-    static prepared prepare(enum_type e) {
-        return {mask_for(e)};
-    }
+    static prepared prepare(enum_type e) ;
     template<enum_type e>
-    static constexpr prepared prepare() {
-        return {mask_for<e>()};
-    }
+    static constexpr prepared prepare() ;
     static_assert(std::numeric_limits<mask_type>::max() >= ((size_t)1 << Enum::max_sequence), "mask type too small");
     template<enum_type e>
-    bool contains() const {
-        return bool(_mask & mask_for<e>());
-    }
-    bool contains(enum_type e) const {
-        return bool(_mask & mask_for(e));
-    }
+    bool contains() const ;
+    bool contains(enum_type e) const ;
     template<enum_type e>
-    void remove() {
-        _mask &= ~mask_for<e>();
-    }
+    void remove() ;
     void remove(enum_type e) {
         _mask &= ~mask_for(e);
     }
@@ -2142,25 +2124,13 @@ public:
     void set_if(bool condition) {
         _mask |= mask_type(condition) << shift_for<e>();
     }
-    void set(enum_type e) {
-        _mask |= mask_for(e);
-    }
+    void set(enum_type e) ;
     template<enum_type e>
-    void toggle() {
-        _mask ^= mask_for<e>();
-    }
-    void toggle(enum_type e) {
-        _mask ^= mask_for(e);
-    }
-    void add(const enum_set& other) {
-        _mask |= other._mask;
-    }
-    explicit operator bool() const {
-        return bool(_mask);
-    }
-    mask_type mask() const {
-        return _mask;
-    }
+    void toggle() ;
+    void toggle(enum_type e) ;
+    void add(const enum_set& other) ;
+    explicit operator bool() const ;
+    mask_type mask() const ;
     iterator begin() const {
         return make_iterator(mask_iterator(_mask));
     }
@@ -2533,9 +2503,9 @@ public:
     using iterator = typename T::const_iterator;
     using const_iterator = typename T::const_iterator;
 public:
-    explicit fragment_range_view(const T& range) : _range(&range) { }
-    const_iterator begin() const { return _range->begin(); }
-    const_iterator end() const { return _range->end(); }
+    explicit fragment_range_view(const T& range)  ;
+    const_iterator begin() const ;
+    const_iterator end() const ;
     size_t size_bytes() const { return _range->size_bytes(); }
     bool empty() const { return _range->empty(); }
 };
@@ -2556,7 +2526,7 @@ public:
     const_iterator begin() const { return &_view; }
     const_iterator end() const { return &_view + 1; }
     size_t size_bytes() const { return _view.size(); }
-    bool empty() const { return _view.empty(); }
+    bool empty() const ;
 };
 single_fragment_range(bytes_view) -> single_fragment_range<mutable_view::no>;
 single_fragment_range(bytes_mutable_view) -> single_fragment_range<mutable_view::yes>;
@@ -2565,10 +2535,10 @@ struct empty_fragment_range {
     using fragment_type = bytes_view;
     using iterator = bytes_view*;
     using const_iterator = bytes_view*;
-    iterator begin() const { return nullptr; }
-    iterator end() const { return nullptr; }
-    size_t size_bytes() const { return 0; }
-    bool empty() const { return true; }
+    iterator begin() const ;
+    iterator end() const ;
+    size_t size_bytes() const ;
+    bool empty() const ;
 };
 static_assert(FragmentRange<empty_fragment_range>);
 static_assert(FragmentRange<single_fragment_range<mutable_view::no>>);
@@ -2576,14 +2546,7 @@ static_assert(FragmentRange<single_fragment_range<mutable_view::yes>>);
 template<typename FragmentedBuffer>
 requires FragmentRange<FragmentedBuffer>
 bytes linearized(const FragmentedBuffer& buffer)
-{
-    bytes b(bytes::initialized_later(), buffer.size_bytes());
-    auto dst = b.begin();
-    for (bytes_view fragment : buffer) {
-        dst = boost::copy(fragment, dst);
-    }
-    return b;
-}
+;
 template<typename FragmentedBuffer, typename Function>
 requires FragmentRange<FragmentedBuffer> && requires (Function fn, bytes_view bv) {
     fn(bv);
@@ -2645,21 +2608,17 @@ struct fragment_range {
             _current = _view.current_fragment(); 
             return *this;
         }
-        fragment_iterator operator++(int) {
-            fragment_iterator i(*this);
-            ++(*this);
-            return i;
-        }
-        reference operator*() const { return _current; }
-        pointer operator->() const { return &_current; }
+        fragment_iterator operator++(int) ;
+        reference operator*() const ;
+        pointer operator->() const ;
         bool operator==(const fragment_iterator& i) const { return _view.size_bytes() == i._view.size_bytes(); }
     };
     using iterator = fragment_iterator;
     fragment_range(const View& v) : view(v) {}
     fragment_iterator begin() const { return fragment_iterator(view); }
-    fragment_iterator end() const { return fragment_iterator(); }
-    size_t size_bytes() const { return view.size_bytes(); }
-    bool empty() const { return view.empty(); }
+    fragment_iterator end() const ;
+    size_t size_bytes() const ;
+    bool empty() const ;
 };
 template<FragmentedView View>
 requires (!FragmentRange<View>)
@@ -3349,16 +3308,14 @@ inline std::ostream& operator<<(std::ostream& os, const managed_bytes_view& v) {
     }
     return os;
 }
-inline std::ostream& operator<<(std::ostream& os, const managed_bytes& b) {
-    return (os << managed_bytes_view(b));
-}
+ std::ostream& operator<<(std::ostream& os, const managed_bytes& b) ;
 std::ostream& operator<<(std::ostream& os, const managed_bytes_opt& b);
 class bytes_ostream {
 public:
     using size_type = bytes::size_type;
     using value_type = bytes::value_type;
     using fragment_type = bytes_view;
-    static constexpr size_type max_chunk_size() { return max_alloc_size() - sizeof(chunk); }
+    static constexpr size_type max_chunk_size() ;
 private:
     static_assert(sizeof(value_type) == 1, "value_type is assumed to be one byte long");
     // Note: while appending data, chunk::size refers to the allocated space in the chunk,
@@ -3367,7 +3324,7 @@ private:
     //       doesn't change. This fits with managed_bytes interpretation.
     using chunk = blob_storage;
     static constexpr size_type default_chunk_size{512};
-    static constexpr size_type max_alloc_size() { return 128 * 1024; }
+    static constexpr size_type max_alloc_size() ;
 private:
     blob_storage::ref_type _begin;
     chunk* _current;
@@ -3388,7 +3345,7 @@ public:
         chunk* _current = nullptr;
     public:
         fragment_iterator() = default;
-        fragment_iterator(chunk* current) : _current(current) {}
+        fragment_iterator(chunk* current)  ;
         fragment_iterator(const fragment_iterator&) = default;
         fragment_iterator& operator=(const fragment_iterator&) = default;
         bytes_view operator*() const ;
@@ -3630,20 +3587,8 @@ public:
         iterator() = default;
         iterator(bytes_view current, size_t left, FragmentIterator next)  ;
         bytes_view operator*() const ;
-        const bytes_view* operator->() const {
-            return &_current;
-        }
-        iterator& operator++() {
-            _left -= _current.size();
-            if (_left) {
-                auto next_view = bytes_view(reinterpret_cast<const bytes::value_type*>((*_next).begin()),
-                                            (*_next).size());
-                auto next_size = std::min(_left, next_view.size());
-                _current = bytes_view(next_view.data(), next_size);
-                ++_next;
-            }
-            return *this;
-        }
+        const bytes_view* operator->() const ;
+        iterator& operator++() ;
         iterator operator++(int) {
             iterator it(*this);
             operator++();
@@ -3670,38 +3615,13 @@ public:
         : buffer_view(bytes_view(reinterpret_cast<const int8_t*>(stream.first_fragment_data()), stream.first_fragment_size()),
                       stream.size(), stream.fragment_iterator())
     { }
-    iterator begin() const {
-        return iterator(_first, _total_size, _next);
-    }
-    iterator end() const {
-        return iterator();
-    }
-    size_t size_bytes() const {
-        return _total_size;
-    }
-    bool empty() const {
-        return !_total_size;
-    }
+    iterator begin() const ;
+    iterator end() const ;
+    size_t size_bytes() const ;
+    bool empty() const ;
     // FragmentedView implementation
-    void remove_prefix(size_t n) {
-        while (n >= _first.size() && n > 0) {
-            n -= _first.size();
-            remove_current();
-        }
-        _total_size -= n;
-        _first.remove_prefix(n);
-    }
-    void remove_current() {
-        _total_size -= _first.size();
-        if (_total_size) {
-            auto next_data = reinterpret_cast<const bytes::value_type*>((*_next).begin());
-            size_t next_size = std::min(_total_size, (*_next).size());
-            _first = bytes_view(next_data, next_size);
-            ++_next;
-        } else {
-            _first = bytes_view();
-        }
-    }
+    void remove_prefix(size_t n) ;
+    void remove_current() ;
     buffer_view prefix(size_t n) const ;
     bytes_view current_fragment() ;
     bytes linearize() const ;
@@ -3734,23 +3654,15 @@ struct integral_serializer {
     template<typename Output>
     static void write(Output& out, T v) ;
     template<typename Input>
-    static void skip(Input& v) {
-        read(v);
-    }
+    static void skip(Input& v) ;
 };
 template<> struct serializer<bool> {
     template <typename Input>
-    static bool read(Input& i) {
-        return deserialize_integral<uint8_t>(i);
-    }
+    static bool read(Input& i) ;
     template< typename Output>
-    static void write(Output& out, bool v) {
-        serialize_integral(out, uint8_t(v));
-    }
+    static void write(Output& out, bool v) ;
     template <typename Input>
-    static void skip(Input& i) {
-        read(i);
-    }
+    static void skip(Input& i) ;
 };
 template<> struct serializer<int8_t> : public integral_serializer<int8_t> {};
 template<> struct serializer<uint8_t> : public integral_serializer<uint8_t> {};
@@ -3763,13 +3675,9 @@ template<> struct serializer<uint64_t> : public integral_serializer<uint64_t> {}
 template<typename Output>
 void safe_serialize_as_uint32(Output& output, uint64_t data);
 template<typename T, typename Output>
-inline void serialize(Output& out, const T& v) {
-    serializer<T>::write(out, v);
-};
+ void serialize(Output& out, const T& v) ;;
 template<typename T, typename Output>
-inline void serialize(Output& out, const std::reference_wrapper<T> v) {
-    serializer<T>::write(out, v.get());
-}
+ void serialize(Output& out, const std::reference_wrapper<T> v) ;
 template<typename T, typename Input>
 inline auto deserialize(Input& in, boost::type<T> t) {
     return serializer<T>::read(in);
@@ -3867,13 +3775,7 @@ serialize_gc_clock_duration_value(Output& out, int64_t v) {
 }
 template <typename Input>
 int64_t
-deserialize_gc_clock_duration_value(Input& in) {
-    if (!gc_clock_using_3_1_0_serialization) {
-        return serializer<int32_t>::read(in);
-    } else {
-        return serializer<int64_t>::read(in);
-    }
-}
+deserialize_gc_clock_duration_value(Input& in) ;
 }
 // The following is a redesigned subset of Java's DataOutput,
 // DataOutputStream, DataInput, DataInputStream, etc. It allows serializing
@@ -3910,15 +3812,11 @@ void serialize_int(CharOutputIterator& out, IntegerType val) {
 }
 }
 template <typename CharOutputIterator>
-inline
-void serialize_int8(CharOutputIterator& out, uint8_t val) {
-    internal_impl::serialize_int<uint8_t>(out, val);
-}
+
+void serialize_int8(CharOutputIterator& out, uint8_t val) ;
 template <typename CharOutputIterator>
-inline
-void serialize_int16(CharOutputIterator& out, uint16_t val) {
-    internal_impl::serialize_int<uint16_t>(out, val);
-}
+
+void serialize_int16(CharOutputIterator& out, uint16_t val) ;
 template <typename CharOutputIterator>
 inline
 void serialize_int32(CharOutputIterator& out, uint32_t val) {
@@ -3945,45 +3843,16 @@ template <typename CharOutputIterator>
 requires requires (CharOutputIterator it) {
     *it++ = 'a';
 }
-inline
-void serialize_string(CharOutputIterator& out, const sstring& s) {
-    // Java specifies that nulls in the string need to be replaced by the
-    // two bytes 0xC0, 0x80. Let's not bother with such transformation
-    // now, but just verify wasn't needed.
-    for (char c : s) {
-        if (c == '\0') {
-            throw UTFDataFormatException();
-        }
-    }
-    if (s.size() > std::numeric_limits<uint16_t>::max()) {
-        // Java specifies the string length is written as uint16_t, so we
-        // can't serialize longer strings.
-        throw UTFDataFormatException();
-    }
-    serialize_int16(out, s.size());
-    out = std::copy(s.begin(), s.end(), out);
-}
+
+void serialize_string(CharOutputIterator& out, const sstring& s) ;
 template <typename CharOutputIterator>
 requires requires (CharOutputIterator it) {
     *it++ = 'a';
 }
-inline
-void serialize_string(CharOutputIterator& out, const char* s) {
-    // TODO: like above, need to change UTF-8 when above 16-bit.
-    auto len = strlen(s);
-    if (len > std::numeric_limits<uint16_t>::max()) {
-        // Java specifies the string length is written as uint16_t, so we
-        // can't serialize longer strings.
-        throw UTFDataFormatException();
-    }
-    serialize_int16(out, len);
-    out = std::copy_n(s, len, out);
-}
-inline
-size_t serialize_string_size(const sstring& s) {;
-    // As above, this code is missing the case of modified utf-8
-    return serialize_int16_size + s.size();
-}
+
+void serialize_string(CharOutputIterator& out, const char* s) ;
+
+size_t serialize_string_size(const sstring& s) ;
 template<typename T, typename CharOutputIterator>
 static inline
 void write(CharOutputIterator& out, const T& val) {
@@ -4043,18 +3912,9 @@ public:
         return uint64_t(least_sig_bits) <=> uint64_t(v.least_sig_bits);
     }
     // nibble set to a non-zero value
-    bool is_null() const noexcept {
-        return !most_sig_bits && !least_sig_bits;
-    }
-    explicit operator bool() const noexcept {
-        return !is_null();
-    }
-    bytes serialize() const {
-        bytes b(bytes::initialized_later(), serialized_size());
-        auto i = b.begin();
-        serialize(i);
-        return b;
-    }
+    bool is_null() const noexcept ;
+    explicit operator bool() const noexcept ;
+    bytes serialize() const ;
     static size_t serialized_size() noexcept {
         return 16;
     }
@@ -4139,25 +3999,18 @@ struct tagged_uuid {
     const utils::UUID& uuid() const noexcept {
         return id;
     }
-    sstring to_sstring() const {
-        return id.to_sstring();
-    }
+    sstring to_sstring() const ;
 };
 } // namespace utils
 template<>
 struct appending_hash<utils::UUID> {
     template<typename Hasher>
-    void operator()(Hasher& h, const utils::UUID& id) const noexcept {
-        feed_hash(h, id.get_most_significant_bits());
-        feed_hash(h, id.get_least_significant_bits());
-    }
+    void operator()(Hasher& h, const utils::UUID& id) const noexcept ;
 };
 template<typename Tag>
 struct appending_hash<utils::tagged_uuid<Tag>> {
     template<typename Hasher>
-    void operator()(Hasher& h, const utils::tagged_uuid<Tag>& id) const noexcept {
-        appending_hash<utils::UUID>{}(h, id.uuid());
-    }
+    void operator()(Hasher& h, const utils::tagged_uuid<Tag>& id) const noexcept ;
 };
 namespace std {
 template<>
@@ -4279,17 +4132,9 @@ public:
         return uuid;
     }
     static UUID get_time_UUID(milliseconds when, int64_t clock_seq_and_node = UUID_gen::clock_seq_and_node)
-    {
-        auto uuid = UUID(create_time(from_unix_timestamp(when)), clock_seq_and_node);
-        assert(uuid.is_timestamp());
-        return uuid;
-    }
+    ;
     static UUID get_time_UUID_raw(decimicroseconds when, int64_t clock_seq_and_node)
-    {
-        auto uuid = UUID(create_time(when), clock_seq_and_node);
-        assert(uuid.is_timestamp());
-        return uuid;
-    }
+    ;
     static UUID get_random_time_UUID_from_micros(std::chrono::microseconds when_in_micros) ;
     // Generate a time-based (Version 1) UUID using
     // a microsecond-precision Unix time and a unique number in
@@ -4314,31 +4159,13 @@ public:
     ;
     static std::array<int8_t, 16> get_time_UUID_bytes() ;
     static UUID min_time_UUID(decimicroseconds timestamp = decimicroseconds{0})
-    {
-        auto uuid = UUID(create_time(from_unix_timestamp(timestamp)), MIN_CLOCK_SEQ_AND_NODE);
-        assert(uuid.is_timestamp());
-        return uuid;
-    }
+    ;
     static UUID max_time_UUID(milliseconds timestamp)
-    {
-        // unix timestamp are milliseconds precision, uuid timestamp are 100's
-        // nanoseconds precision. If we ask for the biggest uuid have unix
-        // timestamp 1ms, then we should not extend 100's nanoseconds
-        // precision by taking 10000, but rather 19999.
-        decimicroseconds uuid_tstamp = from_unix_timestamp(timestamp + milliseconds(1)) - decimicroseconds(1);
-        auto uuid = UUID(create_time(uuid_tstamp), MAX_CLOCK_SEQ_AND_NODE);
-        assert(uuid.is_timestamp());
-        return uuid;
-    }
+    ;
     static milliseconds unix_timestamp(UUID uuid)
-    {
-        return duration_cast<milliseconds>(decimicroseconds(uuid.timestamp()) + START_EPOCH);
-    }
+    ;
     static std::chrono::seconds unix_timestamp_in_sec(UUID uuid)
-    {
-        using namespace std::chrono;
-        return duration_cast<seconds>(static_cast<milliseconds>(unix_timestamp(uuid)));
-    }
+    ;
     static int64_t micros_timestamp(UUID uuid)
     {
         return (uuid.timestamp() + START_EPOCH.count())/10;
@@ -4432,17 +4259,9 @@ public:
     std::vector<sstables::file_io_extension*> sstable_file_io_extensions() const;
     std::vector<db::commitlog_file_extension*> commitlog_file_extensions() const;
     std::set<sstring> schema_extension_keywords() const;
-    void add_schema_extension(sstring w, schema_ext_create_func f) {
-        _schema_extensions.emplace(std::move(w), std::move(f));
-    }
+    void add_schema_extension(sstring w, schema_ext_create_func f) ;
     template<typename Extension>
-    void add_schema_extension(sstring w) {
-        add_schema_extension(std::move(w), [] (db::extensions::schema_ext_config cfg) {
-            return std::visit([] (auto v) {
-                return ::make_shared<Extension>(v);
-            }, cfg);
-        });
-    }
+    void add_schema_extension(sstring w) ;
     void add_sstable_file_io_extension(sstring n, sstable_file_io_extension);
     void add_commitlog_file_extension(sstring n, commitlog_file_extension_ptr);
     void add_extension_to_schema(schema_ptr, const sstring&, shared_ptr<schema_extension>);
@@ -4478,19 +4297,19 @@ public:
     options(const std::map<sstring, sstring>& map);
     std::map<sstring, sstring> to_map() const;
     sstring to_sstring() const;
-    bool enabled() const { return _enabled.value_or(false); }
-    bool is_enabled_set() const { return _enabled.has_value(); }
-    bool preimage() const { return _preimage != image_mode::off; }
-    bool full_preimage() const { return _preimage == image_mode::full; }
-    bool postimage() const { return _postimage; }
-    delta_mode get_delta_mode() const { return _delta_mode; }
-    void set_delta_mode(delta_mode m) { _delta_mode = m; }
-    int ttl() const { return _ttl; }
-    void enabled(bool b) { _enabled = b; }
-    void preimage(bool b) { preimage(b ? image_mode::on : image_mode::off); }
-    void preimage(image_mode m) { _preimage = m; }
-    void postimage(bool b) { _postimage = b; }
-    void ttl(int v) { _ttl = v; }
+    bool enabled() const ;
+    bool is_enabled_set() const ;
+    bool preimage() const ;
+    bool full_preimage() const ;
+    bool postimage() const ;
+    delta_mode get_delta_mode() const ;
+    void set_delta_mode(delta_mode m) ;
+    int ttl() const ;
+    void enabled(bool b) ;
+    void preimage(bool b) ;
+    void preimage(image_mode m) ;
+    void postimage(bool b) ;
+    void ttl(int v) ;
     bool operator==(const options& o) const;
 };
 } // namespace cdc
@@ -4618,57 +4437,16 @@ public:
     }
     explicit operator view() const noexcept;
     istream get_istream() const noexcept;
-    ostream get_ostream() noexcept {
-        if (_fragments.size() != 1) {
-            return ostream::fragmented(_fragments.begin(), _size_bytes);
-        }
-        auto& current = *_fragments.begin();
-        return ostream::simple(reinterpret_cast<char*>(current.get_write()), current.size());
-    }
-    size_t size_bytes() const { return _size_bytes; }
-    bool empty() const { return !_size_bytes; }
+    ostream get_ostream() noexcept ;
+    size_t size_bytes() const ;
+    bool empty() const ;
     // Linear complexity, invalidates views and istreams
-    void remove_prefix(size_t n) noexcept {
-        _size_bytes -= n;
-        auto it = _fragments.begin();
-        while (it->size() < n) {
-            n -= it->size();
-            ++it;
-        }
-        if (n) {
-            it->trim_front(n);
-        }
-        _fragments.erase(_fragments.begin(), it);
-    }
+    void remove_prefix(size_t n) noexcept ;
     // Linear complexity, invalidates views and istreams
-    void remove_suffix(size_t n) noexcept {
-        _size_bytes -= n;
-        auto it = _fragments.rbegin();
-        while (it->size() < n) {
-            n -= it->size();
-            ++it;
-        }
-        if (n) {
-            it->trim(it->size() - n);
-        }
-        _fragments.erase(it.base(), _fragments.end());
-    }
+    void remove_suffix(size_t n) noexcept ;
     // Creates a fragmented temporary buffer of a specified size, supplied as a parameter.
     // Max chunk size is limited to 128kb (the same limit as `bytes_stream` has).
-    static fragmented_temporary_buffer allocate_to_fit(size_t data_size) {
-        constexpr size_t max_fragment_size = default_fragment_size; // 128KB
-        const size_t full_fragment_count = data_size / max_fragment_size; // number of max-sized fragments
-        const size_t last_fragment_size = data_size % max_fragment_size;
-        std::vector<seastar::temporary_buffer<char>> fragments;
-        fragments.reserve(full_fragment_count + !!last_fragment_size);
-        for (size_t i = 0; i < full_fragment_count; ++i) {
-            fragments.emplace_back(seastar::temporary_buffer<char>(max_fragment_size));
-        }
-        if (last_fragment_size) {
-            fragments.emplace_back(seastar::temporary_buffer<char>(last_fragment_size));
-        }
-        return fragmented_temporary_buffer(std::move(fragments), data_size);
-    }
+    static fragmented_temporary_buffer allocate_to_fit(size_t data_size) ;
     vector_type release() && noexcept {
         return std::move(_fragments);
     }
@@ -4816,15 +4594,8 @@ public:
         , _current_end(total_size ? _current->get() + _current->size() : nullptr)
         , _bytes_left(total_size)
     { }
-    size_t bytes_left() const noexcept {
-        return _bytes_left ? _bytes_left - (_current_position - _current->get()) : 0;
-    }
-    void skip(size_t n) noexcept {
-        if (__builtin_expect(contig_remain() < n, false)) {
-            return skip_slow(n);
-        }
-        _current_position += n;
-    }
+    size_t bytes_left() const noexcept ;
+    void skip(size_t n) noexcept ;
     template<typename T, typename ExceptionThrower = default_exception_thrower>
     requires fragmented_temporary_buffer_concepts::ExceptionThrower<ExceptionThrower>
     T read(ExceptionThrower&& exceptions = default_exception_thrower()) {
@@ -4890,10 +4661,7 @@ public:
         return bytes_view(reinterpret_cast<const bytes::value_type*>(ptr), n);
     }
 };
-inline fragmented_temporary_buffer::istream fragmented_temporary_buffer::get_istream() const noexcept // allow empty (ut for that)
-{
-    return istream(_fragments, _size_bytes);
-}
+
 class fragmented_temporary_buffer::reader {
     std::vector<temporary_buffer<char>> _fragments;
     size_t _left = 0;
@@ -5310,14 +5078,12 @@ struct runtime_exception : public std::exception {
     sstring _why;
 public:
     runtime_exception(sstring why) : _why(sstring("runtime error: ") + why) {}
-    virtual const char* what() const noexcept override { return _why.c_str(); }
+    virtual const char* what() const noexcept override ;
 };
 struct empty_t {};
 class empty_value_exception : public std::exception {
 public:
-    virtual const char* what() const noexcept override {
-        return "Unexpected empty value";
-    }
+    virtual const char* what() const noexcept override ;
 };
 [[noreturn]] void on_types_internal_error(std::exception_ptr ex);
 // Cassandra has a notion of empty values even for scalars (i.e. int).  This is
@@ -5352,17 +5118,9 @@ private:
     }
 };
 template <typename T>
-inline
+
 bool
-operator==(const emptyable<T>& me1, const emptyable<T>& me2) {
-    if (me1.empty() && me2.empty()) {
-        return true;
-    }
-    if (me1.empty() != me2.empty()) {
-        return false;
-    }
-    return me1.get() == me2.get();
-}
+operator==(const emptyable<T>& me1, const emptyable<T>& me2) ;
 template <typename T>
 inline
 bool
@@ -5631,9 +5389,9 @@ public:
     bool is_counter() const;
     bool is_string() const;
     bool is_collection() const;
-    bool is_map() const { return _kind == kind::map; }
-    bool is_set() const { return _kind == kind::set; }
-    bool is_list() const { return _kind == kind::list; }
+    bool is_map() const ;
+    bool is_set() const ;
+    bool is_list() const ;
     // Lists and sets are similar: they are both represented as std::vector<data_value>
     // @sa listlike_collection_type_impl
     bool is_listlike() const { return _kind == kind::list || _kind == kind::set; }
@@ -5690,26 +5448,11 @@ data_value::make_new(data_type type, T&& v) {
     return data_value(type->native_value_clone(&value), type);
 }
 template <typename T>
-const T& value_cast(const data_value& value) {
-    return value_cast<T>(const_cast<data_value&&>(value));
-}
+const T& value_cast(const data_value& value) ;
 template <typename T>
-T&& value_cast(data_value&& value) {
-    if (typeid(maybe_empty<T>) != value.type()->native_typeid()) {
-        throw std::bad_cast();
-    }
-    if (value.is_null()) {
-        throw std::runtime_error("value is null");
-    }
-    return std::move(*reinterpret_cast<maybe_empty<T>*>(value._value));
-}
+T&& value_cast(data_value&& value) ;
 /// Special case: sometimes we cast uuid to timeuuid so we can correctly compare timestamps.  See #7729.
-template <>
-inline timeuuid_native_type&& value_cast<timeuuid_native_type>(data_value&& value) {
-    static thread_local timeuuid_native_type value_holder; // Static so it survives return from this function.
-    value_holder.uuid = value_cast<utils::UUID>(value);
-    return std::move(value_holder);
-}
+template <> timeuuid_native_type&& value_cast<timeuuid_native_type>(data_value&& value) ;
 // CRTP: implements translation between a native_type (C++ type) to abstract_type
 // AbstractType is parametrized because we want a
 //    abstract_type -> collection_type_impl -> map_type
@@ -5743,30 +5486,12 @@ public:
 bool operator==(const data_value& x, const data_value& y);
 using bytes_view_opt = std::optional<bytes_view>;
 using managed_bytes_view_opt = std::optional<managed_bytes_view>;
-static inline
-bool optional_less_compare(data_type t, bytes_view_opt e1, bytes_view_opt e2) {
-    if (bool(e1) != bool(e2)) {
-        return bool(e2);
-    }
-    if (!e1) {
-        return false;
-    }
-    return t->less(*e1, *e2);
-}
-static inline
-bool optional_equal(data_type t, bytes_view_opt e1, bytes_view_opt e2) {
-    if (bool(e1) != bool(e2)) {
-        return false;
-    }
-    if (!e1) {
-        return true;
-    }
-    return t->equal(*e1, *e2);
-}
-static inline
-bool less_compare(data_type t, bytes_view e1, bytes_view e2) {
-    return t->less(e1, e2);
-}
+static
+bool optional_less_compare(data_type t, bytes_view_opt e1, bytes_view_opt e2) ;
+static
+bool optional_equal(data_type t, bytes_view_opt e1, bytes_view_opt e2) ;
+static
+bool less_compare(data_type t, bytes_view e1, bytes_view e2) ;
 static inline
 std::strong_ordering tri_compare(data_type t, managed_bytes_view e1, managed_bytes_view e2) {
     return t->compare(e1, e2);
@@ -5996,25 +5721,14 @@ bytes_view
 to_bytes_view(const sstring& x) {
     return bytes_view(reinterpret_cast<const int8_t*>(x.c_str()), x.size());
 }
-inline
+
 bytes
-to_bytes(const utils::UUID& uuid) {
-    struct {
-        uint64_t msb;
-        uint64_t lsb;
-    } tmp = { net::hton(uint64_t(uuid.get_most_significant_bits())),
-        net::hton(uint64_t(uuid.get_least_significant_bits())) };
-    return bytes(reinterpret_cast<int8_t*>(&tmp), 16);
-}
-inline bool
-less_unsigned(bytes_view v1, bytes_view v2) {
-    return compare_unsigned(v1, v2) < 0;
-}
+to_bytes(const utils::UUID& uuid) ;
+ bool
+less_unsigned(bytes_view v1, bytes_view v2) ;
 template<typename Type>
-static inline
-typename Type::value_type deserialize_value(Type& t, bytes_view v) {
-    return t.deserialize_value(v);
-}
+static
+typename Type::value_type deserialize_value(Type& t, bytes_view v) ;
 template<typename T>
 T read_simple(bytes_view& v) ;
 template<typename T>
@@ -6137,25 +5851,9 @@ public:
         return b;
     }
     template<typename T>
-    static managed_bytes serialize_value(std::initializer_list<T> values) {
-        return serialize_value(boost::make_iterator_range(values.begin(), values.end()));
-    }
-    managed_bytes serialize_optionals(std::span<const bytes_opt> values) const {
-        return serialize_value(boost::make_iterator_range(values.begin(), values.end()) | boost::adaptors::transformed([] (const bytes_opt& bo) -> bytes_view {
-            if (!bo) {
-                throw std::logic_error("attempted to create key component from empty optional");
-            }
-            return *bo;
-        }));
-    }
-    managed_bytes serialize_optionals(std::span<const managed_bytes_opt> values) const {
-        return serialize_value(boost::make_iterator_range(values.begin(), values.end()) | boost::adaptors::transformed([] (const managed_bytes_opt& bo) -> managed_bytes_view {
-            if (!bo) {
-                throw std::logic_error("attempted to create key component from empty optional");
-            }
-            return managed_bytes_view(*bo);
-        }));
-    }
+    static managed_bytes serialize_value(std::initializer_list<T> values) ;
+    managed_bytes serialize_optionals(std::span<const bytes_opt> values) const ;
+    managed_bytes serialize_optionals(std::span<const managed_bytes_opt> values) const ;
     managed_bytes serialize_value_deep(const std::vector<data_value>& values) const {
         // TODO: Optimize
         std::vector<bytes> partial;
@@ -6669,40 +6367,9 @@ public:
             throw std::invalid_argument(format("unknown type: {:d}\n", uint8_t(_t)));
         }
     }
-    static speculative_retry from_sstring(sstring str) {
-        std::transform(str.begin(), str.end(), str.begin(), ::toupper);
-        sstring ms("MS");
-        sstring percentile("PERCENTILE");
-        auto convert = [&str] (sstring& t) {
-            try {
-                return boost::lexical_cast<double>(str.substr(0, str.size() - t.size()));
-            } catch (boost::bad_lexical_cast& e) {
-                throw std::invalid_argument(format("cannot convert {} to speculative_retry\n", str));
-            }
-        };
-        type t;
-        double v = 0;
-        if (str == "NONE") {
-            t = type::NONE;
-        } else if (str == "ALWAYS") {
-            t = type::ALWAYS;
-        } else if (str.compare(str.size() - ms.size(), ms.size(), ms) == 0) {
-            t = type::CUSTOM;
-            v = convert(ms);
-        } else if (str.compare(str.size() - percentile.size(), percentile.size(), percentile) == 0) {
-            t = type::PERCENTILE;
-            v = convert(percentile) / 100;
-        } else {
-            throw std::invalid_argument(format("cannot convert {} to speculative_retry\n", str));
-        }
-        return speculative_retry(t, v);
-    }
-    type get_type() const {
-        return _t;
-    }
-    double get_value() const {
-        return _v;
-    }
+    static speculative_retry from_sstring(sstring str) ;
+    type get_type() const ;
+    double get_value() const ;
     bool operator==(const speculative_retry& other) const = default;
 };
 typedef std::unordered_map<sstring, sstring> index_options_map;
@@ -6800,9 +6467,9 @@ public:
     }
     column_definition& operator=(column_definition&& other) = default;
     bool is_static() const { return kind == column_kind::static_column; }
-    bool is_regular() const { return kind == column_kind::regular_column; }
-    bool is_partition_key() const { return kind == column_kind::partition_key; }
-    bool is_clustering_key() const { return kind == column_kind::clustering_key; }
+    bool is_regular() const ;
+    bool is_partition_key() const ;
+    bool is_clustering_key() const ;
     bool is_primary_key() const { return kind == column_kind::partition_key || kind == column_kind::clustering_key; }
     bool is_atomic() const { return _is_atomic; }
     bool is_multi_cell() const { return !_is_atomic; }
@@ -6820,17 +6487,15 @@ public:
     column_computation_ptr get_computation_ptr() const {
         return _computation ? _computation->clone() : nullptr;
     }
-    void set_computed(column_computation_ptr computation) { _computation = std::move(computation); }
+    void set_computed(column_computation_ptr computation) ;
     // Columns hidden from CQL cannot be in any way retrieved by the user,
     // either explicitly or via the '*' operator, or functions, aggregates, etc.
-    bool is_hidden_from_cql() const { return is_view_virtual(); }
+    bool is_hidden_from_cql() const ;
     const sstring& name_as_text() const;
     const bytes& name() const;
     sstring name_as_cql_string() const;
     friend std::ostream& operator<<(std::ostream& os, const column_definition& cd);
-    bool has_component_index() const {
-        return is_primary_key();
-    }
+    bool has_component_index() const ;
     uint32_t component_index() const {
         assert(has_component_index());
         return id;
