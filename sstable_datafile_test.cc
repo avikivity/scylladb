@@ -36056,23 +36056,19 @@ public:
     const locator::host_id& host_id() const noexcept {
         return _host_id;
     }
-    const inet_address& endpoint() const noexcept {
-        return _endpoint;
-    }
-    const endpoint_dc_rack& dc_rack() const noexcept {
-        return _dc_rack;
-    }
+    const inet_address& endpoint() const noexcept ;
+    const endpoint_dc_rack& dc_rack() const noexcept ;
     // Is this "localhost"?
-    this_node is_this_node() const noexcept { return _is_this_node; }
+    this_node is_this_node() const noexcept ;
     // idx < 0 means "unassigned"
-    idx_type idx() const noexcept { return _idx; }
-    state get_state() const noexcept { return _state; }
+    idx_type idx() const noexcept ;
+    state get_state() const noexcept ;
     static std::string to_string(state);
 private:
     static node_holder make(const locator::topology* topology, locator::host_id id, inet_address endpoint, endpoint_dc_rack dc_rack, state state, node::this_node is_this_node = this_node::no, idx_type idx = -1);
     node_holder clone() const;
-    void set_topology(const locator::topology* topology) noexcept { _topology = topology; }
-    void set_idx(idx_type idx) noexcept { _idx = idx; }
+    void set_topology(const locator::topology* topology) noexcept ;
+    void set_idx(idx_type idx) noexcept ;
     void set_state(state state) noexcept ;
     friend class topology;
 };
@@ -36293,30 +36289,12 @@ public:
         --_value;
         return *this;
     }
-    tagged_tagged_integer operator++(int) noexcept {
-        auto ret = *this;
-        ++_value;
-        return ret;
-    }
-    tagged_tagged_integer operator--(int) noexcept {
-        auto ret = *this;
-        --_value;
-        return ret;
-    }
-    tagged_tagged_integer operator+(const tagged_tagged_integer& o) const {
-        return tagged_tagged_integer(_value + o._value);
-    }
-    tagged_tagged_integer operator-(const tagged_tagged_integer& o) const {
-        return tagged_tagged_integer(_value - o._value);
-    }
-    tagged_tagged_integer& operator+=(const tagged_tagged_integer& o) {
-        _value += o._value;
-        return *this;
-    }
-    tagged_tagged_integer& operator-=(const tagged_tagged_integer& o) {
-        _value -= o._value;
-        return *this;
-    }
+    tagged_tagged_integer operator++(int) noexcept ;
+    tagged_tagged_integer operator--(int) noexcept ;
+    tagged_tagged_integer operator+(const tagged_tagged_integer& o) const ;
+    tagged_tagged_integer operator-(const tagged_tagged_integer& o) const ;
+    tagged_tagged_integer& operator+=(const tagged_tagged_integer& o) ;
+    tagged_tagged_integer& operator-=(const tagged_tagged_integer& o) ;
 };
 template <typename Tag, std::integral ValueType>
 using tagged_integer = tagged_tagged_integer<struct final, Tag, ValueType>;
@@ -36329,20 +36307,14 @@ struct hash<utils::tagged_tagged_integer<Final, Tag, ValueType>> {
     }
 };
 template <typename Final, typename Tag, std::integral ValueType>
-[[maybe_unused]] ostream& operator<<(ostream& s, const utils::tagged_tagged_integer<Final, Tag, ValueType>& x) {
-    return s << x.value();
-}
+[[maybe_unused]] ostream& operator<<(ostream& s, const utils::tagged_tagged_integer<Final, Tag, ValueType>& x) ;
 template <typename Final, typename Tag, std::integral ValueType>
 struct numeric_limits<utils::tagged_tagged_integer<Final, Tag, ValueType>> : public numeric_limits<ValueType> {
     using tagged_tagged_integer_t = utils::tagged_tagged_integer<Final, Tag, ValueType>;
     using value_limits = numeric_limits<ValueType>;
     static_assert(numeric_limits<ValueType>::is_specialized && numeric_limits<ValueType>::is_bounded);
-    static constexpr tagged_tagged_integer_t min() {
-        return tagged_tagged_integer_t(value_limits::min());
-    }
-    static constexpr tagged_tagged_integer_t max() {
-        return tagged_tagged_integer_t(value_limits::max());
-    }
+    static constexpr tagged_tagged_integer_t min() ;
+    static constexpr tagged_tagged_integer_t max() ;
 };
 } // namespace std
 namespace raft {
@@ -36371,26 +36343,16 @@ public:
     using duration = std::chrono::duration<rep, period>;
     using time_point = std::chrono::time_point<logical_clock, duration>;
     static constexpr bool is_steady = true;
-    void advance(duration diff = duration{1}) {
-        _now += diff;
-    }
-    time_point now() const noexcept {
-        return _now;
-    }
-    static constexpr time_point min() {
-        return time_point(duration{0});
-    }
+    void advance(duration diff = duration{1}) ;
+    time_point now() const noexcept ;
+    static constexpr time_point min() ;
 private:
     time_point _now = min();
 };
-inline std::ostream& operator<<(std::ostream& os, const logical_clock::time_point& p) {
-    return os << (p - logical_clock::min()).count();
-}
+ std::ostream& operator<<(std::ostream& os, const logical_clock::time_point& p) ;
 } // end of namespace raft
 namespace std {
-inline std::ostream& operator<<(std::ostream& os, const raft::logical_clock::duration& d) {
-    return os << d.count();
-}
+ std::ostream& operator<<(std::ostream& os, const raft::logical_clock::duration& d) ;
 } // end of namespace std
 #if defined(__clang_major__) && __clang_major__ <= 14
 namespace std {
@@ -36502,72 +36464,20 @@ struct configuration {
         }
     // Return true if the previous configuration is still
     // in use
-    bool is_joint() const {
-        return !previous.empty();
-    }
+    bool is_joint() const ;
     // Count the number of voters in a configuration
-    static size_t voter_count(const config_member_set& c_new) {
-        return std::count_if(c_new.begin(), c_new.end(), [] (const config_member& s) { return s.can_vote; });
-    }
+    static size_t voter_count(const config_member_set& c_new) ;
     // Check if transitioning to a proposed configuration is safe.
-    static void check(const config_member_set& c_new) {
-        // We must have at least one voting member in the config.
-        if (c_new.empty()) {
-            throw std::invalid_argument("Attempt to transition to an empty Raft configuration");
-        }
-        if (voter_count(c_new) == 0) {
-            throw std::invalid_argument("The configuration must have at least one voter");
-        }
-    }
+    static void check(const config_member_set& c_new) ;
     // Compute a diff between a proposed configuration and the current one.
-    configuration_diff diff(const config_member_set& c_new) const {
-        configuration_diff diff;
-        // joining
-        for (const auto& s : c_new) {
-            auto it = current.find(s);
-            // a node is added to a joining set if it is not yet known or its voting status changes
-            if (it == current.end() || it->can_vote != s.can_vote) {
-                diff.joining.insert(s);
-            }
-        }
-        // leaving
-        for (const auto& s : current) {
-            if (!c_new.contains(s)) {
-                diff.leaving.insert(s);
-            }
-        }
-        return diff;
-    }
+    configuration_diff diff(const config_member_set& c_new) const ;
     // True if the current or previous configuration contains
     // this server.
-    bool contains(server_id id) const {
-        auto it = current.find(id);
-        if (it != current.end()) {
-            return true;
-        }
-        return previous.find(id) != previous.end();
-    }
+    bool contains(server_id id) const ;
     // Same as contains() but true only if the member can vote.
-    bool can_vote(server_id id) const {
-        bool can_vote = false;
-        auto it = current.find(id);
-        if (it != current.end()) {
-            can_vote |= it->can_vote;
-        }
-        it = previous.find(id);
-        if (it != previous.end()) {
-            can_vote |= it->can_vote;
-        }
-        return can_vote;
-    }
+    bool can_vote(server_id id) const ;
     // Enter a joint configuration given a new set of servers.
-    void enter_joint(config_member_set c_new) {
-        if (c_new.empty()) {
-            throw std::invalid_argument("Attempt to transition to an empty Raft configuration");
-        }
-        previous = std::move(current);
-        current = std::move(c_new);
-    }
+    void enter_joint(config_member_set c_new) ;
     // Transition from C_old + C_new to C_new.
     void leave_joint() {
         assert(is_joint());
@@ -37938,47 +37848,24 @@ public:
         return make_ready_future<>();
     };
     // noop by default
-    virtual void resume_io() {
-        _state = snitch_state::running;
-    };
+    virtual void resume_io() ;;
     // noop by default
-    virtual future<> start() {
-        _state = snitch_state::running;
-        return make_ready_future<>();
-    }
+    virtual future<> start() ;
     // noop by default
-    virtual void set_my_dc_and_rack(const sstring& new_dc, const sstring& enw_rack) {};
-    virtual void set_prefer_local(bool prefer_local) {};
-    virtual void set_local_private_addr(const sstring& addr_str) {};
-    void set_snitch_ready() {
-        _state = snitch_state::running;
-    }
+    virtual void set_my_dc_and_rack(const sstring& new_dc, const sstring& enw_rack) ;;
+    virtual void set_prefer_local(bool prefer_local) ;;
+    virtual void set_local_private_addr(const sstring& addr_str) ;;
+    void set_snitch_ready() ;
     virtual sstring get_name() const = 0;
     // should be called for production snitches before calling start()
-    virtual void set_backreference(snitch_ptr& d)  {
-        //noop by default
-    }
-    virtual future<> reload_gossiper_state() {
-        // noop by default
-        return make_ready_future<>();
-    }
-    virtual snitch_signal_connection_t when_reconfigured(snitch_signal_slot_t& slot) {
-        // no updates by default
-        return snitch_signal_connection_t();
-    }
+    virtual void set_backreference(snitch_ptr& d)  ;
+    virtual future<> reload_gossiper_state() ;
+    virtual snitch_signal_connection_t when_reconfigured(snitch_signal_slot_t& slot) ;
     // tells wheter the INTERNAL_IP address should be preferred over endpoint address
-    virtual bool prefer_local() const noexcept {
-        return false;
-    }
-    static logging::logger& logger() {
-        static logging::logger snitch_logger("snitch_logger");
-        return snitch_logger;
-    }
+    virtual bool prefer_local() const noexcept ;
+    static logging::logger& logger() ;
 protected:
-    static unsigned& io_cpu_id() {
-        static unsigned id = 0;
-        return id;
-    }
+    static unsigned& io_cpu_id() ;
 protected:
     enum class snitch_state {
         initializing,
@@ -37991,20 +37878,8 @@ protected:
 };
 struct snitch_ptr : public peering_sharded_service<snitch_ptr> {
     using ptr_type = i_endpoint_snitch::ptr_type;
-    future<> stop() {
-        if (_ptr) {
-            return _ptr->stop();
-        } else {
-            return make_ready_future<>();
-        }
-    }
-    future<> start() {
-        if (_ptr) {
-            return _ptr->start();
-        } else {
-            return make_ready_future<>();
-        }
-    }
+    future<> stop() ;
+    future<> start() ;
     i_endpoint_snitch* operator->() {
         return _ptr.get();
     }
@@ -38130,27 +38005,13 @@ public:
         }
         return std::make_pair(_vec.end(), false);
     }
-    size_type size() const noexcept {
-        return _vec.size();
-    }
-    iterator begin() noexcept {
-        return _vec.begin();
-    }
-    iterator end() noexcept {
-        return _vec.end();
-    }
-    const_iterator begin() const noexcept {
-        return _vec.begin();
-    }
-    const_iterator end() const noexcept {
-        return _vec.end();
-    }
-    const_iterator cbegin() const noexcept {
-        return _vec.cbegin();
-    }
-    const_iterator cend() const noexcept {
-        return _vec.cend();
-    }
+    size_type size() const noexcept ;
+    iterator begin() noexcept ;
+    iterator end() noexcept ;
+    const_iterator begin() const noexcept ;
+    const_iterator end() const noexcept ;
+    const_iterator cbegin() const noexcept ;
+    const_iterator cend() const noexcept ;
     auto& front() const noexcept ;
     auto& front() noexcept ;
     auto& back() const noexcept ;
@@ -38657,53 +38518,17 @@ public:
         _application_state[key] = std::move(value);
         update_is_normal();
     }
-    void add_application_state(const endpoint_state& es) {
-        _application_state = es._application_state;
-        update_is_normal();
-    }
-    clk::time_point get_update_timestamp() const noexcept {
-        return _update_timestamp;
-    }
-    void update_timestamp() noexcept {
-        _update_timestamp = clk::now();
-    }
-    bool is_alive() const noexcept {
-        return _is_alive;
-    }
-    void set_alive(bool alive) noexcept {
-        _is_alive = alive;
-    }
-    void mark_alive() noexcept {
-        set_alive(true);
-    }
-    void mark_dead() noexcept {
-        set_alive(false);
-    }
-    std::string_view get_status() const noexcept {
-        constexpr std::string_view empty = "";
-        auto* app_state = get_application_state_ptr(application_state::STATUS);
-        if (!app_state) {
-            return empty;
-        }
-        const auto& value = app_state->value();
-        if (value.empty()) {
-            return empty;
-        }
-        auto pos = value.find(',');
-        if (pos == sstring::npos) {
-            return std::string_view(value);
-        }
-        return std::string_view(value.c_str(), pos);
-    }
-    bool is_shutdown() const noexcept {
-        return get_status() == versioned_value::SHUTDOWN;
-    }
-    bool is_normal() const noexcept {
-        return _is_normal;
-    }
-    void update_is_normal() noexcept {
-        _is_normal = get_status() == versioned_value::STATUS_NORMAL;
-    }
+    void add_application_state(const endpoint_state& es) ;
+    clk::time_point get_update_timestamp() const noexcept ;
+    void update_timestamp() noexcept ;
+    bool is_alive() const noexcept ;
+    void set_alive(bool alive) noexcept ;
+    void mark_alive() noexcept ;
+    void mark_dead() noexcept ;
+    std::string_view get_status() const noexcept ;
+    bool is_shutdown() const noexcept ;
+    bool is_normal() const noexcept ;
+    void update_is_normal() noexcept ;
     bool is_cql_ready() const noexcept;
     friend std::ostream& operator<<(std::ostream& os, const endpoint_state& x);
 };
@@ -38711,7 +38536,7 @@ public:
 namespace gms {
 class i_endpoint_state_change_subscriber {
 public:
-    virtual ~i_endpoint_state_change_subscriber() {}
+    virtual ~i_endpoint_state_change_subscriber() ;
     virtual future<> on_join(inet_address endpoint, endpoint_state ep_state) = 0;
     virtual future<> before_change(inet_address endpoint, endpoint_state current_state, application_state new_statekey, const versioned_value& newvalue) = 0;
     virtual future<> on_change(inet_address endpoint, application_state state, const versioned_value& value) = 0;
@@ -38748,11 +38573,7 @@ public:
     int files;
     long total_size;
     stream_summary() = default;
-    stream_summary(table_id _cf_id, int _files, long _total_size)
-        : cf_id (_cf_id)
-        , files(_files)
-        , total_size(_total_size) {
-    }
+    stream_summary(table_id _cf_id, int _files, long _total_size)  ;
     friend std::ostream& operator<<(std::ostream& os, const stream_summary& r);
 };
 } // namespace streaming
@@ -38768,9 +38589,7 @@ public:
     virtual int get_total_number_of_files() const = 0;
     virtual long get_total_size() const = 0;
     virtual void abort() = 0;
-    virtual stream_summary get_summary() const {
-        return stream_summary(this->cf_id, this->get_total_number_of_files(), this->get_total_size());
-    }
+    virtual stream_summary get_summary() const ;
 };
 } // namespace streaming
 namespace streaming {
@@ -39090,20 +38909,13 @@ public:
     shared_ptr<stream_result_future> get_sending_stream(streaming::plan_id plan_id) const;
     shared_ptr<stream_result_future> get_receiving_stream(streaming::plan_id plan_id) const;
     std::vector<shared_ptr<stream_result_future>> get_all_streams() const;
-    replica::database& db() noexcept { return _db.local(); }
-    netw::messaging_service& ms() noexcept { return _ms.local(); }
-    const std::unordered_map<plan_id, shared_ptr<stream_result_future>>& get_initiated_streams() const {
-        return _initiated_streams;
-    }
-    const std::unordered_map<plan_id, shared_ptr<stream_result_future>>& get_receiving_streams() const {
-        return _receiving_streams;
-    }
+    replica::database& db() noexcept ;
+    netw::messaging_service& ms() noexcept ;
+    const std::unordered_map<plan_id, shared_ptr<stream_result_future>>& get_initiated_streams() const ;
+    const std::unordered_map<plan_id, shared_ptr<stream_result_future>>& get_receiving_streams() const ;
     void remove_stream(streaming::plan_id plan_id);
     void show_streams() const;
-    future<> shutdown() {
-        fail_all_sessions();
-        return make_ready_future<>();
-    }
+    future<> shutdown() ;
     void update_progress(streaming::plan_id plan_id, gms::inet_address peer, progress_info::direction dir, size_t fm_size);
     future<> update_all_progress_info();
     void remove_progress(streaming::plan_id plan_id);
@@ -39117,8 +38929,8 @@ public:
     stream_bytes get_progress_on_local_shard() const;
     shared_ptr<stream_session> get_session(streaming::plan_id plan_id, gms::inet_address from, const char* verb, std::optional<table_id> cf_id = {});
 public:
-    virtual future<> on_join(inet_address endpoint, endpoint_state ep_state) override { return make_ready_future(); }
-    virtual future<> before_change(inet_address endpoint, endpoint_state current_state, application_state new_state_key, const versioned_value& new_value) override { return make_ready_future(); }
+    virtual future<> on_join(inet_address endpoint, endpoint_state ep_state) override ;
+    virtual future<> before_change(inet_address endpoint, endpoint_state current_state, application_state new_state_key, const versioned_value& new_value) override ;
     virtual future<> on_change(inet_address endpoint, application_state state, const versioned_value& value) override { return make_ready_future(); }
     virtual future<> on_alive(inet_address endpoint, endpoint_state state) override { return make_ready_future(); }
     virtual future<> on_dead(inet_address endpoint, endpoint_state state) override;
@@ -39248,9 +39060,7 @@ public:
 public:
     void set_state(stream_session_state new_state) ;
     stream_session_state get_state() const ;
-    bool is_success() const {
-        return _state == stream_session_state::COMPLETE;
-    }
+    bool is_success() const ;
     future<> initiate();
     future<> on_initialization_complete();
     void on_error();
@@ -39260,14 +39070,10 @@ public:
     void follower_start_sent();
     void complete();
     session_info make_session_info();
-    session_info& get_session_info() {
-        return _session_info;
-    }
-    const session_info& get_session_info() const {
-        return _session_info;
-    }
-    stream_manager& manager() noexcept { return _mgr; }
-    const stream_manager& manager() const noexcept { return _mgr; }
+    session_info& get_session_info() ;
+    const session_info& get_session_info() const ;
+    stream_manager& manager() noexcept ;
+    const stream_manager& manager() const noexcept ;
     future<> update_progress();
     void receive_task_completed(table_id cf_id);
     void transfer_task_completed(table_id cf_id);
@@ -39289,9 +39095,7 @@ private:
     std::map<inet_address, shared_ptr<stream_session>> _peer_sessions;
     bool _is_receiving;
 public:
-    stream_coordinator(bool is_receiving = false)
-        : _is_receiving(is_receiving) {
-    }
+    stream_coordinator(bool is_receiving = false)  ;
 public:
     bool has_active_sessions() const;
     std::vector<shared_ptr<stream_session>> get_all_stream_sessions() const;
@@ -39299,13 +39103,7 @@ public:
     void connect_all_stream_sessions();
     std::set<inet_address> get_peers() const;
 public:
-    shared_ptr<stream_session> get_or_create_session(stream_manager& mgr, inet_address peer) {
-        auto& session = _peer_sessions[peer];
-        if (!session) {
-            session = make_shared<stream_session>(mgr, peer);
-        }
-        return session;
-    }
+    shared_ptr<stream_session> get_or_create_session(stream_manager& mgr, inet_address peer) ;
     std::vector<session_info> get_all_session_info() const;
     std::vector<session_info> get_peer_session_info(inet_address peer) const;
     void abort_all_stream_sessions();
@@ -39590,81 +39388,23 @@ public:
 /// The exception behind the pointer is valid as long as the exception
 /// behind the exception_ptr is valid.
 template<typename T>
-inline T* try_catch(std::exception_ptr& eptr) noexcept {
-    static_assert(!std::is_pointer_v<T>, "catching pointers is not supported");
-    static_assert(!std::is_lvalue_reference_v<T> && !std::is_rvalue_reference_v<T>,
-            "T must not be a reference");
-#if defined(USE_OPTIMIZED_EXCEPTION_HANDLING)
-    void* opt_ptr = utils::internal::try_catch_dynamic(eptr, &typeid(std::remove_const_t<T>));
-    return reinterpret_cast<T*>(opt_ptr);
-#else
-    try {
-        std::rethrow_exception(eptr);
-    } catch (T& t) {
-        return &t;
-    } catch (...) {
-    }
-    return nullptr;
-#endif
-}
+ T* try_catch(std::exception_ptr& eptr) noexcept ;
 /// Analogous to std::throw_with_nested, but instead of capturing the currently
 /// thrown exception, takes the exception to be nested inside as an argument,
 /// and does not throw the new exception but rather returns it.
 template<typename Ex>
-inline std::exception_ptr make_nested_exception_ptr(Ex&& ex, std::exception_ptr nested) {
-    using ExDecayed = std::decay_t<Ex>;
-    static_assert(std::is_copy_constructible_v<ExDecayed> && std::is_move_constructible_v<ExDecayed>,
-            "make_nested_exception_ptr argument must be CopyConstructible");
-#if defined(USE_OPTIMIZED_EXCEPTION_HANDLING)
-    // std::rethrow_with_nested wraps the exception type if and only if
-    // it is a non-final non-union class type
-    // and is neither std::nested_exception nor derived from it.
-    // Ref: https://en.cppreference.com/w/cpp/error/throw_with_nested
-    constexpr bool wrap = std::is_class_v<ExDecayed>
-            && !std::is_final_v<ExDecayed>
-            && !std::is_base_of_v<std::nested_exception, ExDecayed>;
-    if constexpr (wrap) {
-        return std::make_exception_ptr(utils::internal::nested_exception<ExDecayed>(
-                std::forward<Ex>(ex), std::move(nested)));
-    } else {
-        return std::make_exception_ptr<Ex>(std::forward<Ex>(ex));
-    }
-#else
-    try {
-        std::rethrow_exception(std::move(nested));
-    } catch (...) {
-        try {
-            std::throw_with_nested(std::forward<Ex>(ex));
-        } catch (...) {
-            return std::current_exception();
-        }
-    }
-#endif
-}
+ std::exception_ptr make_nested_exception_ptr(Ex&& ex, std::exception_ptr nested) ;
 namespace utils {
 using inet_address = gms::inet_address;
 class fb_utilities {
 private:
-    static std::optional<inet_address>& broadcast_address() noexcept {
-        static std::optional<inet_address> _broadcast_address;
-        return _broadcast_address;
-    }
-    static std::optional<inet_address>& broadcast_rpc_address() noexcept {
-        static std::optional<inet_address> _broadcast_rpc_address;
-        return _broadcast_rpc_address;
-    }
+    static std::optional<inet_address>& broadcast_address() noexcept ;
+    static std::optional<inet_address>& broadcast_rpc_address() noexcept ;
 public:
    static constexpr int32_t MAX_UNSIGNED_SHORT = 0xFFFF;
-   static void set_broadcast_address(inet_address addr) noexcept {
-       broadcast_address() = addr;
-   }
-   static void set_broadcast_rpc_address(inet_address addr) noexcept {
-       broadcast_rpc_address() = addr;
-   }
-   static const inet_address get_broadcast_address() noexcept {
-       assert(broadcast_address());
-       return *broadcast_address();
-   }
+   static void set_broadcast_address(inet_address addr) noexcept ;
+   static void set_broadcast_rpc_address(inet_address addr) noexcept ;
+   static const inet_address get_broadcast_address() noexcept ;
    static const inet_address get_broadcast_rpc_address() noexcept {
        assert(broadcast_rpc_address());
        return *broadcast_rpc_address();
@@ -40314,59 +40054,13 @@ public:
         count++;
         sample.push_back(value);
     }
-    void mark(latency_counter& lc) {
-        if (lc.is_start()) {
-            mark(lc.stop().latency());
-        } else {
-            count++;
-        }
-    }
-    bool should_sample() const noexcept {
-        return total == 0 || ((started & sample_mask) == sample_mask);
-    }
-    basic_ihistogram& set_latency(latency_counter& lc) {
-        if (should_sample()) {
-            lc.start();
-        }
-        started++;
-        return *this;
-    }
-    basic_ihistogram& inc() {
-        count++;
-        return *this;
-    }
-    int64_t pending() const {
-        return started - count;
-    }
-    inline double pow2(double a) {
-        return a * a;
-    }
-    basic_ihistogram& operator +=(const basic_ihistogram& o) {
-        if (count == 0) {
-            *this = o;
-        } else if (o.count > 0) {
-            if (min > o.min) {
-                min = o.min;
-            }
-            if (max < o.max) {
-                max = o.max;
-            }
-            double ncount = count + o.count;
-            sum += o.sum;
-            double a = count / ncount;
-            double b = o.count / ncount;
-            double m = a * mean + b * o.mean;
-            variance = (variance + pow2(m - mean)) * a
-                    + (o.variance + pow2(o.mean - mean)) * b;
-            mean = m;
-            count += o.count;
-            total += o.total;
-            for (auto i : o.sample) {
-                sample.push_back(i);
-            }
-        }
-        return *this;
-    }
+    void mark(latency_counter& lc) ;
+    bool should_sample() const noexcept ;
+    basic_ihistogram& set_latency(latency_counter& lc) ;
+    basic_ihistogram& inc() ;
+    int64_t pending() const ;
+     double pow2(double a) ;
+    basic_ihistogram& operator +=(const basic_ihistogram& o) ;
     int64_t estimated_sum() const {
         return mean * count;
     }
@@ -40462,15 +40156,9 @@ public:
     const rates_moving_average& operator()() const noexcept {
         return _rates;
     }
-    void mark(uint64_t n = 1) noexcept {
-        _rates.mark(n);
-    }
-    uint64_t count() const noexcept {
-        return _rates.count();
-    }
-    rate_moving_average rate() const noexcept {
-        return _rates.rate();
-    }
+    void mark(uint64_t n = 1) noexcept ;
+    uint64_t count() const noexcept ;
+    rate_moving_average rate() const noexcept ;
 };
 class summary_calculator {
     std::vector<double> _quantiles = { 0.5, 0.95, 0.99};
@@ -40478,39 +40166,10 @@ class summary_calculator {
     time_estimated_histogram _previous_histogram;
     time_estimated_histogram _current_histogram;
 public:
-    void update() {
-        auto new_entries = _current_histogram.count() - _previous_histogram.count();
-        if (new_entries == 0) {
-            clear();
-            return;
-        }
-        for (size_t i = 0; i < _quantiles.size(); i++ ) {
-            _summary[i] = _quantiles[i] * new_entries;
-        }
-        size_t pos = 0;
-        size_t total_diff = 0;
-        for (size_t i = 0; i < _current_histogram.size(); i++) {
-            total_diff += _current_histogram[i] - _previous_histogram[i];
-            while (pos < _summary.size() && total_diff >= _summary[pos]) {
-                _summary[pos] = _current_histogram.get_bucket_upper_limit(i);
-                pos++;
-            }
-            _previous_histogram[i] = _current_histogram[i];
-        }
-    }
-    const std::vector<double>& quantiles() const noexcept {
-        return _quantiles;
-    }
-    void clear() {
-        for (size_t i =0; i< _summary.size(); i++) {
-            _summary[i] = 0;
-        }
-    }
-    void set_quantiles(const std::vector<double>& quantiles) {
-        _quantiles = quantiles;
-        _summary.resize(quantiles.size());
-        clear();
-    }
+    void update() ;
+    const std::vector<double>& quantiles() const noexcept ;
+    void clear() ;
+    void set_quantiles(const std::vector<double>& quantiles) ;
     const std::vector<double>& summary() const noexcept {
         return _summary;
     }
@@ -40596,53 +40255,16 @@ public:
         _summary.update();}), hist(size, 0) {
     }
     template <typename Rep, typename Ratio>
-    void mark(std::chrono::duration<Rep, Ratio> dur) noexcept {
-        if (std::chrono::duration_cast<ihistogram::duration_unit>(dur).count() >= 0) {
-            hist.mark(dur);
-            _summary.mark(dur);
-            _rates.mark();
-        }
-    }
-    void mark(latency_counter& lc) noexcept {
-        hist.mark(lc);
-        _summary.mark(lc.latency());
-        _rates.mark();
-    }
-    void set_latency(latency_counter& lc) noexcept {
-        hist.set_latency(lc);
-    }
-    rate_moving_average_and_histogram rate() const noexcept {
-        rate_moving_average_and_histogram res;
-        res.hist = hist;
-        res.rate = _rates.rate();
-        return res;
-    }
-    const time_estimated_histogram& histogram() const noexcept {
-        return _summary.histogram();
-    }
-    const summary_calculator& summary() const noexcept {
-        return _summary;
-    }
+    void mark(std::chrono::duration<Rep, Ratio> dur) noexcept ;
+    void mark(latency_counter& lc) noexcept ;
+    void set_latency(latency_counter& lc) noexcept ;
+    rate_moving_average_and_histogram rate() const noexcept ;
+    const time_estimated_histogram& histogram() const noexcept ;
+    const summary_calculator& summary() const noexcept ;
 };
 }
 template<uint64_t Min, uint64_t Max, size_t Precision>
-seastar::metrics::histogram to_metrics_histogram(const utils::approx_exponential_histogram<Min, Max, Precision>& hist) {
-    seastar::metrics::histogram res;
-    res.buckets.resize(hist.size() - 1);
-    uint64_t cummulative_count = 0;
-    res.sample_sum = 0;
-    for (size_t i = 0; i < hist.NUM_BUCKETS - 1; i++) {
-        auto& v = res.buckets[i];
-        v.upper_bound = hist.get_bucket_lower_limit(i + 1);
-        cummulative_count += hist.get(i);
-        v.count = cummulative_count;
-        res.sample_sum += hist.get(i) * v.upper_bound;
-    }
-    // The count serves as the infinite bucket
-    res.sample_count = cummulative_count + hist.get(hist.NUM_BUCKETS - 1);
-    res.sample_sum += hist.get(hist.NUM_BUCKETS - 1) * hist.get_bucket_lower_limit(hist.NUM_BUCKETS - 1);
-    return res;
-}
+seastar::metrics::histogram to_metrics_histogram(const utils::approx_exponential_histogram<Min, Max, Precision>& hist) ;
 seastar::metrics::histogram to_metrics_summary(const utils::summary_calculator& summary) noexcept;
 namespace db {
 class schema_ctxt;
@@ -40700,81 +40322,13 @@ struct serializer<const frozen_schema> : public serializer<frozen_schema>
 {};
 } // ser
 namespace ser {
-template <typename Output>
-void serializer<canonical_mutation>::write(Output& buf, const canonical_mutation& obj) {
-  static_assert(is_equivalent<decltype(obj.representation()), bytes>::value, "member value has a wrong type");
-  serialize(buf, obj.representation());
-}
-template <typename Input>
-canonical_mutation serializer<canonical_mutation>::read(Input& buf) {
- return seastar::with_serialized_stream(buf, [] (auto& buf) {
-  auto& in = buf;
-  auto __local_0 = deserialize(in, boost::type<bytes>());
-  canonical_mutation res {std::move(__local_0)};
-  return res;
- });
-}
-template <typename Input>
-void serializer<canonical_mutation>::skip(Input& buf) {
- seastar::with_serialized_stream(buf, [] (auto& buf) {
-  ser::skip(buf, boost::type<bytes>());
- });
-}
-template <typename Output>
-void serializer<schema_mutations>::write(Output& buf, const schema_mutations& obj) {
-  set_size(buf, obj);
-  static_assert(is_equivalent<decltype(obj.columnfamilies_canonical_mutation()), canonical_mutation>::value, "member value has a wrong type");
-  serialize(buf, obj.columnfamilies_canonical_mutation());
-  static_assert(is_equivalent<decltype(obj.columns_canonical_mutation()), canonical_mutation>::value, "member value has a wrong type");
-  serialize(buf, obj.columns_canonical_mutation());
-  static_assert(is_equivalent<decltype(obj.is_view()), bool>::value, "member value has a wrong type");
-  serialize(buf, obj.is_view());
-  static_assert(is_equivalent<decltype(obj.indices_canonical_mutation()), std::optional<canonical_mutation>>::value, "member value has a wrong type");
-  serialize(buf, obj.indices_canonical_mutation());
-  static_assert(is_equivalent<decltype(obj.dropped_columns_canonical_mutation()), std::optional<canonical_mutation>>::value, "member value has a wrong type");
-  serialize(buf, obj.dropped_columns_canonical_mutation());
-  static_assert(is_equivalent<decltype(obj.scylla_tables_canonical_mutation()), std::optional<canonical_mutation>>::value, "member value has a wrong type");
-  serialize(buf, obj.scylla_tables_canonical_mutation());
-  static_assert(is_equivalent<decltype(obj.view_virtual_columns_canonical_mutation()), std::optional<canonical_mutation>>::value, "member value has a wrong type");
-  serialize(buf, obj.view_virtual_columns_canonical_mutation());
-  static_assert(is_equivalent<decltype(obj.computed_columns_canonical_mutation()), std::optional<canonical_mutation>>::value, "member value has a wrong type");
-  serialize(buf, obj.computed_columns_canonical_mutation());
-}
-template <typename Input>
-schema_mutations serializer<schema_mutations>::read(Input& buf) {
- return seastar::with_serialized_stream(buf, [] (auto& buf) {
-  size_type size = deserialize(buf, boost::type<size_type>());
-  auto in = buf.read_substream(size - sizeof(size_type));
-  auto __local_0 = deserialize(in, boost::type<canonical_mutation>());
-  auto __local_1 = deserialize(in, boost::type<canonical_mutation>());
-  auto __local_2 = (in.size()>0) ?
-    deserialize(in, boost::type<bool>()) : bool();
-  auto __local_3 = (in.size()>0) ?
-    deserialize(in, boost::type<std::optional<canonical_mutation>>()) : std::optional<canonical_mutation>();
-  auto __local_4 = (in.size()>0) ?
-    deserialize(in, boost::type<std::optional<canonical_mutation>>()) : std::optional<canonical_mutation>();
-  auto __local_5 = (in.size()>0) ?
-    deserialize(in, boost::type<std::optional<canonical_mutation>>()) : std::optional<canonical_mutation>();
-  auto __local_6 = (in.size()>0) ?
-    deserialize(in, boost::type<std::optional<canonical_mutation>>()) : std::optional<canonical_mutation>();
-  auto __local_7 = (in.size()>0) ?
-    deserialize(in, boost::type<std::optional<canonical_mutation>>()) : std::optional<canonical_mutation>();
-  schema_mutations res {std::move(__local_0), std::move(__local_1), std::move(__local_2), std::move(__local_3), std::move(__local_4), std::move(__local_5), std::move(__local_6), std::move(__local_7)};
-  return res;
- });
-}
-template <typename Input>
-void serializer<schema_mutations>::skip(Input& buf) {
- seastar::with_serialized_stream(buf, [] (auto& buf) {
-  size_type size = deserialize(buf, boost::type<size_type>());
-  buf.skip(size - sizeof(size_type));
- });
-}
-template <typename Output>
-void serializer<frozen_schema>::write(Output& buf, const frozen_schema& obj) {
-  static_assert(is_equivalent<decltype(obj.representation()), bytes>::value, "member value has a wrong type");
-  serialize(buf, obj.representation());
-}
+
+
+
+
+
+
+
 template <typename Input>
 frozen_schema serializer<frozen_schema>::read(Input& buf) {
  return seastar::with_serialized_stream(buf, [] (auto& buf) {
@@ -41085,7 +40639,7 @@ public:
     // Doesn't invalidate iterators.
     void ensure_last_dummy(const schema&);
     bool static_row_continuous() const { return _static_row_continuous; }
-    void set_static_row_continuous(bool value) { _static_row_continuous = value; }
+    void set_static_row_continuous(bool value) ;
     bool is_fully_continuous() const;
     void make_fully_continuous();
     // Sets or clears continuity of clustering ranges between existing rows.
@@ -41104,7 +40658,7 @@ public:
     stop_iteration clear_gently(cache_tracker*) noexcept;
     // Applies mutation_fragment.
     // The fragment must be goverened by the same schema as this object.
-    void apply(tombstone t) { _tombstone.apply(t); }
+    void apply(tombstone t) ;
     void apply_delete(const schema& schema, const clustering_key_prefix& prefix, tombstone t);
     void apply_delete(const schema& schema, range_tombstone rt);
     void apply_delete(const schema& schema, clustering_key_prefix&& prefix, tombstone t);
@@ -41201,12 +40755,12 @@ public:
     // Weak exception guarantees.
     deletable_row& append_clustered_row(const schema& s, position_in_partition_view pos, is_dummy, is_continuous);
 public:
-    tombstone partition_tombstone() const { return _tombstone; }
-    lazy_row& static_row() { return _static_row; }
-    const lazy_row& static_row() const { return _static_row; }
+    tombstone partition_tombstone() const ;
+    lazy_row& static_row() ;
+    const lazy_row& static_row() const ;
     // return a set of rows_entry where each entry represents a CQL row sharing the same clustering key.
-    const rows_type& clustered_rows() const noexcept { return _rows; }
-    utils::immutable_collection<rows_type> clustered_rows() noexcept { return _rows; }
+    const rows_type& clustered_rows() const noexcept ;
+    utils::immutable_collection<rows_type> clustered_rows() noexcept ;
     rows_type& mutable_clustered_rows() noexcept ;
     const row* find_row(const schema& s, const clustering_key& key) const;
     boost::iterator_range<rows_type::const_iterator> range(const schema& schema, const query::clustering_range& r) const;
@@ -41702,13 +41256,11 @@ public:
     // reclaimable after construction.
     void set_reclaiming_enabled(bool e) noexcept { _impl->set_reclaiming_enabled(e); }
     // Returns the reclaimability state of this region.
-    bool reclaiming_enabled() const noexcept { return _impl->reclaiming_enabled(); }
+    bool reclaiming_enabled() const noexcept ;
     // Returns a value which is increased when this region is either compacted or
     // evicted from, which invalidates references into the region.
     // When the value returned by this method doesn't change, references remain valid.
-    uint64_t reclaim_counter() const noexcept {
-        return allocator().invalidate_counter();
-    }
+    uint64_t reclaim_counter() const noexcept ;
     // Will cause subsequent calls to evictable_occupancy() to report empty occupancy.
     void ground_evictable_occupancy();
     // Follows region's occupancy in the parent region group. Less fine-grained than occupancy().
@@ -41728,15 +41280,9 @@ public:
 struct reclaim_lock {
     region& _region;
     bool _prev;
-    reclaim_lock(region& r) noexcept
-        : _region(r)
-        , _prev(r.reclaiming_enabled())
-    {
-        _region.set_reclaiming_enabled(false);
-    }
-    ~reclaim_lock() {
-        _region.set_reclaiming_enabled(_prev);
-    }
+    reclaim_lock(region& r) 
+    ;
+    ~reclaim_lock() ;
 };
 // Utility for running critical sections which need to lock some region and
 // also allocate LSA memory. The object learns from failures how much it
@@ -41772,22 +41318,7 @@ public:
     // Throws std::bad_alloc when reserves can't be increased to a sufficient level.
     //
     template<typename Func>
-    decltype(auto) with_reserve(region& r, Func&& fn) {
-        auto prev_lsa_reserve = _lsa_reserve;
-        auto prev_std_reserve = _std_reserve;
-        try {
-            guard g(r.get_tracker().get_impl());
-            _minimum_lsa_emergency_reserve = g._prev;
-            reserve(r.get_tracker().get_impl());
-            return fn();
-        } catch (const std::bad_alloc&) {
-            // roll-back limits to protect against pathological requests
-            // preventing future requests from succeeding.
-            _lsa_reserve = prev_lsa_reserve;
-            _std_reserve = prev_std_reserve;
-            throw;
-        }
-    }
+    decltype(auto) with_reserve(region& r, Func&& fn) ;
     //
     // Invokes func with reclaim_lock on region r. If LSA allocation fails
     // inside func it is retried after increasing LSA segment reserve. The
@@ -41800,19 +41331,7 @@ public:
     // Throws std::bad_alloc when reserves can't be increased to a sufficient level.
     //
     template<typename Func>
-    decltype(auto) with_reclaiming_disabled(logalloc::region& r, Func&& fn) {
-        assert(r.reclaiming_enabled());
-        maybe_decay_reserve();
-        while (true) {
-            try {
-                logalloc::reclaim_lock _(r);
-                memory::disable_abort_on_alloc_failure_temporarily dfg;
-                return fn();
-            } catch (const std::bad_alloc&) {
-                on_alloc_failure(r);
-            }
-        }
-    }
+    decltype(auto) with_reclaiming_disabled(logalloc::region& r, Func&& fn) ;
     //
     // Reserves standard allocator and LSA memory and
     // invokes func with reclaim_lock on region r. If LSA allocation fails
@@ -41826,11 +41345,7 @@ public:
     // Throws std::bad_alloc when reserves can't be increased to a sufficient level.
     //
     template<typename Func>
-    decltype(auto) operator()(logalloc::region& r, Func&& func) {
-        return with_reserve(r, [this, &r, &func] {
-            return with_reclaiming_disabled(r, func);
-        });
-    }
+    decltype(auto) operator()(logalloc::region& r, Func&& func) ;
 };
 future<> prime_segment_pool(size_t available_memory, size_t min_free_memory);
 // Use the segment pool appropriate for the standard allocator.
@@ -42093,9 +41608,7 @@ public:
     }
     // Returns a reference to the partition_snapshot which is attached to given non-latest partition version.
     // Assumes !v.is_referenced_from_entry() && v.is_referenced().
-    static const partition_snapshot& referer_of(const partition_version& v) {
-        return container_of(v._backref);
-    }
+    static const partition_snapshot& referer_of(const partition_version& v) ;
     // If possible, merges the version pointed to by this snapshot with
     // adjacent partition versions. Leaves the snapshot in an unspecified state.
     // Can be retried if previous merge attempt has failed.
@@ -42110,36 +41623,25 @@ public:
     void touch() noexcept;
     // Must be called after snapshot's original region is merged into a different region
     // before the original region is destroyed, unless the snapshot is destroyed earlier.
-    void migrate(logalloc::region* region, mutation_cleaner* cleaner) noexcept {
-        _region = region;
-        _cleaner = cleaner;
-    }
+    void migrate(logalloc::region* region, mutation_cleaner* cleaner) noexcept ;
     ~partition_snapshot();
     partition_version_ref& version();
-    change_mark get_change_mark() {
-        return {_region->reclaim_counter(), version_count()};
-    }
+    change_mark get_change_mark() ;
     const partition_version_ref& version() const;
-    partition_version_range versions() {
-        return version()->elements_from_this();
-    }
+    partition_version_range versions() ;
     unsigned version_count();
-    bool at_latest_version() const {
-        return _entry != nullptr;
-    }
-    bool at_oldest_version() const {
-        return !version()->next();
-    }
-    const schema_ptr& schema() const { return _schema; }
-    logalloc::region& region() const { return *_region; }
-    cache_tracker* tracker() const { return _tracker; }
-    mutation_cleaner& cleaner() { return *_cleaner; }
+    bool at_latest_version() const ;
+    bool at_oldest_version() const ;
+    const schema_ptr& schema() const ;
+    logalloc::region& region() const ;
+    cache_tracker* tracker() const ;
+    mutation_cleaner& cleaner() ;
     tombstone partition_tombstone() const;
     ::static_row static_row(bool digest_requested) const;
     bool static_row_continuous() const;
     mutation_partition squashed() const;
     using range_tombstone_result = utils::chunked_vector<range_tombstone>;
-    phase_type phase() const { return _phase; }
+    phase_type phase() const ;
 };
 class partition_snapshot_ptr {
     lw_shared_ptr<partition_snapshot> _snp;
@@ -42150,21 +41652,9 @@ public:
     partition_snapshot_ptr(const partition_snapshot_ptr&) = default;
     partition_snapshot_ptr(lw_shared_ptr<partition_snapshot> snp) : _snp(std::move(snp)) {}
     ~partition_snapshot_ptr();
-    partition_snapshot_ptr& operator=(partition_snapshot_ptr&& other) noexcept {
-        if (this != &other) {
-            this->~partition_snapshot_ptr();
-            new (this) partition_snapshot_ptr(std::move(other));
-        }
-        return *this;
-    }
-    partition_snapshot_ptr& operator=(const partition_snapshot_ptr& other) noexcept {
-        if (this != &other) {
-            this->~partition_snapshot_ptr();
-            new (this) partition_snapshot_ptr(other);
-        }
-        return *this;
-    }
-    partition_snapshot& operator*() { return *_snp; }
+    partition_snapshot_ptr& operator=(partition_snapshot_ptr&& other) noexcept ;
+    partition_snapshot_ptr& operator=(const partition_snapshot_ptr& other) noexcept ;
+    partition_snapshot& operator*() ;
     const partition_snapshot& operator*() const { return *_snp; }
     partition_snapshot* operator->() { return &*_snp; }
     const partition_snapshot* operator->() const { return &*_snp; }
@@ -42240,22 +41730,14 @@ public:
     // Snapshots will be unlinked and evicted independently by reclaimer.
     // This entry is invalid after this and can only be destroyed.
     void evict(mutation_cleaner&) noexcept;
-    partition_version_ref& version() {
-        return _version;
-    }
-    partition_version_range versions() {
-        return _version->elements_from_this();
-    }
-    partition_version_reversed_range versions_from_oldest() {
-        return _version->all_elements_reversed();
-    }
+    partition_version_ref& version() ;
+    partition_version_range versions() ;
+    partition_version_reversed_range versions_from_oldest() ;
     // Tells whether this entry is locked.
     // Locked entries are undergoing an update and should not have their snapshots
     // detached from the entry.
     // Certain methods can only be called when !is_locked().
-    bool is_locked() const {
-        return _snapshot && _snapshot->is_locked();
-    }
+    bool is_locked() const ;
     // Strong exception guarantees.
     // Assumes this instance and mp are fully continuous.
     // Use only on non-evictable entries.
@@ -42315,24 +41797,7 @@ public:
     // Returns a reference to existing version with an active snapshot of given phase
     // or creates a new version and returns a reference to it.
     // Doesn't affect value or continuity of the partition.
-    partition_version& open_version(const schema& s, cache_tracker* t, partition_snapshot::phase_type phase = partition_snapshot::max_phase) {
-        if (_snapshot) {
-            if (_snapshot->_phase == phase) {
-                return *_version;
-            } else if (phase < _snapshot->_phase) {
-                // If entry is being updated, we will get reads for non-latest phase, and
-                // they must attach to the non-current version.
-                partition_version* second = _version->next();
-                assert(second && second->is_referenced());
-                auto&& snp = partition_snapshot::referer_of(*second);
-                assert(phase == snp._phase);
-                return *second;
-            } else { // phase > _snapshot->_phase
-                add_version(s, t);
-            }
-        }
-        return *_version;
-    }
+    partition_version& open_version(const schema& s, cache_tracker* t, partition_snapshot::phase_type phase = partition_snapshot::max_phase) ;
     mutation_partition_v2 squashed(schema_ptr from, schema_ptr to, is_evictable);
     mutation_partition squashed(const schema&, is_evictable);
     tombstone partition_tombstone() const;
@@ -42350,7 +41815,7 @@ public:
         const schema& _schema;
         const partition_entry& _partition_entry;
     public:
-        printer(const schema& s, const partition_entry& pe) : _schema(s), _partition_entry(pe) { }
+        printer(const schema& s, const partition_entry& pe)  ;
         printer(const printer&) = delete;
         printer(printer&&) = delete;
         friend std::ostream& operator<<(std::ostream& os, const printer& p);
@@ -42359,14 +41824,7 @@ public:
 };
 // Monotonic exception guarantees
 void merge_versions(const schema&, mutation_partition& newer, mutation_partition&& older, is_evictable);
-inline partition_version_ref& partition_snapshot::version()
-{
-    if (_version) {
-        return _version;
-    } else {
-        return _entry->_version;
-    }
-}
+
 inline const partition_version_ref& partition_snapshot::version() const
 {
     if (_version) {
@@ -42554,43 +42012,29 @@ public:
     }
     mutation_cleaner(mutation_cleaner&&) = delete;
     mutation_cleaner(const mutation_cleaner&) = delete;
-    void set_scheduling_group(seastar::scheduling_group sg) {
-        _impl->set_scheduling_group(sg);
-    }
+    void set_scheduling_group(seastar::scheduling_group sg) ;
     // Frees some of the data. Returns stop_iteration::yes iff all was freed.
     // Must be invoked under owning allocator.
-    stop_iteration clear_gently() noexcept {
-        return _impl->clear_gently();
-    }
+    stop_iteration clear_gently() noexcept ;
     // Must be invoked under owning allocator.
-    memory::reclaiming_result clear_some() noexcept {
-        return _impl->clear_some();
-    }
+    memory::reclaiming_result clear_some() noexcept ;
     // Must be invoked under owning allocator.
-    void clear() noexcept {
-        _impl->clear();
-    }
+    void clear() noexcept ;
     // Returns a guard object which when freed calls the on_space_freed callback with the amount
     // of memory freed in the region in terms of total_space() during the time the guard was
     // alive.
     // The guard must not outlive the cleaner.
-    auto make_region_space_guard() {
-        return _impl->make_region_space_guard();
-    }
+    auto make_region_space_guard() ;
     // Enqueues v for destruction.
     // The object must not be part of any list, and must not be accessed externally any more.
     // In particular, it must not be attached, even indirectly, to any snapshot or partition_entry,
     // and must not be evicted from.
     // Must be invoked under owning allocator.
-    void destroy_later(partition_version& v) noexcept {
-        return _impl->destroy_later(v);
-    }
+    void destroy_later(partition_version& v) noexcept ;
     // Destroys v now or later.
     // Same requirements as destroy_later().
     // Must be invoked under owning allocator.
-    void destroy_gently(partition_version& v) noexcept {
-        return _impl->destroy_gently(v);
-    }
+    void destroy_gently(partition_version& v) noexcept ;
     // Transfers objects from other to this.
     // This and other must belong to the same logalloc::region, and the same cache_tracker.
     // After the call other will refer to this cleaner.
@@ -42645,10 +42089,10 @@ public:
     public:
         static validation_result invalid(sstring what) { return validation_result(what); }
         static validation_result valid() { return validation_result(); }
-        bool is_valid() const { return _what.empty(); }
-        const sstring& what() const { return _what; }
-        explicit operator bool() const { return is_valid(); }
-        bool operator!() const { return !is_valid(); }
+        bool is_valid() const ;
+        const sstring& what() const ;
+        explicit operator bool() const ;
+        bool operator!() const ;
     };
 private:
     const ::schema& _schema;
@@ -42662,7 +42106,7 @@ private:
         std::optional<tombstone> new_current_tombstone);
 public:
     explicit mutation_fragment_stream_validator(const schema& s);
-    const ::schema& schema() const { return _schema; }
+    const ::schema& schema() const ;
     /// Validate the monotonicity of the fragment kind.
     ///
     /// Should be used when the full, more heavy-weight position-in-partition
@@ -42740,15 +42184,11 @@ public:
     /// fragment wasn't a `partition_end` fragment.
     validation_result on_end_of_stream();
     /// The previous valid fragment kind.
-    mutation_fragment_v2::kind previous_mutation_fragment_kind() const {
-        return _prev_kind;
-    }
+    mutation_fragment_v2::kind previous_mutation_fragment_kind() const ;
     /// The previous valid position.
     ///
     /// Call only if operator()(position_in_partition_view) was used.
-    const position_in_partition& previous_position() const {
-        return _prev_pos;
-    }
+    const position_in_partition& previous_position() const ;
     /// Get the current effective tombstone
     ///
     /// Call only if operator()(mutation_fragment_v2) or
@@ -42845,42 +42285,15 @@ class mutation_compactor_garbage_collector : public compaction_garbage_collector
 public:
     explicit mutation_compactor_garbage_collector(const schema& schema)  ;
     void start_collecting_static_row() ;
-    void start_collecting_clustering_row(clustering_key ckey) {
-        _kind = column_kind::regular_column;
-        _ckey = std::move(ckey);
-    }
-    void collect(row_tombstone tomb) {
-        _tomb = tomb;
-    }
-    virtual void collect(column_id id, atomic_cell cell) override {
-        _row.apply(_schema.column_at(_kind, id), std::move(cell));
-    }
-    virtual void collect(column_id id, collection_mutation_description mut) override {
-        if (mut.tomb || !mut.cells.empty()) {
-            const auto& cdef = _schema.column_at(_kind, id);
-            _row.apply(cdef, mut.serialize(*cdef.type));
-        }
-    }
-    virtual void collect(row_marker marker) override {
-        _marker = marker;
-    }
+    void start_collecting_clustering_row(clustering_key ckey) ;
+    void collect(row_tombstone tomb) ;
+    virtual void collect(column_id id, atomic_cell cell) override ;
+    virtual void collect(column_id id, collection_mutation_description mut) override ;
+    virtual void collect(row_marker marker) override ;
     template <typename Consumer>
-    void consume_static_row(Consumer&& consumer) {
-        if (!_row.empty()) {
-            consumer(static_row(std::move(_row)));
-            _row = {};
-        }
-    }
+    void consume_static_row(Consumer&& consumer) ;
     template <typename Consumer>
-    void consume_clustering_row(Consumer&& consumer) {
-        if (_tomb || !_marker.is_missing() || !_row.empty()) {
-            consumer(clustering_row(std::move(*_ckey), _tomb, _marker, std::move(_row)));
-            _ckey.reset();
-            _tomb = {};
-            _marker = {};
-            _row = {};
-        }
-    }
+    void consume_clustering_row(Consumer&& consumer) ;
 };
 struct compaction_stats {
     struct row_stats {
@@ -43515,35 +42928,14 @@ public:
     stop_iteration consume(partition_end) {
         return consume_end_of_partition();
     }
-    stop_iteration consume(mutation_fragment_v2&& mf) {
-        return std::move(mf).consume(*this);
-    }
+    stop_iteration consume(mutation_fragment_v2&& mf) ;
 public:
-    void consume_new_partition(const dht::decorated_key& dk) {
-        _builder.consume_new_partition(dk);
-    }
-    stop_iteration consume(tombstone t) {
-        _builder.consume(t);
-        return stop_iteration::no;
-    }
-    stop_iteration consume(range_tombstone_change&& rt) {
-        if (auto rt_opt = _rt_assembler.consume(*_s, std::move(rt))) {
-            _builder.consume(std::move(*rt_opt));
-        }
-        return stop_iteration::no;
-    }
-    stop_iteration consume(static_row&& sr) {
-        _builder.consume(std::move(sr));
-        return stop_iteration::no;
-    }
-    stop_iteration consume(clustering_row&& cr) {
-        _builder.consume(std::move(cr));
-        return stop_iteration::no;
-    }
-    stop_iteration consume_end_of_partition() {
-        _rt_assembler.on_end_of_stream();
-        return stop_iteration::yes;
-    }
+    void consume_new_partition(const dht::decorated_key& dk) ;
+    stop_iteration consume(tombstone t) ;
+    stop_iteration consume(range_tombstone_change&& rt) ;
+    stop_iteration consume(static_row&& sr) ;
+    stop_iteration consume(clustering_row&& cr) ;
+    stop_iteration consume_end_of_partition() ;
     mutation_opt consume_end_of_stream() {
         _rt_assembler.on_end_of_stream();
         return _builder.consume_end_of_stream();
@@ -43603,12 +42995,8 @@ struct partition {
     const frozen_mutation& mut() const {
         return _m;
     }
-    frozen_mutation& mut() {
-        return _m;
-    }
-    bool operator==(const partition& other) const {
-        return row_count() == other.row_count() && _m.representation() == other._m.representation();
-    }
+    frozen_mutation& mut() ;
+    bool operator==(const partition& other) const ;
 };
 // The partitions held by this object are ordered according to dht::decorated_key ordering and non-overlapping.
 // Each mutation must have different key.
@@ -43631,21 +43019,11 @@ public:
                         query::result_memory_tracker memory_tracker = { });
     const utils::chunked_vector<partition>& partitions() const;
     utils::chunked_vector<partition>& partitions();
-    uint32_t row_count_low_bits() const {
-        return _row_count_low_bits;
-    }
-    uint32_t row_count_high_bits() const {
-        return _row_count_high_bits;
-    }
-    uint64_t row_count() const {
-        return (static_cast<uint64_t>(_row_count_high_bits) << 32) | _row_count_low_bits;
-    }
-    query::short_read is_short_read() const {
-        return _short_read;
-    }
-    size_t memory_usage() const {
-        return _memory_tracker.used_memory();
-    }
+    uint32_t row_count_low_bits() const ;
+    uint32_t row_count_high_bits() const ;
+    uint64_t row_count() const ;
+    query::short_read is_short_read() const ;
+    size_t memory_usage() const ;
     bool operator==(const reconcilable_result& other) const;
     struct printer {
         const reconcilable_result& self;
@@ -45652,42 +45030,9 @@ public:
                     mutation_reader::forwarding) {
         return fn(std::move(s), std::move(permit), range, slice, pc, std::move(tr), fwd);
     }) {}
-    mutation_source(std::function<flat_mutation_reader_v2(schema_ptr, reader_permit, partition_range, const query::partition_slice&, io_priority)> fn)
-        : mutation_source([fn = std::move(fn)] (schema_ptr s,
-                    reader_permit permit,
-                    partition_range range,
-                    const query::partition_slice& slice,
-                    io_priority pc,
-                    tracing::trace_state_ptr,
-                    streamed_mutation::forwarding fwd,
-                    mutation_reader::forwarding) {
-        assert(!fwd);
-        return fn(std::move(s), std::move(permit), range, slice, pc);
-    }) {}
-    mutation_source(std::function<flat_mutation_reader_v2(schema_ptr, reader_permit, partition_range, const query::partition_slice&)> fn)
-        : mutation_source([fn = std::move(fn)] (schema_ptr s,
-                    reader_permit permit,
-                    partition_range range,
-                    const query::partition_slice& slice,
-                    io_priority,
-                    tracing::trace_state_ptr,
-                    streamed_mutation::forwarding fwd,
-                    mutation_reader::forwarding) {
-        assert(!fwd);
-        return fn(std::move(s), std::move(permit), range, slice);
-    }) {}
-    mutation_source(std::function<flat_mutation_reader_v2(schema_ptr, reader_permit, partition_range range)> fn)
-        : mutation_source([fn = std::move(fn)] (schema_ptr s,
-                    reader_permit permit,
-                    partition_range range,
-                    const query::partition_slice&,
-                    io_priority,
-                    tracing::trace_state_ptr,
-                    streamed_mutation::forwarding fwd,
-                    mutation_reader::forwarding) {
-        assert(!fwd);
-        return fn(std::move(s), std::move(permit), range);
-    }) {}
+    mutation_source(std::function<flat_mutation_reader_v2(schema_ptr, reader_permit, partition_range, const query::partition_slice&, io_priority)> fn)  ;
+    mutation_source(std::function<flat_mutation_reader_v2(schema_ptr, reader_permit, partition_range, const query::partition_slice&)> fn)  ;
+    mutation_source(std::function<flat_mutation_reader_v2(schema_ptr, reader_permit, partition_range range)> fn)  ;
     mutation_source(const mutation_source& other) = default;
     mutation_source& operator=(const mutation_source& other) = default;
     mutation_source(mutation_source&&) = default;
@@ -45702,19 +45047,13 @@ public:
         tracing::trace_state_ptr trace_state = nullptr,
         streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
         mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes) const
-    {
-        return mutation_fragment_v1_stream(
-                    (*_fn)(std::move(s), std::move(permit), range, slice, pc, std::move(trace_state), fwd, fwd_mr));
-    }
+    ;
     mutation_fragment_v1_stream
     make_fragment_v1_stream(
         schema_ptr s,
         reader_permit permit,
         partition_range range = query::full_partition_range) const
-    {
-        auto& full_slice = s->full_slice();
-        return this->make_fragment_v1_stream(std::move(s), std::move(permit), range, full_slice);
-    }
+    ;
     // Creates a new reader.
     //
     // All parameters captured by reference must remain live as long as returned
@@ -45729,18 +45068,13 @@ public:
             tracing::trace_state_ptr trace_state = nullptr,
             streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
             mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::yes) const
-    {
-        return (*_fn)(std::move(s), std::move(permit), range, slice, pc, std::move(trace_state), fwd, fwd_mr);
-    }
+    ;
     flat_mutation_reader_v2
     make_reader_v2(
             schema_ptr s,
             reader_permit permit,
             partition_range range = query::full_partition_range) const
-    {
-        auto& full_slice = s->full_slice();
-        return make_reader_v2(std::move(s), std::move(permit), range, full_slice);
-    }
+    ;
     partition_presence_checker make_partition_presence_checker() {
         return (*_presence_checker_factory)();
     }
@@ -45842,18 +45176,13 @@ public:
     // Evicts contents of this entry.
     // The caller is still responsible for unlinking and destroying this entry.
     void evict(cache_tracker&) noexcept;
-    const dht::decorated_key& key() const noexcept { return _key; }
-    dht::ring_position_view position() const noexcept {
-        if (is_dummy_entry()) {
-            return dht::ring_position_view::max();
-        }
-        return _key;
-    }
-    friend dht::ring_position_view ring_position_view_to_compare(const cache_entry& ce) noexcept { return ce.position(); }
-    const partition_entry& partition() const noexcept { return _pe; }
-    partition_entry& partition() { return _pe; }
-    const schema_ptr& schema() const noexcept { return _schema; }
-    schema_ptr& schema() noexcept { return _schema; }
+    const dht::decorated_key& key() const noexcept ;
+    dht::ring_position_view position() const noexcept ;
+    friend dht::ring_position_view ring_position_view_to_compare(const cache_entry& ce) noexcept ;
+    const partition_entry& partition() const noexcept ;
+    partition_entry& partition() ;
+    const schema_ptr& schema() const noexcept ;
+    schema_ptr& schema() noexcept ;
     flat_mutation_reader_v2 read(row_cache&, cache::read_context&);
     flat_mutation_reader_v2 read(row_cache&, std::unique_ptr<cache::read_context>);
     flat_mutation_reader_v2 read(row_cache&, cache::read_context&, utils::phased_barrier::phase_type);
@@ -46175,47 +45504,20 @@ public:
     explicit operator bool() const ;
 public:
     // Sets the iterator in latest version for the current position.
-    void set_latest(mutation_partition::rows_type::iterator it) {
-        _it = std::move(it);
-        _in_latest = true;
-    }
+    void set_latest(mutation_partition::rows_type::iterator it) ;
 public:
     // Returns the position of the row.
     // Call only when pointing at a row.
-    const position_in_partition& position() const { return _pos; }
+    const position_in_partition& position() const ;
     // Returns true iff the object is valid.
-    bool valid(partition_snapshot& snp) { return snp.get_change_mark() == _change_mark; }
+    bool valid(partition_snapshot& snp) ;
     // Call only when valid.
-    bool is_in_latest_version() const { return _in_latest; }
+    bool is_in_latest_version() const ;
     // Brings the object back to validity and returns true iff the snapshot contains the row.
     // When not pointing at a row, returns false.
-    bool refresh(partition_snapshot& snp) {
-        auto snp_cm = snp.get_change_mark();
-        if (snp_cm == _change_mark) {
-            return true;
-        }
-        if (!_change_mark) {
-            return false;
-        }
-        _change_mark = snp_cm;
-        rows_entry::tri_compare cmp(*snp.schema());
-        _in_latest = true;
-        for (auto&& v : snp.versions()) {
-            auto rows = v.partition().clustered_rows();
-            _it = rows.find(_pos, cmp);
-            if (_it != rows.end()) {
-                return true;
-            }
-            _in_latest = false;
-        }
-        return false;
-    }
-    rows_entry* operator->() const {
-        return &*_it;
-    }
-    rows_entry& operator*() const {
-        return *_it;
-    }
+    bool refresh(partition_snapshot& snp) ;
+    rows_entry* operator->() const ;
+    rows_entry& operator*() const ;
 };
 // Allows iterating over rows of mutation_partition represented by given partition_snapshot.
 //
@@ -46599,12 +45901,7 @@ public:
     // Brings back the cursor to validity, pointing at the first row with position not smaller
     // than the current position. Returns false iff no such row exists.
     // Assumes that rows are not inserted into the snapshot (static). They can be removed.
-    bool maybe_refresh_static() {
-        if (!iterators_valid()) {
-            return maybe_advance_to(position());
-        }
-        return true;
-    }
+    bool maybe_refresh_static() ;
     // Moves the cursor to the first entry with position >= pos.
     // If no such entry exists, the cursor is still moved, although
     // it won't be pointing at a row. Still, continuous() will be valid.
@@ -46617,51 +45914,38 @@ public:
     // The cursor is valid after the call.
     // Must be called under reclaim lock.
     // When throws, the cursor is invalidated and its position is not changed.
-    bool advance_to(position_in_partition_view lower_bound) {
-        maybe_advance_to(lower_bound);
-        return no_clustering_row_between_weak(_schema, lower_bound, position());
-    }
+    bool advance_to(position_in_partition_view lower_bound) ;
     // Call only when valid.
     // Returns true iff the cursor is pointing at a row.
-    bool at_a_row() const { return !_current_row.empty(); }
+    bool at_a_row() const ;
     // Advances to the next row, if any.
     // If there is no next row, advances to the extreme position in the direction of the cursor
     // (position_in_partition::before_all_clustering_rows() or position_in_partition::after_all_clustering_rows)
     // and does not point at a row.
     // Information about the range, continuous() and range_tombstone(), is still valid in this case.
     // Call only when valid, not necessarily pointing at a row.
-    bool next() { return advance(true); }
-    bool erase_and_advance() { return advance(false); }
+    bool next() ;
+    bool erase_and_advance() ;
     // Can be called when cursor is pointing at a row.
     // Returns true iff the key range adjacent to the cursor's position from the side of smaller keys
     // is marked as continuous.
-    bool continuous() const { return _continuous; }
+    bool continuous() const ;
     // Can be called when cursor is valid, not necessarily pointing at a row.
     // Returns the range tombstone for the key range adjacent to the cursor's position from the side of smaller keys.
     // Excludes the range for the row itself. That information is returned by range_tombstone_for_row().
     // It's possible that range_tombstone() is empty and range_tombstone_for_row() is not empty.
-    tombstone range_tombstone() const { return _range_tombstone; }
+    tombstone range_tombstone() const ;
     // Can be called when cursor is pointing at a row.
     // Returns the range tombstone covering the row under the cursor.
-    tombstone range_tombstone_for_row() const { return _range_tombstone_for_row; }
+    tombstone range_tombstone_for_row() const ;
     // Can be called when cursor is pointing at a row.
-    bool dummy() const { return _dummy; }
+    bool dummy() const ;
     // Can be called only when cursor is valid and pointing at a row, and !dummy().
-    const clustering_key& key() const { return _position.key(); }
+    const clustering_key& key() const ;
     // Can be called only when cursor is valid and pointing at a row.
-    clustering_row row() const {
-        // Note: if the precondition ("cursor is valid and pointing at a row") is fulfilled
-        // then _current_row is not empty, so the below is valid.
-        clustering_row cr(key(), deletable_row(_schema, _current_row[0].it->row()));
-        for (size_t i = 1; i < _current_row.size(); ++i) {
-            cr.apply(_schema, _current_row[i].it->row());
-        }
-        return cr;
-    }
+    clustering_row row() const ;
     // Can be called only when cursor is valid and pointing at a row.
-    deletable_row& latest_row() const noexcept {
-        return _current_row[0].it->row();
-    }
+    deletable_row& latest_row() const noexcept ;
     // Can be called only when cursor is valid and pointing at a row.
     // Monotonic exception guarantees.
     template <typename Consumer>
@@ -46702,55 +45986,7 @@ public:
     // Can be called only when cursor is valid and pointing at a row.
     // The cursor remains valid after the call and points at the same row as before.
     // Use only with evictable snapshots.
-    ensure_result ensure_entry_in_latest() {
-        auto&& rows = _snp.version()->partition().mutable_clustered_rows();
-        if (is_in_latest_version()) {
-            auto latest_i = get_iterator_in_latest_version();
-            rows_entry& latest = *latest_i;
-            if (_snp.at_latest_version()) {
-                _snp.tracker()->touch(latest);
-            }
-            return {latest, latest_i, false};
-        } else {
-            // Copy row from older version because rows in evictable versions must
-            // hold values which are independently complete to be consistent on eviction.
-            auto e = [&] {
-                if (!at_a_row()) {
-                    return alloc_strategy_unique_ptr<rows_entry>(
-                            current_allocator().construct<rows_entry>(*_snp.schema(), _position,
-                                                                      is_dummy(!_position.is_clustering_row()), is_continuous::no));
-                } else {
-                    return alloc_strategy_unique_ptr<rows_entry>(
-                            current_allocator().construct<rows_entry>(*_snp.schema(), *_current_row[0].it));
-                }
-            }();
-            rows_entry& re = *e;
-            if (_reversed) { // latest_i is not reliably a successor
-                // FIXME: set continuity when possible. Not that important since cache sets it anyway when populating.
-                re.set_continuous(false);
-                e->set_range_tombstone(range_tombstone_for_row());
-                rows_entry::tri_compare cmp(*_snp.schema());
-                auto res = rows.insert(std::move(e), cmp);
-                if (res.second) {
-                    _snp.tracker()->insert(re);
-                }
-                return {*res.first, res.first, res.second};
-            } else {
-                auto latest_i = get_iterator_in_latest_version();
-                if (latest_i && latest_i->continuous()) {
-                    e->set_continuous(true);
-                    // See the "information monotonicity" rule.
-                    e->set_range_tombstone(latest_i->range_tombstone());
-                } else {
-                    e->set_continuous(false);
-                    e->set_range_tombstone(range_tombstone_for_row());
-                }
-                auto i = rows.insert_before(latest_i, std::move(e));
-                _snp.tracker()->insert(re);
-                return {re, i, true};
-            }
-        }
-    }
+    ensure_result ensure_entry_in_latest() ;
     // Returns a pointer to rows_entry with given position in latest version or
     // creates a neutral one, provided that it belongs to a continuous range.
     // Otherwise returns nullptr.
@@ -46764,53 +46000,7 @@ public:
     // positions unless iterators are invalidated across the calls.
     // The cursor must not be a reversed-order cursor.
     // Use only with evictable snapshots.
-    std::optional<ensure_result> ensure_entry_if_complete(position_in_partition_view pos) {
-        if (_reversed) { // latest_i is unreliable
-            throw_with_backtrace<std::logic_error>("ensure_entry_if_complete() called on reverse cursor");
-        }
-        position_in_partition::less_compare less(_schema);
-        if (!iterators_valid() || less(position(), pos)) {
-            auto has_entry = maybe_advance_to(pos);
-            assert(has_entry); // evictable snapshots must have a dummy after all rows.
-        }
-        auto&& rows = _snp.version()->partition().mutable_clustered_rows();
-        auto latest_i = get_iterator_in_latest_version();
-        position_in_partition::equal_compare eq(_schema);
-        if (eq(position(), pos)) {
-            // Check if entry was already inserted by previous call to ensure_entry_if_complete()
-            if (latest_i != rows.begin()) {
-                auto prev_i = std::prev(latest_i);
-                if (eq(prev_i->position(), pos)) {
-                    return ensure_result{*prev_i, prev_i, false};
-                }
-            }
-            return ensure_entry_in_latest();
-        } else if (!continuous()) {
-            return std::nullopt;
-        }
-        // Check if entry was already inserted by previous call to ensure_entry_if_complete()
-        if (latest_i != rows.begin()) {
-            auto prev_i = std::prev(latest_i);
-            if (eq(prev_i->position(), pos)) {
-                return ensure_result{*prev_i, prev_i, false};
-            }
-        }
-        auto e = alloc_strategy_unique_ptr<rows_entry>(
-                current_allocator().construct<rows_entry>(_schema, pos,
-                    is_dummy(!pos.is_clustering_row()),
-                    is_continuous::no));
-        if (latest_i && latest_i->continuous()) {
-            e->set_continuous(true);
-            e->set_range_tombstone(latest_i->range_tombstone()); // See the "information monotonicity" rule.
-        } else {
-            // Even if the range in the latest version is not continuous, the row itself is assumed to be complete,
-            // so it must inherit the current range tombstone.
-            e->set_range_tombstone(range_tombstone());
-        }
-        auto e_i = rows.insert_before(latest_i, std::move(e));
-        _snp.tracker()->insert(*e_i);
-        return ensure_result{*e_i, e_i, true};
-    }
+    std::optional<ensure_result> ensure_entry_if_complete(position_in_partition_view pos) ;
     // Brings the entry pointed to by the cursor to the front of the LRU
     // Cursor must be valid and pointing at a row.
     // Use only with evictable snapshots.
@@ -46905,15 +46095,8 @@ public:
             : _max_rows(max_rows)
             , _max_partitions(max_partitions)
     { }
-    void reserve(size_t size) {
-        _partial.reserve(size);
-    }
-    void operator()(foreign_ptr<lw_shared_ptr<query::result>> r) {
-        if (!_partial.empty() && _partial.back()->is_short_read()) {
-            return;
-        }
-        _partial.emplace_back(std::move(r));
-    }
+    void reserve(size_t size) ;
+    void operator()(foreign_ptr<lw_shared_ptr<query::result>> r) ;
     // FIXME: Eventually we should return a composite_query_result here
     // which holds the vector of query results and which can be quickly turned
     // into packet fragments by the transport layer without copying the data.
@@ -46927,25 +46110,11 @@ class xx_hasher {
     static constexpr size_t digest_size = 16;
     XXH64_state_t _state;
 public:
-    explicit xx_hasher(uint64_t seed = 0) noexcept {
-        XXH64_reset(&_state, seed);
-    }
-    void update(const char* ptr, size_t length) noexcept {
-        XXH64_update(&_state, ptr, length);
-    }
-    bytes finalize() {
-        bytes digest{bytes::initialized_later(), digest_size};
-        serialize_to(digest.begin());
-        return digest;
-    }
-    std::array<uint8_t, digest_size> finalize_array() {
-        std::array<uint8_t, digest_size> digest;
-        serialize_to(digest.begin());
-        return digest;
-    }
-    uint64_t finalize_uint64() {
-        return XXH64_digest(&_state);
-    }
+    explicit xx_hasher(uint64_t seed = 0) noexcept ;
+    void update(const char* ptr, size_t length) noexcept ;
+    bytes finalize() ;
+    std::array<uint8_t, digest_size> finalize_array() ;
+    uint64_t finalize_uint64() ;
 private:
     template<typename OutIterator>
     void serialize_to(OutIterator&& out) {
