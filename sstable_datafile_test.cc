@@ -30,7 +30,6 @@
 #include <boost/range/adaptors.hpp>
 #include <boost/range/algorithm_ext/push_back.hpp>
 #include <boost/range/algorithm.hpp>
-#include <boost/range/combine.hpp>
 #include <boost/range/join.hpp>
 #include <boost/regex/icu.hpp>
 #include <boost/signals2.hpp>
@@ -6100,12 +6099,8 @@ public:
     const columns_type& all_columns() const {
         return _raw._columns;
     }
-    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const {
-        return _columns_by_name;
-    }
-    const auto& dropped_columns() const {
-        return _raw._dropped_columns;
-    }
+    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const ;
+    const auto& dropped_columns() const ;
     const auto& collections() const ;
     gc_clock::duration default_time_to_live() const ;
     data_type make_legacy_default_validator() const;
@@ -9712,9 +9707,7 @@ using clustering_range = nonwrapping_range<clustering_key_prefix>;
 clustering_range reverse(const clustering_range& range);
 extern const dht::partition_range full_partition_range;
 extern const clustering_range full_clustering_range;
-
 bool is_single_partition(const dht::partition_range& range) ;
-
 bool is_single_row(const schema& s, const query::clustering_range& range) ;
 typedef std::vector<clustering_range> clustering_row_ranges;
 /// Trim the clustering ranges.
@@ -10955,11 +10948,11 @@ public:
     }
     static shared_ptr<const user_type_impl> get_instance(sstring keyspace, bytes name,
             std::vector<bytes> field_names, std::vector<data_type> field_types, bool multi_cell);
-    data_type field_type(size_t i) const { return type(i); }
+    data_type field_type(size_t i) const ;
     const std::vector<data_type>& field_types() const ;
     bytes_view field_name(size_t i) const ;
     sstring field_name_as_string(size_t i) const ;
-    const std::vector<bytes>& field_names() const { return _field_names; }
+    const std::vector<bytes>& field_names() const ;
     const std::vector<sstring>& string_field_names() const { return _string_field_names; }
     std::optional<size_t> idx_of_field(const bytes& name) const;
     bool is_multi_cell() const { return _is_multi_cell; }
@@ -12562,7 +12555,6 @@ public:
     template<typename... Args>
     size_t operator()(const std::tuple<Args...>& v) const;
 };
-
 }
 #endif 
 namespace auth {
@@ -15656,7 +15648,7 @@ public:
         : _start(std::move(start))
         , _end(std::move(end))
     { }
-    void set_start(position_in_partition pos) { _start = std::move(pos); }
+    void set_start(position_in_partition pos) ;
     void set_end(position_in_partition pos) ;
     const position_in_partition& start() const& ;
     position_in_partition&& start() && ;
@@ -15728,9 +15720,7 @@ public:
     uint32_t get_rows_fetched_for_last_partition_low_bits() const ;
     uint32_t get_remaining_high_bits() const ;
     uint32_t get_rows_fetched_for_last_partition_high_bits() const ;
-    uint64_t get_remaining() const {
-        return (static_cast<uint64_t>(_remaining_high_bits) << 32) | _remaining_low_bits;
-    }
+    uint64_t get_remaining() const ;
     uint64_t get_rows_fetched_for_last_partition() const ;
     query_id get_query_uuid() const ;
     replicas_per_token_range get_last_replicas() const ;
@@ -16553,26 +16543,10 @@ inline frame<seastar::memory_output_stream<Iterator>> start_frame(seastar::memor
 namespace ser {
 } // ser
 namespace ser {
-
 struct qr_cell_view {
     utils::input_stream v;
-    auto timestamp() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<std::optional<api::timestamp_type>>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       return deserialize(in, boost::type<std::optional<api::timestamp_type>>());
-      });
-    }
-    auto expiry() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<std::optional<gc_clock::time_point>>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<std::optional<api::timestamp_type>>());
-       return deserialize(in, boost::type<std::optional<gc_clock::time_point>>());
-      });
-    }
+    auto timestamp() const ;
+    auto expiry() const ;
     auto value() const {
       return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<bytes>())) {
        std::ignore = this;
@@ -18051,8 +18025,6 @@ struct expression::impl final {
     variant_type v;
     impl(variant_type v) : v(std::move(v)) {}
 };
-
-
 template <invocable_on_expression Visitor>
 decltype(auto) visit(Visitor&& visitor, const expression& e) {
     return std::visit(std::forward<Visitor>(visitor), e._v->v);
@@ -23772,8 +23744,6 @@ public:
 private:
     size_t calculate_memory_usage(const schema& s) const ;
 };
-
-
 std::ostream& operator<<(std::ostream&, mutation_fragment::kind);
 // range_tombstone_stream is a helper object that simplifies producing a stream
 // of range tombstones and merging it with a stream of clustering rows.
@@ -58880,7 +58850,6 @@ class duration_builder final { public:     duration_builder& add(cql_duration::c
 //
 std::optional<cql_duration> parse_duration_standard_format(std::string_view s) ; std::optional<cql_duration> parse_duration_iso8601_format(std::string_view s) ; std::optional<cql_duration> parse_duration_iso8601_alternative_format(std::string_view s) ; std::optional<cql_duration> parse_duration_iso8601_week_format(std::string_view s) ; // Parse a duration string without sign information assuming one of the supported formats.
 std::optional<cql_duration> parse_duration(std::string_view s) ; }
- 
  std::ostream& operator<<(std::ostream& os, const cql_duration& d) {     if ((d.months < 0) || (d.days < 0) || (d.nanoseconds < 0)) {         os << '-';     }     // If a non-zero integral component of the count can be expressed in `unit`, then append it to the stream with its
     // unit.
     //
