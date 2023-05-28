@@ -1405,16 +1405,11 @@ public:
     size_t size() const {
         return _size;
     }
-    size_t capacity() const {
-        return _capacity;
-    }
+    size_t capacity() const ;
     T& operator[](size_t i) ;
     const T& operator[](size_t i) const ;
     T& at(size_t i) ;
-    const T& at(size_t i) const {
-        check_bounds(i);
-        return *addr(i);
-    }
+    const T& at(size_t i) const ;
     void push_back(const T& x) {
         reserve_for_push_back();
         new (addr(_size)) T(x);
@@ -1436,12 +1431,8 @@ public:
         --_size;
         addr(_size)->~T();
     }
-    const T& back() const {
-        return *addr(_size - 1);
-    }
-    T& back() {
-        return *addr(_size - 1);
-    }
+    const T& back() const ;
+    T& back() ;
     void clear();
     void shrink_to_fit();
     void resize(size_t n);
@@ -1465,15 +1456,8 @@ public:
     /// necessary.
     ///
     /// \returns the memory that remains to be reserved
-    size_t reserve_partial(size_t n) {
-        if (n > _capacity) {
-            return make_room(n, true);
-        }
-        return 0;
-    }
-    size_t memory_size() const {
-        return _capacity * sizeof(T);
-    }
+    size_t reserve_partial(size_t n) ;
+    size_t memory_size() const ;
     size_t external_memory_usage() const;
 public:
     template <class ValueType>
@@ -1497,9 +1481,7 @@ public:
         reference operator*() const {
             return *addr();
         }
-        pointer operator->() const {
-            return addr();
-        }
+        pointer operator->() const ;
         reference operator[](ssize_t n) const {
             return *(*this + n);
         }
@@ -1507,30 +1489,17 @@ public:
             ++_i;
             return *this;
         }
-        iterator_type operator++(int) {
-            auto x = *this;
-            ++_i;
-            return x;
-        }
+        iterator_type operator++(int) ;
         iterator_type& operator--() {
             --_i;
             return *this;
         }
-        iterator_type operator--(int) {
-            auto x = *this;
-            --_i;
-            return x;
-        }
-        iterator_type& operator+=(ssize_t n) {
-            _i += n;
-            return *this;
-        }
+        iterator_type operator--(int) ;
+        iterator_type& operator+=(ssize_t n) ;
         iterator_type& operator-=(ssize_t n) ;
         iterator_type operator+(ssize_t n) const ;
         iterator_type operator-(ssize_t n) const ;
-        friend iterator_type operator+(ssize_t n, iterator_type a) {
-            return a + n;
-        }
+        friend iterator_type operator+(ssize_t n, iterator_type a) ;
         friend ssize_t operator-(iterator_type a, iterator_type b) {
             return a._i - b._i;
         }
@@ -1552,9 +1521,9 @@ public:
     iterator end() { return iterator(_chunks.data(), _size); }
     const_iterator begin() const { return const_iterator(_chunks.data(), 0); }
     const_iterator end() const { return const_iterator(_chunks.data(), _size); }
-    const_iterator cbegin() const { return const_iterator(_chunks.data(), 0); }
-    const_iterator cend() const { return const_iterator(_chunks.data(), _size); }
-    std::reverse_iterator<iterator> rbegin() { return std::reverse_iterator(end()); }
+    const_iterator cbegin() const ;
+    const_iterator cend() const ;
+    std::reverse_iterator<iterator> rbegin() ;
     std::reverse_iterator<iterator> rend() ;
     std::reverse_iterator<const_iterator> rbegin() const ;
     std::reverse_iterator<const_iterator> rend() const ;
@@ -1563,28 +1532,14 @@ public:
 public:
     bool operator==(const chunked_vector& x) const ;
 };
-template <typename T, size_t max_contiguous_allocation>
-chunked_vector<T, max_contiguous_allocation>::chunked_vector(const chunked_vector& x)
-        : chunked_vector() {
-    reserve(x.size());
-    std::copy(x.begin(), x.end(), std::back_inserter(*this));
-}
+
 template <typename T, size_t max_contiguous_allocation>
 chunked_vector<T, max_contiguous_allocation>::chunked_vector(chunked_vector&& x) noexcept
         : _chunks(std::exchange(x._chunks, {}))
         , _size(std::exchange(x._size, 0))
         , _capacity(std::exchange(x._capacity, 0)) {
 }
-template <typename T, size_t max_contiguous_allocation>
-inline
-chunked_vector<T, max_contiguous_allocation>&
-chunked_vector<T, max_contiguous_allocation>::operator=(chunked_vector&& x) noexcept {
-    if (this != &x) {
-        this->~chunked_vector();
-        new (this) chunked_vector(std::move(x));
-    }
-    return *this;
-}
+
 template <typename T, size_t max_contiguous_allocation>
 chunked_vector<T, max_contiguous_allocation>::~chunked_vector() {
     if constexpr (!std::is_trivially_destructible_v<T>) {
@@ -1656,19 +1611,7 @@ chunked_vector<T, max_contiguous_allocation>::do_reserve_for_push_back() {
         reserve((_capacity / max_chunk_capacity() + 1) * max_chunk_capacity());
     }
 }
-template <typename T, size_t max_contiguous_allocation>
-void
-chunked_vector<T, max_contiguous_allocation>::resize(size_t n) {
-    reserve(n);
-    // FIXME: construct whole chunks at once
-    while (_size > n) {
-        pop_back();
-    }
-    while (_size < n) {
-        push_back(T{});
-    }
-    shrink_to_fit();
-}
+
 template <typename T, size_t max_contiguous_allocation>
 void
 chunked_vector<T, max_contiguous_allocation>::shrink_to_fit() {
@@ -1698,16 +1641,12 @@ chunked_vector<T, max_contiguous_allocation>::clear() {
     shrink_to_fit();
 }
 template <typename T, size_t max_contiguous_allocation>
-std::ostream& operator<<(std::ostream& os, const chunked_vector<T, max_contiguous_allocation>& v) {
-    return utils::format_range(os, v);
-}
+std::ostream& operator<<(std::ostream& os, const chunked_vector<T, max_contiguous_allocation>& v) ;
 }
 using namespace seastar;
 class large_bitset {
     using int_type = uint64_t;
-    static constexpr size_t bits_per_int() {
-        return std::numeric_limits<int_type>::digits;
-    }
+    static constexpr size_t bits_per_int() ;
     size_t _nr_bits = 0;
     utils::chunked_vector<int_type> _storage;
 public:
@@ -1719,12 +1658,7 @@ public:
     size_t size() const ;
     size_t memory_size() const ;
     bool test(size_t idx) const ;
-    void set(size_t idx) {
-        auto idx1 = idx / bits_per_int();
-        idx %= bits_per_int();
-        auto idx2 = idx;
-        _storage[idx1] |= int_type(1) << idx2;
-    }
+    void set(size_t idx) ;
     void clear(size_t idx) ;
     void clear();
     const utils::chunked_vector<int_type>& get_storage() const ;
@@ -1753,9 +1687,7 @@ public:
     virtual void clear() override ;
     virtual void close() override ;
     virtual size_t memory_size() override ;
-    static const stats& get_shard_stats() noexcept {
-        return _shard_stats;
-    }
+    static const stats& get_shard_stats() noexcept ;
 };
 struct murmur3_bloom_filter: public bloom_filter {
     murmur3_bloom_filter(int hashes, bitmap&& bs, filter_format format)
@@ -1817,9 +1749,7 @@ struct super_enum {
     static constexpr sequence_type sequence_for() {
         return static_cast<sequence_type>(Elem);
     }
-    static sequence_type sequence_for(enum_type elem) {
-        return static_cast<sequence_type>(elem);
-    }
+    static sequence_type sequence_for(enum_type elem) ;
     static constexpr sequence_type max_sequence = sequence_for<max<Items...>::value>();
     static constexpr sequence_type min_sequence = sequence_for<min<Items...>::value>();
     static_assert(min_sequence >= 0, "negative enum values unsupported");
@@ -1851,22 +1781,10 @@ private:
 public:
     using iterator = std::invoke_result_t<decltype(&enum_set::make_iterator), mask_iterator>;
     constexpr enum_set() : _mask(0) {}
-    static constexpr enum_set from_mask(mask_type mask) {
-        const auto bit_range = seastar::bitsets::for_each_set(std::bitset<mask_digits>(mask));
-        if (!std::all_of(bit_range.begin(), bit_range.end(), &Enum::is_valid_sequence)) {
-            throw bad_enum_set_mask();
-        }
-        return enum_set(mask);
-    }
-    static constexpr mask_type full_mask() {
-        return ~(std::numeric_limits<mask_type>::max() << (Enum::max_sequence + 1));
-    }
-    static constexpr enum_set full() {
-        return enum_set(full_mask());
-    }
-    static inline mask_type mask_for(enum_type e) {
-        return mask_type(1) << Enum::sequence_for(e);
-    }
+    static constexpr enum_set from_mask(mask_type mask) ;
+    static constexpr mask_type full_mask() ;
+    static constexpr enum_set full() ;
+    static mask_type mask_for(enum_type e) ;
     template<enum_type Elem>
     static constexpr mask_type mask_for() {
         return mask_type(1) << shift_for<Elem>();
@@ -1884,17 +1802,13 @@ public:
     bool contains(enum_type e) const ;
     template<enum_type e>
     void remove() ;
-    void remove(enum_type e) {
-        _mask &= ~mask_for(e);
-    }
+    void remove(enum_type e) ;
     template<enum_type e>
     void set() {
         _mask |= mask_for<e>();
     }
     template<enum_type e>
-    void set_if(bool condition) {
-        _mask |= mask_type(condition) << shift_for<e>();
-    }
+    void set_if(bool condition) ;
     void set(enum_type e) ;
     template<enum_type e>
     void toggle() ;
@@ -1902,36 +1816,24 @@ public:
     void add(const enum_set& other) ;
     explicit operator bool() const ;
     mask_type mask() const ;
-    iterator begin() const {
-        return make_iterator(mask_iterator(_mask));
-    }
-    iterator end() const {
-        return make_iterator(mask_iterator(0));
-    }
+    iterator begin() const ;
+    iterator end() const ;
     template<enum_type... items>
     struct frozen {
         template<enum_type first>
         static constexpr mask_type make_mask() {
             return mask_for<first>();
         }
-        static constexpr mask_type make_mask() {
-            return 0;
-        }
+        static constexpr mask_type make_mask() ;
         template<enum_type first, enum_type second, enum_type... rest>
         static constexpr mask_type make_mask() {
             return mask_for<first>() | make_mask<second, rest...>();
         }
         static constexpr mask_type mask = make_mask<items...>();
         template<enum_type Elem>
-        static constexpr bool contains() {
-            return mask & mask_for<Elem>();
-        }
-        static bool contains(enum_type e) {
-            return mask & mask_for(e);
-        }
-        static bool contains(prepared e) {
-            return mask & e.mask;
-        }
+        static constexpr bool contains() ;
+        static bool contains(enum_type e) ;
+        static bool contains(prepared e) ;
         static constexpr enum_set<Enum> unfreeze() {
             return enum_set<Enum>(mask);
         }
@@ -1966,7 +1868,7 @@ public:
     virtual void migrate(void* src, void* dsts, size_t size) const noexcept = 0;
     virtual size_t size(const void* obj) const = 0;
     size_t align() const { return _align; }
-    uint32_t index() const { return _index; }
+    uint32_t index() const ;
 };
 // Non-constant-size classes (ending with `char data[0]`) must provide
 // the method telling the underlying storage size
@@ -2089,12 +1991,8 @@ public:
     // are invalidated, e.g. due to internal events like compaction or eviction.
     // When the value returned by this method doesn't change, references obtained
     // between invocations remain valid.
-    uint64_t invalidate_counter() const noexcept {
-        return _invalidate_counter;
-    }
-    void invalidate_references() noexcept {
-        ++_invalidate_counter;
-    }
+    uint64_t invalidate_counter() const noexcept ;
+    void invalidate_references() noexcept ;
 };
 class standard_allocation_strategy : public allocation_strategy {
 public:
@@ -2126,10 +2024,8 @@ public:
     }
 };
 extern standard_allocation_strategy standard_allocation_strategy_instance;
-inline
-standard_allocation_strategy& standard_allocator() {
-    return standard_allocation_strategy_instance;
-}
+
+standard_allocation_strategy& standard_allocator() ;
 inline
 allocation_strategy*& current_allocation_strategy_ptr() {
     static thread_local allocation_strategy* current = &standard_allocation_strategy_instance;
@@ -2195,13 +2091,8 @@ using alloc_strategy_unique_ptr = std::unique_ptr<T, alloc_strategy_deleter<T>>;
 class allocator_lock {
     allocation_strategy* _prev;
 public:
-    allocator_lock(allocation_strategy& alloc) {
-        _prev = current_allocation_strategy_ptr();
-        current_allocation_strategy_ptr() = &alloc;
-    }
-    ~allocator_lock() {
-        current_allocation_strategy_ptr() = _prev;
-    }
+    allocator_lock(allocation_strategy& alloc) ;
+    ~allocator_lock() ;
 };
 template<typename Func>
 inline
@@ -2232,9 +2123,7 @@ To read_unaligned(const void* src) {
     return dst;
 }
 template <TriviallyCopyable From>
-void write_unaligned(void* dst, const From& src) {
-    std::memcpy(dst, &src, sizeof(From));
-}
+void write_unaligned(void* dst, const From& src) ;
 enum class mutable_view { no, yes, };
 /// Fragmented buffer
 ///
@@ -2277,8 +2166,8 @@ public:
     explicit fragment_range_view(const T& range)  ;
     const_iterator begin() const ;
     const_iterator end() const ;
-    size_t size_bytes() const { return _range->size_bytes(); }
-    bool empty() const { return _range->empty(); }
+    size_t size_bytes() const ;
+    bool empty() const ;
 };
 /// Single-element fragment range
 ///
@@ -2374,11 +2263,7 @@ struct fragment_range {
         fragment_iterator(const View& v) : _view(v) {
             _current = _view.current_fragment();
         }
-        fragment_iterator& operator++() {
-            _view.remove_current();
-            _current = _view.current_fragment(); 
-            return *this;
-        }
+        fragment_iterator& operator++() ;
         fragment_iterator operator++(int) ;
         reference operator*() const ;
         pointer operator->() const ;
