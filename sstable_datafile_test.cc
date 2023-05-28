@@ -4123,12 +4123,7 @@ public:
     future<fragmented_temporary_buffer> read_exactly(input_stream<char>& in, size_t length) ;
 };
 // The operator below is used only for logging
-inline std::ostream& operator<<(std::ostream& out, const fragmented_temporary_buffer::view& v) {
-    for (bytes_view frag : fragment_range(v)) {
-        out << to_hex(frag);
-    }
-    return out;
-}
+ std::ostream& operator<<(std::ostream& out, const fragmented_temporary_buffer::view& v) ;
 namespace exceptions {
 enum class exception_code : int32_t {
     SERVER_ERROR    = 0x0000,
@@ -4174,8 +4169,8 @@ public:
         , _msg(std::move(msg))
     { }
     virtual const char* what() const noexcept override { return _msg.c_str(); }
-    exception_code code() const { return _code; }
-    sstring get_message() const { return what(); }
+    exception_code code() const ;
+    sstring get_message() const ;
 };
 class server_exception : public cassandra_exception {
 public:
@@ -4222,10 +4217,8 @@ public:
 class read_timeout_exception : public request_timeout_exception {
 public:
     bool data_present;
-    read_timeout_exception(const sstring& ks, const sstring& cf, db::consistency_level consistency, int32_t received, int32_t block_for, bool data_present) noexcept
-        : request_timeout_exception{exception_code::READ_TIMEOUT, ks, cf, consistency, received, block_for}
-        , data_present{data_present}
-    { }
+    read_timeout_exception(const sstring& ks, const sstring& cf, db::consistency_level consistency, int32_t received, int32_t block_for, bool data_present) 
+    ;
 };
 struct mutation_write_timeout_exception : public request_timeout_exception {
     db::write_type type;
@@ -4263,14 +4256,10 @@ struct mutation_write_failure_exception : public request_failure_exception {
 };
 struct read_failure_exception : public request_failure_exception {
     bool data_present;
-    read_failure_exception(const sstring& ks, const sstring& cf, db::consistency_level consistency_, int32_t received_, int32_t failures_, int32_t block_for_, bool data_present_) noexcept
-        : request_failure_exception{exception_code::READ_FAILURE, ks, cf, consistency_, received_, failures_, block_for_}
-        , data_present{data_present_}
-    { }
-    read_failure_exception(const sstring& msg, db::consistency_level consistency_, int32_t received_, int32_t failures_, int32_t block_for_, bool data_present_) noexcept
-        : request_failure_exception{exception_code::READ_FAILURE, msg, consistency_, received_, failures_, block_for_}
-        , data_present{data_present_}
-    { }
+    read_failure_exception(const sstring& ks, const sstring& cf, db::consistency_level consistency_, int32_t received_, int32_t failures_, int32_t block_for_, bool data_present_) 
+    ;
+    read_failure_exception(const sstring& msg, db::consistency_level consistency_, int32_t received_, int32_t failures_, int32_t block_for_, bool data_present_) 
+    ;
 };
 struct overloaded_exception : public cassandra_exception {
     explicit overloaded_exception(size_t c) noexcept;
@@ -4288,7 +4277,7 @@ public:
 };
 class invalidated_prepared_usage_attempt_exception : public exceptions::request_validation_exception {
 public:
-    invalidated_prepared_usage_attempt_exception() : request_validation_exception{exception_code::UNPREPARED, "Attempt to execute the invalidated prepared statement."} {}
+    invalidated_prepared_usage_attempt_exception()  ;
 };
 class unauthorized_exception: public request_validation_exception {
 public:
@@ -4403,20 +4392,7 @@ enum class lexicographical_relation : int8_t {
 // Compare is an abstract_type-aware less comparator, which takes the type as first argument.
 template <typename TypesIterator, typename InputIt1, typename InputIt2, typename Compare>
 bool lexicographical_compare(TypesIterator types, InputIt1 first1, InputIt1 last1,
-        InputIt2 first2, InputIt2 last2, Compare comp) {
-    while (first1 != last1 && first2 != last2) {
-        if (comp(*types, *first1, *first2)) {
-            return true;
-        }
-        if (comp(*types, *first2, *first1)) {
-            return false;
-        }
-        ++first1;
-        ++first2;
-        ++types;
-    }
-    return (first1 == last1) && (first2 != last2);
-}
+        InputIt2 first2, InputIt2 last2, Compare comp) ;
 // Like std::lexicographical_compare but injects values from shared sequence
 // (types) to the comparator. Compare is an abstract_type-aware trichotomic
 // comparator, which takes the type as first argument.
@@ -4559,22 +4535,9 @@ template <typename T>
 bool
 operator==(const emptyable<T>& me1, const emptyable<T>& me2) ;
 template <typename T>
-inline
+
 bool
-operator<(const emptyable<T>& me1, const emptyable<T>& me2) {
-    if (me1.empty()) {
-        if (me2.empty()) {
-            return false;
-        } else {
-            return true;
-        }
-    }
-    if (me2.empty()) {
-        return false;
-    } else {
-        return me1.get() < me2.get();
-    }
-}
+operator<(const emptyable<T>& me1, const emptyable<T>& me2) ;
 // Checks whether T::empty() const exists and returns bool
 template <typename T>
 concept has_empty = requires (T obj) {
@@ -4706,9 +4669,7 @@ public:
     sstring to_parsable_string() const;
 };
 template<typename T>
-inline bytes serialized(T v) {
-    return data_value(v).serialize_nonnull();
-}
+ bytes serialized(T v) ;
 class serialized_compare;
 class serialized_tri_compare;
 class user_type_impl;
@@ -4784,15 +4745,9 @@ public:
     data_value deserialize(bytes_view v) const {
         return deserialize_impl(single_fragmented_view(v));
     }
-    data_value deserialize(const managed_bytes& v) const {
-        return deserialize(managed_bytes_view(v));
-    }
-    template <FragmentedView View> data_value deserialize_value(View v) const {
-        return deserialize(v);
-    }
-    data_value deserialize_value(bytes_view v) const {
-        return deserialize_impl(single_fragmented_view(v));
-    };
+    data_value deserialize(const managed_bytes& v) const ;
+    template <FragmentedView View> data_value deserialize_value(View v) const ;
+    data_value deserialize_value(bytes_view v) const ;;
     // Explicitly instantiated in .cc
     template <FragmentedView View> void validate(const View& v) const;
     void validate(bytes_view view) const;
@@ -4831,12 +4786,12 @@ public:
     bool is_list() const ;
     // Lists and sets are similar: they are both represented as std::vector<data_value>
     // @sa listlike_collection_type_impl
-    bool is_listlike() const { return _kind == kind::list || _kind == kind::set; }
+    bool is_listlike() const ;
     bool is_multi_cell() const;
     bool is_atomic() const { return !is_multi_cell(); }
     bool is_reversed() const { return _kind == kind::reversed; }
     bool is_tuple() const;
-    bool is_user_type() const { return _kind == kind::user; }
+    bool is_user_type() const ;
     bool is_native() const;
     cql3::cql3_type as_cql3_type() const;
     const sstring& cql3_type_name() const;
@@ -4906,18 +4861,14 @@ public:
     data_value make_value(native_type value) const {
         return make_value(std::make_unique<native_type>(std::move(value)));
     }
-    data_value make_null() const {
-        return data_value::make_null(this->shared_from_this());
-    }
+    data_value make_null() const ;
     data_value make_empty() const {
         return make_value(native_type(empty_t()));
     }
     const native_type& from_value(const void* v) const {
         return *reinterpret_cast<const native_type*>(v);
     }
-    const native_type& from_value(const data_value& v) const {
-        return this->from_value(AbstractType::get_value_ptr(v));
-    }
+    const native_type& from_value(const data_value& v) const ;
     friend class abstract_type;
 };
 bool operator==(const data_value& x, const data_value& y);
@@ -4942,10 +4893,8 @@ tri_compare_opt(data_type t, managed_bytes_view_opt v1, managed_bytes_view_opt v
         return tri_compare(std::move(t), *v1, *v2);
     }
 }
-static inline
-bool equal(data_type t, managed_bytes_view e1, managed_bytes_view e2) {
-    return t->equal(e1, e2);
-}
+static
+bool equal(data_type t, managed_bytes_view e1, managed_bytes_view e2) ;
 class row_tombstone;
 class collection_type_impl;
 using collection_type = shared_ptr<const collection_type_impl>;
@@ -5029,18 +4978,14 @@ class set_type_impl;
 using set_type = shared_ptr<const set_type_impl>;
 class list_type_impl;
 using list_type = shared_ptr<const list_type_impl>;
-inline
-size_t hash_value(const shared_ptr<const abstract_type>& x) {
-    return std::hash<const abstract_type*>()(x.get());
-}
+
+size_t hash_value(const shared_ptr<const abstract_type>& x) ;
 struct no_match_for_native_data_type {};
 template <typename T>
 inline constexpr auto data_type_for_v = no_match_for_native_data_type();
 template <typename Type>
-inline
-shared_ptr<const abstract_type> data_type_for() {
-    return data_type_for_v<Type>;
-}
+
+shared_ptr<const abstract_type> data_type_for() ;
 class serialized_compare {
     data_type _type;
 public:
@@ -5048,9 +4993,7 @@ public:
     bool operator()(const bytes& v1, const bytes& v2) const {
         return _type->less(v1, v2);
     }
-    bool operator()(const managed_bytes& v1, const managed_bytes& v2) const {
-        return _type->compare(v1, v2) < 0;
-    }
+    bool operator()(const managed_bytes& v1, const managed_bytes& v2) const ;
 };
 inline
 serialized_compare
@@ -5061,9 +5004,7 @@ class serialized_tri_compare {
     data_type _type;
 public:
     serialized_tri_compare(data_type type) : _type(type) {}
-    std::strong_ordering operator()(const bytes_view& v1, const bytes_view& v2) const {
-        return _type->compare(v1, v2);
-    }
+    std::strong_ordering operator()(const bytes_view& v1, const bytes_view& v2) const ;
     std::strong_ordering operator()(const managed_bytes_view& v1, const managed_bytes_view& v2) const ;
 };
 using key_compare = serialized_compare;
@@ -5127,14 +5068,9 @@ bytes
 to_bytes(bytes_view x) ;
 bytes_opt
 to_bytes_opt(bytes_view_opt bv) ;
-inline
+
 bytes_view_opt
-as_bytes_view_opt(const bytes_opt& bv) {
-    if (bv) {
-        return bytes_view{*bv};
-    }
-    return std::nullopt;
-}
+as_bytes_view_opt(const bytes_opt& bv) ;
 // FIXME: make more explicit
 inline
 bytes
@@ -5142,16 +5078,12 @@ to_bytes(const sstring& x) {
     return bytes(reinterpret_cast<const int8_t*>(x.c_str()), x.size());
 }
 // FIXME: make more explicit
-inline
+
 managed_bytes
-to_managed_bytes(const sstring& x) {
-    return managed_bytes(reinterpret_cast<const int8_t*>(x.c_str()), x.size());
-}
-inline
+to_managed_bytes(const sstring& x) ;
+
 bytes_view
-to_bytes_view(const sstring& x) {
-    return bytes_view(reinterpret_cast<const int8_t*>(x.c_str()), x.size());
-}
+to_bytes_view(const sstring& x) ;
 bytes
 to_bytes(const utils::UUID& uuid) ;
  bool
@@ -5224,9 +5156,7 @@ public:
     bool is_singular() const {
         return _types.size() == 1;
     }
-    prefix_type as_prefix() {
-        return prefix_type(_types);
-    }
+    prefix_type as_prefix() ;
 private:
     template<typename RangeOfSerializedComponents, FragmentedMutableView Out>
     static void serialize_value(RangeOfSerializedComponents&& values, Out out) {
@@ -5261,12 +5191,8 @@ private:
         return len;
     }
 public:
-    managed_bytes serialize_single(const managed_bytes& v) const {
-        return serialize_value(boost::make_iterator_range(&v, 1+&v));
-    }
-    managed_bytes serialize_single(const bytes& v) const {
-        return serialize_value(boost::make_iterator_range(&v, 1+&v));
-    }
+    managed_bytes serialize_single(const managed_bytes& v) const ;
+    managed_bytes serialize_single(const bytes& v) const ;
     template<typename RangeOfSerializedComponents>
     static managed_bytes serialize_value(RangeOfSerializedComponents&& values) {
         auto size = serialized_size(values);
@@ -5281,20 +5207,8 @@ public:
     static managed_bytes serialize_value(std::initializer_list<T> values) ;
     managed_bytes serialize_optionals(std::span<const bytes_opt> values) const ;
     managed_bytes serialize_optionals(std::span<const managed_bytes_opt> values) const ;
-    managed_bytes serialize_value_deep(const std::vector<data_value>& values) const {
-        // TODO: Optimize
-        std::vector<bytes> partial;
-        partial.reserve(values.size());
-        auto i = _types.begin();
-        for (auto&& component : values) {
-            assert(i != _types.end());
-            partial.push_back((*i++)->decompose(component));
-        }
-        return serialize_value(partial);
-    }
-    managed_bytes decompose_value(const value_type& values) const {
-        return serialize_value(values);
-    }
+    managed_bytes serialize_value_deep(const std::vector<data_value>& values) const ;
+    managed_bytes decompose_value(const value_type& values) const ;
     class iterator {
     public:
         using iterator_category = std::input_iterator_tag;
@@ -5328,16 +5242,12 @@ public:
             read_current();
         }
         iterator(end_iterator_tag, const managed_bytes_view& v) : _v() {}
-        iterator() {}
+        iterator() ;
         iterator& operator++() {
             read_current();
             return *this;
         }
-        iterator operator++(int) {
-            iterator i(*this);
-            ++(*this);
-            return i;
-        }
+        iterator operator++(int) ;
         const value_type& operator*() const { return _current; }
         const value_type* operator->() const { return &_current; }
         bool operator==(const iterator& i) const { return _remaining == i._remaining; }
@@ -5351,14 +5261,7 @@ public:
     static boost::iterator_range<iterator> components(managed_bytes_view v) {
         return { begin(v), end(v) };
     }
-    value_type deserialize_value(managed_bytes_view v) const {
-        std::vector<bytes> result;
-        result.reserve(_types.size());
-        std::transform(begin(v), end(v), std::back_inserter(result), [] (auto&& v) {
-            return to_bytes(v);
-        });
-        return result;
-    }
+    value_type deserialize_value(managed_bytes_view v) const ;
     bool less(managed_bytes_view b1, managed_bytes_view b2) const {
         return with_linearized(b1, [&] (bytes_view bv1) {
             return with_linearized(b2, [&] (bytes_view bv2) {
@@ -5369,30 +5272,9 @@ public:
     bool less(bytes_view b1, bytes_view b2) const {
         return compare(b1, b2) < 0;
     }
-    size_t hash(managed_bytes_view v) const{
-        return with_linearized(v, [&] (bytes_view v) {
-            return hash(v);
-        });
-    }
-    size_t hash(bytes_view v) const {
-        if (_byte_order_equal) {
-            return std::hash<bytes_view>()(v);
-        }
-        auto t = _types.begin();
-        size_t h = 0;
-        for (auto&& value : components(v)) {
-            h ^= (*t)->hash(value);
-            ++t;
-        }
-        return h;
-    }
-    std::strong_ordering compare(managed_bytes_view b1, managed_bytes_view b2) const {
-        return with_linearized(b1, [&] (bytes_view bv1) {
-            return with_linearized(b2, [&] (bytes_view bv2) {
-                return compare(bv1, bv2);
-            });
-        });
-    }
+    size_t hash(managed_bytes_view v) const;
+    size_t hash(bytes_view v) const ;
+    std::strong_ordering compare(managed_bytes_view b1, managed_bytes_view b2) const ;
     std::strong_ordering compare(bytes_view b1, bytes_view b2) const {
         if (_byte_order_comparable) {
             if (_is_reversed) {
@@ -5411,29 +5293,10 @@ public:
         assert(AllowPrefixes == allow_prefixes::yes);
         return std::distance(begin(v), end(v)) == (ssize_t)_types.size();
     }
-    bool is_empty(managed_bytes_view v) const {
-        return v.empty();
-    }
-    bool is_empty(const managed_bytes& v) const {
-        return v.empty();
-    }
-    bool is_empty(bytes_view v) const {
-        return begin(v) == end(v);
-    }
-    void validate(managed_bytes_view v) const {
-        std::vector<managed_bytes_view> values(begin(v), end(v));
-        if (AllowPrefixes == allow_prefixes::no && values.size() < _types.size()) {
-            throw marshal_exception(fmt::format("compound::validate(): non-prefixable compound cannot be a prefix"));
-        }
-        if (values.size() > _types.size()) {
-            throw marshal_exception(fmt::format("compound::validate(): cannot have more values than types, have {} values but only {} types",
-                        values.size(), _types.size()));
-        }
-        for (size_t i = 0; i != values.size(); ++i) {
-            //FIXME: is it safe to assume internal serialization-format format?
-            _types[i]->validate(values[i]);
-        }
-    }
+    bool is_empty(managed_bytes_view v) const ;
+    bool is_empty(const managed_bytes& v) const ;
+    bool is_empty(bytes_view v) const ;
+    void validate(managed_bytes_view v) const ;
     bool equal(managed_bytes_view v1, managed_bytes_view v2) const {
         return with_linearized(v1, [&] (bytes_view bv1) {
             return with_linearized(v2, [&] (bytes_view bv2) {
@@ -5454,7 +5317,7 @@ class compressor {
     sstring _name;
 public:
     compressor(sstring);
-    virtual ~compressor() {}
+    virtual ~compressor() ;
     virtual size_t uncompress(const char* input, size_t input_len, char* output,
                     size_t output_len) const = 0;
     virtual size_t compress(const char* input, size_t input_len, char* output,
@@ -5462,9 +5325,7 @@ public:
     virtual size_t compress_max_size(size_t input_len) const = 0;
     virtual std::set<sstring> option_names() const;
     virtual std::map<sstring, sstring> options() const;
-    const sstring& name() const {
-        return _name;
-    }
+    const sstring& name() const ;
     // to cheaply bridge sstable compression options / maps
     using opt_string = std::optional<sstring>;
     using opt_getter = std::function<opt_string(const sstring&)>;
@@ -5494,8 +5355,8 @@ private:
     std::optional<double> _crc_check_chance;
 public:
     compression_parameters() {}
-    compression_parameters(compressor_ptr) {}
-    compression_parameters(const std::map<sstring, sstring>& options) {}
+    compression_parameters(compressor_ptr) ;
+    compression_parameters(const std::map<sstring, sstring>& options) ;
     ~compression_parameters() {}
     compressor_ptr get_compressor() const { return _compressor; }
     int32_t chunk_length() const { return _chunk_length.value_or(int(DEFAULT_CHUNK_LENGTH)); }
