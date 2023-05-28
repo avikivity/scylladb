@@ -2267,11 +2267,11 @@ struct fragment_range {
         fragment_iterator operator++(int) ;
         reference operator*() const ;
         pointer operator->() const ;
-        bool operator==(const fragment_iterator& i) const { return _view.size_bytes() == i._view.size_bytes(); }
+        bool operator==(const fragment_iterator& i) const ;
     };
     using iterator = fragment_iterator;
     fragment_range(const View& v) : view(v) {}
-    fragment_iterator begin() const { return fragment_iterator(view); }
+    fragment_iterator begin() const ;
     fragment_iterator end() const ;
     size_t size_bytes() const ;
     bool empty() const ;
@@ -2563,17 +2563,11 @@ private:
         return a->data[index];
     }
     std::unique_ptr<bytes_view::value_type[]> do_linearize_pure() const;
-    explicit managed_bytes(blob_storage* data) {
-        _u.small.size = -1;
-        _u.ptr.ptr = data;
-        data->backref = &_u.ptr;
-    }
+    explicit managed_bytes(blob_storage* data) ;
 public:
     using size_type = blob_storage::size_type;
     struct initialized_later {};
-    managed_bytes() {
-        _u.small.size = 0;
-    }
+    managed_bytes() ;
     managed_bytes(const blob_storage::char_type* ptr, size_type size)
         : managed_bytes(bytes_view(ptr, size)) {}
     explicit managed_bytes(const bytes& b) : managed_bytes(static_cast<bytes_view>(b)) {}
@@ -2690,51 +2684,11 @@ public:
         }
         return *this;
     }
-    bool operator==(const managed_bytes& o) const {
-        if (size() != o.size()) {
-            return false;
-        }
-        if (!external()) {
-            return std::equal(_u.small.data, _u.small.data + _u.small.size, o._u.small.data);
-        } else {
-            auto a = _u.ptr;
-            auto a_data = a->data;
-            auto a_remain = a->frag_size;
-            a = a->next;
-            auto b = o._u.ptr;
-            auto b_data = b->data;
-            auto b_remain = b->frag_size;
-            b = b->next;
-            while (a_remain || b_remain) {
-                auto now = std::min(a_remain, b_remain);
-                if (bytes_view(a_data, now) != bytes_view(b_data, now)) {
-                    return false;
-                }
-                a_data += now;
-                a_remain -= now;
-                if (!a_remain && a) {
-                    a_data = a->data;
-                    a_remain = a->frag_size;
-                    a = a->next;
-                }
-                b_data += now;
-                b_remain -= now;
-                if (!b_remain && b) {
-                    b_data = b->data;
-                    b_remain = b->frag_size;
-                    b = b->next;
-                }
-            }
-            return true;
-        }
-    }
+    bool operator==(const managed_bytes& o) const ;
     bytes_view::value_type& operator[](size_type index) {
         return value_at_index(index);
     }
-    const bytes_view::value_type& operator[](size_type index) const {
-        return const_cast<const bytes_view::value_type&>(
-                const_cast<managed_bytes*>(this)->value_at_index(index));
-    }
+    const bytes_view::value_type& operator[](size_type index) const ;
     size_type size() const {
         if (external()) {
             return _u.ptr->size;
@@ -2746,47 +2700,14 @@ public:
         return _u.small.size == 0;
     }
     // Returns the amount of external memory used.
-    size_t external_memory_usage() const noexcept {
-        if (external()) {
-            size_t mem = 0;
-            blob_storage* blob = _u.ptr;
-            while (blob) {
-                mem += blob->frag_size + sizeof(blob_storage);
-                blob = blob->next;
-            }
-            return mem;
-        }
-        return 0;
-    }
+    size_t external_memory_usage() const noexcept ;
     // Returns the minimum possible amount of external memory used by a managed_bytes
     // of the same size as us.
     // In other words, it returns the amount of external memory that would used by this
     // managed_bytes if all data was allocated in one big fragment.
-    size_t minimal_external_memory_usage() const noexcept {
-        if (external()) {
-            return sizeof(blob_storage) + _u.ptr->size;
-        } else {
-            return 0;
-        }
-    }
+    size_t minimal_external_memory_usage() const noexcept ;
     template <std::invocable<bytes_view> Func>
-    std::invoke_result_t<Func, bytes_view> with_linearized(Func&& func) const {
-        const bytes_view::value_type* start = nullptr;
-        size_t size = 0;
-        if (!external()) {
-            start = _u.small.data;
-            size = _u.small.size;
-        } else if (!_u.ptr->next) {
-            start = _u.ptr->data;
-            size = _u.ptr->size;
-        }
-        if (start) {
-            return func(bytes_view(start, size));
-        } else {
-            auto data = do_linearize_pure();
-            return func(bytes_view(data.get(), _u.ptr->size));
-        }
-    }
+    std::invoke_result_t<Func, bytes_view> with_linearized(Func&& func) const ;
     template <mutable_view is_mutable_view>
     friend class managed_bytes_basic_view;
 };
@@ -2858,16 +2779,14 @@ public:
         v.remove_prefix(offset);
         return v;
     }
-    const auto& front() const { return _current_fragment.front(); }
+    const auto& front() const ;
     auto& front() { return _current_fragment.front(); }
     const value_type& operator[](size_t index) const {
         auto v = *this;
         v.remove_prefix(index);
         return v.current_fragment().front();
     }
-    bytes linearize() const {
-        return linearized(*this);
-    }
+    bytes linearize() const ;
     bool is_linearized() const {
         return _current_fragment.size() == _size;
     }
@@ -2882,27 +2801,14 @@ public:
         , _size(other._size)
     {}
     template <std::invocable<bytes_view> Func>
-    std::invoke_result_t<Func, bytes_view> with_linearized(Func&& func) const {
-        bytes b;
-        auto bv = std::invoke([&] () -> bytes_view {
-            if (is_linearized()) {
-                return _current_fragment;
-            } else {
-                b = linearize();
-                return b;
-            }
-        });
-        return func(bv);
-    }
+    std::invoke_result_t<Func, bytes_view> with_linearized(Func&& func) const ;
     friend managed_bytes_basic_view<mutable_view::no> build_managed_bytes_view_from_internals(bytes_view current_fragment, blob_storage* next_fragment, size_t size);
 };
 static_assert(FragmentedView<managed_bytes_view>);
 static_assert(FragmentedMutableView<managed_bytes_mutable_view>);
 using managed_bytes_opt = std::optional<managed_bytes>;
 using managed_bytes_view_opt = std::optional<managed_bytes_view>;
-inline bytes to_bytes(const managed_bytes& v) {
-    return linearized(managed_bytes_view(v));
-}
+ bytes to_bytes(const managed_bytes& v) ;
 inline bytes to_bytes(managed_bytes_view v) {
     return linearized(v);
 }
@@ -2916,25 +2822,14 @@ bytes_opt to_bytes_opt(const managed_bytes_opt&);
 ///
 /// \note copies data
 managed_bytes_opt to_managed_bytes_opt(const bytes_opt&);
-template<FragmentedView View>
-inline managed_bytes::managed_bytes(View v) : managed_bytes(initialized_later(), v.size_bytes()) {
-    managed_bytes_mutable_view self(*this);
-    write_fragmented(self, v);
-}
-inline
+
+
 managed_bytes_view
-build_managed_bytes_view_from_internals(bytes_view current_fragment, blob_storage* next_fragment, size_t size) {
-    return managed_bytes_view(current_fragment, next_fragment, size);
-}
+build_managed_bytes_view_from_internals(bytes_view current_fragment, blob_storage* next_fragment, size_t size) ;
 template<>
 struct appending_hash<managed_bytes_view> {
     template<Hasher Hasher>
-    void operator()(Hasher& h, managed_bytes_view v) const {
-        feed_hash(h, v.size_bytes());
-        for (bytes_view frag : fragment_range(v)) {
-            h.update(reinterpret_cast<const char*>(frag.data()), frag.size());
-        }
-    }
+    void operator()(Hasher& h, managed_bytes_view v) const ;
 };
 namespace std {
 template <>
@@ -2958,12 +2853,7 @@ sstring to_hex(const managed_bytes_opt& b);
 inline bool operator==(const managed_bytes_view& a, const managed_bytes_view& b) {
     return a.size_bytes() == b.size_bytes() && compare_unsigned(a, b) == 0;
 }
-inline std::ostream& operator<<(std::ostream& os, const managed_bytes_view& v) {
-    for (bytes_view frag : fragment_range(v)) {
-        os << to_hex(frag);
-    }
-    return os;
-}
+ std::ostream& operator<<(std::ostream& os, const managed_bytes_view& v) ;
  std::ostream& operator<<(std::ostream& os, const managed_bytes& b) ;
 std::ostream& operator<<(std::ostream& os, const managed_bytes_opt& b);
 class bytes_ostream {
@@ -3244,25 +3134,14 @@ public:
         bytes_view operator*() const ;
         const bytes_view* operator->() const ;
         iterator& operator++() ;
-        iterator operator++(int) {
-            iterator it(*this);
-            operator++();
-            return it;
-        }
-        bool operator==(const iterator& other) const {
-            return _left == other._left;
-        }
+        iterator operator++(int) ;
+        bool operator==(const iterator& other) const ;
     };
     using const_iterator = iterator;
     explicit buffer_view(bytes_view current)
         : _first(current), _total_size(current.size()) { }
-    buffer_view(bytes_view current, size_t size, FragmentIterator it)
-        : _first(current), _total_size(size), _next(it)
-    {
-        if (_first.size() > _total_size) {
-            _first.remove_suffix(_first.size() - _total_size);
-        }
-    }
+    buffer_view(bytes_view current, size_t size, FragmentIterator it) 
+    ;
     explicit buffer_view(typename seastar::memory_input_stream<FragmentIterator>::simple stream)
         : buffer_view(bytes_view(reinterpret_cast<const int8_t*>(stream.begin()), stream.size()))
     { }
@@ -3338,9 +3217,7 @@ inline auto deserialize(Input& in, boost::type<T> t) {
     return serializer<T>::read(in);
 }
 template<typename T, typename Input>
-inline void skip(Input& v, boost::type<T>) {
-    return serializer<T>::skip(v);
-}
+ void skip(Input& v, boost::type<T>) ;
 template<typename T>
 size_type get_sizeof(const T& obj);
 template<typename T>
@@ -3418,16 +3295,7 @@ struct is_equivalent<std::variant<T...>, std::variant<U...>> : is_equivalent<std
 inline bool gc_clock_using_3_1_0_serialization = false;
 template <typename Output>
 void
-serialize_gc_clock_duration_value(Output& out, int64_t v) {
-    if (!gc_clock_using_3_1_0_serialization) {
-        // This should have been caught by the CQL layer, so this is just
-        // for extra safety.
-        assert(int32_t(v) == v);
-        serializer<int32_t>::write(out, v);
-    } else {
-        serializer<int64_t>::write(out, v);
-    }
-}
+serialize_gc_clock_duration_value(Output& out, int64_t v) ;
 template <typename Input>
 int64_t
 deserialize_gc_clock_duration_value(Input& in) ;
@@ -3481,10 +3349,8 @@ void serialize_int64(CharOutputIterator& out, uint64_t val) {
     internal_impl::serialize_int<uint64_t>(out, val);
 }
 template <typename CharOutputIterator>
-inline
-void serialize_bool(CharOutputIterator& out, bool val) {
-    serialize_int8(out, val ? 1 : 0);
-}
+
+void serialize_bool(CharOutputIterator& out, bool val) ;
 // The following serializer is compatible with Java's writeUTF().
 // In our C++ implementation, we assume the string is already UTF-8
 // encoded. Unfortunately, Java's implementation is a bit different from
@@ -3521,33 +3387,19 @@ public:
         : most_sig_bits(most_sig_bits), least_sig_bits(least_sig_bits) {}
     // May throw marshal_exception is failed to parse uuid string.
     explicit UUID(const sstring& uuid_string) : UUID(sstring_view(uuid_string)) { }
-    explicit UUID(const char * s) : UUID(sstring_view(s)) {}
+    explicit UUID(const char * s)  ;
     explicit UUID(sstring_view uuid_string);
-    int64_t get_most_significant_bits() const noexcept {
-        return most_sig_bits;
-    }
-    int64_t get_least_significant_bits() const noexcept {
-        return least_sig_bits;
-    }
+    int64_t get_most_significant_bits() const noexcept ;
+    int64_t get_least_significant_bits() const noexcept ;
     int version() const noexcept {
         return (most_sig_bits >> 12) & 0xf;
     }
     bool is_timestamp() const noexcept {
         return version() == 1;
     }
-    int64_t timestamp() const noexcept {
-        //if (version() != 1) {
-        //     throw new UnsupportedOperationException("Not a time-based UUID");
-        //}
-        assert(is_timestamp());
-        return ((most_sig_bits & 0xFFF) << 48) |
-               (((most_sig_bits >> 16) & 0xFFFF) << 32) |
-               (((uint64_t)most_sig_bits) >> 32);
-    }
+    int64_t timestamp() const noexcept ;
     friend ::fmt::formatter<UUID>;
-    sstring to_sstring() const {
-        return fmt::to_string(*this);
-    }
+    sstring to_sstring() const ;
     friend std::ostream& operator<<(std::ostream& out, const UUID& uuid);
     bool operator==(const UUID& v) const noexcept = default;
     // Please note that this comparator does not preserve timeuuid
@@ -3565,18 +3417,14 @@ public:
     bool is_null() const noexcept ;
     explicit operator bool() const noexcept ;
     bytes serialize() const ;
-    static size_t serialized_size() noexcept {
-        return 16;
-    }
+    static size_t serialized_size() noexcept ;
     template <typename CharOutputIterator>
     void serialize(CharOutputIterator& out) const {
         serialize_int64(out, most_sig_bits);
         serialize_int64(out, least_sig_bits);
     }
 };
-inline UUID null_uuid() noexcept {
-    return UUID();
-}
+ UUID null_uuid() noexcept ;
 UUID make_random_uuid() noexcept;
 // Read 8 most significant bytes of timeuuid from serialized bytes
 inline uint64_t timeuuid_read_msb(const int8_t *b) noexcept {
@@ -3637,18 +3485,12 @@ template<typename Tag>
 struct tagged_uuid {
     utils::UUID id;
     std::strong_ordering operator<=>(const tagged_uuid&) const noexcept = default;
-    explicit operator bool() const noexcept {
-        // The default constructor sets the id to nil, which is
-        // guaranteed to not match any valid id.
-        return bool(id);
-    }
-    static tagged_uuid create_random_id() noexcept { return tagged_uuid{utils::make_random_uuid()}; }
-    static tagged_uuid create_null_id() noexcept { return tagged_uuid{utils::null_uuid()}; }
+    explicit operator bool() const noexcept ;
+    static tagged_uuid create_random_id() noexcept ;
+    static tagged_uuid create_null_id() noexcept ;
     explicit tagged_uuid(const utils::UUID& uuid) noexcept : id(uuid) {}
     tagged_uuid() = default;
-    const utils::UUID& uuid() const noexcept {
-        return id;
-    }
+    const utils::UUID& uuid() const noexcept ;
     sstring to_sstring() const ;
 };
 } // namespace utils
@@ -3678,9 +3520,7 @@ struct hash<utils::tagged_uuid<Tag>> {
     }
 };
 template<typename Tag>
-std::ostream& operator<<(std::ostream& os, const utils::tagged_uuid<Tag>& id) {
-    return os << id.id;
-}
+std::ostream& operator<<(std::ostream& os, const utils::tagged_uuid<Tag>& id) ;
 } // namespace std
 template <>
 struct fmt::formatter<utils::UUID> : fmt::formatter<std::string_view> {
@@ -3776,11 +3616,7 @@ public:
         return uuid;
     }
     static UUID get_time_UUID(std::chrono::system_clock::time_point tp)
-    {
-        auto uuid = UUID(create_time(from_unix_timestamp(tp.time_since_epoch())), clock_seq_and_node);
-        assert(uuid.is_timestamp());
-        return uuid;
-    }
+    ;
     static UUID get_time_UUID(milliseconds when, int64_t clock_seq_and_node = UUID_gen::clock_seq_and_node)
     ;
     static UUID get_time_UUID_raw(decimicroseconds when, int64_t clock_seq_and_node)
@@ -3817,9 +3653,7 @@ public:
     static std::chrono::seconds unix_timestamp_in_sec(UUID uuid)
     ;
     static int64_t micros_timestamp(UUID uuid)
-    {
-        return (uuid.timestamp() + START_EPOCH.count())/10;
-    }
+    ;
     template <std::intmax_t N, std::intmax_t D>
     static bool is_valid_unix_timestamp(std::chrono::duration<int64_t, std::ratio<N, D>> d) {
         return duration_cast<milliseconds>(d) < UUID_UNIXTIME_MAX;
@@ -3886,9 +3720,7 @@ using table_id = utils::tagged_uuid<struct table_id_tag>;
 // When table_schema_version changes, schema_tables::calculate_schema_digest() should
 // also change when schema mutations are applied.
 using table_schema_version = utils::tagged_uuid<struct table_schema_version_tag>;
-inline table_schema_version reversed(table_schema_version v) noexcept {
-    return table_schema_version(utils::UUID_gen::negate(v.uuid()));
-}
+ table_schema_version reversed(table_schema_version v) noexcept ;
 namespace sstables {
 class file_io_extension;
 }
@@ -3903,9 +3735,7 @@ public:
     using schema_ext_create_func = std::function<seastar::shared_ptr<schema_extension>(schema_ext_config)>;
     using sstable_file_io_extension = std::unique_ptr<sstables::file_io_extension>;
     using commitlog_file_extension_ptr = std::unique_ptr<db::commitlog_file_extension>;
-    const std::map<sstring, schema_ext_create_func>& schema_extensions() const {
-        return _schema_extensions;
-    }
+    const std::map<sstring, schema_ext_create_func>& schema_extensions() const ;
     std::vector<sstables::file_io_extension*> sstable_file_io_extensions() const;
     std::vector<db::commitlog_file_extension*> commitlog_file_extensions() const;
     std::set<sstring> schema_extension_keywords() const;
@@ -4077,14 +3907,7 @@ public:
         : _fragments(std::move(fragments)), _size_bytes(size_bytes)
     { }
     fragmented_temporary_buffer(const char* str, size_t size)
-    {
-        *this = allocate_to_fit(size);
-        size_t pos = 0;
-        for (auto& frag : _fragments) {
-            std::memcpy(frag.get_write(), str + pos, frag.size());
-            pos += frag.size();
-        }
-    }
+    ;
     explicit operator view() const noexcept;
     istream get_istream() const noexcept;
     ostream get_ostream() noexcept ;
@@ -4097,9 +3920,7 @@ public:
     // Creates a fragmented temporary buffer of a specified size, supplied as a parameter.
     // Max chunk size is limited to 128kb (the same limit as `bytes_stream` has).
     static fragmented_temporary_buffer allocate_to_fit(size_t data_size) ;
-    vector_type release() && noexcept {
-        return std::move(_fragments);
-    }
+    vector_type release() && noexcept ;
 };
 class fragmented_temporary_buffer::view {
     vector_type::const_iterator _current;
@@ -4136,7 +3957,7 @@ public:
             , _left(left)
             , _current(current)
         { }
-        reference operator*() const noexcept { return _current; }
+        reference operator*() const noexcept ;
         pointer operator->() const noexcept ;
         iterator& operator++() noexcept ;
         iterator operator++(int) noexcept ;
@@ -4157,13 +3978,7 @@ public:
 };
 static_assert(FragmentRange<fragmented_temporary_buffer::view>);
 static_assert(FragmentedView<fragmented_temporary_buffer::view>);
-inline fragmented_temporary_buffer::operator view() const noexcept
-{
-    if (!_size_bytes) {
-        return view();
-    }
-    return view(_fragments.begin(), 0, _size_bytes);
-}
+
 namespace fragmented_temporary_buffer_concepts {
 template<typename T>
 concept ExceptionThrower = requires(T obj, size_t n) {
@@ -4179,17 +3994,7 @@ private:
     size_t contig_remain() const {
         return _current_end - _current_position;
     }
-    void next_fragment() {
-        _bytes_left -= _current->size();
-        if (_bytes_left) {
-            _current++;
-            _current_position = _current->get();
-            _current_end = _current->get() + _current->size();
-        } else {
-            _current_position = nullptr;
-            _current_end = nullptr;
-        }
-    }
+    void next_fragment() ;
     template<typename ExceptionThrower>
     requires fragmented_temporary_buffer_concepts::ExceptionThrower<ExceptionThrower>
     void check_out_of_range(ExceptionThrower& exceptions, size_t n) {
@@ -4315,23 +4120,7 @@ class fragmented_temporary_buffer::reader {
     std::vector<temporary_buffer<char>> _fragments;
     size_t _left = 0;
 public:
-    future<fragmented_temporary_buffer> read_exactly(input_stream<char>& in, size_t length) {
-        _fragments = std::vector<temporary_buffer<char>>();
-        _left = length;
-        return repeat_until_value([this, length, &in] {
-            if (!_left) {
-                return make_ready_future<std::optional<fragmented_temporary_buffer>>(fragmented_temporary_buffer(std::move(_fragments), length));
-            }
-            return in.read_up_to(_left).then([this] (temporary_buffer<char> buf) {
-                if (buf.empty()) {
-                    return std::make_optional(fragmented_temporary_buffer());
-                }
-                _left -= buf.size();
-                _fragments.emplace_back(std::move(buf));
-                return std::optional<fragmented_temporary_buffer>();
-            });
-        });
-    }
+    future<fragmented_temporary_buffer> read_exactly(input_stream<char>& in, size_t length) ;
 };
 // The operator below is used only for logging
 inline std::ostream& operator<<(std::ostream& out, const fragmented_temporary_buffer::view& v) {
