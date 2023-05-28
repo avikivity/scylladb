@@ -20,7 +20,6 @@
 #include <boost/algorithm/cxx11/any_of.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/circular_buffer.hpp>
-#include <boost/date_time/c_local_time_adjustor.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <boost/heap/binomial_heap.hpp>
