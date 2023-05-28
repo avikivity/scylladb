@@ -9,7 +9,7 @@ clang++  -Wl,--gc-sections -Wl,--build-id=sha1,--dynamic-linker=////////////////
 
 rm -f gdb.txt
 
-gdb -batch -ex 'set logging on' -ex run -ex bt -ex quit ./sstable_datafile_test_g 
+gdb -batch -ex 'handle SIGTERM pass noprint' -ex 'set logging on' -ex run -ex bt -ex quit ./sstable_datafile_test_g
 
 expect() {
     grep -q "$1" gdb.txt || exit 1
