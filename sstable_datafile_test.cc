@@ -14190,12 +14190,8 @@ public:
     /// \returns an exceptional future with \ref nonexistent_role if the role does not exist.
     future<role_set> get_roles(std::string_view role_name) const;
     future<bool> exists(const resource&) const;
-    const authenticator& underlying_authenticator() const {
-        return *_authenticator;
-    }
-    const authorizer& underlying_authorizer() const {
-        return *_authorizer;
-    }
+    const authenticator& underlying_authenticator() const ;
+    const authorizer& underlying_authorizer() const ;
     role_manager& underlying_role_manager() const ;
 private:
     future<bool> has_existing_legacy_users() const;
@@ -14650,10 +14646,10 @@ std::vector<seastar::sstring> additional_options_for_proto_ext(cql_protocol_exte
 namespace qos {
 struct service_level_options {
     struct unset_marker {
-        bool operator==(const unset_marker&) const { return true; };
+        bool operator==(const unset_marker&) const ;;
     };
     struct delete_marker {
-        bool operator==(const delete_marker&) const { return true; };
+        bool operator==(const delete_marker&) const ;;
     };
     enum class workload_type {
         unspecified, batch, interactive, delete_marker
@@ -14939,15 +14935,11 @@ public:
             _user = auth::authenticated_user();
         }
     }
-    gms::inet_address get_client_address() const {
-        return gms::inet_address(_remote_address);
-    }
+    gms::inet_address get_client_address() const ;
     ::in_port_t get_client_port() const ;
     const socket_address& get_remote_address() const ;
     const timeout_config& get_timeout_config() const ;
-    qos::service_level_controller& get_service_level_controller() const {
-        return *_sl_controller;
-    }
+    qos::service_level_controller& get_service_level_controller() const ;
     client_state(internal_tag) : client_state(internal_tag{}, infinite_timeout_config)
     {}
     client_state(internal_tag, const timeout_config& config)
@@ -15040,12 +15032,8 @@ public:
 private:
     cql_transport::cql_protocol_extension_enum_set _enabled_protocol_extensions;
 public:
-    bool is_protocol_extension_set(cql_transport::cql_protocol_extension ext) const {
-        return _enabled_protocol_extensions.contains(ext);
-    }
-    void set_protocol_extensions(cql_transport::cql_protocol_extension_enum_set exts) {
-        _enabled_protocol_extensions = std::move(exts);
-    }
+    bool is_protocol_extension_set(cql_transport::cql_protocol_extension ext) const ;
+    void set_protocol_extensions(cql_transport::cql_protocol_extension_enum_set exts) ;
 };
 }
 class service_permit {
@@ -15295,9 +15283,7 @@ public:
         , _bound_weight(weight)
         , _ck(ck)
     { }
-    bool is_before_key() const {
-        return _bound_weight == bound_weight::before_all_prefixed;
-    }
+    bool is_before_key() const ;
     bool is_after_key() const ;
 private:
     // Returns placement of this position_in_partition relative to *_ck,
@@ -15311,7 +15297,7 @@ public:
     struct range_tag_t { };
     using range_tombstone_tag_t = range_tag_t;
     explicit position_in_partition_view(partition_start_tag_t)  ;
-    explicit position_in_partition_view(end_of_partition_tag_t) : _type(partition_region::partition_end), _ck(nullptr) { }
+    explicit position_in_partition_view(end_of_partition_tag_t)  ;
     explicit position_in_partition_view(static_row_tag_t) : _type(partition_region::static_row), _ck(nullptr) { }
     position_in_partition_view(clustering_row_tag_t, const clustering_key_prefix& ck)
         : _type(partition_region::clustered), _ck(&ck) { }
@@ -15337,13 +15323,9 @@ public:
     // The second element of the pair needs to be kept alive as long as the first element is used.
     // The returned view is valid as long as the view passed to this method is valid.
     static view_and_holder after_key(const schema&, position_in_partition_view);
-    static position_in_partition_view after_all_prefixed(const clustering_key& ck) {
-        return {partition_region::clustered, bound_weight::after_all_prefixed, &ck};
-    }
+    static position_in_partition_view after_all_prefixed(const clustering_key& ck) ;
     // Returns a view to after_all_prefixed(pos._ck) if pos.is_clustering_row() else returns pos as-is.
-    static position_in_partition_view after_all_prefixed(position_in_partition_view pos) {
-        return {partition_region::clustered, pos._bound_weight == bound_weight::equal ? bound_weight::after_all_prefixed : pos._bound_weight, pos._ck};
-    }
+    static position_in_partition_view after_all_prefixed(position_in_partition_view pos) ;
     static position_in_partition_view before_key(const clustering_key& ck) ;
     // Returns a view to before_key(pos._ck) if pos.is_clustering_row() else returns pos as-is.
     static position_in_partition_view before_key(position_in_partition_view pos) ;
@@ -15374,7 +15356,7 @@ public:
         const schema& _schema;
         const position_in_partition_view& _pipv;
     public:
-        printer(const schema& schema, const position_in_partition_view& pipv) : _schema(schema), _pipv(pipv) {}
+        printer(const schema& schema, const position_in_partition_view& pipv)  ;
         friend fmt::formatter<printer>;
     };
     // Create a position which is the same as this one but governed by a schema with reversed clustering key order.
@@ -15427,12 +15409,12 @@ public:
     using range_tombstone_tag_t = range_tag_t;
     partition_region get_type() const ;
     bound_weight get_bound_weight() const ;
-    const std::optional<clustering_key_prefix>& get_clustering_key_prefix() const { return _ck; }
+    const std::optional<clustering_key_prefix>& get_clustering_key_prefix() const ;
     position_in_partition(partition_region type, bound_weight weight, std::optional<clustering_key_prefix> ck)
         : _type(type), _bound_weight(weight), _ck(std::move(ck)) { }
     explicit position_in_partition(partition_start_tag_t) : _type(partition_region::partition_start) { }
-    explicit position_in_partition(end_of_partition_tag_t) : _type(partition_region::partition_end) { }
-    explicit position_in_partition(static_row_tag_t) : _type(partition_region::static_row) { }
+    explicit position_in_partition(end_of_partition_tag_t)  ;
+    explicit position_in_partition(static_row_tag_t)  ;
     position_in_partition(clustering_row_tag_t, clustering_key_prefix ck)
         : _type(partition_region::clustered), _ck(std::move(ck)) { }
     position_in_partition(after_clustering_row_tag_t, const schema& s, clustering_key_prefix ck)
@@ -15466,15 +15448,9 @@ public:
         : _type(partition_region::clustered), _bound_weight(position_weight(bv.kind())), _ck(bv.prefix()) { }
     position_in_partition(range_tag_t, bound_kind kind, clustering_key_prefix&& prefix)
         : _type(partition_region::clustered), _bound_weight(position_weight(kind)), _ck(std::move(prefix)) { }
-    position_in_partition(after_static_row_tag_t) :
-        position_in_partition(range_tag_t(), bound_view::bottom()) { }
-    explicit position_in_partition(position_in_partition_view view)
-        : _type(view._type), _bound_weight(view._bound_weight)
-        {
-            if (view._ck) {
-                _ck = *view._ck;
-            }
-        }
+    position_in_partition(after_static_row_tag_t)  ;
+    explicit position_in_partition(position_in_partition_view view) 
+        ;
     position_in_partition& operator=(position_in_partition_view view) {
         _type = view._type;
         _bound_weight = view._bound_weight;
@@ -15488,9 +15464,7 @@ public:
     static position_in_partition before_all_clustered_rows() {
         return {position_in_partition::range_tag_t(), bound_view::bottom()};
     }
-    static position_in_partition after_all_clustered_rows() {
-        return {position_in_partition::range_tag_t(), bound_view::top()};
-    }
+    static position_in_partition after_all_clustered_rows() ;
     // If given position is a clustering row position, returns a position
     // right before it. Otherwise, returns it unchanged.
     // The position "pos" must be a clustering position.
@@ -15520,9 +15494,7 @@ public:
     template<typename Hasher>
     void feed_hash(Hasher& hasher, const schema& s) const ;
     bool has_key() const ;
-    const clustering_key_prefix& key() const {
-        return *_ck;
-    }
+    const clustering_key_prefix& key() const ;
     operator position_in_partition_view() const {
         return { _type, _bound_weight, _ck ? &*_ck : nullptr };
     }
@@ -15548,20 +15520,7 @@ public:
             return static_cast<int>(t);
         }
         composite_tri_compare(const schema& s) : _s(s) {}
-        std::strong_ordering operator()(position_in_partition_view a, position_in_partition_view b) const {
-            if (a._type != b._type) {
-                return rank(a._type) <=> rank(b._type);
-            }
-            if (!a._ck) {
-                return std::strong_ordering::equal;
-            }
-            auto&& types = _s.clustering_key_type()->types();
-            auto cmp = [&] (const data_type& t, managed_bytes_view c1, managed_bytes_view c2) { return t->compare(c1, c2); };
-            return lexicographical_tri_compare(types.begin(), types.end(),
-                a._ck->begin(_s), a._ck->end(_s),
-                b._ck->begin(_s), b._ck->end(_s),
-                cmp, a.relation(), b.relation());
-        }
+        std::strong_ordering operator()(position_in_partition_view a, position_in_partition_view b) const ;
         std::strong_ordering operator()(position_in_partition_view a, composite_view b) const ;
         std::strong_ordering operator()(composite_view a, position_in_partition_view b) const ;
         std::strong_ordering operator()(composite_view a, composite_view b) const ;
@@ -15570,7 +15529,7 @@ public:
     class composite_less_compare {
         composite_tri_compare _cmp;
     public:
-        composite_less_compare(const schema& s) : _cmp(s) {}
+        composite_less_compare(const schema& s)  ;
         template<typename T, typename U>
         bool operator()(const T& a, const U& b) const {
             return _cmp(a, b) < 0;
@@ -15776,9 +15735,7 @@ public:
     uint64_t get_rows_fetched_for_last_partition() const ;
     query_id get_query_uuid() const ;
     replicas_per_token_range get_last_replicas() const ;
-    std::optional<db::read_repair_decision> get_query_read_repair_decision() const {
-        return _query_read_repair_decision;
-    }
+    std::optional<db::read_repair_decision> get_query_read_repair_decision() const ;
     static lw_shared_ptr<paging_state> deserialize(bytes_opt bytes);
     bytes_opt serialize() const;
 };
@@ -15788,7 +15745,7 @@ template<typename... Ts> struct overloaded_functor : Ts... { using Ts::operator(
 template<typename... Ts> overloaded_functor(Ts...) -> overloaded_functor<Ts...>;
 namespace cql3 {
 struct null_value {
-    friend bool operator==(const null_value&, const null_value) { return true; }
+    friend bool operator==(const null_value&, const null_value) ;
 };
 class raw_value;
 /// \brief View to a raw CQL protocol value.
@@ -16073,15 +16030,8 @@ public:
     db::consistency_level get_consistency() const {
         return _consistency;
     }
-    cql3::raw_value_view get_value_at(size_t idx) const {
-        if (_unset.at(idx)) {
-            throw exceptions::invalid_request_exception(fmt::format("Unexpected unset value for bind variable {}", idx));
-        }
-        return _value_views[idx];
-    }
-    bool is_unset(size_t idx) const {
-        return _unset.at(idx);
-    }
+    cql3::raw_value_view get_value_at(size_t idx) const ;
+    bool is_unset(size_t idx) const ;
     size_t get_values_count() const ;
     bool skip_metadata() const ;
     int32_t get_page_size() const ;
@@ -16517,9 +16467,7 @@ struct frame<bytes_ostream> : public place_holder<bytes_ostream> {
     bytes_ostream::size_type offset;
     frame(bytes_ostream::place_holder<size_type> ph, bytes_ostream::size_type offset)
         : place_holder(ph), offset(offset) { }
-    void end(bytes_ostream& out) {
-        set(out, out.size() - offset);
-    }
+    void end(bytes_ostream& out) ;
 };
 struct vector_position {
     bytes_ostream::position pos;
@@ -16528,9 +16476,9 @@ struct vector_position {
 //empty frame, behave like a place holder, but is used when no place holder is needed
 template<typename Output>
 struct empty_frame {
-    void end(Output&) {}
+    void end(Output&) ;
     empty_frame() = default;
-    empty_frame(const frame<Output>&){}
+    empty_frame(const frame<Output>&);
 };
  place_holder<bytes_ostream> start_place_holder(bytes_ostream& out) ;
  frame<bytes_ostream> start_frame(bytes_ostream& out) ;
@@ -16606,10 +16554,7 @@ inline frame<seastar::memory_output_stream<Iterator>> start_frame(seastar::memor
 namespace ser {
 } // ser
 namespace ser {
-template<typename Input>
-query::digest_algorithm serializer<query::digest_algorithm>::read(Input& buf) {
-  return static_cast<query::digest_algorithm>(deserialize(buf, boost::type<uint8_t>()));
-}
+
 struct qr_cell_view {
     utils::input_stream v;
     auto timestamp() const {
@@ -16682,9 +16627,7 @@ struct serializer<qr_row_view> {
       });
     }
     template<typename Output>
-    static void write(Output& out, qr_row_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, qr_row_view v) ;
     template<typename Input>
     static void skip(Input& v) ;
 };
@@ -16860,10 +16803,7 @@ struct qr_clustered_row__cells__cells {
   void add(std::optional<qr_cell_view> v) ;
   after_qr_clustered_row__cells__cells<Output> end_cells() && ;
   vector_position pos() const ;
-  void rollback(const vector_position& vp) {
-        _out.retract(vp.pos);
-        _count = vp.count;
-  }
+  void rollback(const vector_position& vp) ;
 };
 template<typename Output>
 struct qr_clustered_row__cells {
@@ -16939,13 +16879,8 @@ struct qr_partition__static_row__cells {
   writer_of_std__optional__qr_cell<Output> add() ;
   void add(std::optional<qr_cell_view> v) ;
   after_qr_partition__static_row__cells<Output> end_cells() && ;
-  vector_position pos() const {
-        return vector_position{_out.pos(), _count};
-  }
-  void rollback(const vector_position& vp) {
-        _out.retract(vp.pos);
-        _count = vp.count;
-  }
+  vector_position pos() const ;
+  void rollback(const vector_position& vp) ;
 };
 template<typename Output>
 struct qr_partition__static_row {
@@ -17012,18 +16947,10 @@ class result_atomic_cell_view {
 public:
     result_atomic_cell_view(ser::qr_cell_view view)
         : _view(view) { }
-    api::timestamp_type timestamp() const {
-        return _view.timestamp().value_or(api::missing_timestamp);
-    }
-    expiry_opt expiry() const {
-        return _view.expiry();
-    }
-    ttl_opt ttl() const {
-        return _view.ttl();
-    }
-    result_bytes_view value() const {
-        return _view.value().view();
-    }
+    api::timestamp_type timestamp() const ;
+    expiry_opt expiry() const ;
+    ttl_opt ttl() const ;
+    result_bytes_view value() const ;
 };
 // Contains cells in the same order as requested by partition_slice.
 // Contains only live cells.
@@ -17040,21 +16967,8 @@ public:
             : _cells(v.cells())
             , _i(_cells.begin())
         { }
-        std::optional<result_atomic_cell_view> next_atomic_cell() {
-            auto cell_opt = *_i++;
-            if (!cell_opt) {
-                return {};
-            }
-            return {result_atomic_cell_view(*cell_opt)};
-        }
-        std::optional<result_bytes_view> next_collection_cell() {
-            auto cell_opt = *_i++;
-            if (!cell_opt) {
-                return {};
-            }
-            ser::qr_cell_view v = *cell_opt;
-            return {v.value().view()};
-        };
+        std::optional<result_atomic_cell_view> next_atomic_cell() ;
+        std::optional<result_bytes_view> next_collection_cell() ;;
         void skip(const column_definition& def) ;
     };
     iterator_type iterator() const ;
@@ -17260,19 +17174,8 @@ public:
     void add_shard(const counter_shard& cs) {
         _shards.emplace_back(cs);
     }
-    void add_maybe_unsorted_shard(const counter_shard& cs) {
-        add_shard(cs);
-        if (_sorted && _shards.size() > 1) {
-            auto current = _shards.rbegin();
-            auto previous = std::next(current);
-            _sorted = current->id() > previous->id();
-        }
-    }
-    void sort_and_remove_duplicates() {
-        if (!_sorted) {
-            do_sort_and_remove_duplicates();
-        }
-    }
+    void add_maybe_unsorted_shard(const counter_shard& cs) ;
+    void sort_and_remove_duplicates() ;
     size_t serialized_size() const {
         return _shards.size() * counter_shard::serialized_size();
     }
@@ -17395,24 +17298,10 @@ public:
         assert(!_cell.is_counter_update());
     }
     api::timestamp_type timestamp() const { return _cell.timestamp(); }
-    static data_type total_value_type() { return long_type; }
-    int64_t total_value() const {
-        return boost::accumulate(shards(), int64_t(0), [] (int64_t v, counter_shard_view cs) {
-            return v + cs.value();
-        });
-    }
-    std::optional<counter_shard_view> get_shard(const counter_id& id) const {
-        auto it = boost::range::find_if(shards(), [&id] (counter_shard_view csv) {
-            return csv.id() == id;
-        });
-        if (it == shards().end()) {
-            return { };
-        }
-        return *it;
-    }
-    bool operator==(const basic_counter_cell_view& other) const {
-        return timestamp() == other.timestamp() && boost::equal(shards(), other.shards());
-    }
+    static data_type total_value_type() ;
+    int64_t total_value() const ;
+    std::optional<counter_shard_view> get_shard(const counter_id& id) const ;
+    bool operator==(const basic_counter_cell_view& other) const ;
 };
 struct counter_cell_view : basic_counter_cell_view<mutable_view::no> {
     using basic_counter_cell_view::basic_counter_cell_view;
@@ -17438,22 +17327,12 @@ void transform_counter_updates_to_shards(mutation& dst, const mutation* current_
 template<>
 struct appending_hash<counter_shard_view> {
     template<typename Hasher>
-    void operator()(Hasher& h, const counter_shard_view& cshard) const {
-        ::feed_hash(h, cshard.id());
-        ::feed_hash(h, cshard.value());
-        ::feed_hash(h, cshard.logical_clock());
-    }
+    void operator()(Hasher& h, const counter_shard_view& cshard) const ;
 };
 template<>
 struct appending_hash<counter_cell_view> {
     template<typename Hasher>
-    void operator()(Hasher& h, const counter_cell_view& cell) const {
-        ::feed_hash(h, true); // is_live
-        ::feed_hash(h, cell.timestamp());
-        for (auto&& csv : cell.shards()) {
-            ::feed_hash(h, csv);
-        }
-    }
+    void operator()(Hasher& h, const counter_cell_view& cell) const ;
 };
 namespace cql3 {
 namespace selection {
@@ -18173,12 +18052,8 @@ struct expression::impl final {
     variant_type v;
     impl(variant_type v) : v(std::move(v)) {}
 };
-expression::expression(ExpressionElement auto e)
-        : _v(std::make_unique<impl>(std::move(e))) {
-}
-inline expression::expression()
-        : expression(conjunction{}) {
-}
+
+
 template <invocable_on_expression Visitor>
 decltype(auto) visit(Visitor&& visitor, const expression& e) {
     return std::visit(std::forward<Visitor>(visitor), e._v->v);
@@ -18530,9 +18405,7 @@ public:
         , _unset_guard(std::move(ubvg))
     { }
     virtual ~operation() {}
-    virtual bool is_raw_counter_shard_write() const {
-        return false;
-    }
+    virtual bool is_raw_counter_shard_write() const ;
     virtual bool requires_read() const ;
     virtual void fill_prepare_context(prepare_context& ctx) ;
     virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params) = 0;
@@ -18540,7 +18413,7 @@ public:
     virtual void prepare_for_broadcast_tables(statements::broadcast_tables::prepared_update&) const;
     class raw_update {
     public:
-        virtual ~raw_update() {}
+        virtual ~raw_update() ;
         virtual ::shared_ptr<operation> prepare(data_dictionary::database db, const sstring& keyspace, const column_definition& receiver) const = 0;
         virtual bool is_compatible_with(const std::unique_ptr<raw_update>& other) const = 0;
     };
@@ -18864,12 +18737,8 @@ public:
     // Range tombstone covers all rows with positions p such that: position() <= p < end_position()
     position_in_partition_view position() const;
     position_in_partition_view end_position() const;
-    bool empty() const noexcept {
-        return !bool(tomb);
-    }
-    explicit operator bool() const noexcept {
-        return bool(tomb);
-    }
+    bool empty() const noexcept ;
+    explicit operator bool() const noexcept ;
     bool equal(const schema& s, const range_tombstone& other) const {
         return tomb == other.tomb && start_bound().equal(s, other.start_bound()) && end_bound().equal(s, other.end_bound());
     }
@@ -18926,22 +18795,7 @@ public:
     //   2) is_clustering_row() == false
     //
     // Also: start <= end
-    bool trim(const schema& s, position_in_partition_view start, position_in_partition_view end) {
-        position_in_partition::less_compare less(s);
-        if (!less(start, end_position())) {
-            return false;
-        }
-        if (!less(position(), end)) {
-            return false;
-        }
-        if (less(position(), start)) {
-            set_start(start);
-        }
-        if (less(end, end_position())) {
-            set_end(s, end);
-        }
-        return true;
-    }
+    bool trim(const schema& s, position_in_partition_view start, position_in_partition_view end) ;
     // Assumes !pos.is_clustering_row(), because range_tombstone bounds can't represent such positions
     void set_start(position_in_partition_view pos) ;
     // Assumes !pos.is_clustering_row(), because range_tombstone bounds can't represent such positions
@@ -18952,9 +18806,7 @@ public:
     size_t external_memory_usage(const schema&) const noexcept ;
     size_t minimal_external_memory_usage(const schema&) const noexcept ;
     size_t memory_usage(const schema& s) const noexcept ;
-    size_t minimal_memory_usage(const schema& s) const noexcept {
-        return sizeof(range_tombstone) + minimal_external_memory_usage(s);
-    }
+    size_t minimal_memory_usage(const schema& s) const noexcept ;
 };
 template<>
 struct appending_hash<range_tombstone>  {
@@ -19004,13 +18856,8 @@ private:
 public:
     explicit range_tombstone_accumulator(const schema& s)
         : _cmp(s) { }
-    void set_partition_tombstone(tombstone t) {
-        _partition_tombstone = t;
-        update_current_tombstone();
-    }
-    tombstone get_partition_tombstone() const {
-        return _partition_tombstone;
-    }
+    void set_partition_tombstone(tombstone t) ;
+    tombstone get_partition_tombstone() const ;
     tombstone current_tombstone() const ;
     tombstone tombstone_for_row(const clustering_key_prefix& ck) ;
     const std::deque<range_tombstone>& range_tombstones_for_row(const clustering_key_prefix& ck) ;
@@ -20084,35 +19931,11 @@ struct searcher<K, Key, Hook, Compare, key_search::linear> {
 };
 template <typename K, typename Key, member_hook Key::* Hook, typename Compare>
 struct searcher<K, Key, Hook, Compare, key_search::binary> {
-    static key_index ge(const K& k, const node_base& node, const Compare& cmp, bool& match) {
-        ssize_t s = 0, e = node.num_keys - 1; // signed for below s <= e corner cases
-        while (s <= e) {
-            key_index i = (s + e) / 2;
-            auto x = cmp(k, *node.keys[i]->to_key<Key, Hook>());
-            if (x < 0) {
-                e = i - 1;
-            } else if (x > 0) {
-                s = i + 1;
-            } else {
-                match = true;
-                return i;
-            }
-        }
-        match = false;
-        return s;
-    }
+    static key_index ge(const K& k, const node_base& node, const Compare& cmp, bool& match) ;
 };
 template <typename K, typename Key, member_hook Key::* Hook, typename Compare>
 struct searcher<K, Key, Hook, Compare, key_search::both> {
-    static key_index ge(const K& k, const node_base& node, const Compare& cmp, bool& match) {
-        bool ml, mr;
-        key_index rl = searcher<K, Key, Hook, Compare, key_search::linear>::ge(k, node, cmp, ml);
-        key_index rb = searcher<K, Key, Hook, Compare, key_search::binary>::ge(k, node, cmp, mr);
-        assert(rl == rb);
-        assert(ml == mr);
-        match = ml;
-        return rl;
-    }
+    static key_index ge(const K& k, const node_base& node, const Compare& cmp, bool& match) ;
 };
 template <typename Key, member_hook Key::* Hook, typename Compare, size_t NodeSize, size_t LinearThreshold, key_search Search, with_debug Debug>
 class node {
@@ -20300,12 +20123,8 @@ private:
         }
         std::abort();
     }
-    bool need_refill() const noexcept {
-        return _base.num_keys <= NodeHalf;
-    }
-    bool need_collapse_root() const noexcept {
-        return !is_leaf() && (_base.num_keys == 0);
-    }
+    bool need_refill() const noexcept ;
+    bool need_collapse_root() const noexcept ;
     bool can_grab_from() const noexcept {
         return _base.num_keys > NodeHalf + 1u;
     }
@@ -20549,17 +20368,8 @@ private:
         nr->_base.flags |= node_base::NODE_ROOT;
         t->do_set_root(*nr);
     }
-    void remove(kid_index idx) noexcept {
-        if (is_leaf()) { // ... or linear
-            remove_key(idx);
-        } else {
-            remove_from_inner(idx);
-        }
-    }
-    void remove_key(kid_index idx) noexcept {
-        shift_left(idx);
-        check_refill();
-    }
+    void remove(kid_index idx) noexcept ;
+    void remove_key(kid_index idx) noexcept ;
     void remove_leftmost_light_rebalance() noexcept ;
     void check_refill() noexcept ;
     void check_light_refill() noexcept ;
@@ -22340,9 +22150,7 @@ class tombstone_gc_state {
 public:
     tombstone_gc_state() = delete;
     tombstone_gc_state(per_table_history_maps* maps) noexcept : _repair_history_maps(maps) {}
-    explicit operator bool() const noexcept {
-        return _repair_history_maps != nullptr;
-    }
+    explicit operator bool() const noexcept ;
     seastar::lw_shared_ptr<repair_history_map> get_repair_history_map_for_table(const table_id& id) const;
     seastar::lw_shared_ptr<repair_history_map> get_or_create_repair_history_map_for_table(const table_id& id);
     void drop_repair_history_map_for_table(const table_id& id);
@@ -22366,9 +22174,7 @@ struct cell_hash {
     using size_type = uint64_t;
     static constexpr size_type no_hash = 0;
     size_type hash = no_hash;
-    explicit operator bool() const noexcept {
-        return hash != no_hash;
-    }
+    explicit operator bool() const noexcept ;
 };
 template<>
 struct appending_hash<cell_hash> {
@@ -22410,8 +22216,8 @@ public:
     row(const schema&, column_kind, const row&);
     row(row&& other) noexcept;
     row& operator=(row&& other) noexcept;
-    size_t size() const { return _size; }
-    bool empty() const { return _size == 0; }
+    size_t size() const ;
+    bool empty() const ;
     const atomic_cell_or_collection& cell_at(column_id id) const;
     // Returns a pointer to cell's value or nullptr if column is not set.
     const atomic_cell_or_collection* find_cell(column_id id) const;
@@ -22521,16 +22327,8 @@ class lazy_row {
 public:
     lazy_row() = default;
     explicit lazy_row(row&& r) ;
-    lazy_row(const schema& s, column_kind kind, const lazy_row& r) {
-        if (!r.empty()) {
-            _row = make_managed<row>(s, kind, *r._row);
-        }
-    }
-    lazy_row(const schema& s, column_kind kind, const row& r) {
-        if (!r.empty()) {
-            _row = make_managed<row>(s, kind, r);
-        }
-    }
+    lazy_row(const schema& s, column_kind kind, const lazy_row& r) ;
+    lazy_row(const schema& s, column_kind kind, const row& r) ;
     row& maybe_create() {
         if (!_row) {
             _row = make_managed<row>();
@@ -22584,13 +22382,9 @@ public:
         maybe_create().apply(column, std::move(cell), std::move(hash));
     }
     // Monotonic exception guarantees. In case of exception the sum of cell and this remains the same as before the exception.
-    void apply_monotonically(const column_definition& column, atomic_cell_or_collection&& cell, cell_hash_opt hash = cell_hash_opt()) {
-        maybe_create().apply_monotonically(column, std::move(cell), std::move(hash));
-    }
+    void apply_monotonically(const column_definition& column, atomic_cell_or_collection&& cell, cell_hash_opt hash = cell_hash_opt()) ;
     // Adds cell to the row. The column must not be already set.
-    void append_cell(column_id id, atomic_cell_or_collection cell) {
-        maybe_create().append_cell(id, std::move(cell));
-    }
+    void append_cell(column_id id, atomic_cell_or_collection cell) ;
     // Weak exception guarantees
     void apply(const schema& s, column_kind kind, const row& src) ;
     // Weak exception guarantees
@@ -22736,23 +22530,13 @@ public:
     }
     // Consistent with operator==()
     template<typename Hasher>
-    void feed_hash(Hasher& h) const {
-        ::feed_hash(h, _timestamp);
-        if (!is_missing()) {
-            ::feed_hash(h, _ttl);
-            if (_ttl != no_ttl) {
-                ::feed_hash(h, _expiry);
-            }
-        }
-    }
+    void feed_hash(Hasher& h) const ;
     friend std::ostream& operator<<(std::ostream& os, const row_marker& rm);
 };
 template<>
 struct appending_hash<row_marker> {
     template<typename Hasher>
-    void operator()(Hasher& h, const row_marker& m) const {
-        m.feed_hash(h);
-    }
+    void operator()(Hasher& h, const row_marker& m) const ;
 };
 class shadowable_tombstone {
     tombstone _tomb;
@@ -22831,12 +22615,8 @@ public:
             : row_tombstone(regular, shadowable_tombstone(regular)) {
     }
     row_tombstone() = default;
-    std::strong_ordering operator<=>(const row_tombstone& t) const {
-        return _shadowable <=> t._shadowable;
-    }
-    bool operator==(const row_tombstone& t) const {
-        return _shadowable == t._shadowable;
-    }
+    std::strong_ordering operator<=>(const row_tombstone& t) const ;
+    bool operator==(const row_tombstone& t) const ;
     explicit operator bool() const {
         return bool(_shadowable);
     }
@@ -22925,8 +22705,8 @@ public:
     void apply_monotonically(const schema& s, const deletable_row& src);
     void apply_monotonically(const schema& s, deletable_row&& src);
 public:
-    row_tombstone deleted_at() const { return _deleted_at; }
-    api::timestamp_type created_at() const { return _marker.timestamp(); }
+    row_tombstone deleted_at() const ;
+    api::timestamp_type created_at() const ;
     // Call `maybe_shadow()` if the marker's timestamp is mutated.
     row_marker& marker() ;
     const row_marker& marker() const ;
@@ -23011,16 +22791,10 @@ public:
         : _key(key), _row(s, row)
     { }
     rows_entry(rows_entry&& o) noexcept;
-    rows_entry(const schema& s, const rows_entry& e)
-        : _key(e._key)
-        , _row(s, e._row)
-        , _range_tombstone(e._range_tombstone)
-        , _flags(e._flags)
-    { }
+    rows_entry(const schema& s, const rows_entry& e) 
+    ;
     // Valid only if !dummy()
-    clustering_key& key() {
-        return _key;
-    }
+    clustering_key& key() ;
     // Valid only if !dummy()
     const clustering_key& key() const {
         return _key;
@@ -23034,8 +22808,8 @@ public:
     position_in_partition_view position() const {
         return position_in_partition_view(partition_region::clustered, bound_weight(_flags._after_ck - _flags._before_ck), &_key);
     }
-    is_continuous continuous() const { return is_continuous(_flags._continuous); }
-    void set_continuous(bool value) { _flags._continuous = value; }
+    is_continuous continuous() const ;
+    void set_continuous(bool value) ;
     void set_continuous(is_continuous value) ;
     void set_range_tombstone(tombstone t) ;
     tombstone range_tombstone() const ;
@@ -23221,7 +22995,7 @@ public:
         const schema& _schema;
         const mutation_partition& _mutation_partition;
     public:
-        printer(const schema& s, const mutation_partition& mp) : _schema(s), _mutation_partition(mp) { }
+        printer(const schema& s, const mutation_partition& mp)  ;
         printer(const printer&) = delete;
         printer(printer&&) = delete;
         friend std::ostream& operator<<(std::ostream& os, const printer& p);
@@ -23231,7 +23005,7 @@ public:
     // Makes sure there is a dummy entry after all clustered rows. Doesn't affect continuity.
     // Doesn't invalidate iterators.
     void ensure_last_dummy(const schema&);
-    bool static_row_continuous() const { return _static_row_continuous; }
+    bool static_row_continuous() const ;
     void set_static_row_continuous(bool value) { _static_row_continuous = value; }
     bool is_fully_continuous() const;
     void make_fully_continuous();
@@ -23465,9 +23239,7 @@ struct reader_resources {
         : count(count)
         , memory(memory) {
     }
-    reader_resources operator-(const reader_resources& other) const {
-        return reader_resources{count - other.count, memory - other.memory};
-    }
+    reader_resources operator-(const reader_resources& other) const ;
     reader_resources& operator-=(const reader_resources& other) ;
     reader_resources operator+(const reader_resources& other) const ;
     reader_resources& operator+=(const reader_resources& other) ;
@@ -23571,7 +23343,7 @@ public:
     void add(resource_units&& o);
     void reset_to(reader_resources res);
     void reset_to_zero() noexcept;
-    reader_permit permit() const { return _permit; }
+    reader_permit permit() const ;
     reader_resources resources() const { return _resources; }
 };
 std::ostream& operator<<(std::ostream& os, reader_permit::state s);
