@@ -23386,18 +23386,12 @@ public:
     }
     awaits_guard(awaits_guard&&) noexcept = default;
     awaits_guard(const awaits_guard&) = delete;
-    ~awaits_guard() {
-        if (_permit) {
-            _permit->mark_not_awaits();
-        }
-    }
+    ~awaits_guard() ;
     awaits_guard& operator=(awaits_guard&&) = delete;
     awaits_guard& operator=(const awaits_guard&) = delete;
 };
 template <typename Char>
-temporary_buffer<Char> make_tracked_temporary_buffer(temporary_buffer<Char> buf, reader_permit::resource_units units) {
-    return temporary_buffer<Char>(buf.get_write(), buf.size(), make_object_deleter(buf.release(), std::move(units)));
-}
+temporary_buffer<Char> make_tracked_temporary_buffer(temporary_buffer<Char> buf, reader_permit::resource_units units) ;
 inline temporary_buffer<char> make_new_tracked_temporary_buffer(size_t size, reader_permit& permit) {
     auto buf = temporary_buffer<char>(size);
     return temporary_buffer<char>(buf.get_write(), buf.size(), make_object_deleter(buf.release(), permit.consume_memory(size)));
@@ -23407,12 +23401,8 @@ class tracking_allocator_base {
     reader_permit _permit;
 protected:
     tracking_allocator_base(reader_permit permit) noexcept : _permit(std::move(permit)) { }
-    void consume(size_t memory) {
-        _permit.consume(reader_resources::with_memory(memory));
-    }
-    void signal(size_t memory) {
-        _permit.signal(reader_resources::with_memory(memory));
-    }
+    void consume(size_t memory) ;
+    void signal(size_t memory) ;
 };
 template <typename T>
 class tracking_allocator : public tracking_allocator_base {
@@ -23516,12 +23506,8 @@ public:
     size_t external_memory_usage(const schema& s) const {
         return _cells.external_memory_usage(s, column_kind::static_column);
     }
-    size_t memory_usage(const schema& s) const {
-        return sizeof(static_row) + external_memory_usage(s);
-    }
-    bool equal(const schema& s, const static_row& other) const {
-        return _cells.equal(column_kind::static_column, s, other._cells, s);
-    }
+    size_t memory_usage(const schema& s) const ;
+    bool equal(const schema& s, const static_row& other) const ;
     class printer {
         const schema& _schema;
         const static_row& _static_row;
@@ -23787,14 +23773,8 @@ public:
 private:
     size_t calculate_memory_usage(const schema& s) const ;
 };
-inline position_in_partition_view partition_start::position() const
-{
-    return position_in_partition_view::for_partition_start();
-}
-inline position_in_partition_view partition_end::position() const
-{
-    return position_in_partition_view::for_partition_end();
-}
+
+
 std::ostream& operator<<(std::ostream&, mutation_fragment::kind);
 // range_tombstone_stream is a helper object that simplifies producing a stream
 // of range tombstones and merging it with a stream of clustering rows.
@@ -23948,7 +23928,7 @@ public:
 private:
     struct data {
         data(reader_permit permit) :  _memory(permit.consume_memory()) { }
-        ~data() { }
+        ~data() ;
         reader_permit::resource_units _memory;
         union {
             static_row _static_row;
@@ -23962,7 +23942,7 @@ private:
     kind _kind;
     std::unique_ptr<data> _data;
     mutation_fragment_v2() = default;
-    explicit operator bool() const noexcept { return bool(_data); }
+    explicit operator bool() const noexcept ;
     void destroy_data() noexcept;
     void reset_memory(const schema& s, std::optional<reader_resources> res = {});
     friend class optimized_optional<mutation_fragment_v2>;
@@ -24231,13 +24211,8 @@ public:
     template<RangeTombstoneChangeConsumer C>
     void flush(const position_in_partition_view upper_bound, C consumer, bool end_of_range = false) ;
     void consume(range_tombstone rt) ;
-    void reset() {
-        _range_tombstones.clear();
-        _lower_bound = position_in_partition::before_all_clustered_rows();
-    }
-    bool discardable() const {
-        return _range_tombstones.empty();
-    }
+    void reset() ;
+    bool discardable() const ;
 };
 struct mutation_consume_cookie {
     using crs_iterator_type = mutation_partition::rows_type::iterator;
@@ -24299,11 +24274,7 @@ public:
         : _ptr(std::make_unique<data>(std::move(schema), std::move(key), std::move(mp)))
     { }
     mutation(const mutation& m)
-    {
-        if (m._ptr) {
-            _ptr = std::make_unique<data>(schema_ptr(m.schema()), dht::decorated_key(m.decorated_key()), m.partition());
-        }
-    }
+    ;
     mutation(mutation&&) = default;
     mutation& operator=(mutation&& x) = default;
     mutation& operator=(const mutation& m);
@@ -24333,7 +24304,7 @@ public:
     const partition_key& key() const ;;
     const dht::decorated_key& decorated_key() const ;;
     dht::ring_position ring_position() const ;
-    const dht::token& token() const { return _ptr->_dk._token; }
+    const dht::token& token() const ;
     const schema_ptr& schema() const { return _ptr->_schema; }
     const mutation_partition& partition() const { return _ptr->_p; }
     mutation_partition& partition() { return _ptr->_p; }
@@ -24377,9 +24348,7 @@ public:
     // Returns a subset of this mutation holding only information relevant for given clustering ranges.
     // Range tombstones will be trimmed to the boundaries of the clustering ranges.
     mutation sliced(const query::clustering_row_ranges&) const;
-    unsigned shard_of() const {
-        return dht::shard_of(*schema(), token());
-    }
+    unsigned shard_of() const ;
     // Returns a mutation which contains the same writes but in a minimal form.
     // Drops data covered by tombstones.
     // Does not drop expired tombstones.
@@ -24508,14 +24477,7 @@ public:
     };
     struct adder final : operation_skip_if_unset {
         using operation_skip_if_unset::operation_skip_if_unset;
-        virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params) override {
-            auto value = expr::evaluate(*_e, params._options);
-            if (value.is_null()) {
-                throw exceptions::invalid_request_exception("Invalid null value for counter increment");
-            }
-            auto increment = value.view().deserialize<int64_t>(*long_type);
-            m.set_cell(prefix, column, params.make_counter_update_cell(increment));
-        }
+        virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params) override ;
     };
     struct subtracter final : operation_skip_if_unset {
         using operation_skip_if_unset::operation_skip_if_unset;
@@ -26184,12 +26146,8 @@ public:
     schema_mutations(const schema_mutations&) = default;
     schema_mutations& operator=(const schema_mutations&) = default;
     void copy_to(std::vector<mutation>& dst) const;
-    const mutation& columnfamilies_mutation() const {
-        return _columnfamilies;
-    }
-    const mutation& columns_mutation() const {
-        return _columns;
-    }
+    const mutation& columnfamilies_mutation() const ;
+    const mutation& columns_mutation() const ;
     const mutation_opt& view_virtual_columns_mutation() const ;
     const mutation_opt& computed_columns_mutation() const ;
     const mutation_opt& scylla_tables() const ;
@@ -26223,13 +26181,9 @@ class non_null_data_value {
     data_value _v;
 public:
     explicit non_null_data_value(data_value&& v);
-    operator const data_value&() const {
-        return _v;
-    }
+    operator const data_value&() const ;
 };
-inline bool operator==(const non_null_data_value& x, const non_null_data_value& y) {
-    return static_cast<const data_value&>(x) == static_cast<const data_value&>(y);
-}
+ bool operator==(const non_null_data_value& x, const non_null_data_value& y) ;
 // Result set row is a set of cells that are associated with a row
 // including regular column cells, partition keys, as well as static values.
 class result_set_row {
@@ -26769,24 +26723,13 @@ public:
         friend class flat_mutation_reader_v2;
     protected:
         template<typename... Args>
-        void push_mutation_fragment(Args&&... args) {
-            seastar::memory::on_alloc_point(); // for exception safety tests
-            _buffer.emplace_back(std::forward<Args>(args)...);
-            _buffer_size += _buffer.back().memory_usage();
-        }
-        void clear_buffer() {
-            _buffer.erase(_buffer.begin(), _buffer.end());
-            _buffer_size = 0;
-        }
-        void reserve_additional(size_t n) {
-            _buffer.reserve(_buffer.size() + n);
-        }
+        void push_mutation_fragment(Args&&... args) ;
+        void clear_buffer() ;
+        void reserve_additional(size_t n) ;
         void clear_buffer_to_next_partition();
         template<typename Source>
         future<bool> fill_buffer_from(Source&);
-        const tracked_buffer& buffer() const {
-            return _buffer;
-        }
+        const tracked_buffer& buffer() const ;
     public:
         impl(schema_ptr s, reader_permit permit) : _buffer(permit), _schema(std::move(s)), _permit(std::move(permit)) { }
         virtual ~impl() ;
@@ -27463,18 +27406,9 @@ struct live_marker_view {
 template<>
 struct serializer<live_marker_view> {
     template<typename Input>
-    static live_marker_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return live_marker_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static live_marker_view read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, live_marker_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, live_marker_view v) ;
     template<typename Input>
     static void skip(Input& v) ;
 };
@@ -27554,14 +27488,7 @@ struct dead_marker_view {
 template<>
 struct serializer<dead_marker_view> {
     template<typename Input>
-    static dead_marker_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return dead_marker_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static dead_marker_view read(Input& v) ;
     template<typename Output>
     static void write(Output& out, dead_marker_view v) ;
     template<typename Input>
@@ -27578,9 +27505,7 @@ struct serializer<expiring_cell_view> {
     template<typename Input>
     static expiring_cell_view read(Input& v) ;
     template<typename Output>
-    static void write(Output& out, expiring_cell_view v) {
-        v.v.copy_to(out);
-    }
+    static void write(Output& out, expiring_cell_view v) ;
     template<typename Input>
     static void skip(Input& v) {
       return seastar::with_serialized_stream(v, [] (auto& v) {
@@ -27621,14 +27546,7 @@ struct expiring_marker_view {
 template<>
 struct serializer<expiring_marker_view> {
     template<typename Input>
-    static expiring_marker_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return expiring_marker_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static expiring_marker_view read(Input& v) ;
     template<typename Output>
     static void write(Output& out, expiring_marker_view v) ;
     template<typename Input>
@@ -27637,15 +27555,7 @@ struct serializer<expiring_marker_view> {
 struct partition_start_view {
     utils::input_stream v;
     auto key() const ;
-    auto partition_tombstone() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<tombstone_view>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<partition_key>());
-       return deserialize(in, boost::type<tombstone_view>());
-      });
-    }
+    auto partition_tombstone() const ;
 };
 template<>
 struct serializer<partition_start_view> {
