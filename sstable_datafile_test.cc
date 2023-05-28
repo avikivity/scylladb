@@ -16547,27 +16547,8 @@ struct qr_cell_view {
     utils::input_stream v;
     auto timestamp() const ;
     auto expiry() const ;
-    auto value() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<bytes>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<std::optional<api::timestamp_type>>());
-       ser::skip(in, boost::type<std::optional<gc_clock::time_point>>());
-       return deserialize(in, boost::type<bytes>());
-      });
-    }
-    auto ttl() const {
-      return seastar::with_serialized_stream(v, [this] (auto& v) -> decltype(deserialize(std::declval<utils::input_stream&>(), boost::type<std::optional<gc_clock::duration>>())) {
-       std::ignore = this;
-       auto in = v;
-       ser::skip(in, boost::type<size_type>());
-       ser::skip(in, boost::type<std::optional<api::timestamp_type>>());
-       ser::skip(in, boost::type<std::optional<gc_clock::time_point>>());
-       ser::skip(in, boost::type<bytes>());
-       return (in.size()>0) ? deserialize(in, boost::type<std::optional<gc_clock::duration>>()) : std::optional<gc_clock::duration>();
-      });
-    }
+    auto value() const ;
+    auto ttl() const ;
 };
 template<>
 struct serializer<qr_cell_view> {
@@ -24841,12 +24822,8 @@ public:
     bool can_hint_for(const locator::topology& topo, gms::inet_address ep) const;
      const std::unordered_set<sstring>& get_dcs() const ;
     bool operator==(const host_filter& other) const noexcept ;
-    inline bool is_enabled_for_all() const noexcept {
-        return _enabled_kind == enabled_kind::enabled_for_all;
-    }
-    inline bool is_disabled_for_all() const noexcept {
-        return _enabled_kind == enabled_kind::disabled_for_all;
-    }
+     bool is_enabled_for_all() const noexcept ;
+     bool is_disabled_for_all() const noexcept ;
     sstring to_configuration_string() const;
     friend std::ostream& operator<<(std::ostream& os, const host_filter& f);
 };
@@ -25899,7 +25876,7 @@ using schema_features = enum_set<super_enum<schema_feature,
 class canonical_mutation {
     bytes_ostream _data;
 public:
-    canonical_mutation() {}
+    canonical_mutation() ;
     explicit canonical_mutation(bytes_ostream);
     explicit canonical_mutation(const mutation&);
     canonical_mutation(canonical_mutation&&) = default;
@@ -25913,7 +25890,7 @@ public:
     // is not intended, user should sync the schema first.
     mutation to_mutation(schema_ptr) const;
     table_id column_family_id() const;
-    const bytes_ostream& representation() const { return _data; }
+    const bytes_ostream& representation() const ;
     friend std::ostream& operator<<(std::ostream& os, const canonical_mutation& cm);
 };
 // Commutative representation of table schema
@@ -26010,14 +25987,8 @@ public:
     get_ptr(const sstring& column_name) const ;
     // throws no_value on error
     template<typename T>
-    const T& get_nonnull(const sstring& column_name) const {
-        auto v = get_ptr<std::remove_reference_t<T>>(column_name);
-        if (v) {
-            return *v;
-        }
-        throw no_value(column_name);
-    }
-    const std::unordered_map<sstring, non_null_data_value>& cells() const { return _cells; }
+    const T& get_nonnull(const sstring& column_name) const ;
+    const std::unordered_map<sstring, non_null_data_value>& cells() const ;
     friend inline bool operator==(const result_set_row& x, const result_set_row& y) = default;
     friend std::ostream& operator<<(std::ostream& out, const result_set_row& row);
 };
@@ -26697,9 +26668,7 @@ public:
     flat_mutation_reader_v2& operator=(const flat_mutation_reader_v2&) = delete;
     flat_mutation_reader_v2& operator=(flat_mutation_reader_v2&& o) noexcept;
     ~flat_mutation_reader_v2();
-    future<mutation_fragment_v2_opt> operator()() {
-        return _impl->operator()();
-    }
+    future<mutation_fragment_v2_opt> operator()() ;
     template <typename Consumer>
     requires FlatMutationReaderConsumerV2<Consumer>
     auto consume_pausable(Consumer consumer) {
@@ -26737,9 +26706,7 @@ public:
         void on_end_of_stream() const { }
     };
     struct no_filter {
-        bool operator()(const dht::decorated_key& dk) const {
-            return true;
-        }
+        bool operator()(const dht::decorated_key& dk) const ;
         bool operator()(const mutation_fragment_v2& mf) const ;
         void on_end_of_stream() const ;
     };
@@ -28274,10 +28241,7 @@ struct after_counter_cell__created_at {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    counter_cell__value__counter_cell_full<Output> start_value_counter_cell_full() && {
-        serialize(_out, uint32_t(0));
-        return { _out, std::move(_state) };
-    }
+    counter_cell__value__counter_cell_full<Output> start_value_counter_cell_full() && ;
     template<typename Serializer>
     after_counter_cell__value<Output> value_counter_cell_full(Serializer&& f) && ;
     counter_cell__value__counter_cell_update<Output> start_value_counter_cell_update() && ;
@@ -28302,10 +28266,7 @@ template<typename Output>
 struct after_dead_cell__tomb__deletion_time {
     Output& _out;
     state_of_dead_cell__tomb<Output> _state;
-    after_dead_cell__tomb<Output>  end_tomb() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_dead_cell__tomb<Output>  end_tomb() && ;
 };
 template<typename Output>
 struct after_dead_cell__tomb__timestamp {
@@ -28364,10 +28325,7 @@ struct dead_marker__tomb {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
 };
 template<typename Output>
 struct writer_of_dead_marker {
@@ -28397,10 +28355,7 @@ struct after_expiring_cell__c__created_at {
     after_expiring_cell__c__value<Output> write_value(bytes_view t) && ;
     template<typename FragmentedBuffer>
     requires FragmentRange<FragmentedBuffer>
-    after_expiring_cell__c__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && {
-        serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
-        return { _out, std::move(_state) };
-    }
+    after_expiring_cell__c__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && ;
 };
 template<typename Output>
 struct expiring_cell__c {
@@ -28453,19 +28408,13 @@ template<typename Output>
 struct after_expiring_marker__lm {
     Output& _out;
     state_of_expiring_marker<Output> _state;
-    after_expiring_marker__ttl<Output> write_ttl(const gc_clock::duration& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_expiring_marker__ttl<Output> write_ttl(const gc_clock::duration& t) && ;
 };
 template<typename Output>
 struct after_expiring_marker__lm__created_at {
     Output& _out;
     state_of_expiring_marker__lm<Output> _state;
-    after_expiring_marker__lm<Output>  end_lm() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_expiring_marker__lm<Output>  end_lm() && ;
 };
 template<typename Output>
 struct expiring_marker__lm {
@@ -28589,9 +28538,7 @@ template<typename Output>
 struct after_range_tombstone__start {
     Output& _out;
     state_of_range_tombstone<Output> _state;
-    range_tombstone__tomb<Output> start_tomb() && {
-        return { _out, std::move(_state) };
-    }
+    range_tombstone__tomb<Output> start_tomb() && ;
     after_range_tombstone__tomb<Output> write_tomb(const tombstone& t) && ;
 };
 template<typename Output>
@@ -28621,10 +28568,7 @@ struct after_collection_element__value__live_cell__created_at {
     after_collection_element__value__live_cell__value<Output> write_value(bytes_view t) && ;
     template<typename FragmentedBuffer>
     requires FragmentRange<FragmentedBuffer>
-    after_collection_element__value__live_cell__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && {
-        serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
-        return { _out, std::move(_state) };
-    }
+    after_collection_element__value__live_cell__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && ;
 };
 template<typename Output>
 struct collection_element__value__live_cell {
@@ -28698,38 +28642,25 @@ struct collection_element__value__expiring_cell {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_collection_element__value__expiring_cell__ttl<Output> write_ttl(const gc_clock::duration& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_collection_element__value__expiring_cell__ttl<Output> write_ttl(const gc_clock::duration& t) && ;
 };
 template<typename Output>
 struct after_collection_element__value__dead_cell__tomb {
     Output& _out;
     state_of_collection_element__value__dead_cell<Output> _state;
-    after_collection_element__value<Output>  end_dead_cell() && {
-        _state.f.end(_out);
-        _state._parent.f.end(_out);
-        return { _out, std::move(_state._parent._parent) };
-    }
+    after_collection_element__value<Output>  end_dead_cell() && ;
 };
 template<typename Output>
 struct after_collection_element__value__dead_cell__tomb__deletion_time {
     Output& _out;
     state_of_collection_element__value__dead_cell__tomb<Output> _state;
-    after_collection_element__value__dead_cell__tomb<Output>  end_tomb() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_collection_element__value__dead_cell__tomb<Output>  end_tomb() && ;
 };
 template<typename Output>
 struct after_collection_element__value__dead_cell__tomb__timestamp {
     Output& _out;
     state_of_collection_element__value__dead_cell__tomb<Output> _state;
-    after_collection_element__value__dead_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_collection_element__value__dead_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
 };
 template<typename Output>
 struct collection_element__value__dead_cell__tomb {
@@ -28816,19 +28747,13 @@ template<typename Output>
 struct after_collection_cell__tomb__deletion_time {
     Output& _out;
     state_of_collection_cell__tomb<Output> _state;
-    after_collection_cell__tomb<Output>  end_tomb() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_collection_cell__tomb<Output>  end_tomb() && ;
 };
 template<typename Output>
 struct after_collection_cell__tomb__timestamp {
     Output& _out;
     state_of_collection_cell__tomb<Output> _state;
-    after_collection_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_collection_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
 };
 template<typename Output>
 struct collection_cell__tomb {
@@ -28908,16 +28833,10 @@ template<typename Output>
 struct after_column__c__variant__expiring_cell__c__created_at {
     Output& _out;
     state_of_column__c__variant__expiring_cell__c<Output> _state;
-    after_column__c__variant__expiring_cell__c__value<Output> write_value(bytes_view t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_column__c__variant__expiring_cell__c__value<Output> write_value(bytes_view t) && ;
     template<typename FragmentedBuffer>
     requires FragmentRange<FragmentedBuffer>
-    after_column__c__variant__expiring_cell__c__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && {
-        serialize_fragmented(_out, std::forward<FragmentedBuffer>(fragments));
-        return { _out, std::move(_state) };
-    }
+    after_column__c__variant__expiring_cell__c__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && ;
 };
 template<typename Output>
 struct column__c__variant__expiring_cell__c {
@@ -28994,13 +28913,9 @@ template<typename Output>
 struct column__c__variant__dead_cell {
     Output& _out;
     state_of_column__c__variant__dead_cell<Output> _state;
-    column__c__variant__dead_cell(Output& out, state_of_column__c__variant<Output> state)
-            : _out(out)
-            , _state(state)
-            {}
-    column__c__variant__dead_cell__tomb<Output> start_tomb() && {
-        return { _out, std::move(_state) };
-    }
+    column__c__variant__dead_cell(Output& out, state_of_column__c__variant<Output> state) 
+            ;
+    column__c__variant__dead_cell__tomb<Output> start_tomb() && ;
     after_column__c__variant__dead_cell__tomb<Output> write_tomb(const tombstone& t) && ;
 };
 template<typename Output>
@@ -29163,13 +29078,8 @@ struct column__c__collection_cell {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    column__c__collection_cell__tomb<Output> start_tomb() && {
-        return { _out, std::move(_state) };
-    }
-    after_column__c__collection_cell__tomb<Output> write_tomb(const tombstone& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    column__c__collection_cell__tomb<Output> start_tomb() && ;
+    after_column__c__collection_cell__tomb<Output> write_tomb(const tombstone& t) && ;
 };
 template<typename Output>
 struct after_column__id {
@@ -29293,10 +29203,7 @@ struct deletable_row__cells {
     deletable_row__cells__columns<Output> start_columns() && {
         return { _out, std::move(_state) };
     }
-    after_deletable_row__cells__columns<Output> skip_columns() && {
-        serialize(_out, size_type(0));
-        return { _out, std::move(_state) };
-    }
+    after_deletable_row__cells__columns<Output> skip_columns() && ;
 };
 template<typename Output>
 struct after_deletable_row__deleted_at {
@@ -29316,10 +29223,7 @@ template<typename Output>
 struct after_deletable_row__deleted_at__timestamp {
     Output& _out;
     state_of_deletable_row__deleted_at<Output> _state;
-    after_deletable_row__deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_deletable_row__deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
 };
 template<typename Output>
 struct deletable_row__deleted_at {
@@ -29423,19 +29327,13 @@ template<typename Output>
 struct after_deletable_row__marker__dead_marker__tomb__deletion_time {
     Output& _out;
     state_of_deletable_row__marker__dead_marker__tomb<Output> _state;
-    after_deletable_row__marker__dead_marker__tomb<Output>  end_tomb() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_deletable_row__marker__dead_marker__tomb<Output>  end_tomb() && ;
 };
 template<typename Output>
 struct after_deletable_row__marker__dead_marker__tomb__timestamp {
     Output& _out;
     state_of_deletable_row__marker__dead_marker__tomb<Output> _state;
-    after_deletable_row__marker__dead_marker__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_deletable_row__marker__dead_marker__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
 };
 template<typename Output>
 struct deletable_row__marker__dead_marker__tomb {
@@ -29472,17 +29370,9 @@ struct after_deletable_row__key {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    deletable_row__marker__live_marker<Output> start_marker_live_marker() && {
-        serialize(_out, uint32_t(0));
-        return { _out, std::move(_state) };
-    }
+    deletable_row__marker__live_marker<Output> start_marker_live_marker() && ;
     template<typename Serializer>
-    after_deletable_row__marker<Output> marker_live_marker(Serializer&& f) && {
-        serialize(_out, uint32_t(0));
-        f(writer_of_live_marker<Output>(_out));
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_deletable_row__marker<Output> marker_live_marker(Serializer&& f) && ;
     deletable_row__marker__expiring_marker<Output> start_marker_expiring_marker() && ;
     template<typename Serializer>
     after_deletable_row__marker<Output> marker_expiring_marker(Serializer&& f) && ;
@@ -29524,13 +29414,8 @@ struct static_row__cells__columns {
   writer_of_column<Output> add() ;
   void add(column_view v) ;
   after_static_row__cells__columns<Output> end_columns() && ;
-  vector_position pos() const {
-        return vector_position{_out.pos(), _count};
-  }
-  void rollback(const vector_position& vp) {
-        _out.retract(vp.pos);
-        _count = vp.count;
-  }
+  vector_position pos() const ;
+  void rollback(const vector_position& vp) ;
 };
 template<typename Output>
 struct static_row__cells {
@@ -29585,10 +29470,7 @@ struct clustering_row__row__shadowable_deleted_at {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_clustering_row__row__shadowable_deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_clustering_row__row__shadowable_deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
 };
 template<typename Output>
 struct after_clustering_row__row__cells {
@@ -29614,9 +29496,7 @@ struct clustering_row__row__cells__columns {
   writer_of_column<Output> add() ;
   void add(column_view v) ;
   after_clustering_row__row__cells__columns<Output> end_columns() && ;
-  vector_position pos() const {
-        return vector_position{_out.pos(), _count};
-  }
+  vector_position pos() const ;
   void rollback(const vector_position& vp) {
         _out.retract(vp.pos);
         _count = vp.count;
@@ -29696,10 +29576,7 @@ struct clustering_row__row__marker__live_marker {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_clustering_row__row__marker__live_marker__created_at<Output> write_created_at(const api::timestamp_type& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_clustering_row__row__marker__live_marker__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
 };
 template<typename Output>
 struct after_clustering_row__row__marker__expiring_marker__expiry {
@@ -29723,10 +29600,7 @@ template<typename Output>
 struct after_clustering_row__row__marker__expiring_marker__lm__created_at {
     Output& _out;
     state_of_clustering_row__row__marker__expiring_marker__lm<Output> _state;
-    after_clustering_row__row__marker__expiring_marker__lm<Output>  end_lm() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_clustering_row__row__marker__expiring_marker__lm<Output>  end_lm() && ;
 };
 template<typename Output>
 struct clustering_row__row__marker__expiring_marker__lm {
@@ -29784,19 +29658,14 @@ struct clustering_row__row__marker__dead_marker__tomb {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_clustering_row__row__marker__dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_clustering_row__row__marker__dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
 };
 template<typename Output>
 struct clustering_row__row__marker__dead_marker {
     Output& _out;
     state_of_clustering_row__row__marker__dead_marker<Output> _state;
-    clustering_row__row__marker__dead_marker(Output& out, state_of_clustering_row__row__marker<Output> state)
-            : _out(out)
-            , _state(state)
-            {}
+    clustering_row__row__marker__dead_marker(Output& out, state_of_clustering_row__row__marker<Output> state) 
+            ;
     clustering_row__row__marker__dead_marker__tomb<Output> start_tomb() && ;
     after_clustering_row__row__marker__dead_marker__tomb<Output> write_tomb(const tombstone& t) && ;
 };
@@ -29820,10 +29689,7 @@ struct after_clustering_row__row__key {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    clustering_row__row__marker__live_marker<Output> start_marker_live_marker() && {
-        serialize(_out, uint32_t(0));
-        return { _out, std::move(_state) };
-    }
+    clustering_row__row__marker__live_marker<Output> start_marker_live_marker() && ;
     template<typename Serializer>
     after_clustering_row__row__marker<Output> marker_live_marker(Serializer&& f) && ;
     clustering_row__row__marker__expiring_marker<Output> start_marker_expiring_marker() && ;
@@ -29834,12 +29700,7 @@ struct after_clustering_row__row__key {
     after_clustering_row__row__marker<Output> marker_dead_marker(Serializer&& f) && ;
     clustering_row__row__marker__no_marker<Output> start_marker_no_marker() && ;
     template<typename Serializer>
-    after_clustering_row__row__marker<Output> marker_no_marker(Serializer&& f) && {
-        serialize(_out, uint32_t(3));
-        f(writer_of_no_marker<Output>(_out));
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_clustering_row__row__marker<Output> marker_no_marker(Serializer&& f) && ;
 };
 template<typename Output>
 struct clustering_row__row {
@@ -29943,10 +29804,7 @@ struct mutation_partition__static_row {
     mutation_partition__static_row__columns<Output> start_columns() && {
         return { _out, std::move(_state) };
     }
-    after_mutation_partition__static_row__columns<Output> skip_columns() && {
-        serialize(_out, size_type(0));
-        return { _out, std::move(_state) };
-    }
+    after_mutation_partition__static_row__columns<Output> skip_columns() && ;
 };
 template<typename Output>
 struct after_mutation_partition__tomb {
@@ -29966,10 +29824,7 @@ template<typename Output>
 struct after_mutation_partition__tomb__timestamp {
     Output& _out;
     state_of_mutation_partition__tomb<Output> _state;
-    after_mutation_partition__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_partition__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
 };
 template<typename Output>
 struct mutation_partition__tomb {
@@ -30078,9 +29933,7 @@ struct canonical_mutation__partition__static_row {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    canonical_mutation__partition__static_row__columns<Output> start_columns() && {
-        return { _out, std::move(_state) };
-    }
+    canonical_mutation__partition__static_row__columns<Output> start_columns() && ;
     after_canonical_mutation__partition__static_row__columns<Output> skip_columns() && ;
 };
 template<typename Output>
@@ -30095,10 +29948,7 @@ template<typename Output>
 struct after_canonical_mutation__partition__tomb__deletion_time {
     Output& _out;
     state_of_canonical_mutation__partition__tomb<Output> _state;
-    after_canonical_mutation__partition__tomb<Output>  end_tomb() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_canonical_mutation__partition__tomb<Output>  end_tomb() && ;
 };
 template<typename Output>
 struct after_canonical_mutation__partition__tomb__timestamp {
@@ -30130,9 +29980,7 @@ struct canonical_mutation__partition {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    canonical_mutation__partition__tomb<Output> start_tomb() && {
-        return { _out, std::move(_state) };
-    }
+    canonical_mutation__partition__tomb<Output> start_tomb() && ;
     after_canonical_mutation__partition__tomb<Output> write_tomb(const tombstone& t) && ;
 };
 template<typename Output>
@@ -30147,10 +29995,7 @@ template<typename Output>
 struct after_canonical_mutation__key {
     Output& _out;
     state_of_canonical_mutation<Output> _state;
-    after_canonical_mutation__mapping<Output> write_mapping(const column_mapping& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_canonical_mutation__mapping<Output> write_mapping(const column_mapping& t) && ;
 };
 template<typename Output>
 struct after_canonical_mutation__schema_version {
@@ -30370,18 +30215,13 @@ struct mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__cells {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> start_shadowable_deleted_at() && {
-        return { _out, std::move(_state) };
-    }
+    mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> start_shadowable_deleted_at() && ;
     after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> write_shadowable_deleted_at(const tombstone& t) && ;
 };
 template<typename Output>
@@ -30401,13 +30241,8 @@ struct mutation_fragment__fragment__clustering_row__row__cells__columns {
   writer_of_column<Output> add() ;
   void add(column_view v) ;
   after_mutation_fragment__fragment__clustering_row__row__cells__columns<Output> end_columns() && ;
-  vector_position pos() const {
-        return vector_position{_out.pos(), _count};
-  }
-  void rollback(const vector_position& vp) {
-        _out.retract(vp.pos);
-        _count = vp.count;
-  }
+  vector_position pos() const ;
+  void rollback(const vector_position& vp) ;
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__cells {
@@ -30448,32 +30283,20 @@ struct mutation_fragment__fragment__clustering_row__row__deleted_at {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_mutation_fragment__fragment__clustering_row__row__deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__clustering_row__row__deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__deleted_at<Output> start_deleted_at() && {
-        return { _out, std::move(_state) };
-    }
-    after_mutation_fragment__fragment__clustering_row__row__deleted_at<Output> write_deleted_at(const tombstone& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    mutation_fragment__fragment__clustering_row__row__deleted_at<Output> start_deleted_at() && ;
+    after_mutation_fragment__fragment__clustering_row__row__deleted_at<Output> write_deleted_at(const tombstone& t) && ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__live_marker__created_at {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__live_marker<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__marker<Output>  end_live_marker() && {
-        _state.f.end(_out);
-        _state._parent.f.end(_out);
-        return { _out, std::move(_state._parent._parent) };
-    }
+    after_mutation_fragment__fragment__clustering_row__row__marker<Output>  end_live_marker() && ;
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__live_marker {
@@ -30536,9 +30359,7 @@ struct mutation_fragment__fragment__clustering_row__row__marker__expiring_marker
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> start_lm() && {
-        return { _out, std::move(_state) };
-    }
+    mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> start_lm() && ;
     template<typename Serializer>
     after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> lm(Serializer&& f) && ;
 };
@@ -30558,10 +30379,7 @@ template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__timestamp {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb {
@@ -30589,15 +30407,9 @@ template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__no_marker {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__no_marker<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__marker__no_marker(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> state)
-            : _out(out)
-            , _state(state)
-            {}
-    after_mutation_fragment__fragment__clustering_row__row__marker<Output>  end_no_marker() && {
-        _state.f.end(_out);
-        _state._parent.f.end(_out);
-        return { _out, std::move(_state._parent._parent) };
-    }
+    mutation_fragment__fragment__clustering_row__row__marker__no_marker(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> state) 
+            ;
+    after_mutation_fragment__fragment__clustering_row__row__marker<Output>  end_no_marker() && ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__key {
@@ -30689,13 +30501,8 @@ struct mutation_fragment__fragment__static_row__cells {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    mutation_fragment__fragment__static_row__cells__columns<Output> start_columns() && {
-        return { _out, std::move(_state) };
-    }
-    after_mutation_fragment__fragment__static_row__cells__columns<Output> skip_columns() && {
-        serialize(_out, size_type(0));
-        return { _out, std::move(_state) };
-    }
+    mutation_fragment__fragment__static_row__cells__columns<Output> start_columns() && ;
+    after_mutation_fragment__fragment__static_row__cells__columns<Output> skip_columns() && ;
 };
 template<typename Output>
 struct mutation_fragment__fragment__static_row {
@@ -30758,18 +30565,13 @@ struct mutation_fragment__fragment__range_tombstone__tomb {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_mutation_fragment__fragment__range_tombstone__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__range_tombstone__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__range_tombstone__start {
     Output& _out;
     state_of_mutation_fragment__fragment__range_tombstone<Output> _state;
-    mutation_fragment__fragment__range_tombstone__tomb<Output> start_tomb() && {
-        return { _out, std::move(_state) };
-    }
+    mutation_fragment__fragment__range_tombstone__tomb<Output> start_tomb() && ;
     after_mutation_fragment__fragment__range_tombstone__tomb<Output> write_tomb(const tombstone& t) && {
         serialize(_out, t);
         return { _out, std::move(_state) };
@@ -30814,18 +30616,13 @@ struct mutation_fragment__fragment__partition_start__partition_tombstone {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_mutation_fragment__fragment__partition_start__partition_tombstone__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__partition_start__partition_tombstone__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__partition_start__key {
     Output& _out;
     state_of_mutation_fragment__fragment__partition_start<Output> _state;
-    mutation_fragment__fragment__partition_start__partition_tombstone<Output> start_partition_tombstone() && {
-        return { _out, std::move(_state) };
-    }
+    mutation_fragment__fragment__partition_start__partition_tombstone<Output> start_partition_tombstone() && ;
     after_mutation_fragment__fragment__partition_start__partition_tombstone<Output> write_partition_tombstone(const tombstone& t) && {
         serialize(_out, t);
         return { _out, std::move(_state) };
@@ -30839,10 +30636,7 @@ struct mutation_fragment__fragment__partition_start {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_mutation_fragment__fragment__partition_start__key<Output> write_key(const partition_key& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__partition_start__key<Output> write_key(const partition_key& t) && ;
 };
 template<typename Output>
 struct writer_of_mutation_fragment {
@@ -30861,13 +30655,7 @@ struct writer_of_mutation_fragment {
     mutation_fragment__fragment__partition_start<Output> start_fragment_partition_start() && ;
     template<typename Serializer>
     after_mutation_fragment__fragment<Output> fragment_partition_start(Serializer&& f) && ;
-    after_mutation_fragment__fragment<Output> write_fragment_partition_end(const partition_end& t) && {
-        auto state = state_of_mutation_fragment__fragment<Output> { start_frame(_out), std::move(_state) };
-        serialize(_out, uint32_t(4));
-        serialize(_out, t);
-        state.f.end(_out);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment<Output> write_fragment_partition_end(const partition_end& t) && ;
 };
 } // ser
 namespace ser {
@@ -30999,9 +30787,7 @@ public:
         , _consumer(consumer)
     {
     }
-    Consumer& consumer() {
-        return _consumer;
-    }
+    Consumer& consumer() ;
     void on_new_partition(const partition_key& key) ;
     virtual void accept_partition_tombstone(tombstone t) override ;
     virtual void accept_static_cell(column_id id, atomic_cell cell) override ;
@@ -31037,7 +30823,7 @@ public:
     frozen_mutation(const frozen_mutation& m) = default;
     frozen_mutation& operator=(frozen_mutation&&) = default;
     frozen_mutation& operator=(const frozen_mutation&) = default;
-    const bytes_ostream& representation() const { return _bytes; }
+    const bytes_ostream& representation() const ;
     table_id column_family_id() const;
     table_schema_version schema_version() const; // FIXME: Should replace column_family_id()
     partition_key_view key() const;
@@ -31123,16 +30909,10 @@ public:
     explicit frozen_mutation_fragment(bytes_ostream bytes) : _bytes(std::move(bytes)) { }
     const bytes_ostream& representation() const { return _bytes; }
     mutation_fragment unfreeze(const schema& s, reader_permit permit);
-    future<> clear_gently() noexcept {
-        return _bytes.clear_gently();
-    }
+    future<> clear_gently() noexcept ;
 };
 frozen_mutation_fragment freeze(const schema& s, const mutation_fragment& mf);
-template<FlattenedConsumerV2 Consumer>
-auto frozen_mutation::consume_gently(schema_ptr s, Consumer& consumer) const -> future<frozen_mutation_consume_result<decltype(consumer.consume_end_of_stream())>> {
-    frozen_mutation_consumer_adaptor adaptor(s, consumer);
-    co_return co_await consume_gently(s, adaptor);
-}
+
 class frozen_mutation_and_schema;
 namespace replica {
 struct cf_stats;
@@ -31401,12 +31181,8 @@ public:
     node(const locator::topology* topology, locator::host_id id, inet_address endpoint, endpoint_dc_rack dc_rack, state state, this_node is_this_node = this_node::no, idx_type idx = -1);
     node(const node&) = delete;
     node(node&&) = delete;
-    const locator::topology* topology() const noexcept {
-        return _topology;
-    }
-    const locator::host_id& host_id() const noexcept {
-        return _host_id;
-    }
+    const locator::topology* topology() const noexcept ;
+    const locator::host_id& host_id() const noexcept ;
     const inet_address& endpoint() const noexcept ;
     const endpoint_dc_rack& dc_rack() const noexcept ;
     // Is this "localhost"?
