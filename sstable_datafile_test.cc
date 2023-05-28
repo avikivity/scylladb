@@ -30912,7 +30912,6 @@ public:
     future<> clear_gently() noexcept ;
 };
 frozen_mutation_fragment freeze(const schema& s, const mutation_fragment& mf);
-
 class frozen_mutation_and_schema;
 namespace replica {
 struct cf_stats;
@@ -31538,12 +31537,8 @@ struct server_address_hash {
 struct config_member_hash {
     using is_transparent = void;
     size_t operator()(const raft::server_id& id) const ;
-    size_t operator()(const raft::server_address& address) const {
-        return operator()(address.id);
-    }
-    size_t operator()(const raft::config_member& s) const {
-        return operator()(s.addr);
-    }
+    size_t operator()(const raft::server_address& address) const ;
+    size_t operator()(const raft::config_member& s) const ;
 };
 using server_address_set = std::unordered_set<server_address, server_address_hash, std::equal_to<>>;
 using config_member_set = std::unordered_set<config_member, config_member_hash, std::equal_to<>>;
@@ -43807,54 +43802,12 @@ public:
     // arrive_and_wait() never block. Eliminates the need to mess
     // with conditional usage in callers.
     struct solo {};
-    cross_shard_barrier(solo) {}
-    future<> arrive_and_wait() {
-        if (!_b) {
-            return make_ready_future<>();
-        }
-        // The barrier assumes that each shard arrives exactly once
-        // (per phase). At the same time we cannot ban copying the
-        // barrier, because it will likely be copied between sharded
-        // users on sharded::start. The best check in this situation
-        // is to make sure the local promise is not set up.
-        assert(!_b->wakeup[this_shard_id()].has_value());
-        auto i = _b->counter.fetch_add(-1);
-        return i == 1 ? complete() : wait();
-    }
-    void abort() noexcept {
-        // We can get here from shards that had already visited the
-        // arrive_and_wait() and got the exceptional future. In this
-        // case the counter would be set to smp::count and none of the
-        // fetch_add(-1)s below will make it call complete()
-        _b->alive.store(false);
-        auto i = _b->counter.fetch_add(-1);
-        if (i == 1) {
-            (void)complete().handle_exception([] (std::exception_ptr ignored) {});
-        }
-    }
+    cross_shard_barrier(solo) ;
+    future<> arrive_and_wait() ;
+    void abort() noexcept ;
 private:
-    future<> complete() {
-        _b->counter.fetch_add(smp::count);
-        bool alive = _b->alive.load(std::memory_order_relaxed);
-        return smp::invoke_on_all([b = _b, sid = this_shard_id(), alive] {
-            if (this_shard_id() != sid) {
-                std::optional<promise<>>& w = b->wakeup[this_shard_id()];
-                if (alive) {
-                    assert(w.has_value());
-                    w->set_value();
-                    w.reset();
-                } else if (w.has_value()) {
-                    w->set_exception(barrier_aborted_exception());
-                    w.reset();
-                }
-            }
-            return alive ? make_ready_future<>()
-                         : make_exception_future<>(barrier_aborted_exception());
-        });
-    }
-    future<> wait() {
-        return _b->wakeup[this_shard_id()].emplace().get_future();
-    }
+    future<> complete() ;
+    future<> wait() ;
 };
 } // namespace utils
 namespace sstables {
