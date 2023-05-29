@@ -4634,7 +4634,7 @@ public:
     friend data_value make_map_value(data_type, maybe_empty<std::vector<std::pair<data_value, data_value>>>);
     friend data_value make_user_value(data_type, std::vector<data_value>);
     template <typename Func>
-    friend inline auto visit(const data_value& v, Func&& f);
+    friend auto visit(const data_value& v, Func&& f);
     // Prints a value of this type in a way which is parsable back from CQL.
     // Differs from operator<< for collections.
     sstring to_parsable_string() const;
@@ -7842,13 +7842,7 @@ public:
         less_compare_with_prefix(const schema& s) 
         ;
         bool operator()(const prefix_view_on_prefix_compound& k1, const TopLevel& k2) const ;
-        bool operator()(const TopLevel& k1, const prefix_view_on_prefix_compound& k2) const {
-            return lexicographical_tri_compare(
-                prefix_type->types().begin(), prefix_type->types().end(),
-                prefix_type->begin(k1), prefix_type->end(k1),
-                k2.begin(), k2.end(),
-                tri_compare) < 0;
-        }
+        bool operator()(const TopLevel& k1, const prefix_view_on_prefix_compound& k2) const ;
     };
 };
 template <typename TopLevel, typename TopLevelView, typename PrefixTopLevel>
@@ -7864,13 +7858,7 @@ public:
         typename TopLevel::compound full_type;
         less_compare_with_prefix(const schema& s) 
         ;
-        bool operator()(const TopLevel& k1, const PrefixTopLevel& k2) const {
-            return lexicographical_tri_compare(
-                prefix_type->types().begin(), prefix_type->types().end(),
-                full_type->begin(k1), full_type->end(k1),
-                prefix_type->begin(k2), prefix_type->end(k2),
-                tri_compare) < 0;
-        }
+        bool operator()(const TopLevel& k1, const PrefixTopLevel& k2) const ;
         bool operator()(const PrefixTopLevel& k1, const TopLevel& k2) const ;
     };
     // In prefix equality two sequences are equal if any of them is a prefix
@@ -7903,9 +7891,7 @@ protected:
     prefix_compound_wrapper(managed_bytes&& b) : base(std::move(b)) {}
 public:
     using prefix_view_type = prefix_view_on_prefix_compound<TopLevel>;
-    prefix_view_type prefix_view(const schema& s, unsigned prefix_len) const {
-        return { s, this->representation(), prefix_len };
-    }
+    prefix_view_type prefix_view(const schema& s, unsigned prefix_len) const ;
     bool is_full(const schema& s) const {
         return TopLevel::get_compound_type(s)->is_full(base::_bytes);
     }
@@ -7927,12 +7913,7 @@ public:
         typename TopLevel::compound prefix_type;
         prefix_equal_tri_compare(const schema& s) 
         ;
-        std::strong_ordering operator()(const TopLevel& k1, const TopLevel& k2) const {
-            return prefix_equality_tri_compare(prefix_type->types().begin(),
-                prefix_type->begin(k1.representation()), prefix_type->end(k1.representation()),
-                prefix_type->begin(k2.representation()), prefix_type->end(k2.representation()),
-                tri_compare);
-        }
+        std::strong_ordering operator()(const TopLevel& k1, const TopLevel& k2) const ;
     };
 };
 class partition_key_view : public compound_view_wrapper<partition_key_view> {
@@ -8029,10 +8010,8 @@ class exploded_clustering_prefix {
     std::vector<bytes> _v;
 public:
     exploded_clustering_prefix(std::vector<bytes>&& v) : _v(std::move(v)) {}
-    exploded_clustering_prefix() {}
-    size_t size() const {
-        return _v.size();
-    }
+    exploded_clustering_prefix() ;
+    size_t size() const ;
     auto const& components() const {
         return _v;
     }
@@ -8045,12 +8024,8 @@ class clustering_key_prefix_view : public prefix_compound_view_wrapper<clusterin
         : prefix_compound_view_wrapper<clustering_key_prefix_view, clustering_key>(v)
     { }
 public:
-    static clustering_key_prefix_view from_bytes(const managed_bytes& v) {
-        return { v };
-    }
-    static clustering_key_prefix_view from_bytes(managed_bytes_view v) {
-        return { v };
-    }
+    static clustering_key_prefix_view from_bytes(const managed_bytes& v) ;
+    static clustering_key_prefix_view from_bytes(managed_bytes_view v) ;
     static clustering_key_prefix_view from_bytes(bytes_view v) ;
     using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
     static const compound& get_compound_type(const schema& s) ;
@@ -8088,9 +8063,7 @@ public:
     static const compound& get_compound_type(const schema& s) {
         return s.clustering_key_prefix_type();
     }
-    static clustering_key_prefix from_clustering_prefix(const schema& s, const exploded_clustering_prefix& prefix) {
-        return from_exploded(s, prefix.components());
-    }
+    static clustering_key_prefix from_clustering_prefix(const schema& s, const exploded_clustering_prefix& prefix) ;
     static bool make_full(const schema& s, clustering_key_prefix& ck) ;
 };
 template <>
@@ -8150,7 +8123,7 @@ public:
               , _inclusive(inclusive)
     { }
     const T& value() const & { return _value; }
-    T&& value() && { return std::move(_value); }
+    T&& value() && ;
     bool is_inclusive() const { return _inclusive; }
     bool operator==(const interval_bound& other) const ;
     bool equal(const interval_bound& other, IntervalComparatorFor<T> auto&& cmp) const ;
@@ -8212,9 +8185,7 @@ public:
     static wrapping_interval make_open_ended_both_sides() ;
     static wrapping_interval make_singular(T value) ;
     static wrapping_interval make_starting_with(bound b) ;
-    static wrapping_interval make_ending_with(bound b) {
-        return {{}, {std::move(b)}};
-    }
+    static wrapping_interval make_ending_with(bound b) ;
     bool is_singular() const {
         return _singular;
     }
@@ -8262,9 +8233,7 @@ public:
     // Transforms this interval into a new interval of a different value type
     // Supplied transformer should transform value of type T (the old type) into value of type U (the new type).
     template<typename Transformer, typename U = transformed_type<Transformer>>
-    wrapping_interval<U> transform(Transformer&& transformer) && {
-        return wrapping_interval<U>(transform_bound(std::move(_start), transformer), transform_bound(std::move(_end), transformer), _singular);
-    }
+    wrapping_interval<U> transform(Transformer&& transformer) && ;
     template<typename Transformer, typename U = transformed_type<Transformer>>
     wrapping_interval<U> transform(Transformer&& transformer) const & {
         return wrapping_interval<U>(transform_bound(_start, transformer), transform_bound(_end, transformer), _singular);
@@ -8583,8 +8552,7 @@ public:
     using kind = token_kind;
     kind _kind;
     int64_t _data;
-    token() : _kind(kind::before_all_keys) {
-    }
+    token()  ;
     token(kind k, int64_t d)
         : _kind(std::move(k))
         , _data(normalize(d)) { }
@@ -8617,9 +8585,7 @@ public:
     bool is_maximum() const noexcept {
         return _kind == kind::after_all_keys;
     }
-    size_t external_memory_usage() const {
-        return 0;
-    }
+    size_t external_memory_usage() const ;
     size_t memory_usage() const ;
     bytes data() const ;
     sstring to_sstring() const;
@@ -8634,15 +8600,7 @@ public:
     static unsigned shard_of_minimum_token() {
         return 0;  // hardcoded for now; unlikely to change
     }
-    int64_t raw() const noexcept {
-        if (is_minimum()) {
-            return std::numeric_limits<int64_t>::min();
-        }
-        if (is_maximum()) {
-            return std::numeric_limits<int64_t>::max();
-        }
-        return _data;
-    }
+    int64_t raw() const noexcept ;
 };
 static std::strong_ordering tri_compare_raw(const int64_t l1, const int64_t l2) noexcept ;
 template <typename T>
@@ -8727,11 +8685,7 @@ dht::token find_first_token_for_shard(
 namespace utils {
 class can_yield_tag;
 using can_yield = seastar::bool_class<can_yield_tag>;
-inline void maybe_yield(can_yield can_yield) {
-    if (can_yield) {
-        seastar::thread::maybe_yield();
-    }
-}
+ void maybe_yield(can_yield can_yield) ;
 } // namespace utils
 namespace sstables {
 class key_view;
@@ -8786,9 +8740,7 @@ class decorated_key_equals_comparator {
     const schema& _schema;
 public:
     explicit decorated_key_equals_comparator(const schema& schema)  ;
-    bool operator()(const dht::decorated_key& k1, const dht::decorated_key& k2) const {
-        return k1.equal(_schema, k2);
-    }
+    bool operator()(const dht::decorated_key& k1, const dht::decorated_key& k2) const ;
 };
 using decorated_key_opt = std::optional<decorated_key>;
 class i_partitioner {
@@ -8796,9 +8748,7 @@ public:
     using ptr_type = std::unique_ptr<i_partitioner>;
     i_partitioner() = default;
     virtual ~i_partitioner() {}
-    decorated_key decorate_key(const schema& s, const partition_key& key) const {
-        return { get_token(s, key), key };
-    }
+    decorated_key decorate_key(const schema& s, const partition_key& key) const ;
     decorated_key decorate_key(const schema& s, partition_key&& key) const {
         auto token = get_token(s, key);
         return { std::move(token), std::move(key) };
@@ -8853,10 +8803,8 @@ public:
     bool is_max() const noexcept ;
     static ring_position starting_at(dht::token token) ;
     static ring_position ending_at(dht::token token) ;
-    ring_position(dht::token token, token_bound bound)
-        : _token(std::move(token))
-        , _token_bound(bound)
-    { }
+    ring_position(dht::token token, token_bound bound) 
+    ;
     ring_position(dht::token token, partition_key key)
         : _token(std::move(token))
         , _key(std::make_optional(std::move(key)))
@@ -8874,9 +8822,7 @@ public:
         : _token(std::move(dk._token))
         , _key(std::make_optional(std::move(dk._key)))
     { }
-    const dht::token& token() const noexcept {
-        return _token;
-    }
+    const dht::token& token() const noexcept ;
     // Valid when !has_key()
     token_bound bound() const ;
     // Returns -1 if smaller than keys with the same token, +1 if greater.
@@ -8921,7 +8867,7 @@ class ring_position_view {
     int8_t _weight;
 private:
     ring_position_view() noexcept : _token(nullptr), _key(nullptr), _weight(0) { }
-    explicit operator bool() const noexcept { return bool(_token); }
+    explicit operator bool() const noexcept ;
 public:
     using token_bound = ring_position::token_bound;
     struct after_key_tag {};
@@ -9098,9 +9044,7 @@ struct ring_position_less_comparator {
     ring_position_comparator tri;
     ring_position_less_comparator(const schema& s) : tri(s) {}
     template<typename T, typename U>
-    bool operator()(const T& lh, const U& rh) const {
-        return tri(lh, rh) < 0;
-    }
+    bool operator()(const T& lh, const U& rh) const ;
 };
 struct token_comparator {
     // Return values are those of a trichotomic comparison.
@@ -9128,9 +9072,7 @@ unsigned shard_of(const schema&, const token&);
 inline decorated_key decorate_key(const schema& s, partition_key&& key) {
     return s.get_partitioner().decorate_key(s, std::move(key));
 }
-inline token get_token(const schema& s, partition_key_view key) {
-    return s.get_partitioner().get_token(s, key);
-}
+ token get_token(const schema& s, partition_key_view key) ;
 dht::partition_range to_partition_range(dht::token_range);
 dht::partition_range_vector to_partition_ranges(const dht::token_range_vector& ranges, utils::can_yield can_yield = utils::can_yield::no);
 // Each shard gets a sorted, disjoint vector of ranges
@@ -9349,9 +9291,7 @@ public:
         , elapsed(-1)
         , slow_query_record_ttl(ttl)
     {}
-    bool ready() const {
-        return elapsed.count() >= 0 && !_consumed;
-    }
+    bool ready() const ;
     void set_consumed() ;
 };
 class one_session_records {
@@ -9584,7 +9524,7 @@ public:
     static constexpr cql_protocol_version_type latest_version = 4;
     explicit cql_serialization_format(cql_protocol_version_type version) : _version(version) {}
     static cql_serialization_format latest() { return cql_serialization_format{latest_version}; }
-    cql_protocol_version_type protocol_version() const { return _version; }
+    cql_protocol_version_type protocol_version() const ;
     void ensure_supported() const {
         if (_version < 3) {
             throw std::runtime_error("cql protocol version must be 3 or later");
@@ -9742,10 +9682,7 @@ public:
     const uint32_t partition_row_limit_low_bits() const ;
     const uint32_t partition_row_limit_high_bits() const ;
     const uint64_t partition_row_limit() const ;
-    void set_partition_row_limit(uint64_t limit) {
-        _partition_row_limit_low_bits = static_cast<uint64_t>(limit);
-        _partition_row_limit_high_bits = static_cast<uint64_t>(limit >> 32);
-    }
+    void set_partition_row_limit(uint64_t limit) ;
     [[nodiscard]]
     bool is_reversed() const {
         return options.contains<query::partition_slice::option::reversed>();
@@ -9985,10 +9922,7 @@ struct tombstone final {
         }
     }
     // See reversibly_mergeable.hh
-    void apply_reversibly(tombstone& t) noexcept {
-        std::swap(*this, t);
-        apply(t);
-    }
+    void apply_reversibly(tombstone& t) noexcept ;
     // See reversibly_mergeable.hh
     void revert(tombstone& t) noexcept ;
     tombstone operator+(const tombstone& t) ;
@@ -10011,10 +9945,7 @@ static std::ostream& operator<<(std::ostream& out, const tombstone& t) ;
 template<>
 struct appending_hash<tombstone> {
     template<typename Hasher>
-    void operator()(Hasher& h, const tombstone& t) const {
-        feed_hash(h, t.timestamp);
-        feed_hash(h, t.deletion_time);
-    }
+    void operator()(Hasher& h, const tombstone& t) const ;
 };
 // Determines whether tombstone may be GC-ed.
 using can_gc_fn = std::function<bool(tombstone)>;
@@ -10184,9 +10115,7 @@ protected:
     explicit basic_atomic_cell_view(managed_bytes_basic_view<is_mutable> v) : _view(std::move(v)) { }
     friend class atomic_cell_or_collection;
 public:
-    operator basic_atomic_cell_view<mutable_view::no>() const noexcept {
-        return basic_atomic_cell_view<mutable_view::no>(_view);
-    }
+    operator basic_atomic_cell_view<mutable_view::no>() const noexcept ;
     bool is_counter_update() const {
         return atomic_cell_type::is_counter_update(_view);
     }
@@ -10198,12 +10127,8 @@ public:
     bool is_live_and_has_ttl() const {
         return atomic_cell_type::is_live_and_has_ttl(_view);
     }
-    bool is_dead(gc_clock::time_point now) const {
-        return atomic_cell_type::is_dead(_view) || has_expired(now);
-    }
-    bool is_covered_by(tombstone t, bool is_counter) const {
-        return timestamp() <= t.timestamp || (is_counter && t.timestamp != api::missing_timestamp);
-    }
+    bool is_dead(gc_clock::time_point now) const ;
+    bool is_covered_by(tombstone t, bool is_counter) const ;
     // Can be called on live and dead cells
     api::timestamp_type timestamp() const {
         return atomic_cell_type::timestamp(_view);
@@ -10216,9 +10141,7 @@ public:
         return atomic_cell_type::value(_view);
     }
     // Can be called on live cells only
-    size_t value_size() const {
-        return atomic_cell_type::value(_view).size();
-    }
+    size_t value_size() const ;
     // Can be called on live counter update cells only
     int64_t counter_update_value() const {
         return atomic_cell_type::counter_update_value(_view);
@@ -10236,9 +10159,7 @@ public:
         return atomic_cell_type::ttl(_view);
     }
     // Can be called on live and dead cells
-    bool has_expired(gc_clock::time_point now) const {
-        return is_live_and_has_ttl() && expiry() <= now;
-    }
+    bool has_expired(gc_clock::time_point now) const ;
     managed_bytes_view serialize() const {
         return _view;
     }
@@ -10247,8 +10168,7 @@ class atomic_cell_view final : public basic_atomic_cell_view<mutable_view::no> {
     atomic_cell_view(managed_bytes_view v)
         : basic_atomic_cell_view(v) {}
     template<mutable_view is_mutable>
-    atomic_cell_view(basic_atomic_cell_view<is_mutable> view)
-        : basic_atomic_cell_view<mutable_view::no>(view) {}
+    atomic_cell_view(basic_atomic_cell_view<is_mutable> view)  ;
     friend class atomic_cell;
 public:
     static atomic_cell_view from_bytes(const abstract_type& t, managed_bytes_view v) {
@@ -10323,7 +10243,7 @@ public:
     friend std::ostream& operator<<(std::ostream& os, const atomic_cell& ac);
     class printer : atomic_cell_view::printer {
     public:
-        printer(const abstract_type& type, const atomic_cell_view& cell) : atomic_cell_view::printer(type, cell) {}
+        printer(const abstract_type& type, const atomic_cell_view& cell)  ;
         friend std::ostream& operator<<(std::ostream& os, const printer& acvp);
     };
 };
@@ -10671,10 +10591,7 @@ public:
             const std::vector<managed_bytes_view_opt>& v);
 };
 data_value make_set_value(data_type tuple_type, set_type_impl::native_type value);
-template <typename NativeType>
-data_value::data_value(const std::unordered_set<NativeType>& v)
-    : data_value(new set_type_impl::native_type(v.begin(), v.end()), set_type_impl::get_instance(data_type_for<NativeType>(), true))
-{}
+
 struct tuple_deserializing_iterator {
 public:
     using iterator_category = std::input_iterator_tag;
@@ -10702,18 +10619,13 @@ public:
     const managed_bytes_view_opt& operator*() const {
         return _current;
     }
-    const managed_bytes_view_opt* operator->() const {
-        return &_current;
-    }
+    const managed_bytes_view_opt* operator->() const ;
     tuple_deserializing_iterator& operator++() {
         skip();
         parse();
         return *this;
     }
-    void operator++(int) {
-        skip();
-        parse();
-    }
+    void operator++(int) ;
     bool operator==(const tuple_deserializing_iterator& x) const {
         return _v == x._v;
     }
@@ -10746,29 +10658,12 @@ std::optional<View> read_tuple_element(View& v) {
     return read_simple_bytes(v, s);
 }
 template <FragmentedView View>
-managed_bytes_opt get_nth_tuple_element(View v, size_t n) {
-    for (size_t i = 0; i < n; ++i) {
-        if (v.empty()) {
-            return std::nullopt;
-        }
-        read_tuple_element(v);
-    }
-    if (v.empty()) {
-        return std::nullopt;
-    }
-    auto el = read_tuple_element(v);
-    if (el) {
-        return managed_bytes(*el);
-    }
-    return std::nullopt;
-}
+managed_bytes_opt get_nth_tuple_element(View v, size_t n) ;
 class tuple_type_impl : public concrete_type<std::vector<data_value>> {
     using intern = type_interning_helper<tuple_type_impl, std::vector<data_type>>;
 protected:
     std::vector<data_type> _types;
-    static boost::iterator_range<tuple_deserializing_iterator> make_range(managed_bytes_view v) {
-        return { tuple_deserializing_iterator::start(v), tuple_deserializing_iterator::finish(v) };
-    }
+    static boost::iterator_range<tuple_deserializing_iterator> make_range(managed_bytes_view v) ;
     tuple_type_impl(kind k, sstring name, std::vector<data_type> types, bool freeze_inner);
     tuple_type_impl(std::vector<data_type> types, bool freze_inner);
 public:
@@ -10786,30 +10681,7 @@ public:
     std::vector<bytes_opt> split(FragmentedView auto v) const ;
     std::vector<managed_bytes_opt> split_fragmented(FragmentedView auto v) const ;
     template <typename RangeOf_bytes_opt>  // also accepts bytes_view_opt
-    static bytes build_value(RangeOf_bytes_opt&& range) {
-        auto item_size = [] (auto&& v) { return 4 + (v ? v->size() : 0); };
-        auto size = boost::accumulate(range | boost::adaptors::transformed(item_size), 0);
-        auto ret = bytes(bytes::initialized_later(), size);
-        auto out = ret.begin();
-        auto put = [&out] (auto&& v) {
-            if (v) {
-                using val_type = std::remove_cvref_t<decltype(*v)>;
-                if constexpr (FragmentedView<val_type>) {
-                    int32_t size = v->size_bytes();
-                    write(out, size);
-                    read_fragmented(*v, size, out);
-                    out += size;
-                } else {
-                    write(out, int32_t(v->size()));
-                    out = std::copy(v->begin(), v->end(), out);
-                }
-            } else {
-                write(out, int32_t(-1));
-            }
-        };
-        boost::range::for_each(range, put);
-        return ret;
-    }
+    static bytes build_value(RangeOf_bytes_opt&& range) ;
     template <typename Range> // range of managed_bytes_opt or managed_bytes_view_opt
     requires requires (Range it) { {std::begin(it)->value()} -> std::convertible_to<managed_bytes_view>; }
     static managed_bytes build_value_fragmented(Range&& range) {
@@ -10862,11 +10734,11 @@ public:
     bytes_view field_name(size_t i) const ;
     sstring field_name_as_string(size_t i) const ;
     const std::vector<bytes>& field_names() const ;
-    const std::vector<sstring>& string_field_names() const { return _string_field_names; }
+    const std::vector<sstring>& string_field_names() const ;
     std::optional<size_t> idx_of_field(const bytes& name) const;
     bool is_multi_cell() const { return _is_multi_cell; }
     virtual data_type freeze() const override;
-    bytes get_name() const { return _name; }
+    bytes get_name() const ;
     sstring get_name_as_string() const;
     sstring get_name_as_cql_string() const;
     virtual sstring keypace_name() const override { return _keyspace; }
@@ -11042,13 +10914,9 @@ public:
         return _v == maybe_unwrap(x);
     }
     template <typename T>
-    bool operator>(const T& x) const {
-        return _v > maybe_unwrap(x);
-    }
+    bool operator>(const T& x) const ;
     template <typename T>
-    bool operator>=(const T& x) const {
-        return _v >= maybe_unwrap(x);
-    }
+    bool operator>=(const T& x) const ;
     template <typename T>
     bool operator<(const T& x) const ;
     template <typename T>
@@ -11308,9 +11176,7 @@ template <typename Func> struct data_value_visitor {
 template <typename Func> inline auto visit(const abstract_type& t, const void* v, Func&& f) {
     return ::visit(t, data_value_visitor<Func>{v, f});
 }
-template <typename Func> inline auto visit(const data_value& v, Func&& f) {
-    return ::visit(*v.type(), v._value, f);
-}
+template <typename Func>  auto visit(const data_value& v, Func&& f) ;
 namespace utils {
 // observable/observer - a publish/subscribe utility
 //
@@ -11343,11 +11209,7 @@ public:
         observable* _observable;
         seastar::noncopyable_function<void (Args...)> _callback;
     private:
-        void moved(observer* from) {
-            if (_observable) {
-                _observable->moved(from, this);
-            }
-        }
+        void moved(observer* from) ;
     public:
         observer(observable* o, seastar::noncopyable_function<void (Args...)> callback) noexcept
                 : _observable(o), _callback(std::move(callback)) {
