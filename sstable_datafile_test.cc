@@ -19220,10 +19220,7 @@ private:
         n.set_kid(t, _kids[f]);
     }
     void unlink_corner_leaf() noexcept ;
-    static const node* from_base(const node_base* nb) noexcept {
-        assert(!nb->is_inline());
-        return boost::intrusive::get_parent_from_member(nb, &node::_base);
-    }
+    static const node* from_base(const node_base* nb) noexcept ;
     static node* from_base(node_base* nb) noexcept {
         assert(!nb->is_inline());
         return boost::intrusive::get_parent_from_member(nb, &node::_base);
@@ -28834,10 +28831,7 @@ struct canonical_mutation__partition__static_row__columns {
   void add(column_view v) ;
   after_canonical_mutation__partition__static_row__columns<Output> end_columns() && ;
   vector_position pos() const ;
-  void rollback(const vector_position& vp) {
-        _out.retract(vp.pos);
-        _count = vp.count;
-  }
+  void rollback(const vector_position& vp) ;
 };
 template<typename Output>
 struct canonical_mutation__partition__static_row {
@@ -28909,10 +28903,7 @@ template<typename Output>
 struct after_canonical_mutation__schema_version {
     Output& _out;
     state_of_canonical_mutation<Output> _state;
-    after_canonical_mutation__key<Output> write_key(const partition_key& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_canonical_mutation__key<Output> write_key(const partition_key& t) && ;
 };
 template<typename Output>
 struct after_canonical_mutation__table_id {
@@ -30248,10 +30239,7 @@ public:
     explicit operator bool() const { return _value != 0; }
     auto operator<=>(const tagged_tagged_integer& o) const = default;
     tagged_tagged_integer& operator++() noexcept ;
-    tagged_tagged_integer& operator--() noexcept {
-        --_value;
-        return *this;
-    }
+    tagged_tagged_integer& operator--() noexcept ;
     tagged_tagged_integer operator++(int) noexcept ;
     tagged_tagged_integer operator--(int) noexcept ;
     tagged_tagged_integer operator+(const tagged_tagged_integer& o) const ;
@@ -32164,12 +32152,7 @@ private:
     bool _is_alive;
     bool _is_normal = false;
 public:
-    bool operator==(const endpoint_state& other) const {
-        return _heart_beat_state  == other._heart_beat_state &&
-               _application_state == other._application_state &&
-               _update_timestamp  == other._update_timestamp &&
-               _is_alive          == other._is_alive;
-    }
+    bool operator==(const endpoint_state& other) const ;
     endpoint_state() noexcept
         : _heart_beat_state()
         , _update_timestamp(clk::now())
@@ -37961,7 +37944,7 @@ public:
     class external_updater_impl {
     public:
         virtual ~external_updater_impl() ;
-        virtual future<> prepare() { return make_ready_future<>(); }
+        virtual future<> prepare() ;
         // FIXME: make execute() noexcept, that will require every updater to make execution exception safe,
         // also change function signature.
         virtual void execute() = 0;
@@ -45248,7 +45231,7 @@ private:
 public:
     authorized_prepared_statements_cache_key(auth::authenticated_user user, cql3::prepared_cache_key_type prepared_cache_key)
         : _key(std::move(user), std::move(prepared_cache_key.key())) {}
-    cache_key_type& key() { return _key; }
+    cache_key_type& key() ;
     const cache_key_type& key() const ;
     bool operator==(const authorized_prepared_statements_cache_key&) const = default;
     static size_t hash(const auth::authenticated_user& user, const cql3::prepared_cache_key_type::cache_key_type& prep_cache_key) ;
@@ -45357,9 +45340,7 @@ struct exception : public std::exception {
     std::string _msg;
 public:
     explicit exception(std::string_view msg) : _msg(msg) {}
-    const char* what() const noexcept {
-        return _msg.c_str();
-    }
+    const char* what() const noexcept ;
 };
 struct instance_corrupting_exception : public exception {
     explicit instance_corrupting_exception(std::string_view msg) : exception(msg) {}
@@ -45734,7 +45715,7 @@ private:
                             query::result_row_view row) ;
         void accept_new_row(query::result_row_view static_row, query::result_row_view row) ;
         void accept_partition_end(const query::result_row_view& static_row) ;
-        uint64_t rows_read() const { return _total_row_count; }
+        uint64_t rows_read() const ;
     };
 public:
     result_generator() = default;
@@ -45747,11 +45728,7 @@ public:
         , _stats(&stats)
     { }
     template<typename Visitor>
-    void visit(Visitor&& visitor) const {
-        query_result_visitor<Visitor> v(*_schema, visitor, *_selection);
-        query::result_view::consume(*_result, _command->slice, v);
-        _stats->rows_read += v.rows_read();
-    }
+    void visit(Visitor&& visitor) const ;
 };
 }
 namespace cql3 {
@@ -45873,17 +45850,7 @@ public:
     const rows_type& rows() const;
     template<typename Visitor>
     requires ResultVisitor<Visitor>
-    void visit(Visitor&& visitor) const {
-        auto column_count = get_metadata().column_count();
-        for (auto& row : _rows) {
-            visitor.start_row();
-            for (auto i = 0u; i < column_count; i++) {
-                auto& cell = row[i];
-                visitor.accept_value(cell ? managed_bytes_view_opt(*cell) : managed_bytes_view_opt());
-            }
-            visitor.end_row();
-        }
-    }
+    void visit(Visitor&& visitor) const ;
     class builder;
 };
 class result_set::builder {
@@ -45895,7 +45862,7 @@ public:
     void start_row() ;
     void accept_value(managed_bytes_view_opt value) ;
     void end_row() ;
-    result_set get_result_set() && { return std::move(_result); }
+    result_set get_result_set() && ;
 };
 class result {
     mutable std::unique_ptr<cql3::result_set> _result_set;
@@ -46242,9 +46209,7 @@ public:
     bounce_to_shard(unsigned shard, cql3::computed_function_values cached_fn_calls)
         : _shard(shard), _cached_fn_calls(std::move(cached_fn_calls))
     {}
-    virtual void accept(result_message::visitor& v) const override {
-        v.visit(*this);
-    }
+    virtual void accept(result_message::visitor& v) const override ;
     virtual std::optional<unsigned> move_to_shard() const override ;
     cql3::computed_function_values&& take_cached_pk_function_calls() ;
 };
@@ -46257,9 +46222,7 @@ private:
     exceptions::coordinator_exception_container _ex;
 public:
     exception(exceptions::coordinator_exception_container ex) : _ex(std::move(ex)) {}
-    virtual void accept(result_message::visitor& v) const override {
-        v.visit(*this);
-    }
+    virtual void accept(result_message::visitor& v) const override ;
     [[noreturn]] void throw_me() const {
         _ex.throw_me();
     }
@@ -46297,9 +46260,7 @@ public:
     { }
     const bytes& get_id() const ;
     static const bytes& get_id(::shared_ptr<cql_transport::messages::result_message::prepared> prepared) ;
-    virtual void accept(result_message::visitor& v) const override {
-        v.visit(*this);
-    }
+    virtual void accept(result_message::visitor& v) const override ;
 };
 std::ostream& operator<<(std::ostream& os, const result_message::prepared::cql& msg);
 class result_message::prepared::thrift : public result_message::prepared {
@@ -46375,9 +46336,7 @@ public:
             _msg += "...";
         }
     }
-    virtual const char* what() const noexcept override {
-        return _msg.c_str();
-    }
+    virtual const char* what() const noexcept override ;
 };
 class cql_config;
 class query_options;
@@ -46683,7 +46642,7 @@ struct cql_test_init_configurables {
 };
 class cql_test_env {
 public:
-    virtual ~cql_test_env() {};
+    virtual ~cql_test_env() ;;
     virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_cql(sstring_view text) = 0;
     virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_cql(
             sstring_view text, std::unique_ptr<cql3::query_options> qo) = 0;
@@ -46957,9 +46916,7 @@ public:
     { }
     // If ck_ranges is passed, verifies only that information relevant for ck_ranges matches.
     mutation_partition_assertion& is_equal_to(const mutation_partition& other,
-            const std::optional<query::clustering_row_ranges>& ck_ranges = {}) {
-        return is_equal_to(*_schema, other, ck_ranges);
-    }
+            const std::optional<query::clustering_row_ranges>& ck_ranges = {}) ;
     // If ck_ranges is passed, verifies only that information relevant for ck_ranges matches.
     mutation_partition_assertion& is_equal_to(const schema& s, const mutation_partition& other,
             const std::optional<query::clustering_row_ranges>& ck_ranges = {}) ;
@@ -47050,27 +47007,7 @@ public:
     flat_reader_assertions_v2& produces_partition_start(const dht::decorated_key& dk,
                                                      std::optional<tombstone> tomb = std::nullopt) ;
     flat_reader_assertions_v2& produces_static_row() ;
-    flat_reader_assertions_v2& produces_row_with_key(const clustering_key& ck, std::optional<tombstone> active_range_tombstone = std::nullopt) {
-        testlog.trace("Expect {}", ck);
-        if (active_range_tombstone) {
-            testlog.trace("(with active range tombstone: {})", *active_range_tombstone);
-        }
-        auto mfopt = read_next();
-        if (!mfopt) {
-            BOOST_FAIL(format("Expected row with key {}, but got end of stream", ck));
-        }
-        if (!mfopt->is_clustering_row()) {
-            BOOST_FAIL(format("Expected row with key {}, but got {}", ck, mutation_fragment_v2::printer(*_reader.schema(), *mfopt)));
-        }
-        auto& actual = mfopt->as_clustering_row().key();
-        if (!actual.equal(*_reader.schema(), ck)) {
-            BOOST_FAIL(format("Expected row with key {}, but key is {}", ck, actual));
-        }
-        if (active_range_tombstone) {
-            BOOST_REQUIRE_EQUAL(*active_range_tombstone, _rt);
-        }
-        return *this;
-    }
+    flat_reader_assertions_v2& produces_row_with_key(const clustering_key& ck, std::optional<tombstone> active_range_tombstone = std::nullopt) ;
     struct expected_column {
         column_id id;
         const sstring& name;
