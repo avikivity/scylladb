@@ -2073,11 +2073,8 @@ public:
     ~allocator_lock() ;
 };
 template<typename Func>
-inline
-decltype(auto) with_allocator(allocation_strategy& alloc, Func&& func) {
-    allocator_lock l(alloc);
-    return func();
-}
+
+decltype(auto) with_allocator(allocation_strategy& alloc, Func&& func) ;
 class marshal_exception : public std::exception {
     sstring _why;
 public:
