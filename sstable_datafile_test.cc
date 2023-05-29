@@ -7093,7 +7093,7 @@ public:
         // weakly_incrementable concept requires for ranges.
         // Will be fixed by https://wg21.link/P2325R3 but still
         // needed for now.
-        iterator() {}
+        iterator() ;
         value_type operator*() const {
             int32_t component_size = _i->size();
             if (_offset == -2) {
@@ -7139,20 +7139,7 @@ public:
         tri_comparator(const CompoundType& type) 
         ;
         // @k1 and @k2 must be serialized using @type, which was passed to the constructor.
-        std::strong_ordering operator()(managed_bytes_view k1, managed_bytes_view k2) const {
-            if (_type.is_singular()) {
-                return compare_unsigned(*_type.begin(k1), *_type.begin(k2));
-            }
-            return std::lexicographical_compare_three_way(
-                _type.begin(k1), _type.end(k1),
-                _type.begin(k2), _type.end(k2),
-                [] (const managed_bytes_view& c1, const managed_bytes_view& c2) -> std::strong_ordering {
-                    if (c1.size() != c2.size() || !c1.size()) {
-                        return c1.size() < c2.size() ? std::strong_ordering::less : c1.size() ? std::strong_ordering::greater : std::strong_ordering::equal;
-                    }
-                    return compare_unsigned(c1, c2);
-                });
-        }
+        std::strong_ordering operator()(managed_bytes_view k1, managed_bytes_view k2) const ;
     };
     // Equivalent to std::distance(begin(), end()), but computes faster
     size_t size() const {
@@ -7508,53 +7495,7 @@ bool validate(const uint8_t *data, size_t len);
 std::optional<size_t> validate_with_error_position(const uint8_t *data, size_t len);
  std::optional<size_t> validate_with_error_position(bytes_view string) ;
  std::optional<size_t> validate_with_error_position_fragmented(single_fragmented_view fv) ;
-std::optional<size_t> validate_with_error_position_fragmented(FragmentedView auto fv) {
-    uint8_t partial_codepoint[4];
-    size_t partial_filled = 0;
-    size_t partial_more_needed = 0;
-    size_t bytes_validated = 0;
-    for (bytes_view frag : fragment_range(fv)) {
-        auto data = reinterpret_cast<const uint8_t*>(frag.data());
-        auto len = frag.size();
-        if (partial_more_needed) {
-            // Tiny loop (often zero iterations), don't call memcpy
-            while (partial_more_needed && len) {
-                partial_codepoint[partial_filled++] = *data++;
-                --partial_more_needed;
-                --len;
-            }
-            if (!partial_more_needed) {
-                // We accumulated a codepoint that straddled two or more fragments,
-                // validate it now.
-                auto pvr = internal::validate_partial(partial_codepoint, partial_filled);
-                if (pvr.error) {
-                    return {bytes_validated};
-                }
-                bytes_validated += partial_filled;
-                partial_filled = partial_more_needed = 0;
-            }
-            if (!len) {
-                continue;
-            }
-        }
-        auto pvr = internal::validate_partial(data, len);
-        if (pvr.error) {
-            return bytes_validated + *validate_with_error_position(data, len);
-        }
-        bytes_validated += len - pvr.unvalidated_tail;
-        data += len - pvr.unvalidated_tail;
-        len = pvr.unvalidated_tail;
-        while (len) {
-            partial_codepoint[partial_filled++] = *data++;
-            --len;
-        }
-        partial_more_needed = pvr.bytes_needed_for_tail;
-    }
-    if (partial_more_needed) {
-        return bytes_validated;
-    }
-    return std::nullopt;
-}
+std::optional<size_t> validate_with_error_position_fragmented(FragmentedView auto fv) ;
 } // namespace utf8
 } // namespace utils
 namespace replica {
@@ -8012,9 +7953,7 @@ public:
     exploded_clustering_prefix(std::vector<bytes>&& v) : _v(std::move(v)) {}
     exploded_clustering_prefix() ;
     size_t size() const ;
-    auto const& components() const {
-        return _v;
-    }
+    auto const& components() const ;
     explicit operator bool() const ;
     bool is_full(const schema& s) const ;
     friend std::ostream& operator<<(std::ostream& os, const exploded_clustering_prefix& ecp);
@@ -13076,7 +13015,7 @@ struct do_nothing_loading_cache_stats {
     // These events are interesting because they are an indication of a cache pollution event.
     static void inc_unprivileged_on_cache_size_eviction() noexcept ;;
     // A metric complementary to the above one. Both combined allow to get the total number of cache evictions
-    static void inc_privileged_on_cache_size_eviction() noexcept {};
+    static void inc_privileged_on_cache_size_eviction() noexcept ;;
 };
 /// \brief Loading cache is a cache that loads the value into the cache using the given asynchronous callback.
 ///
@@ -15005,7 +14944,7 @@ public:
     using range_tombstone_tag_t = range_tag_t;
     explicit position_in_partition_view(partition_start_tag_t)  ;
     explicit position_in_partition_view(end_of_partition_tag_t)  ;
-    explicit position_in_partition_view(static_row_tag_t) : _type(partition_region::static_row), _ck(nullptr) { }
+    explicit position_in_partition_view(static_row_tag_t)  ;
     position_in_partition_view(clustering_row_tag_t, const clustering_key_prefix& ck)
         : _type(partition_region::clustered), _ck(&ck) { }
     position_in_partition_view(const clustering_key_prefix& ck)  ;
@@ -15130,9 +15069,8 @@ public:
             _bound_weight = bound_weight::before_all_prefixed;
         }
     }
-    position_in_partition(after_clustering_row_tag_t, const schema& s, position_in_partition_view pos)
-        : position_in_partition(after_clustering_row_tag_t(), s, position_in_partition(pos))
-    { }
+    position_in_partition(after_clustering_row_tag_t, const schema& s, position_in_partition_view pos) 
+    ;
     position_in_partition(after_clustering_row_tag_t, const schema& s, position_in_partition&& pos)
         : _type(partition_region::clustered)
         , _bound_weight(pos._bound_weight != bound_weight::equal ? pos._bound_weight : bound_weight::after_all_prefixed)
@@ -17092,9 +17030,7 @@ private:
 public:
     static ::shared_ptr<selection> from_selectors(data_dictionary::database db, schema_ptr schema, const std::vector<::shared_ptr<raw_selector>>& raw_selectors);
     virtual std::unique_ptr<selectors> new_selectors() const = 0;
-    auto const& get_columns() const {
-        return _columns;
-    }
+    auto const& get_columns() const ;
     uint32_t get_column_count() const ;
     virtual bool is_aggregate() const = 0;
     virtual bool is_count() const ;
@@ -21786,12 +21722,7 @@ public:
     // for each cell in this row, depending on the concrete Func type.
     // noexcept if Func doesn't throw.
     template<typename Func>
-    void for_each_cell(Func&& func) {
-        if (!_row) {
-            return;
-        }
-        _row->for_each_cell(std::forward<Func>(func));
-    }
+    void for_each_cell(Func&& func) ;
     template<typename Func>
     void for_each_cell(Func&& func) const {
         if (!_row) {
@@ -22585,7 +22516,7 @@ namespace seastar {
 struct reader_resources {
     int count = 0;
     ssize_t memory = 0;
-    static reader_resources with_memory(ssize_t memory) { return reader_resources(0, memory); }
+    static reader_resources with_memory(ssize_t memory) ;
     reader_resources() = default;
     reader_resources(int count, ssize_t memory)
         : count(count)
@@ -22740,10 +22671,7 @@ public:
 };
 template <typename Char>
 temporary_buffer<Char> make_tracked_temporary_buffer(temporary_buffer<Char> buf, reader_permit::resource_units units) ;
-inline temporary_buffer<char> make_new_tracked_temporary_buffer(size_t size, reader_permit& permit) {
-    auto buf = temporary_buffer<char>(size);
-    return temporary_buffer<char>(buf.get_write(), buf.size(), make_object_deleter(buf.release(), permit.consume_memory(size)));
-}
+ temporary_buffer<char> make_new_tracked_temporary_buffer(size_t size, reader_permit& permit) ;
 file make_tracked_file(file f, reader_permit p);
 class tracking_allocator_base {
     reader_permit _permit;
@@ -25147,9 +25075,7 @@ public:
     bytes serialize() const override {
         return ser::serialize_to_buffer<bytes>(_options.to_map());
     }
-    static std::map<sstring, sstring> deserialize(const bytes_view& buffer) {
-        return ser::deserialize_from_buffer(buffer, boost::type<std::map<sstring, sstring>>());
-    }
+    static std::map<sstring, sstring> deserialize(const bytes_view& buffer) ;
     const per_partition_rate_limit_options& get_options() const {
         return _options;
     }
