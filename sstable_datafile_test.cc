@@ -11219,15 +11219,7 @@ public:
                 , _callback(std::move(o._callback)) {
             moved(&o);
         }
-        observer& operator=(observer&& o) noexcept {
-            if (this != &o) {
-                disconnect();
-                _observable = std::exchange(o._observable, nullptr);
-                _callback = std::move(o._callback);
-                moved(&o);
-            }
-            return *this;
-        }
+        observer& operator=(observer&& o) noexcept ;
         ~observer() ;
         // Stops observing the observable immediately, instead of
         // during destruction.
@@ -11399,9 +11391,7 @@ public:
     const T& get() const ;
     const T& operator()() const ;
     observable<T>& as_observable() const ;
-    observer<T> observe(std::function<void (const T&)> callback) const {
-        return _updater.observe(std::move(callback));
-    }
+    observer<T> observe(std::function<void (const T&)> callback) const ;
     friend class updateable_value_base;
 };
 template <typename T>
@@ -11444,11 +11434,7 @@ class config_type {
     std::function<json::json_return_type (const void*)> _to_json;
 private:
     template <typename NativeType>
-    std::function<json::json_return_type (const void*)> make_to_json(json::json_return_type (*func)(const NativeType&)) {
-        return [func] (const void* value) {
-            return func(*static_cast<const NativeType*>(value));
-        };
-    }
+    std::function<json::json_return_type (const void*)> make_to_json(json::json_return_type (*func)(const NativeType&)) ;
 public:
     template <typename NativeType>
     config_type(std::string_view name, json::json_return_type (*to_json)(const NativeType&)) : _name(name), _to_json(make_to_json(to_json)) {}
@@ -11502,9 +11488,7 @@ public:
         std::string_view alias() const ;
         const std::string_view & desc() const ;
         std::string_view type_name() const ;
-        config_file * get_config_file() const {
-            return _cf;
-        }
+        config_file * get_config_file() const ;
         bool matches(std::string_view name) const;
         virtual void add_command_line_option(bpo::options_description_easy_init&) = 0;
         virtual void set_value(const YAML::Node&) = 0;
@@ -11557,9 +11541,7 @@ public:
                 std::initializer_list<T> allowed_values = {})
                 : named_value(file, name, {}, liveness::MustRestart, vs, t, desc, allowed_values) {
         }
-        value_status status() const noexcept override {
-            return _value_status;
-        }
+        value_status status() const noexcept override ;
         config_source source() const noexcept override ;
         bool is_set() const ;
         MyType & operator()(const T& t, config_source src = config_source::Internal) ;
@@ -11776,9 +11758,7 @@ public:
     const bytes& name() const;
     sstring to_string() const;
     sstring to_cql_string() const;
-    friend std::ostream& operator<<(std::ostream& out, const column_identifier& i) {
-        return out << i._text;
-    }
+    friend std::ostream& operator<<(std::ostream& out, const column_identifier& i) ;
 #if 0
     public ColumnIdentifier clone(AbstractAllocator allocator)
     {
@@ -11937,11 +11917,11 @@ class cql3_type final {
     data_type _type;
 public:
     cql3_type(data_type type) : _type(std::move(type)) {}
-    bool is_collection() const { return _type->is_collection(); }
+    bool is_collection() const ;
     bool is_counter() const ;
     bool is_native() const ;
     bool is_user_type() const ;
-    data_type get_type() const { return _type; }
+    data_type get_type() const ;
     const sstring& to_string() const { return _type->cql3_type_name(); }
     // For UserTypes, we need to know the current keyspace to resolve the
     // actual type used, so Raw is a "not yet prepared" CQL3Type.
@@ -11950,7 +11930,7 @@ public:
     protected:
         bool _frozen = false;
     public:
-        virtual ~raw() {}
+        virtual ~raw() ;
         virtual bool supports_freezing() const = 0;
         virtual bool is_collection() const;
         virtual bool is_counter() const;
@@ -12298,9 +12278,7 @@ permission_set from_strings(const std::unordered_set<sstring>&);
 #define UTILS_HASH_HH_
 namespace utils {
 // public for unit testing etc
-inline size_t hash_combine(size_t left, size_t right) {
-    return left + 0x9e3779b9 + (right << 6) + (right >> 2);
-}
+ size_t hash_combine(size_t left, size_t right) ;
 struct tuple_hash {
 private:
     // CMH. Add specializations here to handle recursive tuples
@@ -12384,9 +12362,7 @@ public:
     resource(functions_resource_t, std::string_view keyspace, std::string_view function_signature);
     resource(functions_resource_t, std::string_view keyspace, std::string_view function_name,
             std::vector<::shared_ptr<cql3::cql3_type::raw>> function_args);
-    resource_kind kind() const noexcept {
-        return _kind;
-    }
+    resource_kind kind() const noexcept ;
     ///
     /// A machine-friendly identifier unique to each resource.
     ///
@@ -12476,12 +12452,8 @@ std::ostream& operator<<(std::ostream&, const functions_resource_view&);
 ///
 resource parse_resource(std::string_view name);
 const resource& root_data_resource();
-inline resource make_data_resource(std::string_view keyspace) {
-    return resource(data_resource_t{}, keyspace);
-}
-inline resource make_data_resource(std::string_view keyspace, std::string_view table) {
-    return resource(data_resource_t{}, keyspace, table);
-}
+ resource make_data_resource(std::string_view keyspace) ;
+ resource make_data_resource(std::string_view keyspace, std::string_view table) ;
 const resource& root_role_resource();
  resource make_role_resource(std::string_view role) ;
 const resource& root_service_level_resource();
@@ -12784,7 +12756,7 @@ struct hash<auth::role_or_anonymous> {
 namespace bi = boost::intrusive;
 namespace utils {
 struct do_nothing_loading_shared_values_stats {
-    static void inc_hits() noexcept {} // Increase the number of times entry was found ready
+    static void inc_hits() noexcept ; // Increase the number of times entry was found ready
     static void inc_misses() noexcept ; // Increase the number of times entry was not found
     static void inc_blocks() noexcept ; // Increase the number of times entry was not ready (>= misses)
     static void inc_evictions() noexcept ; // Increase the number of times entry was evicted
@@ -14215,14 +14187,7 @@ private:
         params_values& operator*() ;
     } _params_ptr;
     static trace_state_props_set make_primary(trace_state_props_set props) ;
-    static trace_state_props_set make_secondary(trace_state_props_set props) noexcept {
-        props.remove(trace_state_props::primary);
-        // Default a secondary session to a full tracing.
-        // We may get both zeroes for a full_tracing and a log_slow_query if a
-        // primary session is created with an older server version.
-        props.set_if<trace_state_props::full_tracing>(!props.contains(trace_state_props::full_tracing) && !props.contains(trace_state_props::log_slow_query));
-        return props;
-    }
+    static trace_state_props_set make_secondary(trace_state_props_set props) noexcept ;
 public:
     trace_state(trace_type type, trace_state_props_set props)
         : _local_tracing_ptr(tracing::get_local_tracing_instance().shared_from_this())
@@ -14353,11 +14318,7 @@ template <typename... A>
  void trace(const trace_state_ptr& p, A&&... a) noexcept ;
  std::optional<trace_info> make_trace_info(const trace_state_ptr& state) ;
  void stop_foreground(const trace_state_ptr& state) noexcept ;
-inline void add_prepared_query_options(const trace_state_ptr& state, const cql3::query_options& prepared_options_ptr) {
-    if (state) {
-        state->add_prepared_query_options(prepared_options_ptr);
-    }
-}
+ void add_prepared_query_options(const trace_state_ptr& state, const cql3::query_options& prepared_options_ptr) ;
 // global_trace_state_ptr is a helper class that may be used for creating spans
 // of an existing tracing session on other shards. When a tracing span on a
 // different shard is needed global_trace_state_ptr would create a secondary
@@ -14379,9 +14340,8 @@ public:
             , _ptr(std::move(t))
     { }
     // May be invoked across shards.
-    global_trace_state_ptr(const global_trace_state_ptr& other)
-            : global_trace_state_ptr(other.get())
-    { }
+    global_trace_state_ptr(const global_trace_state_ptr& other) 
+    ;
     // May be invoked across shards.
     global_trace_state_ptr(global_trace_state_ptr&& other) 
     ;
@@ -14561,13 +14521,7 @@ public:
     future<service_levels_info> get_distributed_service_levels();
     future<service_levels_info> get_distributed_service_level(sstring service_level_name);
     future<std::optional<service_level_options>> find_service_level(auth::role_set roles);
-    service_level& get_service_level(sstring service_level_name) {
-        auto sl_it = _service_levels_db.find(service_level_name);
-        if (sl_it == _service_levels_db.end() || sl_it->second.marked_for_deletion) {
-            sl_it = _service_levels_db.find(default_service_level_name);
-        }
-        return sl_it->second;
-    }
+    service_level& get_service_level(sstring service_level_name) ;
 private:
     future<> do_add_service_level(sstring name, service_level_options slo, bool is_static = false);
     future<> do_remove_service_level(sstring name, bool remove_static);
@@ -14614,9 +14568,7 @@ public:
         client_state_for_another_shard(const client_state* cs, seastar::sharded<auth::service>* auth_service) : _cs(cs), _auth_service(auth_service) {}
         friend client_state;
     public:
-        client_state get() const {
-            return client_state(_cs, _auth_service);
-        }
+        client_state get() const ;
     };
 private:
     client_state(const client_state* cs, seastar::sharded<auth::service>* auth_service)
@@ -14702,8 +14654,8 @@ public:
     const socket_address& get_remote_address() const ;
     const timeout_config& get_timeout_config() const ;
     qos::service_level_controller& get_service_level_controller() const ;
-    client_state(internal_tag) : client_state(internal_tag{}, infinite_timeout_config)
-    {}
+    client_state(internal_tag) 
+    ;
     client_state(internal_tag, const timeout_config& config)
             : _keyspace("system")
             , _is_internal(true)
@@ -14804,7 +14756,7 @@ class service_permit {
     friend service_permit make_service_permit(seastar::semaphore_units<>&& permit);
     friend service_permit empty_service_permit();
 public:
-    size_t count() const { return _permit ? _permit->count() : 0; };
+    size_t count() const ;;
 };
 inline service_permit make_service_permit(seastar::semaphore_units<>&& permit) {
     return service_permit(std::move(permit));
@@ -14935,12 +14887,8 @@ public:
         bool operator()(const clustering_key_prefix& p1, int32_t w1, const clustering_key_prefix& p2, int32_t w2) const {
             return _cmp(p1, w1, p2, w2) < 0;
         }
-        bool operator()(const bound_view b, const clustering_key_prefix& p) const {
-            return operator()(b._prefix, weight(b._kind), p, 0);
-        }
-        bool operator()(const clustering_key_prefix& p, const bound_view b) const {
-            return operator()(p, 0, b._prefix, weight(b._kind));
-        }
+        bool operator()(const bound_view b, const clustering_key_prefix& p) const ;
+        bool operator()(const clustering_key_prefix& p, const bound_view b) const ;
         bool operator()(const bound_view b1, const bound_view b2) const {
             return operator()(b1._prefix, weight(b1._kind), b2._prefix, weight(b2._kind));
         }
@@ -14948,9 +14896,7 @@ public:
     bool equal(const schema& s, const bound_view other) const {
         return _kind == other._kind && _prefix.get().equal(s, other._prefix.get());
     }
-    bool adjacent(const schema& s, const bound_view other) const {
-        return invert_kind(other._kind) == _kind && _prefix.get().equal(s, other._prefix.get());
-    }
+    bool adjacent(const schema& s, const bound_view other) const ;
     static bound_view bottom() {
         return {_empty_prefix, bound_kind::incl_start};
     }
@@ -15063,8 +15009,7 @@ public:
     explicit position_in_partition_view(static_row_tag_t) : _type(partition_region::static_row), _ck(nullptr) { }
     position_in_partition_view(clustering_row_tag_t, const clustering_key_prefix& ck)
         : _type(partition_region::clustered), _ck(&ck) { }
-    position_in_partition_view(const clustering_key_prefix& ck)
-        : _type(partition_region::clustered), _ck(&ck) { }
+    position_in_partition_view(const clustering_key_prefix& ck)  ;
     position_in_partition_view(range_tag_t, bound_view bv)
         : _type(partition_region::clustered), _bound_weight(position_weight(bv.kind())), _ck(&bv.prefix()) { }
     position_in_partition_view(const clustering_key_prefix& ck, bound_weight w)  ;
@@ -15074,9 +15019,7 @@ public:
     static position_in_partition_view after_all_clustered_rows() ;
     static position_in_partition_view for_partition_start() ;
     static position_in_partition_view for_partition_end() ;
-    static position_in_partition_view for_static_row() {
-        return position_in_partition_view(static_row_tag_t());
-    }
+    static position_in_partition_view for_static_row() ;
     static position_in_partition_view for_key(const clustering_key& ck) {
         return {clustering_row_tag_t(), ck};
     }
@@ -15174,7 +15117,7 @@ public:
     const std::optional<clustering_key_prefix>& get_clustering_key_prefix() const ;
     position_in_partition(partition_region type, bound_weight weight, std::optional<clustering_key_prefix> ck)
         : _type(type), _bound_weight(weight), _ck(std::move(ck)) { }
-    explicit position_in_partition(partition_start_tag_t) : _type(partition_region::partition_start) { }
+    explicit position_in_partition(partition_start_tag_t)  ;
     explicit position_in_partition(end_of_partition_tag_t)  ;
     explicit position_in_partition(static_row_tag_t)  ;
     position_in_partition(clustering_row_tag_t, clustering_key_prefix ck)
@@ -15223,9 +15166,7 @@ public:
         }
         return *this;
     }
-    static position_in_partition before_all_clustered_rows() {
-        return {position_in_partition::range_tag_t(), bound_view::bottom()};
-    }
+    static position_in_partition before_all_clustered_rows() ;
     static position_in_partition after_all_clustered_rows() ;
     // If given position is a clustering row position, returns a position
     // right before it. Otherwise, returns it unchanged.
@@ -15260,9 +15201,7 @@ public:
     operator position_in_partition_view() const {
         return { _type, _bound_weight, _ck ? &*_ck : nullptr };
     }
-    size_t external_memory_usage() const {
-        return _ck ? _ck->external_memory_usage() : 0;
-    }
+    size_t external_memory_usage() const ;
     // Defines total order on the union of position_and_partition and composite objects.
     //
     // The ordering is compatible with position_range (r). The following is satisfied for
@@ -15281,7 +15220,7 @@ public:
         static int rank(partition_region t) {
             return static_cast<int>(t);
         }
-        composite_tri_compare(const schema& s) : _s(s) {}
+        composite_tri_compare(const schema& s)  ;
         std::strong_ordering operator()(position_in_partition_view a, position_in_partition_view b) const ;
         std::strong_ordering operator()(position_in_partition_view a, composite_view b) const ;
         std::strong_ordering operator()(composite_view a, position_in_partition_view b) const ;
@@ -15293,9 +15232,7 @@ public:
     public:
         composite_less_compare(const schema& s)  ;
         template<typename T, typename U>
-        bool operator()(const T& a, const U& b) const {
-            return _cmp(a, b) < 0;
-        }
+        bool operator()(const T& a, const U& b) const ;
     };
     class tri_compare {
         bound_view::tri_compare _cmp;
@@ -15332,28 +15269,16 @@ public:
         bool operator()(const position_in_partition& a, const position_in_partition& b) const {
             return _cmp(a, b) < 0;
         }
-        bool operator()(const position_in_partition_view& a, const position_in_partition_view& b) const {
-            return _cmp(a, b) < 0;
-        }
+        bool operator()(const position_in_partition_view& a, const position_in_partition_view& b) const ;
         bool operator()(const position_in_partition& a, const position_in_partition_view& b) const {
             return _cmp(a, b) < 0;
         }
-        bool operator()(const position_in_partition_view& a, const position_in_partition& b) const {
-            return _cmp(a, b) < 0;
-        }
+        bool operator()(const position_in_partition_view& a, const position_in_partition& b) const ;
     };
     class equal_compare {
         clustering_key_prefix::equality _equal;
         template<typename T, typename U>
-        bool compare(const T& a, const U& b) const {
-            if (a._type != b._type) {
-                return false;
-            }
-            bool a_rt_weight = bool(a._ck);
-            bool b_rt_weight = bool(b._ck);
-            return a_rt_weight == b_rt_weight
-                   && (!a_rt_weight || (a._bound_weight == b._bound_weight && _equal(*a._ck, *b._ck)));
-        }
+        bool compare(const T& a, const U& b) const ;
     public:
         equal_compare(const schema& s) : _equal(s) { }
         bool operator()(const position_in_partition& a, const position_in_partition& b) const ;
@@ -15381,9 +15306,8 @@ struct view_and_holder {
         : holder(std::move(pos))
         , view(*holder)
     { }
-    explicit view_and_holder(position_in_partition_view pos)
-        : view(pos)
-    { }
+    explicit view_and_holder(position_in_partition_view pos) 
+    ;
     view_and_holder(view_and_holder&& other) noexcept
         : holder(std::move(other.holder))
         , view(holder ? *holder : other.view)
@@ -15536,9 +15460,7 @@ class raw_value_view {
     // of the given buffer. The view created that way refers to its own temporary storage.
     explicit raw_value_view(managed_bytes&& temporary_storage);
 public:
-    static raw_value_view make_null() {
-        return raw_value_view{null_value{}};
-    }
+    static raw_value_view make_null() ;
     static raw_value_view make_value(fragmented_temporary_buffer::view view) ;
     static raw_value_view make_value(managed_bytes_view view) ;
     static raw_value_view make_value(bytes_view view) ;
@@ -15548,9 +15470,7 @@ public:
     // An empty int value can be created in CQL using blobasint(0x).
     bool is_empty_value() const ;
     bool is_value() const ;
-    explicit operator bool() const {
-        return is_value();
-    }
+    explicit operator bool() const ;
     template <typename Func>
     requires std::invocable<Func, const managed_bytes_view&> && std::invocable<Func, const fragmented_temporary_buffer::view&>
     decltype(auto) with_value(Func f) const {
@@ -15787,9 +15707,7 @@ public:
     explicit query_options(db::consistency_level, raw_value_vector_with_unset values, specific_options options = specific_options::DEFAULT);
     explicit query_options(std::unique_ptr<query_options>, lw_shared_ptr<service::pager::paging_state> paging_state);
     explicit query_options(std::unique_ptr<query_options>, lw_shared_ptr<service::pager::paging_state> paging_state, int32_t page_size);
-    db::consistency_level get_consistency() const {
-        return _consistency;
-    }
+    db::consistency_level get_consistency() const ;
     cql3::raw_value_view get_value_at(size_t idx) const ;
     bool is_unset(size_t idx) const ;
     size_t get_values_count() const ;
@@ -15937,10 +15855,8 @@ public:
     // Consumes n bytes from memory limiter and checks whether the result
     // can grow any more (considering just the per-shard limit).
     stop_iteration update_and_check(size_t n) ;
-    void release(size_t n) noexcept {
-        _memory_limiter.signal(n);
-    }
-    semaphore& sem() noexcept { return _memory_limiter; }
+    void release(size_t n) noexcept ;
+    semaphore& sem() noexcept ;
 };
 class result_memory_tracker {
     semaphore_units<> _units;
@@ -15951,7 +15867,7 @@ public:
     result_memory_tracker() noexcept : _units(_dummy, 0), _used_memory(0) { }
     result_memory_tracker(semaphore& sem, size_t blocked, size_t used) noexcept
         : _units(sem, blocked), _used_memory(used) { }
-    size_t used_memory() const { return _used_memory; }
+    size_t used_memory() const ;
 };
 class result_memory_accounter {
     result_memory_limiter* _limiter = nullptr;
@@ -16032,7 +15948,7 @@ private:
 public:
     result_digest() = default;
     result_digest(type&& digest) : _digest(std::move(digest)) {}
-    const type& get() const { return _digest; }
+    const type& get() const ;
     bool operator==(const result_digest& rh) const = default;
 };
 //
@@ -16151,9 +16067,7 @@ public:
     const std::optional<uint32_t>& partition_count() const ;
     void ensure_counts();
     const std::optional<full_position>& last_position() const ;
-    void set_last_position(std::optional<full_position> last_position) {
-        _last_position = std::move(last_position);
-    }
+    void set_last_position(std::optional<full_position> last_position) ;
     // Return _last_position if replica filled it, otherwise calculate it based
     // on the content (by looking up the last row in the last partition).
     full_position get_or_calculate_last_position() const;
@@ -16217,10 +16131,7 @@ template<>
 struct place_holder<bytes_ostream> {
     bytes_ostream::place_holder<size_type> ph;
     place_holder(bytes_ostream::place_holder<size_type> ph) : ph(ph) { }
-    void set(bytes_ostream& out, size_type v) {
-        auto stream = ph.get_stream();
-        serialize(stream, v);
-    }
+    void set(bytes_ostream& out, size_type v) ;
 };
 template<>
 struct frame<bytes_ostream> : public place_holder<bytes_ostream> {
@@ -16343,14 +16254,7 @@ struct qr_row_view {
 template<>
 struct serializer<qr_row_view> {
     template<typename Input>
-    static qr_row_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return qr_row_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
+    static qr_row_view read(Input& v) ;
     template<typename Output>
     static void write(Output& out, qr_row_view v) ;
     template<typename Input>
@@ -16538,9 +16442,7 @@ struct qr_clustered_row__cells {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    qr_clustered_row__cells__cells<Output> start_cells() && {
-        return { _out, std::move(_state) };
-    }
+    qr_clustered_row__cells__cells<Output> start_cells() && ;
     after_qr_clustered_row__cells__cells<Output> skip_cells() && ;
 };
 template<typename Output>
@@ -16722,7 +16624,7 @@ struct result_visitor {
         const result_row_view& static_row,
         const result_row_view& row) ;
     void accept_new_row(const result_row_view& static_row, const result_row_view& row) ;
-    void accept_partition_end(const result_row_view& static_row) {}
+    void accept_partition_end(const result_row_view& static_row) ;
 };
 template<typename Visitor>
 concept ResultVisitor = requires(Visitor visitor, const partition_key& pkey,
