@@ -16722,10 +16722,7 @@ public:
         managed_bytes_mutable_view other_view = other._base.substr(off, size);
         copy_fragmented_view(this_view, other_view);
     }
-    bool operator==(const basic_counter_shard_view& other) const {
-        return id() == other.id() && value() == other.value()
-               && logical_clock() == other.logical_clock();
-    }
+    bool operator==(const basic_counter_shard_view& other) const ;
     struct less_compare_by_id {
         bool operator()(const basic_counter_shard_view& x, const basic_counter_shard_view& y) const {
             return x.id() < y.id();
@@ -16795,9 +16792,7 @@ private:
     void do_sort_and_remove_duplicates();
 public:
     counter_cell_builder() = default;
-    counter_cell_builder(size_t shard_count) {
-        _shards.reserve(shard_count);
-    }
+    counter_cell_builder(size_t shard_count) ;
     void add_shard(const counter_shard& cs) {
         _shards.emplace_back(cs);
     }
@@ -16806,14 +16801,8 @@ public:
     size_t serialized_size() const {
         return _shards.size() * counter_shard::serialized_size();
     }
-    void serialize(atomic_cell_value_mutable_view& out) const {
-        for (auto&& cs : _shards) {
-            cs.serialize(out);
-        }
-    }
-    bool empty() const {
-        return _shards.empty();
-    }
+    void serialize(atomic_cell_value_mutable_view& out) const ;
+    bool empty() const ;
     atomic_cell build(api::timestamp_type timestamp) const {
         auto ac = atomic_cell::make_live_uninitialized(*counter_type, timestamp, serialized_size());
         auto dst = ac.value();
@@ -16822,12 +16811,7 @@ public:
         }
         return ac;
     }
-    static atomic_cell from_single_shard(api::timestamp_type timestamp, const counter_shard& cs) {
-        auto ac = atomic_cell::make_live_uninitialized(*counter_type, timestamp, counter_shard::serialized_size());
-        auto dst = ac.value();
-        cs.serialize(dst);
-        return ac;
-    }
+    static atomic_cell from_single_shard(api::timestamp_type timestamp, const counter_shard& cs) ;
     class inserter_iterator {
     public:
         using iterator_category = std::output_iterator_tag;
@@ -16887,21 +16871,13 @@ private:
             _current_view = basic_counter_shard_view<is_mutable>(_current.substr(_pos, counter_shard_view::size));
             return *this;
         }
-        shard_iterator operator++(int) noexcept {
-            auto it = *this;
-            operator++();
-            return it;
-        }
+        shard_iterator operator++(int) noexcept ;
         shard_iterator& operator--() noexcept {
             _pos -= counter_shard_view::size;
             _current_view = basic_counter_shard_view<is_mutable>(_current.substr(_pos, counter_shard_view::size));
             return *this;
         }
-        shard_iterator operator--(int) noexcept {
-            auto it = *this;
-            operator--();
-            return it;
-        }
+        shard_iterator operator--(int) noexcept ;
         bool operator==(const shard_iterator& other) const noexcept {
             return _pos == other._pos;
         }
@@ -17018,14 +16994,7 @@ public:
     virtual ::shared_ptr<selector::factory> new_selector_factory(data_dictionary::database db, schema_ptr schema, std::vector<const column_definition*>& defs) = 0;
     virtual sstring to_string() const = 0;
 protected:
-    static size_t add_and_get_index(const column_definition& def, std::vector<const column_definition*>& defs) {
-        auto i = std::find(defs.begin(), defs.end(), &def);
-        if (i != defs.end()) {
-            return std::distance(defs.begin(), i);
-        }
-        defs.push_back(&def);
-        return defs.size() - 1;
-    }
+    static size_t add_and_get_index(const column_definition& def, std::vector<const column_definition*>& defs) ;
 public:
     class writetime_or_ttl;
     class with_function;
@@ -17127,9 +17096,7 @@ public:
     auto const& get_columns() const {
         return _columns;
     }
-    uint32_t get_column_count() const {
-        return _columns.size();
-    }
+    uint32_t get_column_count() const ;
     virtual bool is_aggregate() const = 0;
     virtual bool is_count() const ;
     virtual bool is_reducible() const ;
@@ -17222,25 +17189,7 @@ public:
         void accept_new_partition(uint64_t row_count) ;
         void accept_new_row(const clustering_key& key, const query::result_row_view& static_row, const query::result_row_view& row) ;
         void accept_new_row(const query::result_row_view& static_row, const query::result_row_view& row) ;
-        uint64_t accept_partition_end(const query::result_row_view& static_row) {
-            if (_row_count == 0) {
-                if (!_filter(_selection, _partition_key, _clustering_key, static_row, nullptr)) {
-                    return _filter.get_rows_dropped();
-                }
-                _builder.new_row();
-                auto static_row_iterator = static_row.iterator();
-                for (auto&& def : _selection.get_columns()) {
-                    if (def->is_partition_key()) {
-                        _builder.add(_partition_key[def->component_index()]);
-                    } else if (def->is_static()) {
-                        add_value(*def, static_row_iterator);
-                    } else {
-                        _builder.add_empty();
-                    }
-                }
-            }
-            return _filter.get_rows_dropped();
-        }
+        uint64_t accept_partition_end(const query::result_row_view& static_row) ;
     };
 private:
     bytes_opt get_value(data_type t, query::result_atomic_cell_view c);
@@ -17280,10 +17229,7 @@ public:
                 , ck_cmp(s)
             { }
             std::strong_ordering tri_compare(const partition_key& pk1, const clustering_key& ck1,
-                    const partition_key& pk2, const clustering_key& ck2) const {
-                std::strong_ordering rc = pk_cmp(pk1, pk2);
-                return rc != 0 ? rc : ck_cmp(ck1, ck2);
-            }
+                    const partition_key& pk2, const clustering_key& ck2) const ;
             // Allow mixing std::pair<partition_key, clustering_key> and
             // std::pair<const partition_key&, const clustering_key&> during lookup
             template <typename Pair1, typename Pair2>
@@ -18029,7 +17975,7 @@ public:
         , _e(std::move(e))
         , _unset_guard(std::move(ubvg))
     { }
-    virtual ~operation() {}
+    virtual ~operation() ;
     virtual bool is_raw_counter_shard_write() const ;
     virtual bool requires_read() const ;
     virtual void fill_prepare_context(prepare_context& ctx) ;
@@ -18135,9 +18081,7 @@ public:
 };
 class operation_skip_if_unset : public operation {
 public:
-    operation_skip_if_unset(const column_definition& column, expr::expression e)
-            : operation(column, e, expr::unset_bind_variable_guard(e)) {
-    }
+    operation_skip_if_unset(const column_definition& column, expr::expression e)  ;
 };
 class operation_no_unset_support : public operation {
 public:
@@ -18230,7 +18174,7 @@ public:
     atomic_cell_or_collection& operator=(const atomic_cell_or_collection&) = delete;
     atomic_cell_or_collection(atomic_cell ac) : _data(std::move(ac._data)) {}
     atomic_cell_or_collection(const abstract_type& at, atomic_cell_view acv);
-    static atomic_cell_or_collection from_atomic_cell(atomic_cell data) { return { std::move(data._data) }; }
+    static atomic_cell_or_collection from_atomic_cell(atomic_cell data) ;
     atomic_cell_view as_atomic_cell(const column_definition& cdef) const { return atomic_cell_view::from_bytes(*cdef.type, _data); }
     atomic_cell_mutable_view as_mutable_atomic_cell(const column_definition& cdef) { return atomic_cell_mutable_view::from_bytes(*cdef.type, _data); }
     atomic_cell_or_collection(collection_mutation cm) : _data(std::move(cm._data)) { }
@@ -18295,12 +18239,7 @@ public:
     virtual void accept_row_tombstone(const range_tombstone& rt) override ;
     virtual void accept_row(position_in_partition_view pos, const row_tombstone& deleted_at, const row_marker& rm, is_dummy dummy, is_continuous continuous) override ;
     virtual void accept_row_cell(column_id id, atomic_cell_view cell) override ;
-    virtual void accept_row_cell(column_id id, collection_mutation_view cell) override {
-        auto&& col = _s.regular_column_at(id);
-        feed_hash(_h, col.name());
-        feed_hash(_h, col.type->name());
-        feed_hash(_h, cell, col);
-    }
+    virtual void accept_row_cell(column_id id, collection_mutation_view cell) override ;
 };
 namespace bi = boost::intrusive;
 class range_tombstone final {
@@ -18334,9 +18273,8 @@ public:
     range_tombstone(range_tombstone&& rt) noexcept
             : range_tombstone(std::move(rt.start), rt.start_kind, std::move(rt.end), rt.end_kind, std::move(rt.tomb)) {
     }
-    range_tombstone(const range_tombstone& rt)
-            : range_tombstone(rt.start, rt.start_kind, rt.end, rt.end_kind, rt.tomb)
-    { }
+    range_tombstone(const range_tombstone& rt) 
+    ;
     range_tombstone& operator=(range_tombstone&& rt) noexcept {
         start = std::move(rt.start);
         start_kind = rt.start_kind;
@@ -18345,14 +18283,7 @@ public:
         tomb = std::move(rt.tomb);
         return *this;
     }
-    range_tombstone& operator=(const range_tombstone& rt) {
-        start = rt.start;
-        start_kind = rt.start_kind;
-        end = rt.end;
-        end_kind = rt.end_kind;
-        tomb = rt.tomb;
-        return *this;
-    }
+    range_tombstone& operator=(const range_tombstone& rt) ;
     const bound_view start_bound() const {
         return bound_view(start, start_kind);
     }
@@ -18374,11 +18305,7 @@ public:
             return _c(rt1.start_bound(), rt2.start_bound());
         }
     };
-    friend void swap(range_tombstone& rt1, range_tombstone& rt2) noexcept {
-        range_tombstone tmp = std::move(rt2);
-        rt2 = std::move(rt1);
-        rt1 = std::move(tmp);
-    }
+    friend void swap(range_tombstone& rt1, range_tombstone& rt2) noexcept ;
     static bool is_single_clustering_row_tombstone(const schema& s, const clustering_key_prefix& start,
         bound_kind start_kind, const clustering_key_prefix& end, bound_kind end_kind)
     {
@@ -18400,16 +18327,7 @@ public:
     // pos must satisfy:
     //   1) before_all_clustered_rows() <= pos
     //   2) !pos.is_clustering_row() - because range_tombstone bounds can't represent such positions
-    bool trim_front(const schema& s, position_in_partition_view pos) {
-        position_in_partition::less_compare less(s);
-        if (!less(pos, end_position())) {
-            return false;
-        }
-        if (less(position(), pos)) {
-            set_start(pos);
-        }
-        return true;
-    }
+    bool trim_front(const schema& s, position_in_partition_view pos) ;
     // Intersects the range of this tombstone with [start, end) and replaces
     // the range of the tombstone if there is an overlap.
     // Returns true if there is an overlap and false otherwise. When returns false, the tombstone
@@ -18436,17 +18354,7 @@ public:
 template<>
 struct appending_hash<range_tombstone>  {
     template<typename Hasher>
-    void operator()(Hasher& h, const range_tombstone& value, const schema& s) const {
-        feed_hash(h, value.start, s);
-        // For backward compatibility, don't consider new fields if
-        // this could be an old-style, overlapping, range tombstone.
-        if (!value.start.equal(s, value.end) || value.start_kind != bound_kind::incl_start || value.end_kind != bound_kind::incl_end) {
-            feed_hash(h, value.start_kind);
-            feed_hash(h, value.end, s);
-            feed_hash(h, value.end_kind);
-        }
-        feed_hash(h, value.tomb);
-    }
+    void operator()(Hasher& h, const range_tombstone& value, const schema& s) const ;
 };
 // The accumulator expects the incoming range tombstones and clustered rows to
 // follow the ordering used by the mutation readers.
@@ -18545,13 +18453,11 @@ public:
     }
     range_tombstone& tombstone() noexcept { return _tombstone; }
     const range_tombstone& tombstone() const noexcept { return _tombstone; }
-    const bound_view start_bound() const { return _tombstone.start_bound(); }
+    const bound_view start_bound() const ;
     const bound_view end_bound() const { return _tombstone.end_bound(); }
     position_in_partition_view position() const { return _tombstone.position(); }
     position_in_partition_view end_position() const { return _tombstone.end_position(); }
-    size_t memory_usage(const schema& s) const noexcept {
-        return sizeof(range_tombstone_entry) + _tombstone.external_memory_usage(s);
-    }
+    size_t memory_usage(const schema& s) const noexcept ;
 private:
     void update_node(bi::set_member_hook<bi::link_mode<bi::auto_unlink>>& other_link) noexcept {
         if (other_link.is_linked()) {
@@ -18644,24 +18550,16 @@ public:
     range_tombstone_list(range_tombstone_list&&) = default;
     range_tombstone_list& operator=(range_tombstone_list&&) = default;
     ~range_tombstone_list();
-    size_t size() const noexcept {
-        return _tombstones.size();
-    }
-    bool empty() const noexcept {
-        return _tombstones.empty();
-    }
+    size_t size() const noexcept ;
+    bool empty() const noexcept ;
     auto begin() noexcept {
         return _tombstones.begin();
     }
     auto begin() const noexcept {
         return _tombstones.begin();
     }
-    auto rbegin() noexcept {
-        return _tombstones.rbegin();
-    }
-    auto rbegin() const noexcept {
-        return _tombstones.rbegin();
-    }
+    auto rbegin() noexcept ;
+    auto rbegin() const noexcept ;
     auto end() noexcept {
         return _tombstones.end();
     }
@@ -18671,9 +18569,7 @@ public:
     auto rend() noexcept ;
     auto rend() const noexcept ;
     void apply(const schema& s, const bound_view& start_bound, const bound_view& end_bound, tombstone tomb) ;
-    void apply(const schema& s, const range_tombstone& rt) {
-        apply(s, rt.start, rt.start_kind, rt.end, rt.end_kind, rt.tomb);
-    }
+    void apply(const schema& s, const range_tombstone& rt) ;
     void apply(const schema& s, range_tombstone&& rt) {
         apply(s, std::move(rt.start), rt.start_kind, std::move(rt.end), rt.end_kind, std::move(rt.tomb));
     }
@@ -18809,7 +18705,7 @@ template <typename Key, member_hook Key::* Hook, typename Compare, size_t NodeSi
 template <typename Key, member_hook Key::*, typename Compare, size_t NodeSize, size_t LinearThreshold> class validator;
 // For .{do_something_with_data}_and_dispose methods below
 template <typename T>
-void default_dispose(T* value) noexcept { }
+void default_dispose(T* value) noexcept ;
 using key_index = size_t;
 using kid_index = size_t;
 class node_base {
@@ -18878,9 +18774,7 @@ public:
         }
     }
     template <typename K, member_hook K::* Hook>
-    const K* to_key() const noexcept {
-        return boost::intrusive::get_parent_from_member(this, Hook);
-    }
+    const K* to_key() const noexcept ;
     template <typename K, member_hook K::* Hook>
     K* to_key() noexcept {
         return boost::intrusive::get_parent_from_member(this, Hook);
@@ -19631,30 +19525,7 @@ private:
     void move_kid(kid_index f, node& n, kid_index t) noexcept {
         n.set_kid(t, _kids[f]);
     }
-    void unlink_corner_leaf() noexcept {
-        assert(!is_root());
-        node* p = _parent.n, *x;
-        switch (_base.flags & (node_base::NODE_LEFTMOST | node_base::NODE_RIGHTMOST)) {
-            case 0:
-                break;
-            case node_base::NODE_LEFTMOST:
-                assert(p->_base.num_keys > 0 && p->_kids[0] == this);
-                x = p->_kids[1];
-                _base.flags &= ~node_base::NODE_LEFTMOST;
-                x->_base.flags |= node_base::NODE_LEFTMOST;
-                _leaf_tree->do_set_left(*x);
-                break;
-            case node_base::NODE_RIGHTMOST:
-                assert(p->_base.num_keys > 0 && p->_kids[p->_base.num_keys] == this);
-                x = p->_kids[p->_base.num_keys - 1];
-                _base.flags &= ~node_base::NODE_RIGHTMOST;
-                x->_base.flags |= node_base::NODE_RIGHTMOST;
-                _leaf_tree->do_set_right(*x);
-                break;
-            default:
-                assert(false);
-        }
-    }
+    void unlink_corner_leaf() noexcept ;
     static const node* from_base(const node_base* nb) noexcept {
         assert(!nb->is_inline());
         return boost::intrusive::get_parent_from_member(nb, &node::_base);
@@ -19750,15 +19621,11 @@ private:
     }
     bool need_refill() const noexcept ;
     bool need_collapse_root() const noexcept ;
-    bool can_grab_from() const noexcept {
-        return _base.num_keys > NodeHalf + 1u;
-    }
+    bool can_grab_from() const noexcept ;
     bool can_push_to() const noexcept {
         return _base.num_keys < NodeSize;
     }
-    bool can_merge_with(const node& n) const noexcept {
-        return _base.num_keys + n._base.num_keys + 1u <= NodeSize;
-    }
+    bool can_merge_with(const node& n) const noexcept ;
     // Make a room for a new key (and kid) at \at position
     void shift_right(size_t at) noexcept {
         for (size_t i = _base.num_keys; i > at; i--) {
@@ -19998,12 +19865,7 @@ private:
     void remove_leftmost_light_rebalance() noexcept ;
     void check_refill() noexcept ;
     void check_light_refill() noexcept ;
-    void collapse_root() noexcept {
-        node& nr = *_kids[0];
-        nr._base.flags |= node_base::NODE_ROOT;
-        _parent.t->do_set_root(nr);
-        drop();
-    }
+    void collapse_root() noexcept ;
     void grab_from_left(node* left, key_index idx) noexcept {
         shift_right(0);
         _parent.n->move_key(idx - 1, *this, 0);
@@ -20027,24 +19889,8 @@ private:
     void merge_kids(node& t, node& n, key_index idx) noexcept ;
     void merge_kids_and_refill(node& t, node& n, key_index idx) noexcept ;
     void refill() noexcept ;
-    void light_refill() noexcept {
-        assert(_parent.n->_base.num_keys > 0);
-        node* right = _parent.n->_kids[1];
-        if (can_merge_with(*right)) {
-            _parent.n->merge_kids(*this, *right, 0);
-            _parent.n->check_light_refill();
-        } else {
-            grab_from_right(right, 0);
-        }
-    }
-    void remove_from_inner(kid_index idx) noexcept {
-        node* rightmost = _kids[idx + 1];
-        while (!rightmost->is_leaf()) {
-            rightmost = rightmost->_kids[0];
-        }
-        rightmost->move_key(0, *this, idx);
-        rightmost->remove_key(0);
-    }
+    void light_refill() noexcept ;
+    void remove_from_inner(kid_index idx) noexcept ;
     template <typename KFunc>
     void clear(KFunc&& k_clear) noexcept {
         size_t nk = _base.num_keys;
@@ -20063,21 +19909,7 @@ private:
     node* clone(node*& left_leaf, node*& right_leaf, Cloner&& cloner, Deleter&& deleter) const ;
     size_t size_slow() const noexcept ;
     size_t external_memory_usage() const noexcept ;
-    void fill_stats(struct stats& st) const noexcept {
-        if (is_linear()) {
-            st.linear_keys = _base.num_keys;
-        } else if (is_leaf()) {
-            st.leaves_filled[_base.num_keys]++;
-            st.leaves++;
-        } else {
-            st.nodes_filled[_base.num_keys]++;
-            st.nodes++;
-            assert(_base.num_keys != 0);
-            for (kid_index i = 0; i <= _base.num_keys; i++) {
-                _kids[i]->fill_stats(st);
-            }
-        }
-    }
+    void fill_stats(struct stats& st) const noexcept ;
     class prealloc {
         node* _nodes;
         node** _tail = &_nodes;
@@ -20168,9 +20000,7 @@ public:
     reclaiming_result evict_shallow() noexcept ;
     // Evicts all elements.
     // May stall the reactor, use only in tests.
-    void evict_all() {
-        while (evict() == reclaiming_result::reclaimed_something) {}
-    }
+    void evict_all() ;
 };
 inline
 evictable::evictable(evictable&& o) noexcept {
@@ -20219,12 +20049,8 @@ struct managed_ref {
         new (this) managed_ref(std::move(o));
         return *this;
     }
-    T* get() {
-        return _ptr ? &_ptr->_value : nullptr;
-    }
-    const T* get() const {
-        return _ptr ? &_ptr->_value : nullptr;
-    }
+    T* get() ;
+    const T* get() const ;
     T& operator*() {
         return _ptr->_value;
     }
@@ -20234,9 +20060,7 @@ struct managed_ref {
     explicit operator bool() const {
         return _ptr != nullptr;
     }
-    size_t external_memory_usage() const {
-        return _ptr ? current_allocator().object_memory_size_in_allocator(_ptr) : 0;
-    }
+    size_t external_memory_usage() const ;
 };
 template<typename T>
 requires std::is_nothrow_move_constructible_v<T>
@@ -20320,10 +20144,7 @@ template <>
 inline unsigned find_in_array<32>(uint8_t val, const uint8_t* arr) {
     return utils::array_search_32_eq(val, arr);
 }
-template <>
-inline unsigned find_in_array<64>(uint8_t val, const uint8_t* arr) {
-    return utils::array_search_x32_eq(val, arr, 2);
-}
+template <> unsigned find_in_array<64>(uint8_t val, const uint8_t* arr) ;
 // A union of any number of types.
 template <typename... Ts>
 struct variadic_union;
@@ -21729,7 +21550,7 @@ template <typename Collection>
 class immutable_collection {
     Collection* _col;
 public:
-    immutable_collection(Collection& col) noexcept : _col(&col) {}
+    immutable_collection(Collection& col)  ;
 #define DO_WRAP_METHOD(method, is_const)                                                                           \
     template <typename... Args>                                                                                    \
     auto method(Args&&... args) is_const noexcept(noexcept(std::declval<is_const Collection>().method(args...))) { \
@@ -21804,9 +21625,7 @@ struct cell_hash {
 template<>
 struct appending_hash<cell_hash> {
     template<typename Hasher>
-    void operator()(Hasher& h, const cell_hash& ch) const {
-        feed_hash(h, ch.hash);
-    }
+    void operator()(Hasher& h, const cell_hash& ch) const ;
 };
 using cell_hash_opt = seastar::optimized_optional<cell_hash>;
 struct cell_and_hash {
@@ -21875,12 +21694,7 @@ public:
     // for each cell in this row, depending on the concrete Func type.
     // noexcept if Func doesn't throw.
     template<typename Func>
-    void for_each_cell(Func&& func) {
-        _cells.walk([func] (column_id id, cell_and_hash& cah) {
-            maybe_invoke_with_hash(func, id, cah);
-            return true;
-        });
-    }
+    void for_each_cell(Func&& func) ;
     template<typename Func>
     void for_each_cell(Func&& func) const {
         _cells.walk([func] (column_id id, const cell_and_hash& cah) {
@@ -21990,12 +21804,7 @@ public:
         _row->for_each_cell(std::forward<Func>(func));
     }
     template<typename Func>
-    void for_each_cell_until(Func&& func) const {
-        if (!_row) {
-            return;
-        }
-        _row->for_each_cell_until(std::forward<Func>(func));
-    }
+    void for_each_cell_until(Func&& func) const ;
     // Merges cell's value into the row.
     // Weak exception guarantees.
     void apply(const column_definition& column, const atomic_cell_or_collection& cell, cell_hash_opt hash = cell_hash_opt()) {
