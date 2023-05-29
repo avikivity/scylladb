@@ -57871,44 +57871,15 @@ return utf8_type;
 }
 data_type schema::column_name_type(const column_definition &def) const { return column_name_type(def, _raw._regular_column_name_type); }
 bool schema::has_static_columns() const { return !static_columns().empty(); }
-column_count_type schema::columns_count(column_kind kind) const
-{
-switch (kind)
-{
-case column_kind::partition_key:
-    return partition_key_size();
-case column_kind::clustering_key:
-    return clustering_key_size();
-case column_kind::static_column:
-    return static_columns_count();
-case column_kind::regular_column:
-    return regular_columns_count();
-default:
-    std::abort();
-}
-}
+
 column_count_type schema::partition_key_size() const { return column_offset(column_kind::clustering_key); }
 schema::const_iterator_range_type schema::partition_key_columns() const { return boost::make_iterator_range(_raw._columns.begin() + column_offset(column_kind::partition_key), _raw._columns.begin() + column_offset(column_kind::clustering_key)); }
 schema::const_iterator_range_type schema::clustering_key_columns() const { return boost::make_iterator_range(_raw._columns.begin() + column_offset(column_kind::clustering_key), _raw._columns.begin() + column_offset(column_kind::static_column)); }
 schema::const_iterator_range_type schema::static_columns() const { return boost::make_iterator_range(_raw._columns.begin() + column_offset(column_kind::static_column), _raw._columns.begin() + column_offset(column_kind::regular_column)); }
 schema::const_iterator_range_type schema::regular_columns() const { return boost::make_iterator_range(_raw._columns.begin() + column_offset(column_kind::regular_column), _raw._columns.end()); }
-schema::const_iterator_range_type schema::columns(column_kind kind) const
-{
-switch (kind)
-{
-case column_kind::partition_key:
-    return partition_key_columns();
-case column_kind::clustering_key:
-    return clustering_key_columns();
-case column_kind::static_column:
-    return static_columns();
-case column_kind::regular_column:
-    return regular_columns();
-}
-throw std::invalid_argument(std::to_string(int(kind)));
-}
+
 data_type schema::make_legacy_default_validator() const { return _raw._default_validation_class; }
-bool schema::is_synced() const { return _registry_entry && _registry_entry->is_synced(); }
+
 void collection_column_computation::operate_on_collection_entries(std::invocable<collection_kv *, collection_kv *, tombstone> auto &&old_and_new_row_func, const schema &schema, const partition_key &key, const db::view::clustering_or_static_row &update, const std::optional<db::view::clustering_or_static_row> &existing) const
 {
 const column_definition *cdef = schema.get_column_definition(_collection_name);
@@ -57975,11 +57946,7 @@ slogger.trace("Deactivating {}", _version);
 _schema = nullptr;
 _erase_timer.arm(_registry.grace_period());
 }
-frozen_schema schema_registry_entry::frozen() const
-{
-assert(_state >= state::LOADED);
-return *_frozen_schema;
-}
+
 future<> schema_registry_entry::maybe_sync(std::function<future<>()> syncer)
 {
 switch (_sync_state)
@@ -58352,10 +58319,7 @@ public:
                               {             auto it_src = _allocations.find(src);             if (it_src == _allocations.end()) {                 logger.error("Attempting to migrate an object at {} (size: {}) that does not exist",                              src, size);                 on_error();             }             if (it_src->second.size != size) {                 logger.error("Mismatch between allocation and migration size of object at {}: {} vs. {}\n"                              "Allocated at:\n{}",                              src, it_src->second.size, size, it_src->second.backtrace);                 on_error();             }             auto [ it_dst, success ] = _allocations.emplace(dst, std::move(it_src->second));             if (!success) {                 logger.error("Attempting to migrate an {} byte object to an already occupied address {}:\n"                              "Migrated object allocated from:\n{}\n"                              "Previous allocation of {} bytes at the destination:\n{}",                              size, dst, it_src->second.backtrace, it_dst->second.size, it_dst->second.backtrace);                 on_error();             }             _allocations.erase(it_src); });
     }
     void merge(region_sanitizer &other) noexcept
-    {
-        run_and_handle_errors([&]
-                              {             _broken = other._broken;             if (_broken) {                 _allocations.clear();             } else {                 _allocations.merge(other._allocations);                 if (!other._allocations.empty()) {                     for (auto [ptr, o_alloc] : other._allocations) {                         auto& alloc = _allocations.at(ptr);                         logger.error("Conflicting allocations at address {} in merged regions\n"                                      "{} bytes allocated from:\n{}\n"                                      "{} bytes allocated from:\n{}",                                      ptr, alloc.size, alloc.backtrace, o_alloc.size, o_alloc.backtrace);                     }                     on_error();                 }             } });
-    }
+    ;
 };
 logging::logger region_sanitizer::logger("lsa-sanitizer");
 struct segment;
@@ -58379,7 +58343,7 @@ class background_reclaimer
     bool _stopping = false;
     static constexpr size_t free_memory_threshold = 60'000'000;
 private:
-    bool have_work() const { return memory::free_memory() < free_memory_threshold; }
+    bool have_work() const ;
     void main_loop_wake();
     future<> main_loop();
     void adjust_shares();
@@ -58395,11 +58359,7 @@ public:
         }
     }
     future<> stop()
-    {
-        _stopping = true;
-        main_loop_wake();
-        return std::move(_done);
-    }
+    ;
 };
 class segment_pool;
 struct reclaim_timer;
@@ -58428,16 +58388,7 @@ public:
     impl();
     ~impl();
     future<> stop()
-    {
-        if (_background_reclaimer)
-        {
-        return _background_reclaimer->stop();
-        }
-        else
-        {
-        return make_ready_future<>();
-        }
-    }
+    ;
     void disable_reclaim() noexcept { ++_reclaiming_disabled_depth; }
     void enable_reclaim() noexcept { --_reclaiming_disabled_depth; }
     logalloc::segment_pool &segment_pool() { return *_segment_pool; }
@@ -58456,7 +58407,7 @@ public:
     occupancy_stats region_occupancy() const noexcept;
     occupancy_stats occupancy() const noexcept;
     size_t non_lsa_used_space() const noexcept; // Set the minimum number of segments reclaimed during single reclamation cycle.
-    void set_reclamation_step(size_t step_in_segments) noexcept { _reclamation_step = step_in_segments; }
+    void set_reclamation_step(size_t step_in_segments) noexcept ;
     size_t reclamation_step() const noexcept { return _reclamation_step; } // Abort on allocation failure from LSA
     void enable_abort_on_bad_alloc() noexcept;
     bool should_abort_on_bad_alloc() const noexcept;
@@ -58473,14 +58424,7 @@ public:
         return true;
     }
     bool try_reset_active_timer(reclaim_timer &timer)
-    {
-        if (_active_timer == &timer)
-        {
-        _active_timer = nullptr;
-        return true;
-        }
-        return false;
-    }
+    ;
 private:                                                                                            // Like compact_and_evict() but assumes that reclaim_lock is held around the operation.
     size_t compact_and_evict_locked(size_t reserve_segments, size_t bytes, is_preemptible preempt); // Like reclaim() but assumes that reclaim_lock is held around the operation.
     size_t reclaim_locked(size_t bytes, is_preemptible p);
@@ -58491,9 +58435,9 @@ tracker::tracker() : _impl(std::make_unique<impl>()), _reclaimer([this](seastar:
                                                                  { return reclaim(r); },
                                                                  memory::reclaimer_scope::sync) {}
 tracker::~tracker() {}
-future<> tracker::stop() { return _impl->stop(); }
+
 size_t tracker::reclaim(size_t bytes) { return _impl->reclaim(bytes, is_preemptible::no); }
-void tracker::reclaim_all_free_segments() { return _impl->reclaim_all_free_segments(); }
+
 struct alignas(segment_size) segment
 {
     static constexpr int size_shift = segment_size_shift;
@@ -58603,35 +58547,11 @@ private:
     size_t _available_segments; // for fast free_memory()
 private:
     static memory::memory_layout allocate_memory(size_t segments)
-    {
-        const auto size = segments * segment_size;
-        auto p = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if (p == MAP_FAILED)
-        {
-        std::abort();
-        }
-        madvise(p, size, MADV_HUGEPAGE);
-        auto start = reinterpret_cast<uintptr_t>(p);
-        return {start, start + size};
-    }
+    ;
 public:
     standard_memory_segment_store_backend(size_t segments) : segment_store_backend(allocate_memory(segments), false), _available_segments((_layout.end - _segments_base) / segment_size) {}
     virtual void *alloc_segment_memory() noexcept override
-    {
-        if (_freelist)
-        {
-        --_available_segments;
-        return std::exchange(_freelist, _freelist->next);
-        }
-        auto seg = _segments_base + _segments_offset * segment_size;
-        if (seg + segment_size > _layout.end)
-        {
-        return nullptr;
-        }
-        ++_segments_offset;
-        --_available_segments;
-        return reinterpret_cast<void *>(seg);
-    }
+    ;
     virtual void free_segment_memory(void *seg) noexcept override;
     virtual size_t free_memory() const noexcept override;
 };
@@ -58740,17 +58660,17 @@ public:
     void free_segment(segment *) noexcept;
     void free_segment(segment *, segment_descriptor &) noexcept;
     size_t current_emergency_reserve_goal() const noexcept { return _current_emergency_reserve_goal; }
-    void set_emergency_reserve_max(size_t new_size) noexcept { _emergency_reserve_max = new_size; }
+    void set_emergency_reserve_max(size_t new_size) noexcept ;
     size_t emergency_reserve_max() const noexcept { return _emergency_reserve_max; }
     void set_current_emergency_reserve_goal(size_t goal) noexcept { _current_emergency_reserve_goal = goal; }
-    void clear_allocation_failure_flag() noexcept { _allocation_failure_flag = false; }
+    void clear_allocation_failure_flag() noexcept ;
     bool allocation_failure_flag() const noexcept;
     void refill_emergency_reserve();
     void add_non_lsa_memory_in_use(size_t n) noexcept;
     void subtract_non_lsa_memory_in_use(size_t n) noexcept;
     size_t non_lsa_memory_in_use() const noexcept { return _non_lsa_memory_in_use; }
     size_t total_memory_in_use() const noexcept { return _non_lsa_memory_in_use + _segments_in_use * segment::size; }
-    size_t total_free_memory() const noexcept { return _free_segments * segment::size; }
+    size_t total_free_memory() const noexcept ;
     struct reservation_goal;
     void set_region(segment *seg, region::impl *r) noexcept;
     void set_region(segment_descriptor &desc, region::impl *r) noexcept;
@@ -58782,17 +58702,9 @@ private: // CLOCK_MONOTONIC_COARSE is not quite what we want -- to look for stal
         occupancy_stats region_occupancy;
         tracker::stats pool_stats;
         friend stats operator-(const stats &s1, const stats &s2)
-        {
-        stats result(s1);
-        result -= s2;
-        return result;
-        }
+        ;
         stats &operator-=(const stats &other)
-        {
-        region_occupancy -= other.region_occupancy;
-        pool_stats -= other.pool_stats;
-        return *this;
-        }
+        ;
     };
     clock::duration _duration_threshold;
     const char *_name;
@@ -58822,12 +58734,7 @@ private:
     void sample_stats(stats &data);
     template <typename T>
     void log_if_changed(log_level level, const char *name, T before, T now) const noexcept
-    {
-        if (now != before)
-        {
-        timing_logger.log(level, "- {}: {:.3f} -> {:.3f}", name, before, now);
-        }
-    }
+    ;
     template <typename T>
     void log_if_any(log_level level, const char *name, T value) const noexcept;
     template <typename T>
@@ -58952,7 +58859,7 @@ segment *segment_pool::new_segment(region::impl *r)
     desc._region = r;
     return seg;
 }
-void segment_pool::free_segment(segment *seg) noexcept { free_segment(seg, descriptor(seg)); }
+
 void segment_pool::free_segment(segment *seg, segment_descriptor &desc) noexcept
 {
     llogger.trace("Releasing segment {}", fmt::ptr(seg));
@@ -59071,7 +58978,7 @@ class region_impl final : public basic_region_impl
         // index() (i.e. -- suitable for express encoding)
         void encode(char *&pos, size_t encoded_size, size_t size) const noexcept { utils::uleb64_express_encode(pos, _n, encoded_size, size, poison<char>, unpoison); }
         static object_descriptor decode_forwards(const char *&pos) noexcept { return object_descriptor(utils::uleb64_decode_forwards(pos, poison<char>, unpoison)); }
-        static object_descriptor decode_backwards(const char *&pos) noexcept { return object_descriptor(utils::uleb64_decode_bacwards(pos, poison<char>, unpoison)); }
+        static object_descriptor decode_backwards(const char *&pos) noexcept ;
     };
 private: // lsa_buffer allocator
     segment *_buf_active = nullptr;
@@ -59355,36 +59262,10 @@ public:
         tracker_instance._impl->register_region(this);
     }
     virtual ~region_impl()
-    {
-        _sanitizer.on_region_destruction();
-        _tracker.get_impl().unregister_region(this);
-        while (!_segment_descs.empty())
-        {
-        auto &desc = _segment_descs.one_of_largest();
-        _segment_descs.pop_one_of_largest();
-        assert(desc.is_empty());
-        free_segment(desc);
-        }
-        _closed_occupancy = {};
-        if (_active)
-        {
-        assert(segment_pool().descriptor(_active).is_empty());
-        free_segment(_active);
-        _active = nullptr;
-        }
-        if (_buf_active)
-        {
-        assert(segment_pool().descriptor(_buf_active).is_empty());
-        free_segment(_buf_active);
-        _buf_active = nullptr;
-        }
-    }
+    ;
     logalloc::segment_pool &segment_pool() const { return _tracker.get_impl().segment_pool(); }
     void listen(region_listener *listener)
-    {
-        _listener = listener;
-        _listener->add(_region);
-    }
+    ;
     void unlisten();
     void moved(region *new_region); // Note: allocation is disallowed in this path
     // since we don't instantiate reclaiming_lock
@@ -59444,22 +59325,7 @@ public:
     } // Compacts everything. Mainly for testing.
     // Invalidates references to allocated objects.
     void full_compaction()
-    {
-        compaction_lock _(*this);
-        llogger.debug("Full compaction, {}", occupancy());
-        close_and_open();
-        close_buf_active();
-        segment_descriptor_hist all;
-        std::swap(all, _segment_descs);
-        _closed_occupancy = {};
-        while (!all.empty())
-        {
-        auto &desc = all.one_of_largest();
-        all.pop_one_of_largest();
-        compact_segment_locked(segment_pool().segment_from(desc), desc);
-        }
-        llogger.debug("Done, {}", occupancy());
-    }
+    ;
     void compact_segment(segment *seg, segment_descriptor &desc)
     {
         compaction_lock _(*this);
@@ -59501,7 +59367,7 @@ lsa_buffer::~lsa_buffer()
 }
 memory::reclaiming_result tracker::reclaim(seastar::memory::reclaimer::request r) { return reclaim(std::max(r.bytes_to_reclaim, _impl->reclamation_step() * segment::size)) ? memory::reclaiming_result::reclaimed_something : memory::reclaiming_result::reclaimed_nothing; }
 std::ostream &operator<<(std::ostream &out, const occupancy_stats &stats) { return out << format("{:.2f}%, {:d} / {:d} [B]", stats.used_fraction() * 100, stats.used_space(), stats.total_space()); }
-occupancy_stats tracker::impl::global_occupancy() const noexcept { return occupancy_stats(_segment_pool->total_free_memory(), _segment_pool->total_memory_in_use()); } // Note: allocation is disallowed in this path
+ // Note: allocation is disallowed in this path
 // since we don't instantiate reclaiming_lock
 // while traversing _regions
 occupancy_stats tracker::impl::region_occupancy() const noexcept
@@ -59513,15 +59379,7 @@ occupancy_stats tracker::impl::region_occupancy() const noexcept
     }
     return total;
 }
-occupancy_stats tracker::impl::occupancy() const noexcept
-{
-    auto occ = region_occupancy();
-    {
-        auto s = _segment_pool->free_segments() * segment::size;
-        occ += occupancy_stats(s, s);
-    }
-    return occ;
-}
+
 size_t tracker::impl::non_lsa_used_space() const noexcept
 {
     auto free_space_in_lsa = _segment_pool->free_segments() * segment_size;
@@ -59585,34 +59443,7 @@ static void reclaim_from_evictable(region::impl &r, size_t target_mem_in_use, is
         r.compact();
     }
 }
-idle_cpu_handler_result tracker::impl::compact_on_idle(work_waiting_on_reactor check_for_work)
-{
-    if (_reclaiming_disabled_depth)
-    {
-        return idle_cpu_handler_result::no_more_work;
-    }
-    reclaiming_lock rl(*this);
-    if (_regions.empty())
-    {
-        return idle_cpu_handler_result::no_more_work;
-    }
-    segment_pool::reservation_goal open_emergency_pool(*_segment_pool, 0);
-    auto cmp = [](region::impl *c1, region::impl *c2)
-    {         if (c1->is_idle_compactible() != c2->is_idle_compactible()) {             return !c1->is_idle_compactible();         }         return c2->min_occupancy() < c1->min_occupancy(); };
-    boost::range::make_heap(_regions, cmp);
-    while (!check_for_work())
-    {
-        boost::range::pop_heap(_regions, cmp);
-        region::impl *r = _regions.back();
-        if (!r->is_idle_compactible())
-        {
-        return idle_cpu_handler_result::no_more_work;
-        }
-        r->compact();
-        boost::range::push_heap(_regions, cmp);
-    }
-    return idle_cpu_handler_result::interrupted_by_higher_priority_task;
-}
+
 size_t tracker::impl::reclaim(size_t memory_to_release, is_preemptible preempt)
 {
     if (_reclaiming_disabled_depth)
@@ -59845,37 +59676,14 @@ bool segment_pool::compact_segment(segment *seg)
     desc._region->compact_segment(seg, desc);
     return true;
 }
-void allocating_section::set_std_reserve(size_t reserve) noexcept { _std_reserve = reserve; }
+
 }
 // Orders segments by free space, assuming all segments have the same size.
 // This avoids using the occupancy, which entails extra division operations.
 template <>
 size_t hist_key<logalloc::segment_descriptor>(const logalloc::segment_descriptor &desc) { return desc.free_space(); }
 using namespace seastar;
-large_bitset::large_bitset(size_t nr_bits) : _nr_bits(nr_bits)
-{
-assert(thread::running_in_thread());
-const size_t orig_nr_ints = align_up(nr_bits, bits_per_int()) / bits_per_int();
-auto nr_ints = orig_nr_ints;
-while (nr_ints)
-{
-    nr_ints = _storage.reserve_partial(nr_ints);
-    if (need_preempt())
-    {
-        thread::yield();
-    }
-}
-nr_ints = orig_nr_ints;
-while (nr_ints)
-{
-    _storage.push_back(0);
-    --nr_ints;
-    if (need_preempt())
-    {
-        thread::yield();
-    }
-}
-}
+
 using namespace seastar;
 class buffer_data_source_impl : public data_source_impl
 {
@@ -60257,26 +60065,7 @@ case bound_kind::excl_start:
 abort();
 }
 const thread_local clustering_key_prefix bound_view::_empty_prefix = clustering_key::make_empty();
-void counter_cell_builder::do_sort_and_remove_duplicates()
-{
-boost::range::sort(_shards, [](auto &a, auto &b)
-                   { return a.id() < b.id(); });
-std::vector<counter_shard> new_shards;
-new_shards.reserve(_shards.size());
-for (auto &cs : _shards)
-{
-    if (new_shards.empty() || new_shards.back().id() != cs.id())
-    {
-        new_shards.emplace_back(cs);
-    }
-    else
-    {
-        new_shards.back().apply(cs);
-    }
-}
-_shards = std::move(new_shards);
-_sorted = true;
-}
+
 static bool apply_in_place(const column_definition &cdef, atomic_cell_mutable_view dst, atomic_cell_mutable_view src)
 {
 auto dst_ccmv = counter_cell_mutable_view(dst);
@@ -60364,50 +60153,7 @@ combine(dst_shards.begin(), dst_shards.end(), src_shards.begin(), src_shards.end
 auto cell = result.build(std::max(dst_ac.timestamp(), src_ac.timestamp()));
 src = std::exchange(dst, atomic_cell_or_collection(std::move(cell)));
 }
-std::optional<atomic_cell> counter_cell_view::difference(atomic_cell_view a, atomic_cell_view b)
-{
-assert(!a.is_counter_update());
-assert(!b.is_counter_update());
-if (!b.is_live() || !a.is_live())
-{
-    if (b.is_live() || (!a.is_live() && compare_atomic_cell_for_merge(b, a) < 0))
-    {
-        return atomic_cell(*counter_type, a);
-    }
-    return {};
-}
-auto a_ccv = counter_cell_view(a);
-auto b_ccv = counter_cell_view(b);
-auto a_shards = a_ccv.shards();
-auto b_shards = b_ccv.shards();
-auto a_it = a_shards.begin();
-auto a_end = a_shards.end();
-auto b_it = b_shards.begin();
-auto b_end = b_shards.end();
-counter_cell_builder result;
-while (a_it != a_end)
-{
-    while (b_it != b_end && (*b_it).id() < (*a_it).id())
-    {
-        ++b_it;
-    }
-    if (b_it == b_end || (*a_it).id() != (*b_it).id() || (*a_it).logical_clock() > (*b_it).logical_clock())
-    {
-        result.add_shard(counter_shard(*a_it));
-    }
-    ++a_it;
-}
-std::optional<atomic_cell> diff;
-if (!result.empty())
-{
-    diff = result.build(std::max(a.timestamp(), b.timestamp()));
-}
-else if (a.timestamp() > b.timestamp())
-{
-    diff = atomic_cell::make_live(*counter_type, a.timestamp(), bytes_view());
-}
-return diff;
-}
+
 namespace runtime
 {
 static std::chrono::steady_clock::time_point boot_time;
@@ -60526,37 +60272,7 @@ UUID make_random_uuid() noexcept
     lsb |= uint64_t(0x2) << 62; // IETF variant
     return UUID(msb, lsb);
 }
-UUID::UUID(sstring_view uuid)
-{
-    sstring uuid_string(uuid.begin(), uuid.end());
-    boost::erase_all(uuid_string, "-");
-    auto size = uuid_string.size() / 2;
-    if (size != 16)
-    {
-        throw marshal_exception(format("UUID string size mismatch: '{}'", uuid));
-    }
-    sstring most = sstring(uuid_string.begin(), uuid_string.begin() + size);
-    sstring least = sstring(uuid_string.begin() + size, uuid_string.end());
-    int base = 16;
-    try
-    {
-        std::size_t pos = 0;
-        this->most_sig_bits = std::stoull(most, &pos, base);
-        if (pos != most.size())
-        {
-        throw std::invalid_argument("");
-        }
-        this->least_sig_bits = std::stoull(least, &pos, base);
-        if (pos != least.size())
-        {
-        throw std::invalid_argument("");
-        }
-    }
-    catch (const std::logic_error &)
-    {
-        throw marshal_exception(format("invalid UUID: '{}'", uuid));
-    }
-}
+
 }
 // Clang or boost have a problem navigating the enable_if maze
 // that is cpp_int's constructor. It ends up treating the
@@ -60639,34 +60355,7 @@ date_type_impl::date_type_impl() : concrete_type(kind::date, date_type_name, 8) 
 timeuuid_type_impl::timeuuid_type_impl() : concrete_type<utils::UUID>(kind::timeuuid, timeuuid_type_name, 16) {}
 timestamp_type_impl::timestamp_type_impl() : simple_type_impl(kind::timestamp, timestamp_type_name, 8) {}
 static boost::posix_time::ptime get_time(const boost::smatch &sm)
-{ // Unfortunately boost::date_time  parsers are more strict with regards
-// to the expected date format than we need to be.
-auto year = boost::lexical_cast<int>(sm[1]);
-auto month = boost::lexical_cast<int>(sm[2]);
-auto day = boost::lexical_cast<int>(sm[3]);
-boost::gregorian::date date(year, month, day);
-auto hour = sm[5].length() ? boost::lexical_cast<int>(sm[5]) : 0;
-auto minute = sm[6].length() ? boost::lexical_cast<int>(sm[6]) : 0;
-auto second = sm[8].length() ? boost::lexical_cast<int>(sm[8]) : 0;
-boost::posix_time::time_duration time(hour, minute, second);
-if (sm[10].length())
-{
-    static constexpr auto milliseconds_string_length = 3;
-    auto length = sm[10].length();
-    if (length > milliseconds_string_length)
-    {
-        throw marshal_exception(format("Milliseconds length exceeds expected ({:d})", length));
-    }
-    auto value = boost::lexical_cast<int>(sm[10]);
-    while (length < milliseconds_string_length)
-    {
-        value *= 10;
-        length++;
-    }
-    time += boost::posix_time::milliseconds(value);
-}
-return boost::posix_time::ptime(date, time);
-}
+;
 static boost::posix_time::time_duration get_utc_offset(const std::string &s);
 int64_t timestamp_from_string(sstring_view s);
 simple_date_type_impl::simple_date_type_impl() : simple_type_impl{kind::simple_date, simple_date_type_name, {}}
@@ -60674,82 +60363,11 @@ simple_date_type_impl::simple_date_type_impl() : simple_type_impl{kind::simple_d
 }
 static date::year_month_day get_simple_date_time(const boost::smatch &sm);
 static uint32_t serialize(const std::string &input, int64_t days);
-uint32_t simple_date_type_impl::from_sstring(sstring_view s)
-{
-char *end;
-auto v = std::strtoll(s.begin(), &end, 10);
-if (end == s.begin() + s.size())
-{
-    return v;
-}
-auto str = std::string(s); // FIXME: this copy probably can be avoided
-static const boost::regex date_re("^(-?\\d+)-(\\d+)-(\\d+)");
-boost::smatch dsm;
-if (!boost::regex_match(str, dsm, date_re))
-{
-    throw marshal_exception(format("Unable to coerce '{}' to a formatted date (long)", str));
-}
-auto t = get_simple_date_time(dsm);
-return serialize(str, date::local_days(t).time_since_epoch().count());
-}
+
 time_type_impl::time_type_impl() : simple_type_impl{kind::time, time_type_name, {}}
 {
 }
-int64_t time_type_impl::from_sstring(sstring_view s)
-{
-static auto format_error = "Timestamp format must be hh:mm:ss[.fffffffff]";
-auto hours_end = s.find(':');
-if (hours_end == std::string::npos)
-{
-    throw marshal_exception(format_error);
-}
-int64_t hours = std::stol(sstring(s.substr(0, hours_end)));
-if (hours < 0 || hours >= 24)
-{
-    throw marshal_exception(format("Hour out of bounds ({:d}).", hours));
-}
-auto minutes_end = s.find(':', hours_end + 1);
-if (minutes_end == std::string::npos)
-{
-    throw marshal_exception(format_error);
-}
-int64_t minutes = std::stol(sstring(s.substr(hours_end + 1, hours_end - minutes_end)));
-if (minutes < 0 || minutes >= 60)
-{
-    throw marshal_exception(format("Minute out of bounds ({:d}).", minutes));
-}
-auto seconds_end = s.find('.', minutes_end + 1);
-if (seconds_end == std::string::npos)
-{
-    seconds_end = s.length();
-}
-int64_t seconds = std::stol(sstring(s.substr(minutes_end + 1, minutes_end - seconds_end)));
-if (seconds < 0 || seconds >= 60)
-{
-    throw marshal_exception(format("Second out of bounds ({:d}).", seconds));
-}
-int64_t nanoseconds = 0;
-if (seconds_end < s.length())
-{
-    nanoseconds = std::stol(sstring(s.substr(seconds_end + 1)));
-    auto nano_digits = s.length() - (seconds_end + 1);
-    if (nano_digits > 9)
-    {
-        throw marshal_exception(format("more than 9 nanosecond digits: {}", s));
-    }
-    nanoseconds *= std::pow(10, 9 - nano_digits);
-    if (nanoseconds < 0 || nanoseconds >= 1000 * 1000 * 1000)
-    {
-        throw marshal_exception(format("Nanosecond out of bounds ({:d}).", nanoseconds));
-    }
-}
-std::chrono::nanoseconds result{};
-result += std::chrono::hours(hours);
-result += std::chrono::minutes(minutes);
-result += std::chrono::seconds(seconds);
-result += std::chrono::nanoseconds(nanoseconds);
-return result.count();
-}
+
 uuid_type_impl::uuid_type_impl() : concrete_type(kind::uuid, uuid_type_name, 16) {}
 using inet_address = seastar::net::inet_address;
 inet_addr_type_impl::inet_addr_type_impl() : concrete_type<inet_address>(kind::inet, inet_addr_type_name, {}) {}
@@ -61052,41 +60670,7 @@ struct is_byte_order_equal_visitor
 bool abstract_type::is_byte_order_equal() const { return visit(*this, is_byte_order_equal_visitor{}); }
 static bool check_compatibility(const tuple_type_impl &t, const abstract_type &previous, bool (abstract_type::*predicate)(const abstract_type &) const);
 static bool is_fixed_size_int_type(const abstract_type &t)
-{
-using k = abstract_type::kind;
-switch (t.get_kind())
-{
-case k::byte:
-case k::short_kind:
-case k::int32:
-case k::long_kind:
-    return true;
-case k::ascii:
-case k::boolean:
-case k::bytes:
-case k::counter:
-case k::date:
-case k::double_kind:
-case k::duration:
-case k::empty:
-case k::float_kind:
-case k::inet:
-case k::list:
-case k::map:
-case k::reversed:
-case k::set:
-case k::simple_date:
-case k::time:
-case k::timestamp:
-case k::timeuuid:
-case k::tuple:
-case k::user:
-case k::utf8:
-case k::uuid:
-    return false;
-}
-__builtin_unreachable();
-}
+;
 bool abstract_type::is_compatible_with(const abstract_type &previous) const
 {
 if (this == &previous)
@@ -61337,17 +60921,7 @@ if (include_frozen_type)
 return out.str();
 }
 static std::optional<data_type> update_user_type_aux(const map_type_impl &m, const shared_ptr<const user_type_impl> updated)
-{
-auto old_keys = m.get_keys_type();
-auto old_values = m.get_values_type();
-auto k = old_keys->update_user_type(updated);
-auto v = old_values->update_user_type(updated);
-if (!k && !v)
-{
-    return std::nullopt;
-}
-return std::make_optional(static_pointer_cast<const abstract_type>(map_type_impl::get_instance(k ? *k : old_keys, v ? *v : old_values, m.is_multi_cell())));
-}
+;
 static void serialize(const abstract_type &t, const void *value, bytes::iterator &out);
 set_type set_type_impl::get_instance(data_type elements, bool is_multi_cell) { return intern::get_instance(elements, is_multi_cell); }
 sstring make_set_type_name(data_type elements, bool is_multi_cell)
