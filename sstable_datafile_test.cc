@@ -33953,14 +33953,8 @@ public:
         }
         return res;
     }
-    void update() noexcept {
-        for (int i = 0; i < 3; i++) {
-            rates[i].update();
-        }
-    }
-    uint64_t count() const {
-        return _count;
-    }
+    void update() noexcept ;
+    uint64_t count() const ;
 };
 class timed_rate_moving_average {
     rates_moving_average _rates;
@@ -34007,12 +34001,7 @@ public:
     void mark(std::chrono::duration<Rep, Ratio> dur) ;
     void mark(latency_counter& lc) ;
     void set_latency(latency_counter& lc) ;
-    rate_moving_average_and_histogram rate() const {
-        rate_moving_average_and_histogram res;
-        res.hist = hist;
-        res.rate = met().rate();
-        return res;
-    }
+    rate_moving_average_and_histogram rate() const ;
 };
 class timed_rate_moving_average_summary_and_histogram {
     meter_timer _timer;
@@ -34027,12 +34016,8 @@ public:
         _summary.update();}) {
         _match_duration = d/meter_timer::tick_interval();
     }
-    rates_moving_average& operator()() noexcept {
-        return _rates;
-    }
-    const rates_moving_average& operator()() const noexcept {
-        return _rates;
-    }
+    rates_moving_average& operator()() noexcept ;
+    const rates_moving_average& operator()() const noexcept ;
     timed_rate_moving_average_summary_and_histogram(timed_rate_moving_average_summary_and_histogram&&) = default;
     timed_rate_moving_average_summary_and_histogram(size_t size) : _timer([this]{
         _rates.update();
@@ -34347,9 +34332,7 @@ public:
     struct incomplete_tag {};
     // Constructs an empty instance which is fully discontinuous except for the partition tombstone.
     mutation_partition_v2(incomplete_tag, const schema& s, tombstone);
-    static mutation_partition_v2 make_incomplete(const schema& s, tombstone t = {}) {
-        return mutation_partition_v2(incomplete_tag(), s, t);
-    }
+    static mutation_partition_v2 make_incomplete(const schema& s, tombstone t = {}) ;
     mutation_partition_v2(schema_ptr s)
         : _rows()
 #ifdef SEASTAR_DEBUG
@@ -34391,7 +34374,7 @@ public:
     // Makes sure there is a dummy entry after all clustered rows. Doesn't affect continuity.
     // Doesn't invalidate iterators.
     void ensure_last_dummy(const schema&);
-    bool static_row_continuous() const { return _static_row_continuous; }
+    bool static_row_continuous() const ;
     void set_static_row_continuous(bool value) ;
     bool is_fully_continuous() const;
     void make_fully_continuous();
@@ -34692,7 +34675,7 @@ public:
         return *this;
     }
     entangled* get() { return _ref; }
-    const entangled* get() const { return _ref; }
+    const entangled* get() const ;
     explicit operator bool() const { return _ref != nullptr; }
     template<typename T>
     T* get(entangled T::* paired_member) {
@@ -34702,12 +34685,7 @@ public:
         return boost::intrusive::get_parent_from_member(get(), paired_member);
     }
     template<typename T>
-    const T* get(entangled T::* paired_member) const {
-        if (!_ref) {
-            return nullptr;
-        }
-        return boost::intrusive::get_parent_from_member(get(), paired_member);
-    }
+    const T* get(entangled T::* paired_member) const ;
 };
 namespace logalloc {
 struct occupancy_stats;
@@ -34754,11 +34732,7 @@ public:
         uint64_t memory_freed;
         uint64_t memory_compacted;
         uint64_t memory_evicted;
-        friend stats operator+(const stats& s1, const stats& s2) {
-            stats result(s1);
-            result += s2;
-            return result;
-        }
+        friend stats operator+(const stats& s1, const stats& s2) ;
         friend stats operator-(const stats& s1, const stats& s2) ;
         stats& operator+=(const stats& other) ;
         stats& operator-=(const stats& other) ;
@@ -34805,7 +34779,7 @@ class tracker_reclaimer_lock {
     tracker::impl& _tracker_impl;
 public:
     tracker_reclaimer_lock(tracker::impl& impl) noexcept;
-    tracker_reclaimer_lock(tracker& t) noexcept : tracker_reclaimer_lock(t.get_impl()) { }
+    tracker_reclaimer_lock(tracker& t)  ;
     ~tracker_reclaimer_lock();
 };
 tracker& shard_tracker() noexcept;
@@ -34852,7 +34826,7 @@ public:
     /// Returns the number of bytes in the buffer.
     size_t size() const noexcept ;
     /// Returns true iff the pointer is engaged.
-    explicit operator bool() const noexcept { return bool(_link); }
+    explicit operator bool() const noexcept ;
 };
 // Monoid representing pool occupancy statistics.
 // Naturally ordered so that sparser pools come fist.
@@ -35191,7 +35165,7 @@ public:
     // Frees elements of this version in batches.
     // Returns stop_iteration::yes iff there are no more elements to free.
     stop_iteration clear_gently(cache_tracker* tracker) noexcept;
-    mutation_partition_v2& partition() { return _partition; }
+    mutation_partition_v2& partition() ;
     const mutation_partition_v2& partition() const ;
     bool is_referenced() const ;
     // Returns true iff this version is directly referenced from a partition_entry (is its newset version).
@@ -35345,7 +35319,7 @@ public:
     const partition_snapshot& operator*() const ;
     partition_snapshot* operator->() ;
     const partition_snapshot* operator->() const ;
-    explicit operator bool() const { return bool(_snp); }
+    explicit operator bool() const ;
 };
 class real_dirty_memory_accounter;
 // Represents mutation_partition with snapshotting support a la MVCC.
@@ -35385,9 +35359,7 @@ public:
     partition_entry(const schema&, mutation_partition);
     // Returns a reference to partition_entry containing given pv,
     // assuming pv.is_referenced_from_entry().
-    static partition_entry& container_of(partition_version& pv) {
-        return *boost::intrusive::get_parent_from_member(&pv.back_reference(), &partition_entry::_version);
-    }
+    static partition_entry& container_of(partition_version& pv) ;
     // Constructs an evictable entry
     // Strong exception guarantees for the state of mp.
     partition_entry(evictable_tag, const schema& s, mutation_partition&& mp);
@@ -35527,23 +35499,7 @@ public:
     void pop_front() noexcept ;
     // Appends other to the tail of this deque.
     // The other deque will be left empty.
-    void splice(partition_version_list& other) noexcept {
-        if (!other._head) {
-            return;
-        }
-        if (!_head) {
-            _head = std::move(other._head);
-            _tail = std::move(other._tail);
-        } else {
-            (_tail ? _tail : _head)->splice(*other._head);
-            if (other._tail) {
-                _tail = std::move(other._tail);
-                other._head = {};
-            } else {
-                _tail = std::move(other._head);
-            }
-        }
-    }
+    void splice(partition_version_list& other) noexcept ;
 };
 class mutation_cleaner;
 class mutation_cleaner_impl final {
@@ -35598,18 +35554,7 @@ public:
     auto make_region_space_guard() ;
 };
 
-inline
-void mutation_cleaner_impl::merge_and_destroy(partition_snapshot& ps) noexcept {
-    if (ps.slide_to_oldest() == stop_iteration::yes || merge_some(ps) == stop_iteration::yes) {
-        lw_shared_ptr<partition_snapshot>::dispose(&ps);
-    } else {
-        // The snapshot must not be reachable by partitino_entry::read() after this,
-        // which is ensured by slide_to_oldest() == stop_iteration::no.
-        ps.migrate(&_region, _cleaner);
-        _worker_state->snapshots.push_back(ps);
-        _worker_state->cv.signal();
-    }
-}
+
 // Container for garbage partition_version objects, used for freeing them incrementally.
 //
 // Mutation cleaner extends the lifetime of mutation_partition without doing
@@ -35664,9 +35609,7 @@ public:
     // using destroy_from_this(), possibly deferring in between.
     // This instance becomes the sole owner of the partition_snapshot object, the caller should not destroy it
     // nor access it after calling this.
-    void merge_and_destroy(partition_snapshot& ps) {
-        return _impl->merge_and_destroy(ps);
-    }
+    void merge_and_destroy(partition_snapshot& ps) ;
 };
 class atomic_cell;
 class row_marker;
@@ -35962,16 +35905,7 @@ private:
         return SSTableCompaction == compact_for_sstables::yes;
     }
     template <typename GCConsumer>
-    void partition_is_not_empty_for_gc_consumer(GCConsumer& gc_consumer) {
-        if (_empty_partition_in_gc_consumer) {
-            _empty_partition_in_gc_consumer = false;
-            gc_consumer.consume_new_partition(*_dk);
-            auto pt = _partition_tombstone;
-            if (pt && can_purge_tombstone(pt)) {
-                gc_consumer.consume(pt);
-            }
-        }
-    }
+    void partition_is_not_empty_for_gc_consumer(GCConsumer& gc_consumer) ;
     template <typename Consumer>
     void partition_is_not_empty(Consumer& consumer) ;
     bool can_purge_tombstone(const tombstone& t) ;;
@@ -36075,7 +36009,7 @@ public:
     /// If the currently compacted partition is exhausted a disengaged optional
     /// is returned -- in this case there is no state to detach.
     std::optional<detached_compaction_state> detach_state() && ;
-    const compaction_stats& stats() const { return _stats; }
+    const compaction_stats& stats() const ;
 };
 template<compact_for_sstables SSTableCompaction, typename Consumer, typename GCConsumer>
 requires CompactedFragmentsConsumerV2<Consumer> && CompactedFragmentsConsumerV2<GCConsumer>
@@ -36185,18 +36119,13 @@ class mutation_rebuilder {
     mutation_opt _m;
 public:
     explicit mutation_rebuilder(schema_ptr s) : _s(std::move(s)) { }
-    void consume_new_partition(const dht::decorated_key& dk) {
-        assert(!_m);
-        _m = mutation(_s, std::move(dk));
-    }
+    void consume_new_partition(const dht::decorated_key& dk) ;
     stop_iteration consume(tombstone t) ;
     stop_iteration consume(range_tombstone&& rt) ;
     stop_iteration consume(static_row&& sr) ;
     stop_iteration consume(clustering_row&& cr) ;
     stop_iteration consume_end_of_partition() ;
-    mutation_opt consume_end_of_stream() {
-        return std::move(_m);
-    }
+    mutation_opt consume_end_of_stream() ;
 };
 // Builds the mutation corresponding to the next partition in the mutation fragment stream.
 // Implements FlattenedConsumerV2, MutationFragmentConsumerV2 and FlatMutationReaderConsumerV2.
@@ -36262,9 +36191,7 @@ struct partition {
         , _m(std::move(m))
         , _row_count_high_bits(static_cast<uint32_t>(row_count >> 32))
     { }
-    uint32_t row_count_low_bits() const {
-        return _row_count_low_bits;
-    }
+    uint32_t row_count_low_bits() const ;
     uint32_t row_count_high_bits() const ;
     uint64_t row_count() const ;
     const frozen_mutation& mut() const ;
@@ -36414,10 +36341,7 @@ public:
     template <query::partition_slice::option OPTION>
     partition_slice_builder& with_option() ;
     template <query::partition_slice::option OPTION>
-    partition_slice_builder& with_option_toggled() {
-        _options.toggle<OPTION>();
-        return *this;
-    }
+    partition_slice_builder& with_option_toggled() ;
     partition_slice_builder& with_partition_row_limit(uint64_t limit);
     query::partition_slice build();
 };
@@ -38010,10 +37934,7 @@ class mutation_fragment_v1_stream final {
     mutation_fragment_opt consume(clustering_row mf) ;
     mutation_fragment_opt consume(range_tombstone_change mf) ;
     mutation_fragment_opt consume(partition_start mf) ;
-    mutation_fragment_opt consume(partition_end mf) {
-        _rt_assembler.on_end_of_stream();
-        return wrap(std::move(mf));
-    }
+    mutation_fragment_opt consume(partition_end mf) ;
     future<mutation_fragment_opt> read_from_underlying() {
         auto mfp = co_await _reader();
         if (!mfp) [[unlikely]] {
@@ -38028,9 +37949,7 @@ class mutation_fragment_v1_stream final {
         co_return std::move(ret);
     }
     template<typename Arg>
-    mutation_fragment wrap(Arg arg) const {
-        return {*_schema, _permit, std::move(arg)};
-    }
+    mutation_fragment wrap(Arg arg) const ;
     void reset_state() ;
     future<> next_partition() ;
 public:
@@ -38064,10 +37983,7 @@ public:
         }
         co_return bool(co_await _reader.peek());
     }
-    future<> fast_forward_to(const dht::partition_range& pr) {
-        reset_state();
-        return _reader.fast_forward_to(pr);
-    }
+    future<> fast_forward_to(const dht::partition_range& pr) ;
     future<> fast_forward_to(position_range pr) ;
     void set_max_buffer_size(size_t size) ;
     future<> fill_buffer() ;
@@ -38081,9 +37997,7 @@ private:
             : _reader(reader)
             , _consumer(std::move(c))
         { }
-        future<stop_iteration> operator()(mutation_fragment&& mf) {
-            return std::move(mf).consume(*this);
-        }
+        future<stop_iteration> operator()(mutation_fragment&& mf) ;
         future<stop_iteration> consume(static_row&& sr) ;
         future<stop_iteration> consume(clustering_row&& cr) ;
         future<stop_iteration> consume(range_tombstone&& rt) ;
@@ -38174,7 +38088,7 @@ class mutation_source {
     lw_shared_ptr<std::function<partition_presence_checker()>> _presence_checker_factory;
 private:
     mutation_source() = default;
-    explicit operator bool() const { return bool(_fn); }
+    explicit operator bool() const ;
     friend class optimized_optional<mutation_source>;
 public:
     mutation_source(flat_reader_v2_factory_type fn, std::function<partition_presence_checker()> pcf = [] { return make_default_partition_presence_checker(); })
@@ -38290,7 +38204,7 @@ public:
     bool is_tail() const noexcept ;
     void set_tail(bool v) noexcept ;
     bool with_train() const noexcept ;
-    void set_train(bool v) noexcept { _flags._train = v; }
+    void set_train(bool v) noexcept ;
     struct dummy_entry_tag{};
     struct evictable_tag{};
     cache_entry(dummy_entry_tag)
@@ -38384,16 +38298,14 @@ public:
             Func _func;
         public:
             explicit non_prepared(Func func) : _func(std::move(func)) {}
-            virtual void execute() override {
-                _func();
-            }
+            virtual void execute() override ;
         };
         std::unique_ptr<external_updater_impl> _impl;
     public:
         external_updater(seastar::noncopyable_function<void()> f) : _impl(std::make_unique<non_prepared>(std::move(f))) {}
         external_updater(std::unique_ptr<external_updater_impl> impl) : _impl(std::move(impl)) {}
-        future<> prepare() { return _impl->prepare(); }
-        void execute() { _impl->execute(); }
+        future<> prepare() ;
+        void execute() ;
     };
 public:
     struct stats {
@@ -38746,7 +38658,7 @@ class partition_snapshot_row_cursor final {
     // Can be only called on a valid cursor pointing at a row.
     // When throws, the cursor is invalidated and its position is not changed.
     bool advance(bool keep) ;
-    bool is_in_latest_version() const noexcept { return at_a_row() && _current_row[0].version_no == 0; }
+    bool is_in_latest_version() const noexcept ;
 public:
     // When reversed is true then the cursor will operate in reversed direction.
     // When reversed, s must be a reversed schema relative to snp->schema()
@@ -38761,10 +38673,7 @@ public:
         , _position(position_in_partition::static_row_tag_t{})
     { }
     // If is_in_latest_version() then this returns an iterator to the entry under cursor in the latest version.
-    mutation_partition::rows_type::iterator get_iterator_in_latest_version() const {
-        assert(_latest_it);
-        return *_latest_it;
-    }
+    mutation_partition::rows_type::iterator get_iterator_in_latest_version() const ;
     // Returns true iff the iterators obtained since the cursor was last made valid
     // are still valid. Note that this doesn't mean that the cursor itself is valid.
     bool iterators_valid() const ;
@@ -38905,13 +38814,7 @@ public:
     position_in_partition_view table_position() const ;
     friend std::ostream& operator<<(std::ostream& out, const partition_snapshot_row_cursor& cur) ;;
 };
-inline
-partition_snapshot_row_weakref& partition_snapshot_row_weakref::operator=(const partition_snapshot_row_cursor& c) {
-    auto tmp = partition_snapshot_row_weakref(c);
-    this->~partition_snapshot_row_weakref();
-    new (this) partition_snapshot_row_weakref(std::move(tmp));
-    return *this;
-}
+
 namespace query {
 // Merges non-overlapping results into one
 // Implements @Reducer concept from distributed.hh
@@ -38946,10 +38849,7 @@ public:
     uint64_t finalize_uint64() ;
 private:
     template<typename OutIterator>
-    void serialize_to(OutIterator&& out) {
-        serialize_int64(out, 0);
-        serialize_int64(out, finalize_uint64());
-    }
+    void serialize_to(OutIterator&& out) ;
 };
 // Used to specialize templates in order to fix a bug
 // in handling null values: #4567
@@ -38980,8 +38880,8 @@ class md5_hasher final : public cryptopp_hasher<md5_hasher, 16> {};
 class sha256_hasher final : public cryptopp_hasher<sha256_hasher, 32> {};
 namespace query {
 struct noop_hasher {
-    void update(const char* ptr, size_t length) noexcept { }
-    std::array<uint8_t, 16> finalize_array() { return std::array<uint8_t, 16>(); };
+    void update(const char* ptr, size_t length) noexcept ;
+    std::array<uint8_t, 16> finalize_array() ;;
 };
 class digester final {
     std::variant<noop_hasher, md5_hasher, xx_hasher, legacy_xx_hasher_without_null_digest> _impl;
@@ -39111,7 +39011,7 @@ public:
     stop_iteration consume(static_row&& sr, tombstone current_tombstone);
     // Requires that cr.has_any_live_data()
     stop_iteration consume(clustering_row&& cr, row_tombstone current_tombstone);
-    stop_iteration consume(range_tombstone_change&&) { return stop_iteration::no; }
+    stop_iteration consume(range_tombstone_change&&) ;
     uint64_t consume_end_of_stream();
 };
 class query_result_builder {
@@ -39231,18 +39131,7 @@ class generic_rate_limiter : public rate_limiter_base {
 private:
     seastar::timer<ClockType> _timer;
 public:
-    generic_rate_limiter()
-            : rate_limiter_base() {
-        // Rate limiting is more accurate when the rate limiter timers
-        // on all nodes are synchronized. Assume that the nodes' clocks
-        // are synchronized and schedule the first tick on the beginning
-        // of the closest second.
-        const auto period = std::chrono::seconds(1);
-        const auto now = std::chrono::system_clock::now();
-        const auto initial_delay = period - now.time_since_epoch() % period;
-        _timer.set_callback([this] { on_timer(); });
-        _timer.arm(ClockType::now() + initial_delay, period);
-    }
+    generic_rate_limiter()  ;
 };
 extern template class generic_rate_limiter<seastar::lowres_clock>;
 using rate_limiter = generic_rate_limiter<seastar::lowres_clock>;
@@ -39444,13 +39333,9 @@ private:
         Func func;
     public:
         void allocate() override ;
-        void fail(std::exception_ptr e) override {
-            pr.set_exception(e);
-        }
+        void fail(std::exception_ptr e) override ;
         concrete_allocating_function(Func&& func) : func(std::forward<Func>(func)) {}
-        typename futurator::type get_future() {
-            return pr.get_future();
-        }
+        typename futurator::type get_future() ;
     };
     class on_request_expiry {
         class blocked_requests_timed_out_error : public timed_out_error {
@@ -39458,9 +39343,7 @@ private:
         public:
             explicit blocked_requests_timed_out_error(sstring name)
                 : _msg(std::move(name) + ": timed out") {}
-            virtual const char* what() const noexcept override {
-                return _msg.c_str();
-            }
+            virtual const char* what() const noexcept override ;
         };
         sstring _name;
     public:
@@ -39616,9 +39499,7 @@ class flush_permit {
 public:
     flush_permit(flush_permit&&) noexcept = default;
     flush_permit& operator=(flush_permit&&) noexcept = default;
-    sstable_write_permit release_sstable_write_permit() noexcept {
-        return std::exchange(_sstable_write_permit, std::nullopt).value();
-    }
+    sstable_write_permit release_sstable_write_permit() noexcept ;
     bool has_sstable_write_permit() const noexcept ;
     future<flush_permit> reacquire_sstable_write_permit() &&;
 };
@@ -39696,9 +39577,7 @@ public:
                 })
         , _flush_serializer(1)
         , _waiting_flush(make_ready_future<>()) {}
-    static dirty_memory_manager& from_region_group(dirty_memory_manager_logalloc::region_group *rg) noexcept {
-        return *(boost::intrusive::get_parent_from_member(rg, &dirty_memory_manager::_region_group));
-    }
+    static dirty_memory_manager& from_region_group(dirty_memory_manager_logalloc::region_group *rg) noexcept ;
     dirty_memory_manager_logalloc::region_group& region_group() noexcept ;
     const dirty_memory_manager_logalloc::region_group& region_group() const noexcept ;
     void revert_potentially_cleaned_up_memory(logalloc::region* from, int64_t delta) ;
