@@ -3632,9 +3632,7 @@ public:
     static int64_t micros_timestamp(UUID uuid)
     ;
     template <std::intmax_t N, std::intmax_t D>
-    static bool is_valid_unix_timestamp(std::chrono::duration<int64_t, std::ratio<N, D>> d) {
-        return duration_cast<milliseconds>(d) < UUID_UNIXTIME_MAX;
-    }
+    static bool is_valid_unix_timestamp(std::chrono::duration<int64_t, std::ratio<N, D>> d) ;
     template <std::intmax_t N, std::intmax_t D>
     static decimicroseconds from_unix_timestamp(std::chrono::duration<int64_t, std::ratio<N, D>> d) {
         // Avoid 64-bit representation overflow when adding
@@ -3967,9 +3965,7 @@ class fragmented_temporary_buffer::istream {
     const char* _current_end;
     size_t _bytes_left = 0;
 private:
-    size_t contig_remain() const {
-        return _current_end - _current_position;
-    }
+    size_t contig_remain() const ;
     void next_fragment() ;
     template<typename ExceptionThrower>
     requires fragmented_temporary_buffer_concepts::ExceptionThrower<ExceptionThrower>
@@ -5328,7 +5324,7 @@ public:
     compression_parameters(compressor_ptr) ;
     compression_parameters(const std::map<sstring, sstring>& options) ;
     ~compression_parameters() {}
-    compressor_ptr get_compressor() const { return _compressor; }
+    compressor_ptr get_compressor() const ;
     int32_t chunk_length() const ;
     double crc_check_chance() const ;
     void validate();
@@ -5583,22 +5579,8 @@ enum class cf_type : uint8_t {
     standard,
     super,
 };
-inline sstring cf_type_to_sstring(cf_type t) {
-    if (t == cf_type::standard) {
-        return "Standard";
-    } else if (t == cf_type::super) {
-        return "Super";
-    }
-    throw std::invalid_argument(format("unknown type: {:d}\n", uint8_t(t)));
-}
-inline cf_type sstring_to_cf_type(sstring name) {
-    if (name == "Standard") {
-        return cf_type::standard;
-    } else if (name == "Super") {
-        return cf_type::super;
-    }
-    throw std::invalid_argument(format("unknown type: {}\n", name));
-}
+ sstring cf_type_to_sstring(cf_type t) ;
+ cf_type sstring_to_cf_type(sstring name) ;
 struct speculative_retry {
     enum class type {
         NONE, CUSTOM, PERCENTILE, ALWAYS
@@ -5608,19 +5590,7 @@ private:
     double _v;
 public:
     speculative_retry(type t, double v) : _t(t), _v(v) {}
-    sstring to_sstring() const {
-        if (_t == type::NONE) {
-            return "NONE";
-        } else if (_t == type::ALWAYS) {
-            return "ALWAYS";
-        } else if (_t == type::CUSTOM) {
-            return format("{:.2f}ms", _v);
-        } else if (_t == type::PERCENTILE) {
-            return format("{:.1f}PERCENTILE", 100 * _v);
-        } else {
-            throw std::invalid_argument(format("unknown type: {:d}\n", uint8_t(_t)));
-        }
-    }
+    sstring to_sstring() const ;
     static speculative_retry from_sstring(sstring str) ;
     type get_type() const ;
     double get_value() const ;
@@ -5724,20 +5694,20 @@ public:
     bool is_regular() const ;
     bool is_partition_key() const ;
     bool is_clustering_key() const ;
-    bool is_primary_key() const { return kind == column_kind::partition_key || kind == column_kind::clustering_key; }
+    bool is_primary_key() const ;
     bool is_atomic() const { return _is_atomic; }
-    bool is_multi_cell() const { return !_is_atomic; }
+    bool is_multi_cell() const ;
     bool is_counter() const { return _is_counter; }
     // "virtual columns" appear in a materialized view as placeholders for
     // unselected columns, with liveness information but without data, and
     // allow view rows to remain alive despite having no data (issue #3362).
     // These columns should be hidden from the user's SELECT queries.
-    bool is_view_virtual() const { return _is_view_virtual == column_view_virtual::yes; }
+    bool is_view_virtual() const ;
     column_view_virtual view_virtual() const ;
     // Computed column values are generated from other columns (and possibly other sources) during updates.
     // Their values are still stored on disk, same as a regular columns.
     bool is_computed() const ;
-    const column_computation& get_computation() const { return *_computation; }
+    const column_computation& get_computation() const ;
     column_computation_ptr get_computation_ptr() const {
         return _computation ? _computation->clone() : nullptr;
     }
@@ -5754,7 +5724,7 @@ public:
     uint32_t position() const ;
     bool is_on_all_components() const;
     bool is_part_of_cell_name() const ;
-    api::timestamp_type dropped_at() const { return _dropped_at; }
+    api::timestamp_type dropped_at() const ;
     friend bool operator==(const column_definition&, const column_definition&);
 };
 class schema_builder;
@@ -5785,7 +5755,7 @@ public:
     column_mapping_entry& operator=(const column_mapping_entry&);
     column_mapping_entry(column_mapping_entry&&) = default;
     column_mapping_entry& operator=(column_mapping_entry&&) = default;
-    const bytes& name() const { return _name; }
+    const bytes& name() const ;
     const data_type& type() const ;
     const sstring& type_name() const ;
     bool is_atomic() const ;
@@ -5808,7 +5778,7 @@ public:
             : _columns(std::move(columns))
             , _n_static(n_static)
     { }
-    const std::vector<column_mapping_entry>& columns() const { return _columns; }
+    const std::vector<column_mapping_entry>& columns() const ;
     column_count_type n_static() const ;
     const column_mapping_entry& column_at(column_kind kind, column_id id) const ;
     const column_mapping_entry& static_column_at(column_id id) const ;
@@ -5896,9 +5866,7 @@ public:
     struct dropped_column {
         data_type type;
         api::timestamp_type timestamp;
-        bool operator==(const dropped_column& rhs) const {
-            return type == rhs.type && timestamp == rhs.timestamp;
-        }
+        bool operator==(const dropped_column& rhs) const ;
     };
     using extensions_map = std::map<sstring, ::shared_ptr<schema_extension>>;
 private:
@@ -6020,9 +5988,7 @@ public:
     bool is_counter() const {
         return _raw._is_counter;
     }
-    const cf_type type() const {
-        return _raw._type;
-    }
+    const cf_type type() const ;
     bool is_super() const {
         return _raw._type == cf_type::super;
     }
@@ -6043,12 +6009,8 @@ public:
     const cdc::options& cdc_options() const;
     const ::tombstone_gc_options& tombstone_gc_options() const;
     const db::per_partition_rate_limit_options& per_partition_rate_limit_options() const ;
-    const ::speculative_retry& speculative_retry() const {
-        return _raw._speculative_retry;
-    }
-    const ::caching_options& caching_options() const {
-        return _raw._caching_options;
-    }
+    const ::speculative_retry& speculative_retry() const ;
+    const ::caching_options& caching_options() const ;
     static void set_default_partitioner(const sstring& class_name, unsigned ignore_msb = 0);
     const dht::i_partitioner& get_partitioner() const;
     const dht::sharder& get_sharder() const;
@@ -6077,8 +6039,8 @@ public:
     column_count_type partition_key_size() const;
     column_count_type clustering_key_size() const { return _clustering_key_size; }
     column_count_type static_columns_count() const { return _static_column_count; }
-    column_count_type regular_columns_count() const { return _regular_column_count; }
-    column_count_type all_columns_count() const { return _raw._columns.size(); }
+    column_count_type regular_columns_count() const ;
+    column_count_type all_columns_count() const ;
     // Returns a range of column definitions
     const_iterator_range_type partition_key_columns() const;
     // Returns a range of column definitions
@@ -6111,9 +6073,7 @@ public:
     const lw_shared_ptr<compound_type<allow_prefixes::no>>& partition_key_type() const {
         return _partition_key_type;
     }
-    const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_type() const {
-        return _clustering_key_type;
-    }
+    const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_type() const ;
     const lw_shared_ptr<compound_type<allow_prefixes::yes>>& clustering_key_prefix_type() const {
         return _clustering_key_type;
     }
@@ -6151,13 +6111,9 @@ public:
     // recent as this version.
     bool is_synced() const;
     bool equal_columns(const schema&) const;
-    bool wait_for_sync_to_commitlog() const {
-        return _static_props.wait_for_sync_to_commitlog;
-    }
+    bool wait_for_sync_to_commitlog() const ;
 public:
-    const v3_columns& v3() const {
-        return _v3_columns;
-    }
+    const v3_columns& v3() const ;
     // Make a copy of the schema with reversed clustering order.
     //
     // The reversing is revertible, so that:
@@ -6366,10 +6322,7 @@ struct vector_serializer {
     template<typename Output>
     static void write(Output& out, const Vector& v) ;
     template<typename Input>
-    static void skip(Input& in) {
-        auto sz = deserialize(in, boost::type<uint32_t>());
-        skip_array<value_type>(in, sz);
-    }
+    static void skip(Input& in) ;
 };
 }
 template<typename T>
@@ -6672,9 +6625,7 @@ void serialize(Output& out, const managed_bytes& v) ;
 template<typename Output>
 void serialize(Output& out, const bytes_ostream& v) ;
 template<typename Input>
-bytes_ostream deserialize(Input& in, boost::type<bytes_ostream>) {
-    return serializer<bytes>::read(in);
-}
+bytes_ostream deserialize(Input& in, boost::type<bytes_ostream>) ;
 template<typename Output, typename FragmentedBuffer>
 requires FragmentRange<FragmentedBuffer>
 void serialize_fragmented(Output& out, FragmentedBuffer&& v) ;
@@ -6850,12 +6801,8 @@ public:
         }
     }
     // Get the number of items in the vector
-    size_t size() const noexcept {
-        return _size;
-    }
-    bool empty() const noexcept {
-        return _size == 0;
-    }
+    size_t size() const noexcept ;
+    bool empty() const noexcept ;
     // Input iterator
     class iterator {
         // _idx is the distance from .begin(). It is used only for comparing iterators.
@@ -6878,9 +6825,7 @@ public:
         using reference = value_type&;
         using difference_type = ssize_t;
         iterator() noexcept = default;
-        bool operator==(const iterator& it) const noexcept {
-            return _idx == it._idx;
-        }
+        bool operator==(const iterator& it) const noexcept ;
         // Deserializes and returns the item, effectively incrementing the iterator..
         value_type operator*() const ;
         iterator& operator++() ;
@@ -6914,12 +6859,8 @@ public:
     cdc_extension(const options& opts) : _cdc_options(opts) {}
     explicit cdc_extension(std::map<sstring, sstring> tags) : _cdc_options(std::move(tags)) {}
     explicit cdc_extension(const bytes& b) : _cdc_options(cdc_extension::deserialize(b)) {}
-    explicit cdc_extension(const sstring& s) {
-        throw std::logic_error("Cannot create cdc info from string");
-    }
-    bytes serialize() const override {
-        return ser::serialize_to_buffer<bytes>(_cdc_options.to_map());
-    }
+    explicit cdc_extension(const sstring& s) ;
+    bytes serialize() const override ;
     static std::map<sstring, sstring> deserialize(const bytes_view& buffer) ;
     const options& get_options() const ;
 };
@@ -7068,19 +7009,12 @@ constexpr bool check_sstable_versions(const std::array<sstable_version_types, S1
     return expected == S2;
 }
 static_assert(check_sstable_versions(all_sstable_versions, writable_sstable_versions, oldest_writable_sstable_format));
-inline auto get_highest_sstable_version() {
-    return all_sstable_versions[all_sstable_versions.size() - 1];
-}
+ auto get_highest_sstable_version() ;
 sstable_version_types version_from_string(std::string_view s);
 sstable_format_types format_from_string(std::string_view s);
 extern const std::unordered_map<sstable_version_types, seastar::sstring, seastar::enum_hash<sstable_version_types>> version_string;
 extern const std::unordered_map<sstable_format_types, seastar::sstring, seastar::enum_hash<sstable_format_types>> format_string;
-inline int operator<=>(sstable_version_types a, sstable_version_types b) {
-    auto to_int = [] (sstable_version_types x) {
-        return static_cast<std::underlying_type_t<sstable_version_types>>(x);
-    };
-    return to_int(a) - to_int(b);
-}
+ int operator<=>(sstable_version_types a, sstable_version_types b) ;
 }
 template <>
 struct fmt::formatter<sstables::sstable_version_types> : fmt::formatter<std::string_view> {
@@ -7747,9 +7681,7 @@ public:
     static TopLevel make_empty() {
         return from_exploded(std::vector<bytes>());
     }
-    static TopLevel make_empty(const schema&) {
-        return make_empty();
-    }
+    static TopLevel make_empty(const schema&) ;
     template<typename RangeOfSerializedComponents>
     static TopLevel from_exploded(RangeOfSerializedComponents&& v) {
         return TopLevel::from_range(std::forward<RangeOfSerializedComponents>(v));
@@ -7768,10 +7700,7 @@ public:
     template <typename T>
     static
     TopLevel from_singular(const schema& s, const T& v) ;
-    static TopLevel from_singular_bytes(const schema& s, const bytes& b) {
-        get_singular_type(s); // validation
-        return from_single_value(s, b);
-    }
+    static TopLevel from_singular_bytes(const schema& s, const bytes& b) ;
     TopLevelView view() const {
         return TopLevelView::from_bytes(_bytes);
     }
@@ -7779,9 +7708,7 @@ public:
         return view();
     }
     // FIXME: return views
-    std::vector<bytes> explode(const schema& s) const {
-        return get_compound_type(s)->deserialize_value(_bytes);
-    }
+    std::vector<bytes> explode(const schema& s) const ;
     std::vector<bytes> explode() const {
         std::vector<bytes> result;
         for (managed_bytes_view c : components()) {
@@ -7789,21 +7716,13 @@ public:
         }
         return result;
     }
-    std::vector<managed_bytes> explode_fragmented() const {
-        std::vector<managed_bytes> result;
-        for (managed_bytes_view c : components()) {
-            result.emplace_back(managed_bytes(c));
-        }
-        return result;
-    }
+    std::vector<managed_bytes> explode_fragmented() const ;
     struct tri_compare {
         typename TopLevel::compound _t;
         tri_compare(const schema& s)  ;
         std::strong_ordering operator()(const TopLevel& k1, const TopLevel& k2) const ;
         std::strong_ordering operator()(const TopLevelView& k1, const TopLevel& k2) const ;
-        std::strong_ordering operator()(const TopLevel& k1, const TopLevelView& k2) const {
-            return _t->compare(k1.representation(), k2.representation());
-        }
+        std::strong_ordering operator()(const TopLevel& k1, const TopLevelView& k2) const ;
     };
     struct less_compare {
         typename TopLevel::compound _t;
@@ -7848,9 +7767,7 @@ public:
     bool is_empty() const {
         return _bytes.empty();
     }
-    explicit operator bool() const {
-        return !is_empty();
-    }
+    explicit operator bool() const ;
     // For backward compatibility with existing code.
     bool is_empty(const schema& s) const {
         return is_empty();
@@ -7863,20 +7780,14 @@ public:
     auto components(const schema& s) const {
         return components();
     }
-    managed_bytes_view get_component(const schema& s, size_t idx) const {
-        auto it = begin(s);
-        std::advance(it, idx);
-        return *it;
-    }
+    managed_bytes_view get_component(const schema& s, size_t idx) const ;
     // Returns the number of components of this compound.
     size_t size(const schema& s) const {
         return std::distance(begin(s), end(s));
     }
     size_t minimal_external_memory_usage() const ;
     size_t external_memory_usage() const noexcept ;
-    size_t memory_usage() const noexcept {
-        return sizeof(*this) + external_memory_usage();
-    }
+    size_t memory_usage() const noexcept ;
 };
 template <typename TopLevel, typename PrefixTopLevel>
 class prefix_view_on_full_compound {
@@ -7924,7 +7835,7 @@ public:
     {
         std::advance(_end, prefix_len);
     }
-    iterator begin() const { return _begin; }
+    iterator begin() const ;
     iterator end() const ;
     struct less_compare_with_prefix {
         typename TopLevel::compound prefix_type;
