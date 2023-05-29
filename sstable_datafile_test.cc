@@ -21560,18 +21560,15 @@ public:
 #define WRAP_METHOD(method)          \
     WRAP_CONST_METHOD(method)        \
     DO_WRAP_METHOD(method, )
-    WRAP_METHOD(find)
-    WRAP_METHOD(lower_bound)
+    ; WRAP_METHOD(lower_bound)
     WRAP_METHOD(upper_bound)
-    WRAP_METHOD(slice)
-    WRAP_METHOD(lower_slice)
+    ;  WRAP_METHOD(lower_slice)
     WRAP_METHOD(upper_slice)
     WRAP_CONST_METHOD(empty)
     WRAP_CONST_METHOD(size)
     WRAP_CONST_METHOD(calculate_size)
     WRAP_CONST_METHOD(external_memory_usage)
-    WRAP_METHOD(begin)
-    ;;   ; WRAP_CONST_METHOD(cbegin)
+    ;  ;;   ; WRAP_CONST_METHOD(cbegin)
     WRAP_CONST_METHOD(cend)
     WRAP_CONST_METHOD(crbegin)
     WRAP_CONST_METHOD(crend)
@@ -46452,16 +46449,8 @@ namespace utils {
 // A policy which throws the container_error associated with the result
 // if there was an attempt to access value while it was not present.
 struct exception_container_throw_policy : bo::policy::base {
-    template<class Impl> static constexpr void wide_value_check(Impl&& self) {
-        if (!base::_has_value(self)) {
-            base::_error(self).throw_me();
-        }
-    }
-    template<class Impl> static constexpr void wide_error_check(Impl&& self) {
-        if (!base::_has_error(self)) {
-            throw bo::bad_result_access("no error");
-        }
-    }
+    template<class Impl> static constexpr void wide_value_check(Impl&& self) ;
+    template<class Impl> static constexpr void wide_error_check(Impl&& self) ;
 };
 template<typename T, typename... Exs>
 using result_with_exception = bo::result<T, exception_container<Exs...>, exception_container_throw_policy>;
@@ -55346,15 +55335,15 @@ template void appending_hash<mutation_fragment>::operator()<xx_hasher>(xx_hasher
 template void appending_hash<row>::operator()<xx_hasher>(xx_hasher& h, const row& cells, const schema& s, column_kind kind, const query::column_id_vector& columns, max_timestamp& max_ts) const;
  template<typename RowWriter> static void get_compacted_row_slice(const schema& s,     const query::partition_slice& slice,     column_kind kind,     const row& cells,     const query::column_id_vector& columns,     RowWriter& writer) ;
  bool has_any_live_data(const schema& s, column_kind kind, const row& cells, tombstone tomb, gc_clock::time_point now) ;
- std::ostream& operator<<(std::ostream& os, const std::pair<column_id, const atomic_cell_or_collection::printer&>& c) {     fmt::print(os, "{{column: {} {}}}", c.first, c.second);     return os; }
+ std::ostream& operator<<(std::ostream& os, const std::pair<column_id, const atomic_cell_or_collection::printer&>& c) ;
  // Transforms given range of printable into a range of strings where each element
 // in the original range is prefxied with given string.
-template<typename RangeOfPrintable> static auto prefixed(const sstring& prefix, const RangeOfPrintable& r) {     return r | boost::adaptors::transformed([&] (auto&& e) { return format("{}{}", prefix, e); }); }
- std::ostream& operator<<(std::ostream& os, const row::printer& p) {     auto& cells = p._row._cells;     os << "{{row:";     cells.walk([&] (column_id id, const cell_and_hash& cah) {         auto& cdef = p._schema.column_at(p._kind, id);         os << "\n    " << cdef.name_as_text() << atomic_cell_or_collection::printer(cdef, cah.cell);         return true;     });     return os << "}}"; }
+template<typename RangeOfPrintable> static auto prefixed(const sstring& prefix, const RangeOfPrintable& r) ;
+ std::ostream& operator<<(std::ostream& os, const row::printer& p) ;
  std::ostream& operator<<(std::ostream& os, const row_marker& rm) ;
  std::ostream& operator<<(std::ostream& os, const deletable_row::printer& p) ;
  std::ostream& operator<<(std::ostream& os, const rows_entry::printer& p) ;
- std::ostream& operator<<(std::ostream& os, const mutation_partition::printer& p) {     const auto indent = "  ";     auto& mp = p._mutation_partition;     os << "mutation_partition: {\n";     if (mp._tombstone) {         fmt::print(os, "{}tombstone: {},\n", indent, mp._tombstone);     }     if (!mp._row_tombstones.empty()) {         fmt::print(os, "{}range_tombstones: {{{}}},\n", indent, fmt::join(prefixed("\n    ", mp._row_tombstones), ","));     }     if (!mp.static_row().empty()) {         os << indent << "static_row: {\n";         const auto& srow = mp.static_row().get();         srow.for_each_cell([&] (column_id& c_id, const atomic_cell_or_collection& cell) {             auto& column_def = p._schema.column_at(column_kind::static_column, c_id);             os << indent << indent <<  "'" << column_def.name_as_text()                 << "': " << atomic_cell_or_collection::printer(column_def, cell) << ",\n";         });          os << indent << "},\n";     }     os << indent << "rows: [\n";     for (const auto& re : mp.clustered_rows()) {         os << indent << indent << "{\n";         const auto& row = re.row();         os << indent << indent << indent << "cont: " << re.continuous() << ",\n";         os << indent << indent << indent << "dummy: " << re.dummy() << ",\n";         if (!row.marker().is_missing()) {             os << indent << indent << indent << "marker: " << row.marker() << ",\n";         }         if (row.deleted_at()) {             os << indent << indent << indent << "tombstone: " << row.deleted_at() << ",\n";         }         position_in_partition pip(re.position());         if (pip.get_clustering_key_prefix()) {             os << indent << indent << indent << "position: {\n";             auto ck = *pip.get_clustering_key_prefix();             auto type_iterator = ck.get_compound_type(p._schema)->types().begin();             auto column_iterator = p._schema.clustering_key_columns().begin();             os << indent << indent << indent << indent << "bound_weight: " << int32_t(pip.get_bound_weight()) << ",\n";             for (auto&& e : ck.components(p._schema)) {                 os << indent << indent << indent << indent << "'" << column_iterator->name_as_text()                     << "': " << (*type_iterator)->to_string(to_bytes(e)) << ",\n";                 ++type_iterator;                 ++column_iterator;             }             os << indent << indent << indent << "},\n";         }         row.cells().for_each_cell([&] (column_id& c_id, const atomic_cell_or_collection& cell) {             auto& column_def = p._schema.column_at(column_kind::regular_column, c_id);             os << indent << indent << indent <<  "'" << column_def.name_as_text()                 << "': " << atomic_cell_or_collection::printer(column_def, cell) << ",\n";         });         os << indent << indent << "},\n";     }     os << indent << "]\n}";     return os; }
+ std::ostream& operator<<(std::ostream& os, const mutation_partition::printer& p) ;
  constexpr gc_clock::duration row_marker::no_ttl;
  constexpr gc_clock::duration row_marker::dead;
  int compare_row_marker_for_merge(const row_marker& left, const row_marker& right) noexcept {     if (left.timestamp() != right.timestamp()) {         return left.timestamp() > right.timestamp() ? 1 : -1;     }     if (left.is_live() != right.is_live()) {         return left.is_live() ? -1 : 1;     }     if (left.is_live()) {         if (left.is_expiring() != right.is_expiring()) {             // prefer expiring cells.
