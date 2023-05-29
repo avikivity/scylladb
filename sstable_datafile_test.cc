@@ -12,6 +12,7 @@
 // is defined which isn't the case for us.
 #define RAPIDJSON_FORCEINLINE __attribute__((always_inline))
 #undef SEASTAR_TESTING_MAIN
+#include <immintrin.h>
 #include <absl/container/btree_set.h>
 #include <absl/container/flat_hash_map.h>
 #include <any>
@@ -24,7 +25,6 @@
 #include <boost/icl/interval_set.hpp>
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/unordered_set.hpp>
-#include <boost/multiprecision/cpp_int.hpp>
 #include <boost/outcome/result.hpp>
 #include <boost/program_options.hpp>
 #include <boost/range/adaptors.hpp>
@@ -4452,10 +4452,6 @@ struct task_info {
 };
 }
 class tuple_type_impl;
-class big_decimal;
-namespace utils {
-class multiprecision_int;
-}
 namespace cql3 {
 class cql3_type;
 }
@@ -4594,8 +4590,6 @@ public:
     data_value(time_native_type);
     data_value(timeuuid_native_type);
     data_value(date_type_native_type);
-    data_value(utils::multiprecision_int);
-    data_value(big_decimal);
     data_value(cql_duration);
     data_value(empty_type_representation);
     explicit data_value(std::optional<bytes>);
@@ -4656,7 +4650,6 @@ public:
         bytes,
         counter,
         date,
-        decimal,
         double_kind,
         duration,
         empty,
@@ -4677,8 +4670,7 @@ public:
         user,
         utf8,
         uuid,
-        varint,
-        last = varint,
+        last = uuid,
     };
 private:
     kind _kind;
@@ -4995,8 +4987,6 @@ extern thread_local const shared_ptr<const abstract_type> uuid_type;
 extern thread_local const shared_ptr<const abstract_type> inet_addr_type;
 extern thread_local const shared_ptr<const abstract_type> float_type;
 extern thread_local const shared_ptr<const abstract_type> double_type;
-extern thread_local const shared_ptr<const abstract_type> varint_type;
-extern thread_local const shared_ptr<const abstract_type> decimal_type;
 extern thread_local const shared_ptr<const abstract_type> counter_type;
 extern thread_local const shared_ptr<const abstract_type> duration_type;
 extern thread_local const data_type empty_type;
@@ -5017,8 +5007,6 @@ template <> inline thread_local const data_type& data_type_for_v<net::inet_addre
 template <> inline thread_local const data_type& data_type_for_v<bool> = boolean_type;
 template <> inline thread_local const data_type& data_type_for_v<float> = float_type;
 template <> inline thread_local const data_type& data_type_for_v<double> = double_type;
-template <> inline thread_local const data_type& data_type_for_v<utils::multiprecision_int> = varint_type;
-template <> inline thread_local const data_type& data_type_for_v<big_decimal> = decimal_type;
 template <> inline thread_local const data_type& data_type_for_v<cql_duration> = duration_type;
 namespace std {
 template <>
@@ -10699,215 +10687,7 @@ bytes serialize_field_index(size_t);
 size_t deserialize_field_index(const bytes_view&);
 size_t deserialize_field_index(managed_bytes_view);
 namespace utils {
-// multiprecision_int is a thin wrapper around boost::multiprecision::cpp_int.
-// cpp_int is worth about 20,000 lines of header files that are rarely used.
-// Forward-declaring cpp_int is very difficult as it is a complicated template,
-// hence this wrapper.
-//
-// Because cpp_int uses a lot of expression templates, the code below contains
-// many casts since the expression templates defeat regular C++ conversion rules.
-class multiprecision_int final {
-public:
-    using cpp_int = boost::multiprecision::cpp_int;
-private:
-    cpp_int _v;
-private:
-    // maybe_unwrap() selectively unwraps multiprecision_int values (leaving
-    // anything else unchanged), so avoid confusing boost::multiprecision.
-    static const cpp_int& maybe_unwrap(const multiprecision_int& x) {
-        return x._v;
-    }
-    template <typename T>
-    static const T& maybe_unwrap(const T& x) {
-        return x;
-    }
-public:
-    multiprecision_int() = default;
-    multiprecision_int(cpp_int x) : _v(std::move(x)) {}
-    explicit multiprecision_int(int x) : _v(x) {}
-    explicit multiprecision_int(unsigned x) : _v(x) {}
-    explicit multiprecision_int(long x) : _v(x) {}
-    explicit multiprecision_int(unsigned long x) : _v(x) {}
-    explicit multiprecision_int(long long x) : _v(x) {}
-    explicit multiprecision_int(unsigned long long x) : _v(x) {}
-    explicit multiprecision_int(float x) : _v(x) {}
-    explicit multiprecision_int(double x) : _v(x) {}
-    explicit multiprecision_int(long double x) : _v(x) {}
-    explicit multiprecision_int(const std::string x) : _v(x) {}
-    explicit multiprecision_int(const char* x) : _v(x) {}
-    operator const cpp_int&() const {
-        return _v;
-    }
-    explicit operator signed char() const {
-        return static_cast<signed char>(_v);
-    }
-    explicit operator unsigned char() const {
-        return static_cast<unsigned char>(_v);
-    }
-    explicit operator short() const {
-        return static_cast<short>(_v);
-    }
-    explicit operator unsigned short() const {
-        return static_cast<unsigned short>(_v);
-    }
-    explicit operator int() const {
-        return static_cast<int>(_v);
-    }
-    explicit operator unsigned() const {
-        return static_cast<unsigned>(_v);
-    }
-    explicit operator long() const {
-        return static_cast<long>(_v);
-    }
-    explicit operator unsigned long() const {
-        return static_cast<unsigned long>(_v);
-    }
-    explicit operator long long() const {
-        return static_cast<long long>(_v);
-    }
-    explicit operator unsigned long long() const {
-        return static_cast<unsigned long long>(_v);
-    }
-    explicit operator float() const {
-        return static_cast<float>(_v);
-    }
-    explicit operator double() const {
-        return static_cast<double>(_v);
-    }
-    explicit operator long double() const {
-        return static_cast<long double>(_v);
-    }
-    template <typename T>
-    multiprecision_int& operator+=(const T& x) {
-        _v += maybe_unwrap(x);
-        return *this;
-    }
-    template <typename T>
-    multiprecision_int& operator-=(const T& x) {
-        _v -= maybe_unwrap(x);
-        return *this;
-    }
-    template <typename T>
-    multiprecision_int& operator*=(const T& x) {
-        _v *= maybe_unwrap(x);
-        return *this;
-    }
-    template <typename T>
-    multiprecision_int& operator/=(const T& x) {
-        _v /= maybe_unwrap(x);
-        return *this;
-    }
-    template <typename T>
-    multiprecision_int& operator%=(const T& x) {
-        _v %= maybe_unwrap(x);
-        return *this;
-    }
-    template <typename T>
-    multiprecision_int& operator<<=(const T& x) {
-        _v <<= maybe_unwrap(x);
-        return *this;
-    }
-    template <typename T>
-    multiprecision_int& operator>>=(const T& x) {
-        _v >>= maybe_unwrap(x);
-        return *this;
-    }
-    multiprecision_int operator-() const {
-        return cpp_int(-_v);
-    }
-    multiprecision_int operator+(const multiprecision_int& x) const {
-        return cpp_int(_v + x._v);
-    }
-    template <typename T>
-    multiprecision_int operator+(const T& x) const {
-        return cpp_int(_v + maybe_unwrap(x));
-    }
-    template <typename T>
-    multiprecision_int operator-(const T& x) const {
-        return cpp_int(_v - maybe_unwrap(x));
-    }
-    template <typename T>
-    multiprecision_int operator*(const T& x) const {
-        return cpp_int(_v * maybe_unwrap(x));
-    }
-    template <typename T>
-    multiprecision_int operator/(const T& x) const {
-        return cpp_int(_v / maybe_unwrap(x));
-    }
-    template <typename T>
-    multiprecision_int operator%(const T& x) const {
-        return cpp_int(_v % maybe_unwrap(x));
-    }
-    template <typename T>
-    multiprecision_int operator<<(const T& x) const {
-        return cpp_int(_v << maybe_unwrap(x));
-    }
-    template <typename T>
-    multiprecision_int operator>>(const T& x) const {
-        return cpp_int(_v >> maybe_unwrap(x));
-    }
-    std::strong_ordering operator<=>(const multiprecision_int& x) const = default;
-    template <typename T>
-    bool operator==(const T& x) const {
-        return _v == maybe_unwrap(x);
-    }
-    template <typename T>
-    bool operator>(const T& x) const ;
-    template <typename T>
-    bool operator>=(const T& x) const ;
-    template <typename T>
-    bool operator<(const T& x) const ;
-    template <typename T>
-    bool operator<=(const T& x) const ;
-    template <typename T>
-    friend multiprecision_int operator+(const T& x, const multiprecision_int& y) ;
-    template <typename T>
-    friend multiprecision_int operator-(const T& x, const multiprecision_int& y) ;
-    template <typename T>
-    friend multiprecision_int operator*(const T& x, const multiprecision_int& y) ;
-    template <typename T>
-    friend multiprecision_int operator/(const T& x, const multiprecision_int& y) ;
-    template <typename T>
-    friend multiprecision_int operator%(const T& x, const multiprecision_int& y) ;
-    template <typename T>
-    friend multiprecision_int operator<<(const T& x, const multiprecision_int& y) ;
-    template <typename T>
-    friend multiprecision_int operator>>(const T& x, const multiprecision_int& y) ;
-    std::string str() const;
-    friend std::ostream& operator<<(std::ostream& os, const multiprecision_int& x);
-};
 }
-uint64_t from_varint_to_integer(const utils::multiprecision_int& varint);
-class big_decimal {
-private:
-    int32_t _scale;
-    boost::multiprecision::cpp_int _unscaled_value;
-public:
-    enum class rounding_mode {
-        HALF_EVEN,
-    };
-    explicit big_decimal(sstring_view text);
-    big_decimal();
-    big_decimal(int32_t scale, boost::multiprecision::cpp_int unscaled_value);
-    big_decimal(std::integral auto v) : big_decimal(0, v) {}
-    int32_t scale() const { return _scale; }
-    const boost::multiprecision::cpp_int& unscaled_value() const { return _unscaled_value; }
-    boost::multiprecision::cpp_rational as_rational() const;
-    sstring to_string() const;
-    std::strong_ordering operator<=>(const big_decimal& other) const;
-    big_decimal& operator+=(const big_decimal& other);
-    big_decimal& operator-=(const big_decimal& other);
-    big_decimal operator+(const big_decimal& other) const;
-    big_decimal operator-(const big_decimal& other) const;
-    big_decimal div(const ::uint64_t y, const rounding_mode mode) const;
-};
-template <>
-struct fmt::formatter<big_decimal> : fmt::formatter<std::string_view> {
-    template <typename FormatContext>
-    auto format(const big_decimal& v, FormatContext& ctx) const {
-        return fmt::format_to(ctx.out(), "{}", v.to_string());
-    }
-};
 struct empty_type_impl final : public abstract_type {
     using native_type = empty_type_representation;
     empty_type_impl();
@@ -10948,9 +10728,6 @@ struct double_type_impl final : public floating_type_impl<double> {
 struct float_type_impl final : public floating_type_impl<float> {
     float_type_impl();
 };
-struct decimal_type_impl final : public concrete_type<big_decimal> {
-    decimal_type_impl();
-};
 struct duration_type_impl final : public concrete_type<cql_duration> {
     duration_type_impl();
 };
@@ -10989,9 +10766,6 @@ struct timeuuid_type_impl final : public concrete_type<utils::UUID> {
     timeuuid_type_impl();
     static utils::UUID from_sstring(sstring_view s);
 };
-struct varint_type_impl final : public concrete_type<utils::multiprecision_int> {
-    varint_type_impl();
-};
 struct inet_addr_type_impl final : public concrete_type<seastar::net::inet_address> {
     inet_addr_type_impl();
     static sstring to_sstring(const seastar::net::inet_address& addr);
@@ -11009,7 +10783,6 @@ template <typename Func> concept CanHandleAllTypes = requires(Func f) {
     { f(*static_cast<const bytes_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const counter_type_impl*>(nullptr)) }     -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const date_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const decimal_type_impl*>(nullptr)) }     -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const double_type_impl*>(nullptr)) }      -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const duration_type_impl*>(nullptr)) }    -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const empty_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
@@ -11030,7 +10803,6 @@ template <typename Func> concept CanHandleAllTypes = requires(Func f) {
     { f(*static_cast<const user_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const utf8_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const uuid_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const varint_type_impl*>(nullptr)) }      -> std::same_as<visit_ret_type<Func>>;
 };
 template<typename Func>
 requires CanHandleAllTypes<Func>
@@ -11048,8 +10820,6 @@ static inline visit_ret_type<Func> visit(const abstract_type& t, Func&& f) {
         return f(*static_cast<const counter_type_impl*>(&t));
     case abstract_type::kind::date:
         return f(*static_cast<const date_type_impl*>(&t));
-    case abstract_type::kind::decimal:
-        return f(*static_cast<const decimal_type_impl*>(&t));
     case abstract_type::kind::double_kind:
         return f(*static_cast<const double_type_impl*>(&t));
     case abstract_type::kind::duration:
@@ -11090,8 +10860,6 @@ static inline visit_ret_type<Func> visit(const abstract_type& t, Func&& f) {
         return f(*static_cast<const utf8_type_impl*>(&t));
     case abstract_type::kind::uuid:
         return f(*static_cast<const uuid_type_impl*>(&t));
-    case abstract_type::kind::varint:
-        return f(*static_cast<const varint_type_impl*>(&t));
     }
     __builtin_unreachable();
 }
@@ -11900,7 +11668,7 @@ private:
     }
 public:
     enum class kind : int8_t {
-        ASCII, BIGINT, BLOB, BOOLEAN, COUNTER, DECIMAL, DOUBLE, EMPTY, FLOAT, INT, SMALLINT, TINYINT, INET, TEXT, TIMESTAMP, UUID, VARINT, TIMEUUID, DATE, TIME, DURATION
+        ASCII, BIGINT, BLOB, BOOLEAN, COUNTER, DOUBLE, EMPTY, FLOAT, INT, SMALLINT, TINYINT, INET, TEXT, TIMESTAMP, UUID, TIMEUUID, DATE, TIME, DURATION
     };
     using kind_enum = super_enum<kind,
         kind::ASCII,
@@ -11908,7 +11676,6 @@ public:
         kind::BLOB,
         kind::BOOLEAN,
         kind::COUNTER,
-        kind::DECIMAL,
         kind::DOUBLE,
         kind::EMPTY,
         kind::FLOAT,
@@ -11919,7 +11686,6 @@ public:
         kind::TEXT,
         kind::TIMESTAMP,
         kind::UUID,
-        kind::VARINT,
         kind::TIMEUUID,
         kind::DATE,
         kind::TIME,
@@ -11942,8 +11708,6 @@ public:
     static thread_local cql3_type date;
     static thread_local cql3_type time;
     static thread_local cql3_type inet;
-    static thread_local cql3_type varint;
-    static thread_local cql3_type decimal;
     static thread_local cql3_type counter;
     static thread_local cql3_type duration;
     static const std::vector<cql3_type>& values();
@@ -61112,60 +60876,9 @@ UUID::UUID(sstring_view uuid)
 // string_view as binary and "0" ends up 48.
 // Work around by casting to string.
 using string_view_workaround = std::string;
-big_decimal::big_decimal() : big_decimal(0, 0) {}
-big_decimal::big_decimal(int32_t scale, boost::multiprecision::cpp_int unscaled_value) : _scale(scale), _unscaled_value(std::move(unscaled_value)) {}
 
-sstring big_decimal::to_string() const
-{
-if (!_unscaled_value)
-{
-    return "0";
-}
-boost::multiprecision::cpp_int num = boost::multiprecision::abs(_unscaled_value);
-auto str = num.str();
-if (_scale < 0)
-{
-    for (int i = 0; i > _scale; i--)
-    {
-        str.push_back('0');
-    }
-}
-else if (_scale > 0)
-{
-    if (str.size() > unsigned(_scale))
-    {
-        str.insert(str.size() - _scale, 1, '.');
-    }
-    else
-    {
-        std::string nstr = "0.";
-        nstr.append(_scale - str.size(), '0');
-        nstr.append(str);
-        str = std::move(nstr);
-    }
-    while (str.back() == '0')
-    {
-        str.pop_back();
-    }
-    if (str.back() == '.')
-    {
-        str.pop_back();
-    }
-}
-if (_unscaled_value < 0)
-{
-    str.insert(0, 1, '-');
-}
-return str;
-}
-std::strong_ordering big_decimal::operator<=>(const big_decimal &other) const
-{
-auto max_scale = std::max(_scale, other._scale);
-boost::multiprecision::cpp_int rescale(10);
-boost::multiprecision::cpp_int x = _unscaled_value * boost::multiprecision::pow(rescale, max_scale - _scale);
-boost::multiprecision::cpp_int y = other._unscaled_value * boost::multiprecision::pow(rescale, max_scale - other._scale);
-return x.compare(y) <=> 0;
-}
+
+
 
 static logging::logger tlogger("types");
 bytes_view_opt read_collection_value(bytes_view &in);
@@ -61190,8 +60903,6 @@ static const char *uuid_type_name = "org.apache.cassandra.db.marshal.UUIDType";
 static const char *inet_addr_type_name = "org.apache.cassandra.db.marshal.InetAddressType";
 static const char *double_type_name = "org.apache.cassandra.db.marshal.DoubleType";
 static const char *float_type_name = "org.apache.cassandra.db.marshal.FloatType";
-static const char *varint_type_name = "org.apache.cassandra.db.marshal.IntegerType";
-static const char *decimal_type_name = "org.apache.cassandra.db.marshal.DecimalType";
 static const char *counter_type_name = "org.apache.cassandra.db.marshal.CounterColumnType";
 static const char *duration_type_name = "org.apache.cassandra.db.marshal.DurationType";
 static const char *empty_type_name = "org.apache.cassandra.db.marshal.EmptyType";
@@ -61399,12 +61110,6 @@ double_type_impl::double_type_impl() : floating_type_impl{kind::double_kind, dou
 {
 }
 float_type_impl::float_type_impl() : floating_type_impl{kind::float_kind, float_type_name, 4}
-{
-}
-varint_type_impl::varint_type_impl() : concrete_type{kind::varint, varint_type_name, {}}
-{
-}
-decimal_type_impl::decimal_type_impl() : concrete_type{kind::decimal, decimal_type_name, {}}
 {
 }
 counter_type_impl::counter_type_impl() : abstract_type{kind::counter, counter_type_name, {}}
@@ -61678,7 +61383,6 @@ case k::boolean:
 case k::bytes:
 case k::counter:
 case k::date:
-case k::decimal:
 case k::double_kind:
 case k::duration:
 case k::empty:
@@ -61696,7 +61400,6 @@ case k::tuple:
 case k::user:
 case k::utf8:
 case k::uuid:
-case k::varint:
     return false;
 }
 __builtin_unreachable();
@@ -61760,7 +61463,6 @@ struct visitor
     }
     bool operator()(const tuple_type_impl &t) { return check_compatibility(t, previous, &abstract_type::is_compatible_with); }
     bool operator()(const collection_type_impl &t) { return is_compatible_with_aux(t, previous); }
-    bool operator()(const varint_type_impl &t) { return is_fixed_size_int_type(previous); }
     bool operator()(const abstract_type &t) { return false; }
 };
 return visit(*this, visitor{previous});
@@ -61776,7 +61478,6 @@ struct visitor
     sstring operator()(const bytes_type_impl &) { return "blob"; }
     sstring operator()(const counter_type_impl &) { return "counter"; }
     sstring operator()(const timestamp_date_base_class &) { return "timestamp"; }
-    sstring operator()(const decimal_type_impl &) { return "decimal"; }
     sstring operator()(const double_type_impl &) { return "double"; }
     sstring operator()(const duration_type_impl &) { return "duration"; }
     sstring operator()(const empty_type_impl &) { return "empty"; }
@@ -61795,7 +61496,6 @@ struct visitor
     sstring operator()(const tuple_type_impl &t) { return format("tuple<{}>", fmt::join(t.all_types() | boost::adaptors::transformed(std::mem_fn(&abstract_type::as_cql3_type)), ", ")); }
     sstring operator()(const utf8_type_impl &) { return "text"; }
     sstring operator()(const uuid_type_impl &) { return "uuid"; }
-    sstring operator()(const varint_type_impl &) { return "varint"; }
 };
 return visit(t, visitor{});
 }
@@ -62308,46 +62008,6 @@ for (size_t i = 0; i < elems.size(); ++i)
     }
 }
 }
-static void serialize_varint_aux(bytes::iterator &out, const boost::multiprecision::cpp_int &num, uint8_t mask)
-{
-struct inserter_with_prefix
-{
-    bytes::iterator &out;
-    uint8_t mask;
-    bool first = true;
-    inserter_with_prefix &operator*() { return *this; }
-    inserter_with_prefix &operator=(uint8_t value)
-    {
-        if (first)
-        {
-        if (value & 0x80)
-        {
-            *out++ = 0 ^ mask;
-        }
-        first = false;
-        }
-        *out = value ^ mask;
-        return *this;
-    }
-    inserter_with_prefix &operator++()
-    {
-        ++out;
-        return *this;
-    }
-};
-export_bits(num, inserter_with_prefix{out, mask}, 8);
-}
-static void serialize_varint(bytes::iterator &out, const boost::multiprecision::cpp_int &num)
-{
-if (num < 0)
-{
-    serialize_varint_aux(out, -num - 1, 0xff);
-}
-else
-{
-    serialize_varint_aux(out, num, 0);
-}
-}
 namespace
 {
 struct serialize_visitor
@@ -62464,25 +62124,6 @@ struct serialize_visitor
         auto u = net::hton(i);
         out = std::copy_n(reinterpret_cast<const char *>(&u), sizeof(u), out);
     }
-    void operator()(const varint_type_impl &t, const varint_type_impl::native_type *num1)
-    {
-        if (num1->empty())
-        {
-        return;
-        }
-        serialize_varint(out, num1->get());
-    }
-    void operator()(const decimal_type_impl &t, const decimal_type_impl::native_type *bd1)
-    {
-        if (bd1->empty())
-        {
-        return;
-        }
-        auto &&bd = std::move(*bd1).get();
-        auto u = net::hton(bd.scale());
-        out = std::copy_n(reinterpret_cast<const char *>(&u), sizeof(int32_t), out);
-        serialize_varint(out, bd.unscaled_value());
-    }
     void operator()(const counter_type_impl &t, const void *) { fail(unimplemented::cause::COUNTERS); }
     void operator()(const duration_type_impl &t, const duration_type_impl::native_type *m)
     {
@@ -62547,35 +62188,6 @@ while (ti != t.all_types().end())
 }
 return data_value::make(t.shared_from_this(), std::make_unique<tuple_type_impl::native_type>(std::move(ret)));
 }
-template <FragmentedView View>
-utils::multiprecision_int deserialize_value(const varint_type_impl &, View v)
-{
-if (v.empty())
-{
-    throw marshal_exception("cannot deserialize multiprecision int - empty buffer");
-}
-skip_empty_fragments(v);
-bool negative = v.current_fragment().front() < 0;
-utils::multiprecision_int num;
-while (v.size_bytes())
-{
-    for (uint8_t b : v.current_fragment())
-    {
-        if (negative)
-        {
-        b = ~b;
-        }
-        num <<= 8;
-        num += b;
-    }
-    v.remove_current();
-}
-if (negative)
-{
-    num += 1;
-}
-return negative ? -num : num;
-}
 template <typename T, FragmentedView View>
 T deserialize_value(const floating_type_impl<T> &, View v)
 {
@@ -62587,13 +62199,6 @@ if (v.size_bytes())
 T d;
 memcpy(&d, &i, sizeof(T));
 return d;
-}
-template <FragmentedView View>
-big_decimal deserialize_value(const decimal_type_impl &, View v)
-{
-auto scale = read_simple<int32_t>(v);
-auto unscaled = deserialize_value(static_cast<const varint_type_impl &>(*varint_type), v);
-return big_decimal(scale, unscaled);
 }
 template <FragmentedView View>
 cql_duration deserialize_value(const duration_type_impl &t, View v)
@@ -62831,16 +62436,6 @@ struct compare_visitor
         const auto b = v2.empty() ? 0 : simple_type_traits<int64_t>::read_nonempty(v2);
         return a <=> b;
     }
-    std::strong_ordering operator()(const decimal_type_impl &d)
-    {
-        return with_empty_checks([&]
-                                 {         auto a = deserialize_value(d, v1);         auto b = deserialize_value(d, v2);         return a <=> b; });
-    }
-    std::strong_ordering operator()(const varint_type_impl &v)
-    {
-        return with_empty_checks([&]
-                                 {         auto a = deserialize_value(v, v1);         auto b = deserialize_value(v, v2);         return a == b ? std::strong_ordering::equal : a < b ? std::strong_ordering::less : std::strong_ordering::greater; });
-    }
     template <typename T>
     std::strong_ordering operator()(const floating_type_impl<T> &)
     {
@@ -62893,32 +62488,6 @@ static size_t concrete_serialized_size(const simple_date_type_impl::native_type 
 static size_t concrete_serialized_size(const string_type_impl::native_type &v) { return v.size(); }
 static size_t concrete_serialized_size(const bytes_type_impl::native_type &v) { return v.size(); }
 static size_t concrete_serialized_size(const inet_addr_type_impl::native_type &v) { return v.get().size(); }
-static size_t concrete_serialized_size_aux(const boost::multiprecision::cpp_int &num)
-{
-if (num)
-{
-    return align_up(boost::multiprecision::msb(num) + 2, 8u) / 8;
-}
-else
-{
-    return 1;
-}
-}
-static size_t concrete_serialized_size(const boost::multiprecision::cpp_int &num)
-{
-if (num < 0)
-{
-    return concrete_serialized_size_aux(-num - 1);
-}
-return concrete_serialized_size_aux(num);
-}
-static size_t concrete_serialized_size(const utils::multiprecision_int &num) { return concrete_serialized_size(static_cast<const boost::multiprecision::cpp_int &>(num)); }
-static size_t concrete_serialized_size(const varint_type_impl::native_type &v) { return concrete_serialized_size(v.get()); }
-static size_t concrete_serialized_size(const decimal_type_impl::native_type &v)
-{
-const boost::multiprecision::cpp_int &uv = v.get().unscaled_value();
-return sizeof(int32_t) + concrete_serialized_size(uv);
-}
 static size_t concrete_serialized_size(const duration_type_impl::native_type &v)
 {
 const auto &d = v.get();
@@ -62975,8 +62544,6 @@ struct from_string_visitor
     bytes operator()(const uuid_type_impl &);
     template <typename T>
     bytes operator()(const floating_type_impl<T> &t);
-    bytes operator()(const varint_type_impl &t);
-    bytes operator()(const decimal_type_impl &t);
     bytes operator()(const counter_type_impl &);
     bytes operator()(const duration_type_impl &t);
     bytes operator()(const empty_type_impl &);
@@ -63300,8 +62867,6 @@ thread_local const shared_ptr<const abstract_type> uuid_type(make_shared<uuid_ty
 thread_local const shared_ptr<const abstract_type> inet_addr_type(make_shared<inet_addr_type_impl>());
 thread_local const shared_ptr<const abstract_type> float_type(make_shared<float_type_impl>());
 thread_local const shared_ptr<const abstract_type> double_type(make_shared<double_type_impl>());
-thread_local const shared_ptr<const abstract_type> varint_type(make_shared<varint_type_impl>());
-thread_local const shared_ptr<const abstract_type> decimal_type(make_shared<decimal_type_impl>());
 thread_local const shared_ptr<const abstract_type> counter_type(make_shared<counter_type_impl>());
 thread_local const shared_ptr<const abstract_type> duration_type(make_shared<duration_type_impl>());
 thread_local const data_type empty_type(make_shared<empty_type_impl>());
@@ -63349,8 +62914,6 @@ data_value::data_value(db_clock::time_point v) : data_value(make_new(timestamp_t
 data_value::data_value(time_native_type v) : data_value(make_new(time_type, v.nanoseconds)) {}
 data_value::data_value(timeuuid_native_type v) : data_value(make_new(timeuuid_type, v.uuid)) {}
 data_value::data_value(date_type_native_type v) : data_value(make_new(date_type, v.tp)) {}
-data_value::data_value(utils::multiprecision_int v) : data_value(make_new(varint_type, v)) {}
-data_value::data_value(big_decimal v) : data_value(make_new(decimal_type, v)) {}
 data_value::data_value(cql_duration d) : data_value(make_new(duration_type, d)) {}
 data_value::data_value(empty_type_representation e) : data_value(make_new(empty_type, e)) {}
 sstring data_value::to_parsable_string() const
@@ -63942,11 +63505,6 @@ case utils::config_file::config_source::API:
     return "api";
 }
 __builtin_unreachable();
-}
-namespace utils
-{
-std::string multiprecision_int::str() const { return _v.str(); }
-std::ostream &operator<<(std::ostream &os, const multiprecision_int &x) { return os << x._v; }
 }
 using u32 = uint32_t;
 using u64 = uint64_t;
@@ -65460,7 +65018,7 @@ struct column_description
     data_type old_type;
 };
 auto columns = std::vector<column_description>{
-    {100, int32_type, {varint_type, bytes_type}, {[&]
+    {100, int32_type, {bytes_type, bytes_type}, {[&]
                                                   { return random_int32_value(); },
                                                   [&]
                                                   { return bytes(); }},
@@ -65468,7 +65026,7 @@ auto columns = std::vector<column_description>{
     {200, map_of_int_to_int, {map_of_int_to_bytes}, {[&]
                                                      { return random_map(); }},
      empty_type},
-    {300, int32_type, {varint_type, bytes_type}, {[&]
+    {300, int32_type, {bytes_type, bytes_type}, {[&]
                                                   { return random_int32_value(); },
                                                   [&]
                                                   { return bytes(); }},
@@ -66035,7 +65593,7 @@ type_generator::type_generator(random_schema_specification &spec) : _spec(spec)
         data_type type;
         data_type operator()(std::mt19937 &, is_multi_cell) { return type; }
     };
-    _generators = {simple_type_generator{byte_type}, simple_type_generator{short_type}, simple_type_generator{int32_type}, simple_type_generator{long_type}, simple_type_generator{ascii_type}, simple_type_generator{bytes_type}, simple_type_generator{utf8_type}, simple_type_generator{boolean_type}, simple_type_generator{date_type}, simple_type_generator{timeuuid_type}, simple_type_generator{timestamp_type}, simple_type_generator{simple_date_type}, simple_type_generator{time_type}, simple_type_generator{uuid_type}, simple_type_generator{inet_addr_type}, simple_type_generator{float_type}, simple_type_generator{double_type}, simple_type_generator{varint_type}, simple_type_generator{decimal_type}, simple_type_generator{duration_type}}; // tuple
+    _generators = {simple_type_generator{byte_type}, simple_type_generator{short_type}, simple_type_generator{int32_type}, simple_type_generator{long_type}, simple_type_generator{ascii_type}, simple_type_generator{bytes_type}, simple_type_generator{utf8_type}, simple_type_generator{boolean_type}, simple_type_generator{date_type}, simple_type_generator{timeuuid_type}, simple_type_generator{timestamp_type}, simple_type_generator{simple_date_type}, simple_type_generator{time_type}, simple_type_generator{uuid_type}, simple_type_generator{inet_addr_type}, simple_type_generator{float_type}, simple_type_generator{double_type}, simple_type_generator{duration_type}}; // tuple
     _generators.emplace_back([this](std::mt19937 &engine, is_multi_cell)
                              {             std::uniform_int_distribution<size_t> count_dist{2, 4};             const auto count = count_dist(engine);             std::vector<data_type> data_types;             for (size_t i = 0; i < count; ++i) {                 data_types.emplace_back((*this)(engine, type_generator::is_multi_cell::no));             }             return tuple_type_impl::get_instance(std::move(data_types)); }); // user
     _generators.emplace_back([this](std::mt19937 &engine, is_multi_cell multi_cell) mutable
@@ -66124,24 +65682,6 @@ namespace
 std::unique_ptr<random_schema_specification> make_random_schema_specification(sstring keyspace_name, std::uniform_int_distribution<size_t> partition_column_count_dist, std::uniform_int_distribution<size_t> clustering_column_count_dist, std::uniform_int_distribution<size_t> regular_column_count_dist, std::uniform_int_distribution<size_t> static_column_count_dist) { return std::make_unique<default_random_schema_specification>(std::move(keyspace_name), partition_column_count_dist, clustering_column_count_dist, regular_column_count_dist, static_column_count_dist); }
 namespace
 {
-    utils::multiprecision_int generate_multiprecision_integer_value(std::mt19937 &engine, size_t min_size_in_bytes, size_t max_size_in_bytes)
-    {
-        using utils::multiprecision_int;
-        const auto max_bytes = std::min(size_t(16), std::max(size_t(2), max_size_in_bytes) - 1);
-        const auto generate_int = [](std::mt19937 &engine, size_t max_bytes)
-        {         if (max_bytes == 8) {             return multiprecision_int(random::get_int<uint64_t>(engine));         } else { // max_bytes < 8
-            return multiprecision_int(random::get_int<uint64_t>(0, (uint64_t(1) << (max_bytes * 8)) - uint64_t(1), engine));         } };
-        if (max_bytes <= 8)
-        {
-        return generate_int(engine, max_bytes);
-        }
-        else
-        { // max_bytes > 8
-        auto ls = multiprecision_int(generate_int(engine, 8));
-        auto ms = multiprecision_int(generate_int(engine, max_bytes - 8));
-        return multiprecision_int(ls) + (multiprecision_int(ms) << 64);
-        }
-    }
     template <typename String>
     String generate_string_value(std::mt19937 &engine, typename String::value_type min, typename String::value_type max, size_t min_size_in_bytes, size_t max_size_in_bytes)
     {
@@ -66317,12 +65857,6 @@ namespace
     data_value generate_inet_addr_value(std::mt19937 &engine, size_t, size_t) { return data_value(net::ipv4_address(random::get_int<int32_t>(engine))); }
     data_value generate_float_value(std::mt19937 &engine, size_t, size_t) { return data_value(random::get_real<float>(engine)); }
     data_value generate_double_value(std::mt19937 &engine, size_t, size_t) { return data_value(random::get_real<double>(engine)); }
-    data_value generate_varint_value(std::mt19937 &engine, size_t min_size_in_bytes, size_t max_size_in_bytes) { return data_value(generate_multiprecision_integer_value(engine, min_size_in_bytes, max_size_in_bytes)); }
-    data_value generate_decimal_value(std::mt19937 &engine, size_t min_size_in_bytes, size_t max_size_in_bytes)
-    {
-        auto scale_dist = std::uniform_int_distribution<int32_t>(-8, 8);
-        return data_value(big_decimal(scale_dist(engine), generate_multiprecision_integer_value(engine, min_size_in_bytes - sizeof(int32_t), max_size_in_bytes - sizeof(int32_t))));
-    }
     data_value generate_duration_value(std::mt19937 &engine, size_t, size_t)
     {
         auto months = months_counter(random::get_int<months_counter::value_type>(engine));
@@ -66377,7 +65911,7 @@ data_value value_generator::generate_atomic_value(std::mt19937 &engine, const ab
     assert(!type.is_multi_cell());
     return get_atomic_value_generator(type)(engine, min_size_in_bytes, max_size_in_bytes);
 }
-value_generator::value_generator() : _regular_value_generators{{empty_type.get(), &generate_empty_value}, {byte_type.get(), &generate_byte_value}, {short_type.get(), &generate_short_value}, {int32_type.get(), &generate_int32_value}, {long_type.get(), &generate_long_value}, {ascii_type.get(), &generate_ascii_value}, {bytes_type.get(), &generate_bytes_value}, {utf8_type.get(), &generate_utf8_value}, {boolean_type.get(), &generate_boolean_value}, {date_type.get(), &generate_date_value}, {timeuuid_type.get(), &generate_timeuuid_value}, {timestamp_type.get(), &generate_timestamp_value}, {simple_date_type.get(), &generate_simple_date_value}, {time_type.get(), &generate_time_value}, {uuid_type.get(), &generate_uuid_value}, {inet_addr_type.get(), &generate_inet_addr_value}, {float_type.get(), &generate_float_value}, {double_type.get(), &generate_double_value}, {varint_type.get(), &generate_varint_value}, {decimal_type.get(), &generate_decimal_value}, {duration_type.get(), &generate_duration_value}}
+value_generator::value_generator() : _regular_value_generators{{empty_type.get(), &generate_empty_value}, {byte_type.get(), &generate_byte_value}, {short_type.get(), &generate_short_value}, {int32_type.get(), &generate_int32_value}, {long_type.get(), &generate_long_value}, {ascii_type.get(), &generate_ascii_value}, {bytes_type.get(), &generate_bytes_value}, {utf8_type.get(), &generate_utf8_value}, {boolean_type.get(), &generate_boolean_value}, {date_type.get(), &generate_date_value}, {timeuuid_type.get(), &generate_timeuuid_value}, {timestamp_type.get(), &generate_timestamp_value}, {simple_date_type.get(), &generate_simple_date_value}, {time_type.get(), &generate_time_value}, {uuid_type.get(), &generate_uuid_value}, {inet_addr_type.get(), &generate_inet_addr_value}, {float_type.get(), &generate_float_value}, {double_type.get(), &generate_double_value}, {duration_type.get(), &generate_duration_value}}
 {
     std::mt19937 engine;
     for (const auto &[regular_type, regular_value_gen] : _regular_value_generators)
