@@ -11480,15 +11480,13 @@ public:
     // for selectable::with_expression::raw:
     bool processes_selection() const;
     bool operator==(const column_identifier_raw& other) const;
-    virtual sstring to_string() const;
-    sstring to_cql_string() const;
+    
+    
     friend std::hash<column_identifier_raw>;
-    friend std::ostream& operator<<(std::ostream& out, const column_identifier_raw& id);
+    
 };
-static
-const column_definition* get_column_definition(const schema& schema, const column_identifier& id) ;
-static
-::shared_ptr<column_identifier> to_identifier(const column_definition& def) ;
+
+
 }
 namespace std {
 template<>
@@ -11540,68 +11538,67 @@ class user_types_metadata;
 class keyspace_metadata;
 class no_such_keyspace : public std::runtime_error {
 public:
-    no_such_keyspace(std::string_view ks_name);
+    
 };
 class no_such_column_family : public std::runtime_error {
 public:
-    no_such_column_family(const table_id& uuid);
-    no_such_column_family(std::string_view ks_name, std::string_view cf_name);
-    no_such_column_family(std::string_view ks_name, const table_id& uuid);
+    
+    
+    
 };
 class table {
     const impl* _ops;
     const void* _table;
 private:
     friend class impl;
-    table(const impl* ops, const void* table);
+    
 public:
-    schema_ptr schema() const;
-    const std::vector<view_ptr>& views() const;
-    const secondary_index::secondary_index_manager& get_index_manager() const;
+    
+    
+    
 };
 class keyspace {
     const impl* _ops;
     const void* _keyspace;
 private:
     friend class impl;
-    keyspace(const impl* ops, const void* keyspace);
+    
 public:
-    bool is_internal() const;
-    lw_shared_ptr<keyspace_metadata> metadata() const;
-    const user_types_metadata& user_types() const;
-    const locator::abstract_replication_strategy& get_replication_strategy() const;
+    
+    
+    
+    
 };
 class database {
     const impl* _ops;
     const void* _database;
 private:
     friend class impl;
-    database(const impl* ops, const void* database);
+    
 public:
-    keyspace find_keyspace(std::string_view name) const;
-    std::optional<keyspace> try_find_keyspace(std::string_view name) const;
-    bool has_keyspace(std::string_view name) const;  // throws no_keyspace
-    std::vector<keyspace> get_keyspaces() const;
-    std::vector<sstring> get_user_keyspaces() const;
-    std::vector<sstring> get_all_keyspaces() const;
-    std::vector<table> get_tables() const;
-    table find_table(std::string_view ks, std::string_view table) const;  // throws no_such_column_family
-    table find_column_family(table_id uuid) const;  // throws no_such_column_family
-    schema_ptr find_schema(std::string_view ks, std::string_view table) const;  // throws no_such_column_family
-    schema_ptr find_schema(table_id uuid) const;  // throws no_such_column_family
-    table find_column_family(schema_ptr s) const;
-    bool has_schema(std::string_view ks_name, std::string_view cf_name) const;
-    std::optional<table> try_find_table(std::string_view ks, std::string_view table) const;
-    std::optional<table> try_find_table(table_id id) const;
-    const db::config& get_config() const;
-    std::set<sstring> existing_index_names(std::string_view ks_name, std::string_view cf_to_exclude = sstring()) const;
-    schema_ptr find_indexed_table(std::string_view ks_name, std::string_view index_name) const;
-    sstring get_available_index_name(std::string_view ks_name, std::string_view table_name,
-                                               std::optional<sstring> index_name_root) const;
-    schema_ptr get_cdc_base_table(sstring_view ks_name, std::string_view table_name) const;
-    schema_ptr get_cdc_base_table(const schema&) const;
-    const db::extensions& extensions() const;
-    const gms::feature_service& features() const;
+    
+    
+      // throws no_keyspace
+    
+    
+    
+    
+      // throws no_such_column_family
+      // throws no_such_column_family
+      // throws no_such_column_family
+      // throws no_such_column_family
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     replica::database& real_database() const; // For transition; remove
 };
 }
@@ -13421,23 +13418,15 @@ public:
 };
 class nonexistant_role : public roles_argument_exception {
 public:
-    explicit nonexistant_role(std::string_view role_name)
-            : roles_argument_exception(format("Role {} doesn't exist.", role_name)) {
-    }
+    
 };
 class role_already_included : public roles_argument_exception {
 public:
-    role_already_included(std::string_view grantee_name, std::string_view role_name)
-            : roles_argument_exception(
-                      format("{} already includes role {}.", grantee_name, role_name)) {
-    }
+    
 };
 class revoke_ungranted_role : public roles_argument_exception {
 public:
-    revoke_ungranted_role(std::string_view revokee_name, std::string_view role_name)
-            : roles_argument_exception(
-                      format("{} was not granted role {}, so it cannot be revoked.", revokee_name, role_name)) {
-    }
+    
 };
 using role_set = std::unordered_set<sstring>;
 enum class recursive_role_query { yes, no };
@@ -13457,23 +13446,23 @@ public:
     using attribute_vals = std::unordered_map<sstring, sstring>;
     using ptr_type = std::unique_ptr<role_manager>;
 public:
-    virtual ~role_manager() = default;
-    virtual std::string_view qualified_java_name() const noexcept = 0;
-    virtual const resource_set& protected_resources() const = 0;
-    virtual future<> start() = 0;
-    virtual future<> stop() = 0;
+    
+    
+    
+    
+    
     ///
     /// \returns an exceptional future with \ref role_already_exists for a role that has previously been created.
     ///
-    virtual future<> create(std::string_view role_name, const role_config&) = 0;
+    
     ///
     /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
     ///
-    virtual future<> drop(std::string_view role_name) = 0;
+    
     ///
     /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
     ///
-    virtual future<> alter(std::string_view role_name, const role_config_update&) = 0;
+    
     ///
     /// Grant `role_name` to `grantee_name`.
     ///
@@ -13482,7 +13471,7 @@ public:
     /// \returns an exceptional future with \ref role_already_included if granting the role would be redundant, or
     /// create a cycle.
     ///
-    virtual future<> grant(std::string_view grantee_name, std::string_view role_name) = 0;
+    
     ///
     /// Revoke `role_name` from `revokee_name`.
     ///
@@ -13490,21 +13479,21 @@ public:
     ///
     /// \returns an exceptional future with \ref revoke_ungranted_role if the role was not granted.
     ///
-    virtual future<> revoke(std::string_view revokee_name, std::string_view role_name) = 0;
+    
     ///
     /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
     ///
-    virtual future<role_set> query_granted(std::string_view grantee, recursive_role_query) = 0;
-    virtual future<role_set> query_all() = 0;
-    virtual future<bool> exists(std::string_view role_name) = 0;
+    
+    
+    
     ///
     /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
     ///
-    virtual future<bool> is_superuser(std::string_view role_name) = 0;
+    
     ///
     /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
     ///
-    virtual future<bool> can_login(std::string_view role_name) = 0;
+    
     ///
     /// \returns the value of the named attribute, if one is set.
     ///
@@ -13512,16 +13501,16 @@ public:
     ///
     /// \returns a mapping of each role's value for the named attribute, if one is set for the role.
     ///
-    virtual future<attribute_vals> query_attribute_for_all(std::string_view attribute_name) = 0;
+    
     /// Sets `attribute_name` with `attribute_value` for `role_name`.
     /// \returns an exceptional future with nonexistant_role if the role does not exist.
     ///
-    virtual future<> set_attribute(std::string_view role_name, std::string_view attribute_name, std::string_view attribute_value) = 0;
+    
     /// Removes `attribute_name` for `role_name`.
     /// \returns an exceptional future with nonexistant_role if the role does not exist.
     /// \note: This is a no-op if the role does not have the named attribute set.
     ///
-    virtual future<> remove_attribute(std::string_view role_name, std::string_view attribute_name) = 0;
+    
 };
 }
 namespace cql3 {
@@ -13577,36 +13566,25 @@ class service final : public seastar::peering_sharded_service<service> {
     utils::observer<uint32_t> _permissions_cache_update_interval_in_ms_observer;
     utils::observer<uint32_t> _permissions_cache_validity_in_ms_observer;
 public:
-    service(
-            utils::loading_cache_config,
-            cql3::query_processor&,
-            ::service::migration_notifier&,
-            std::unique_ptr<authorizer>,
-            std::unique_ptr<authenticator>,
-            std::unique_ptr<role_manager>);
+    
     ///
     /// This constructor is intended to be used when the class is sharded via \ref seastar::sharded. In that case, the
     /// arguments must be copyable, which is why we delay construction with instance-construction instructions instead
     /// of the instances themselves.
     ///
-    service(
-            utils::loading_cache_config,
-            cql3::query_processor&,
-            ::service::migration_notifier&,
-            ::service::migration_manager&,
-            const service_config&);
-    future<> start(::service::migration_manager&);
-    future<> stop();
-    void update_cache_config();
-    void reset_authorization_cache();
+    
+    
+    
+    
+    
     ///
     /// \returns an exceptional future with \ref nonexistant_role if the named role does not exist.
     ///
-    future<permission_set> get_permissions(const role_or_anonymous&, const resource&) const;
+    
     ///
     /// Like \ref get_permissions, but never returns cached permissions.
     ///
-    future<permission_set> get_uncached_permissions(const role_or_anonymous&, const resource&) const;
+    
     ///
     /// Query whether the named role has been granted a role that is a superuser.
     ///
@@ -13614,30 +13592,30 @@ public:
     ///
     /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
     ///
-    future<bool> has_superuser(std::string_view role_name) const;
+    
     ///
     /// Return the set of all roles granted to the given role, including itself and roles granted through other roles.
     ///
     /// \returns an exceptional future with \ref nonexistent_role if the role does not exist.
-    future<role_set> get_roles(std::string_view role_name) const;
-    future<bool> exists(const resource&) const;
-    const authenticator& underlying_authenticator() const ;
-    const authorizer& underlying_authorizer() const ;
-    role_manager& underlying_role_manager() const ;
+    
+    
+    
+    
+    
 private:
-    future<bool> has_existing_legacy_users() const;
-    future<> create_keyspace_if_missing(::service::migration_manager& mm) const;
+    
+    
 };
-future<bool> has_superuser(const service&, const authenticated_user&);
-future<role_set> get_roles(const service&, const authenticated_user&);
-future<permission_set> get_permissions(const service&, const authenticated_user&, const resource&);
+
+
+
 ///
 /// Access-control is "enforcing" when either the authenticator or the authorizer are not their "allow-all" variants.
 ///
 /// Put differently, when access control is not enforcing, all operations on resources will be allowed and users do not
 /// need to authenticate themselves.
 ///
-bool is_enforcing(const service&);
+
 /// A description of a CQL command from which auth::service can tell whether or not this command could endanger
 /// internal data on which auth::service depends.
 struct command_desc {
@@ -13651,7 +13629,7 @@ struct command_desc {
 ///
 /// Protected resources cannot be modified even if the performer has permissions to do so.
 ///
-bool is_protected(const service&, command_desc) noexcept;
+
 ///
 /// Create a role with optional authentication information.
 ///
@@ -13934,46 +13912,41 @@ private:
         begin(lf(), client);
     }
     void set_batchlog_endpoints(const inet_address_vector_replica_set& val);
-    void set_consistency_level(db::consistency_level val);
-    void set_optional_serial_consistency_level(const std::optional<db::consistency_level>& val);
-    sstring raw_value_to_sstring(const cql3::raw_value_view& v, bool is_unset, const data_type& t);
-    void set_page_size(int32_t val);
-    void set_request_size(size_t s) noexcept;
-    void set_response_size(size_t s) noexcept;
-    void add_query(sstring_view val);
-    void add_session_param(sstring_view key, sstring_view val);
-    void set_user_timestamp(api::timestamp_type val);
-    void add_prepared_statement(prepared_checked_weak_ptr& prepared);
-    void set_username(const std::optional<auth::authenticated_user>& user) ;
-    void add_table_name(sstring full_table_name) ;
-    void build_parameters_map();
-    void add_prepared_query_options(const cql3::query_options& prepared_options_ptr);
-    void build_parameters_map_for_one_prepared(const prepared_checked_weak_ptr& prepared_ptr,
-            std::optional<std::vector<sstring_view>>& names_opt,
-            cql3::raw_value_view_vector_with_unset& values, const sstring& param_name_prefix);
-    void trace_internal(sstring msg);
-    void trace(sstring msg) noexcept ;
-    void trace(const char* msg) noexcept ;
-    template <typename... A>
-    void trace(const char* fmt, A&&... a) noexcept;
-    template <typename... A>
-    friend void begin(const trace_state_ptr& p, A&&... a);
-    template <typename... A>
-    friend void trace(const trace_state_ptr& p, A&&... a) noexcept;
-    friend void set_page_size(const trace_state_ptr& p, int32_t val);
-    friend void set_request_size(const trace_state_ptr& p, size_t s) noexcept;
-    friend void set_response_size(const trace_state_ptr& p, size_t s) noexcept;
-    friend void set_batchlog_endpoints(const trace_state_ptr& p, const inet_address_vector_replica_set& val);
-    friend void set_consistency_level(const trace_state_ptr& p, db::consistency_level val);
-    friend void set_optional_serial_consistency_level(const trace_state_ptr& p, const std::optional<db::consistency_level>&val);
-    friend void add_query(const trace_state_ptr& p, sstring_view val);
-    friend void add_session_param(const trace_state_ptr& p, sstring_view key, sstring_view val);
-    friend void set_user_timestamp(const trace_state_ptr& p, api::timestamp_type val);
-    friend void add_prepared_statement(const trace_state_ptr& p, prepared_checked_weak_ptr& prepared);
-    friend void set_username(const trace_state_ptr& p, const std::optional<auth::authenticated_user>& user);
-    friend void add_table_name(const trace_state_ptr& p, const sstring& ks_name, const sstring& cf_name);
-    friend void add_prepared_query_options(const trace_state_ptr& state, const cql3::query_options& prepared_options_ptr);
-    friend void stop_foreground(const trace_state_ptr& state) noexcept;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    ;
+    ;
+    ;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 };
 class trace_state_ptr final {
 private:
@@ -13996,26 +13969,24 @@ public:
         return *_state_ptr;
     }
 };
- void set_page_size(const trace_state_ptr& p, int32_t val) ;
- void set_request_size(const trace_state_ptr& p, size_t s) noexcept ;
- void set_response_size(const trace_state_ptr& p, size_t s) noexcept ;
- void set_batchlog_endpoints(const trace_state_ptr& p, const inet_address_vector_replica_set& val) ;
- void set_consistency_level(const trace_state_ptr& p, db::consistency_level val) ;
- void set_optional_serial_consistency_level(const trace_state_ptr& p, const std::optional<db::consistency_level>& val) ;
- void add_query(const trace_state_ptr& p, sstring_view val) ;
- void add_session_param(const trace_state_ptr& p, sstring_view key, sstring_view val) ;
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
  void set_user_timestamp(const trace_state_ptr& p, api::timestamp_type val) ;
  void add_prepared_statement(const trace_state_ptr& p, prepared_checked_weak_ptr& prepared) ;
  void set_username(const trace_state_ptr& p, const std::optional<auth::authenticated_user>& user) ;
- void add_table_name(const trace_state_ptr& p, const sstring& ks_name, const sstring& cf_name) ;
- bool should_return_id_in_response(const trace_state_ptr& p) ;
-template <typename... A>
- void begin(const trace_state_ptr& p, A&&... a) ;
-template <typename... A>
- void trace(const trace_state_ptr& p, A&&... a) noexcept ;
- std::optional<trace_info> make_trace_info(const trace_state_ptr& state) ;
- void stop_foreground(const trace_state_ptr& state) noexcept ;
- void add_prepared_query_options(const trace_state_ptr& state, const cql3::query_options& prepared_options_ptr) ;
+ 
+ 
+ ;
+ ;
+ 
+ 
+ 
 // global_trace_state_ptr is a helper class that may be used for creating spans
 // of an existing tracing session on other shards. When a tracing span on a
 // different shard is needed global_trace_state_ptr would create a secondary
@@ -14032,21 +14003,16 @@ class global_trace_state_ptr {
     trace_state_ptr _ptr;
 public:
     // Note: the trace_state_ptr must come from the current shard
-    global_trace_state_ptr(trace_state_ptr t)
-            : _cpu_of_origin(this_shard_id())
-            , _ptr(std::move(t))
-    { }
+    
     // May be invoked across shards.
-    global_trace_state_ptr(const global_trace_state_ptr& other) 
-    ;
+    
     // May be invoked across shards.
-    global_trace_state_ptr(global_trace_state_ptr&& other) 
-    ;
-    global_trace_state_ptr& operator=(const global_trace_state_ptr&) = delete;
+    
+    
     // May be invoked across shards.
-    trace_state_ptr get() const ;
+    
     // May be invoked across shards.
-    operator trace_state_ptr() const ;
+    
 };
 }
 namespace cql_transport {
@@ -14058,17 +14024,17 @@ using cql_protocol_extension_enum = super_enum<cql_protocol_extension,
     cql_protocol_extension::LWT_ADD_METADATA_MARK,
     cql_protocol_extension::RATE_LIMIT_ERROR>;
 using cql_protocol_extension_enum_set = enum_set<cql_protocol_extension_enum>;
-cql_protocol_extension_enum_set supported_cql_protocol_extensions();
-const seastar::sstring& protocol_extension_name(cql_protocol_extension ext);
-std::vector<seastar::sstring> additional_options_for_proto_ext(cql_protocol_extension ext);
+
+
+
 } // namespace cql_transport
 namespace qos {
 struct service_level_options {
     struct unset_marker {
-        bool operator==(const unset_marker&) const ;;
+        ;
     };
     struct delete_marker {
-        bool operator==(const delete_marker&) const ;;
+        ;
     };
     enum class workload_type {
         unspecified, batch, interactive, delete_marker
@@ -14076,15 +14042,15 @@ struct service_level_options {
     using timeout_type = std::variant<unset_marker, delete_marker, lowres_clock::duration>;
     timeout_type timeout = unset_marker{};
     workload_type workload = workload_type::unspecified;
-    service_level_options replace_defaults(const service_level_options& other) const;
+    
     // Merges the values of two service level options. The semantics depends
     // on the type of the parameter - e.g. for timeouts, a min value is preferred.
-    service_level_options merge_with(const service_level_options& other) const;
-    bool operator==(const service_level_options& other) const = default;
-    static std::string_view to_string(const workload_type& wt);
-    static std::optional<workload_type> parse_workload_type(std::string_view sv);
+    
+    
+    
+    
 };
-std::ostream& operator<<(std::ostream& os, const service_level_options::workload_type&);
+
 using service_levels_info = std::map<sstring, service_level_options>;
 ///
 /// A logical argument error for a service_level statement operation.
@@ -14098,9 +14064,7 @@ public:
 ///
 class nonexistant_service_level_exception : public service_level_argument_exception {
 public:
-    nonexistant_service_level_exception(sstring service_level_name)
-            : service_level_argument_exception(format("Service Level {} doesn't exists.", service_level_name)) {
-    }
+    
 };
 }
 // This class supports atomic removes (by using a lock and returning a
@@ -14110,41 +14074,40 @@ class atomic_vector {
     std::vector<T> _vec;
     seastar::rwlock _vec_lock;
 public:
-    void add(const T& value) ;
-    seastar::future<> remove(const T& value) ;
+    
+    
     // This must be called on a thread. The callback function must not
     // call remove.
     //
     // We would take callbacks that take a T&, but we had bugs in the
     // past with some of those callbacks holding that reference past a
     // preemption.
-    void thread_for_each(seastar::noncopyable_function<void(T)> func) ;
+    
     // The callback function must not call remove.
     //
     // We would take callbacks that take a T&, but we had bugs in the
     // past with some of those callbacks holding that reference past a
     // preemption.
-    seastar::future<> for_each(seastar::noncopyable_function<seastar::future<>(T)> func) ;
+    
 };
 namespace service {
 class endpoint_lifecycle_subscriber {
 public:
-    virtual ~endpoint_lifecycle_subscriber()
-    ;
-    virtual void on_join_cluster(const gms::inet_address& endpoint) = 0;
-    virtual void on_leave_cluster(const gms::inet_address& endpoint) = 0;
-    virtual void on_up(const gms::inet_address& endpoint) = 0;
-    virtual void on_down(const gms::inet_address& endpoint) = 0;
+    
+    
+    
+    
+    
 };
 class endpoint_lifecycle_notifier {
     atomic_vector<endpoint_lifecycle_subscriber*> _subscribers;
 public:
-    void register_subscriber(endpoint_lifecycle_subscriber* subscriber);
-    future<> unregister_subscriber(endpoint_lifecycle_subscriber* subscriber) noexcept;
-    future<> notify_down(gms::inet_address endpoint);
-    future<> notify_left(gms::inet_address endpoint);
-    future<> notify_up(gms::inet_address endpoint);
-    future<> notify_joined(gms::inet_address endpoint);
+    
+    
+    
+    
+    
+    
 };
 }
 namespace qos {
@@ -14153,10 +14116,10 @@ namespace qos {
     };
     class qos_configuration_change_subscriber {
     public:
-        virtual future<> on_before_service_level_add(service_level_options slo, service_level_info sl_info) = 0;
-        virtual future<> on_after_service_level_remove(service_level_info sl_info) = 0;
-        virtual future<> on_before_service_level_change(service_level_options slo_before, service_level_options slo_after, service_level_info sl_info) = 0;
-        virtual ~qos_configuration_change_subscriber() ;;
+        
+        
+        
+        ;
     };
 }
 namespace db {
@@ -14172,10 +14135,10 @@ class service_level_controller : public peering_sharded_service<service_level_co
 public:
     class service_level_distributed_data_accessor {
     public:
-        virtual future<qos::service_levels_info> get_service_levels() const = 0;
-        virtual future<qos::service_levels_info> get_service_level(sstring service_level_name) const = 0;
-        virtual future<> set_service_level(sstring service_level_name, qos::service_level_options slo) const = 0;
-        virtual future<> drop_service_level(sstring service_level_name) const = 0;
+        
+        
+        
+        
     };
     using service_level_distributed_data_accessor_ptr = ::shared_ptr<service_level_distributed_data_accessor>;
 private:
@@ -14204,41 +14167,41 @@ private:
     atomic_vector<qos_configuration_change_subscriber*> _subscribers;
 public:
     service_level_controller(sharded<auth::service>& auth_service, service_level_options default_service_level_config);
-    future<> start();
-    void set_distributed_data_accessor(service_level_distributed_data_accessor_ptr sl_data_accessor);
-    future<> add_service_level(sstring name, service_level_options slo, bool is_static = false);
-    future<> remove_service_level(sstring name, bool remove_static);
-    future<> drain();
-    future<> stop();
-    void update_from_distributed_data(std::chrono::duration<float> interval);
-    future<> update_service_levels_from_distributed_data();
-    future<> add_distributed_service_level(sstring name, service_level_options slo, bool if_not_exsists);
-    future<> alter_distributed_service_level(sstring name, service_level_options slo);
-    future<> drop_distributed_service_level(sstring name, bool if_exists);
-    future<service_levels_info> get_distributed_service_levels();
-    future<service_levels_info> get_distributed_service_level(sstring service_level_name);
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     future<std::optional<service_level_options>> find_service_level(auth::role_set roles);
-    service_level& get_service_level(sstring service_level_name) ;
+    
 private:
-    future<> do_add_service_level(sstring name, service_level_options slo, bool is_static = false);
-    future<> do_remove_service_level(sstring name, bool remove_static);
-    future<> notify_service_level_added(sstring name, service_level sl_data);
-    future<> notify_service_level_updated(sstring name, service_level_options slo);
-    future<> notify_service_level_removed(sstring name);
+    
+    
+    
+    
+    
     enum class  set_service_level_op_type {
         add_if_not_exists,
         add,
         alter
     };
-    future<> set_distributed_service_level(sstring name, service_level_options slo, set_service_level_op_type op_type);
+    
 public:
-    void register_subscriber(qos_configuration_change_subscriber* subscriber);
-    future<> unregister_subscriber(qos_configuration_change_subscriber* subscriber);
+    
+    
     static sstring default_service_level_name;
-    virtual void on_join_cluster(const gms::inet_address& endpoint) override;
-    virtual void on_leave_cluster(const gms::inet_address& endpoint) override;
-    virtual void on_up(const gms::inet_address& endpoint) override;
-    virtual void on_down(const gms::inet_address& endpoint) override;
+    
+    
+    
+    
 };
 }
 namespace auth {
@@ -14262,24 +14225,13 @@ public:
     private:
         const client_state* _cs;
         seastar::sharded<auth::service>* _auth_service;
-        client_state_for_another_shard(const client_state* cs, seastar::sharded<auth::service>* auth_service) : _cs(cs), _auth_service(auth_service) {}
+        
         friend client_state;
     public:
-        client_state get() const ;
+        
     };
 private:
-    client_state(const client_state* cs, seastar::sharded<auth::service>* auth_service)
-            : _keyspace(cs->_keyspace)
-            , _user(cs->_user)
-            , _auth_state(cs->_auth_state)
-            , _is_internal(cs->_is_internal)
-            , _is_thrift(cs->_is_thrift)
-            , _remote_address(cs->_remote_address)
-            , _auth_service(auth_service ? &auth_service->local() : nullptr)
-            , _default_timeout_config(cs->_default_timeout_config)
-            , _timeout_config(cs->_timeout_config)
-            , _enabled_protocol_extensions(cs->_enabled_protocol_extensions)
-    {}
+    
     friend client_state_for_another_shard;
 private:
     sstring _keyspace;
@@ -14322,33 +14274,17 @@ private:
 public:
     struct internal_tag {};
     struct external_tag {};
-    workload_type get_workload_type() const noexcept ;
-    auth_state get_auth_state() const noexcept ;
-    void set_auth_state(auth_state new_state) noexcept ;
-    std::optional<sstring> get_driver_name() const ;
-    void set_driver_name(sstring driver_name) ;
-    std::optional<sstring> get_driver_version() const ;
-    void set_driver_version(sstring driver_version) ;
-    client_state(external_tag,
-                 auth::service& auth_service,
-                 qos::service_level_controller* sl_controller,
-                 timeout_config timeout_config,
-                 const socket_address& remote_address = socket_address(),
-                 bool thrift = false)
-            : _is_internal(false)
-            , _is_thrift(thrift)
-            , _remote_address(remote_address)
-            , _auth_service(&auth_service)
-            , _sl_controller(sl_controller)
-            , _default_timeout_config(timeout_config)
-            , _timeout_config(timeout_config) {
-        if (!auth_service.underlying_authenticator().require_authentication()) {
-            _user = auth::authenticated_user();
-        }
-    }
-    gms::inet_address get_client_address() const ;
-    ::in_port_t get_client_port() const ;
-    const socket_address& get_remote_address() const ;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     const timeout_config& get_timeout_config() const ;
     qos::service_level_controller& get_service_level_controller() const ;
     client_state(internal_tag) 
@@ -15268,17 +15204,16 @@ public:
     bytes to_bytes() && ;
     bytes_opt to_bytes_opt() && ;
     managed_bytes to_managed_bytes() && ;
-    managed_bytes_opt to_managed_bytes_opt() && ;
-    raw_value_view view() const;
+    
+    
     friend class raw_value_view;
-    friend bool operator==(const raw_value& v1, const raw_value& v2);
-    friend std::ostream& operator<<(std::ostream& os, const raw_value& value);
+    
+    
 };
 }
- bytes to_bytes(const cql3::raw_value_view& view)
-;
- bytes_opt to_bytes_opt(const cql3::raw_value_view& view) ;
- bytes_opt to_bytes_opt(const cql3::raw_value& value) ;
+ 
+ 
+ 
 namespace cql3 {
 class cql_config;
 extern const cql_config default_cql_config;
@@ -15290,26 +15225,22 @@ using unset_bind_variable_vector = utils::small_vector<bool, 16>;
 struct raw_value_view_vector_with_unset {
     std::vector<raw_value_view> values;
     unset_bind_variable_vector unset;
-    raw_value_view_vector_with_unset(std::vector<raw_value_view> values_, unset_bind_variable_vector unset_) : values(std::move(values_)), unset(std::move(unset_)) {}
+    
     // Constructor with no unset support, for tests and internal queries
-    raw_value_view_vector_with_unset(std::vector<raw_value_view> values_) : values(std::move(values_)) {
-        unset.resize(values.size());
-    }
-    raw_value_view_vector_with_unset() = default;
+    
+    
 };
 // Matches a raw_value with an unset vector to support CQL binary protocol
 // "unset" values.
 struct raw_value_vector_with_unset {
     std::vector<raw_value> values;
     unset_bind_variable_vector unset;
-    raw_value_vector_with_unset(std::vector<raw_value> values_, unset_bind_variable_vector unset_) : values(std::move(values_)), unset(std::move(unset_)) {}
+    
     // Constructor with no unset support, for tests and internal queries
-    raw_value_vector_with_unset(std::vector<raw_value> values_) : values(std::move(values_)) {
-        unset.resize(values.size());
-    }
+    
     // Mostly for testing.
-    raw_value_vector_with_unset(std::initializer_list<raw_value> values_) : raw_value_vector_with_unset(std::vector(values_)) {}
-    raw_value_vector_with_unset() = default;
+    
+    
 };
 class query_options {
 public:
@@ -15366,31 +15297,11 @@ private:
     requires std::same_as<Values, raw_value_vector_with_unset> || std::same_as<Values, raw_value_view_vector_with_unset>
     explicit query_options(query_options&& o, std::vector<Values> values_ranges);
 public:
-    query_options(query_options&&) = default;
-    explicit query_options(const query_options&) = default;
-    explicit query_options(const cql_config& cfg,
-                           db::consistency_level consistency,
-                           std::optional<std::vector<sstring_view>> names,
-                           raw_value_vector_with_unset values,
-                           bool skip_metadata,
-                           specific_options options
-                           );
-    explicit query_options(const cql_config& cfg,
-                           db::consistency_level consistency,
-                           std::optional<std::vector<sstring_view>> names,
-                           std::vector<cql3::raw_value> values,
-                           std::vector<cql3::raw_value_view> value_views,
-                           unset_bind_variable_vector unset,
-                           bool skip_metadata,
-                           specific_options options
-                           );
-    explicit query_options(const cql_config& cfg,
-                           db::consistency_level consistency,
-                           std::optional<std::vector<sstring_view>> names,
-                           raw_value_view_vector_with_unset value_views,
-                           bool skip_metadata,
-                           specific_options options
-                           );
+    
+    
+    
+    
+    
     template <typename Values>
     requires std::same_as<Values, raw_value_vector_with_unset> || std::same_as<Values, raw_value_view_vector_with_unset>
     static query_options make_batch_options(query_options&& o, std::vector<Values> values_ranges) {
@@ -15399,23 +15310,23 @@ public:
     // It can't be const because of prepare()
     static thread_local query_options DEFAULT;
     // forInternalUse
-    explicit query_options(raw_value_vector_with_unset values);
-    explicit query_options(db::consistency_level, raw_value_vector_with_unset values, specific_options options = specific_options::DEFAULT);
-    explicit query_options(std::unique_ptr<query_options>, lw_shared_ptr<service::pager::paging_state> paging_state);
-    explicit query_options(std::unique_ptr<query_options>, lw_shared_ptr<service::pager::paging_state> paging_state, int32_t page_size);
-    db::consistency_level get_consistency() const ;
-    cql3::raw_value_view get_value_at(size_t idx) const ;
-    bool is_unset(size_t idx) const ;
-    size_t get_values_count() const ;
-    bool skip_metadata() const ;
-    int32_t get_page_size() const ;
-    lw_shared_ptr<service::pager::paging_state> get_paging_state() const ;
-    std::optional<db::consistency_level> get_serial_consistency() const ;
-    db::consistency_level check_serial_consistency() const;
-    api::timestamp_type get_timestamp(service::query_state& state) const ;
-    const query_options::specific_options& get_specific_options() const ;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     // Mainly for the sake of BatchQueryOptions
-    const query_options& for_statement(size_t i) const ;
+    
     const std::optional<std::vector<sstring_view>>& get_names() const noexcept {
         return _names;
     }
@@ -15457,13 +15368,13 @@ public:
         return max_entries;
     }
     void prepare(const std::vector<lw_shared_ptr<column_specification>>& specs);
-    void cache_pk_function_call(computed_function_values::key_type id, computed_function_values::mapped_type value) const;
-    const computed_function_values& cached_pk_function_calls() const;
-    computed_function_values&& take_cached_pk_function_calls();
-    void set_cached_pk_function_calls(computed_function_values vals);
-    computed_function_values::mapped_type* find_cached_pk_function_call(computed_function_values::key_type id) const;
+    
+    
+    
+    
+    
 private:
-    void fill_value_views();
+    
 };
 template <typename Values>
 requires std::same_as<Values, raw_value_vector_with_unset> || std::same_as<Values, raw_value_view_vector_with_unset>
@@ -15490,7 +15401,7 @@ struct full_position;
 struct full_position_view {
     const partition_key_view partition;
     const position_in_partition_view position;
-    full_position_view(const full_position&);
+    
     full_position_view(const partition_key&, const position_in_partition_view);
 };
 struct full_position {
@@ -15751,53 +15662,47 @@ public:
         w.reduce_chunk_count();
     }
     result(result&&) = default;
-    result& operator=(result&&) = default;
-    const bytes_ostream& buf() const ;
-    const std::optional<result_digest>& digest() const ;
-    const std::optional<uint32_t> row_count_low_bits() const ;
-    const std::optional<uint32_t> row_count_high_bits() const ;
-    const std::optional<uint64_t> row_count() const ;
-    void set_row_count(std::optional<uint64_t> row_count) ;
-    const api::timestamp_type last_modified() const ;
-    short_read is_short_read() const ;
-    const std::optional<uint32_t>& partition_count() const ;
-    void ensure_counts();
-    const std::optional<full_position>& last_position() const ;
-    void set_last_position(std::optional<full_position> last_position) ;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     // Return _last_position if replica filled it, otherwise calculate it based
     // on the content (by looking up the last row in the last partition).
-    full_position get_or_calculate_last_position() const;
+    
     struct printer {
         schema_ptr s;
         const query::partition_slice& slice;
         const query::result& res;
     };
-    sstring pretty_print(schema_ptr, const query::partition_slice&) const;
-    printer pretty_printer(schema_ptr, const query::partition_slice&) const;
+    
+    
 };
-std::ostream& operator<<(std::ostream& os, const query::result::printer&);
+
 }
 namespace ser {
 template <>
 struct serializer<clustering_key_prefix> {
-  template <typename Output>
-  static void write(Output& buf, const clustering_key_prefix& v);
-  template <typename Input>
-  static clustering_key_prefix read(Input& buf);
-  template <typename Input>
-  static void skip(Input& buf);
+  ;
+  ;
+  ;
 };
 template <>
 struct serializer<const clustering_key_prefix> : public serializer<clustering_key_prefix>
 {};
 template <>
 struct serializer<partition_key> {
-  template <typename Output>
-  static void write(Output& buf, const partition_key& v);
-  template <typename Input>
-  static partition_key read(Input& buf);
-  template <typename Input>
-  static void skip(Input& buf);
+  ;
+  ;
+  ;
 };
 template <>
 struct serializer<const partition_key> : public serializer<partition_key>
@@ -15806,12 +15711,9 @@ struct serializer<const partition_key> : public serializer<partition_key>
 namespace ser {
 template <>
 struct serializer<query::digest_algorithm> {
-  template <typename Output>
-  static void write(Output& buf, const query::digest_algorithm& v);
-  template <typename Input>
-  static query::digest_algorithm read(Input& buf);
-  template <typename Input>
-  static void skip(Input& buf);
+  ;
+  ;
+  ;
 };
 template <>
 struct serializer<const query::digest_algorithm> : public serializer<query::digest_algorithm>
@@ -15826,15 +15728,14 @@ struct frame { };
 template<>
 struct place_holder<bytes_ostream> {
     bytes_ostream::place_holder<size_type> ph;
-    place_holder(bytes_ostream::place_holder<size_type> ph) : ph(ph) { }
-    void set(bytes_ostream& out, size_type v) ;
+    
+    
 };
 template<>
 struct frame<bytes_ostream> : public place_holder<bytes_ostream> {
     bytes_ostream::size_type offset;
-    frame(bytes_ostream::place_holder<size_type> ph, bytes_ostream::size_type offset)
-        : place_holder(ph), offset(offset) { }
-    void end(bytes_ostream& out) ;
+    
+    
 };
 struct vector_position {
     bytes_ostream::position pos;
@@ -15843,14 +15744,13 @@ struct vector_position {
 //empty frame, behave like a place holder, but is used when no place holder is needed
 template<typename Output>
 struct empty_frame {
-    void end(Output&) ;
-    empty_frame() = default;
-    empty_frame(const frame<Output>&);
+    
+    
+    
 };
- place_holder<bytes_ostream> start_place_holder(bytes_ostream& out) ;
- frame<bytes_ostream> start_frame(bytes_ostream& out) ;
-template<typename Input>
-size_type read_frame_size(Input& in) ;
+ 
+ 
+ ;
 template<>
 struct place_holder<seastar::measuring_output_stream> {
     void set(seastar::measuring_output_stream&, size_type) { }
@@ -15859,8 +15759,8 @@ template<>
 struct frame<seastar::measuring_output_stream> : public place_holder<seastar::measuring_output_stream> {
     void end(seastar::measuring_output_stream& out) { }
 };
- place_holder<seastar::measuring_output_stream> start_place_holder(seastar::measuring_output_stream& out) ;
- frame<seastar::measuring_output_stream> start_frame(seastar::measuring_output_stream& out) ;
+ 
+ 
 template<>
 class place_holder<seastar::simple_output_stream> {
     seastar::simple_output_stream _substream;
@@ -15881,8 +15781,8 @@ public:
         set(out, out.begin() - _start);
     }
 };
- place_holder<seastar::simple_output_stream> start_place_holder(seastar::simple_output_stream& out) ;
- frame<seastar::simple_output_stream> start_frame(seastar::simple_output_stream& out) ;
+ 
+ 
 template<typename Iterator>
 class place_holder<seastar::memory_output_stream<Iterator>> {
     seastar::memory_output_stream<Iterator> _substream;
@@ -15923,19 +15823,16 @@ namespace ser {
 namespace ser {
 struct qr_cell_view {
     utils::input_stream v;
-    auto timestamp() const ;
-    auto expiry() const ;
-    auto value() const ;
-    auto ttl() const ;
+    
+    
+    
+    
 };
 template<>
 struct serializer<qr_cell_view> {
-    template<typename Input>
-    static qr_cell_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, qr_cell_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
 struct qr_row_view {
     utils::input_stream v;
@@ -15949,54 +15846,42 @@ struct qr_row_view {
 };
 template<>
 struct serializer<qr_row_view> {
-    template<typename Input>
-    static qr_row_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, qr_row_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
 struct qr_clustered_row_view {
     utils::input_stream v;
-    auto key() const ;
-    auto cells() const ;
+    
+    
 };
 template<>
 struct serializer<qr_clustered_row_view> {
-    template<typename Input>
-    static qr_clustered_row_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, qr_clustered_row_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
 struct qr_partition_view {
     utils::input_stream v;
-    auto key() const ;
-    auto static_row() const ;
-    auto rows() const ;
+    
+    
+    
 };
 template<>
 struct serializer<qr_partition_view> {
-    template<typename Input>
-    static qr_partition_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, qr_partition_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
 struct query_result_view {
     utils::input_stream v;
-    auto partitions() const ;
+    
 };
 template<>
 struct serializer<query_result_view> {
-    template<typename Input>
-    static query_result_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, query_result_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
 ////// State holders
 template<typename Output>
@@ -16034,52 +15919,49 @@ template<typename Output>
 struct after_qr_cell__ttl {
     Output& _out;
     state_of_qr_cell<Output> _state;
-    void  end_qr_cell() ;
+    
 };
 template<typename Output>
 struct after_qr_cell__value {
     Output& _out;
     state_of_qr_cell<Output> _state;
-    after_qr_cell__ttl<Output> skip_ttl() && ;
-    after_qr_cell__ttl<Output> write_ttl(const gc_clock::duration& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_qr_cell__expiry {
     Output& _out;
     state_of_qr_cell<Output> _state;
-    after_qr_cell__value<Output> write_value(bytes_view t) && ;
-    template<typename FragmentedBuffer>
-    requires FragmentRange<FragmentedBuffer>
-    after_qr_cell__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && ;
+    
+     ;
 };
 template<typename Output>
 struct after_qr_cell__timestamp {
     Output& _out;
     state_of_qr_cell<Output> _state;
-    after_qr_cell__expiry<Output> skip_expiry() && ;
-    after_qr_cell__expiry<Output> write_expiry(const gc_clock::time_point& t) && ;
+    
+    
 };
 template<typename Output>
 struct writer_of_qr_cell {
     Output& _out;
     state_of_qr_cell<Output> _state;
-    writer_of_qr_cell(Output& out) 
-            ;
-    after_qr_cell__timestamp<Output> skip_timestamp() && ;
-    after_qr_cell__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_qr_row__cells {
     Output& _out;
     state_of_qr_row<Output> _state;
-    void  end_qr_row() ;
+    
 };
 template<typename Output>
 struct writer_of_std__optional__qr_cell {
     Output& _out;
-    void skip()  ;
-    void write(const qr_cell_view& obj) ;
-    writer_of_qr_cell<Output> write() ;
+    
+    
+    
 };
 template<typename Output>
 struct qr_row__cells {
@@ -16087,12 +15969,11 @@ struct qr_row__cells {
     state_of_qr_row<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    qr_row__cells(Output& out, state_of_qr_row<Output> state) 
-            ;
-  writer_of_std__optional__qr_cell<Output> add() ;
-  void add(std::optional<qr_cell_view> v) ;
-  after_qr_row__cells<Output> end_cells() && ;
-  vector_position pos() const ;
+    
+  
+  
+  
+  
   void rollback(const vector_position& vp) ;
 };
 template<typename Output>
@@ -16749,7 +16630,7 @@ public:
     virtual bool is_aggregate() const = 0;
     virtual void add_input_row(result_set_builder& rs) = 0;
     virtual std::vector<managed_bytes_opt> get_output_row() = 0;
-    virtual void reset() = 0;
+    
 };
 class selection {
 private:
@@ -16762,45 +16643,39 @@ private:
     bool _is_trivial;
 protected:
     using trivial = bool_class<class trivial_tag>;
-    selection(schema_ptr schema,
-        std::vector<const column_definition*> columns,
-        std::vector<lw_shared_ptr<column_specification>> metadata_,
-        bool collect_timestamps,
-        bool collect_TTLs, trivial is_trivial = trivial::no);
-    virtual ~selection() ;
+    
+    
 public:
     // Overriden by SimpleSelection when appropriate.
-    virtual bool is_wildcard() const ;
-    bool contains_static_columns() const ;
-    bool contains_only_static_columns() const;
-    int32_t index_of(const column_definition& def) const;
-    bool has_column(const column_definition& def) const;
-    ::shared_ptr<const metadata> get_result_metadata() const ;
-    ::shared_ptr<metadata> get_result_metadata() ;
-    static ::shared_ptr<selection> wildcard(schema_ptr schema);
-    static ::shared_ptr<selection> for_columns(schema_ptr schema, std::vector<const column_definition*> columns);
-    virtual uint32_t add_column_for_post_processing(const column_definition& c);
-    virtual std::vector<shared_ptr<functions::function>> used_functions() const ;
-    query::partition_slice::option_set get_query_options();
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 private:
-    static bool processes_selection(const std::vector<::shared_ptr<raw_selector>>& raw_selectors);
-    static std::vector<lw_shared_ptr<column_specification>> collect_metadata(const schema& schema,
-        const std::vector<::shared_ptr<raw_selector>>& raw_selectors, const selector_factories& factories);
+    
+    
 public:
-    static ::shared_ptr<selection> from_selectors(data_dictionary::database db, schema_ptr schema, const std::vector<::shared_ptr<raw_selector>>& raw_selectors);
-    virtual std::unique_ptr<selectors> new_selectors() const = 0;
-    auto const& get_columns() const ;
-    uint32_t get_column_count() const ;
-    virtual bool is_aggregate() const = 0;
-    virtual bool is_count() const ;
-    virtual bool is_reducible() const ;
-    virtual query::forward_request::reductions_info get_reductions() const ;
-    template<typename... Args>
-    static void validate_selectors(const std::vector<::shared_ptr<selector>>& selectors, const sstring& msg, Args&&... args) ;
-    bool is_trivial() const ;
+    
+    
+    
+    
+    
+    
+    
+    
+     ;
+    
     friend class result_set_builder;
 };
-shared_ptr<selection> selection_from_partition_slice(schema_ptr schema, const query::partition_slice& slice);
+
 class result_set_builder {
 private:
     std::unique_ptr<result_set> _result_set;
@@ -16815,13 +16690,12 @@ private:
     std::vector<int32_t> _ttls;
     const gc_clock::time_point _now;
 public:
-    template<typename Func>
-    auto with_thread_if_needed(Func&& func) ;
+     ;
     class nop_filter {
     public:
-         bool operator()(const selection&, const std::vector<bytes>&, const std::vector<bytes>&, const query::result_row_view&, const query::result_row_view*) const ;
-        void reset(const partition_key* = nullptr) ;
-        uint64_t get_rows_dropped() const ;
+         
+        
+        
     };
     class restrictions_filter {
         const ::shared_ptr<const restrictions::statement_restrictions> _restrictions;
@@ -16839,25 +16713,18 @@ public:
         mutable std::optional<partition_key> _last_pkey;
         mutable bool _is_first_partition_on_page = true;
     public:
-        explicit restrictions_filter(::shared_ptr<const restrictions::statement_restrictions> restrictions,
-                const query_options& options,
-                uint64_t remaining,
-                schema_ptr schema,
-                uint64_t per_partition_limit,
-                std::optional<partition_key> last_pkey = {},
-                uint64_t rows_fetched_for_last_partition = 0);
-        bool operator()(const selection& selection, const std::vector<bytes>& pk, const std::vector<bytes>& ck, const query::result_row_view& static_row, const query::result_row_view* row) const;
-        void reset(const partition_key* key = nullptr);
-        uint64_t get_rows_dropped() const ;
+        
+        
+        
+        
     private:
-        bool do_filter(const selection& selection, const std::vector<bytes>& pk, const std::vector<bytes>& ck, const query::result_row_view& static_row, const query::result_row_view* row) const;
+        
     };
-    result_set_builder(const selection& s, gc_clock::time_point now,
-                       std::vector<size_t> group_by_cell_indices = {});
-    void add_empty();
-    void add(bytes_opt value);
-    void add(const column_definition& def, const query::result_atomic_cell_view& c);
-    void add_collection(const column_definition& def, bytes_view c);
+    
+    
+    
+    
+    
     void new_row();
     std::unique_ptr<result_set> build();
     api::timestamp_type timestamp_of(size_t idx);
@@ -26482,125 +26349,97 @@ struct row_view {
 };
 template<>
 struct serializer<row_view> {
-    template<typename Input>
-    static row_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, row_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
-template<typename Input>
- void skip(Input& v, boost::type<boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>>) ;
-template<typename Input>
-boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type> deserialize(Input& v, boost::type<boost::variant<live_marker_view, expiring_marker_view, dead_marker_view, no_marker_view, unknown_variant_type>>) ;
+ ;
+ ;
 struct deletable_row_view {
     utils::input_stream v;
-    auto key() const ;
-    auto marker() const ;
-    auto deleted_at() const ;
-    auto cells() const ;
-    auto shadowable_deleted_at() const ;
+    
+    
+    
+    
+    
 };
 template<>
 struct serializer<deletable_row_view> {
-    template<typename Input>
-    static deletable_row_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, deletable_row_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
 struct static_row_view {
     utils::input_stream v;
-    auto cells() const ;
+    
 };
 template<>
 struct serializer<static_row_view> {
-    template<typename Input>
-    static static_row_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, static_row_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
 struct clustering_row_view {
     utils::input_stream v;
-    auto row() const ;
+    
 };
 template<>
 struct serializer<clustering_row_view> {
-    template<typename Input>
-    static clustering_row_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, clustering_row_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
 struct mutation_partition_view {
     utils::input_stream v;
-    auto tomb() const ;
-    auto static_row() const ;
-    auto range_tombstones() const ;
-    auto rows() const ;
+    
+    
+    
+    
 };
 template<>
 struct serializer<mutation_partition_view> {
-    template<typename Input>
-    static mutation_partition_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, mutation_partition_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
 struct canonical_mutation_view {
     utils::input_stream v;
-    auto table_id() const ;
-    auto schema_version() const ;
-    auto key() const ;
-    auto mapping() const ;
-    auto partition() const ;
+    
+    
+    
+    
+    
 };
 template<>
 struct serializer<canonical_mutation_view> {
-    template<typename Input>
-    static canonical_mutation_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, canonical_mutation_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
 struct mutation_view {
     utils::input_stream v;
-    auto table_id() const ;
-    auto schema_version() const ;
-    auto key() const ;
-    auto partition() const ;
+    
+    
+    
+    
 };
 template<>
 struct serializer<mutation_view> {
-    template<typename Input>
-    static mutation_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, mutation_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
-template<typename Input>
- void skip(Input& v, boost::type<std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>>) ;
-template<typename Input>
-std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type> deserialize(Input& v, boost::type<std::variant<clustering_row_view, static_row_view, range_tombstone_view, partition_start_view, partition_end, unknown_variant_type>>) ;
+ ;
+ ;
 struct mutation_fragment_view {
     utils::input_stream v;
-    auto fragment() const ;
+    
 };
 template<>
 struct serializer<mutation_fragment_view> {
-    template<typename Input>
-    static mutation_fragment_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, mutation_fragment_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
 ////// State holders
 template<typename Output>
@@ -26624,13 +26463,13 @@ template<typename Output>
 struct state_of_counter_cell__value__counter_cell_full {
     empty_frame<Output> f;
     state_of_counter_cell__value<Output> _parent;
-    state_of_counter_cell__value__counter_cell_full(state_of_counter_cell__value<Output> parent)  ;
+    
 };
 template<typename Output>
 struct state_of_counter_cell__value__counter_cell_update {
     empty_frame<Output> f;
     state_of_counter_cell__value<Output> _parent;
-    state_of_counter_cell__value__counter_cell_update(state_of_counter_cell__value<Output> parent)  ;
+    
 };
 template<typename Output>
 struct state_of_tombstone {
@@ -26686,7 +26525,7 @@ template<typename Output>
 struct state_of_collection_element__value__dead_cell {
     empty_frame<Output> f;
     state_of_collection_element__value<Output> _parent;
-    state_of_collection_element__value__dead_cell(state_of_collection_element__value<Output> parent)  ;
+    
 };
 template<typename Output>
 struct state_of_collection_element__value__dead_cell__tomb {
@@ -26735,7 +26574,7 @@ template<typename Output>
 struct state_of_column__c__variant__dead_cell {
     empty_frame<Output> f;
     state_of_column__c__variant<Output> _parent;
-    state_of_column__c__variant__dead_cell(state_of_column__c__variant<Output> parent)  ;
+    
 };
 template<typename Output>
 struct state_of_column__c__variant__dead_cell__tomb {
@@ -26756,13 +26595,13 @@ template<typename Output>
 struct state_of_column__c__variant__counter_cell__value__counter_cell_full {
     empty_frame<Output> f;
     state_of_column__c__variant__counter_cell__value<Output> _parent;
-    state_of_column__c__variant__counter_cell__value__counter_cell_full(state_of_column__c__variant__counter_cell__value<Output> parent)  ;
+    
 };
 template<typename Output>
 struct state_of_column__c__variant__counter_cell__value__counter_cell_update {
     empty_frame<Output> f;
     state_of_column__c__variant__counter_cell__value<Output> _parent;
-    state_of_column__c__variant__counter_cell__value__counter_cell_update(state_of_column__c__variant__counter_cell__value<Output> parent)  ;
+    
 };
 template<typename Output>
 struct state_of_column__c__collection_cell {
@@ -26832,7 +26671,7 @@ template<typename Output>
 struct state_of_deletable_row__marker__dead_marker {
     empty_frame<Output> f;
     state_of_deletable_row__marker<Output> _parent;
-    state_of_deletable_row__marker__dead_marker(state_of_deletable_row__marker<Output> parent)  ;
+    
 };
 template<typename Output>
 struct state_of_deletable_row__marker__dead_marker__tomb {
@@ -26843,7 +26682,7 @@ template<typename Output>
 struct state_of_deletable_row__marker__no_marker {
     empty_frame<Output> f;
     state_of_deletable_row__marker<Output> _parent;
-    state_of_deletable_row__marker__no_marker(state_of_deletable_row__marker<Output> parent)  ;
+    
 };
 template<typename Output>
 struct state_of_deletable_row__deleted_at {
@@ -26954,7 +26793,7 @@ template<typename Output>
 struct state_of_clustering_row__row__marker__dead_marker {
     empty_frame<Output> f;
     state_of_clustering_row__row__marker<Output> _parent;
-    state_of_clustering_row__row__marker__dead_marker(state_of_clustering_row__row__marker<Output> parent)  ;
+    
 };
 template<typename Output>
 struct state_of_clustering_row__row__marker__dead_marker__tomb {
@@ -26965,7 +26804,7 @@ template<typename Output>
 struct state_of_clustering_row__row__marker__no_marker {
     empty_frame<Output> f;
     state_of_clustering_row__row__marker<Output> _parent;
-    state_of_clustering_row__row__marker__no_marker(state_of_clustering_row__row__marker<Output> parent)  ;
+    
 };
 template<typename Output>
 struct state_of_clustering_row__row__deleted_at {
@@ -27043,7 +26882,7 @@ template<typename Output>
 struct state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker {
     empty_frame<Output> f;
     state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> _parent;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker(state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> parent)  ;
+    
 };
 template<typename Output>
 struct state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb {
@@ -27054,7 +26893,7 @@ template<typename Output>
 struct state_of_mutation_fragment__fragment__clustering_row__row__marker__no_marker {
     empty_frame<Output> f;
     state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> _parent;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__no_marker(state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> parent)  ;
+    
 };
 template<typename Output>
 struct state_of_mutation_fragment__fragment__clustering_row__row__deleted_at {
@@ -27106,7 +26945,7 @@ template<typename Output>
 struct after_counter_cell_full__shards {
     Output& _out;
     state_of_counter_cell_full<Output> _state;
-    void  end_counter_cell_full() ;
+    
 };
 template<typename Output>
 struct counter_cell_full__shards {
@@ -27114,86 +26953,78 @@ struct counter_cell_full__shards {
     state_of_counter_cell_full<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    counter_cell_full__shards(Output& out, state_of_counter_cell_full<Output> state) 
-            ;
-  void add_shards(counter_shard t)  ;
-  after_counter_cell_full__shards<Output> end_shards() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
 };
 template<typename Output>
 struct writer_of_counter_cell_full {
     Output& _out;
     state_of_counter_cell_full<Output> _state;
-    writer_of_counter_cell_full(Output& out) 
-            ;
-    counter_cell_full__shards<Output> start_shards() && ;
-    after_counter_cell_full__shards<Output> skip_shards() && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_counter_cell_update__delta {
     Output& _out;
     state_of_counter_cell_update<Output> _state;
-    void  end_counter_cell_update() ;
+    
 };
 template<typename Output>
 struct writer_of_counter_cell_update {
     Output& _out;
     state_of_counter_cell_update<Output> _state;
-    writer_of_counter_cell_update(Output& out) 
-            ;
-    after_counter_cell_update__delta<Output> write_delta(const int64_t& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_live_cell__value {
     Output& _out;
     state_of_live_cell<Output> _state;
-    void  end_live_cell() ;
+    
 };
 template<typename Output>
 struct after_live_cell__created_at {
     Output& _out;
     state_of_live_cell<Output> _state;
-    after_live_cell__value<Output> write_value(bytes_view t) && ;
-    template<typename FragmentedBuffer>
-    requires FragmentRange<FragmentedBuffer>
-    after_live_cell__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && ;
+    
+     ;
 };
 template<typename Output>
 struct writer_of_live_cell {
     Output& _out;
     state_of_live_cell<Output> _state;
-    writer_of_live_cell(Output& out) 
-            ;
-    after_live_cell__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_live_marker__created_at {
     Output& _out;
     state_of_live_marker<Output> _state;
-    void  end_live_marker() ;
+    
 };
 template<typename Output>
 struct writer_of_live_marker {
     Output& _out;
     state_of_live_marker<Output> _state;
-    writer_of_live_marker(Output& out) 
-            ;
-    after_live_marker__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct writer_of_no_marker {
     Output& _out;
     state_of_no_marker<Output> _state;
-    writer_of_no_marker(Output& out) 
-            ;
-    void  end_no_marker() ;
+    
+    
 };
 template<typename Output>
 struct after_tombstone__deletion_time {
     Output& _out;
     state_of_tombstone<Output> _state;
-    void  end_tombstone() ;
+    
 };
 template<typename Output>
 struct after_tombstone__timestamp {
@@ -27327,391 +27158,340 @@ template<typename Output>
 struct after_dead_marker__tomb__deletion_time {
     Output& _out;
     state_of_dead_marker__tomb<Output> _state;
-    after_dead_marker__tomb<Output>  end_tomb() && ;
+    
 };
 template<typename Output>
 struct after_dead_marker__tomb__timestamp {
     Output& _out;
     state_of_dead_marker__tomb<Output> _state;
-    after_dead_marker__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct dead_marker__tomb {
     Output& _out;
     state_of_dead_marker__tomb<Output> _state;
-    dead_marker__tomb(Output& out, state_of_dead_marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct writer_of_dead_marker {
     Output& _out;
     state_of_dead_marker<Output> _state;
-    writer_of_dead_marker(Output& out) 
-            ;
-    dead_marker__tomb<Output> start_tomb() && ;
-    after_dead_marker__tomb<Output> write_tomb(const tombstone& t) && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_expiring_cell__c {
     Output& _out;
     state_of_expiring_cell<Output> _state;
-    void  end_expiring_cell() ;
+    
 };
 template<typename Output>
 struct after_expiring_cell__c__value {
     Output& _out;
     state_of_expiring_cell__c<Output> _state;
-    after_expiring_cell__c<Output>  end_c() && ;
+    
 };
 template<typename Output>
 struct after_expiring_cell__c__created_at {
     Output& _out;
     state_of_expiring_cell__c<Output> _state;
-    after_expiring_cell__c__value<Output> write_value(bytes_view t) && ;
-    template<typename FragmentedBuffer>
-    requires FragmentRange<FragmentedBuffer>
-    after_expiring_cell__c__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && ;
+    
+     ;
 };
 template<typename Output>
 struct expiring_cell__c {
     Output& _out;
     state_of_expiring_cell__c<Output> _state;
-    expiring_cell__c(Output& out, state_of_expiring_cell<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_expiring_cell__c__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_expiring_cell__expiry {
     Output& _out;
     state_of_expiring_cell<Output> _state;
-    expiring_cell__c<Output> start_c() && ;
-    template<typename Serializer>
-    after_expiring_cell__c<Output> c(Serializer&& f) && ;
+    
+     ;
 };
 template<typename Output>
 struct after_expiring_cell__ttl {
     Output& _out;
     state_of_expiring_cell<Output> _state;
-    after_expiring_cell__expiry<Output> write_expiry(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct writer_of_expiring_cell {
     Output& _out;
     state_of_expiring_cell<Output> _state;
-    writer_of_expiring_cell(Output& out) 
-            ;
-    after_expiring_cell__ttl<Output> write_ttl(const gc_clock::duration& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_expiring_marker__expiry {
     Output& _out;
     state_of_expiring_marker<Output> _state;
-    void  end_expiring_marker() ;
+    
 };
 template<typename Output>
 struct after_expiring_marker__ttl {
     Output& _out;
     state_of_expiring_marker<Output> _state;
-    after_expiring_marker__expiry<Output> write_expiry(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct after_expiring_marker__lm {
     Output& _out;
     state_of_expiring_marker<Output> _state;
-    after_expiring_marker__ttl<Output> write_ttl(const gc_clock::duration& t) && ;
+    
 };
 template<typename Output>
 struct after_expiring_marker__lm__created_at {
     Output& _out;
     state_of_expiring_marker__lm<Output> _state;
-    after_expiring_marker__lm<Output>  end_lm() && ;
+    
 };
 template<typename Output>
 struct expiring_marker__lm {
     Output& _out;
     state_of_expiring_marker__lm<Output> _state;
-    expiring_marker__lm(Output& out, state_of_expiring_marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_expiring_marker__lm__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct writer_of_expiring_marker {
     Output& _out;
     state_of_expiring_marker<Output> _state;
-    writer_of_expiring_marker(Output& out) 
-            ;
-    expiring_marker__lm<Output> start_lm() && ;
-    template<typename Serializer>
-    after_expiring_marker__lm<Output> lm(Serializer&& f) && ;
+    
+    
+     ;
 };
 template<typename Output>
 struct after_partition_start__partition_tombstone {
     Output& _out;
     state_of_partition_start<Output> _state;
-    void  end_partition_start() ;
+    
 };
 template<typename Output>
 struct after_partition_start__partition_tombstone__deletion_time {
     Output& _out;
     state_of_partition_start__partition_tombstone<Output> _state;
-    after_partition_start__partition_tombstone<Output>  end_partition_tombstone() && ;
+    
 };
 template<typename Output>
 struct after_partition_start__partition_tombstone__timestamp {
     Output& _out;
     state_of_partition_start__partition_tombstone<Output> _state;
-    after_partition_start__partition_tombstone__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct partition_start__partition_tombstone {
     Output& _out;
     state_of_partition_start__partition_tombstone<Output> _state;
-    partition_start__partition_tombstone(Output& out, state_of_partition_start<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_partition_start__partition_tombstone__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_partition_start__key {
     Output& _out;
     state_of_partition_start<Output> _state;
-    partition_start__partition_tombstone<Output> start_partition_tombstone() && ;
-    after_partition_start__partition_tombstone<Output> write_partition_tombstone(const tombstone& t) && ;
+    
+    
 };
 template<typename Output>
 struct writer_of_partition_start {
     Output& _out;
     state_of_partition_start<Output> _state;
-    writer_of_partition_start(Output& out) 
-            ;
-    after_partition_start__key<Output> write_key(const partition_key& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_range_tombstone__end_kind {
     Output& _out;
     state_of_range_tombstone<Output> _state;
-    void  end_range_tombstone() ;
+    
 };
 template<typename Output>
 struct after_range_tombstone__end {
     Output& _out;
     state_of_range_tombstone<Output> _state;
-    after_range_tombstone__end_kind<Output> write_end_kind(const bound_kind& t) && ;
+    
 };
 template<typename Output>
 struct after_range_tombstone__start_kind {
     Output& _out;
     state_of_range_tombstone<Output> _state;
-    after_range_tombstone__end<Output> write_end(const clustering_key_prefix& t) && ;
+    
 };
 template<typename Output>
 struct after_range_tombstone__tomb {
     Output& _out;
     state_of_range_tombstone<Output> _state;
-    after_range_tombstone__start_kind<Output> write_start_kind(const bound_kind& t) && ;
+    
 };
 template<typename Output>
 struct after_range_tombstone__tomb__deletion_time {
     Output& _out;
     state_of_range_tombstone__tomb<Output> _state;
-    after_range_tombstone__tomb<Output>  end_tomb() && ;
+    
 };
 template<typename Output>
 struct after_range_tombstone__tomb__timestamp {
     Output& _out;
     state_of_range_tombstone__tomb<Output> _state;
-    after_range_tombstone__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct range_tombstone__tomb {
     Output& _out;
     state_of_range_tombstone__tomb<Output> _state;
-    range_tombstone__tomb(Output& out, state_of_range_tombstone<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_range_tombstone__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_range_tombstone__start {
     Output& _out;
     state_of_range_tombstone<Output> _state;
-    range_tombstone__tomb<Output> start_tomb() && ;
-    after_range_tombstone__tomb<Output> write_tomb(const tombstone& t) && ;
+    
+    
 };
 template<typename Output>
 struct writer_of_range_tombstone {
     Output& _out;
     state_of_range_tombstone<Output> _state;
-    writer_of_range_tombstone(Output& out) 
-            ;
-    after_range_tombstone__start<Output> write_start(const clustering_key_prefix& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_collection_element__value {
     Output& _out;
     state_of_collection_element<Output> _state;
-    void  end_collection_element() ;
+    
 };
 template<typename Output>
 struct after_collection_element__value__live_cell__value {
     Output& _out;
     state_of_collection_element__value__live_cell<Output> _state;
-    after_collection_element__value<Output>  end_live_cell() && ;
+    
 };
 template<typename Output>
 struct after_collection_element__value__live_cell__created_at {
     Output& _out;
     state_of_collection_element__value__live_cell<Output> _state;
-    after_collection_element__value__live_cell__value<Output> write_value(bytes_view t) && ;
-    template<typename FragmentedBuffer>
-    requires FragmentRange<FragmentedBuffer>
-    after_collection_element__value__live_cell__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && ;
+    
+     ;
 };
 template<typename Output>
 struct collection_element__value__live_cell {
     Output& _out;
     state_of_collection_element__value__live_cell<Output> _state;
-    collection_element__value__live_cell(Output& out, state_of_collection_element__value<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_collection_element__value__live_cell__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_collection_element__value__expiring_cell__c {
     Output& _out;
     state_of_collection_element__value__expiring_cell<Output> _state;
-    after_collection_element__value<Output>  end_expiring_cell() && ;
+    
 };
 template<typename Output>
 struct after_collection_element__value__expiring_cell__c__value {
     Output& _out;
     state_of_collection_element__value__expiring_cell__c<Output> _state;
-    after_collection_element__value__expiring_cell__c<Output>  end_c() && ;
+    
 };
 template<typename Output>
 struct after_collection_element__value__expiring_cell__c__created_at {
     Output& _out;
     state_of_collection_element__value__expiring_cell__c<Output> _state;
-    after_collection_element__value__expiring_cell__c__value<Output> write_value(bytes_view t) && ;
-    template<typename FragmentedBuffer>
-    requires FragmentRange<FragmentedBuffer>
-    after_collection_element__value__expiring_cell__c__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && ;
+    
+     ;
 };
 template<typename Output>
 struct collection_element__value__expiring_cell__c {
     Output& _out;
     state_of_collection_element__value__expiring_cell__c<Output> _state;
-    collection_element__value__expiring_cell__c(Output& out, state_of_collection_element__value__expiring_cell<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_collection_element__value__expiring_cell__c__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_collection_element__value__expiring_cell__expiry {
     Output& _out;
     state_of_collection_element__value__expiring_cell<Output> _state;
-    collection_element__value__expiring_cell__c<Output> start_c() && ;
-    template<typename Serializer>
-    after_collection_element__value__expiring_cell__c<Output> c(Serializer&& f) && ;
+    
+     ;
 };
 template<typename Output>
 struct after_collection_element__value__expiring_cell__ttl {
     Output& _out;
     state_of_collection_element__value__expiring_cell<Output> _state;
-    after_collection_element__value__expiring_cell__expiry<Output> write_expiry(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct collection_element__value__expiring_cell {
     Output& _out;
     state_of_collection_element__value__expiring_cell<Output> _state;
-    collection_element__value__expiring_cell(Output& out, state_of_collection_element__value<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_collection_element__value__expiring_cell__ttl<Output> write_ttl(const gc_clock::duration& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_collection_element__value__dead_cell__tomb {
     Output& _out;
     state_of_collection_element__value__dead_cell<Output> _state;
-    after_collection_element__value<Output>  end_dead_cell() && ;
+    
 };
 template<typename Output>
 struct after_collection_element__value__dead_cell__tomb__deletion_time {
     Output& _out;
     state_of_collection_element__value__dead_cell__tomb<Output> _state;
-    after_collection_element__value__dead_cell__tomb<Output>  end_tomb() && ;
+    
 };
 template<typename Output>
 struct after_collection_element__value__dead_cell__tomb__timestamp {
     Output& _out;
     state_of_collection_element__value__dead_cell__tomb<Output> _state;
-    after_collection_element__value__dead_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct collection_element__value__dead_cell__tomb {
     Output& _out;
     state_of_collection_element__value__dead_cell__tomb<Output> _state;
-    collection_element__value__dead_cell__tomb(Output& out, state_of_collection_element__value__dead_cell<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_collection_element__value__dead_cell__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct collection_element__value__dead_cell {
     Output& _out;
     state_of_collection_element__value__dead_cell<Output> _state;
-    collection_element__value__dead_cell(Output& out, state_of_collection_element__value<Output> state) 
-            ;
-    collection_element__value__dead_cell__tomb<Output> start_tomb() && ;
-    after_collection_element__value__dead_cell__tomb<Output> write_tomb(const tombstone& t) && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_collection_element__key {
     Output& _out;
     state_of_collection_element__value<Output> _state;
-    after_collection_element__key(Output& out, state_of_collection_element<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    collection_element__value__live_cell<Output> start_value_live_cell() && ;
-    template<typename Serializer>
-    after_collection_element__value<Output> value_live_cell(Serializer&& f) && ;
-    collection_element__value__expiring_cell<Output> start_value_expiring_cell() && ;
-    template<typename Serializer>
-    after_collection_element__value<Output> value_expiring_cell(Serializer&& f) && ;
-    collection_element__value__dead_cell<Output> start_value_dead_cell() && ;
-    template<typename Serializer>
-    after_collection_element__value<Output> value_dead_cell(Serializer&& f) && ;
+    
+    
+     ;
+    
+     ;
+    
+     ;
 };
 template<typename Output>
 struct writer_of_collection_element {
     Output& _out;
     state_of_collection_element<Output> _state;
-    writer_of_collection_element(Output& out) 
-            ;
-    after_collection_element__key<Output> write_key(bytes_view t) && ;
-    template<typename FragmentedBuffer>
-    requires FragmentRange<FragmentedBuffer>
-    after_collection_element__key<Output> write_fragmented_key(FragmentedBuffer&& fragments) && ;
+    
+    
+     ;
 };
 template<typename Output>
 struct after_collection_cell__elements {
     Output& _out;
     state_of_collection_cell<Output> _state;
-    void  end_collection_cell() ;
+    
 };
 template<typename Output>
 struct collection_cell__elements {
@@ -27719,192 +27499,169 @@ struct collection_cell__elements {
     state_of_collection_cell<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    collection_cell__elements(Output& out, state_of_collection_cell<Output> state) 
-            ;
-  writer_of_collection_element<Output> add() ;
-  void add(collection_element_view v) ;
-  after_collection_cell__elements<Output> end_elements() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct after_collection_cell__tomb {
     Output& _out;
     state_of_collection_cell<Output> _state;
-    collection_cell__elements<Output> start_elements() && ;
-    after_collection_cell__elements<Output> skip_elements() && ;
+    
+    
 };
 template<typename Output>
 struct after_collection_cell__tomb__deletion_time {
     Output& _out;
     state_of_collection_cell__tomb<Output> _state;
-    after_collection_cell__tomb<Output>  end_tomb() && ;
+    
 };
 template<typename Output>
 struct after_collection_cell__tomb__timestamp {
     Output& _out;
     state_of_collection_cell__tomb<Output> _state;
-    after_collection_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct collection_cell__tomb {
     Output& _out;
     state_of_collection_cell__tomb<Output> _state;
-    collection_cell__tomb(Output& out, state_of_collection_cell<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_collection_cell__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct writer_of_collection_cell {
     Output& _out;
     state_of_collection_cell<Output> _state;
-    writer_of_collection_cell(Output& out) 
-            ;
-    collection_cell__tomb<Output> start_tomb() && ;
-    after_collection_cell__tomb<Output> write_tomb(const tombstone& t) && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_column__c {
     Output& _out;
     state_of_column<Output> _state;
-    void  end_column() ;
+    
 };
 template<typename Output>
 struct after_column__c__variant {
     Output& _out;
     state_of_column__c<Output> _state;
-    after_column__c<Output>  end_variant() && ;
+    
 };
 template<typename Output>
 struct after_column__c__variant__live_cell__value {
     Output& _out;
     state_of_column__c__variant__live_cell<Output> _state;
-    after_column__c__variant<Output>  end_live_cell() && ;
+    
 };
 template<typename Output>
 struct after_column__c__variant__live_cell__created_at {
     Output& _out;
     state_of_column__c__variant__live_cell<Output> _state;
-    after_column__c__variant__live_cell__value<Output> write_value(bytes_view t) && ;
-    template<typename FragmentedBuffer>
-    requires FragmentRange<FragmentedBuffer>
-    after_column__c__variant__live_cell__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && ;
+    
+     ;
 };
 template<typename Output>
 struct column__c__variant__live_cell {
     Output& _out;
     state_of_column__c__variant__live_cell<Output> _state;
-    column__c__variant__live_cell(Output& out, state_of_column__c__variant<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_column__c__variant__live_cell__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_column__c__variant__expiring_cell__c {
     Output& _out;
     state_of_column__c__variant__expiring_cell<Output> _state;
-    after_column__c__variant<Output>  end_expiring_cell() && ;
+    
 };
 template<typename Output>
 struct after_column__c__variant__expiring_cell__c__value {
     Output& _out;
     state_of_column__c__variant__expiring_cell__c<Output> _state;
-    after_column__c__variant__expiring_cell__c<Output>  end_c() && ;
+    
 };
 template<typename Output>
 struct after_column__c__variant__expiring_cell__c__created_at {
     Output& _out;
     state_of_column__c__variant__expiring_cell__c<Output> _state;
-    after_column__c__variant__expiring_cell__c__value<Output> write_value(bytes_view t) && ;
-    template<typename FragmentedBuffer>
-    requires FragmentRange<FragmentedBuffer>
-    after_column__c__variant__expiring_cell__c__value<Output> write_fragmented_value(FragmentedBuffer&& fragments) && ;
+    
+     ;
 };
 template<typename Output>
 struct column__c__variant__expiring_cell__c {
     Output& _out;
     state_of_column__c__variant__expiring_cell__c<Output> _state;
-    column__c__variant__expiring_cell__c(Output& out, state_of_column__c__variant__expiring_cell<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_column__c__variant__expiring_cell__c__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_column__c__variant__expiring_cell__expiry {
     Output& _out;
     state_of_column__c__variant__expiring_cell<Output> _state;
-    column__c__variant__expiring_cell__c<Output> start_c() && ;
-    template<typename Serializer>
-    after_column__c__variant__expiring_cell__c<Output> c(Serializer&& f) && ;
+    
+     ;
 };
 template<typename Output>
 struct after_column__c__variant__expiring_cell__ttl {
     Output& _out;
     state_of_column__c__variant__expiring_cell<Output> _state;
-    after_column__c__variant__expiring_cell__expiry<Output> write_expiry(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct column__c__variant__expiring_cell {
     Output& _out;
     state_of_column__c__variant__expiring_cell<Output> _state;
-    column__c__variant__expiring_cell(Output& out, state_of_column__c__variant<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_column__c__variant__expiring_cell__ttl<Output> write_ttl(const gc_clock::duration& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_column__c__variant__dead_cell__tomb {
     Output& _out;
     state_of_column__c__variant__dead_cell<Output> _state;
-    after_column__c__variant<Output>  end_dead_cell() && ;
+    
 };
 template<typename Output>
 struct after_column__c__variant__dead_cell__tomb__deletion_time {
     Output& _out;
     state_of_column__c__variant__dead_cell__tomb<Output> _state;
-    after_column__c__variant__dead_cell__tomb<Output>  end_tomb() && ;
+    
 };
 template<typename Output>
 struct after_column__c__variant__dead_cell__tomb__timestamp {
     Output& _out;
     state_of_column__c__variant__dead_cell__tomb<Output> _state;
-    after_column__c__variant__dead_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct column__c__variant__dead_cell__tomb {
     Output& _out;
     state_of_column__c__variant__dead_cell__tomb<Output> _state;
-    column__c__variant__dead_cell__tomb(Output& out, state_of_column__c__variant__dead_cell<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_column__c__variant__dead_cell__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct column__c__variant__dead_cell {
     Output& _out;
     state_of_column__c__variant__dead_cell<Output> _state;
-    column__c__variant__dead_cell(Output& out, state_of_column__c__variant<Output> state) 
-            ;
-    column__c__variant__dead_cell__tomb<Output> start_tomb() && ;
-    after_column__c__variant__dead_cell__tomb<Output> write_tomb(const tombstone& t) && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_column__c__variant__counter_cell__value {
     Output& _out;
     state_of_column__c__variant__counter_cell<Output> _state;
-    after_column__c__variant<Output>  end_counter_cell() && ;
+    
 };
 template<typename Output>
 struct after_column__c__variant__counter_cell__value__counter_cell_full__shards {
     Output& _out;
     state_of_column__c__variant__counter_cell__value__counter_cell_full<Output> _state;
-    after_column__c__variant__counter_cell__value<Output>  end_counter_cell_full() && ;
+    
 };
 template<typename Output>
 struct column__c__variant__counter_cell__value__counter_cell_full__shards {
@@ -27912,87 +27669,69 @@ struct column__c__variant__counter_cell__value__counter_cell_full__shards {
     state_of_column__c__variant__counter_cell__value__counter_cell_full<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    column__c__variant__counter_cell__value__counter_cell_full__shards(Output& out, state_of_column__c__variant__counter_cell__value__counter_cell_full<Output> state) 
-            ;
-  void add_shards(counter_shard t)  ;
-  after_column__c__variant__counter_cell__value__counter_cell_full__shards<Output> end_shards() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
 };
 template<typename Output>
 struct column__c__variant__counter_cell__value__counter_cell_full {
     Output& _out;
     state_of_column__c__variant__counter_cell__value__counter_cell_full<Output> _state;
-    column__c__variant__counter_cell__value__counter_cell_full(Output& out, state_of_column__c__variant__counter_cell__value<Output> state) 
-            ;
-    column__c__variant__counter_cell__value__counter_cell_full__shards<Output> start_shards() && ;
-    after_column__c__variant__counter_cell__value__counter_cell_full__shards<Output> skip_shards() && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_column__c__variant__counter_cell__value__counter_cell_update__delta {
     Output& _out;
     state_of_column__c__variant__counter_cell__value__counter_cell_update<Output> _state;
-    after_column__c__variant__counter_cell__value<Output>  end_counter_cell_update() && ;
+    
 };
 template<typename Output>
 struct column__c__variant__counter_cell__value__counter_cell_update {
     Output& _out;
     state_of_column__c__variant__counter_cell__value__counter_cell_update<Output> _state;
-    column__c__variant__counter_cell__value__counter_cell_update(Output& out, state_of_column__c__variant__counter_cell__value<Output> state) 
-            ;
-    after_column__c__variant__counter_cell__value__counter_cell_update__delta<Output> write_delta(const int64_t& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_column__c__variant__counter_cell__created_at {
     Output& _out;
     state_of_column__c__variant__counter_cell__value<Output> _state;
-    after_column__c__variant__counter_cell__created_at(Output& out, state_of_column__c__variant__counter_cell<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    column__c__variant__counter_cell__value__counter_cell_full<Output> start_value_counter_cell_full() && ;
-    template<typename Serializer>
-    after_column__c__variant__counter_cell__value<Output> value_counter_cell_full(Serializer&& f) && ;
-    column__c__variant__counter_cell__value__counter_cell_update<Output> start_value_counter_cell_update() && ;
-    template<typename Serializer>
-    after_column__c__variant__counter_cell__value<Output> value_counter_cell_update(Serializer&& f) && ;
+    
+    
+     ;
+    
+     ;
 };
 template<typename Output>
 struct column__c__variant__counter_cell {
     Output& _out;
     state_of_column__c__variant__counter_cell<Output> _state;
-    column__c__variant__counter_cell(Output& out, state_of_column__c__variant<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_column__c__variant__counter_cell__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct column__c__variant {
     Output& _out;
     state_of_column__c__variant<Output> _state;
-    column__c__variant(Output& out, state_of_column__c<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    column__c__variant__live_cell<Output> start_variant_live_cell() && ;
-    template<typename Serializer>
-    after_column__c__variant<Output> variant_live_cell(Serializer&& f) && ;
-    column__c__variant__expiring_cell<Output> start_variant_expiring_cell() && ;
-    template<typename Serializer>
-    after_column__c__variant<Output> variant_expiring_cell(Serializer&& f) && ;
-    column__c__variant__dead_cell<Output> start_variant_dead_cell() && ;
-    template<typename Serializer>
-    after_column__c__variant<Output> variant_dead_cell(Serializer&& f) && ;
-    column__c__variant__counter_cell<Output> start_variant_counter_cell() && ;
-    template<typename Serializer>
-    after_column__c__variant<Output> variant_counter_cell(Serializer&& f) && ;
+    
+    
+     ;
+    
+     ;
+    
+     ;
+    
+     ;
 };
 template<typename Output>
 struct after_column__c__collection_cell__elements {
     Output& _out;
     state_of_column__c__collection_cell<Output> _state;
-    after_column__c<Output>  end_collection_cell() && ;
+    
 };
 template<typename Output>
 struct column__c__collection_cell__elements {
@@ -28000,52 +27739,45 @@ struct column__c__collection_cell__elements {
     state_of_column__c__collection_cell<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    column__c__collection_cell__elements(Output& out, state_of_column__c__collection_cell<Output> state) 
-            ;
-  writer_of_collection_element<Output> add() ;
-  void add(collection_element_view v) ;
-  after_column__c__collection_cell__elements<Output> end_elements() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct after_column__c__collection_cell__tomb {
     Output& _out;
     state_of_column__c__collection_cell<Output> _state;
-    column__c__collection_cell__elements<Output> start_elements() && ;
-    after_column__c__collection_cell__elements<Output> skip_elements() && ;
+    
+    
 };
 template<typename Output>
 struct after_column__c__collection_cell__tomb__deletion_time {
     Output& _out;
     state_of_column__c__collection_cell__tomb<Output> _state;
-    after_column__c__collection_cell__tomb<Output>  end_tomb() && ;
+    
 };
 template<typename Output>
 struct after_column__c__collection_cell__tomb__timestamp {
     Output& _out;
     state_of_column__c__collection_cell__tomb<Output> _state;
-    after_column__c__collection_cell__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct column__c__collection_cell__tomb {
     Output& _out;
     state_of_column__c__collection_cell__tomb<Output> _state;
-    column__c__collection_cell__tomb(Output& out, state_of_column__c__collection_cell<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_column__c__collection_cell__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct column__c__collection_cell {
     Output& _out;
     state_of_column__c__collection_cell<Output> _state;
-    column__c__collection_cell(Output& out, state_of_column__c<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    column__c__collection_cell__tomb<Output> start_tomb() && ;
+    
+    
     after_column__c__collection_cell__tomb<Output> write_tomb(const tombstone& t) && ;
 };
 template<typename Output>
@@ -28095,49 +27827,46 @@ struct writer_of_row {
     state_of_row<Output> _state;
     writer_of_row(Output& out) 
             ;
-    row__columns<Output> start_columns() && ;
-    after_row__columns<Output> skip_columns() && ;
+    
+    
 };
 template<typename Output>
 struct after_deletable_row__shadowable_deleted_at {
     Output& _out;
     state_of_deletable_row<Output> _state;
-    void  end_deletable_row() ;
+    
 };
 template<typename Output>
 struct after_deletable_row__shadowable_deleted_at__deletion_time {
     Output& _out;
     state_of_deletable_row__shadowable_deleted_at<Output> _state;
-    after_deletable_row__shadowable_deleted_at<Output>  end_shadowable_deleted_at() && ;
+    
 };
 template<typename Output>
 struct after_deletable_row__shadowable_deleted_at__timestamp {
     Output& _out;
     state_of_deletable_row__shadowable_deleted_at<Output> _state;
-    after_deletable_row__shadowable_deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct deletable_row__shadowable_deleted_at {
     Output& _out;
     state_of_deletable_row__shadowable_deleted_at<Output> _state;
-    deletable_row__shadowable_deleted_at(Output& out, state_of_deletable_row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_deletable_row__shadowable_deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_deletable_row__cells {
     Output& _out;
     state_of_deletable_row<Output> _state;
-    deletable_row__shadowable_deleted_at<Output> start_shadowable_deleted_at() && ;
-    after_deletable_row__shadowable_deleted_at<Output> write_shadowable_deleted_at(const tombstone& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_deletable_row__cells__columns {
     Output& _out;
     state_of_deletable_row__cells<Output> _state;
-    after_deletable_row__cells<Output>  end_cells() && ;
+    
 };
 template<typename Output>
 struct deletable_row__cells__columns {
@@ -28145,209 +27874,178 @@ struct deletable_row__cells__columns {
     state_of_deletable_row__cells<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    deletable_row__cells__columns(Output& out, state_of_deletable_row__cells<Output> state) 
-            ;
-  writer_of_column<Output> add() ;
-  void add(column_view v) ;
-  after_deletable_row__cells__columns<Output> end_columns() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct deletable_row__cells {
     Output& _out;
     state_of_deletable_row__cells<Output> _state;
-    deletable_row__cells(Output& out, state_of_deletable_row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    deletable_row__cells__columns<Output> start_columns() && ;
-    after_deletable_row__cells__columns<Output> skip_columns() && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_deletable_row__deleted_at {
     Output& _out;
     state_of_deletable_row<Output> _state;
-    deletable_row__cells<Output> start_cells() && ;
-    template<typename Serializer>
-    after_deletable_row__cells<Output> cells(Serializer&& f) && ;
+    
+     ;
 };
 template<typename Output>
 struct after_deletable_row__deleted_at__deletion_time {
     Output& _out;
     state_of_deletable_row__deleted_at<Output> _state;
-    after_deletable_row__deleted_at<Output>  end_deleted_at() && ;
+    
 };
 template<typename Output>
 struct after_deletable_row__deleted_at__timestamp {
     Output& _out;
     state_of_deletable_row__deleted_at<Output> _state;
-    after_deletable_row__deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct deletable_row__deleted_at {
     Output& _out;
     state_of_deletable_row__deleted_at<Output> _state;
-    deletable_row__deleted_at(Output& out, state_of_deletable_row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_deletable_row__deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_deletable_row__marker {
     Output& _out;
     state_of_deletable_row<Output> _state;
-    deletable_row__deleted_at<Output> start_deleted_at() && ;
-    after_deletable_row__deleted_at<Output> write_deleted_at(const tombstone& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_deletable_row__marker__live_marker__created_at {
     Output& _out;
     state_of_deletable_row__marker__live_marker<Output> _state;
-    after_deletable_row__marker<Output>  end_live_marker() && ;
+    
 };
 template<typename Output>
 struct deletable_row__marker__live_marker {
     Output& _out;
     state_of_deletable_row__marker__live_marker<Output> _state;
-    deletable_row__marker__live_marker(Output& out, state_of_deletable_row__marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_deletable_row__marker__live_marker__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_deletable_row__marker__expiring_marker__expiry {
     Output& _out;
     state_of_deletable_row__marker__expiring_marker<Output> _state;
-    after_deletable_row__marker<Output>  end_expiring_marker() && ;
+    
 };
 template<typename Output>
 struct after_deletable_row__marker__expiring_marker__ttl {
     Output& _out;
     state_of_deletable_row__marker__expiring_marker<Output> _state;
-    after_deletable_row__marker__expiring_marker__expiry<Output> write_expiry(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct after_deletable_row__marker__expiring_marker__lm {
     Output& _out;
     state_of_deletable_row__marker__expiring_marker<Output> _state;
-    after_deletable_row__marker__expiring_marker__ttl<Output> write_ttl(const gc_clock::duration& t) && ;
+    
 };
 template<typename Output>
 struct after_deletable_row__marker__expiring_marker__lm__created_at {
     Output& _out;
     state_of_deletable_row__marker__expiring_marker__lm<Output> _state;
-    after_deletable_row__marker__expiring_marker__lm<Output>  end_lm() && ;
+    
 };
 template<typename Output>
 struct deletable_row__marker__expiring_marker__lm {
     Output& _out;
     state_of_deletable_row__marker__expiring_marker__lm<Output> _state;
-    deletable_row__marker__expiring_marker__lm(Output& out, state_of_deletable_row__marker__expiring_marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_deletable_row__marker__expiring_marker__lm__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct deletable_row__marker__expiring_marker {
     Output& _out;
     state_of_deletable_row__marker__expiring_marker<Output> _state;
-    deletable_row__marker__expiring_marker(Output& out, state_of_deletable_row__marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    deletable_row__marker__expiring_marker__lm<Output> start_lm() && ;
-    template<typename Serializer>
-    after_deletable_row__marker__expiring_marker__lm<Output> lm(Serializer&& f) && ;
+    
+    
+     ;
 };
 template<typename Output>
 struct after_deletable_row__marker__dead_marker__tomb {
     Output& _out;
     state_of_deletable_row__marker__dead_marker<Output> _state;
-    after_deletable_row__marker<Output>  end_dead_marker() && ;
+    
 };
 template<typename Output>
 struct after_deletable_row__marker__dead_marker__tomb__deletion_time {
     Output& _out;
     state_of_deletable_row__marker__dead_marker__tomb<Output> _state;
-    after_deletable_row__marker__dead_marker__tomb<Output>  end_tomb() && ;
+    
 };
 template<typename Output>
 struct after_deletable_row__marker__dead_marker__tomb__timestamp {
     Output& _out;
     state_of_deletable_row__marker__dead_marker__tomb<Output> _state;
-    after_deletable_row__marker__dead_marker__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct deletable_row__marker__dead_marker__tomb {
     Output& _out;
     state_of_deletable_row__marker__dead_marker__tomb<Output> _state;
-    deletable_row__marker__dead_marker__tomb(Output& out, state_of_deletable_row__marker__dead_marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_deletable_row__marker__dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct deletable_row__marker__dead_marker {
     Output& _out;
     state_of_deletable_row__marker__dead_marker<Output> _state;
-    deletable_row__marker__dead_marker(Output& out, state_of_deletable_row__marker<Output> state) 
-            ;
-    deletable_row__marker__dead_marker__tomb<Output> start_tomb() && ;
-    after_deletable_row__marker__dead_marker__tomb<Output> write_tomb(const tombstone& t) && ;
+    
+    
+    
 };
 template<typename Output>
 struct deletable_row__marker__no_marker {
     Output& _out;
     state_of_deletable_row__marker__no_marker<Output> _state;
-    deletable_row__marker__no_marker(Output& out, state_of_deletable_row__marker<Output> state) 
-            ;
-    after_deletable_row__marker<Output>  end_no_marker() && ;
+    
+    
 };
 template<typename Output>
 struct after_deletable_row__key {
     Output& _out;
     state_of_deletable_row__marker<Output> _state;
-    after_deletable_row__key(Output& out, state_of_deletable_row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    deletable_row__marker__live_marker<Output> start_marker_live_marker() && ;
-    template<typename Serializer>
-    after_deletable_row__marker<Output> marker_live_marker(Serializer&& f) && ;
-    deletable_row__marker__expiring_marker<Output> start_marker_expiring_marker() && ;
-    template<typename Serializer>
-    after_deletable_row__marker<Output> marker_expiring_marker(Serializer&& f) && ;
-    deletable_row__marker__dead_marker<Output> start_marker_dead_marker() && ;
-    template<typename Serializer>
-    after_deletable_row__marker<Output> marker_dead_marker(Serializer&& f) && ;
-    deletable_row__marker__no_marker<Output> start_marker_no_marker() && ;
-    template<typename Serializer>
-    after_deletable_row__marker<Output> marker_no_marker(Serializer&& f) && ;
+    
+    
+     ;
+    
+     ;
+    
+     ;
+    
+     ;
 };
 template<typename Output>
 struct writer_of_deletable_row {
     Output& _out;
     state_of_deletable_row<Output> _state;
-    writer_of_deletable_row(Output& out) 
-            ;
-    after_deletable_row__key<Output> write_key(const clustering_key& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_static_row__cells {
     Output& _out;
     state_of_static_row<Output> _state;
-    void  end_static_row() ;
+    
 };
 template<typename Output>
 struct after_static_row__cells__columns {
     Output& _out;
     state_of_static_row__cells<Output> _state;
-    after_static_row__cells<Output>  end_cells() && ;
+    
 };
 template<typename Output>
 struct static_row__cells__columns {
@@ -28355,81 +28053,72 @@ struct static_row__cells__columns {
     state_of_static_row__cells<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    static_row__cells__columns(Output& out, state_of_static_row__cells<Output> state) 
-            ;
-  writer_of_column<Output> add() ;
-  void add(column_view v) ;
-  after_static_row__cells__columns<Output> end_columns() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct static_row__cells {
     Output& _out;
     state_of_static_row__cells<Output> _state;
-    static_row__cells(Output& out, state_of_static_row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    static_row__cells__columns<Output> start_columns() && ;
-    after_static_row__cells__columns<Output> skip_columns() && ;
+    
+    
+    
 };
 template<typename Output>
 struct writer_of_static_row {
     Output& _out;
     state_of_static_row<Output> _state;
-    writer_of_static_row(Output& out) 
-            ;
-    static_row__cells<Output> start_cells() && ;
-    template<typename Serializer>
-    after_static_row__cells<Output> cells(Serializer&& f) && ;
+    
+    
+     ;
 };
 template<typename Output>
 struct after_clustering_row__row {
     Output& _out;
     state_of_clustering_row<Output> _state;
-    void  end_clustering_row() ;
+    
 };
 template<typename Output>
 struct after_clustering_row__row__shadowable_deleted_at {
     Output& _out;
     state_of_clustering_row__row<Output> _state;
-    after_clustering_row__row<Output>  end_row() && ;
+    
 };
 template<typename Output>
 struct after_clustering_row__row__shadowable_deleted_at__deletion_time {
     Output& _out;
     state_of_clustering_row__row__shadowable_deleted_at<Output> _state;
-    after_clustering_row__row__shadowable_deleted_at<Output>  end_shadowable_deleted_at() && ;
+    
 };
 template<typename Output>
 struct after_clustering_row__row__shadowable_deleted_at__timestamp {
     Output& _out;
     state_of_clustering_row__row__shadowable_deleted_at<Output> _state;
-    after_clustering_row__row__shadowable_deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct clustering_row__row__shadowable_deleted_at {
     Output& _out;
     state_of_clustering_row__row__shadowable_deleted_at<Output> _state;
-    clustering_row__row__shadowable_deleted_at(Output& out, state_of_clustering_row__row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_clustering_row__row__shadowable_deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_clustering_row__row__cells {
     Output& _out;
     state_of_clustering_row__row<Output> _state;
-    clustering_row__row__shadowable_deleted_at<Output> start_shadowable_deleted_at() && ;
-    after_clustering_row__row__shadowable_deleted_at<Output> write_shadowable_deleted_at(const tombstone& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_clustering_row__row__cells__columns {
     Output& _out;
     state_of_clustering_row__row__cells<Output> _state;
-    after_clustering_row__row__cells<Output>  end_cells() && ;
+    
 };
 template<typename Output>
 struct clustering_row__row__cells__columns {
@@ -28437,215 +28126,180 @@ struct clustering_row__row__cells__columns {
     state_of_clustering_row__row__cells<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    clustering_row__row__cells__columns(Output& out, state_of_clustering_row__row__cells<Output> state) 
-            ;
-  writer_of_column<Output> add() ;
-  void add(column_view v) ;
-  after_clustering_row__row__cells__columns<Output> end_columns() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct clustering_row__row__cells {
     Output& _out;
     state_of_clustering_row__row__cells<Output> _state;
-    clustering_row__row__cells(Output& out, state_of_clustering_row__row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    clustering_row__row__cells__columns<Output> start_columns() && ;
-    after_clustering_row__row__cells__columns<Output> skip_columns() && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_clustering_row__row__deleted_at {
     Output& _out;
     state_of_clustering_row__row<Output> _state;
-    clustering_row__row__cells<Output> start_cells() && ;
-    template<typename Serializer>
-    after_clustering_row__row__cells<Output> cells(Serializer&& f) && ;
+    
+     ;
 };
 template<typename Output>
 struct after_clustering_row__row__deleted_at__deletion_time {
     Output& _out;
     state_of_clustering_row__row__deleted_at<Output> _state;
-    after_clustering_row__row__deleted_at<Output>  end_deleted_at() && ;
+    
 };
 template<typename Output>
 struct after_clustering_row__row__deleted_at__timestamp {
     Output& _out;
     state_of_clustering_row__row__deleted_at<Output> _state;
-    after_clustering_row__row__deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct clustering_row__row__deleted_at {
     Output& _out;
     state_of_clustering_row__row__deleted_at<Output> _state;
-    clustering_row__row__deleted_at(Output& out, state_of_clustering_row__row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_clustering_row__row__deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_clustering_row__row__marker {
     Output& _out;
     state_of_clustering_row__row<Output> _state;
-    clustering_row__row__deleted_at<Output> start_deleted_at() && ;
-    after_clustering_row__row__deleted_at<Output> write_deleted_at(const tombstone& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_clustering_row__row__marker__live_marker__created_at {
     Output& _out;
     state_of_clustering_row__row__marker__live_marker<Output> _state;
-    after_clustering_row__row__marker<Output>  end_live_marker() && ;
+    
 };
 template<typename Output>
 struct clustering_row__row__marker__live_marker {
     Output& _out;
     state_of_clustering_row__row__marker__live_marker<Output> _state;
-    clustering_row__row__marker__live_marker(Output& out, state_of_clustering_row__row__marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_clustering_row__row__marker__live_marker__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_clustering_row__row__marker__expiring_marker__expiry {
     Output& _out;
     state_of_clustering_row__row__marker__expiring_marker<Output> _state;
-    after_clustering_row__row__marker<Output>  end_expiring_marker() && ;
+    
 };
 template<typename Output>
 struct after_clustering_row__row__marker__expiring_marker__ttl {
     Output& _out;
     state_of_clustering_row__row__marker__expiring_marker<Output> _state;
-    after_clustering_row__row__marker__expiring_marker__expiry<Output> write_expiry(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct after_clustering_row__row__marker__expiring_marker__lm {
     Output& _out;
     state_of_clustering_row__row__marker__expiring_marker<Output> _state;
-    after_clustering_row__row__marker__expiring_marker__ttl<Output> write_ttl(const gc_clock::duration& t) && ;
+    
 };
 template<typename Output>
 struct after_clustering_row__row__marker__expiring_marker__lm__created_at {
     Output& _out;
     state_of_clustering_row__row__marker__expiring_marker__lm<Output> _state;
-    after_clustering_row__row__marker__expiring_marker__lm<Output>  end_lm() && ;
+    
 };
 template<typename Output>
 struct clustering_row__row__marker__expiring_marker__lm {
     Output& _out;
     state_of_clustering_row__row__marker__expiring_marker__lm<Output> _state;
-    clustering_row__row__marker__expiring_marker__lm(Output& out, state_of_clustering_row__row__marker__expiring_marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_clustering_row__row__marker__expiring_marker__lm__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct clustering_row__row__marker__expiring_marker {
     Output& _out;
     state_of_clustering_row__row__marker__expiring_marker<Output> _state;
-    clustering_row__row__marker__expiring_marker(Output& out, state_of_clustering_row__row__marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    clustering_row__row__marker__expiring_marker__lm<Output> start_lm() && ;
-    template<typename Serializer>
-    after_clustering_row__row__marker__expiring_marker__lm<Output> lm(Serializer&& f) && ;
+    
+    
+     ;
 };
 template<typename Output>
 struct after_clustering_row__row__marker__dead_marker__tomb {
     Output& _out;
     state_of_clustering_row__row__marker__dead_marker<Output> _state;
-    after_clustering_row__row__marker<Output>  end_dead_marker() && ;
+    
 };
 template<typename Output>
 struct after_clustering_row__row__marker__dead_marker__tomb__deletion_time {
     Output& _out;
     state_of_clustering_row__row__marker__dead_marker__tomb<Output> _state;
-    after_clustering_row__row__marker__dead_marker__tomb<Output>  end_tomb() && ;
+    
 };
 template<typename Output>
 struct after_clustering_row__row__marker__dead_marker__tomb__timestamp {
     Output& _out;
     state_of_clustering_row__row__marker__dead_marker__tomb<Output> _state;
-    after_clustering_row__row__marker__dead_marker__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct clustering_row__row__marker__dead_marker__tomb {
     Output& _out;
     state_of_clustering_row__row__marker__dead_marker__tomb<Output> _state;
-    clustering_row__row__marker__dead_marker__tomb(Output& out, state_of_clustering_row__row__marker__dead_marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_clustering_row__row__marker__dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct clustering_row__row__marker__dead_marker {
     Output& _out;
     state_of_clustering_row__row__marker__dead_marker<Output> _state;
-    clustering_row__row__marker__dead_marker(Output& out, state_of_clustering_row__row__marker<Output> state) 
-            ;
-    clustering_row__row__marker__dead_marker__tomb<Output> start_tomb() && ;
-    after_clustering_row__row__marker__dead_marker__tomb<Output> write_tomb(const tombstone& t) && ;
+    
+    
+    
 };
 template<typename Output>
 struct clustering_row__row__marker__no_marker {
     Output& _out;
     state_of_clustering_row__row__marker__no_marker<Output> _state;
-    clustering_row__row__marker__no_marker(Output& out, state_of_clustering_row__row__marker<Output> state) 
-            ;
-    after_clustering_row__row__marker<Output>  end_no_marker() && ;
+    
+    
 };
 template<typename Output>
 struct after_clustering_row__row__key {
     Output& _out;
     state_of_clustering_row__row__marker<Output> _state;
-    after_clustering_row__row__key(Output& out, state_of_clustering_row__row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    clustering_row__row__marker__live_marker<Output> start_marker_live_marker() && ;
-    template<typename Serializer>
-    after_clustering_row__row__marker<Output> marker_live_marker(Serializer&& f) && ;
-    clustering_row__row__marker__expiring_marker<Output> start_marker_expiring_marker() && ;
-    template<typename Serializer>
-    after_clustering_row__row__marker<Output> marker_expiring_marker(Serializer&& f) && ;
-    clustering_row__row__marker__dead_marker<Output> start_marker_dead_marker() && ;
-    template<typename Serializer>
-    after_clustering_row__row__marker<Output> marker_dead_marker(Serializer&& f) && ;
-    clustering_row__row__marker__no_marker<Output> start_marker_no_marker() && ;
-    template<typename Serializer>
-    after_clustering_row__row__marker<Output> marker_no_marker(Serializer&& f) && ;
+    
+    
+     ;
+    
+     ;
+    
+     ;
+    
+     ;
 };
 template<typename Output>
 struct clustering_row__row {
     Output& _out;
     state_of_clustering_row__row<Output> _state;
-    clustering_row__row(Output& out, state_of_clustering_row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_clustering_row__row__key<Output> write_key(const clustering_key& t) && ;
+    
+    
 };
 template<typename Output>
 struct writer_of_clustering_row {
     Output& _out;
     state_of_clustering_row<Output> _state;
-    writer_of_clustering_row(Output& out) 
-            ;
-    clustering_row__row<Output> start_row() && ;
-    template<typename Serializer>
-    after_clustering_row__row<Output> row(Serializer&& f) && ;
+    
+    
+     ;
 };
 template<typename Output>
 struct after_mutation_partition__rows {
     Output& _out;
     state_of_mutation_partition<Output> _state;
-    void  end_mutation_partition() ;
+    
 };
 template<typename Output>
 struct mutation_partition__rows {
@@ -28653,20 +28307,19 @@ struct mutation_partition__rows {
     state_of_mutation_partition<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    mutation_partition__rows(Output& out, state_of_mutation_partition<Output> state) 
-            ;
-  writer_of_deletable_row<Output> add() ;
-  void add(deletable_row_view v) ;
-  after_mutation_partition__rows<Output> end_rows() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct after_mutation_partition__range_tombstones {
     Output& _out;
     state_of_mutation_partition<Output> _state;
-    mutation_partition__rows<Output> start_rows() && ;
-    after_mutation_partition__rows<Output> skip_rows() && ;
+    
+    
 };
 template<typename Output>
 struct mutation_partition__range_tombstones {
@@ -28674,26 +28327,25 @@ struct mutation_partition__range_tombstones {
     state_of_mutation_partition<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    mutation_partition__range_tombstones(Output& out, state_of_mutation_partition<Output> state) 
-            ;
-  writer_of_range_tombstone<Output> add() ;
-  void add(range_tombstone_view v) ;
-  after_mutation_partition__range_tombstones<Output> end_range_tombstones() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct after_mutation_partition__static_row {
     Output& _out;
     state_of_mutation_partition<Output> _state;
-    mutation_partition__range_tombstones<Output> start_range_tombstones() && ;
-    after_mutation_partition__range_tombstones<Output> skip_range_tombstones() && ;
+    
+    
 };
 template<typename Output>
 struct after_mutation_partition__static_row__columns {
     Output& _out;
     state_of_mutation_partition__static_row<Output> _state;
-    after_mutation_partition__static_row<Output>  end_static_row() && ;
+    
 };
 template<typename Output>
 struct mutation_partition__static_row__columns {
@@ -28701,75 +28353,66 @@ struct mutation_partition__static_row__columns {
     state_of_mutation_partition__static_row<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    mutation_partition__static_row__columns(Output& out, state_of_mutation_partition__static_row<Output> state) 
-            ;
-  writer_of_column<Output> add() ;
-  void add(column_view v) ;
-  after_mutation_partition__static_row__columns<Output> end_columns() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct mutation_partition__static_row {
     Output& _out;
     state_of_mutation_partition__static_row<Output> _state;
-    mutation_partition__static_row(Output& out, state_of_mutation_partition<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    mutation_partition__static_row__columns<Output> start_columns() && ;
-    after_mutation_partition__static_row__columns<Output> skip_columns() && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_mutation_partition__tomb {
     Output& _out;
     state_of_mutation_partition<Output> _state;
-    mutation_partition__static_row<Output> start_static_row() && ;
-    template<typename Serializer>
-    after_mutation_partition__static_row<Output> static_row(Serializer&& f) && ;
+    
+     ;
 };
 template<typename Output>
 struct after_mutation_partition__tomb__deletion_time {
     Output& _out;
     state_of_mutation_partition__tomb<Output> _state;
-    after_mutation_partition__tomb<Output>  end_tomb() && ;
+    
 };
 template<typename Output>
 struct after_mutation_partition__tomb__timestamp {
     Output& _out;
     state_of_mutation_partition__tomb<Output> _state;
-    after_mutation_partition__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct mutation_partition__tomb {
     Output& _out;
     state_of_mutation_partition__tomb<Output> _state;
-    mutation_partition__tomb(Output& out, state_of_mutation_partition<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_mutation_partition__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct writer_of_mutation_partition {
     Output& _out;
     state_of_mutation_partition<Output> _state;
-    writer_of_mutation_partition(Output& out) 
-            ;
-    mutation_partition__tomb<Output> start_tomb() && ;
-    after_mutation_partition__tomb<Output> write_tomb(const tombstone& t) && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_canonical_mutation__partition {
     Output& _out;
     state_of_canonical_mutation<Output> _state;
-    void  end_canonical_mutation() ;
+    
 };
 template<typename Output>
 struct after_canonical_mutation__partition__rows {
     Output& _out;
     state_of_canonical_mutation__partition<Output> _state;
-    after_canonical_mutation__partition<Output>  end_partition() && ;
+    
 };
 template<typename Output>
 struct canonical_mutation__partition__rows {
@@ -28777,20 +28420,19 @@ struct canonical_mutation__partition__rows {
     state_of_canonical_mutation__partition<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    canonical_mutation__partition__rows(Output& out, state_of_canonical_mutation__partition<Output> state) 
-            ;
-  writer_of_deletable_row<Output> add() ;
-  void add(deletable_row_view v) ;
-  after_canonical_mutation__partition__rows<Output> end_rows() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct after_canonical_mutation__partition__range_tombstones {
     Output& _out;
     state_of_canonical_mutation__partition<Output> _state;
-    canonical_mutation__partition__rows<Output> start_rows() && ;
-    after_canonical_mutation__partition__rows<Output> skip_rows() && ;
+    
+    
 };
 template<typename Output>
 struct canonical_mutation__partition__range_tombstones {
@@ -28798,26 +28440,25 @@ struct canonical_mutation__partition__range_tombstones {
     state_of_canonical_mutation__partition<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    canonical_mutation__partition__range_tombstones(Output& out, state_of_canonical_mutation__partition<Output> state) 
-            ;
-  writer_of_range_tombstone<Output> add() ;
-  void add(range_tombstone_view v) ;
-  after_canonical_mutation__partition__range_tombstones<Output> end_range_tombstones() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct after_canonical_mutation__partition__static_row {
     Output& _out;
     state_of_canonical_mutation__partition<Output> _state;
-    canonical_mutation__partition__range_tombstones<Output> start_range_tombstones() && ;
-    after_canonical_mutation__partition__range_tombstones<Output> skip_range_tombstones() && ;
+    
+    
 };
 template<typename Output>
 struct after_canonical_mutation__partition__static_row__columns {
     Output& _out;
     state_of_canonical_mutation__partition__static_row<Output> _state;
-    after_canonical_mutation__partition__static_row<Output>  end_static_row() && ;
+    
 };
 template<typename Output>
 struct canonical_mutation__partition__static_row__columns {
@@ -28825,111 +28466,98 @@ struct canonical_mutation__partition__static_row__columns {
     state_of_canonical_mutation__partition__static_row<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    canonical_mutation__partition__static_row__columns(Output& out, state_of_canonical_mutation__partition__static_row<Output> state) 
-            ;
-  writer_of_column<Output> add() ;
-  void add(column_view v) ;
-  after_canonical_mutation__partition__static_row__columns<Output> end_columns() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct canonical_mutation__partition__static_row {
     Output& _out;
     state_of_canonical_mutation__partition__static_row<Output> _state;
-    canonical_mutation__partition__static_row(Output& out, state_of_canonical_mutation__partition<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    canonical_mutation__partition__static_row__columns<Output> start_columns() && ;
-    after_canonical_mutation__partition__static_row__columns<Output> skip_columns() && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_canonical_mutation__partition__tomb {
     Output& _out;
     state_of_canonical_mutation__partition<Output> _state;
-    canonical_mutation__partition__static_row<Output> start_static_row() && ;
-    template<typename Serializer>
-    after_canonical_mutation__partition__static_row<Output> static_row(Serializer&& f) && ;
+    
+     ;
 };
 template<typename Output>
 struct after_canonical_mutation__partition__tomb__deletion_time {
     Output& _out;
     state_of_canonical_mutation__partition__tomb<Output> _state;
-    after_canonical_mutation__partition__tomb<Output>  end_tomb() && ;
+    
 };
 template<typename Output>
 struct after_canonical_mutation__partition__tomb__timestamp {
     Output& _out;
     state_of_canonical_mutation__partition__tomb<Output> _state;
-    after_canonical_mutation__partition__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct canonical_mutation__partition__tomb {
     Output& _out;
     state_of_canonical_mutation__partition__tomb<Output> _state;
-    canonical_mutation__partition__tomb(Output& out, state_of_canonical_mutation__partition<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_canonical_mutation__partition__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct canonical_mutation__partition {
     Output& _out;
     state_of_canonical_mutation__partition<Output> _state;
-    canonical_mutation__partition(Output& out, state_of_canonical_mutation<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    canonical_mutation__partition__tomb<Output> start_tomb() && ;
-    after_canonical_mutation__partition__tomb<Output> write_tomb(const tombstone& t) && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_canonical_mutation__mapping {
     Output& _out;
     state_of_canonical_mutation<Output> _state;
-    canonical_mutation__partition<Output> start_partition() && ;
-    template<typename Serializer>
-    after_canonical_mutation__partition<Output> partition(Serializer&& f) && ;
+    
+     ;
 };
 template<typename Output>
 struct after_canonical_mutation__key {
     Output& _out;
     state_of_canonical_mutation<Output> _state;
-    after_canonical_mutation__mapping<Output> write_mapping(const column_mapping& t) && ;
+    
 };
 template<typename Output>
 struct after_canonical_mutation__schema_version {
     Output& _out;
     state_of_canonical_mutation<Output> _state;
-    after_canonical_mutation__key<Output> write_key(const partition_key& t) && ;
+    
 };
 template<typename Output>
 struct after_canonical_mutation__table_id {
     Output& _out;
     state_of_canonical_mutation<Output> _state;
-    after_canonical_mutation__schema_version<Output> write_schema_version(const table_schema_version& t) && ;
+    
 };
 template<typename Output>
 struct writer_of_canonical_mutation {
     Output& _out;
     state_of_canonical_mutation<Output> _state;
-    writer_of_canonical_mutation(Output& out) 
-            ;
-    after_canonical_mutation__table_id<Output> write_table_id(const ::table_id& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_mutation__partition {
     Output& _out;
     state_of_mutation<Output> _state;
-    void  end_mutation() ;
+    
 };
 template<typename Output>
 struct after_mutation__partition__rows {
     Output& _out;
     state_of_mutation__partition<Output> _state;
-    after_mutation__partition<Output>  end_partition() && ;
+    
 };
 template<typename Output>
 struct mutation__partition__rows {
@@ -28937,20 +28565,19 @@ struct mutation__partition__rows {
     state_of_mutation__partition<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    mutation__partition__rows(Output& out, state_of_mutation__partition<Output> state) 
-            ;
-  writer_of_deletable_row<Output> add() ;
-  void add(deletable_row_view v) ;
-  after_mutation__partition__rows<Output> end_rows() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct after_mutation__partition__range_tombstones {
     Output& _out;
     state_of_mutation__partition<Output> _state;
-    mutation__partition__rows<Output> start_rows() && ;
-    after_mutation__partition__rows<Output> skip_rows() && ;
+    
+    
 };
 template<typename Output>
 struct mutation__partition__range_tombstones {
@@ -28958,26 +28585,25 @@ struct mutation__partition__range_tombstones {
     state_of_mutation__partition<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    mutation__partition__range_tombstones(Output& out, state_of_mutation__partition<Output> state) 
-            ;
-  writer_of_range_tombstone<Output> add() ;
-  void add(range_tombstone_view v) ;
-  after_mutation__partition__range_tombstones<Output> end_range_tombstones() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct after_mutation__partition__static_row {
     Output& _out;
     state_of_mutation__partition<Output> _state;
-    mutation__partition__range_tombstones<Output> start_range_tombstones() && ;
-    after_mutation__partition__range_tombstones<Output> skip_range_tombstones() && ;
+    
+    
 };
 template<typename Output>
 struct after_mutation__partition__static_row__columns {
     Output& _out;
     state_of_mutation__partition__static_row<Output> _state;
-    after_mutation__partition__static_row<Output>  end_static_row() && ;
+    
 };
 template<typename Output>
 struct mutation__partition__static_row__columns {
@@ -28985,146 +28611,130 @@ struct mutation__partition__static_row__columns {
     state_of_mutation__partition__static_row<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    mutation__partition__static_row__columns(Output& out, state_of_mutation__partition__static_row<Output> state) 
-            ;
-  writer_of_column<Output> add() ;
-  void add(column_view v) ;
-  after_mutation__partition__static_row__columns<Output> end_columns() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct mutation__partition__static_row {
     Output& _out;
     state_of_mutation__partition__static_row<Output> _state;
-    mutation__partition__static_row(Output& out, state_of_mutation__partition<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    mutation__partition__static_row__columns<Output> start_columns() && ;
-    after_mutation__partition__static_row__columns<Output> skip_columns() && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_mutation__partition__tomb {
     Output& _out;
     state_of_mutation__partition<Output> _state;
-    mutation__partition__static_row<Output> start_static_row() && ;
-    template<typename Serializer>
-    after_mutation__partition__static_row<Output> static_row(Serializer&& f) && ;
+    
+     ;
 };
 template<typename Output>
 struct after_mutation__partition__tomb__deletion_time {
     Output& _out;
     state_of_mutation__partition__tomb<Output> _state;
-    after_mutation__partition__tomb<Output>  end_tomb() && ;
+    
 };
 template<typename Output>
 struct after_mutation__partition__tomb__timestamp {
     Output& _out;
     state_of_mutation__partition__tomb<Output> _state;
-    after_mutation__partition__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct mutation__partition__tomb {
     Output& _out;
     state_of_mutation__partition__tomb<Output> _state;
-    mutation__partition__tomb(Output& out, state_of_mutation__partition<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_mutation__partition__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct mutation__partition {
     Output& _out;
     state_of_mutation__partition<Output> _state;
-    mutation__partition(Output& out, state_of_mutation<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    mutation__partition__tomb<Output> start_tomb() && ;
-    after_mutation__partition__tomb<Output> write_tomb(const tombstone& t) && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_mutation__key {
     Output& _out;
     state_of_mutation<Output> _state;
-    mutation__partition<Output> start_partition() && ;
-    template<typename Serializer>
-    after_mutation__partition<Output> partition(Serializer&& f) && ;
+    
+     ;
 };
 template<typename Output>
 struct after_mutation__schema_version {
     Output& _out;
     state_of_mutation<Output> _state;
-    after_mutation__key<Output> write_key(const partition_key& t) && ;
+    
 };
 template<typename Output>
 struct after_mutation__table_id {
     Output& _out;
     state_of_mutation<Output> _state;
-    after_mutation__schema_version<Output> write_schema_version(const table_schema_version& t) && ;
+    
 };
 template<typename Output>
 struct writer_of_mutation {
     Output& _out;
     state_of_mutation<Output> _state;
-    writer_of_mutation(Output& out) 
-            ;
-    after_mutation__table_id<Output> write_table_id(const ::table_id& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment {
     Output& _out;
     state_of_mutation_fragment<Output> _state;
-    void  end_mutation_fragment() ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row<Output> _state;
-    after_mutation_fragment__fragment<Output>  end_clustering_row() && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row<Output>  end_row() && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__deletion_time {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output>  end_shadowable_deleted_at() && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__timestamp {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at(Output& out, state_of_mutation_fragment__fragment__clustering_row__row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__cells {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> start_shadowable_deleted_at() && ;
-    after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> write_shadowable_deleted_at(const tombstone& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__cells__columns {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__cells<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__cells<Output>  end_cells() && ;
+    
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__cells__columns {
@@ -29132,223 +28742,186 @@ struct mutation_fragment__fragment__clustering_row__row__cells__columns {
     state_of_mutation_fragment__fragment__clustering_row__row__cells<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    mutation_fragment__fragment__clustering_row__row__cells__columns(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__cells<Output> state) 
-            ;
-  writer_of_column<Output> add() ;
-  void add(column_view v) ;
-  after_mutation_fragment__fragment__clustering_row__row__cells__columns<Output> end_columns() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__cells {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__cells<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__cells(Output& out, state_of_mutation_fragment__fragment__clustering_row__row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    mutation_fragment__fragment__clustering_row__row__cells__columns<Output> start_columns() && ;
-    after_mutation_fragment__fragment__clustering_row__row__cells__columns<Output> skip_columns() && ;
+    
+    
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__deleted_at {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__cells<Output> start_cells() && ;
-    template<typename Serializer>
-    after_mutation_fragment__fragment__clustering_row__row__cells<Output> cells(Serializer&& f) && ;
+    
+     ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__deleted_at__deletion_time {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__deleted_at<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__deleted_at<Output>  end_deleted_at() && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__deleted_at__timestamp {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__deleted_at<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__deleted_at__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__deleted_at {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__deleted_at<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__deleted_at(Output& out, state_of_mutation_fragment__fragment__clustering_row__row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_mutation_fragment__fragment__clustering_row__row__deleted_at__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__deleted_at<Output> start_deleted_at() && ;
-    after_mutation_fragment__fragment__clustering_row__row__deleted_at<Output> write_deleted_at(const tombstone& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__live_marker__created_at {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__live_marker<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__marker<Output>  end_live_marker() && ;
+    
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__live_marker {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__live_marker<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__marker__live_marker(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_mutation_fragment__fragment__clustering_row__row__marker__live_marker__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__expiry {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__marker<Output>  end_expiring_marker() && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__ttl {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__expiry<Output> write_expiry(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__ttl<Output> write_ttl(const gc_clock::duration& t) && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm__created_at {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output>  end_lm() && ;
+    
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__expiring_marker {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__marker__expiring_marker(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> start_lm() && ;
-    template<typename Serializer>
-    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> lm(Serializer&& f) && ;
+    
+    
+     ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__marker<Output>  end_dead_marker() && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__deletion_time {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output>  end_tomb() && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__timestamp {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__deletion_time<Output> write_deletion_time(const gc_clock::time_point& t) && ;
+    
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
+    
+    
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__dead_marker {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__marker__dead_marker(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> state) 
-            ;
-    mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> start_tomb() && ;
-    after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> write_tomb(const tombstone& t) && ;
+    
+    
+    
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__no_marker {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__no_marker<Output> _state;
-    mutation_fragment__fragment__clustering_row__row__marker__no_marker(Output& out, state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> state) 
-            ;
-    after_mutation_fragment__fragment__clustering_row__row__marker<Output>  end_no_marker() && ;
+    
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__key {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__key(Output& out, state_of_mutation_fragment__fragment__clustering_row__row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    mutation_fragment__fragment__clustering_row__row__marker__live_marker<Output> start_marker_live_marker() && ;
-    template<typename Serializer>
-    after_mutation_fragment__fragment__clustering_row__row__marker<Output> marker_live_marker(Serializer&& f) && ;
-    mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> start_marker_expiring_marker() && ;
-    template<typename Serializer>
-    after_mutation_fragment__fragment__clustering_row__row__marker<Output> marker_expiring_marker(Serializer&& f) && ;
-    mutation_fragment__fragment__clustering_row__row__marker__dead_marker<Output> start_marker_dead_marker() && ;
-    template<typename Serializer>
-    after_mutation_fragment__fragment__clustering_row__row__marker<Output> marker_dead_marker(Serializer&& f) && ;
-    mutation_fragment__fragment__clustering_row__row__marker__no_marker<Output> start_marker_no_marker() && ;
-    template<typename Serializer>
-    after_mutation_fragment__fragment__clustering_row__row__marker<Output> marker_no_marker(Serializer&& f) && ;
+    
+    
+     ;
+    
+     ;
+    
+     ;
+    
+     ;
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-    mutation_fragment__fragment__clustering_row__row(Output& out, state_of_mutation_fragment__fragment__clustering_row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    after_mutation_fragment__fragment__clustering_row__row__key<Output> write_key(const clustering_key& t) && ;
+    
+    
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row<Output> _state;
-    mutation_fragment__fragment__clustering_row(Output& out, state_of_mutation_fragment__fragment<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    mutation_fragment__fragment__clustering_row__row<Output> start_row() && ;
-    template<typename Serializer>
-    after_mutation_fragment__fragment__clustering_row__row<Output> row(Serializer&& f) && ;
+    
+    
+     ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__static_row__cells {
     Output& _out;
     state_of_mutation_fragment__fragment__static_row<Output> _state;
-    after_mutation_fragment__fragment<Output>  end_static_row() && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__static_row__cells__columns {
     Output& _out;
     state_of_mutation_fragment__fragment__static_row__cells<Output> _state;
-    after_mutation_fragment__fragment__static_row__cells<Output>  end_cells() && ;
+    
 };
 template<typename Output>
 struct mutation_fragment__fragment__static_row__cells__columns {
@@ -29356,54 +28929,46 @@ struct mutation_fragment__fragment__static_row__cells__columns {
     state_of_mutation_fragment__fragment__static_row__cells<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    mutation_fragment__fragment__static_row__cells__columns(Output& out, state_of_mutation_fragment__fragment__static_row__cells<Output> state) 
-            ;
-  writer_of_column<Output> add() ;
-  void add(column_view v) ;
-  after_mutation_fragment__fragment__static_row__cells__columns<Output> end_columns() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+    
+  
+  
+  
+  
+  
 };
 template<typename Output>
 struct mutation_fragment__fragment__static_row__cells {
     Output& _out;
     state_of_mutation_fragment__fragment__static_row__cells<Output> _state;
-    mutation_fragment__fragment__static_row__cells(Output& out, state_of_mutation_fragment__fragment__static_row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    mutation_fragment__fragment__static_row__cells__columns<Output> start_columns() && ;
-    after_mutation_fragment__fragment__static_row__cells__columns<Output> skip_columns() && ;
+    
+    
+    
 };
 template<typename Output>
 struct mutation_fragment__fragment__static_row {
     Output& _out;
     state_of_mutation_fragment__fragment__static_row<Output> _state;
-    mutation_fragment__fragment__static_row(Output& out, state_of_mutation_fragment__fragment<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
-    mutation_fragment__fragment__static_row__cells<Output> start_cells() && ;
-    template<typename Serializer>
-    after_mutation_fragment__fragment__static_row__cells<Output> cells(Serializer&& f) && ;
+    
+    
+     ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__range_tombstone__end_kind {
     Output& _out;
     state_of_mutation_fragment__fragment__range_tombstone<Output> _state;
-    after_mutation_fragment__fragment<Output>  end_range_tombstone() && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__range_tombstone__end {
     Output& _out;
     state_of_mutation_fragment__fragment__range_tombstone<Output> _state;
-    after_mutation_fragment__fragment__range_tombstone__end_kind<Output> write_end_kind(const bound_kind& t) && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__range_tombstone__start_kind {
     Output& _out;
     state_of_mutation_fragment__fragment__range_tombstone<Output> _state;
-    after_mutation_fragment__fragment__range_tombstone__end<Output> write_end(const clustering_key_prefix& t) && ;
+    
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__range_tombstone__tomb {
@@ -37887,28 +37452,28 @@ public:
     { }
     cache_entry(cache_entry&&) noexcept;
     ~cache_entry();
-    static cache_entry& container_of(partition_entry& pe) ;
+    
     // Called when all contents have been evicted.
     // This object should unlink and destroy itself from the container.
-    void on_evicted(cache_tracker&) noexcept;
+    
     // Evicts contents of this entry.
     // The caller is still responsible for unlinking and destroying this entry.
-    void evict(cache_tracker&) noexcept;
-    const dht::decorated_key& key() const noexcept ;
-    dht::ring_position_view position() const noexcept ;
-    friend dht::ring_position_view ring_position_view_to_compare(const cache_entry& ce) noexcept ;
-    const partition_entry& partition() const noexcept ;
-    partition_entry& partition() ;
-    const schema_ptr& schema() const noexcept ;
-    schema_ptr& schema() noexcept ;
-    flat_mutation_reader_v2 read(row_cache&, cache::read_context&);
-    flat_mutation_reader_v2 read(row_cache&, std::unique_ptr<cache::read_context>);
-    flat_mutation_reader_v2 read(row_cache&, cache::read_context&, utils::phased_barrier::phase_type);
-    flat_mutation_reader_v2 read(row_cache&, std::unique_ptr<cache::read_context>, utils::phased_barrier::phase_type);
-    bool continuous() const noexcept ;
-    void set_continuous(bool value) noexcept ;
-    bool is_dummy_entry() const noexcept ;
-    friend std::ostream& operator<<(std::ostream&, const cache_entry&);
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 };
 //
 // A data source which wraps another data source such that data obtained from the underlying data source
@@ -37943,26 +37508,26 @@ public:
     // must be left in the state in which it was before the call.
     class external_updater_impl {
     public:
-        virtual ~external_updater_impl() ;
-        virtual future<> prepare() ;
+        
+        
         // FIXME: make execute() noexcept, that will require every updater to make execution exception safe,
         // also change function signature.
-        virtual void execute() = 0;
+        
     };
     class external_updater {
         class non_prepared : public external_updater_impl {
             using Func = seastar::noncopyable_function<void()>;
             Func _func;
         public:
-            explicit non_prepared(Func func) : _func(std::move(func)) {}
-            virtual void execute() override ;
+            
+            
         };
         std::unique_ptr<external_updater_impl> _impl;
     public:
-        external_updater(seastar::noncopyable_function<void()> f) : _impl(std::make_unique<non_prepared>(std::move(f))) {}
-        external_updater(std::unique_ptr<external_updater_impl> impl) : _impl(std::move(impl)) {}
-        future<> prepare() ;
-        void execute() ;
+        
+        
+        
+        
     };
 public:
     struct stats {
@@ -38012,21 +37577,21 @@ private:
     logalloc::allocating_section _update_section;
     logalloc::allocating_section _populate_section;
     logalloc::allocating_section _read_section;
-    flat_mutation_reader_v2 create_underlying_reader(cache::read_context&, mutation_source&, const dht::partition_range&);
-    flat_mutation_reader_v2 make_scanning_reader(const dht::partition_range&, std::unique_ptr<cache::read_context>);
-    void on_partition_hit();
-    void on_partition_miss();
-    void on_row_hit();
-    void on_row_miss();
-    void on_static_row_insert();
-    void on_mispopulate();
-    void upgrade_entry(cache_entry&);
-    void invalidate_locked(const dht::decorated_key&);
-    void clear_now() noexcept;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     struct previous_entry_pointer {
         std::optional<dht::decorated_key> _key;
-        previous_entry_pointer() = default; // Represents dht::ring_position_view::min()
-        previous_entry_pointer(dht::decorated_key key) : _key(std::move(key)) {};
+         // Represents dht::ring_position_view::min()
+        ;
         // TODO: store iterator here to avoid key comparison
     };
     template<typename CreateEntry, typename VisitEntry>
@@ -38044,19 +37609,19 @@ private:
     // The entry which is returned will have the tombstone applied to it.
     //
     // Must be run under reclaim lock
-    cache_entry& find_or_create_incomplete(const partition_start& ps, row_cache::phase_type phase, const previous_entry_pointer* previous = nullptr);
+    
     // Creates (or touches) a cache entry for missing partition so that sstables are not
     // poked again for it.
-    cache_entry& find_or_create_missing(const dht::decorated_key& key);
-    partitions_type::iterator partitions_end() ;
+    
+    
     // Only active phases are accepted.
     // Reference valid only until next deferring point.
-    mutation_source& snapshot_for_phase(phase_type);
+    
     // Returns population phase for given position in the ring.
     // snapshot_for_phase() can be called to obtain mutation_source for given phase, but
     // only until the next deferring point.
     // Should be only called outside update().
-    phase_type phase_of(dht::ring_position_view);
+    
     struct snapshot_and_phase {
         mutation_source& snapshot;
         phase_type phase;
@@ -38065,16 +37630,15 @@ private:
     //
     //  { snapshot_for_phase(phase_of(pos)), phase_of(pos) };
     //
-    snapshot_and_phase snapshot_of(dht::ring_position_view pos);
+    
     // Merges the memtable into cache with configurable logic for handling memtable entries.
     // The Updater gets invoked for every entry in the memtable with a lower bound iterator
     // into _partitions (cache_i), and the memtable entry.
     // It is invoked inside allocating section and in the context of cache's allocator.
     // All memtable entries will be removed.
-    template <typename Updater>
-    future<> do_update(external_updater, replica::memtable& m, Updater func);
+    ;
     // Clears given memtable invalidating any affected cache elements.
-    void invalidate_sync(replica::memtable&) noexcept;
+    
     // A function which updates cache to the current snapshot.
     // It's responsible for advancing _prev_snapshot_pos between deferring points.
     //
@@ -38087,63 +37651,49 @@ private:
     // source was and cache are not modified.
     //
     // internal_updater is only kept alive until its invocation returns.
-    future<> do_update(external_updater eu, internal_updater iu) noexcept;
+    
 public:
-    ~row_cache();
-    row_cache(schema_ptr, snapshot_source, cache_tracker&, is_continuous = is_continuous::no);
-    row_cache(row_cache&&) = default;
-    row_cache(const row_cache&) = delete;
+    
+    
+    
+    
 public:
     // Implements mutation_source for this cache, see mutation_reader.hh
     // User needs to ensure that the row_cache object stays alive
     // as long as the reader is used.
     // The range must not wrap around.
-    flat_mutation_reader_v2 make_reader(schema_ptr s,
-                                     reader_permit permit,
-                                     const dht::partition_range& range,
-                                     const query::partition_slice& slice,
-                                     const io_priority_class& pc = default_priority_class(),
-                                     tracing::trace_state_ptr trace_state = nullptr,
-                                     streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
-                                     mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::no) ;
+    
     // Same as make_reader, but returns an empty optional instead of a no-op reader when there is nothing to
     // read. This is an optimization.
-    flat_mutation_reader_v2_opt make_reader_opt(schema_ptr,
-                                     reader_permit permit,
-                                     const dht::partition_range&,
-                                     const query::partition_slice&,
-                                     const io_priority_class& = default_priority_class(),
-                                     tracing::trace_state_ptr trace_state = nullptr,
-                                     streamed_mutation::forwarding fwd = streamed_mutation::forwarding::no,
-                                     mutation_reader::forwarding fwd_mr = mutation_reader::forwarding::no);
-    flat_mutation_reader_v2 make_reader(schema_ptr s, reader_permit permit, const dht::partition_range& range = query::full_partition_range) ;
-    const stats& stats() const ;
+    
+    
+    
 public:
     // Populate cache from given mutation, which must be fully continuous.
     // Intended to be used only in tests.
     // Can only be called prior to any reads.
-    void populate(const mutation& m, const previous_entry_pointer* previous = nullptr);
+    
     // Finds the entry in cache for a given key.
     // Intended to be used only in tests.
-    cache_entry& lookup(const dht::decorated_key& key);
+    
     // Synchronizes cache with the underlying data source from a memtable which
     // has just been flushed to the underlying data source.
     // The memtable can be queried during the process, but must not be written.
     // After the update is complete, memtable is empty.
-    future<> update(external_updater, replica::memtable&);
+    
     // Like update(), synchronizes cache with an incremental change to the underlying
     // mutation source, but instead of inserting and merging data, invalidates affected ranges.
     // Can be thought of as a more fine-grained version of invalidate(), which invalidates
     // as few elements as possible.
-    future<> update_invalidating(external_updater, replica::memtable&);
+    
     // Refreshes snapshot. Must only be used if logical state in the underlying data
     // source hasn't changed.
-    void refresh_snapshot();
+    
     // Moves given partition to the front of LRU if present in cache.
-    void touch(const dht::decorated_key&);
+    
     // Detaches current contents of given partition from LRU, so
     // that they are not evicted by memory reclaimer.
-    void unlink_from_lru(const dht::decorated_key&);
+    
     // Synchronizes cache with the underlying mutation source
     // by invalidating ranges which were modified. This will force
     // them to be re-read from the underlying mutation source
@@ -38157,20 +37707,20 @@ public:
     // Guarantees that readers created after invalidate()
     // completes will see all writes from the underlying
     // mutation source made prior to the call to invalidate().
-    future<> invalidate(external_updater, const dht::decorated_key&);
-    future<> invalidate(external_updater, const dht::partition_range& = query::full_partition_range);
-    future<> invalidate(external_updater, dht::partition_range_vector&&);
+    
+    
+    
     // Evicts entries from cache.
     //
     // Note that this does not synchronize with the underlying source,
     // it is assumed that the underlying source didn't change.
     // If it did, use invalidate() instead.
-    void evict();
-    const cache_tracker& get_cache_tracker() const ;
-    cache_tracker& get_cache_tracker() ;
-    void set_schema(schema_ptr) noexcept;
-    const schema_ptr& schema() const;
-    friend std::ostream& operator<<(std::ostream&, row_cache&);
+    
+    
+    
+    
+    
+    
     friend class just_cache_scanning_reader;
     friend class scanning_and_populating_reader;
     friend class range_populating_reader;
@@ -38181,15 +37731,12 @@ namespace cache {
 class lsa_manager {
     row_cache &_cache;
 public:
-    lsa_manager(row_cache &cache)  ;
-    template<typename Func>
-    decltype(auto) run_in_read_section(const Func &func) ;
-    template<typename Func>
-    decltype(auto) run_in_update_section(const Func &func) ;
-    template<typename Func>
-    void run_in_update_section_with_allocator(Func &&func) ;
-    logalloc::region &region() ;
-    logalloc::allocating_section &read_section() ;
+    
+     ;
+     ;
+     ;
+    
+    
 };
 }
 class partition_snapshot_row_cursor;
@@ -38201,13 +37748,12 @@ class partition_snapshot_row_weakref final {
     position_in_partition _pos = position_in_partition::min();
     bool _in_latest = false;
 public:
-    partition_snapshot_row_weakref() = default;
+    
     // Makes this object point to a row pointed to by given partition_snapshot_row_cursor.
-    explicit partition_snapshot_row_weakref(const partition_snapshot_row_cursor&);
-    explicit partition_snapshot_row_weakref(std::nullptr_t) ;
-    partition_snapshot_row_weakref(partition_snapshot& snp, mutation_partition::rows_type::iterator it, bool in_latest) 
-    ;
-    partition_snapshot_row_weakref& operator=(const partition_snapshot_row_cursor&);
+    
+    
+    
+    
     partition_snapshot_row_weakref& operator=(std::nullptr_t) noexcept ;
     // Returns true iff the pointer is pointing at a row.
     explicit operator bool() const ;
@@ -61117,13 +60663,7 @@ return fmt::to_string(fmt::join(v | boost::adaptors::transformed([](const data_v
 }
 template <typename F>
 static std::optional<data_type> update_listlike(const listlike_collection_type_impl &c, F &&f, shared_ptr<const user_type_impl> updated)
-{
-if (auto e = c.get_elements_type()->update_user_type(updated))
-{
-    return std::make_optional<data_type>(f(std::move(*e), c.is_multi_cell()));
-}
-return std::nullopt;
-}
+;
 tuple_type_impl::tuple_type_impl(kind k, sstring name, std::vector<data_type> types, bool freeze_inner) : concrete_type(k, std::move(name), {}), _types(std::move(types))
 {
 if (freeze_inner)
@@ -61407,7 +60947,7 @@ struct visitor
 {
     View v;
     ;
-    data_value operator()(const abstract_type &) { on_internal_error(tlogger, "collection_type_impl::deserialize called on a non-collection type. This should be impossible."); }
+    data_value operator()(const abstract_type &) ;
     data_value operator()(const list_type_impl &t);
     data_value operator()(const map_type_impl &t);
     data_value operator()(const set_type_impl &t);
@@ -61717,11 +61257,7 @@ catch (const marshal_exception &)
     on_types_internal_error(std::current_exception());
 }
 }
-bool abstract_type::equal(bytes_view v1, bytes_view v2) const
-{
-return ::visit(*this, [&](const auto &t)
-               {         if (is_byte_order_equal_visitor{}(t)) {             return compare_unsigned(v1, v2) == 0;         }         return compare_visitor{v1, v2}(t) == 0; });
-}
+
 // Count number of ':' which are not preceded by '\'.
 static std::size_t count_segments(sstring_view v);
 // Split on ':', unless it's preceded by '\'.
@@ -61809,7 +61345,7 @@ struct from_string_visitor
     bytes operator()(const collection_type_impl &);
 };
 }
-bytes abstract_type::from_string(sstring_view s) const { return visit(*this, from_string_visitor{s}); }
+
 template <typename N, typename A, typename F>
 static sstring format_if_not_empty(const concrete_type<N, A> &type, const typename concrete_type<N, A>::native_type *b, F &&f)
 {
@@ -61874,17 +61410,7 @@ struct visitor
 return visit(t, visitor{other});
 }
 bool abstract_type::is_value_compatible_with(const abstract_type &other) const { return is_value_compatible_with_internal(*this, *other.underlying_type()); }
-std::optional<size_t> user_type_impl::idx_of_field(const bytes &name) const
-{
-for (size_t i = 0; i < _field_names.size(); ++i)
-{
-    if (name == _field_names[i])
-    {
-        return {i};
-    }
-}
-return {};
-}
+
 shared_ptr<const user_type_impl> user_type_impl::get_instance(sstring keyspace, bytes name, std::vector<bytes> field_names, std::vector<data_type> field_types, bool multi_cell) { return intern::get_instance(std::move(keyspace), std::move(name), std::move(field_names), std::move(field_types), multi_cell); }
 sstring tuple_type_impl::make_name(const std::vector<data_type> &types)
 { // To keep format compatibility with Origin we never wrap
@@ -61912,13 +61438,7 @@ for (uint32_t i = 0; i < types.size(); ++i)
 return new_types;
 }
 static std::optional<data_type> update_user_type_aux(const tuple_type_impl &t, const shared_ptr<const user_type_impl> updated)
-{
-if (auto new_types = update_types(t.all_types(), updated))
-{
-    return std::make_optional(tuple_type_impl::get_instance(std::move(*new_types)));
-}
-return std::nullopt;
-}
+;
 namespace
 {
 struct native_value_clone_visitor
@@ -62070,22 +61590,7 @@ if (!is_multi_cell)
 }
 return os.str();
 }
-std::optional<data_type> abstract_type::update_user_type(const shared_ptr<const user_type_impl> updated) const
-{
-struct visitor
-{
-    const shared_ptr<const user_type_impl> updated;
-    std::optional<data_type> operator()(const abstract_type &);
-    std::optional<data_type> operator()(const empty_type_impl &);
-    std::optional<data_type> operator()(const reversed_type_impl &r);
-    std::optional<data_type> operator()(const user_type_impl &u);
-    std::optional<data_type> operator()(const tuple_type_impl &t);
-    std::optional<data_type> operator()(const map_type_impl &m);
-    std::optional<data_type> operator()(const set_type_impl &s);
-    std::optional<data_type> operator()(const list_type_impl &l);
-};
-return visit(*this, visitor{updated});
-}
+
 static bytes_ostream serialize_for_cql_aux(const map_type_impl &, collection_mutation_view_description mut);
 static bytes_ostream serialize_for_cql_aux(const set_type_impl &, collection_mutation_view_description mut);
 static bytes_ostream serialize_for_cql_aux(const list_type_impl &, collection_mutation_view_description mut);
@@ -62149,9 +61654,9 @@ return *this;
 }
 data_value::data_value(bytes v) : data_value(make_new(bytes_type, v)) {}
 data_value::data_value(sstring &&v) : data_value(make_new(utf8_type, std::move(v))) {}
-data_value::data_value(const char *v) : data_value(std::string_view(v)) {}
+
 data_value::data_value(std::string_view v) : data_value(sstring(v)) {}
-data_value::data_value(const std::string &v) : data_value(std::string_view(v)) {}
+
 data_value::data_value(const sstring &v) : data_value(std::string_view(v)) {}
 data_value::data_value(ascii_native_type v) : data_value(make_new(ascii_type, v.string)) {}
 data_value::data_value(bool v) : data_value(make_new(boolean_type, v)) {}
@@ -62164,7 +61669,7 @@ data_value::data_value(float v) : data_value(make_new(float_type, v)) {}
 data_value::data_value(double v) : data_value(make_new(double_type, v)) {}
 data_value::data_value(seastar::net::inet_address v) : data_value(make_new(inet_addr_type, v)) {}
 data_value::data_value(seastar::net::ipv4_address v) : data_value(seastar::net::inet_address(v)) {}
-data_value::data_value(seastar::net::ipv6_address v) : data_value(seastar::net::inet_address(v)) {}
+
 data_value::data_value(simple_date_native_type v) : data_value(make_new(simple_date_type, v.days)) {}
 data_value::data_value(db_clock::time_point v) : data_value(make_new(timestamp_type, v)) {}
 data_value::data_value(time_native_type v) : data_value(make_new(time_type, v.nanoseconds)) {}
@@ -62172,110 +61677,7 @@ data_value::data_value(timeuuid_native_type v) : data_value(make_new(timeuuid_ty
 data_value::data_value(date_type_native_type v) : data_value(make_new(date_type, v.tp)) {}
 data_value::data_value(cql_duration d) : data_value(make_new(duration_type, d)) {}
 data_value::data_value(empty_type_representation e) : data_value(make_new(empty_type, e)) {}
-sstring data_value::to_parsable_string() const
-{ // For some reason trying to do it using fmt::format refuses to compile
-// auto to_parsable_str_transform = boost::adaptors::transformed([](const data_value& dv) -> sstring {
-//     return dv.to_parsable_string();
-// });
-if (_type->without_reversed().is_list())
-{
-    const list_type_impl::native_type *the_list = (const list_type_impl::native_type *)_value;
-    std::ostringstream result;
-    result << "[";
-    for (size_t i = 0; i < the_list->size(); i++)
-    {
-        if (i != 0)
-        {
-        result << ", ";
-        }
-        result << (*the_list)[i].to_parsable_string();
-    }
-    result << "]";
-    return result.str(); // return fmt::format("[{}]", fmt::join(*the_list | to_parsable_str_transform, ", "));
-}
-if (_type->without_reversed().is_set())
-{
-    const set_type_impl::native_type *the_set = (const set_type_impl::native_type *)_value;
-    std::ostringstream result;
-    result << "{";
-    for (size_t i = 0; i < the_set->size(); i++)
-    {
-        if (i != 0)
-        {
-        result << ", ";
-        }
-        result << (*the_set)[i].to_parsable_string();
-    }
-    result << "}";
-    return result.str(); // return fmt::format("{{{}}}", fmt::join(*the_set | to_parsable_str_transform, ", "));
-}
-if (_type->without_reversed().is_map())
-{
-    const map_type_impl::native_type *the_map = (const map_type_impl::native_type *)_value;
-    std::ostringstream result;
-    result << "{";
-    for (size_t i = 0; i < the_map->size(); i++)
-    {
-        if (i != 0)
-        {
-        result << ", ";
-        }
-        result << (*the_map)[i].first.to_parsable_string() << ":" << (*the_map)[i].second.to_parsable_string();
-    }
-    result << "}";
-    return result.str(); // auto to_map_elem_transform = boost::adaptors::transformed(
-    //    [](const std::pair<data_value, data_value>& map_elem) -> sstring {
-    //        return fmt::format("{{{}:{}}}", map_elem.first.to_parsable_string(), map_elem.second.to_parsable_string());
-    //    }
-    //);
-    //
-    // return fmt::format("{{{}}}", fmt::join(*the_map | to_map_elem_transform, ", "));
-}
-if (_type->without_reversed().is_user_type())
-{
-    const user_type_impl *user_typ = dynamic_cast<const user_type_impl *>(&_type->without_reversed());
-    const user_type_impl::native_type *field_values = (const user_type_impl::native_type *)_value;
-    std::ostringstream result;
-    result << "{";
-    for (std::size_t i = 0; i < field_values->size(); i++)
-    {
-        if (i != 0)
-        {
-        result << ", ";
-        }
-        result << user_typ->string_field_names().at(i) << ":" << (*field_values)[i].to_parsable_string();
-    }
-    result << "}";
-    return result.str();
-}
-if (_type->without_reversed().is_tuple())
-{
-    const tuple_type_impl::native_type *tuple_elements = (const tuple_type_impl::native_type *)_value;
-    std::ostringstream result;
-    result << "(";
-    for (std::size_t i = 0; i < tuple_elements->size(); i++)
-    {
-        if (i != 0)
-        {
-        result << ", ";
-        }
-        result << (*tuple_elements)[i].to_parsable_string();
-    }
-    result << ")";
-    return result.str();
-}
-abstract_type::kind type_kind = _type->without_reversed().get_kind();
-if (type_kind == abstract_type::kind::date || type_kind == abstract_type::kind::timestamp)
-{ // Put timezone information after a date or timestamp to specify that it's in UTC
-    // Otherwise it will be parsed as a date in the local timezone.
-    return fmt::format("'{}+0000'", *this);
-}
-if (type_kind == abstract_type::kind::utf8 || type_kind == abstract_type::kind::ascii || type_kind == abstract_type::kind::inet || type_kind == abstract_type::kind::time)
-{ // Put quotes on types that require it
-    return fmt::format("'{}'", *this);
-} // For simple types the default operator<< should work ok
-return fmt::format("{}", *this);
-}
+
 data_value make_list_value(data_type type, list_type_impl::native_type value) { return data_value::make_new(std::move(type), std::move(value)); }
 data_value make_set_value(data_type type, set_type_impl::native_type value) { return data_value::make_new(std::move(type), std::move(value)); }
 data_value make_map_value(data_type type, map_type_impl::native_type value) { return data_value::make_new(std::move(type), std::move(value)); }
@@ -62289,7 +61691,7 @@ if (v.is_null())
 }
 return out << v.type()->to_string_impl(v);
 }
-shared_ptr<const reversed_type_impl> reversed_type_impl::get_instance(data_type type) { return intern::get_instance(std::move(type)); }
+
 bool abstract_type::contains_set_or_map() const { return _contains_set_or_map; }
 bool abstract_type::contains_collection() const { return _contains_collection; }
 // compile once the template instance that was externed in marshal_exception.hh
@@ -62304,13 +61706,7 @@ column_identifier::column_identifier(bytes bytes_, data_type type) : bytes_(std:
 namespace cql3
 {
 column_specification::column_specification(std::string_view ks_name_, std::string_view cf_name_, ::shared_ptr<column_identifier> name_, data_type type_) : ks_name(ks_name_), cf_name(cf_name_), name(name_), type(type_) {}
-bool column_specification::all_in_same_table(const std::vector<lw_shared_ptr<column_specification>> &names)
-{
-    assert(!names.empty());
-    auto first = names.front();
-    return std::all_of(std::next(names.begin()), names.end(), [first](auto &&spec)
-                       { return spec->ks_name == first->ks_name && spec->cf_name == first->cf_name; });
-}
+
 }
 namespace utils
 {
@@ -62767,42 +62163,7 @@ using u64 = uint64_t;
 static u64 pmul(u32 p1, u32 p2);
 static u32 pmul_mod(u32 p1, u32 p2);
 static u32 mul_by_x_pow_mul8(u32 p, u64 e)
-{
-u32 x0 = crc32_x_pow_radix_8_table_base_0[e & 0xff];
-if (__builtin_expect(e < 0x100, false))
-{
-    return pmul_mod(p, x0);
-}
-u32 x1 = crc32_x_pow_radix_8_table_base_8[(e >> 8) & 0xff];
-u32 x2 = crc32_x_pow_radix_8_table_base_16[(e >> 16) & 0xff];
-u64 y0 = pmul(p, x0);
-u64 y1 = pmul(x1, x2);
-u32 z0 = crc32_fold_barrett_u64(y0);
-u32 z1 = crc32_fold_barrett_u64(y1);
-if (__builtin_expect(e < 0x1000000, true))
-{
-    return pmul_mod(z0, z1);
-}
-u32 x3 = crc32_x_pow_radix_8_table_base_24[(e >> 24) & 0xff];
-z1 = pmul_mod(z1, x3);
-if (__builtin_expect(e < 0x100000000, true))
-{
-    return pmul_mod(z0, z1);
-}
-u32 x4 = crc32_x_pow_radix_8_table_base_0[(e >> 32) & 0xff];
-u32 x5 = crc32_x_pow_radix_8_table_base_8[(e >> 40) & 0xff];
-u32 x6 = crc32_x_pow_radix_8_table_base_16[(e >> 48) & 0xff];
-u32 x7 = crc32_x_pow_radix_8_table_base_24[(e >> 56) & 0xff];
-u64 y2 = pmul(x4, x5);
-u64 y3 = pmul(x6, x7);
-u64 u0 = pmul(z0, z1);
-u32 z2 = crc32_fold_barrett_u64(y2);
-u32 z3 = crc32_fold_barrett_u64(y3);
-u64 u1 = pmul(z2, z3);
-u32 v0 = crc32_fold_barrett_u64(u0);
-u32 v1 = crc32_fold_barrett_u64(u1);
-return pmul_mod(v0, v1);
-}
+;
 template <int bits>
 static constexpr std::array<uint32_t, bits> make_crc32_power_table()
 {
@@ -62845,15 +62206,8 @@ constinit std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_16 = make_crc
 constinit std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_24 = make_crc32_table(24, radix_bits, one, pows);
 namespace utils
 {
-inline size_t iovec_len(const std::vector<iovec> &iov)
-{
-    size_t ret = 0;
-    for (auto &&e : iov)
-    {
-        ret += e.iov_len;
-    }
-    return ret;
-}
+ size_t iovec_len(const std::vector<iovec> &iov)
+;
 }
 namespace s3
 {
@@ -62876,23 +62230,7 @@ protected:
 public:
     dns_connection_factory(std::string host, int port, bool use_https) : _host(std::move(host)), _port(port), _state(make_lw_shared<state>()), _done(initialize(use_https)) {}
     virtual future<connected_socket> make() override
-    {
-        if (!_state->initialized)
-        {
-        s3l.debug("Waiting for factory to initialize");
-        co_await _done.get_future();
-        }
-        if (_state->creds)
-        {
-        s3l.debug("Making new HTTPS connection addr={} host={}", _state->addr, _host);
-        co_return co_await tls::connect(_state->creds, _state->addr, _host);
-        }
-        else
-        {
-        s3l.debug("Making new HTTP connection");
-        co_return co_await seastar::connect(_state->addr, {}, transport::TCP);
-        }
-    }
+    ;
 }; // TODO: possibly move this to seastar's http subsystem.
 static std::time_t parse_http_last_modified_time(const sstring &object_name, sstring last_modified);
 class client::upload_sink : public data_sink_impl
@@ -62988,11 +62326,7 @@ std::unique_ptr<dht::i_partitioner> make_partitioner(sstring partitioner_name)
     }
 }
 future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const schema &s, const partition_range &pr, shard_id shard);
-flat_mutation_reader_v2::filter incremental_owned_ranges_checker::make_partition_filter(const dht::token_range_vector &sorted_owned_ranges)
-{
-    return [checker = incremental_owned_ranges_checker(sorted_owned_ranges)](const dht::decorated_key &dk) mutable
-    { return checker.belongs_to_current_node(dk.token()); };
-}
+
 }
 namespace dht
 {
@@ -63661,16 +62995,7 @@ const auto unit_table = std::unordered_map<std::string_view, std::reference_wrap
 //
 template <class Match, class Index = typename Match::size_type>
 cql_duration::common_counter_type parse_count(const Match &m, Index group_index)
-{
-    try
-    {
-        return boost::lexical_cast<cql_duration::common_counter_type>(m[group_index].str());
-    }
-    catch (const boost::bad_lexical_cast &)
-    {
-        throw std::out_of_range("duration counter");
-    }
-} //
+; //
 // Build up a duration unit-by-unit.
 //
 // We support overflow detection on construction for convenience and compatibility with Cassandra.
@@ -64166,12 +63491,12 @@ explicit impl(generate_counters counters, local_shard_only lso = local_shard_onl
 void set_key_cardinality(size_t n_keys);
 bytes random_blob();
 clustering_key make_random_key();
-clustering_key_prefix make_random_prefix(std::optional<size_t> max_components_opt = std::nullopt);
-std::vector<query::clustering_range> make_random_ranges(unsigned n_ranges);
-range_tombstone make_random_range_tombstone();
-mutation operator()();
-std::vector<dht::decorated_key> make_partition_keys(size_t n);
-std::vector<mutation> operator()(size_t n);
+
+
+
+
+
+
 };
 void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mutation> &, schema_ptr, const std::vector<mutation> &)> fn)
 {
