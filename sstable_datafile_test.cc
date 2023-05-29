@@ -29361,10 +29361,7 @@ struct mutation__partition__tomb {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_mutation__partition__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation__partition__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
 };
 template<typename Output>
 struct mutation__partition {
@@ -29552,19 +29549,13 @@ template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__ttl<Output> write_ttl(const gc_clock::duration& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__ttl<Output> write_ttl(const gc_clock::duration& t) && ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm__created_at {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> _state;
-    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output>  end_lm() && {
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output>  end_lm() && ;
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm {
@@ -29574,10 +29565,7 @@ struct mutation_fragment__fragment__clustering_row__row__marker__expiring_marker
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm__created_at<Output> write_created_at(const api::timestamp_type& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm__created_at<Output> write_created_at(const api::timestamp_type& t) && ;
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__expiring_marker {
@@ -29617,10 +29605,7 @@ struct mutation_fragment__fragment__clustering_row__row__marker__dead_marker__to
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__timestamp<Output> write_timestamp(const api::timestamp_type& t) && ;
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__dead_marker {
@@ -29656,17 +29641,9 @@ struct after_mutation_fragment__fragment__clustering_row__row__key {
     mutation_fragment__fragment__clustering_row__row__marker__dead_marker<Output> start_marker_dead_marker() && ;
     template<typename Serializer>
     after_mutation_fragment__fragment__clustering_row__row__marker<Output> marker_dead_marker(Serializer&& f) && ;
-    mutation_fragment__fragment__clustering_row__row__marker__no_marker<Output> start_marker_no_marker() && {
-        serialize(_out, uint32_t(3));
-        return { _out, std::move(_state) };
-    }
+    mutation_fragment__fragment__clustering_row__row__marker__no_marker<Output> start_marker_no_marker() && ;
     template<typename Serializer>
-    after_mutation_fragment__fragment__clustering_row__row__marker<Output> marker_no_marker(Serializer&& f) && {
-        serialize(_out, uint32_t(3));
-        f(writer_of_no_marker<Output>(_out));
-        _state.f.end(_out);
-        return { _out, std::move(_state._parent) };
-    }
+    after_mutation_fragment__fragment__clustering_row__row__marker<Output> marker_no_marker(Serializer&& f) && ;
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row {
@@ -29676,10 +29653,7 @@ struct mutation_fragment__fragment__clustering_row__row {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_mutation_fragment__fragment__clustering_row__row__key<Output> write_key(const clustering_key& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__clustering_row__row__key<Output> write_key(const clustering_key& t) && ;
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row {
@@ -29689,9 +29663,7 @@ struct mutation_fragment__fragment__clustering_row {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    mutation_fragment__fragment__clustering_row__row<Output> start_row() && {
-        return { _out, std::move(_state) };
-    }
+    mutation_fragment__fragment__clustering_row__row<Output> start_row() && ;
     template<typename Serializer>
     after_mutation_fragment__fragment__clustering_row__row<Output> row(Serializer&& f) && ;
 };
@@ -29740,14 +29712,9 @@ struct mutation_fragment__fragment__static_row {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    mutation_fragment__fragment__static_row__cells<Output> start_cells() && {
-        return { _out, std::move(_state) };
-    }
+    mutation_fragment__fragment__static_row__cells<Output> start_cells() && ;
     template<typename Serializer>
-    after_mutation_fragment__fragment__static_row__cells<Output> cells(Serializer&& f) && {
-        f(writer_of_row<Output>(_out));
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__static_row__cells<Output> cells(Serializer&& f) && ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__range_tombstone__end_kind {
@@ -29813,10 +29780,7 @@ struct mutation_fragment__fragment__range_tombstone {
             : _out(out)
             , _state{start_frame(out), std::move(state)}
             {}
-    after_mutation_fragment__fragment__range_tombstone__start<Output> write_start(const clustering_key_prefix& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__range_tombstone__start<Output> write_start(const clustering_key_prefix& t) && ;
 };
 template<typename Output>
 struct after_mutation_fragment__fragment__partition_start__partition_tombstone {
@@ -29851,10 +29815,7 @@ struct after_mutation_fragment__fragment__partition_start__key {
     Output& _out;
     state_of_mutation_fragment__fragment__partition_start<Output> _state;
     mutation_fragment__fragment__partition_start__partition_tombstone<Output> start_partition_tombstone() && ;
-    after_mutation_fragment__fragment__partition_start__partition_tombstone<Output> write_partition_tombstone(const tombstone& t) && {
-        serialize(_out, t);
-        return { _out, std::move(_state) };
-    }
+    after_mutation_fragment__fragment__partition_start__partition_tombstone<Output> write_partition_tombstone(const tombstone& t) && ;
 };
 template<typename Output>
 struct mutation_fragment__fragment__partition_start {
@@ -29947,9 +29908,7 @@ private:
     template <bool is_preemptible>
     accept_ordered_result do_accept_ordered(const schema& schema, mutation_partition_view_virtual_visitor& mpvvv, accept_ordered_cookie cookie) const;
 public:
-    static mutation_partition_view from_stream(utils::input_stream v) {
-        return { v };
-    }
+    static mutation_partition_view from_stream(utils::input_stream v) ;
     static mutation_partition_view from_view(ser::mutation_partition_view v);
     void accept(const schema& schema, partition_builder& visitor) const;
     future<> accept_gently(const schema& schema, partition_builder& visitor) const;
@@ -29987,27 +29946,7 @@ private:
     deletable_row* _current_row = nullptr;
     Consumer& _consumer;
     stop_iteration _stop_consuming = stop_iteration::no;
-    stop_iteration flush_rows_and_tombstones(position_in_partition_view pos) {
-        if (!_static_row.empty()) {
-            auto row = std::move(_static_row.get_existing());
-            _stop_consuming = _consumer.consume(static_row(std::move(row)));
-            if (_stop_consuming) {
-                return _stop_consuming;
-            }
-        }
-        if (_current_row) {
-            auto row_entry = std::move(_current_row_entry);
-            _current_row = nullptr;
-            _stop_consuming = _consumer.consume(clustering_row(std::move(*row_entry)));
-            if (_stop_consuming) {
-                return _stop_consuming;
-            }
-        }
-        _rt_gen.flush(pos, [this] (range_tombstone_change rtc) {
-            _stop_consuming = _consumer.consume(std::move(rtc));
-        });
-        return _stop_consuming;
-    }
+    stop_iteration flush_rows_and_tombstones(position_in_partition_view pos) ;
 public:
     frozen_mutation_consumer_adaptor(schema_ptr s, Consumer& consumer)
         : _schema(*s)
@@ -30090,9 +30029,7 @@ public:
     auto consume_gently(schema_ptr s, Consumer& consumer) const -> future<frozen_mutation_consume_result<decltype(consumer.consume_end_of_stream())>>;
     template<FlattenedConsumerV2 Consumer>
     auto consume_gently(schema_ptr s, frozen_mutation_consumer_adaptor<Consumer>& adaptor) const -> future<frozen_mutation_consume_result<decltype(adaptor.consumer().consume_end_of_stream())>>;
-    unsigned shard_of(const schema& s) const {
-        return dht::shard_of(s, dht::get_token(s, key()));
-    }
+    unsigned shard_of(const schema& s) const ;
     struct printer {
         const frozen_mutation& self;
         schema_ptr schema;
@@ -30135,7 +30072,7 @@ class frozen_mutation_fragment {
     bytes_ostream _bytes;
 public:
     explicit frozen_mutation_fragment(bytes_ostream bytes) : _bytes(std::move(bytes)) { }
-    const bytes_ostream& representation() const { return _bytes; }
+    const bytes_ostream& representation() const ;
     mutation_fragment unfreeze(const schema& s, reader_permit permit);
     future<> clear_gently() noexcept ;
 };
@@ -30546,9 +30483,7 @@ private:
     // pre-calculated
     std::unordered_set<sstring> _datacenters;
     void calculate_datacenters();
-    const std::unordered_map<inet_address, const node*>& get_nodes_by_endpoint() const noexcept {
-        return _nodes_by_endpoint;
-    };
+    const std::unordered_map<inet_address, const node*>& get_nodes_by_endpoint() const noexcept ;;
     friend class token_metadata_impl;
 public:
     void test_compare_endpoints(const inet_address& address, const inet_address& a1, const inet_address& a2) const;
@@ -30741,9 +30676,7 @@ struct server_address {
     server_address(server_id id, server_info info)
         : id(std::move(id)), info(std::move(info)) {
     }
-    bool operator==(const server_address& rhs) const {
-        return id == rhs.id;
-    }
+    bool operator==(const server_address& rhs) const ;
     bool operator==(const raft::server_id& rhs) const ;
     bool operator<(const server_address& rhs) const ;
     friend std::ostream& operator<<(std::ostream&, const server_address&);
@@ -30805,10 +30738,7 @@ struct configuration {
     // Enter a joint configuration given a new set of servers.
     void enter_joint(config_member_set c_new) ;
     // Transition from C_old + C_new to C_new.
-    void leave_joint() {
-        assert(is_joint());
-        previous.clear();
-    }
+    void leave_joint() ;
     friend std::ostream& operator<<(std::ostream&, const configuration&);
 };
 struct log_entry {
@@ -30845,7 +30775,7 @@ struct stopped_error : public error {
                     : std::string("Raft instance is stopped")) {}
 };
 struct conf_change_in_progress : public error {
-    conf_change_in_progress() : error("A configuration change is already in progress") {}
+    conf_change_in_progress()  ;
 };
 struct config_error : public error {
     using error::error;
@@ -31006,10 +30936,7 @@ struct transient_error: public error {
         : transient_error(format("Transient error: '{}'", e), leader)
     {
     }
-    friend std::ostream& operator<<(std::ostream& os, const transient_error& e) {
-        fmt::print(os, "transient_error, message: {}, leader: {}", e.what(), e.leader);
-        return os;
-    }
+    friend std::ostream& operator<<(std::ostream& os, const transient_error& e) ;
 };
 // Response to add_entry or modify_config RPC.
 // Carries either entry id (the entry is not committed yet),
@@ -31641,9 +31568,7 @@ public:
     }
 #endif
 private:
-    const token_metadata& get_token_metadata() {
-        return *_token_metadata_ptr;
-    }
+    const token_metadata& get_token_metadata() ;
 };
 } // namespace dht
 namespace dht {
@@ -31656,19 +31581,7 @@ public:
             , _it(_sorted_owned_ranges.begin()) {
     }
     // Must be called with increasing token values.
-    bool belongs_to_current_node(const dht::token& t) const noexcept {
-        // While token T is after a range Rn, advance the iterator.
-        // iterator will be stopped at a range which either overlaps with T (if T belongs to node),
-        // or at a range which is after T (if T doesn't belong to this node).
-        //
-        // As the name "incremental" suggests, the search is expected to
-        // terminate quickly (usually after 0 or 1 iterations) and so linear
-        // search is best.
-        while (_it != _sorted_owned_ranges.end() && _it->after(t, dht::token_comparator())) {
-            _it++;
-        }
-        return _it != _sorted_owned_ranges.end() && _it->contains(t, dht::token_comparator());
-    }
+    bool belongs_to_current_node(const dht::token& t) const noexcept ;
     static flat_mutation_reader_v2::filter make_partition_filter(const dht::token_range_vector& sorted_owned_ranges);
 };
 } // dht
@@ -31815,9 +31728,7 @@ class version {
     std::tuple<uint16_t, uint16_t, uint16_t> _version;
 public:
     version(uint16_t x, uint16_t y = 0, uint16_t z = 0): _version(std::make_tuple(x, y, z)) {}
-    seastar::sstring to_sstring() {
-        return seastar::format("{:d}.{:d}.{:d}", std::get<0>(_version), std::get<1>(_version), std::get<2>(_version));
-    }
+    seastar::sstring to_sstring() ;
     static version current() ;
     std::strong_ordering operator<=>(const version&) const = default;
 };
@@ -31865,9 +31776,7 @@ public:
     versioned_value() noexcept
         : _version(-1) {
     }
-    friend inline std::ostream& operator<<(std::ostream& os, const versioned_value& x) {
-        return os << "Value(" << x.value() << "," << x.version() <<  ")";
-    }
+    friend std::ostream& operator<<(std::ostream& os, const versioned_value& x) ;
     static sstring version_string(const std::initializer_list<sstring>& args) ;
     static sstring make_full_token_string(const std::unordered_set<dht::token>& tokens);
     static sstring make_token_string(const std::unordered_set<dht::token>& tokens);
@@ -31970,9 +31879,7 @@ public:
     std::unordered_map<sstring, creator_type>& classes() {
         return _classes;
     }
-    const std::unordered_map<sstring, creator_type>& classes() const {
-        return _classes;
-    }
+    const std::unordered_map<sstring, creator_type>& classes() const ;
     sstring to_qualified_class_name(std::string_view class_name) const;
 };
 template<typename BaseType, typename... Args>
@@ -31984,23 +31891,7 @@ template<typename T>
 void nonstatic_class_registry<BaseType, Args...>::register_class(sstring name) {
     register_class(name, &result_for<BaseType>::template make<T>);
 }
-template<typename BaseType, typename... Args>
-sstring nonstatic_class_registry<BaseType, Args...>::to_qualified_class_name(std::string_view class_name) const {
-    if (is_class_name_qualified(class_name)) {
-        return sstring(class_name);
-    } else {
-        const auto& classes{nonstatic_class_registry<BaseType, Args...>::classes()};
-        const auto it = boost::find_if(classes, [class_name](const auto& registered_class) {
-            // the fully qualified name contains the short name
-            auto i = registered_class.first.find_last_of('.');
-            return i != sstring::npos && registered_class.first.compare(i + 1, sstring::npos, class_name) == 0;
-        });
-        if (it == classes.end()) {
-            return sstring(class_name);
-        }
-        return it->first;
-    }
-}
+
 // BaseType is a base type of a type hierarchy that this registry will hold
 // Args... are parameters for object's constructor
 template<typename BaseType, typename... Args>
@@ -32014,9 +31905,7 @@ public:
     using result_type = typename base_registry::result_type;
     using creator_type = std::function<result_type(Args...)>;
 public:
-    static void register_class(sstring name, creator_type creator) {
-        registry().register_class(std::move(name), std::move(creator));
-    }
+    static void register_class(sstring name, creator_type creator) ;
     template<typename T>
     static void register_class(sstring name) {
         registry().template register_class<T>(std::move(name));
@@ -32028,18 +31917,14 @@ public:
     static std::unordered_map<sstring, creator_type>& classes() {
         return registry().classes();
     }
-    static sstring to_qualified_class_name(std::string_view class_name) {
-        return registry().to_qualified_class_name(class_name);
-    }
+    static sstring to_qualified_class_name(std::string_view class_name) ;
 };
 template<typename BaseType, typename T, typename... Args>
 struct class_registrator {
     class_registrator(const sstring& name) {
         class_registry<BaseType, Args...>::template register_class<T>(name);
     }
-    class_registrator(const sstring& name, typename class_registry<BaseType, Args...>::creator_type creator) {
-        class_registry<BaseType, Args...>::register_class(name, creator);
-    }
+    class_registrator(const sstring& name, typename class_registry<BaseType, Args...>::creator_type creator) ;
 };
 template<typename BaseType, typename... Args>
 typename nonstatic_class_registry<BaseType, Args...>::result_type nonstatic_class_registry<BaseType, Args...>::create(const sstring& name, Args&&... args) {
@@ -32178,10 +32063,8 @@ public:
         , _vec(std::move(v))
     { }
     template <typename InputIt>
-    explicit basic_sequenced_set(InputIt first, InputIt last)
-        : _set(first, last)
-        , _vec(first, last)
-    { }
+    explicit basic_sequenced_set(InputIt first, InputIt last) 
+    ;
     const T& operator[](size_t i) const noexcept ;
     T& operator[](size_t i) noexcept ;
     bool empty() const noexcept ;
@@ -32452,10 +32335,7 @@ using vnode_effective_replication_map_ptr = shared_ptr<const vnode_effective_rep
 using mutable_vnode_effective_replication_map_ptr = shared_ptr<vnode_effective_replication_map>;
 using vnode_erm_ptr = vnode_effective_replication_map_ptr;
 using mutable_vnode_erm_ptr = mutable_vnode_effective_replication_map_ptr;
-inline mutable_vnode_erm_ptr make_effective_replication_map(replication_strategy_ptr rs, token_metadata_ptr tmptr, replication_map replication_map, size_t replication_factor) {
-    return seastar::make_shared<vnode_effective_replication_map>(
-            std::move(rs), std::move(tmptr), std::move(replication_map), replication_factor);
-}
+ mutable_vnode_erm_ptr make_effective_replication_map(replication_strategy_ptr rs, token_metadata_ptr tmptr, replication_map replication_map, size_t replication_factor) ;
 // Apply the replication strategy over the current configuration and the given token_metadata.
 future<mutable_vnode_erm_ptr> calculate_effective_replication_map(replication_strategy_ptr rs, token_metadata_ptr tmptr);
 // Class to hold a coherent view of a keyspace
@@ -32640,10 +32520,7 @@ public:
     // @Deprecated
     std::map<application_state, versioned_value>& get_application_state_map() noexcept ;
     const std::map<application_state, versioned_value>& get_application_state_map() const noexcept ;
-    void add_application_state(application_state key, versioned_value value) {
-        _application_state[key] = std::move(value);
-        update_is_normal();
-    }
+    void add_application_state(application_state key, versioned_value value) ;
     void add_application_state(const endpoint_state& es) ;
     clk::time_point get_update_timestamp() const noexcept ;
     void update_timestamp() noexcept ;
@@ -32856,9 +32733,7 @@ public:
     sstring keyspace;
     dht::token_range_vector ranges;
     // For compatibility with <= 1.5, we send wrapping ranges (though they will never wrap).
-    std::vector<wrapping_range<token>> ranges_compat() const {
-        return ::compat::wrap(ranges);
-    }
+    std::vector<wrapping_range<token>> ranges_compat() const ;
     std::vector<sstring> column_families;
     stream_request() = default;
     stream_request(sstring _keyspace, dht::token_range_vector _ranges, std::vector<sstring> _column_families)
@@ -32897,13 +32772,7 @@ public:
     long current_bytes;
     long total_bytes;
     progress_info() = default;
-    progress_info(inet_address _peer, sstring _file_name, direction _dir, long _current_bytes, long _total_bytes)
-        : peer(_peer)
-        , file_name(_file_name)
-        , dir(_dir)
-        , current_bytes(_current_bytes)
-        , total_bytes(_total_bytes) {
-    }
+    progress_info(inet_address _peer, sstring _file_name, direction _dir, long _current_bytes, long _total_bytes)  ;
     bool is_completed() const ;
     friend std::ostream& operator<<(std::ostream& os, const progress_info& x);
 };
@@ -33189,9 +33058,7 @@ public:
     stream_plan& transfer_ranges(inet_address to, sstring keyspace, dht::token_range_vector ranges, std::vector<sstring> column_families);
     stream_plan& listeners(std::vector<stream_event_handler*> handlers);
 public:
-    bool is_empty() const {
-        return !_coordinator->has_active_sessions();
-    }
+    bool is_empty() const ;
     future<stream_state> execute();
     void abort() noexcept;
     void do_abort();
@@ -33214,14 +33081,14 @@ public:
     class i_source_filter {
     public:
         virtual bool should_include(const locator::topology&, inet_address endpoint) = 0;
-        virtual ~i_source_filter() {}
+        virtual ~i_source_filter() ;
     };
     class failure_detector_source_filter : public i_source_filter {
     private:
         std::set<gms::inet_address> _down_nodes;
     public:
         failure_detector_source_filter(std::set<gms::inet_address> down_nodes) : _down_nodes(std::move(down_nodes)) { }
-        virtual bool should_include(const locator::topology&, inet_address endpoint) override { return !_down_nodes.contains(endpoint); }
+        virtual bool should_include(const locator::topology&, inet_address endpoint) override ;
     };
     class single_datacenter_filter : public i_source_filter {
     private:
@@ -33230,9 +33097,7 @@ public:
         single_datacenter_filter(const sstring& source_dc)
             : _source_dc(source_dc) {
         }
-        virtual bool should_include(const locator::topology& topo, inet_address endpoint) override {
-            return topo.get_datacenter(endpoint) == _source_dc;
-        }
+        virtual bool should_include(const locator::topology& topo, inet_address endpoint) override ;
     };
     range_streamer(distributed<replica::database>& db, sharded<streaming::stream_manager>& sm, const token_metadata_ptr tmptr, abort_source& abort_source, std::unordered_set<token> tokens,
             inet_address address, locator::endpoint_dc_rack dr, sstring description, streaming::stream_reason reason)
@@ -33372,7 +33237,7 @@ public:
     virtual const char* what() const noexcept override {
         return _what.c_str();
     }
-    const std::error_code& code() const noexcept { return _code; }
+    const std::error_code& code() const noexcept ;
 };
 // Rethrow exception if not null
 //
@@ -33465,9 +33330,7 @@ public:
         , _generation(gen)
         , _max_version(version) {
     }
-    inet_address get_endpoint() const {
-        return _endpoint;
-    }
+    inet_address get_endpoint() const ;
     generation_type get_generation() const ;
     version_type get_max_version() const ;
     friend bool operator<(const gossip_digest& x, const gossip_digest& y) ;
@@ -33487,9 +33350,7 @@ public:
         , _partioner(std::move(p))
         , _digests(std::move(digests)) {
     }
-    sstring cluster_id() const {
-        return _cluster_id;
-    }
+    sstring cluster_id() const ;
     sstring partioner() const ;
     sstring get_cluster_id() const ;
     sstring get_partioner() const ;
@@ -34005,17 +33866,10 @@ public:
         _alpha = 1 - std::exp(-std::chrono::duration_cast<std::chrono::seconds>(tick_interval).count()/
                 static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(interval).count()));
     }
-    void add(uint64_t val = 1) {
-        _count += val;
-    }
+    void add(uint64_t val = 1) ;
     void update() ;
     bool is_initilized() const ;
-    double rate() const {
-        if (is_initilized()) {
-            return _rate;
-        }
-        return 0;
-    }
+    double rate() const ;
 };
 template <typename Unit>
 class basic_ihistogram {
@@ -34058,9 +33912,7 @@ class meter_timer {
     std::function<void()> _fun;
     timer<> _timer;
 public:
-    static constexpr latency_counter::duration tick_interval() {
-        return std::chrono::seconds(10);
-    }
+    static constexpr latency_counter::duration tick_interval() ;
     meter_timer(std::function<void()>&& fun) : _fun(std::move(fun)), _timer(_fun) {
         _timer.arm_periodic(tick_interval());
     }
@@ -34082,12 +33934,7 @@ public:
     uint64_t _count = 0;
     rates_moving_average() : start_time(latency_counter::now()) {
     }
-    void mark(uint64_t n = 1) {
-        _count += n;
-        for (int i = 0; i < 3; i++) {
-            rates[i].add(n);
-        }
-    }
+    void mark(uint64_t n = 1) ;
     rate_moving_average rate() const {
         rate_moving_average res;
         double elapsed = std::chrono::duration_cast<std::chrono::seconds>(latency_counter::now() - start_time).count();
