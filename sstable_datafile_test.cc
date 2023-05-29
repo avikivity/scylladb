@@ -47018,35 +47018,7 @@ public:
                 , value(std::move(value))
         { }
     };
-    flat_reader_assertions_v2& produces_static_row(const std::vector<expected_column>& columns) {
-        testlog.trace("Expecting static row");
-        auto mfopt = read_next();
-        if (!mfopt) {
-            BOOST_FAIL("Expected static row, got end of stream");
-        }
-        if (!mfopt->is_static_row()) {
-            BOOST_FAIL(format("Expected static row, got: {}", mutation_fragment_v2::printer(*_reader.schema(), *mfopt)));
-        }
-        auto& cells = mfopt->as_static_row().cells();
-        if (cells.size() != columns.size()) {
-            BOOST_FAIL(format("Expected static row with {} columns, but has {}", columns.size(), cells.size()));
-        }
-        for (size_t i = 0; i < columns.size(); ++i) {
-            const atomic_cell_or_collection* cell = cells.find_cell(columns[i].id);
-            if (!cell) {
-                BOOST_FAIL(format("Expected static row with column {}, but it is not present", columns[i].name));
-            }
-            auto& cdef = _reader.schema()->static_column_at(columns[i].id);
-            auto cmp = compare_unsigned(columns[i].value, cell->as_atomic_cell(cdef).value().linearize());
-            if (cmp != 0) {
-                BOOST_FAIL(format("Expected static row with column {} having value {}, but it has value {}",
-                                  columns[i].name,
-                                  columns[i].value,
-                                  cell->as_atomic_cell(cdef).value()));
-            }
-        }
-        return *this;
-    }
+    flat_reader_assertions_v2& produces_static_row(const std::vector<expected_column>& columns) ;
     flat_reader_assertions_v2& produces_row(const clustering_key& ck, const std::vector<expected_column>& columns) ;
     using assert_function = noncopyable_function<void(const column_definition&, const atomic_cell_or_collection*)>;
     flat_reader_assertions_v2& produces_row(const clustering_key& ck,
@@ -47131,14 +47103,7 @@ private:
         , _timestamp(timestamp)
     {}
 private:
-    const column_definition& get_v_def(const schema& s) {
-        if (_v_def_version == s.version() && _v_def) {
-            return *_v_def;
-        }
-        _v_def = s.get_column_definition(to_bytes("v"));
-        _v_def_version = s.version();
-        return *_v_def;
-    }
+    const column_definition& get_v_def(const schema& s) ;
     static auto get_collection_type() {
         return map_type_impl::get_instance(utf8_type, utf8_type, true);
     }
@@ -47185,9 +47150,7 @@ public:
     range_tombstone make_range_tombstone(const query::clustering_range& range, tombstone t = {}) ;
     range_tombstone make_range_tombstone(const query::clustering_range& range, gc_clock::time_point deletion_time) ;
     mutation new_mutation(sstring pk) ;
-    schema_ptr schema() {
-        return _s;
-    }
+    schema_ptr schema() ;
     const schema_ptr schema() const ;
     // Creates a sequence of keys in ring order
     std::vector<dht::decorated_key> make_pkeys(int n) ;
@@ -47206,9 +47169,7 @@ public:
         : _gs(s.schema())
         , _timestamp(s.current_timestamp()) {
     }
-    simple_schema get() const {
-        return simple_schema(_gs.get(), _timestamp);
-    }
+    simple_schema get() const ;
 };
 using populate_fn = std::function<mutation_source(schema_ptr s, const std::vector<mutation>&)>;
 using populate_fn_ex = std::function<mutation_source(schema_ptr s, const std::vector<mutation>&, gc_clock::time_point)>;
@@ -47224,9 +47185,7 @@ void for_each_mutation_pair(std::function<void(const mutation&, const mutation&,
 // Calls the provided function on mutations. Is supposed to exercise as many differences as possible.
 void for_each_mutation(std::function<void(const mutation&)>);
 // Returns true if mutations in schema s1 can be upgraded to s2.
-inline bool can_upgrade_schema(schema_ptr from, schema_ptr to) {
-    return from->is_counter() == to->is_counter();
-}
+ bool can_upgrade_schema(schema_ptr from, schema_ptr to) ;
 // Merge mutations that have the same key.
 // The returned vector has mutations with unique keys.
 // run_mutation_source_tests() might pass in multiple mutations for the same key.
@@ -47566,9 +47525,7 @@ template <typename RandomEngine>
 template <typename RandomEngine>
  sstring get_sstring(size_t n, RandomEngine& engine) ;
  sstring get_sstring(size_t n) ;
-inline sstring get_sstring() {
-    return get_sstring(get_int<unsigned>(1024));
-}
+ sstring get_sstring() ;
 // Picks a random subset of size `m` from the given vector.
 template <typename T>
 std::vector<T> random_subset(std::vector<T> v, unsigned m, std::mt19937& engine) {
@@ -47584,12 +47541,8 @@ std::vector<T> random_subset(unsigned n, unsigned m, std::mt19937& engine) {
     std::iota(the_set.begin(), the_set.end(), T{});
     return random_subset(std::move(the_set), m, engine);
 }
-inline
-preemption_check random_preempt() {
-    return [] () noexcept {
-        return get_bool();
-    };
-}
+
+preemption_check random_preempt() ;
 }
 namespace tests {
 // Must be used in a seastar thread.
@@ -47668,13 +47621,7 @@ void do_require(bool condition, std::source_location sl, std::string_view msg);
 template <typename LHS, typename RHS>
 void require_equal(const LHS& lhs, const RHS& rhs, std::source_location sl = std::source_location::current()) ;
 void fail(std::string_view msg, std::source_location sl = std::source_location::current());
-inline std::string getenv_safe(std::string_view name) {
-    auto v = ::getenv(name.data());
-    if (!v) {
-        throw std::logic_error(fmt::format("Environment variable {} not set", name));
-    }
-    return std::string(v);
-}
+ std::string getenv_safe(std::string_view name) ;
 extern boost::test_tools::assertion_result has_scylla_test_env(boost::unit_test::test_unit_id);
 }
 int read_collection_size(bytes_view& in);
@@ -47747,10 +47694,7 @@ public:
         parse();
         return *this;
     }
-    void operator++(int) {
-        --_remain;
-        parse();
-    }
+    void operator++(int) ;
     bool operator==(const listlike_partial_deserializing_iterator& x) const {
         return _remain == x._remain;
     }
@@ -48777,12 +48721,7 @@ CONSTCD14
 inline
 To
 ceil(const std::chrono::duration<Rep, Period>& d)
-{
-    auto t = trunc<To>(d);
-    if (t < d)
-        return t + To{1};
-    return t;
-}
+;
 template <class Rep, class Period,
           class = typename std::enable_if
           <
@@ -50928,14 +50867,7 @@ public:
     friend
     std::basic_ostream<CharT, Traits>&
     operator<<(std::basic_ostream<CharT, Traits>& os, const decimal_format_seconds& x)
-    {
-        date::detail::save_stream<CharT, Traits> _(os);
-        os.fill('0');
-        os.flags(std::ios::dec | std::ios::right);
-        os.width(2);
-        os << x.s_.count();
-        return os;
-    }
+    ;
 };
 enum class classify
 {
@@ -53766,9 +53698,7 @@ private:
         return (int_type(1) << n) - 1;
     }
     // For n in range 0..(bits_per_int-1), produces a mask with all bits >= n set
-    static int_type mask_higher_bits(size_t n) noexcept {
-        return ~mask_lower_bits(n);
-    }
+    static int_type mask_higher_bits(size_t n) noexcept ;
     // For bit n, produce index into _bits[level]
     static size_t level_idx(unsigned level, size_t n) noexcept {
         return n >> ((level + 1) * level_shift);
@@ -53792,7 +53722,7 @@ public:
     void set(size_t n) noexcept;
     // undefined if n >= size
     void clear(size_t n) noexcept;
-    size_t size() const noexcept { return _bits_count; }
+    size_t size() const noexcept ;
     size_t find_first_set() const noexcept;
     size_t find_next_set(size_t n) const noexcept;
     size_t find_last_set() const noexcept;
@@ -54089,10 +54019,7 @@ static future<> scan_dir(sstring dir, dir_entry_types type, show_hidden do_show_
 static future<> scan_dir(sstring dir, dir_entry_types type, walker_type walker, filter_type filter);
 static future<> scan_dir(sstring dir, dir_entry_types type, walker_type walker);
 static future<> scan_dir(sstring dir, dir_entry_types type, show_hidden do_show_hidden, walker_type walker)
-{
-    return scan_dir(fs::path(std::move(dir)), std::move(type), do_show_hidden, std::move(walker), [](const fs::path &parent_dir, const directory_entry &entry)
-                    { return true; });
-}
+;
 static future<> rmdir(fs::path dir);
 lister(file f, dir_entry_types type, walker_type walker, filter_type filter, fs::path dir, show_hidden do_show_hidden);
 future<> done();
@@ -54139,10 +54066,8 @@ future<std::optional<directory_entry>> get();
 // and waits for all background work to complete.
 future<> close() noexcept;
 };
-static inline fs::path operator/(const fs::path &lhs, const char *rhs)
-{
-return lhs / fs::path(rhs);
-}
+static fs::path operator/(const fs::path &lhs, const char *rhs)
+;
 static fs::path operator/(const fs::path &lhs, const sstring &rhs);
 static fs::path operator/(const fs::path &lhs, std::string_view rhs);
 static fs::path operator/(const fs::path &lhs, const std::string &rhs);
@@ -54253,10 +54178,8 @@ using traits = log_heap_element_traits<T, opts>;
 using bucket = typename traits::bucket_type;
 struct hist_size_less_compare
 {
-    inline bool operator()(const T &v1, const T &v2) const noexcept
-    {
-        return traits::hist_key(v1) < traits::hist_key(v2);
-    }
+     bool operator()(const T &v1, const T &v2) const noexcept
+    ;
 };
 std::array<bucket, opts.number_of_buckets()> _buckets;
 ssize_t _watermark = -1;
@@ -54291,9 +54214,7 @@ public:
     std::conditional_t<IsConst, const T, T> &operator*() noexcept;
     hist_iterator &operator++() noexcept;
     bool operator==(const hist_iterator &other) const noexcept
-    {
-        return _b == other._b && _it == other._it;
-    }
+    ;
 };
 using iterator = hist_iterator<false>;
 using const_iterator = hist_iterator<true>;
@@ -54359,14 +54280,7 @@ void erase(T &v) noexcept
 }
 // Merges the specified histogram, moving all elements from it into this.
 void merge(log_heap &other)
-{
-    for (size_t i = 0; i < opts.number_of_buckets(); ++i)
-    {
-        _buckets[i].splice(_buckets[i].begin(), other._buckets[i]);
-    }
-    _watermark = std::max(_watermark, other._watermark);
-    other._watermark = -1;
-}
+;
 private:
 void maybe_adjust_watermark() noexcept
 {
@@ -54415,9 +54329,7 @@ const db::view::base_info_ptr &base_info() const;
 void set_base_info(db::view::base_info_ptr);
 db::view::base_info_ptr make_base_dependent_view_info(const schema &base_schema) const;
 friend bool operator==(const view_info &x, const view_info &y)
-{
-    return x._raw == y._raw;
-}
+;
 friend std::ostream &operator<<(std::ostream &os, const view_info &view);
 };
 // Accumulates data sent to the memory_data_sink allowing it
@@ -54957,14 +54869,14 @@ static auto random_spec = tests::make_random_schema_specification(get_name(), st
 static auto random_schema = tests::random_schema{tests::random::get_int<uint32_t>(), *random_spec};
 return my_coroutine(7, random_schema);
 }
-atomic_cell atomic_cell::make_dead(api::timestamp_type timestamp, gc_clock::time_point deletion_time) { return atomic_cell_type::make_dead(timestamp, deletion_time); }
+
 atomic_cell atomic_cell::make_live(const abstract_type &type, api::timestamp_type timestamp, bytes_view value, atomic_cell::collection_member cm) { return atomic_cell_type::make_live(timestamp, single_fragment_range(value)); }
-atomic_cell atomic_cell::make_live(const abstract_type &type, api::timestamp_type timestamp, managed_bytes_view value, atomic_cell::collection_member cm) { return atomic_cell_type::make_live(timestamp, fragment_range(value)); }
+
 atomic_cell atomic_cell::make_live(const abstract_type &type, api::timestamp_type timestamp, bytes_view value, gc_clock::time_point expiry, gc_clock::duration ttl, atomic_cell::collection_member cm) { return atomic_cell_type::make_live(timestamp, single_fragment_range(value), expiry, ttl); }
-atomic_cell atomic_cell::make_live(const abstract_type &type, api::timestamp_type timestamp, managed_bytes_view value, gc_clock::time_point expiry, gc_clock::duration ttl, atomic_cell::collection_member cm) { return atomic_cell_type::make_live(timestamp, fragment_range(value), expiry, ttl); }
+
 atomic_cell atomic_cell::make_live_counter_update(api::timestamp_type timestamp, int64_t value) { return atomic_cell_type::make_live_counter_update(timestamp, value); }
 atomic_cell atomic_cell::make_live_uninitialized(const abstract_type &type, api::timestamp_type timestamp, size_t size) { return atomic_cell_type::make_live_uninitialized(timestamp, size); }
-atomic_cell::atomic_cell(const abstract_type &type, atomic_cell_view other) : _data(other._view) { set_view(_data); }
+
 // Based on:
 //  - org.apache.cassandra.db.AbstractCell#reconcile()
 //  - org.apache.cassandra.db.BufferExpiringCell#reconcile()
@@ -55013,14 +54925,7 @@ else
 }
 return std::strong_ordering::equal;
 }
-atomic_cell_or_collection atomic_cell_or_collection::copy(const abstract_type &type) const
-{
-if (_data.empty())
-{
-    return atomic_cell_or_collection();
-}
-return atomic_cell_or_collection(managed_bytes(_data));
-}
+
 std::ostream &operator<<(std::ostream &os, const atomic_cell_view &acv);
 std::ostream &operator<<(std::ostream &os, const atomic_cell &ac);
 std::ostream &operator<<(std::ostream &os, const atomic_cell_view::printer &acvp);
@@ -55058,7 +54963,7 @@ future<stop_iteration> consume(clustering_row &&cr);
 future<stop_iteration> consume(range_tombstone_change &&rtc);
 future<stop_iteration> consume(partition_end &&);
 };
-mutation::data::data(dht::decorated_key &&key, schema_ptr &&schema) : _schema(std::move(schema)), _dk(std::move(key)), _p(_schema) {}
+
 mutation::data::data(partition_key &&key_, schema_ptr &&schema) : _schema(std::move(schema)), _dk(dht::decorate_key(*_schema, std::move(key_))), _p(_schema) {}
 void mutation::set_static_cell(const column_definition &def, atomic_cell_or_collection &&value) { partition().static_row().apply(def, std::move(value)); }
 void mutation::set_clustered_cell(const clustering_key &key, const column_definition &def, atomic_cell_or_collection &&value)
@@ -55600,7 +55505,7 @@ static typename Container::iterator erase_and_dispose(Container &c, typename Con
 template <typename Container, typename Disposer>
 static typename Container::iterator erase_dispose_and_update_end(Container &c, typename Container::iterator it, Disposer &&disposer, typename Container::iterator &);
 template <typename Container>
-static typename Container::iterator maybe_reverse(Container &, typename Container::iterator r) { return r; }
+static typename Container::iterator maybe_reverse(Container &, typename Container::iterator r) ;
 };
 template <>
 struct reversal_traits<true>
@@ -55610,7 +55515,7 @@ static auto begin(Container &c) { return c.rbegin(); }
 template <typename Container>
 static auto end(Container &c) { return c.rend(); }
 template <typename Container, typename Disposer>
-static typename Container::reverse_iterator erase_and_dispose(Container &c, typename Container::reverse_iterator begin, typename Container::reverse_iterator end, Disposer disposer) { return typename Container::reverse_iterator(c.erase_and_dispose(end.base(), begin.base(), disposer)); } // Erases element pointed to by it and makes sure than iterator end is not
+static typename Container::reverse_iterator erase_and_dispose(Container &c, typename Container::reverse_iterator begin, typename Container::reverse_iterator end, Disposer disposer) ; // Erases element pointed to by it and makes sure than iterator end is not
 // invalidated.
 template <typename Container, typename Disposer>
 static typename Container::reverse_iterator erase_dispose_and_update_end(Container &c, typename Container::reverse_iterator it, Disposer &&disposer, typename Container::reverse_iterator &end);
@@ -55618,15 +55523,7 @@ template <typename Container>
 static typename Container::reverse_iterator maybe_reverse(Container &, typename Container::iterator r);
 };
 mutation_partition::~mutation_partition() { _rows.clear_and_dispose(current_deleter<rows_entry>()); }
-mutation_partition &mutation_partition::operator=(mutation_partition &&x) noexcept
-{
-if (this != &x)
-{
-    this->~mutation_partition();
-    new (this) mutation_partition(std::move(x));
-}
-return *this;
-}
+
 struct mutation_fragment_applier
 {
 const schema &_s;
@@ -55649,22 +55546,7 @@ void mutation_partition::apply_row_tombstone(const schema &schema, range_tombsto
 check_schema(schema);
 _row_tombstones.apply(schema, std::move(rt));
 }
-void mutation_partition::apply_delete(const schema &schema, const clustering_key_prefix &prefix, tombstone t)
-{
-check_schema(schema);
-if (prefix.is_empty(schema))
-{
-    apply(t);
-}
-else if (prefix.is_full(schema))
-{
-    clustered_row(schema, prefix).apply(t);
-}
-else
-{
-    apply_row_tombstone(schema, prefix, t);
-}
-}
+
 void mutation_partition::apply_delete(const schema &schema, range_tombstone rt)
 {
 check_schema(schema);
@@ -55691,22 +55573,7 @@ else
     apply_row_tombstone(schema, std::move(prefix), t);
 }
 }
-void mutation_partition::apply_delete(const schema &schema, clustering_key_prefix_view prefix, tombstone t)
-{
-check_schema(schema);
-if (prefix.is_empty(schema))
-{
-    apply(t);
-}
-else if (prefix.is_full(schema))
-{
-    clustered_row(schema, prefix).apply(t);
-}
-else
-{
-    apply_row_tombstone(schema, prefix, t);
-}
-}
+
 deletable_row &mutation_partition::clustered_row(const schema &s, clustering_key &&key)
 {
 check_schema(s);
@@ -55733,27 +55600,10 @@ template <typename RowWriter>
 void write_cell(RowWriter &w, const query::partition_slice &slice, ::atomic_cell_view c);
 template <typename RowWriter>
 void write_cell(RowWriter &w, const query::partition_slice &slice, data_type type, collection_mutation_view v)
-{
-if (type->is_collection() && slice.options.contains<query::partition_slice::option::collections_as_maps>())
-{
-    auto &ctype = static_cast<const collection_type_impl &>(*type);
-    type = map_type_impl::get_instance(ctype.name_comparator(), ctype.value_comparator(), true);
-}
-w.add().write().skip_timestamp().skip_expiry().write_fragmented_value(serialize_for_cql(*type, std::move(v))).skip_ttl().end_qr_cell();
-}
+;
 template <typename RowWriter>
 void write_counter_cell(RowWriter &w, const query::partition_slice &slice, ::atomic_cell_view c)
-{
-assert(c.is_live());
-auto ccv = counter_cell_view(c);
-auto wr = w.add().write();
-[&, wr = std::move(wr)]() mutable
-{         if (slice.options.contains<query::partition_slice::option::send_timestamp>()) {             return std::move(wr).write_timestamp(c.timestamp());         } else {             return std::move(wr).skip_timestamp();         } }()
-    .skip_expiry()
-    .write_value(counter_cell_view::total_value_type()->decompose(ccv.total_value()))
-    .skip_ttl()
-    .end_qr_cell();
-}
+;
 template <typename Hasher>
 void appending_hash<row>::operator()(Hasher &h, const row &cells, const schema &s, column_kind kind, const query::column_id_vector &columns, max_timestamp &max_ts) const
 {
@@ -55861,14 +55711,7 @@ else
 }
 return 0;
 }
-bool deletable_row::equal(column_kind kind, const schema &s, const deletable_row &other, const schema &other_schema) const
-{
-if (_deleted_at != other._deleted_at || _marker != other._marker)
-{
-    return false;
-}
-return _cells.equal(kind, s, other._cells, other_schema);
-}
+
 static void apply_monotonically(const column_definition &def, cell_and_hash &dst, atomic_cell_or_collection &src, cell_hash_opt src_hash)
 {
 if (def.is_atomic())
@@ -55891,11 +55734,7 @@ else
     dst.hash = {};
 }
 }
-void row::apply(const column_definition &column, const atomic_cell_or_collection &value, cell_hash_opt hash)
-{
-auto tmp = value.copy(*column.type);
-apply_monotonically(column, std::move(tmp), std::move(hash));
-}
+
 void row::apply(const column_definition &column, atomic_cell_or_collection &&value, cell_hash_opt hash) { apply_monotonically(column, std::move(value), std::move(hash)); }
 template <typename Func>
 void row::consume_with(Func &&func)
@@ -56991,9 +56830,9 @@ else
 }
 managed_bytes_view collection_mutation_input_stream::read_fragmented(size_t n) { return ::read_simple_bytes(_src, n); }
 bool collection_mutation_input_stream::empty() const { return _src.empty(); }
-collection_mutation::collection_mutation(const abstract_type &type, collection_mutation_view v) : _data(v.data) {}
+
 collection_mutation::collection_mutation(const abstract_type &type, managed_bytes data) : _data(std::move(data)) {}
-collection_mutation::operator collection_mutation_view() const { return collection_mutation_view{managed_bytes_view(_data)}; }
+
 collection_mutation_view atomic_cell_or_collection::as_collection_mutation() const { return collection_mutation_view{managed_bytes_view(_data)}; }
 std::ostream &operator<<(std::ostream &os, const collection_mutation_view::printer &cmvp);
 bool collection_mutation_description::compact_and_expire(column_id id, row_tombstone base_tomb, gc_clock::time_point query_time, can_gc_fn &can_gc, gc_clock::time_point gc_before, compaction_garbage_collector *collector)
@@ -57277,11 +57116,7 @@ return caching_options(k, r, e);
 caching_options caching_options::from_sstring(const sstring &str) { return from_map(rjson::parse_to_map<std::map<sstring, sstring>>(str)); }
 constexpr int32_t schema::NAME_LENGTH;
 extern logging::logger dblog;
-column_mapping_entry &column_mapping_entry::operator=(const column_mapping_entry &o)
-{
-auto copy = o;
-return operator=(std::move(copy));
-}
+
 template <typename Sequence>
 std::vector<data_type> get_column_types(const Sequence &column_definitions)
 {
@@ -57306,11 +57141,7 @@ if (it == partitioners.end())
 }
 return *it->second;
 }
-void schema::set_default_partitioner(const sstring &class_name, unsigned ignore_msb)
-{
-default_partitioner_name = class_name;
-default_partitioner_ignore_msb = ignore_msb;
-}
+
 static const dht::sharder &get_sharder(unsigned shard_count, unsigned ignore_msb)
 {
 auto it = sharders.find({shard_count, ignore_msb});
@@ -57480,15 +57311,7 @@ for (auto &def : _raw._columns)
 }
 rebuild();
 }
-schema::schema(const schema &o, const std::function<void(schema &)> &transform) : _raw(o._raw), _static_props(o._static_props), _offsets(o._offsets)
-{ // Do the transformation after all the raw fields are initialized, but
-// *before* the derived fields are generated (from the raw ones).
-if (transform)
-{
-    transform(*this);
-}
-rebuild();
-}
+
 lw_shared_ptr<const schema> make_shared_schema(std::optional<table_id> id, std::string_view ks_name, std::string_view cf_name, std::vector<schema::column> partition_key, std::vector<schema::column> clustering_key, std::vector<schema::column> regular_columns, std::vector<schema::column> static_columns, data_type regular_column_name_type, sstring comment)
 {
 schema_builder builder(std::move(ks_name), std::move(cf_name), std::move(id), std::move(regular_column_name_type));
@@ -57925,11 +57748,7 @@ for (;;)
     }
 }
 }
-sstring schema_builder::default_names::partition_key_name()
-{ // For compatibility sake, we call the first alias 'key' rather than 'key1'. This
-// is inconsistent with column alias, but it's probably not worth risking breaking compatibility now.
-return unique_name(default_partition_key_name, _partition_index, 1);
-}
+
 sstring schema_builder::default_names::clustering_name() { return unique_name(default_clustering_name, _clustering_index, 0); }
 sstring schema_builder::default_names::compact_value_name() { return unique_name(default_compact_value_name, _compact_index, 0); }
 void schema_builder::prepare_dense_schema(schema::raw_schema &raw)
