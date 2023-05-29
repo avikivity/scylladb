@@ -48,7 +48,6 @@
 #include <seastar/core/shared_mutex.hh>
 #include <seastar/core/sleep.hh>
 #include <seastar/core/with_scheduling_group.hh>
-#include <seastar/coroutine/all.hh>
 #include <seastar/coroutine/maybe_yield.hh>
 #include <seastar/http/client.hh>
 #include <seastar/net/dns.hh>
@@ -63,7 +62,6 @@
 #include <seastar/util/closeable.hh>
 #include <seastar/util/later.hh>
 #include <seastar/util/lazy.hh>
-#include <seastar/util/short_streams.hh>
 #include <unwind.h>
 #include <xxhash.h>
 #include <yaml-cpp/yaml.h>
@@ -47615,7 +47613,6 @@ template <typename Real, typename RandomEngine>
 Real get_real(Real max, RandomEngine& engine) ;
 /// Returns true with probability p.
 /// p = 1.0 means 100%.
-
 bool with_probability(double p) ;
 template <typename Real, typename RandomEngine>
 Real get_real(RandomEngine& engine) {
@@ -53895,7 +53892,6 @@ class error_injection
     std::map<sstring, bool, str_less> _enabled;
     bool is_enabled(const std::string_view &injection_name) const;
     bool is_one_shot(const std::string_view &injection_name) const;
-
 public:
     // \brief Enter into error injection if it's enabled
     // \param name error injection name to check
@@ -54033,7 +54029,6 @@ class error_injection<false>
 {
     static thread_local error_injection _local;
     using handler_fun = std::function<void()>;
-
 public:
     bool enter(const std::string_view &name) const;
     [[gnu::always_inline]] void enable(const std::string_view &injection_name, const bool one_shot = false) {}
@@ -54143,7 +54138,6 @@ struct show_hidden_tag
 {
 };
 using show_hidden = bool_class<show_hidden_tag>;
-
 private:
 file _f;
 walker_type _walker;
@@ -54152,7 +54146,6 @@ dir_entry_types _expected_type;
 future<> _listing_done;
 fs::path _dir;
 show_hidden _show_hidden;
-
 public:
 static future<> scan_dir(fs::path dir, dir_entry_types type, show_hidden do_show_hidden, walker_type walker, filter_type filter);
 static future<> scan_dir(fs::path dir, dir_entry_types type, walker_type walker, filter_type filter);
@@ -54169,7 +54162,6 @@ static future<> scan_dir(sstring dir, dir_entry_types type, show_hidden do_show_
 static future<> rmdir(fs::path dir);
 lister(file f, dir_entry_types type, walker_type walker, filter_type filter, fs::path dir, show_hidden do_show_hidden);
 future<> done();
-
 private:
 future<> visit(directory_entry de);
 future<directory_entry> guarantee_type(directory_entry de);
@@ -54183,7 +54175,6 @@ lister::show_hidden _do_show_hidden;
 seastar::queue<std::optional<directory_entry>> _queue;
 std::unique_ptr<lister> _lister;
 std::optional<future<>> _opt_done_fut;
-
 public:
 directory_lister(
     fs::path dir,
@@ -54323,7 +54314,6 @@ class log_heap final
 {
 // Ensure that (value << sub_bucket_index) in bucket_of() doesn't overflow
 static_assert(pow2_rank_constexpr(opts.max_size - opts.min_size + 1) + opts.sub_bucket_shift < std::numeric_limits<size_t>::digits, "overflow");
-
 private:
 using traits = log_heap_element_traits<T, opts>;
 using bucket = typename traits::bucket_type;
@@ -54336,7 +54326,6 @@ struct hist_size_less_compare
 };
 std::array<bucket, opts.number_of_buckets()> _buckets;
 ssize_t _watermark = -1;
-
 public:
 template <bool IsConst>
 class hist_iterator
@@ -54347,14 +54336,12 @@ public:
     using difference_type = std::ptrdiff_t;
     using pointer = std::conditional_t<IsConst, const T, T> *;
     using reference = std::conditional_t<IsConst, const T, T> &;
-
 private:
     using hist_type = std::conditional_t<IsConst, const log_heap, log_heap>;
     using iterator_type = std::conditional_t<IsConst, typename bucket::const_iterator, typename bucket::iterator>;
     hist_type &_h;
     ssize_t _b;
     iterator_type _it;
-
 public:
     struct end_tag
     {
@@ -54376,7 +54363,6 @@ public:
 };
 using iterator = hist_iterator<false>;
 using const_iterator = hist_iterator<true>;
-
 public:
 bool empty() const noexcept
 {
@@ -54447,7 +54433,6 @@ void merge(log_heap &other)
     _watermark = std::max(_watermark, other._watermark);
     other._watermark = -1;
 }
-
 private:
 void maybe_adjust_watermark() noexcept
 {
@@ -54468,7 +54453,6 @@ mutable shared_ptr<cql3::statements::select_statement> _select_statement;
 mutable std::optional<query::partition_slice> _partition_slice;
 db::view::base_info_ptr _base_info;
 mutable bool _has_computed_column_depending_on_base_non_primary_key;
-
 public:
 view_info(const schema &schema, const raw_view_info &raw_view_info);
 const raw_view_info &raw() const;
@@ -54509,7 +54493,6 @@ class memory_data_sink_buffers
 using buffers_type = utils::small_vector<temporary_buffer<char>, 1>;
 buffers_type _bufs;
 size_t _size = 0;
-
 public:
 size_t size() const;
 buffers_type &buffers();
@@ -54525,7 +54508,6 @@ memory_data_sink_buffers(memory_data_sink_buffers &&other)
 class memory_data_sink : public data_sink_impl
 {
 memory_data_sink_buffers &_bufs;
-
 public:
 memory_data_sink(memory_data_sink_buffers &b);
 virtual future<> put(net::packet data) override;
@@ -54564,7 +54546,6 @@ class client : public enable_shared_from_this<client>
     };
     void authorize(http::request &);
     future<> get_object_header(sstring object_name, http::experimental::client::reply_handler handler);
-
 public:
     explicit client(std::string host, endpoint_config_ptr cfg, global_factory gf, private_tag);
     static shared_ptr<client> make(std::string endpoint, endpoint_config_ptr cfg, global_factory gf = {});
@@ -54586,7 +54567,6 @@ public:
     {
         std::string _host;
         global_factory _gf;
-
     public:
         handle(const client &cln)
             : _host(cln._host), _gf(cln._gf)
@@ -55133,11 +55113,9 @@ bool _fragmented = false;
 size_t _dirty_size = 0;
 size_t _fragment_size;
 range_tombstone_change _current_rtc;
-
 private:
 future<stop_iteration> flush();
 future<stop_iteration> maybe_flush();
-
 public:
 fragmenting_mutation_freezer(const schema &s, frozen_mutation_consumer_fn c, size_t fragment_size) : _schema(s), _rts(s), _consumer(c), _fragment_size(fragment_size), _current_rtc(position_in_partition::before_all_clustered_rows(), {}) {}
 future<stop_iteration> consume(partition_start &&ps);
@@ -55149,7 +55127,6 @@ future<stop_iteration> consume(partition_end &&);
 mutation::data::data(dht::decorated_key &&key, schema_ptr &&schema) : _schema(std::move(schema)), _dk(std::move(key)), _p(_schema) {}
 mutation::data::data(partition_key &&key_, schema_ptr &&schema) : _schema(std::move(schema)), _dk(dht::decorate_key(*_schema, std::move(key_))), _p(_schema) {}
 void mutation::set_static_cell(const column_definition &def, atomic_cell_or_collection &&value) { partition().static_row().apply(def, std::move(value)); }
-
 void mutation::set_clustered_cell(const clustering_key &key, const column_definition &def, atomic_cell_or_collection &&value)
 {
 auto &row = partition().clustered_row(*schema(), key).cells();
@@ -56722,7 +56699,6 @@ class counter_write_query_result_builder
 {
 const schema &_schema;
 mutation_opt _mutation;
-
 public:
 counter_write_query_result_builder(const schema &s) : _schema(s) {}
 void consume_new_partition(const dht::decorated_key &dk) { _mutation = mutation(_schema.shared_from_this(), dk); }
@@ -56994,7 +56970,6 @@ if (it != _tombstones.end() && it->tombstone().equal(s, rt.tombstone()))
 }
 return _tombstones.end();
 }
-
 // See reversibly_mergeable.hh
 namespace
 {
@@ -57068,7 +57043,6 @@ auto it = rt_list.find(s, _new_rt);
 assert(it != rt_list.end());
 *it = std::move(_old_rt);
 }
-
 bytes_view collection_mutation_input_stream::read_linearized(size_t n)
 {
 managed_bytes_view mbv = ::read_simple_bytes(_src, n);
@@ -57470,7 +57444,6 @@ for (column_definition &def : cols)
 }
 return v3_columns(std::move(cols), s.is_dense(), s.is_compound());
 }
-
 void schema::rebuild()
 {
 _partition_key_type = make_lw_shared<compound_type<>>(get_column_types(partition_key_columns()));
@@ -58124,7 +58097,6 @@ auto schema_builder::static_configurators() -> std::vector<static_configurator> 
 static std::vector<static_configurator> result{};
 return result;
 }
-
 // Useful functions to manipulate the schema's comparator field
 namespace cell_comparator
 {
@@ -58145,7 +58117,6 @@ if (def.kind == column_kind::regular_column)
 return utf8_type;
 }
 data_type schema::column_name_type(const column_definition &def) const { return column_name_type(def, _raw._regular_column_name_type); }
-
 bool schema::has_static_columns() const { return !static_columns().empty(); }
 column_count_type schema::columns_count(column_kind kind) const
 {
@@ -58245,7 +58216,6 @@ if (_schema)
 }
 schema_registry::~schema_registry() = default;
 schema_registry_entry::erase_clock::duration schema_registry::grace_period() const { return std::chrono::seconds(_ctxt->schema_registry_grace_period()); }
-
 void schema_registry_entry::detach_schema() noexcept
 {
 slogger.trace("Deactivating {}", _version);
@@ -58518,10 +58488,8 @@ private:
     };
     std::vector<std::unique_ptr<backtrace_entry>> _backtraces;
     static logging::logger _logger;
-
 private:
     void on_error() { abort(); }
-
 public:
     uint32_t add(const migrate_fn_type *m)
     {
@@ -58593,13 +58561,11 @@ class region_sanitizer
         size_t size;
         saved_backtrace backtrace;
     };
-
 private:
     static logging::logger logger;
     const bool *_report_backtrace = nullptr;
     bool _broken = false;
     std::unordered_map<const void *, allocation> _allocations;
-
 private:
     template <typename Function>
     void run_and_handle_errors(Function &&fn) noexcept
@@ -58620,10 +58586,8 @@ private:
         _allocations.clear();
         }
     }
-
 private:
     void on_error() { abort(); }
-
 public:
     region_sanitizer(const bool &report_backtrace);
     void on_region_destruction() noexcept;
@@ -58661,13 +58625,11 @@ class background_reclaimer
     future<> _done;
     bool _stopping = false;
     static constexpr size_t free_memory_threshold = 60'000'000;
-
 private:
     bool have_work() const { return memory::free_memory() < free_memory_threshold; }
     void main_loop_wake();
     future<> main_loop();
     void adjust_shares();
-
 public:
     explicit background_reclaimer(scheduling_group sg, noncopyable_function<void(size_t target)> reclaim) : _sg(sg), _reclaim(std::move(reclaim)), _adjust_shares_timer(default_scheduling_group(), [this]
                                                                                                                                                                         { adjust_shares(); }),
@@ -58699,7 +58661,6 @@ class tracker::impl
     bool _abort_on_bad_alloc = false;
     bool _sanitizer_report_backtrace = false;
     reclaim_timer *_active_timer = nullptr;
-
 private: // Prevents tracker's reclaimer from running while live. Reclaimer may be
     // invoked synchronously with allocator. This guard ensures that this
     // object is not re-entered while inside one of the tracker's methods.
@@ -58710,7 +58671,6 @@ private: // Prevents tracker's reclaimer from running while live. Reclaimer may 
         ~reclaiming_lock() { _ref.enable_reclaim(); }
     };
     friend class tracker_reclaimer_lock;
-
 public:
     impl();
     ~impl();
@@ -58768,7 +58728,6 @@ public:
         }
         return false;
     }
-
 private:                                                                                            // Like compact_and_evict() but assumes that reclaim_lock is held around the operation.
     size_t compact_and_evict_locked(size_t reserve_segments, size_t bytes, is_preemptible preempt); // Like reclaim() but assumes that reclaim_lock is held around the operation.
     size_t reclaim_locked(size_t bytes, is_preemptible p);
@@ -58848,7 +58807,6 @@ protected:
     memory::memory_layout _layout;                             // Whether freeing segments actually increases availability of non-lsa memory.
     bool _freed_segment_increases_general_memory_availability; // Aligned (to segment::size) address of the first segment.
     uintptr_t _segments_base;
-
 public:
     explicit segment_store_backend(memory::memory_layout layout, bool freed_segment_increases_general_memory_availability) noexcept : _layout(layout), _freed_segment_increases_general_memory_availability(freed_segment_increases_general_memory_availability), _segments_base(align_up(_layout.start, static_cast<uintptr_t>(segment::size))) {}
     memory::memory_layout memory_layout() const noexcept { return _layout; }
@@ -58886,7 +58844,6 @@ class standard_memory_segment_store_backend : public segment_store_backend
     {
         free_segment *next = nullptr;
     };
-
 private:
     uintptr_t _segments_offset = 0;
     free_segment *_freelist = nullptr;
@@ -58904,7 +58861,6 @@ private:
         auto start = reinterpret_cast<uintptr_t>(p);
         return {start, start + size};
     }
-
 public:
     standard_memory_segment_store_backend(size_t segments) : segment_store_backend(allocate_memory(segments), false), _available_segments((_layout.end - _segments_base) / segment_size) {}
     virtual void *alloc_segment_memory() noexcept override
@@ -58930,7 +58886,6 @@ static constexpr size_t segment_npos = size_t(-1); // Segments are allocated fro
 class contiguous_memory_segment_store
 {
     std::unique_ptr<segment_store_backend> _backend;
-
 public:
     size_t non_lsa_reserve = 0;
     contiguous_memory_segment_store() : _backend(std::make_unique<seastar_memory_segment_store_backend>()) {}
@@ -59016,7 +58971,6 @@ private:
     size_t max_segments() const noexcept { return _store.max_segments(); }
     bool can_allocate_more_segments() const noexcept { return _allocation_enabled && _store.can_allocate_more_segments(); }
     bool compact_segment(segment *seg);
-
 public:
     explicit segment_pool(logalloc::tracker::impl &tracker);
     logalloc::tracker::impl &tracker() { return _tracker; }
@@ -59049,10 +59003,8 @@ public:
     void set_region(segment_descriptor &desc, region::impl *r) noexcept;
     size_t reclaim_segments(size_t target, is_preemptible preempt);
     void reclaim_all_free_segments();
-
 private:
     tracker::stats _stats{};
-
 public:
     const tracker::stats &statistics() const noexcept { return _stats; }
     inline void on_segment_compaction(size_t used_size) noexcept;
@@ -59065,7 +59017,6 @@ public:
 struct reclaim_timer
 {
     using extra_logger = noncopyable_function<void(log_level)>;
-
 private: // CLOCK_MONOTONIC_COARSE is not quite what we want -- to look for stalls,
     // we want thread time, not wall time. Wall time will give false positives
     // if the process is descheduled.
@@ -59106,7 +59057,6 @@ private: // CLOCK_MONOTONIC_COARSE is not quite what we want -- to look for stal
     stats _start_stats, _end_stats, _stat_diff;
     clock::duration _duration;
     inline reclaim_timer(const char *name, is_preemptible preemptible, size_t memory_to_release, size_t segments_to_release, tracker::impl &tracker, segment_pool &segment_pool, extra_logger extra_logs);
-
 public:
     inline reclaim_timer(
         const char *name, is_preemptible preemptible, size_t memory_to_release, size_t segments_to_release, tracker::impl &tracker, extra_logger extra_logs = [](log_level) {}) : reclaim_timer(name, preemptible, memory_to_release, segments_to_release, tracker, tracker.segment_pool(), std::move(extra_logs))
@@ -59115,7 +59065,6 @@ public:
     inline reclaim_timer(
         const char *name, is_preemptible preemptible, size_t memory_to_release, size_t segments_to_release, segment_pool &segment_pool, extra_logger extra_logs = [](log_level) {}) : reclaim_timer(name, preemptible, memory_to_release, segments_to_release, segment_pool.tracker(), segment_pool, std::move(extra_logs)){};
     size_t set_memory_released(size_t memory_released) noexcept { return this->_memory_released = memory_released; }
-
 private:
     void sample_stats(stats &data);
     template <typename T>
@@ -59269,7 +59218,6 @@ class segment_pool::reservation_goal
 {
     segment_pool &_sp;
     size_t _old_goal;
-
 public:
     reservation_goal(segment_pool &sp, size_t goal) noexcept : _sp(sp), _old_goal(_sp.current_emergency_reserve_goal()) { _sp.set_current_emergency_reserve_goal(goal); }
 };
@@ -59351,10 +59299,8 @@ class region_impl final : public basic_region_impl
     {
     private:
         uint32_t _n;
-
     private:
         explicit object_descriptor(uint32_t n) noexcept : _n(n) {}
-
     public:
         object_descriptor(allocation_strategy::migrate_fn migrator) noexcept : _n(migrator->index() * 2 + 1) {}
         static object_descriptor make_dead(size_t size) noexcept { return object_descriptor(size * 2); }
@@ -59374,7 +59320,6 @@ class region_impl final : public basic_region_impl
         static object_descriptor decode_forwards(const char *&pos) noexcept { return object_descriptor(utils::uleb64_decode_forwards(pos, poison<char>, unpoison)); }
         static object_descriptor decode_backwards(const char *&pos) noexcept { return object_descriptor(utils::uleb64_decode_bacwards(pos, poison<char>, unpoison)); }
     };
-
 private: // lsa_buffer allocator
     segment *_buf_active = nullptr;
     size_t _buf_active_offset;
@@ -59382,7 +59327,6 @@ private: // lsa_buffer allocator
     // Emergency storage to ensure forward progress during segment compaction,
     // by ensuring that _buf_pointers allocation inside new_buf_active() does not fail.
     std::vector<entangled> _buf_ptrs_for_compact_segment;
-
 private:
     region *_region = nullptr;
     region_listener *_listener = nullptr;
@@ -59403,7 +59347,6 @@ private:
     region_sanitizer _sanitizer;
     uint64_t _id;
     eviction_fn _eviction_fn;
-
 private:
     struct compaction_lock
     {
@@ -59651,7 +59594,6 @@ private:
         }
         }
     };
-
 public:
     explicit region_impl(tracker &tracker, region *region) : basic_region_impl(tracker), _region(region), _sanitizer(tracker.get_impl().sanitizer_report_backtrace()), _id(next_id())
     {
@@ -59721,10 +59663,8 @@ public:
                                                   && (_closed_occupancy.free_space() >= 4 * segment::size) && _segment_descs.contains_above_min(); }
     bool is_idle_compactible() const noexcept;
     virtual void *alloc(allocation_strategy::migrate_fn migrator, size_t size, size_t alignment) override;
-
 private:
     void on_non_lsa_free(void *obj) noexcept;
-
 public:
     virtual void free(void *obj) noexcept override;
     virtual void free(void *obj, size_t size) noexcept override;
@@ -60188,7 +60128,6 @@ class buffer_data_source_impl : public data_source_impl
 {
 private:
 temporary_buffer<char> _buf;
-
 public:
 buffer_data_source_impl(temporary_buffer<char> &&buf) : _buf(std::move(buf)) {}
 buffer_data_source_impl(buffer_data_source_impl &&) noexcept = default;
@@ -60206,7 +60145,6 @@ data_source _src;
 seastar::noncopyable_function<size_t()> _limit_generator;
 temporary_buffer<char> _buf;
 future<temporary_buffer<char>> do_get();
-
 public:
 limiting_data_source_impl(data_source &&src, seastar::noncopyable_function<size_t()> &&limit_generator) : _src(std::move(src)), _limit_generator(std::move(limit_generator)) {}
 virtual future<temporary_buffer<char>> get() override;
@@ -60318,7 +60256,6 @@ private:
     chunked_content::iterator _current_chunk; // _count only needed for Tell(). 32 bits is enough, we don't allow
     // more than 16 MB requests anyway.
     unsigned _count;
-
 public:
     typedef char Ch;
     chunked_content_stream(chunked_content &&content) : _content(std::move(content)), _current_chunk(_content.begin()) {}
@@ -60337,7 +60274,6 @@ struct guarded_yieldable_json_handler : public Handler
 {
     size_t _nested_level = 0;
     size_t _max_nested_level;
-
 public:
     using handler_base = Handler;
     explicit guarded_yieldable_json_handler(size_t max_nested_level) : _max_nested_level(max_nested_level) {}
@@ -60359,7 +60295,6 @@ public:
     bool Double(double d);
     bool String(const value::Ch *str, size_t length, bool copy = false);
     bool Key(const value::Ch *str, size_t length, bool copy = false);
-
 protected:
     static void maybe_yield();
     void check_nested_level() const;
@@ -60551,7 +60486,6 @@ human_readable_value to_hr_size(uint64_t size);
 // namespace utils
 seastar::metrics::histogram to_metrics_summary(const utils::summary_calculator &summary) noexcept;
 std::ostream &operator<<(std::ostream &out, const reconcilable_result::printer &pr);
-
 logging::logger klog("keys");
 const legacy_compound_view<partition_key_view::c_type> partition_key_view::legacy_form(const schema &s) const { return {*get_compound_type(s), _bytes}; }
 int32_t weight(bound_kind k)
@@ -60876,10 +60810,6 @@ UUID::UUID(sstring_view uuid)
 // string_view as binary and "0" ends up 48.
 // Work around by casting to string.
 using string_view_workaround = std::string;
-
-
-
-
 static logging::logger tlogger("types");
 bytes_view_opt read_collection_value(bytes_view &in);
 void on_types_internal_error(std::exception_ptr ex) { on_internal_error(tlogger, std::move(ex)); }
@@ -62703,7 +62633,6 @@ struct native_typeid_visitor
     const std::type_info &operator()(const empty_type_impl &);
 };
 }
-
 bytes abstract_type::decompose(const data_value &value) const
 {
 if (!value._value)
@@ -63617,7 +63546,6 @@ protected:
     lw_shared_ptr<state> _state;
     shared_future<> _done;
     future<> initialize(bool use_https);
-
 public:
     dns_connection_factory(std::string host, int port, bool use_https) : _host(std::move(host)), _port(port), _state(make_lw_shared<state>()), _done(initialize(use_https)) {}
     virtual future<connected_socket> make() override
@@ -63659,7 +63587,6 @@ class client::upload_sink : public data_sink_impl
     future<> upload_part(unsigned part_number, memory_data_sink_buffers bufs);
     future<> abort_upload();
     bool upload_started() const noexcept;
-
 public:
     upload_sink(shared_ptr<client> cln, sstring object_name) : _client(std::move(cln)), _http(_client->_http), _object_name(std::move(object_name)) {}
     virtual future<> put(net::packet) override;
@@ -63682,7 +63609,6 @@ class client::readable_file : public file_impl
     http::experimental::client &_http;
     sstring _object_name;
     [[noreturn]] void unsupported() { throw_with_backtrace<std::logic_error>("unsupported operation on s3 readable file"); }
-
 public:
     readable_file(shared_ptr<client> cln, sstring object_name) : _client(std::move(cln)), _http(_client->_http), _object_name(std::move(object_name)) {}
     virtual future<size_t> write_dma(uint64_t pos, const void *buffer, size_t len, const io_priority_class &pc) override { unsupported(); }
@@ -63696,7 +63622,6 @@ public:
     {
         client::handle _h;
         sstring _object_name;
-
     public:
         readable_file_handle_impl(client::handle h, sstring object_name) : _h(std::move(h)), _object_name(std::move(object_name)) {}
         virtual std::unique_ptr<file_handle_impl> clone() const override { return std::make_unique<readable_file_handle_impl>(_h, _object_name); }
@@ -64433,7 +64358,6 @@ public:
     template <class Match, class Index = typename Match::size_type>
     duration_builder &add_parsed_count(const Match &m, Index group_index, const duration_unit &unit);
     cql_duration build() const noexcept;
-
 private:
     const duration_unit *_current_unit{nullptr};
     cql_duration _duration{}; //
@@ -64753,7 +64677,6 @@ public:
 explicit impl(bytes_view pattern);
 bool operator()(bytes_view text) const;
 void reset(bytes_view pattern);
-
 private:
 void init_re();
 };
@@ -64803,7 +64726,6 @@ class partition_range_walker
 {
     std::vector<dht::partition_range> _ranges;
     size_t _current_position = 0;
-
 private:
 public:
 };
@@ -64873,7 +64795,6 @@ enum class timestamp_level
     cell_tombstone = 6,
     data = 7,
 };
-
 private:                              // Set to true in order to produce mutations which are easier to work with during debugging.
 static const bool debuggable = false; // The "333" prefix is so that it's easily distinguishable from other numbers in the printout.
 static const api::timestamp_type min_timestamp = debuggable ? 3330000 : ::api::min_timestamp;
@@ -64903,7 +64824,6 @@ schema_ptr make_schema(const char *ks_name, const char *cf_name);
 api::timestamp_type gen_timestamp(timestamp_level l);
 gc_clock::time_point new_expiry();
 tombstone random_tombstone(timestamp_level l);
-
 public:
 explicit impl(generate_counters counters, local_shard_only lso = local_shard_only::yes, generate_uncompactable uc = generate_uncompactable::no, std::optional<uint32_t> seed_opt = std::nullopt, const char *ks_name = "ks", const char *cf_name = "cf") : _generate_counters(counters), _local_shard_only(lso), _uncompactable(uc)
 { // In case of errors, reproduce using the --random-seed command line option with the test_runner seed.
@@ -65631,7 +65551,6 @@ namespace
         std::uniform_int_distribution<size_t> _regular_column_count_dist;
         std::uniform_int_distribution<size_t> _static_column_count_dist;
         type_generator _type_generator;
-
     private:
         static unsigned generate_unique_id(std::mt19937 &engine, std::unordered_set<unsigned> &used_ids)
         {
@@ -65664,7 +65583,6 @@ namespace
         }
         return types;
         }
-
     public:
         default_random_schema_specification(sstring keyspace_name, std::uniform_int_distribution<size_t> partition_column_count_dist, std::uniform_int_distribution<size_t> clustering_column_count_dist, std::uniform_int_distribution<size_t> regular_column_count_dist, std::uniform_int_distribution<size_t> static_column_count_dist) : random_schema_specification(std::move(keyspace_name)), _partition_column_count_dist(partition_column_count_dist), _clustering_column_count_dist(clustering_column_count_dist), _regular_column_count_dist(regular_column_count_dist), _static_column_count_dist(static_column_count_dist), _type_generator(*this)
         {
