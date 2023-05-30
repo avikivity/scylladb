@@ -40600,9 +40600,7 @@ private:
     {}
 private:
     const column_definition& get_v_def(const schema& s) ;
-    static auto get_collection_type() {
-        return map_type_impl::get_instance(utf8_type, utf8_type, true);
-    }
+    static auto get_collection_type() ;
 public:
 public:
     // Make a clustering_key which is n-th in some arbitrary sequence of keys
@@ -47677,16 +47675,7 @@ void push(T &v)
 }
 // Adjusts the histogram when the specified element becomes larger.
 void adjust_up(T &v)
-{
-    auto b = traits::cached_bucket(v);
-    auto nb = opts.bucket_of(traits::hist_key(v));
-    if (nb != b)
-    {
-        traits::cache_bucket(v, nb);
-        _buckets[nb].splice(_buckets[nb].begin(), _buckets[b], _buckets[b].iterator_to(v));
-        _watermark = std::max(ssize_t(nb), _watermark);
-    }
-}
+;
 // Removes the specified element from the histogram.
 void erase(T &v) noexcept
 {
@@ -50187,67 +50176,7 @@ bool collection_mutation_input_stream::empty() const { return _src.empty(); }
 collection_mutation::collection_mutation(const abstract_type &type, managed_bytes data) : _data(std::move(data)) {}
 collection_mutation_view atomic_cell_or_collection::as_collection_mutation() const { return collection_mutation_view{managed_bytes_view(_data)}; }
 std::ostream &operator<<(std::ostream &os, const collection_mutation_view::printer &cmvp);
-bool collection_mutation_description::compact_and_expire(column_id id, row_tombstone base_tomb, gc_clock::time_point query_time, can_gc_fn &can_gc, gc_clock::time_point gc_before, compaction_garbage_collector *collector)
-{
-bool any_live = false;
-auto t = tomb;
-tombstone purged_tomb;
-if (tomb <= base_tomb.regular())
-{
-    tomb = tombstone();
-}
-else if (tomb.deletion_time < gc_before && can_gc(tomb))
-{
-    purged_tomb = tomb;
-    tomb = tombstone();
-}
-t.apply(base_tomb.regular());
-utils::chunked_vector<std::pair<bytes, atomic_cell>> survivors;
-utils::chunked_vector<std::pair<bytes, atomic_cell>> losers;
-for (auto &&name_and_cell : cells)
-{
-    atomic_cell &cell = name_and_cell.second;
-    auto cannot_erase_cell = [&]
-    { return cell.deletion_time() >= gc_before || !can_gc(tombstone(cell.timestamp(), cell.deletion_time())); };
-    if (cell.is_covered_by(t, false) || cell.is_covered_by(base_tomb.shadowable().tomb(), false))
-    {
-        continue;
-    }
-    if (cell.has_expired(query_time))
-    {
-        if (cannot_erase_cell())
-        {
-        survivors.emplace_back(std::make_pair(std::move(name_and_cell.first), atomic_cell::make_dead(cell.timestamp(), cell.deletion_time())));
-        }
-        else if (collector)
-        {
-        losers.emplace_back(std::pair(std::move(name_and_cell.first), atomic_cell::make_dead(cell.timestamp(), cell.deletion_time())));
-        }
-    }
-    else if (!cell.is_live())
-    {
-        if (cannot_erase_cell())
-        {
-        survivors.emplace_back(std::move(name_and_cell));
-        }
-        else if (collector)
-        {
-        losers.emplace_back(std::move(name_and_cell));
-        }
-    }
-    else
-    {
-        any_live |= true;
-        survivors.emplace_back(std::move(name_and_cell));
-    }
-}
-if (collector)
-{
-    collector->collect(id, collection_mutation_description{purged_tomb, std::move(losers)});
-}
-cells = std::move(survivors);
-return any_live;
-}
+
 template <typename Iterator>
 static collection_mutation serialize_collection_mutation(const abstract_type &type, const tombstone &tomb, boost::iterator_range<Iterator> cells)
 {
@@ -50613,7 +50542,7 @@ else
 _v3_columns = v3_columns::from_v2_schema(*this);
 _full_slice = make_shared<query::partition_slice>(partition_slice_builder(*this).build());
 }
-const column_mapping &schema::get_column_mapping() const { return _column_mapping; }
+
 schema::raw_schema::raw_schema(table_id id) : _id(id), _partitioner(::get_partitioner(default_partitioner_name)), _sharder(::get_sharder(smp::count, default_partitioner_ignore_msb)) {}
 schema::schema(private_tag, const raw_schema &raw, std::optional<raw_view_info> raw_view_info, const schema_static_props &props) : _raw(raw), _static_props(props), _offsets([this]
                                                                                                                                                                              {         if (_raw._columns.size() > std::numeric_limits<column_count_type>::max()) {             throw std::runtime_error(format("Column count limit ({:d}) overflowed: {:d}",                                             std::numeric_limits<column_count_type>::max(), _raw._columns.size()));         }         auto& cols = _raw._columns;         std::array<column_count_type, 4> count = { 0, 0, 0, 0 };         auto i = cols.begin();         auto e = cols.end();         for (auto k : { column_kind::partition_key, column_kind::clustering_key, column_kind::static_column, column_kind::regular_column }) {             auto j = std::stable_partition(i, e, [k](const auto& c) {                 return c.kind == k;             });             count[column_count_type(k)] = std::distance(i, j);             i = j;         }         return std::array<column_count_type, 3> {                 count[0],                 count[0] + count[1],                 count[0] + count[1] + count[2],         }; }())
@@ -51834,10 +51763,10 @@ struct segment_descriptor : public log_heap_hook<segment_descriptor_hist_options
     // The order of entangled objects in the vector is irrelevant.
     // Also, not all entangled objects may be engaged.
     std::vector<entangled> _buf_pointers;
-    bool is_empty() const noexcept { return free_space() == segment::size; }
+    bool is_empty() const noexcept ;
     occupancy_stats occupancy() const noexcept { return {free_space(), segment::size}; }
     void record_alloc(segment::size_type size) noexcept { _free_space -= size; }
-    void record_free(segment::size_type size) noexcept { _free_space += size; }
+    void record_free(segment::size_type size) noexcept ;
 };
 using segment_descriptor_hist = log_heap<segment_descriptor, segment_descriptor_hist_options>;
 class segment_store_backend
