@@ -56321,15 +56321,7 @@ return {
     _partition_row_limit,
 };
 }
-partition_slice_builder &partition_slice_builder::with_range(query::clustering_range range)
-{
-if (!_row_ranges)
-{
-    _row_ranges = std::vector<query::clustering_range>();
-}
-_row_ranges->emplace_back(std::move(range));
-return *this;
-}
+
 partition_slice_builder &partition_slice_builder::with_ranges(std::vector<query::clustering_range> ranges)
 {
 if (!_row_ranges)
