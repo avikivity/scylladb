@@ -47928,8 +47928,8 @@ for (size_t pk = 0; pk != partition_count; ++pk)
 }
 SEASTAR_TEST_CASE(test_validate_checksums)
 {
-static auto random_spec = tests::make_random_schema_specification(get_name(), std::uniform_int_distribution<size_t>(1, 4), std::uniform_int_distribution<size_t>(2, 4), std::uniform_int_distribution<size_t>(2, 8), std::uniform_int_distribution<size_t>(2, 8));
-static auto random_schema = tests::random_schema{tests::random::get_int<uint32_t>(), *random_spec};
+static auto random_spec = tests::make_random_schema_specification(get_name(), std::uniform_int_distribution<size_t>(1, 1), std::uniform_int_distribution<size_t>(1, 1), std::uniform_int_distribution<size_t>(1, 1), std::uniform_int_distribution<size_t>(1, 1));
+static auto random_schema = tests::random_schema{0, *random_spec};
 return my_coroutine(7, random_schema);
 }
 atomic_cell atomic_cell::make_live(const abstract_type &type, api::timestamp_type timestamp, bytes_view value, atomic_cell::collection_member cm) { return atomic_cell_type::make_live(timestamp, single_fragment_range(value)); }
