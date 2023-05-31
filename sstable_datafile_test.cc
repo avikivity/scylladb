@@ -4363,10 +4363,9 @@ public:
     friend auto visit(const data_value& v, Func&& f);
     // Prints a value of this type in a way which is parsable back from CQL.
     // Differs from operator<< for collections.
-    sstring to_parsable_string() const;
+    
 };
-template<typename T>
- bytes serialized(T v) ;
+ ;
 class serialized_compare;
 class serialized_tri_compare;
 class user_type_impl;
@@ -4419,8 +4418,8 @@ public:
     size_t hash(bytes_view v) const;
     size_t hash(managed_bytes_view v) const;
     bool equal(bytes_view v1, bytes_view v2) const;
-    bool equal(managed_bytes_view v1, managed_bytes_view v2) const;
-    bool equal(managed_bytes_view v1, bytes_view v2) const;
+    
+    
     bool equal(bytes_view v1, managed_bytes_view v2) const;
     std::strong_ordering compare(bytes_view v1, bytes_view v2) const;
     std::strong_ordering compare(managed_bytes_view v1, managed_bytes_view v2) const;
@@ -4441,8 +4440,8 @@ public:
         return deserialize_impl(single_fragmented_view(v));
     }
     data_value deserialize(const managed_bytes& v) const ;
-    template <FragmentedView View> data_value deserialize_value(View v) const ;
-    data_value deserialize_value(bytes_view v) const ;;
+     ;
+    ;
     // Explicitly instantiated in .cc
     template <FragmentedView View> void validate(const View& v) const;
     void validate(bytes_view view) const;
@@ -4477,8 +4476,8 @@ public:
     bool is_string() const;
     bool is_collection() const;
     bool is_map() const ;
-    bool is_set() const ;
-    bool is_list() const ;
+    
+    
     // Lists and sets are similar: they are both represented as std::vector<data_value>
     // @sa listlike_collection_type_impl
     bool is_listlike() const ;
@@ -4510,12 +4509,12 @@ protected:
     // native_value_* methods are virualized versions of native_type's
     // sizeof/alignof/copy-ctor/move-ctor etc.
     void* native_value_clone(const void* from) const;
-    const std::type_info& native_typeid() const;
+    
     // abstract_type is a friend of data_value, but derived classes are not.
     static const void* get_value_ptr(const data_value& v) {
         return v._value;
     }
-    friend void write_collection_value(bytes::iterator& out, data_type type, const data_value& value);
+    
     friend class tuple_type_impl;
     friend class data_value;
     friend class reversed_type_impl;
@@ -4561,18 +4560,15 @@ public:
     const native_type& from_value(const void* v) const {
         return *reinterpret_cast<const native_type*>(v);
     }
-    const native_type& from_value(const data_value& v) const ;
+    
     friend class abstract_type;
 };
 bool operator==(const data_value& x, const data_value& y);
 using bytes_view_opt = std::optional<bytes_view>;
 using managed_bytes_view_opt = std::optional<managed_bytes_view>;
-static
-bool optional_less_compare(data_type t, bytes_view_opt e1, bytes_view_opt e2) ;
-static
-bool optional_equal(data_type t, bytes_view_opt e1, bytes_view_opt e2) ;
-static
-bool less_compare(data_type t, bytes_view e1, bytes_view e2) ;
+
+
+
 static inline
 std::strong_ordering tri_compare(data_type t, managed_bytes_view e1, managed_bytes_view e2) {
     return t->compare(e1, e2);
@@ -4659,24 +4655,23 @@ public:
     const data_type& underlying_type() const {
         return _underlying_type;
     }
-    static shared_ptr<const reversed_type_impl> get_instance(data_type type);
+    
 };
 using reversed_type = shared_ptr<const reversed_type_impl>;
 // Reverse the sort order of the type by wrapping in or stripping reversed_type,
 // as needed.
-data_type reversed(data_type);
+
 class map_type_impl;
 using map_type = shared_ptr<const map_type_impl>;
 class set_type_impl;
 using set_type = shared_ptr<const set_type_impl>;
 class list_type_impl;
 using list_type = shared_ptr<const list_type_impl>;
-size_t hash_value(const shared_ptr<const abstract_type>& x) ;
+
 struct no_match_for_native_data_type {};
 template <typename T>
 inline constexpr auto data_type_for_v = no_match_for_native_data_type();
-template <typename Type>
-shared_ptr<const abstract_type> data_type_for() ;
+ ;
 class serialized_compare {
     data_type _type;
 public:
@@ -4684,7 +4679,7 @@ public:
     bool operator()(const bytes& v1, const bytes& v2) const {
         return _type->less(v1, v2);
     }
-    bool operator()(const managed_bytes& v1, const managed_bytes& v2) const ;
+    
 };
 inline
 serialized_compare
@@ -4694,7 +4689,7 @@ abstract_type::as_less_comparator() const {
 class serialized_tri_compare {
     data_type _type;
 public:
-    serialized_tri_compare(data_type type) : _type(type) {}
+    
 };
 using key_compare = serialized_compare;
 // Remember to update type_codec in transport/server.cc and cql3/cql3_type.cc
@@ -4756,23 +4751,17 @@ to_bytes(const sstring& x) {
     return bytes(reinterpret_cast<const int8_t*>(x.c_str()), x.size());
 }
 // FIXME: make more explicit
-managed_bytes
-to_managed_bytes(const sstring& x) ;
-bytes_view
-to_bytes_view(const sstring& x) ;
-bytes
-to_bytes(const utils::UUID& uuid) ;
- bool
-less_unsigned(bytes_view v1, bytes_view v2) ;
+
+
+
+ 
 template<typename Type>
 static
 typename Type::value_type deserialize_value(Type& t, bytes_view v) ;
 template<typename T>
 T read_simple(bytes_view& v) ;
-template<typename T>
-T read_simple_exactly(bytes_view v) ;
-bytes_view
-read_simple_bytes(bytes_view& v, size_t n) ;
+ ;
+
 template<FragmentedView View>
 View read_simple_bytes(View& v, size_t n) {
     if (v.size_bytes() < n) {
@@ -4867,8 +4856,8 @@ private:
         return len;
     }
 public:
-    managed_bytes serialize_single(const managed_bytes& v) const ;
-    managed_bytes serialize_single(const bytes& v) const ;
+    
+    
     template<typename RangeOfSerializedComponents>
     static managed_bytes serialize_value(RangeOfSerializedComponents&& values) {
         auto size = serialized_size(values);
@@ -4883,8 +4872,8 @@ public:
     static managed_bytes serialize_value(std::initializer_list<T> values) ;
     managed_bytes serialize_optionals(std::span<const bytes_opt> values) const ;
     managed_bytes serialize_optionals(std::span<const managed_bytes_opt> values) const ;
-    managed_bytes serialize_value_deep(const std::vector<data_value>& values) const ;
-    managed_bytes decompose_value(const value_type& values) const ;
+    
+    
     class iterator {
     public:
         using iterator_category = std::input_iterator_tag;
