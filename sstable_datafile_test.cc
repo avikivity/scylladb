@@ -65,11 +65,9 @@
 #include <yaml-cpp/yaml.h>
 // the database clock follows Java - 1ms granularity, 64-bit counter, 1970 epoch
 extern std::atomic<int64_t> clocks_offset;
-template<typename Duration>
-static void forward_jump_clocks(Duration delta)
+
 ;
-static std::chrono::seconds get_clocks_offset()
-;
+
 // Returns a time point which is earlier from t by d, or minimum time point if it cannot be represented.
 template<typename Clock, typename Duration, typename Rep, typename Period>
 inline
@@ -237,14 +235,14 @@ public:
     static constexpr std::time_t to_time_t(time_point t) ;
     static constexpr time_point from_time_t(std::time_t t) ;
     static time_point now() noexcept ;
-    static int32_t as_int32(duration d) ;
-    static int32_t as_int32(time_point tp) ;
+    
+    
 };
 using expiry_opt = std::optional<gc_clock::time_point>;
 using ttl_opt = std::optional<gc_clock::duration>;
 // 20 years in seconds
 static constexpr gc_clock::duration max_ttl = gc_clock::duration{20 * 365 * 24 * 60 * 60};
-std::ostream& operator<<(std::ostream& os, gc_clock::time_point tp);
+
 template<>
 struct appending_hash<gc_clock::time_point> {
     template<typename Hasher>
@@ -260,8 +258,7 @@ struct appending_hash<gc_clock::time_point> {
 };
 namespace ser {
 // Forward-declaration - defined in serializer.hh, to avoid including it here.
-template <typename Output>
-void serialize_gc_clock_duration_value(Output& out, int64_t value);
+;
 template <typename Input>
 int64_t deserialize_gc_clock_duration_value(Input& in);
 template <typename T>
@@ -293,8 +290,8 @@ public:
     static constexpr std::time_t to_time_t(time_point t) {
         return std::chrono::duration_cast<std::chrono::seconds>(t.time_since_epoch()).count();
     }
-    static constexpr time_point from_time_t(std::time_t t) ;
-    static time_point now() noexcept ;
+    
+    
 };
 static
 gc_clock::time_point to_gc_clock(db_clock::time_point tp) noexcept ;
@@ -415,20 +412,20 @@ using bytes_view = std::basic_string_view<int8_t>;
 using bytes_mutable_view = basic_mutable_view<bytes_view::value_type>;
 using bytes_opt = std::optional<bytes>;
 using sstring_view = std::string_view;
- bytes to_bytes(bytes&& b) ;
- sstring_view to_sstring_view(bytes_view view) ;
+ 
+ 
  bytes_view to_bytes_view(sstring_view view) ;
 struct fmt_hex {
     const bytes_view& v;
     fmt_hex(const bytes_view& v) noexcept : v(v) {}
 };
-std::ostream& operator<<(std::ostream& os, const fmt_hex& hex);
-bytes from_hex(sstring_view s);
+
+
 sstring to_hex(bytes_view b);
 sstring to_hex(const bytes& b);
 sstring to_hex(const bytes_opt& b);
 std::ostream& operator<<(std::ostream& os, const bytes& b);
-std::ostream& operator<<(std::ostream& os, const bytes_opt& b);
+
 template <>
 struct fmt::formatter<fmt_hex> {
     size_t _group_size_in_bytes = 0;
@@ -512,7 +509,7 @@ struct fmt::formatter<bytes> : fmt::formatter<fmt_hex> {
 };
 namespace std {
 // Must be in std:: namespace, or ADL fails
-std::ostream& operator<<(std::ostream& os, const bytes_view& b);
+
 }
 template<>
 struct appending_hash<bytes> {
@@ -568,7 +565,7 @@ enum class consistency_level {
     LOCAL_SERIAL,
     LOCAL_ONE, MAX_VALUE = LOCAL_ONE
 };
-std::ostream& operator<<(std::ostream& os, consistency_level cl);
+
 }
 namespace db {
 enum class write_type : uint8_t {
@@ -580,7 +577,7 @@ enum class write_type : uint8_t {
     CAS,
     VIEW,
 };
-std::ostream& operator<<(std::ostream& os, const write_type& t);
+
 }
 namespace db {
 enum class operation_type : uint8_t {
@@ -722,9 +719,9 @@ private:
     std::array<uint64_t, 2> _hash;
 public:
     hashed_key(std::array<uint64_t, 2> h) : _hash(h) {}
-    std::array<uint64_t, 2> hash() const ;;
+    ;
 };
-hashed_key make_hashed_key(bytes_view key);
+
 // FIXME: serialize() and serialized_size() not implemented. We should only be serializing to
 // disk, not in the wire.
 struct i_filter {
@@ -732,16 +729,16 @@ struct i_filter {
     virtual void add(const bytes_view& key) = 0;
     virtual bool is_present(const bytes_view& key) = 0;
     virtual bool is_present(hashed_key) = 0;
-    virtual void clear() = 0;
-    virtual void close() = 0;
-    virtual size_t memory_size() = 0;
-    static filter_ptr get_filter(int64_t num_elements, double max_false_pos_prob, filter_format format);
+    
+    
+    
+    
 };
 }
 namespace utils {
 namespace murmur_hash {
-uint32_t hash32(bytes_view data, int32_t seed);
-uint64_t hash2_64(bytes_view key, uint64_t seed);
+
+
 template<typename InputIterator>
 inline
 uint64_t read_block(InputIterator& in) {
@@ -1378,10 +1375,10 @@ public:
         return _size;
     }
     size_t capacity() const ;
-    T& operator[](size_t i) ;
-    const T& operator[](size_t i) const ;
-    T& at(size_t i) ;
-    const T& at(size_t i) const ;
+    
+    
+    
+    
     void push_back(const T& x) {
         reserve_for_push_back();
         new (addr(_size)) T(x);
@@ -1428,8 +1425,8 @@ public:
     /// necessary.
     ///
     /// \returns the memory that remains to be reserved
-    size_t reserve_partial(size_t n) ;
-    size_t memory_size() const ;
+    
+    
     size_t external_memory_usage() const;
 public:
     template <class ValueType>
@@ -1466,35 +1463,35 @@ public:
         }
         iterator_type operator--(int) ;
         iterator_type& operator+=(ssize_t n) ;
-        iterator_type& operator-=(ssize_t n) ;
-        iterator_type operator+(ssize_t n) const ;
-        iterator_type operator-(ssize_t n) const ;
-        friend iterator_type operator+(ssize_t n, iterator_type a) ;
+        
+        
+        
+        
         friend ssize_t operator-(iterator_type a, iterator_type b) {
             return a._i - b._i;
         }
         bool operator==(iterator_type x) const {
             return _i == x._i;
         }
-        bool operator<(iterator_type x) const ;
-        bool operator<=(iterator_type x) const ;
-        bool operator>(iterator_type x) const ;
-        bool operator>=(iterator_type x) const ;
+        
+        
+        
+        
         friend class chunked_vector;
     };
     using iterator = iterator_type<T>;
     using const_iterator = iterator_type<const T>;
 public:
-    const T& front() const ;
-    T& front() ;
+    
+    
     iterator begin() { return iterator(_chunks.data(), 0); }
     iterator end() { return iterator(_chunks.data(), _size); }
     const_iterator begin() const { return const_iterator(_chunks.data(), 0); }
     const_iterator end() const { return const_iterator(_chunks.data(), _size); }
-    const_iterator cbegin() const ;
-    const_iterator cend() const ;
-    std::reverse_iterator<iterator> rbegin() ;
-    std::reverse_iterator<iterator> rend() ;
+    
+    
+    
+    
 public:
 };
 template <typename T, size_t max_contiguous_allocation>
@@ -1625,8 +1622,8 @@ private:
     } _shard_stats;
     stats& _stats = _shard_stats;
 public:
-    virtual void add(const bytes_view& key) override;
-    virtual bool is_present(const bytes_view& key) override;
+    
+    
     virtual bool is_present(hashed_key key) override;
 };
 struct murmur3_bloom_filter: public bloom_filter {
@@ -40790,11 +40787,11 @@ private:
 class result_set_assertions {
     const query::result_set& _rs;
 public:
-    result_set_assertions(const query::result_set& rs)  ;
-    const result_set_assertions& has(const row_assertion& ra) const;
-    const result_set_assertions& has_only(const row_assertion& ra) const;
-    const result_set_assertions& is_empty() const;
-    const result_set_assertions& has_size(int row_count) const;
+    
+    
+    
+    
+    
 };
 // Make rs live as long as the returned assertion object is used
 result_set_assertions assert_that(const query::result_set& rs) ;
@@ -41255,11 +41252,11 @@ CONSTCD11 year_month operator/(const year& y, const month& m) NOEXCEPT;
 CONSTCD11 year_month operator/(const year& y, int          m) NOEXCEPT;
 CONSTCD11 month_day operator/(const day& d, const month& m) NOEXCEPT;
 CONSTCD11 month_weekday operator/(const weekday_indexed& wdi, const month& m) NOEXCEPT;
-CONSTCD11 month_weekday operator/(const weekday_indexed& wdi, int          m) NOEXCEPT;
-CONSTCD11 month_weekday_last operator/(const month& m, const weekday_last& wdl) NOEXCEPT;
-CONSTCD11 month_weekday_last operator/(int          m, const weekday_last& wdl) NOEXCEPT;
-CONSTCD11 month_weekday_last operator/(const weekday_last& wdl, const month& m) NOEXCEPT;
-CONSTCD11 month_weekday_last operator/(const weekday_last& wdl, int          m) NOEXCEPT;
+
+
+
+
+
 CONSTCD11 year_month_day operator/(const year_month& ym, const day& d) NOEXCEPT;
 CONSTCD11 year_month_day operator/(const year_month& ym, int        d) NOEXCEPT;
 CONSTCD11 year_month_day operator/(const year& y, const month_day& md) NOEXCEPT;
@@ -41903,24 +41900,15 @@ trunc(const std::chrono::duration<Rep, Period>& d)
 #if HAS_CHRONO_ROUNDING == 0
 // round down
 template <class To, class Rep, class Period>
-CONSTCD14
-inline
-To
-floor(const std::chrono::duration<Rep, Period>& d)
+
 ;
 // round to nearest, to even on tie
 template <class To, class Rep, class Period>
-CONSTCD14
-inline
-To
-round(const std::chrono::duration<Rep, Period>& d)
+
 ;
 // round up
 template <class To, class Rep, class Period>
-CONSTCD14
-inline
-To
-ceil(const std::chrono::duration<Rep, Period>& d)
+
 ;
 template <class Rep, class Period,
           class = typename std::enable_if
@@ -44060,14 +44048,8 @@ public:
 private:
     std::chrono::seconds s_;
 public:
-    CONSTCD11 explicit decimal_format_seconds(const precision& s) NOEXCEPT
-        : s_(s)
-        {}
-    template <class CharT, class Traits>
-    friend
-    std::basic_ostream<CharT, Traits>&
-    operator<<(std::basic_ostream<CharT, Traits>& os, const decimal_format_seconds& x)
-    ;
+    
+     ;
 };
 enum class classify
 {
@@ -47360,8 +47342,7 @@ using traits = log_heap_element_traits<T, opts>;
 using bucket = typename traits::bucket_type;
 struct hist_size_less_compare
 {
-     bool operator()(const T &v1, const T &v2) const noexcept
-    ;
+     
 };
 std::array<bucket, opts.number_of_buckets()> _buckets;
 ssize_t _watermark = -1;
@@ -47385,16 +47366,10 @@ public:
     struct end_tag
     {
     };
-    hist_iterator(hist_type &h) noexcept
-        : _h(h), _b(h._watermark), _it(_b >= 0 ? h._buckets[_b].begin() : h._buckets[0].end())
-    {
-    }
-    hist_iterator(hist_type &h, end_tag) noexcept
-        : _h(h), _b(-1), _it(h._buckets[0].end())
-    {
-    }
-    std::conditional_t<IsConst, const T, T> &operator*() noexcept;
-    hist_iterator &operator++() noexcept;
+    
+    
+    
+    
     bool operator==(const hist_iterator &other) const noexcept
     ;
 };
@@ -47480,11 +47455,11 @@ const raw_view_info &raw() const;
 const table_id &base_id() const;
 const sstring &base_name() const;
 bool include_all_columns() const;
-const sstring &where_clause() const;
-cql3::statements::select_statement &select_statement(data_dictionary::database) const;
-const query::partition_slice &partition_slice(data_dictionary::database) const;
-const column_definition *view_column(const schema &base, column_kind kind, column_id base_id) const;
-const column_definition *view_column(const column_definition &base_def) const;
+
+
+
+
+
 bool has_base_non_pk_columns_in_view_pk() const;
 bool has_computed_column_depending_on_base_non_primary_key() const;
 /// Returns a pointer to the base_dependent_view_info which matches the current
@@ -47501,9 +47476,8 @@ bool has_computed_column_depending_on_base_non_primary_key() const;
 const db::view::base_info_ptr &base_info() const;
 void set_base_info(db::view::base_info_ptr);
 db::view::base_info_ptr make_base_dependent_view_info(const schema &base_schema) const;
-friend bool operator==(const view_info &x, const view_info &y)
-;
-friend std::ostream &operator<<(std::ostream &os, const view_info &view);
+
+
 };
 // Accumulates data sent to the memory_data_sink allowing it
 // to be examined later.
@@ -47513,10 +47487,10 @@ using buffers_type = utils::small_vector<temporary_buffer<char>, 1>;
 buffers_type _bufs;
 size_t _size = 0;
 public:
-size_t size() const;
-buffers_type &buffers();
+
+
 // Strong exception guarantees
-void put(temporary_buffer<char> &&buf);
+
 void clear();
 memory_data_sink_buffers() = default;
 memory_data_sink_buffers(memory_data_sink_buffers &&other)
@@ -48667,8 +48641,8 @@ mutation_partition &_mp;
 void operator()(range_tombstone rt);
 void operator()(const static_row &sr);
 void operator()(partition_start ps);
-void operator()(partition_end ps);
-void operator()(const clustering_row &cr);
+
+
 };
 void mutation_partition::apply_row_tombstone(const schema &schema, clustering_key_prefix prefix, tombstone t)
 {
@@ -48730,13 +48704,10 @@ if (i == _rows.end())
 }
 return i->row();
 }
-template <typename RowWriter>
-void write_cell(RowWriter &w, const query::partition_slice &slice, ::atomic_cell_view c);
-template <typename RowWriter>
-void write_cell(RowWriter &w, const query::partition_slice &slice, data_type type, collection_mutation_view v)
 ;
-template <typename RowWriter>
-void write_counter_cell(RowWriter &w, const query::partition_slice &slice, ::atomic_cell_view c)
+
+;
+
 ;
 template <typename Hasher>
 void appending_hash<row>::operator()(Hasher &h, const row &cells, const schema &s, column_kind kind, const query::column_id_vector &columns, max_timestamp &max_ts) const
@@ -48805,11 +48776,11 @@ std::ostream &operator<<(std::ostream &os, const std::pair<column_id, const atom
 // in the original range is prefxied with given string.
 template <typename RangeOfPrintable>
 static auto prefixed(const sstring &prefix, const RangeOfPrintable &r);
-std::ostream &operator<<(std::ostream &os, const row::printer &p);
-std::ostream &operator<<(std::ostream &os, const row_marker &rm);
-std::ostream &operator<<(std::ostream &os, const deletable_row::printer &p);
-std::ostream &operator<<(std::ostream &os, const rows_entry::printer &p);
-std::ostream &operator<<(std::ostream &os, const mutation_partition::printer &p);
+
+
+
+
+
 constexpr gc_clock::duration row_marker::no_ttl;
 constexpr gc_clock::duration row_marker::dead;
 int compare_row_marker_for_merge(const row_marker &left, const row_marker &right) noexcept
@@ -49649,9 +49620,8 @@ namespace
 {
 using atomic_cell_variant = boost::variant<ser::live_cell_view, ser::expiring_cell_view, ser::dead_cell_view, ser::counter_cell_view, ser::unknown_variant_type>;
 atomic_cell read_atomic_cell(const abstract_type &type, atomic_cell_variant cv, atomic_cell::collection_member cm = atomic_cell::collection_member::no);
-collection_mutation read_collection_cell(const abstract_type &type, ser::collection_cell_view cv);
-template <typename Visitor>
-void read_and_visit_row(ser::row_view rv, const column_mapping &cm, column_kind kind, Visitor &&visitor);
+
+;
 row_marker read_row_marker(boost::variant<ser::live_marker_view, ser::expiring_marker_view, ser::dead_marker_view, ser::no_marker_view, ser::unknown_variant_type> rmv)
 {
     struct row_marker_visitor : boost::static_visitor<row_marker>
@@ -49679,9 +49649,9 @@ namespace
 ;
 ;
 ;
-void serialize_mutation_fragments(const schema &s, tombstone partition_tombstone, std::optional<static_row> sr, range_tombstone_list rts, std::deque<clustering_row> crs, ser::writer_of_mutation_partition<bytes_ostream> &&wr);
 
-static void remove_or_mark_as_unique_owner(partition_version *current, mutation_cleaner *cleaner);
+
+
 namespace
 { // A functor which transforms objects from Domain into objects from CoDomain
 template <typename U, typename Domain, typename CoDomain>
@@ -49715,7 +49685,7 @@ inline Result squashed(const partition_version_ref &v, Map &&map, Reduce &&reduc
         reduce);
 }
 }
-void merge_versions(const schema &s, mutation_partition_v2 &newer, mutation_partition_v2 &&older, cache_tracker *tracker, is_evictable evictable);
+
 std::ostream &operator<<(std::ostream &out, const partition_entry::printer &p);
 position_in_partition_view range_tombstone::position() const { return position_in_partition_view(position_in_partition_view::range_tombstone_tag_t(), start_bound()); }
 position_in_partition_view range_tombstone::end_position() const { return position_in_partition_view(position_in_partition_view::range_tombstone_tag_t(), end_bound()); }
@@ -51379,18 +51349,8 @@ private:
     future<> main_loop();
     void adjust_shares();
 public:
-    explicit background_reclaimer(scheduling_group sg, noncopyable_function<void(size_t target)> reclaim) : _sg(sg), _reclaim(std::move(reclaim)), _adjust_shares_timer(default_scheduling_group(), [this]
-                                                                                                                                                                        { adjust_shares(); }),
-                                                                                                            _done(with_scheduling_group(_sg, [this]
-                                                                                                                                        { return main_loop(); }))
-    {
-        if (sg != default_scheduling_group())
-        {
-        _adjust_shares_timer.arm_periodic(50ms);
-        }
-    }
-    future<> stop()
-    ;
+    
+    
 };
 class segment_pool;
 struct reclaim_timer;
@@ -51416,10 +51376,9 @@ private: // Prevents tracker's reclaimer from running while live. Reclaimer may 
     };
     friend class tracker_reclaimer_lock;
 public:
-    impl();
-    ~impl();
-    future<> stop()
     ;
+    ;
+    
     void disable_reclaim() noexcept { ++_reclaiming_disabled_depth; }
     void enable_reclaim() noexcept { --_reclaiming_disabled_depth; }
     logalloc::segment_pool &segment_pool() { return *_segment_pool; }
@@ -52313,8 +52272,8 @@ public:
         return total;
     }
     occupancy_stats compactible_occupancy() const noexcept { return _closed_occupancy; }
-    occupancy_stats evictable_occupancy() const noexcept;
-    void ground_evictable_occupancy(); //
+    
+     //
     // Returns true if this region can be compacted and compact() will make forward progress,
     // so that this will eventually stop:
     //
@@ -52323,10 +52282,10 @@ public:
     bool is_compactible() const noexcept { return _reclaiming_enabled // We require 2 segments per allocation segregation group to ensure forward progress during compaction.
                                                   // There are currently two fixed groups, one for the allocation_strategy implementation and one for lsa_buffer:s.
                                                   && (_closed_occupancy.free_space() >= 4 * segment::size) && _segment_descs.contains_above_min(); }
-    bool is_idle_compactible() const noexcept;
-    virtual void *alloc(allocation_strategy::migrate_fn migrator, size_t size, size_t alignment) override;
+    
+    
 private:
-    void on_non_lsa_free(void *obj) noexcept;
+    
 public:
     virtual void free(void *obj) noexcept override;
     virtual void free(void *obj, size_t size) noexcept override;
@@ -52611,75 +52570,8 @@ size_t tracker::impl::compact_and_evict_locked(size_t reserve_segments, size_t m
     llogger.debug("Released {} bytes (wanted {}), {} during compaction", mem_released, memory_to_release, released_during_compaction);
     return mem_released;
 }
-tracker::impl::impl() : _segment_pool(std::make_unique<logalloc::segment_pool>(*this))
-{
-    namespace sm = seastar::metrics;
-    _metrics.add_group("lsa", {
-                                  sm::make_gauge(
-                                      "total_space_bytes", [this]
-                                      { return region_occupancy().total_space(); },
-                                      sm::description("Holds a current size of allocated memory in bytes.")),
-                                  sm::make_gauge(
-                                      "used_space_bytes", [this]
-                                      { return region_occupancy().used_space(); },
-                                      sm::description("Holds a current amount of used memory in bytes.")),
-                                  sm::make_gauge(
-                                      "small_objects_total_space_bytes", [this]
-                                      { return region_occupancy().total_space() - _segment_pool->non_lsa_memory_in_use(); },
-                                      sm::description("Holds a current size of \"small objects\" memory region in bytes.")),
-                                  sm::make_gauge(
-                                      "small_objects_used_space_bytes", [this]
-                                      { return region_occupancy().used_space() - _segment_pool->non_lsa_memory_in_use(); },
-                                      sm::description("Holds a current amount of used \"small objects\" memory in bytes.")),
-                                  sm::make_gauge(
-                                      "large_objects_total_space_bytes", [this]
-                                      { return _segment_pool->non_lsa_memory_in_use(); },
-                                      sm::description("Holds a current size of allocated non-LSA memory.")),
-                                  sm::make_gauge(
-                                      "non_lsa_used_space_bytes", [this]
-                                      { return non_lsa_used_space(); },
-                                      sm::description("Holds a current amount of used non-LSA memory.")),
-                                  sm::make_gauge(
-                                      "free_space", [this]
-                                      { return _segment_pool->unreserved_free_segments() * segment_size; },
-                                      sm::description("Holds a current amount of free memory that is under lsa control.")),
-                                  sm::make_gauge(
-                                      "occupancy", [this]
-                                      { return region_occupancy().used_fraction() * 100; },
-                                      sm::description("Holds a current portion (in percents) of the used memory.")),
-                                  sm::make_counter(
-                                      "segments_compacted", [this]
-                                      { return _segment_pool->statistics().segments_compacted; },
-                                      sm::description("Counts a number of compacted segments.")),
-                                  sm::make_counter(
-                                      "memory_compacted", [this]
-                                      { return _segment_pool->statistics().memory_compacted; },
-                                      sm::description("Counts number of bytes which were copied as part of segment compaction.")),
-                                  sm::make_counter(
-                                      "memory_allocated", [this]
-                                      { return _segment_pool->statistics().memory_allocated; },
-                                      sm::description("Counts number of bytes which were requested from LSA.")),
-                                  sm::make_counter(
-                                      "memory_evicted", [this]
-                                      { return _segment_pool->statistics().memory_evicted; },
-                                      sm::description("Counts number of bytes which were evicted.")),
-                                  sm::make_counter(
-                                      "memory_freed", [this]
-                                      { return _segment_pool->statistics().memory_freed; },
-                                      sm::description("Counts number of bytes which were requested to be freed in LSA.")),
-                              });
-}
-tracker::impl::~impl()
-{
-    if (!_regions.empty())
-    {
-        for (auto &&r : _regions)
-        {
-        llogger.error("Region with id={} not unregistered!", r->id());
-        }
-        abort();
-    }
-}
+
+
 bool segment_pool::compact_segment(segment *seg)
 {
     auto &desc = descriptor(seg);
@@ -52836,12 +52728,12 @@ private:
     unsigned _count;
 public:
     typedef char Ch;
-    chunked_content_stream(chunked_content &&content) : _content(std::move(content)), _current_chunk(_content.begin()) {}
-    bool eof() const; // Methods needed by rapidjson's Stream concept (see
+    
+     // Methods needed by rapidjson's Stream concept (see
     // https://rapidjson.org/classrapidjson_1_1_stream.html):
-    char Peek() const;
-    char Take();
-    size_t Tell() const; // Not used in input streams, but unfortunately we still need to implement
+    
+    
+     // Not used in input streams, but unfortunately we still need to implement
     Ch *PutBegin();
 };
 template <typename Handler, bool EnableYield, typename Buffer = string_buffer>
@@ -53663,44 +53555,11 @@ struct visitor
     { // Anything that is ascii is also utf8, and they both use bytes comparison
         return previous.is_string();
     }
-    bool operator()(const bytes_type_impl &)
-    { // Both ascii_type_impl and utf8_type_impl really use bytes comparison and
-        // bytesType validate everything, so it is compatible with the former.
-        return previous.is_string();
-    }
-    bool operator()(const date_type_impl &t)
-    {
-        if (previous.get_kind() == kind::timestamp)
-        {
-        static logging::logger date_logger(date_type_name);
-        date_logger.warn("Changing from TimestampType to DateType is allowed, but be wary "
-                         "that they sort differently for pre-unix-epoch timestamps "
-                         "(negative timestamp values) and thus this change will corrupt "
-                         "your data if you have such negative timestamp. There is no "
-                         "reason to switch from DateType to TimestampType except if you "
-                         "were using DateType in the first place and switched to "
-                         "TimestampType by mistake.");
-        return true;
-        }
-        return false;
-    }
-    bool operator()(const timestamp_type_impl &t)
-    {
-        if (previous.get_kind() == kind::date)
-        {
-        static logging::logger timestamp_logger(timestamp_type_name);
-        timestamp_logger.warn("Changing from DateType to TimestampType is allowed, but be wary "
-                              "that they sort differently for pre-unix-epoch timestamps "
-                              "(negative timestamp values) and thus this change will corrupt "
-                              "your data if you have such negative timestamp. So unless you "
-                              "know that you don't have *any* pre-unix-epoch timestamp you "
-                              "should change back to DateType");
-        return true;
-        }
-        return false;
-    }
-    bool operator()(const tuple_type_impl &t) { return check_compatibility(t, previous, &abstract_type::is_compatible_with); }
-    bool operator()(const collection_type_impl &t) { return is_compatible_with_aux(t, previous); }
+    
+    
+    
+    
+    
     bool operator()(const abstract_type &t) { return false; }
 };
 return visit(*this, visitor{previous});
@@ -54741,19 +54600,17 @@ struct serialized_size_visitor
 };
 }
 static size_t serialized_size(const abstract_type &t, const void *value) { return visit(t, value, serialized_size_visitor{}); }
-template <typename T>
-static bytes serialize_value(const T &t, const typename T::native_type &v);
+;
 namespace
 {
 struct from_string_visitor
 {
     sstring_view s;
-    bytes operator()(const reversed_type_impl &r);
-    template <typename T>
-    bytes operator()(const integer_type_impl<T> &t);
+    
     ;
-    bytes operator()(const duration_type_impl &t);
-    bytes operator()(const empty_type_impl &);
+    ;
+    
+    
     bytes operator()(const inet_addr_type_impl &t);
     bytes operator()(const tuple_type_impl &t);
     bytes operator()(const collection_type_impl &);
@@ -56663,7 +56520,7 @@ namespace utf8
         0,
         0,
     }; // 5x faster than naive method
-    partial_validation_results internal::validate_partial(const uint8_t *data, size_t len);
+    
 } // namespace utf8
 }
 // namespace utils
@@ -56684,8 +56541,8 @@ namespace ascii
 namespace
 {
 using std::wstring;                                        /// Processes a new pattern character, extending re with the equivalent regex pattern.
-void process_char(wchar_t c, wstring &re, bool &escaping); /// Returns a regex string matching the given LIKE pattern.
-wstring regex_from_pattern(bytes_view pattern);
+ /// Returns a regex string matching the given LIKE pattern.
+
 }
 // anonymous namespace
 class like_matcher::impl
@@ -56693,8 +56550,8 @@ class like_matcher::impl
 bytes _pattern;
 boost::u32regex _re; // Performs pattern matching.
 public:
-explicit impl(bytes_view pattern);
-bool operator()(bytes_view text) const;
+
+
 void reset(bytes_view pattern);
 private:
 void init_re();
