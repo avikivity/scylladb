@@ -21450,10 +21450,10 @@ struct appending_hash<mutation> {
     template<typename Hasher>
     void operator()(Hasher& h, const mutation& m) const ;
 };
-void apply(mutation_opt& dst, mutation&& src) ;
-void apply(mutation_opt& dst, mutation_opt&& src) ;
-void apply(mutation& dst, mutation_opt&& src) ;
-void apply(mutation& dst, const mutation_opt& src) ;
+
+
+
+
 // Returns a range into partitions containing mutations covered by the range.
 // partitions must be sorted according to decorated key.
 // range must not wrap around.
@@ -21462,7 +21462,7 @@ boost::iterator_range<std::vector<mutation>::const_iterator> slice(
     const dht::partition_range&);
 // Reverses the mutation as if it was created with a schema with reverse
 // clustering order. The resulting mutation will contain a reverse schema too.
-mutation reverse(mutation mut);
+
 namespace service::broadcast_tables {
     class update_query;
 }
@@ -21794,13 +21794,13 @@ struct error_injection_at_startup {
     sstring name;
     bool one_shot = false;
 };
-std::ostream& operator<<(std::ostream& os, const error_injection_at_startup&);
-std::istream& operator>>(std::istream& is, error_injection_at_startup&);
+
+
 }
 namespace utils {
-sstring config_value_as_json(const db::seed_provider_type& v);
-sstring config_value_as_json(const log_level& v);
-sstring config_value_as_json(const std::unordered_map<sstring, log_level>& v);
+
+
+
 }
 namespace db {
 /// Enumeration of all valid values for the `experimental` config entry.
@@ -21833,12 +21833,12 @@ class config : public utils::config_file {
 public:
     config();
     config(std::shared_ptr<db::extensions>);
-    ~config();
+    
     // For testing only
-    void add_cdc_extension();
-    void add_per_partition_rate_limit_extension();
+    
+    
     /// True iff the feature is enabled.
-    bool check_experimental(experimental_features_t::feature f) const;
+    
     using string_map = std::unordered_map<sstring, sstring>;
                     //program_options::string_map;
     using string_list = std::vector<sstring>;
@@ -22201,7 +22201,7 @@ private:
 }
 namespace cql3 {
 namespace util {
-expr::expression where_clause_to_relations(const sstring_view& where_clause);
+
 sstring rename_column_in_where_clause(const sstring_view& where_clause, column_identifier::raw from, column_identifier::raw to);
 /// build a CQL "select" statement with the desired parameters.
 /// If select_all_columns==true, all columns are selected and the value of
@@ -22567,16 +22567,11 @@ class paxos_grace_seconds_extension : public schema_extension {
     int32_t _paxos_gc_sec;
 public:
     static constexpr auto NAME = "paxos_grace_seconds";
-    explicit paxos_grace_seconds_extension(const std::map<sstring, sstring>& map) ;
-    explicit paxos_grace_seconds_extension(bytes b) : _paxos_gc_sec(deserialize(b))
-    {}
-    explicit paxos_grace_seconds_extension(const sstring& s)
-        : _paxos_gc_sec(std::stoi(s))
-    {}
-    bytes serialize() const override {
-        return ser::serialize_to_buffer<bytes>(_paxos_gc_sec);
-    }
-    static int32_t deserialize(const bytes_view& buffer) ;
+    
+    
+    
+    
+    
     int32_t get_paxos_grace_seconds() const {
         return _paxos_gc_sec;
     }
@@ -22614,13 +22609,7 @@ struct replay_position {
     replay_position(segment_id_type i = 0, position_type p = 0)
         : id(i), pos(p)
     {}
-    replay_position(unsigned shard, segment_id_type i, position_type p = 0)
-            : id((segment_id_type(shard) << max_ts_bits) | i), pos(p)
-    {
-        if (i & cpu_mask) {
-            throw std::invalid_argument("base id overflow: " + std::to_string(i));
-        }
-    }
+    
      ;
 };
 class commitlog;
@@ -22628,7 +22617,7 @@ class cf_holder;
 using cf_id_type = table_id;
 class rp_handle {
 public:
-    rp_handle() noexcept;
+    
 private:
     friend class commitlog;
     ::shared_ptr<cf_holder> _h;
@@ -22690,19 +22679,19 @@ class schema_mutations {
     mutation_opt _dropped_columns;
     mutation_opt _scylla_tables;
 public:
-    std::optional<canonical_mutation> view_virtual_columns_canonical_mutation() const ;
-    std::optional<canonical_mutation> computed_columns_canonical_mutation() const ;
-    std::optional<canonical_mutation> indices_canonical_mutation() const ;
+    
+    
+    
     std::optional<canonical_mutation> dropped_columns_canonical_mutation() const ;
     std::optional<canonical_mutation> scylla_tables_canonical_mutation() const ;
     bool is_view() const;
     table_schema_version digest() const;
     std::optional<sstring> partitioner() const;
-    bool operator==(const schema_mutations&) const;
-    schema_mutations& operator+=(schema_mutations&&);
+    
+    
     // Returns true iff any mutations contain any live cells
-    bool live() const;
-    friend std::ostream& operator<<(std::ostream&, const schema_mutations&);
+    
+    
 };
 class mutation;
 namespace query {
@@ -22714,7 +22703,7 @@ public:
 class non_null_data_value {
     data_value _v;
 public:
-    explicit non_null_data_value(data_value&& v);
+    
     operator const data_value&() const ;
 };
  bool operator==(const non_null_data_value& x, const non_null_data_value& y) ;
@@ -22735,15 +22724,12 @@ public:
     template<typename T>
     std::optional<T>
     get(const sstring& column_name) const ;
-    template<typename T>
-    const T*
-    get_ptr(const sstring& column_name) const ;
+     ;
     // throws no_value on error
-    template<typename T>
-    const T& get_nonnull(const sstring& column_name) const ;
-    const std::unordered_map<sstring, non_null_data_value>& cells() const ;
-    friend inline bool operator==(const result_set_row& x, const result_set_row& y) = default;
-    friend std::ostream& operator<<(std::ostream& out, const result_set_row& row);
+     ;
+    
+    
+    
 };
 // Result set is an in-memory representation of query results in
 // deserialized format. To obtain a result set, use the result_set_builder
@@ -22820,10 +22806,10 @@ static constexpr auto INDEXES = "indexes";
 static constexpr auto VIEW_VIRTUAL_COLUMNS = "view_virtual_columns"; // Scylla specific
 static constexpr auto COMPUTED_COLUMNS = "computed_columns"; // Scylla specific
 static constexpr auto SCYLLA_TABLE_SCHEMA_HISTORY = "scylla_table_schema_history"; // Scylla specific;
-schema_ptr columns();
-schema_ptr view_virtual_columns();
-schema_ptr dropped_columns();
-schema_ptr indexes();
+
+
+
+
 // Belongs to the "system" keyspace
 }
 namespace legacy {
@@ -22851,7 +22837,7 @@ std::vector<mutation> adjust_schema_for_schema_features(std::vector<mutation> sc
 // is guaranteed that the schema version we end up with after all calls will reflect the most recent state
 // of feature_service and schema tables.
 future<std::set<sstring>> merge_keyspaces(distributed<service::storage_proxy>& proxy, schema_result&& before, schema_result&& after);
-std::vector<mutation> make_drop_keyspace_mutations(schema_features features, lw_shared_ptr<keyspace_metadata> keyspace, api::timestamp_type timestamp);
+
 seastar::future<std::vector<shared_ptr<cql3::functions::user_function>>> create_functions_from_schema_partition(replica::database& db, lw_shared_ptr<query::result_set> result);
 void add_type_to_schema_mutation(user_type type, api::timestamp_type timestamp, std::vector<mutation>& mutations);
 std::vector<mutation> make_create_table_mutations(schema_ptr table, api::timestamp_type timestamp);
@@ -23255,12 +23241,12 @@ public:
             { }
             future<stop_iteration> operator()(mutation_fragment_v2&& mf) ;
             future<stop_iteration> consume(static_row&& sr) ;
-            future<stop_iteration> consume(clustering_row&& cr) ;
-            future<stop_iteration> consume(range_tombstone_change&& rt) ;
-            future<stop_iteration> consume(partition_start&& ps) ;
-            future<stop_iteration> consume(partition_end&& pe) ;
+            
+            
+            
+            
         private:
-            future<stop_iteration> handle_result(stop_iteration si) ;
+            
         };
     public:
         template<typename Consumer>
@@ -23837,22 +23823,17 @@ template<>
 struct serializer<live_marker_view> {
     template<typename Input>
     static live_marker_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, live_marker_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
 };
 struct no_marker_view {
     utils::input_stream v;
 };
 template<>
 struct serializer<no_marker_view> {
-    template<typename Input>
-    static no_marker_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, no_marker_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
+     ;
 };
 struct tombstone_view {
     utils::input_stream v;
@@ -23906,19 +23887,17 @@ struct serializer<dead_marker_view> {
     static dead_marker_view read(Input& v) ;
     template<typename Output>
     static void write(Output& out, dead_marker_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
 };
 struct expiring_cell_view {
     utils::input_stream v;
-    auto ttl() const ;
-    auto expiry() const ;
-    auto c() const ;
+    
+    
+    
 };
 template<>
 struct serializer<expiring_cell_view> {
-    template<typename Input>
-    static expiring_cell_view read(Input& v) ;
+     ;
     template<typename Output>
     static void write(Output& out, expiring_cell_view v) ;
     template<typename Input>
@@ -24010,8 +23989,7 @@ template<typename Input>
  void skip(Input& v, boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>>) ;
 template<typename Input>
 boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type> deserialize(Input& v, boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>>) ;
-template<typename Input>
- void skip(Input& v, boost::type<boost::variant<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>, collection_cell_view, unknown_variant_type>>) ;
+ ;
 template<typename Input>
 boost::variant<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>, collection_cell_view, unknown_variant_type> deserialize(Input& v, boost::type<boost::variant<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>, collection_cell_view, unknown_variant_type>>) {
   return seastar::with_serialized_stream(v, [] (auto& v) {
@@ -24073,7 +24051,7 @@ struct serializer<column_view> {
 };
 struct row_view {
     utils::input_stream v;
-    auto columns() const ;
+    
 };
 template<>
 struct serializer<row_view> {
@@ -25280,8 +25258,8 @@ struct row__columns {
     state_of_row<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-  void add(column_view v) ;
-  after_row__columns<Output> end_columns() && ;
+  
+  
 };
 template<typename Output>
 struct writer_of_row {
@@ -26185,7 +26163,7 @@ struct writer_of_mutation_fragment {
      ;
      ;
      ;
-    after_mutation_fragment__fragment<Output> write_fragment_partition_end(const partition_end& t) && ;
+    
 };
 } // ser
 namespace ser {
@@ -26395,10 +26373,10 @@ class frozen_mutation_fragment {
 public:
     explicit frozen_mutation_fragment(bytes_ostream bytes) : _bytes(std::move(bytes)) { }
     const bytes_ostream& representation() const ;
-    mutation_fragment unfreeze(const schema& s, reader_permit permit);
-    future<> clear_gently() noexcept ;
+    
+    
 };
-frozen_mutation_fragment freeze(const schema& s, const mutation_fragment& mf);
+
 class frozen_mutation_and_schema;
 namespace replica {
 struct cf_stats;
@@ -26422,8 +26400,8 @@ private:
     // and added to debug messages.
     std::optional<bytes> _column_missing_in_base = {};
 public:
-    const std::vector<column_id>& base_regular_columns_in_view_pk() const;
-    const std::vector<column_id>& base_static_columns_in_view_pk() const;
+    
+    
     const schema_ptr& base_schema() const;
     // Indicates if the view hase pk columns which are not part of the base
     // pk, it seems that !base_non_pk_columns_in_view_pk.empty() is the same,
@@ -26700,8 +26678,8 @@ public:
     void for_each_node(std::function<void(const node*)> func) const;
 private:
     bool is_configured_this_node(const node&) const;
-    const node* add_node(node_holder node);
-    void remove_node(const node* node);
+    
+    
     unsigned _shard;
     config _cfg;
     const node* _this_node = nullptr;
@@ -26726,8 +26704,8 @@ public:
 };
 } // namespace locator
 namespace std {
-std::ostream& operator<<(std::ostream& out, const locator::node& node);
-std::ostream& operator<<(std::ostream& out, const locator::node::state& state);
+
+
 } // namespace std
 template <>
 struct fmt::formatter<locator::node> : fmt::formatter<std::string_view> {
@@ -26746,7 +26724,7 @@ struct fmt::formatter<locator::node::state> : fmt::formatter<std::string_view> {
 namespace cdc {
 struct generation_id_v1 {
     db_clock::time_point ts;
-    bool operator==(const generation_id_v1&) const = default;
+    
 };
 struct generation_id_v2 {
     db_clock::time_point ts;
@@ -26864,10 +26842,10 @@ public:
 private:
     time_point _now = min();
 };
- std::ostream& operator<<(std::ostream& os, const logical_clock::time_point& p) ;
+ 
 } // end of namespace raft
 namespace std {
- std::ostream& operator<<(std::ostream& os, const raft::logical_clock::duration& d) ;
+ 
 } // end of namespace std
 #if defined(__clang_major__) && __clang_major__ <= 14
 namespace std {
@@ -26905,11 +26883,9 @@ using server_info = bytes;
 struct server_address {
     server_id id;
     server_info info;
-    server_address(server_id id, server_info info)
-        : id(std::move(id)), info(std::move(info)) {
-    }
-    bool operator==(const server_address& rhs) const ;
-    bool operator==(const raft::server_id& rhs) const ;
+    
+    
+    
 };
 struct config_member {
     server_address addr;
@@ -27456,9 +27432,9 @@ private:
     public:
         tokens_iterator() = default;
         tokens_iterator(const token& start, const token_metadata_impl* token_metadata);
-        bool operator==(const tokens_iterator& it) const;
-        const token& operator*() const;
-        tokens_iterator& operator++();
+        
+        
+        
     private:
         std::vector<token>::const_iterator _cur_it;
         size_t _remaining = 0;
@@ -27466,8 +27442,8 @@ private:
         friend class token_metadata_impl;
     };
 public:
-    token_metadata(config cfg);
-    explicit token_metadata(std::unique_ptr<token_metadata_impl> impl);
+    
+    
     token_metadata(token_metadata&&) noexcept; // Can't use "= default;" - hits some static_assert in unique_ptr
     token_metadata& operator=(token_metadata&&) noexcept;
     ~token_metadata();
@@ -27493,38 +27469,38 @@ public:
     topology& get_topology();
     const topology& get_topology() const;
     void debug_show() const;
-    void update_host_id(const locator::host_id& host_id, inet_address endpoint);
-    host_id get_host_id(inet_address endpoint) const;
+    
+    
     /// Return the unique host ID for an end-point or nullopt if not found.
     /// Parses the \c host_id_string either as a host uuid or as an ip address and returns the mapping.
     /// Throws std::invalid_argument on parse error or std::runtime_error if the host_id wasn't found.
     /// Returns host_id of the local node.
-    void remove_endpoint(inet_address endpoint);
+    
     // Checks if the node is part of the token ring. If yes, the node is one of
     // the nodes that owns the tokens and inside the set _normal_token_owners.
-    bool is_normal_token_owner(inet_address endpoint) const;
-    bool is_leaving(inet_address endpoint) const;
+    
+    
     // Is this node being replaced by another node
-    bool is_being_replaced(inet_address endpoint) const;
+    
     // Is any node being replaced by another node
-    bool is_any_node_being_replaced() const;
-    void add_replacing_endpoint(inet_address existing_node, inet_address replacing_node);
-    void del_replacing_endpoint(inet_address existing_node);
-    future<token_metadata> clone_async() const noexcept;
+    
+    
+    
+    
     future<token_metadata> clone_only_token_map() const noexcept;
     future<token_metadata> clone_after_all_left() const noexcept;
     future<> clear_gently() noexcept;
     dht::token_range_vector get_primary_ranges_for(std::unordered_set<token> tokens) const;
     dht::token_range_vector get_primary_ranges_for(token right) const;
     static boost::icl::interval<token>::interval_type range_to_interval(range<dht::token> r);
-    static range<dht::token> interval_to_range(boost::icl::interval<token>::interval_type i);
-    bool has_pending_ranges(sstring keyspace_name, inet_address endpoint) const;
-    future<> update_pending_ranges(const abstract_replication_strategy& strategy, const sstring& keyspace_name, dc_rack_fn& get_dc_rack);
-    token get_predecessor(token t) const;
-    const std::unordered_set<inet_address>& get_all_endpoints() const;
-    size_t count_normal_token_owners() const;
+    
+    
+    
+    
+    
+    
     // returns empty vector if keyspace_name not found.
-    inet_address_vector_topology_change pending_endpoints_for(const token& token, const sstring& keyspace_name) const;
+    
     // This function returns a list of nodes to which a read request should be directed.
     // Returns not null only during topology changes, if _topology_change_stage == read_new and
     // new set of replicas differs from the old one.
@@ -27670,21 +27646,21 @@ public:
     protected:
         bool _started = false;
     public:
-        listener() : _slot(signal_type::slot_type(&listener::callback, this)) {}
-        listener(const listener&) = delete;
-        listener(listener&&) = delete;
+        
+        
+        
         listener& operator=(const listener&) = delete;
         listener& operator=(listener&&) = delete;
         // Has to run inside seastar::async context
         virtual void on_enabled() = 0;
     };
     explicit feature(feature_service& service, std::string_view name, bool enabled = false);
-    feature() = default;
-    ~feature();
-    feature(const feature& other) = delete;
+    
+    
+    
     // Has to run inside seastar::async context
-    void enable();
-    feature& operator=(feature&& other);
+    
+    
     const sstring& name() const ;
     // Will call the callback functor when this feature is enabled, unless
     // the returned listener_registration is destroyed earlier.
@@ -28081,10 +28057,10 @@ public:
                                               const gms::feature_service& fs,
                                               const topology& topology);
     static void validate_replication_factor(sstring rf);
-    static sstring to_qualified_class_name(std::string_view strategy_class_name);
-    virtual inet_address_vector_replica_set get_natural_endpoints(const token& search_token, const vnode_effective_replication_map& erm) const;
+    
+    
     // Returns the last stop_iteration result of the called func
-    virtual stop_iteration for_each_natural_endpoint_until(const token& search_token, const vnode_effective_replication_map& erm, const noncopyable_function<stop_iteration(const inet_address&)>& func) const;
+    
     virtual std::optional<std::unordered_set<sstring>> recognized_options(const topology&) const = 0;
     // Decide if the replication strategy allow removing the node being
     // replaced from the natural endpoints when a node is being replaced in the
@@ -28101,8 +28077,8 @@ public:
     // If this is the case, all tables governed by this replication strategy share the effective replication map.
     // Use the token_metadata provided by the caller instead of _token_metadata
     // Note: must be called with initialized, non-empty token_metadata.
-    future<dht::token_range_vector> get_ranges(inet_address ep, token_metadata_ptr tmptr) const;
-    future<dht::token_range_vector> get_ranges(inet_address ep, const token_metadata& tm) const;
+    
+    
     // Caller must ensure that token_metadata will not change throughout the call.
     future<std::unordered_map<dht::token_range, inet_address_vector_replica_set>> get_range_addresses(const token_metadata& tm) const;
     future<dht::token_range_vector> get_pending_address_ranges(const token_metadata_ptr tmptr, std::unordered_set<token> pending_tokens, inet_address pending_address, locator::endpoint_dc_rack dr) const;
@@ -28403,9 +28379,7 @@ namespace streaming {
 struct stream_detail {
     table_id cf_id;
     stream_detail() = default;
-    stream_detail(table_id cf_id_)
-        : cf_id(std::move(cf_id_)) {
-    }
+    
 };
 } // namespace streaming
 namespace streaming {
@@ -28418,16 +28392,16 @@ private:
     long _total_size;
     bool _mutation_done_sent = false;
 public:
-    stream_transfer_task(stream_transfer_task&&) = default;
-    stream_transfer_task(shared_ptr<stream_session> session, table_id cf_id, dht::token_range_vector ranges, long total_size = 0);
-    ~stream_transfer_task();
+    
+    
+    
 public:
-    virtual void abort() override ;
-    virtual int get_total_number_of_files() const override ;
-    virtual long get_total_size() const override ;
-    future<> execute();
-    void append_ranges(const dht::token_range_vector& ranges);
-    void sort_and_merge_ranges();
+    
+    
+    
+    
+    
+    
 };
 } // namespace streaming
 namespace streaming {
@@ -28690,12 +28664,12 @@ public:
     stream_plan& request_ranges(inet_address from, sstring keyspace, dht::token_range_vector ranges, std::vector<sstring> column_families);
     stream_plan& transfer_ranges(inet_address to, sstring keyspace, dht::token_range_vector ranges);
     stream_plan& transfer_ranges(inet_address to, sstring keyspace, dht::token_range_vector ranges, std::vector<sstring> column_families);
-    stream_plan& listeners(std::vector<stream_event_handler*> handlers);
+    
 public:
-    bool is_empty() const ;
-    future<stream_state> execute();
-    void abort() noexcept;
-    void do_abort();
+    
+    
+    
+    
 };
 } // namespace streaming
 namespace replica {
@@ -29173,8 +29147,8 @@ public:
     future<> apply_state_locally(std::map<inet_address, endpoint_state> map);
 private:
     future<> do_apply_state_locally(gms::inet_address node, const endpoint_state& remote_state, bool listener_notification);
-    future<> apply_state_locally_without_listener_notification(std::unordered_map<inet_address, endpoint_state> map);
-    future<> apply_new_states(inet_address addr, endpoint_state& local_state, const endpoint_state& remote_state);
+    
+    
     // notify that a local application state is going to change (doesn't get triggered for remote changes)
     // notify that an application state has changed
 public:
@@ -29182,9 +29156,9 @@ public:
 public:
 private:
 public:
-    future<> add_local_application_state(std::list<std::pair<application_state, versioned_value>>);
-    future<> add_local_application_state(std::initializer_list<std::pair<application_state, utils::in<versioned_value>>>);
-    future<> start();
+    
+    
+    
     future<> shutdown();
     // Needed by seastar::sharded
     future<> stop();
@@ -29330,11 +29304,11 @@ public:
     void mark(latency_counter& lc) ;
     bool should_sample() const noexcept ;
     basic_ihistogram& set_latency(latency_counter& lc) ;
-    basic_ihistogram& inc() ;
-    int64_t pending() const ;
-     double pow2(double a) ;
-    basic_ihistogram& operator +=(const basic_ihistogram& o) ;
-    int64_t estimated_sum() const ;
+    
+    
+     
+    
+    
     template <typename U>
     friend basic_ihistogram<U> operator +(basic_ihistogram<U> a, const basic_ihistogram<U>& b);
 };
@@ -29410,16 +29384,15 @@ public:
     void update() ;
     const std::vector<double>& quantiles() const noexcept ;
     void clear() ;
-    void set_quantiles(const std::vector<double>& quantiles) ;
-    const std::vector<double>& summary() const noexcept ;
-    template <typename Rep, typename Ratio>
-    void mark(std::chrono::duration<Rep, Ratio> dur) ;
-    const time_estimated_histogram& histogram() const noexcept ;
+    
+    
+     ;
+    
 };
 struct rate_moving_average_and_histogram {
     ihistogram hist;
     rate_moving_average rate;
-    rate_moving_average_and_histogram& operator +=(const rate_moving_average_and_histogram& o) ;
+    
     friend rate_moving_average_and_histogram operator +(rate_moving_average_and_histogram a, const rate_moving_average_and_histogram& b);
 };
  rate_moving_average_and_histogram operator +(rate_moving_average_and_histogram a, const rate_moving_average_and_histogram& b) ;
@@ -29450,14 +29423,13 @@ public:
     template <typename Rep, typename Ratio>
     void mark(std::chrono::duration<Rep, Ratio> dur) noexcept ;
     void mark(latency_counter& lc) noexcept ;
-    void set_latency(latency_counter& lc) noexcept ;
-    rate_moving_average_and_histogram rate() const noexcept ;
-    const time_estimated_histogram& histogram() const noexcept ;
-    const summary_calculator& summary() const noexcept ;
+    
+    
+    
+    
 };
 }
-template<uint64_t Min, uint64_t Max, size_t Precision>
-seastar::metrics::histogram to_metrics_histogram(const utils::approx_exponential_histogram<Min, Max, Precision>& hist) ;
+ ;
 seastar::metrics::histogram to_metrics_summary(const utils::summary_calculator& summary) noexcept;
 namespace db {
 class schema_ctxt;
@@ -29593,10 +29565,8 @@ public:
     template<typename... Args>
     service_set(seastar::sharded<Args>&... args) 
     ;
-    template<typename T>
-    void add(seastar::sharded<T>& t) ;
-    template<typename T>
-    seastar::sharded<T>& find() const ;
+     ;
+     ;
 private:
     class impl;
     std::unique_ptr<impl> _impl;
@@ -29620,9 +29590,9 @@ public:
     };
     // visible for testing
     static std::vector<std::reference_wrapper<configurable>>& configurables();
-    static future<notify_set> init_all(const boost::program_options::variables_map&, const db::config&, db::extensions&, const service_set& = {});
-    static future<notify_set> init_all(const db::config&, db::extensions&, const service_set& = {});
-    static void append_all(db::config&, boost::program_options::options_description_easy_init&);
+    
+    
+    
 private:
     static void register_configurable(configurable &);
 };
@@ -29745,15 +29715,10 @@ public:
         , _schema_version(s->version())
 #endif
     { }
-    mutation_partition_v2(mutation_partition_v2& other, copy_comparators_only)
-        : _rows()
-#ifdef SEASTAR_DEBUG
-        , _schema_version(other._schema_version)
-#endif
-    { }
-    mutation_partition_v2(mutation_partition_v2&&) = default;
+    
+    
     // Assumes that p is fully continuous.
-    mutation_partition_v2(const schema& s, mutation_partition&& p);
+    
     // Assumes that p is fully continuous.
     // Consistent with equal()
      ;
@@ -29776,8 +29741,7 @@ public:
     // Applies mutation_fragment.
     // The fragment must be goverened by the same schema as this object.
     // Equivalent to applying a mutation with an empty row, created with given timestamp
-    void apply_insert(const schema& s, clustering_key_view, api::timestamp_type created_at,
-                      gc_clock::duration ttl, gc_clock::time_point expiry);
+    
     // prefix must not be full
     //
     // Applies p to current object.
@@ -29881,7 +29845,7 @@ public:
         using const_iterator = anchorless_list_base_hook::reverse_iterator<const T>;
     };
 public:
-    ~anchorless_list_base_hook() ;
+    
     // Inserts this after elem.
     // Inserts the chain starting at head after this elem.
     // Assumes !head.prev() and !next().
@@ -30147,7 +30111,7 @@ public:
     basic_region_impl(tracker& tracker) 
     ;
     tracker& get_tracker() ;
-    void set_reclaiming_enabled(bool enabled) noexcept ;
+    
     bool reclaiming_enabled() const noexcept {
         return _reclaiming_enabled;
     }
@@ -30173,11 +30137,11 @@ public:
 private:
     shared_ptr<basic_region_impl> _impl;
 private:
-    region_impl& get_impl() noexcept;
-    const region_impl& get_impl() const noexcept;
+    
+    
 public:
-    region();
-    ~region();
+    
+    
     region(region&& other) noexcept;
     region& operator=(region&& other) noexcept;
     region(const region& other) = delete;
@@ -30420,7 +30384,7 @@ public:
     const partition_version* operator->() const ;
     bool is_unique_owner() const ;
     void mark_as_unique_owner() ;
-    void release() ;
+    
 };
 class partition_entry;
 class cache_tracker;
@@ -30494,10 +30458,10 @@ public:
     using value_type = partition_snapshot;
     partition_snapshot_ptr(lw_shared_ptr<partition_snapshot> snp) : _snp(std::move(snp)) {}
     ~partition_snapshot_ptr();
-    const partition_snapshot& operator*() const ;
-    partition_snapshot* operator->() ;
-    const partition_snapshot* operator->() const ;
-    explicit operator bool() const ;
+    
+    
+    
+    
 };
 class real_dirty_memory_accounter;
 // Represents mutation_partition with snapshotting support a la MVCC.
@@ -30556,14 +30520,14 @@ public:
         }
         pe._snapshot = nullptr;
     }
-    partition_entry& operator=(partition_entry&& other) noexcept ;
+    
     // Removes data contained by this entry, but not owned by snapshots.
     // Snapshots will be unlinked and evicted independently by reclaimer.
     // This entry is invalid after this and can only be destroyed.
-    void evict(mutation_cleaner&) noexcept;
-    partition_version_ref& version() ;
-    partition_version_range versions() ;
-    partition_version_reversed_range versions_from_oldest() ;
+    
+    
+    
+    
     // Tells whether this entry is locked.
     // Locked entries are undergoing an update and should not have their snapshots
     // detached from the entry.
@@ -30668,24 +30632,11 @@ private:
     stop_iteration merge_some() noexcept;
     void start_worker();
 public:
-    mutation_cleaner_impl(logalloc::region& r, cache_tracker* t, mutation_cleaner* cleaner,
-            mutation_application_stats& app_stats,
-            seastar::scheduling_group sg = seastar::current_scheduling_group(),
-            std::function<void(size_t)> on_space_freed = nullptr)
-        : _region(r)
-        , _tracker(t)
-        , _cleaner(cleaner)
-        , _worker_state(make_lw_shared<worker>())
-        , _app_stats(app_stats)
-        , _scheduling_group(sg)
-        , _on_space_freed(std::move(on_space_freed))
-    {
-        start_worker();
-    }
-    ~mutation_cleaner_impl();
-    stop_iteration clear_gently() noexcept;
-    memory::reclaiming_result clear_some() noexcept;
-    void clear() noexcept;
+    
+    
+    
+    
+    
     void destroy_later(partition_version& v) noexcept;
     void destroy_gently(partition_version& v) noexcept;
     void merge(mutation_cleaner_impl& other) noexcept;
@@ -49765,7 +49716,7 @@ namespace
 ;
 ;
 void serialize_mutation_fragments(const schema &s, tombstone partition_tombstone, std::optional<static_row> sr, range_tombstone_list rts, std::deque<clustering_row> crs, ser::writer_of_mutation_partition<bytes_ostream> &&wr);
-frozen_mutation_fragment freeze(const schema &s, const mutation_fragment &mf);
+
 static void remove_or_mark_as_unique_owner(partition_version *current, mutation_cleaner *cleaner);
 namespace
 { // A functor which transforms objects from Domain into objects from CoDomain
