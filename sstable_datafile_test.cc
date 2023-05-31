@@ -57301,17 +57301,8 @@ type_generator::type_generator(random_schema_specification &spec) : _spec(spec)
         data_type type;
         data_type operator()(std::mt19937 &, is_multi_cell) { return type; }
     };
-    _generators = {simple_type_generator{byte_type}, simple_type_generator{short_type}, simple_type_generator{int32_type}, simple_type_generator{long_type}, simple_type_generator{ascii_type}, simple_type_generator{bytes_type}, simple_type_generator{utf8_type}, simple_type_generator{boolean_type}, simple_type_generator{date_type}, simple_type_generator{timeuuid_type}, simple_type_generator{timestamp_type}, simple_type_generator{simple_date_type}, simple_type_generator{time_type}, simple_type_generator{uuid_type}, simple_type_generator{inet_addr_type}, simple_type_generator{float_type}, simple_type_generator{double_type}, simple_type_generator{duration_type}}; // tuple
-    _generators.emplace_back([this](std::mt19937 &engine, is_multi_cell)
-                             {             std::uniform_int_distribution<size_t> count_dist{2, 4};             const auto count = count_dist(engine);             std::vector<data_type> data_types;             for (size_t i = 0; i < count; ++i) {                 data_types.emplace_back((*this)(engine, type_generator::is_multi_cell::no));             }             return tuple_type_impl::get_instance(std::move(data_types)); }); // user
-    _generators.emplace_back([this](std::mt19937 &engine, is_multi_cell multi_cell) mutable
-                             {             std::uniform_int_distribution<size_t> count_dist{2, 4};             const auto count = count_dist(engine);             std::vector<bytes> field_names;             std::vector<data_type> field_types;             for (size_t i = 0; i < count; ++i) {                 field_names.emplace_back(to_bytes(format("f{}", i)));                 field_types.emplace_back((*this)(engine, type_generator::is_multi_cell::no));             }             return user_type_impl::get_instance(_spec.keyspace_name(), to_bytes(_spec.udt_name(engine)), std::move(field_names),                     std::move(field_types), bool(multi_cell)); }); // list
-    _generators.emplace_back([this](std::mt19937 &engine, is_multi_cell multi_cell)
-                             {             auto element_type = (*this)(engine, type_generator::is_multi_cell::no);             return list_type_impl::get_instance(std::move(element_type), bool(multi_cell)); }); // set
-    _generators.emplace_back([this](std::mt19937 &engine, is_multi_cell multi_cell)
-                             {             auto element_type = (*this)(engine, type_generator::is_multi_cell::no);             return set_type_impl::get_instance(std::move(element_type), bool(multi_cell)); }); // map
-    _generators.emplace_back([this](std::mt19937 &engine, is_multi_cell multi_cell)
-                             {             auto key_type = (*this)(engine, type_generator::is_multi_cell::no);             auto value_type = (*this)(engine, type_generator::is_multi_cell::no);             return map_type_impl::get_instance(std::move(key_type), std::move(value_type), bool(multi_cell)); });
+    _generators = {simple_type_generator{bytes_type}}; // tuple
+   
 }
 data_type type_generator::operator()(std::mt19937 &engine, is_multi_cell multi_cell)
 {
