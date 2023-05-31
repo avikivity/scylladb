@@ -1668,9 +1668,9 @@ struct super_enum {
     };
     template <enum_type first>
     struct valid_sequence<first> {
-        static constexpr bool apply(sequence_type v) noexcept ;
+        
     };
-    static constexpr bool is_valid_sequence(sequence_type v) noexcept ;
+    
     template<enum_type Elem>
     static constexpr sequence_type sequence_for() {
         return static_cast<sequence_type>(Elem);
@@ -1707,10 +1707,10 @@ private:
 public:
     using iterator = std::invoke_result_t<decltype(&enum_set::make_iterator), mask_iterator>;
     constexpr enum_set() : _mask(0) {}
-    static constexpr enum_set from_mask(mask_type mask) ;
-    static constexpr mask_type full_mask() ;
-    static constexpr enum_set full() ;
-    static mask_type mask_for(enum_type e) ;
+    
+    
+    
+    
     template<enum_type Elem>
     static constexpr mask_type mask_for() {
         return mask_type(1) << shift_for<Elem>();
@@ -1719,9 +1719,8 @@ public:
         mask_type mask;
         bool operator==(const prepared& o) const ;
     };
-    static prepared prepare(enum_type e) ;
-    template<enum_type e>
-    static constexpr prepared prepare() ;
+    
+     ;
     static_assert(std::numeric_limits<mask_type>::max() >= ((size_t)1 << Enum::max_sequence), "mask type too small");
     template<enum_type e>
     bool contains() const ;
@@ -1736,16 +1735,16 @@ public:
     template<enum_type e>
     void set_if(bool condition) ;
      ;
-    mask_type mask() const ;
-    iterator begin() const ;
-    iterator end() const ;
+    
+    
+    
     template<enum_type... items>
     struct frozen {
         template<enum_type first>
         static constexpr mask_type make_mask() {
             return mask_for<first>();
         }
-        static constexpr mask_type make_mask() ;
+        
         template<enum_type first, enum_type second, enum_type... rest>
         static constexpr mask_type make_mask() {
             return mask_for<first>() | make_mask<second, rest...>();
@@ -2611,14 +2610,13 @@ public:
         return _u.small.size == 0;
     }
     // Returns the amount of external memory used.
-    size_t external_memory_usage() const noexcept ;
+    
     // Returns the minimum possible amount of external memory used by a managed_bytes
     // of the same size as us.
     // In other words, it returns the amount of external memory that would used by this
     // managed_bytes if all data was allocated in one big fragment.
-    size_t minimal_external_memory_usage() const noexcept ;
-    template <std::invocable<bytes_view> Func>
-    std::invoke_result_t<Func, bytes_view> with_linearized(Func&& func) const ;
+    
+     ;
     template <mutable_view is_mutable_view>
     friend class managed_bytes_basic_view;
 };
@@ -2633,11 +2631,7 @@ private:
     blob_storage* _next_fragments = nullptr;
     size_t _size = 0;
 private:
-    managed_bytes_basic_view(fragment_type current_fragment, blob_storage* next_fragments, size_t size)
-        : _current_fragment(current_fragment)
-        , _next_fragments(next_fragments)
-        , _size(size) {
-    }
+    
 public:
     managed_bytes_basic_view() = default;
     managed_bytes_basic_view(const managed_bytes_basic_view&) = default;
@@ -2727,12 +2721,12 @@ inline bytes to_bytes(managed_bytes_view v) {
 /// linear bytes_opt.
 ///
 /// \note copies data
-bytes_opt to_bytes_opt(const managed_bytes_opt&);
+
 /// Converts a linear bytes_opt to a possibly fragmented
 /// managed_bytes_opt.
 ///
 /// \note copies data
-managed_bytes_opt to_managed_bytes_opt(const bytes_opt&);
+
 managed_bytes_view
 build_managed_bytes_view_from_internals(bytes_view current_fragment, blob_storage* next_fragment, size_t size) ;
 template<>
@@ -2756,8 +2750,8 @@ struct hash<managed_bytes> {
     }
 };
 } // namespace std
-sstring to_hex(const managed_bytes& b);
-sstring to_hex(const managed_bytes_opt& b);
+
+
 // The operators below are used only by tests.
 inline bool operator==(const managed_bytes_view& a, const managed_bytes_view& b) {
     return a.size_bytes() == b.size_bytes() && compare_unsigned(a, b) == 0;
@@ -2914,9 +2908,7 @@ public:
         }
     };
     // Returns a place holder for a value to be written later.
-    template <std::integral T>
-    place_holder<T>
-    write_place_holder() ;
+     ;
     [[gnu::always_inline]]
     value_type* write_place_holder(size_type size) {
         return alloc(size);
@@ -2944,40 +2936,40 @@ public:
     void write(const char* ptr, size_t size) {
         write(bytes_view(reinterpret_cast<const signed char*>(ptr), size));
     }
-    bool is_linearized() const ;
+    
     // Call only when is_linearized()
-    bytes_view view() const ;
+    
     // Makes the underlying storage contiguous and returns a view to it.
     // Invalidates all previously created placeholders.
-    bytes_view linearize() ;
+    
     // Returns the amount of bytes written so far
     size_type size() const ;
     // For the FragmentRange concept
     size_type size_bytes() const ;
-    bool empty() const ;
-    void reserve(size_t size) ;
+    
+    
     void append(const bytes_ostream& o) ;
     // Removes n bytes from the end of the bytes_ostream.
     // Beware of O(n) algorithm.
     void remove_suffix(size_t n) ;
     // begin() and end() form an input range to bytes_view representing fragments.
     // Any modification of this instance invalidates iterators.
-    fragment_iterator begin() const ;
-    fragment_iterator end() const ;
+    
+    
     output_iterator write_begin() ;
     boost::iterator_range<fragment_iterator> fragments() const ;
     struct position {
         chunk* _chunk;
         size_type _offset;
     };
-    position pos() const ;
+    
     // Returns the amount of bytes written since given position.
     // "pos" must be valid.
-    size_type written_since(position pos) ;
+    
     // Rollbacks all data written after "pos".
     // Invalidates all placeholders and positions created after "pos".
-    void retract(position pos) ;
-    void reduce_chunk_count() ;
+    
+    
     // Makes this instance empty.
     //
     // The first buffer is not deallocated, so callers may rely on the
@@ -3079,18 +3071,13 @@ template<typename T>
 struct integral_serializer {
     template<typename Input>
     static T read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, T v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
 };
 template<> struct serializer<bool> {
-    template <typename Input>
-    static bool read(Input& i) ;
-    template< typename Output>
-    static void write(Output& out, bool v) ;
-    template <typename Input>
-    static void skip(Input& i) ;
+     ;
+     ;
+     ;
 };
 template<> struct serializer<int8_t> : public integral_serializer<int8_t> {};
 template<> struct serializer<uint8_t> : public integral_serializer<uint8_t> {};
@@ -3100,8 +3087,7 @@ template<> struct serializer<int32_t> : public integral_serializer<int32_t> {};
 template<> struct serializer<uint32_t> : public integral_serializer<uint32_t> {};
 template<> struct serializer<int64_t> : public integral_serializer<int64_t> {};
 template<> struct serializer<uint64_t> : public integral_serializer<uint64_t> {};
-template<typename Output>
-void safe_serialize_as_uint32(Output& output, uint64_t data);
+;
 template<typename T, typename Output>
  void serialize(Output& out, const T& v) ;;
 template<typename T, typename Output>
@@ -3112,10 +3098,8 @@ inline auto deserialize(Input& in, boost::type<T> t) {
 }
 template<typename T, typename Input>
  void skip(Input& v, boost::type<T>) ;
-template<typename T>
-size_type get_sizeof(const T& obj);
-template<typename T>
-void set_size(seastar::measuring_output_stream& os, const T& obj);
+;
+;
 template<typename Stream, typename T>
 void set_size(Stream& os, const T& obj);
 template<typename Buffer, typename T>
@@ -3221,10 +3205,8 @@ void serialize_int(CharOutputIterator& out, IntegerType val) {
     out = std::copy_n(reinterpret_cast<const char*>(&nval), sizeof(nval), out);
 }
 }
-template <typename CharOutputIterator>
-void serialize_int8(CharOutputIterator& out, uint8_t val) ;
-template <typename CharOutputIterator>
-void serialize_int16(CharOutputIterator& out, uint16_t val) ;
+ ;
+ ;
 template <typename CharOutputIterator>
 inline
 void serialize_int32(CharOutputIterator& out, uint32_t val) {
@@ -3235,8 +3217,7 @@ inline
 void serialize_int64(CharOutputIterator& out, uint64_t val) {
     internal_impl::serialize_int<uint64_t>(out, val);
 }
-template <typename CharOutputIterator>
-void serialize_bool(CharOutputIterator& out, bool val) ;
+ ;
 // The following serializer is compatible with Java's writeUTF().
 // In our C++ implementation, we assume the string is already UTF-8
 // encoded. Unfortunately, Java's implementation is a bit different from
@@ -3244,17 +3225,9 @@ void serialize_bool(CharOutputIterator& out, bool val) ;
 // http://docs.oracle.com/javase/7/docs/api/java/io/DataInput.html#modified-utf-8)
 // For now we'll just assume those aren't in the string...
 // TODO: fix the compatibility with Java even in this case.
-template <typename CharOutputIterator>
-requires requires (CharOutputIterator it) {
-    *it++ = 'a';
-}
-void serialize_string(CharOutputIterator& out, const sstring& s) ;
-template <typename CharOutputIterator>
-requires requires (CharOutputIterator it) {
-    *it++ = 'a';
-}
-void serialize_string(CharOutputIterator& out, const char* s) ;
-size_t serialize_string_size(const sstring& s) ;
+ ;
+ ;
+
 template<typename T, typename CharOutputIterator>
 static inline
 void write(CharOutputIterator& out, const T& val) {
@@ -3300,10 +3273,10 @@ public:
         return uint64_t(least_sig_bits) <=> uint64_t(v.least_sig_bits);
     }
     // nibble set to a non-zero value
-    bool is_null() const noexcept ;
-    explicit operator bool() const noexcept ;
-    bytes serialize() const ;
-    static size_t serialized_size() noexcept ;
+    
+    
+    
+    
     template <typename CharOutputIterator>
     void serialize(CharOutputIterator& out) const {
         serialize_int64(out, most_sig_bits);
@@ -3377,13 +3350,12 @@ struct tagged_uuid {
     explicit tagged_uuid(const utils::UUID& uuid) noexcept : id(uuid) {}
     tagged_uuid() = default;
     const utils::UUID& uuid() const noexcept ;
-    sstring to_sstring() const ;
+    
 };
 } // namespace utils
 template<>
 struct appending_hash<utils::UUID> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const utils::UUID& id) const noexcept ;
+     ;
 };
 template<typename Tag>
 struct appending_hash<utils::tagged_uuid<Tag>> {
@@ -3501,10 +3473,8 @@ public:
         assert(uuid.is_timestamp());
         return uuid;
     }
-    static UUID get_time_UUID(std::chrono::system_clock::time_point tp)
-    ;
-    static UUID get_time_UUID(milliseconds when, int64_t clock_seq_and_node = UUID_gen::clock_seq_and_node)
-    ;
+    
+    
     static UUID get_time_UUID_raw(decimicroseconds when, int64_t clock_seq_and_node)
     ;
     static UUID get_random_time_UUID_from_micros(std::chrono::microseconds when_in_micros) ;
@@ -3521,9 +3491,8 @@ public:
     //
     static UUID get_name_UUID(sstring_view str);
     static UUID get_name_UUID(const unsigned char* s, size_t len);
-    static std::array<int8_t, 16> decompose(const UUID& uuid)
-    ;
-    static std::array<int8_t, 16> get_time_UUID_bytes() ;
+    
+    
     static UUID min_time_UUID(decimicroseconds timestamp = decimicroseconds{0})
     ;
      ;
@@ -3589,7 +3558,7 @@ using table_id = utils::tagged_uuid<struct table_id_tag>;
 // When table_schema_version changes, schema_tables::calculate_schema_digest() should
 // also change when schema mutations are applied.
 using table_schema_version = utils::tagged_uuid<struct table_schema_version_tag>;
- table_schema_version reversed(table_schema_version v) noexcept ;
+ 
 namespace sstables {
 class file_io_extension;
 }
@@ -3597,7 +3566,7 @@ namespace db {
 class commitlog_file_extension;
 class extensions {
 public:
-    extensions();
+    
     using map_type = std::map<sstring, sstring>;
     using schema_ext_config = std::variant<sstring, map_type, bytes>;
     using schema_ext_create_func = std::function<seastar::shared_ptr<schema_extension>(schema_ext_config)>;
@@ -3632,8 +3601,8 @@ public:
     std::map<sstring, sstring> to_map() const;
     sstring to_sstring() const;
     bool enabled() const ;
-    bool is_enabled_set() const ;
-    void ttl(int v) ;
+    
+    
     bool operator==(const options& o) const;
 };
 } // namespace cdc
@@ -4046,17 +4015,11 @@ public:
 };
 class unauthorized_exception: public request_validation_exception {
 public:
-    unauthorized_exception(sstring msg) noexcept
-                    : request_validation_exception(exception_code::UNAUTHORIZED,
-                                    std::move(msg)) {
-    }
+    
 };
 class authentication_exception: public request_validation_exception {
 public:
-    authentication_exception(sstring msg) noexcept
-                    : request_validation_exception(exception_code::BAD_CREDENTIALS,
-                                    std::move(msg)) {
-    }
+    
 };
 class invalid_request_exception : public request_validation_exception {
 public:
@@ -4072,14 +4035,12 @@ public:
 };
 class overflow_error_exception : public invalid_request_exception {
 public:
-    overflow_error_exception(std::string msg) noexcept
-        : invalid_request_exception(std::move(msg))
-    { }
+    
 };
 class prepared_query_not_found_exception : public request_validation_exception {
 public:
     bytes id;
-    prepared_query_not_found_exception(bytes id) noexcept;
+    
 };
 class syntax_exception : public request_validation_exception {
 public:
@@ -4092,20 +4053,14 @@ public:
     configuration_exception(sstring msg) noexcept
         : request_validation_exception{exception_code::CONFIG_ERROR, std::move(msg)}
     { }
-    configuration_exception(exception_code code, sstring msg) noexcept
-        : request_validation_exception{code, std::move(msg)}
-    { }
+    
 };
 class already_exists_exception : public configuration_exception {
 public:
     const sstring ks_name;
     const sstring cf_name;
 private:
-    already_exists_exception(sstring ks_name_, sstring cf_name_, sstring msg)
-        : configuration_exception{exception_code::ALREADY_EXISTS, msg}
-        , ks_name{ks_name_}
-        , cf_name{cf_name_}
-    { }
+    
 public:
 };
 class recognition_exception : public std::runtime_error {
@@ -4248,7 +4203,7 @@ public:
 struct empty_t {};
 class empty_value_exception : public std::exception {
 public:
-    virtual const char* what() const noexcept override ;
+    
 };
 [[noreturn]] void on_types_internal_error(std::exception_ptr ex);
 // Cassandra has a notion of empty values even for scalars (i.e. int).  This is
@@ -4282,9 +4237,7 @@ private:
         }
     }
 };
-template <typename T>
-bool
-operator==(const emptyable<T>& me1, const emptyable<T>& me2) ;
+ ;
 template <typename T>
 bool
 operator<(const emptyable<T>& me1, const emptyable<T>& me2) ;
@@ -4319,10 +4272,8 @@ struct timeuuid_native_type {
     primary_type uuid;
 };
 using data_type = shared_ptr<const abstract_type>;
-template <typename T>
-const T& value_cast(const data_value& value);
-template <typename T>
-T&& value_cast(data_value&& value);
+;
+;
 struct empty_type_representation {
 };
 class data_value {
@@ -4376,10 +4327,8 @@ public:
     data_value(cql_duration);
     data_value(empty_type_representation);
     explicit data_value(std::optional<bytes>);
-    template <typename NativeType>
-    data_value(std::optional<NativeType>);
-    template <typename NativeType>
-    data_value(const std::unordered_set<NativeType>&);
+    ;
+    ;
     data_value& operator=(const data_value&);
     data_value& operator=(data_value&&);
     const data_type& type() const {
@@ -4402,8 +4351,8 @@ public:
         return data_value(value.release(), std::move(type));
     }
     friend class empty_type_impl;
-    template <typename T> friend const T& value_cast(const data_value&);
-    template <typename T> friend T&& value_cast(data_value&&);
+    ;
+    ;
     friend std::ostream& operator<<(std::ostream&, const data_value&);
     friend data_value make_tuple_value(data_type, maybe_empty<std::vector<data_value>>);
     friend data_value make_set_value(data_type, maybe_empty<std::vector<data_value>>);
@@ -4570,8 +4519,8 @@ protected:
     friend class tuple_type_impl;
     friend class data_value;
     friend class reversed_type_impl;
-    template <typename T> friend const T& value_cast(const data_value& value);
-    template <typename T> friend T&& value_cast(data_value&& value);
+    ;
+    ;
     friend bool operator==(const abstract_type& x, const abstract_type& y);
 };
 inline bool operator==(const abstract_type& x, const abstract_type& y)
@@ -4585,12 +4534,10 @@ data_value::make_new(data_type type, T&& v) {
     maybe_empty<std::remove_reference_t<T>> value(std::forward<T>(v));
     return data_value(type->native_value_clone(&value), type);
 }
-template <typename T>
-const T& value_cast(const data_value& value) ;
-template <typename T>
-T&& value_cast(data_value&& value) ;
+ ;
+ ;
 /// Special case: sometimes we cast uuid to timeuuid so we can correctly compare timestamps.  See #7729.
-template <> timeuuid_native_type&& value_cast<timeuuid_native_type>(data_value&& value) ;
+
 // CRTP: implements translation between a native_type (C++ type) to abstract_type
 // AbstractType is parametrized because we want a
 //    abstract_type -> collection_type_impl -> map_type
