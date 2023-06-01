@@ -19029,8 +19029,8 @@ public:
         const rows_entry& _rows_entry;
     public:
         printer(const schema& s, const rows_entry& r)  ;
-        printer(const printer&) = delete;
-        printer(printer&&) = delete;
+        
+        
     };
     using container_type = intrusive_b::tree<rows_entry, &rows_entry::_link, rows_entry::tri_compare, 12, 20, intrusive_b::key_search::linear>;
 };
@@ -19127,8 +19127,8 @@ public:
     mutation_partition(mutation_partition&&) = default;
     mutation_partition(const schema& s, const mutation_partition&);
     mutation_partition(const mutation_partition&, const schema&, query::clustering_key_filter_ranges);
-    mutation_partition(mutation_partition&&, const schema&, query::clustering_key_filter_ranges);
-    ~mutation_partition();
+    
+    ;
     static mutation_partition& container_of(rows_type&);
     mutation_partition& operator=(mutation_partition&& x) noexcept;
     
@@ -19142,8 +19142,8 @@ public:
     public:
         printer(const schema& s, const mutation_partition& mp)  ;
         printer(const printer&) = delete;
-        printer(printer&&) = delete;
-        friend std::ostream& operator<<(std::ostream& os, const printer& p);
+        
+        
     };
     friend std::ostream& operator<<(std::ostream& os, const printer& p);
 public:
@@ -19171,9 +19171,9 @@ public:
     void apply_delete(const schema& schema, const clustering_key_prefix& prefix, tombstone t);
     void apply_delete(const schema& schema, range_tombstone rt);
     void apply_delete(const schema& schema, clustering_key_prefix&& prefix, tombstone t);
-    void apply_delete(const schema& schema, clustering_key_prefix_view prefix, tombstone t);
+    
     // Equivalent to applying a mutation with an empty row, created with given timestamp
-    void apply_insert(const schema& s, clustering_key_view, api::timestamp_type created_at);
+    
     void apply_insert(const schema& s, clustering_key_view, api::timestamp_type created_at,
                       gc_clock::duration ttl, gc_clock::time_point expiry);
     // prefix must not be full
@@ -19296,15 +19296,15 @@ public:
     lazy_row& static_row() { return _static_row; }
     const lazy_row& static_row() const ;
     // return a set of rows_entry where each entry represents a CQL row sharing the same clustering key.
-    range_tombstone_list& mutable_row_tombstones() noexcept ;
-    const row* find_row(const schema& s, const clustering_key& key) const;
+    
+    
     tombstone range_tombstone_for_row(const schema& schema, const clustering_key& key) const;
     row_tombstone tombstone_for_row(const schema& schema, const clustering_key& key) const;
     // Can be called only for non-dummy entries
-    row_tombstone tombstone_for_row(const schema& schema, const rows_entry& e) const;
-    boost::iterator_range<rows_type::const_iterator> range(const schema& schema, const query::clustering_range& r) const;
-    rows_type::const_iterator lower_bound(const schema& schema, const query::clustering_range& r) const;
-    rows_type::const_iterator upper_bound(const schema& schema, const query::clustering_range& r) const;
+    
+    
+    
+    
     rows_type::iterator lower_bound(const schema& schema, const query::clustering_range& r);
     rows_type::iterator upper_bound(const schema& schema, const query::clustering_range& r);
     boost::iterator_range<rows_type::iterator> range(const schema& schema, const query::clustering_range& r);
@@ -19325,10 +19325,9 @@ public:
     bool is_static_row_live(const schema&,
         gc_clock::time_point query_time = gc_clock::time_point::min()) const;
     uint64_t row_count() const;
-    size_t external_memory_usage(const schema&) const;
+    
 private:
-    template<typename Func>
-    void for_each_row(const schema& schema, const query::clustering_range& row_range, bool reversed, Func&& func) const;
+    ;
     friend class counter_write_query_result_builder;
     void check_schema(const schema& s) const {
 #ifdef SEASTAR_DEBUG
@@ -19345,8 +19344,8 @@ struct reader_resources {
     int count = 0;
     ssize_t memory = 0;
     static reader_resources with_memory(ssize_t memory) ;
-    reader_resources& operator+=(const reader_resources& other) ;
-    bool non_zero() const ;
+    
+    
 };
 class reader_concurrency_semaphore;
 /// A permit for a specific read.
@@ -19375,12 +19374,12 @@ public:
 private:
     shared_ptr<impl> _impl;
 private:
-    void mark_need_cpu() noexcept;
-    void mark_not_need_cpu() noexcept;
+    
+    
     friend class optimized_optional<reader_permit>;
 public:
-    reader_concurrency_semaphore& semaphore();
-    const ::schema* get_schema() const;
+    
+    
     // Call only when needs_readmission() = true.
     resource_units consume_memory(size_t memory = 0);
     resource_units consume_resources(reader_resources res);
@@ -19396,8 +19395,8 @@ class reader_permit::resource_units {
 private:
     class already_consumed_tag {};
 public:
-    resource_units& operator=(const resource_units&) = delete;
-    resource_units& operator=(resource_units&&) noexcept;
+    
+    
     void add(resource_units&& o);
     void reset_to(reader_resources res);
     void reset_to_zero() noexcept;
@@ -19481,25 +19480,24 @@ public:
         : _ck(other._ck), _row(s, other._row) { }
     clustering_row(const schema& s, const rows_entry& re)
         : _ck(re.key()), _row(s, re.row()) { }
-    clustering_row(rows_entry&& re)
-        : _ck(std::move(re.key())), _row(std::move(re.row())) {}
-    clustering_key_prefix& key() ;
+    
+    
     const clustering_key_prefix& key() const ;
     void remove_tombstone() ;
     row_tombstone tomb() const ;
     const row_marker& marker() const ;
     row_marker& marker() ;
     const row& cells() const ;
-    row& cells() ;
-    bool empty() const ;
-    bool is_live(const schema& s, tombstone base_tombstone = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const ;
-    void apply(const schema& s, clustering_row&& cr) ;
+    
+    
+    
+    
     void apply(const schema& s, const clustering_row& cr) ;
     void apply(const schema& s, const rows_entry& r) ;
     void apply(const schema& s, const deletable_row& r) ;
     position_in_partition_view position() const;
-    size_t external_memory_usage(const schema& s) const ;
-    size_t minimal_external_memory_usage(const schema& s) const ;
+    
+    
     size_t memory_usage(const schema& s) const ;
     bool equal(const schema& s, const clustering_row& other) const ;
     class printer {
@@ -19513,20 +19511,20 @@ public:
     };
     friend std::ostream& operator<<(std::ostream& os, const printer& p);
     deletable_row as_deletable_row() && ;
-    const deletable_row& as_deletable_row() const & ;
+    
 };
 class static_row {
     row _cells;
 public:
-    static_row() = default;
+    
     static_row(const schema& s, const static_row& other)  ;
     explicit static_row(const schema& s, const row& r) : _cells(s, column_kind::static_column, r) { }
     explicit static_row(row&& r) : _cells(std::move(r)) { }
     row& cells() ;
     const row& cells() const ;
     bool empty() const ;
-    bool is_live(const schema& s, gc_clock::time_point now = gc_clock::time_point::min()) const ;
-    void apply(const schema& s, const row& r) ;
+    
+    
     void apply(const schema& s, static_row&& sr) ;
     void set_cell(const column_definition& def, atomic_cell_or_collection&& value) ;
     position_in_partition_view position() const;
@@ -19565,8 +19563,8 @@ public:
 class partition_end final {
 public:
     position_in_partition_view position() const;
-    size_t external_memory_usage(const schema&) const ;
-    size_t memory_usage(const schema& s) const ;
+    
+    
     bool equal(const schema& s, const partition_end& other) const ;
     friend std::ostream& operator<<(std::ostream& is, const partition_end& row);
 };
@@ -19690,8 +19688,8 @@ public:
     bool has_key() const ;
     // Requirements: has_key() == true
     const clustering_key_prefix& key() const;
-    kind mutation_fragment_kind() const ;
-    bool is_static_row() const ;
+    
+    
     bool is_clustering_row() const ;
     bool is_range_tombstone() const ;
     bool is_partition_start() const ;
@@ -19861,10 +19859,10 @@ public:
     void set_position(position_in_partition pos) ;
     ::tombstone tombstone() const ;
     void set_tombstone(::tombstone tomb) ;
-    size_t external_memory_usage(const schema& s) const ;
-    size_t minimal_external_memory_usage(const schema&) const noexcept ;
-    size_t memory_usage(const schema& s) const noexcept ;
-    size_t minimal_memory_usage(const schema& s) const noexcept ;
+    
+    
+    
+    
     bool equal(const schema& s, const range_tombstone_change& other) const ;
 };
 template<>
@@ -20000,14 +19998,14 @@ public:
     // Requirements: has_key() == true
     const clustering_key_prefix& key() const;
     kind mutation_fragment_kind() const ;
-    bool is_static_row() const ;
-    bool is_clustering_row() const ;
+    
+    
     bool is_range_tombstone_change() const ;
     bool is_partition_start() const ;
-    bool is_end_of_partition() const ;
-    void mutate_as_static_row(const schema& s, std::invocable<static_row&> auto&& fn) ;
-    void mutate_as_clustering_row(const schema& s, std::invocable<clustering_row&> auto&& fn) ;
-    partition_start&& as_partition_start() && ;
+    
+    
+    
+    
     partition_end&& as_end_of_partition() && ;
     const static_row& as_static_row() const & ;
     const clustering_row& as_clustering_row() const & ;
@@ -20205,9 +20203,8 @@ public:
     // No range_tombstones may be added after this.
     //
     // FIXME: respect preemption
-    template<RangeTombstoneChangeConsumer C>
-    void flush(const position_in_partition_view upper_bound, C consumer, bool end_of_range = false) ;
-    void consume(range_tombstone rt) ;
+     ;
+    
     void reset() ;
     bool discardable() const ;
 };
@@ -20300,14 +20297,14 @@ public:
     void upgrade(const schema_ptr&);
     const partition_key& key() const ;;
     const dht::decorated_key& decorated_key() const ;;
-    dht::ring_position ring_position() const ;
-    const dht::token& token() const ;
+    
+    
     const schema_ptr& schema() const { return _ptr->_schema; }
     const mutation_partition& partition() const ;
     mutation_partition& partition() { return _ptr->_p; }
-    const table_id& column_family_id() const ;
+    
     // Consistent with hash<canonical_mutation>
-    bool operator==(const mutation&) const;
+    
 public:
     // Consumes the mutation's content.
     //
@@ -20425,10 +20422,10 @@ auto mutation::consume_gently(Consumer& consumer, consume_in_reverse reverse, mu
     }
 }
 struct mutation_equals_by_key {
-    bool operator()(const mutation& m1, const mutation& m2) const ;
+    
 };
 struct mutation_hash_by_key {
-    size_t operator()(const mutation& m) const ;
+    
 };
 struct mutation_decorated_key_less_comparator {
     bool operator()(const mutation& m1, const mutation& m2) const;
@@ -20814,7 +20811,7 @@ constexpr unsigned default_murmur3_partitioner_ignore_msb_bits = 12;
 class config : public utils::config_file {
 public:
     config();
-    config(std::shared_ptr<db::extensions>);
+    
     // For testing only
     /// True iff the feature is enabled.
     using string_map = std::unordered_map<sstring, sstring>;
@@ -21179,7 +21176,7 @@ private:
 }
 namespace cql3 {
 namespace util {
-sstring rename_column_in_where_clause(const sstring_view& where_clause, column_identifier::raw from, column_identifier::raw to);
+
 /// build a CQL "select" statement with the desired parameters.
 /// If select_all_columns==true, all columns are selected and the value of
 /// selected_columns is ignored.
@@ -21213,13 +21210,13 @@ std::unique_ptr<cql3::statements::raw::select_statement> build_select_statement(
 /// lowercase if not quoted), or when the identifier is one of many CQL
 /// keywords. But it's allowed - and easier - to just unconditionally
 /// quote the identifier name in CQL, so that is what this function does does.
-sstring quote(const sstring& s);
+
 /// single_quote() takes a string and transforms it to a string 
 /// which can be safely used in CQL commands.
 /// Single quoting involves wrapping the name in single-quotes ('). A sigle-quote
 /// character itself is quoted by doubling it.
 /// Single quoting is necessary for dates, IP addresses or string literals.
- sstring single_quote(const sstring& s) ;
+ 
 // Check whether timestamp is not too far in the future as this probably
 // indicates its incorrectness (for example using other units than microseconds).
 } // namespace util
@@ -21555,8 +21552,8 @@ class per_partition_rate_limit_extension : public schema_extension {
 public:
     static constexpr auto NAME = "per_partition_rate_limit";
     per_partition_rate_limit_extension() = default;
-    per_partition_rate_limit_extension(const per_partition_rate_limit_options& opts) : _options(opts) {}
-    explicit per_partition_rate_limit_extension(const std::map<sstring, sstring>& tags) : _options(tags) {}
+    
+    
     const per_partition_rate_limit_options& get_options() const {
         return _options;
     }
@@ -21643,8 +21640,8 @@ class schema_mutations {
     mutation_opt _dropped_columns;
     mutation_opt _scylla_tables;
 public:
-    std::optional<canonical_mutation> dropped_columns_canonical_mutation() const ;
-    std::optional<canonical_mutation> scylla_tables_canonical_mutation() const ;
+    
+    
     bool is_view() const;
     table_schema_version digest() const;
     std::optional<sstring> partitioner() const;
@@ -21662,17 +21659,14 @@ class non_null_data_value {
 public:
     operator const data_value&() const ;
 };
- bool operator==(const non_null_data_value& x, const non_null_data_value& y) ;
+ 
 // Result set row is a set of cells that are associated with a row
 // including regular column cells, partition keys, as well as static values.
 class result_set_row {
     schema_ptr _schema;
     const std::unordered_map<sstring, non_null_data_value> _cells;
 public:
-    result_set_row(schema_ptr schema, std::unordered_map<sstring, non_null_data_value>&& cells)
-        : _schema{schema}
-        , _cells{std::move(cells)}
-    { }
+    
     // Look up a deserialized row cell value by column name
     const data_value*
     get_data_value(const sstring& column_name) const ;
@@ -21792,8 +21786,8 @@ schema_ptr create_table_from_mutations(const schema_ctxt&, schema_mutations, std
 view_ptr create_view_from_mutations(const schema_ctxt&, schema_mutations, std::optional<table_schema_version> version = {});
 future<std::vector<view_ptr>> create_views_from_schema_partition(distributed<service::storage_proxy>& proxy, const schema_result::mapped_type& result);
 schema_mutations make_schema_mutations(schema_ptr s, api::timestamp_type timestamp, bool with_columns);
-mutation make_scylla_tables_mutation(schema_ptr, api::timestamp_type timestamp);
-void add_table_or_view_to_schema_mutation(schema_ptr view, api::timestamp_type timestamp, bool with_columns, std::vector<mutation>& mutations);
+
+
 std::vector<mutation> make_create_view_mutations(lw_shared_ptr<keyspace_metadata> keyspace, view_ptr view, api::timestamp_type timestamp);
 class preserve_version_tag {};
 using preserve_version = bool_class<preserve_version_tag>;
@@ -22236,8 +22230,8 @@ private:
     void do_upgrade_schema(const schema_ptr&);
     static void on_close_error(std::unique_ptr<impl>, std::exception_ptr ep) noexcept;
 public:
-    flat_mutation_reader_v2(std::unique_ptr<impl> impl) noexcept : _impl(std::move(impl)) {}
-    flat_mutation_reader_v2(const flat_mutation_reader_v2&) = delete;
+    
+    
     flat_mutation_reader_v2(flat_mutation_reader_v2&&) = default;
     flat_mutation_reader_v2& operator=(const flat_mutation_reader_v2&) = delete;
     flat_mutation_reader_v2& operator=(flat_mutation_reader_v2&& o) noexcept;
@@ -22781,10 +22775,8 @@ struct dead_cell_view {
 };
 template<>
 struct serializer<dead_cell_view> {
-    template<typename Input>
-    static dead_cell_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, dead_cell_view v) ;
+     ;
+     ;
     template<typename Input>
     static void skip(Input& v) ;
 };
@@ -22800,10 +22792,8 @@ struct dead_marker_view {
 };
 template<>
 struct serializer<dead_marker_view> {
-    template<typename Input>
-    static dead_marker_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, dead_marker_view v) ;
+     ;
+     ;
      ;
 };
 struct expiring_cell_view {
@@ -22812,10 +22802,8 @@ struct expiring_cell_view {
 template<>
 struct serializer<expiring_cell_view> {
      ;
-    template<typename Output>
-    static void write(Output& out, expiring_cell_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
 };
 struct expiring_marker_view {
     utils::input_stream v;
@@ -22880,15 +22868,13 @@ struct collection_element_view {
 template<>
 struct serializer<collection_element_view> {
      ;
-    template<typename Output>
-    static void write(Output& out, collection_element_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
 };
 struct collection_cell_view {
     utils::input_stream v;
-    auto tomb() const ;
-    auto elements() const ;
+    
+    
 };
 template<>
 struct serializer<collection_cell_view> {
@@ -46759,7 +46745,7 @@ static typename Container::reverse_iterator erase_dispose_and_update_end(Contain
 template <typename Container>
 static typename Container::reverse_iterator maybe_reverse(Container &, typename Container::iterator r);
 };
-mutation_partition::~mutation_partition() { _rows.clear_and_dispose(current_deleter<rows_entry>()); }
+
 struct mutation_fragment_applier
 {
 const schema &_s;
