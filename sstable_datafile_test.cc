@@ -10813,10 +10813,10 @@ public:
     ///
     authenticated_user() = default;
     explicit authenticated_user(std::string_view name);
-    friend bool operator==(const authenticated_user&, const authenticated_user&) noexcept = default;
+    
 };
-const authenticated_user& anonymous_user() noexcept;
- bool is_anonymous(const authenticated_user& u) noexcept ;
+
+ 
 }
 ///
 /// The user name, or "anonymous".
@@ -10981,7 +10981,7 @@ namespace auth {
 class role_or_anonymous final {
 public:
     std::optional<sstring> name{};
-    friend bool operator==(const role_or_anonymous&, const role_or_anonymous&) noexcept = default;
+    
 };
 std::ostream& operator<<(std::ostream&, const role_or_anonymous&);
 bool is_anonymous(const role_or_anonymous&) noexcept;
@@ -11890,10 +11890,10 @@ private:
     loading_cache& _parent;
     int _touch_count;
 public:
-    int touch_count() const noexcept ;
-    ~lru_entry() ;
-    size_t& owning_section_size() noexcept ;
-    void touch() noexcept ;
+    
+    
+    
+    
     const Key& key() const noexcept ;
     timestamped_val& timestamped_value() noexcept ;
     const timestamped_val& timestamped_value() const noexcept ;
@@ -12875,7 +12875,7 @@ public:
 private:
     // Returns placement of this position_in_partition relative to *_ck,
     // or lexicographical_relation::at_prefix if !_ck.
-    lexicographical_relation relation() const ;
+    
 public:
     struct partition_start_tag_t { };
     struct end_of_partition_tag_t { };
@@ -12887,7 +12887,7 @@ public:
         : _type(partition_region::clustered), _ck(&ck) { }
     position_in_partition_view(range_tag_t, bound_view bv)
         : _type(partition_region::clustered), _bound_weight(position_weight(bv.kind())), _ck(&bv.prefix()) { }
-    static position_in_partition_view after_all_clustered_rows() ;
+    
     static position_in_partition_view for_key(const clustering_key& ck) {
         return {clustering_row_tag_t(), ck};
     }
@@ -12897,10 +12897,10 @@ public:
     // The returned view is valid as long as the view passed to this method is valid.
     // Returns a view to after_all_prefixed(pos._ck) if pos.is_clustering_row() else returns pos as-is.
     // Returns a view to before_key(pos._ck) if pos.is_clustering_row() else returns pos as-is.
-    bool is_clustering_row() const ;
+    
     // Returns true if all fragments that can be seen for given schema have
     // positions >= than this. partition_start is ignored.
-    bool is_after_all_clustered_rows(const schema& s) const ;
+    
     // Valid when has_key() == true
     const clustering_key_prefix& key() const ;
     // Can be called only when !is_static_row && !is_clustering_row().
@@ -13088,9 +13088,9 @@ public:
         template<typename T, typename U>
         bool compare(const T& a, const U& b) const ;
     public:
-        equal_compare(const schema& s) : _equal(s) { }
+        
     };
-    friend std::ostream& operator<<(std::ostream&, const position_in_partition&);
+    
     // Create a position which is the same as this one but governed by a schema with reversed clustering key order.
     // Create a position which is the same as this one but governed by a schema with reversed clustering key order.
 };
@@ -13104,14 +13104,14 @@ struct fmt::formatter<position_in_partition> : fmt::formatter<std::string_view> 
 struct view_and_holder {
     std::optional<position_in_partition> holder;
     position_in_partition_view view;
-    view_and_holder& operator=(view_and_holder&& other) noexcept ;
+    
 };
 // Returns true if and only if there can't be any clustering_row with position > a and < b.
 // It is assumed that a <= b.
 bool no_clustering_row_between(const schema& s, position_in_partition_view a, position_in_partition_view b) ;
 // Returns true if and only if there can't be any clustering_row with position >= a and < b.
 // It is assumed that a <= b.
-bool no_clustering_row_between_weak(const schema& s, position_in_partition_view a, position_in_partition_view b) ;
+
 // Includes all position_in_partition objects "p" for which: start <= p < end
 // And only those.
 class position_range {
@@ -15058,7 +15058,7 @@ class unset_bind_variable_guard {
     // Disengaged if the operand is not exactly a single bind variable.
     std::optional<bind_variable> _var;
 public:
-    explicit unset_bind_variable_guard(const std::optional<expr::expression>& operand);
+    
 };
 }
 namespace cql3 {
@@ -15079,14 +15079,14 @@ protected:
     // A guard to check if the operation should be skipped due to unset operand.
     expr::unset_bind_variable_guard _unset_guard;
 public:
-    virtual bool requires_read() const ;
-    virtual void fill_prepare_context(prepare_context& ctx) ;
-    virtual void execute(mutation& m, const clustering_key_prefix& prefix, const update_parameters& params) = 0;
-    bool should_skip_operation(const query_options& qo) const ;
-    virtual void prepare_for_broadcast_tables(statements::broadcast_tables::prepared_update&) const;
+    
+    
+    
+    
+    
     class raw_update {
     public:
-        virtual ~raw_update() ;
+        
     };
     class raw_deletion {
     public:
@@ -15155,7 +15155,7 @@ public:
     protected:
         expr::expression _idx;
     public:
-        virtual bool requires_read() const override;
+        
     };
     class setter_by_uuid : public setter_by_index {
     public:
@@ -15199,11 +15199,11 @@ public:
         const atomic_cell_or_collection& _cell;
     public:
         printer(const column_definition& cdef, const atomic_cell_or_collection& cell)  ;
-        printer(const printer&) = delete;
-        printer(printer&&) = delete;
-        friend std::ostream& operator<<(std::ostream&, const printer&);
+        
+        
+        
     };
-    friend std::ostream& operator<<(std::ostream&, const printer&);
+    
 };
 // Not part of atomic_cell.hh to avoid cyclic dependency between types.hh and atomic_cell.hh
 template<>
@@ -15313,7 +15313,7 @@ public:
     // pos must satisfy:
     //   1) before_all_clustered_rows() <= pos
     //   2) !pos.is_clustering_row() - because range_tombstone bounds can't represent such positions
-    bool trim_front(const schema& s, position_in_partition_view pos) ;
+    
     // Intersects the range of this tombstone with [start, end) and replaces
     // the range of the tombstone if there is an overlap.
     // Returns true if there is an overlap and false otherwise. When returns false, the tombstone
@@ -15324,11 +15324,11 @@ public:
     //   2) is_clustering_row() == false
     //
     // Also: start <= end
-    bool trim(const schema& s, position_in_partition_view start, position_in_partition_view end) ;
+    
     // Assumes !pos.is_clustering_row(), because range_tombstone bounds can't represent such positions
-    void set_start(position_in_partition_view pos) ;
+    
     // Assumes !pos.is_clustering_row(), because range_tombstone bounds can't represent such positions
-    void set_end(const schema& s, position_in_partition_view pos) ;
+    
     // Swap bounds to reverse range-tombstone -- as if it came from a table with
     // reverse native order. See docs/dev/reverse-reads.md.
     void reverse() ;
@@ -18641,10 +18641,10 @@ public:
             compaction_garbage_collector* collector = nullptr);
     row difference(const schema&, column_kind, const row& other) const;
     bool equal(column_kind kind, const schema& this_schema, const row& other, const schema& other_schema) const;
-    size_t external_memory_usage(const schema&, column_kind) const;
-    cell_hash_opt cell_hash_for(column_id id) const;
-    void prepare_hash(const schema& s, column_kind kind) const;
-    void clear_hash() const;
+    
+    
+    
+    
     bool is_live(const schema&, column_kind kind, tombstone tomb = tombstone(), gc_clock::time_point now = gc_clock::time_point::min()) const;
     class printer {
         const schema& _schema;
@@ -19061,10 +19061,10 @@ public:
         std::strong_ordering operator()(const clustering_key& key, const rows_entry& e) const {
             return _c(position_in_partition_view::for_key(key), e.position());
         }
-        std::strong_ordering operator()(const rows_entry& e, const clustering_key& key) const ;
-        std::strong_ordering operator()(const rows_entry& e, position_in_partition_view p) const ;
-        std::strong_ordering operator()(position_in_partition_view p, const rows_entry& e) const ;
-        std::strong_ordering operator()(position_in_partition_view p1, position_in_partition_view p2) const ;
+        
+        
+        
+        
     };
     struct compare {
         tri_compare _c;
@@ -19189,12 +19189,11 @@ public:
     ~mutation_partition();
     static mutation_partition& container_of(rows_type&);
     mutation_partition& operator=(mutation_partition&& x) noexcept;
-    bool equal(const schema&, const mutation_partition&) const;
-    bool equal(const schema& this_schema, const mutation_partition& p, const schema& p_schema) const;
-    bool equal_continuity(const schema&, const mutation_partition&) const;
+    
+    
+    
     // Consistent with equal()
-    template<typename Hasher>
-    void feed_hash(Hasher& h, const schema& s) const ;
+     ;
     class printer {
         const schema& _schema;
         const mutation_partition& _mutation_partition;
@@ -19211,18 +19210,18 @@ public:
     void ensure_last_dummy(const schema&);
     bool static_row_continuous() const ;
     void set_static_row_continuous(bool value) ;
-    bool is_fully_continuous() const;
-    void make_fully_continuous();
+    
+    
     // Sets or clears continuity of clustering ranges between existing rows.
     // Returns clustering row ranges which have continuity matching the is_continuous argument.
     // Returns true iff all keys from given range are marked as continuous, or range is empty.
     // Returns true iff all keys from given range are marked as not continuous and range is not empty.
     // Returns true iff all keys from given range have continuity membership as specified by is_continuous.
-    bool check_continuity(const schema&, const position_range&, is_continuous) const;
+    
     // Frees elements of the partition in batches.
     // Returns stop_iteration::yes iff there are no more elements to free.
     // Continuity is unspecified after this.
-    stop_iteration clear_gently(cache_tracker*) noexcept;
+    
     // Applies mutation_fragment.
     // The fragment must be goverened by the same schema as this object.
     void apply(const schema& s, const mutation_fragment&);
@@ -19474,10 +19473,8 @@ std::ostream& operator<<(std::ostream& os, reader_permit::state s);
 class reader_permit::need_cpu_guard {
     reader_permit_opt _permit;
 public:
-    explicit need_cpu_guard(reader_permit permit) noexcept : _permit(std::move(permit)) {
-        _permit->mark_need_cpu();
-    }
-    need_cpu_guard(need_cpu_guard&&) noexcept = default;
+    
+    
 };
 /// Mark a permit as awaiting I/O or an operation running on a remote shard.
 ///
@@ -19491,9 +19488,8 @@ class reader_permit::awaits_guard {
     reader_permit_opt _permit;
 public:
 };
-template <typename Char>
-temporary_buffer<Char> make_tracked_temporary_buffer(temporary_buffer<Char> buf, reader_permit::resource_units units) ;
- temporary_buffer<char> make_new_tracked_temporary_buffer(size_t size, reader_permit& permit) ;
+ ;
+ 
 file make_tracked_file(file f, reader_permit p);
 class tracking_allocator_base {
     reader_permit _permit;
@@ -19517,8 +19513,7 @@ public:
     template <typename U>
     friend bool operator==(const tracking_allocator<U>& a, const tracking_allocator<U>& b);
 };
-template <typename T>
-bool operator==(const tracking_allocator<T>& a, const tracking_allocator<T>& b) ;
+ ;
 using namespace seastar;
 class mutation_fragment;
 class mutation_fragment_v2;
@@ -19537,13 +19532,9 @@ class clustering_row {
     clustering_key_prefix _ck;
     deletable_row _row;
 public:
-    explicit clustering_row(clustering_key_prefix ck) : _ck(std::move(ck)) { }
-    clustering_row(clustering_key_prefix ck, row_tombstone t, row_marker marker, row cells)
-            : _ck(std::move(ck)), _row(std::move(t), std::move(marker), std::move(cells)) {
-        _row.maybe_shadow();
-    }
-    clustering_row(clustering_key_prefix ck, deletable_row&& row)
-        : _ck(std::move(ck)), _row(std::move(row)) { }
+    
+    
+    
     clustering_row(const schema& s, const clustering_row& other)
         : _ck(other._ck), _row(s, other._row) { }
     clustering_row(const schema& s, const rows_entry& re)
@@ -29060,9 +29051,9 @@ public:
     const mutation_partition_v2& partition() const ;
     bool is_referenced() const ;
     // Returns true iff this version is directly referenced from a partition_entry (is its newset version).
-    bool is_referenced_from_entry() const;
-    partition_version_ref& back_reference() const ;
-    size_t size_in_allocator(const schema& s, allocation_strategy& allocator) const;
+    
+    
+    
 };
 using partition_version_range = anchorless_list_base_hook<partition_version>::range;
 using partition_version_reversed_range = anchorless_list_base_hook<partition_version>::reversed_range;
@@ -29071,7 +29062,7 @@ class partition_version_ref {
     bool _unique_owner = false;
     friend class partition_version;
 public:
-    partition_version_ref() = default;
+    
     ~partition_version_ref() ;
     partition_version& operator*() ;
     const partition_version& operator*() const ;
@@ -37750,7 +37741,7 @@ public:
 private:
 public:
 };
-::shared_ptr<const cql3::metadata> make_empty_metadata();
+
 class prepared_metadata {
 public:
     enum class flag : uint32_t {
@@ -37771,9 +37762,7 @@ private:
     std::vector<lw_shared_ptr<column_specification>> _names;
     std::vector<uint16_t> _partition_key_bind_indices;
 public:
-    prepared_metadata(const std::vector<lw_shared_ptr<column_specification>>& names,
-                      const std::vector<uint16_t>& partition_key_bind_indices,
-                      bool is_conditional);
+    
 };
 template<typename Visitor>
 concept ResultVisitor = requires(Visitor& visitor, managed_bytes_view_opt val) {
@@ -37827,7 +37816,7 @@ class result_message;
 namespace cql3 {
 class query_processor;
 class metadata;
-seastar::shared_ptr<const metadata> make_empty_metadata();
+
 class query_options;
 class cql_statement {
     timeout_config_selector _timeout_config_selector;
@@ -37883,10 +37872,8 @@ public:
     sstring keyspace;
     // Target types other than keyspace have a list of arguments.
     std::vector<sstring> arguments;
-    schema_change(change_type change, target_type target, sstring keyspace, std::vector<sstring> arguments) ;
-    template <typename... Ts>
-    schema_change(change_type change, target_type target, sstring keyspace, Ts... arguments)
-        : schema_change(change, target, keyspace, std::vector<sstring>{std::move(arguments)...}) {}
+    
+    
 };
 }
 namespace utils {
@@ -38348,14 +38335,14 @@ public:
     virtual distributed<cql3::query_processor> & qp() = 0;
     virtual auth::service& local_auth_service() = 0;
     virtual db::view::view_builder& local_view_builder() = 0;
-    virtual sharded<sstables::storage_manager>& get_sstorage_manager() = 0;
-    data_dictionary::database data_dictionary();
+    
+    
 };
 future<> do_with_cql_env(std::function<future<>(cql_test_env&)> func, cql_test_config = {}, std::optional<cql_test_init_configurables> = {});
 future<> do_with_cql_env_thread(std::function<void(cql_test_env&)> func, cql_test_config = {}, thread_attributes thread_attr = {}, std::optional<cql_test_init_configurables> = {});
-reader_permit make_reader_permit(cql_test_env&);
+
 // CQL test config with raft experimental feature enabled
-cql_test_config raft_cql_test_config();
+
 namespace tests::data_model {
 static constexpr api::timestamp_type previously_removed_column_timestamp = 100;
 static constexpr api::timestamp_type data_timestamp = 200;
@@ -38590,18 +38577,12 @@ public:
         column_id id;
         const sstring& name;
         bytes value;
-        expected_column(const column_definition* cdef, bytes value)
-                : id(cdef->id)
-                , name(cdef->name_as_text())
-                , value(std::move(value))
-        { }
+        
     };
-    flat_reader_assertions_v2& produces_static_row(const std::vector<expected_column>& columns) ;
-    flat_reader_assertions_v2& produces_row(const clustering_key& ck, const std::vector<expected_column>& columns) ;
+    
+    
     using assert_function = noncopyable_function<void(const column_definition&, const atomic_cell_or_collection*)>;
-    flat_reader_assertions_v2& produces_row(const clustering_key& ck,
-                                         const std::vector<column_id>& column_ids,
-                                         const std::vector<assert_function>& column_assert) ;
+    
     flat_reader_assertions_v2& may_produce_tombstones(position_range range) ;
     flat_reader_assertions_v2& produces_range_tombstone_change(const range_tombstone_change& rtc_) ;
     flat_reader_assertions_v2& produces_partition_end() ;
@@ -38633,11 +38614,11 @@ struct key_size {
 // * size - the min and max size of the key in bytes, if disengaged default
 //          limits (1-128) are used. If you want exactly sized keys, use
 //          ascii or bytes types only as the key types.
-std::vector<dht::decorated_key> generate_partition_keys(size_t n, schema_ptr s, std::optional<shard_id> shard = this_shard_id(), std::optional<key_size> size = {});
-std::vector<dht::decorated_key> generate_partition_keys(size_t n, schema_ptr s, local_shard_only lso, std::optional<key_size> size = {});
+
+
 // Overload for a single key
-dht::decorated_key generate_partition_key(schema_ptr s, std::optional<shard_id> shard = this_shard_id(), std::optional<key_size> size = {});
-dht::decorated_key generate_partition_key(schema_ptr s, local_shard_only lso, std::optional<key_size> size = {});
+
+
 // Generate n clustering keys
 //
 // Returned keys are unique, ordered and never empty.
@@ -39083,11 +39064,10 @@ template <typename LHS, typename RHS>
 }
 void do_require(bool condition, std::source_location sl, std::string_view msg);
  void require(bool condition, std::source_location sl = std::source_location::current()) ;
-template <typename LHS, typename RHS>
-void require_equal(const LHS& lhs, const RHS& rhs, std::source_location sl = std::source_location::current()) ;
-void fail(std::string_view msg, std::source_location sl = std::source_location::current());
- std::string getenv_safe(std::string_view name) ;
-extern boost::test_tools::assertion_result has_scylla_test_env(boost::unit_test::test_unit_id);
+ ;
+
+ 
+
 }
 int read_collection_size(bytes_view& in);
 bytes_view read_collection_key(bytes_view& in);
@@ -39321,14 +39301,10 @@ public:
                     bytes_view(reinterpret_cast<const int8_t *>(view.data()),
                             view.size() * sizeof(T))) {
     }
-    template<typename T>
-    data_input(const temporary_buffer<T>& buf)
-            : data_input(
-                    std::basic_string_view<T>(buf.get(), buf.size())) {
-    }
-    data_input(data_input&&) = default;
-    data_input(const data_input&) = default;
-    size_t avail() const ;
+    
+    
+    
+    
     bool has_next() const ;
     void ensure(size_t s) const ;
     template<typename T> T peek() const;
@@ -39512,10 +39488,10 @@ CONSTCD11 month_day operator/(const day& d, const month& m) NOEXCEPT;
 CONSTCD11 month_weekday operator/(const weekday_indexed& wdi, const month& m) NOEXCEPT;
 CONSTCD11 year_month_day operator/(const year_month& ym, const day& d) NOEXCEPT;
 CONSTCD11 year_month_day operator/(const year_month& ym, int        d) NOEXCEPT;
-CONSTCD11 year_month_day operator/(const year& y, const month_day& md) NOEXCEPT;
-CONSTCD11 year_month_day operator/(int         y, const month_day& md) NOEXCEPT;
-CONSTCD11 year_month_day operator/(const month_day& md, const year& y) NOEXCEPT;
-CONSTCD11 year_month_day operator/(const month_day& md, int         y) NOEXCEPT;
+
+
+
+
 CONSTCD11
     year_month_day_last operator/(const year_month& ym,   last_spec) NOEXCEPT;
 CONSTCD11
@@ -39547,22 +39523,16 @@ operator/(const year_month& ym, const weekday_last& wdl) NOEXCEPT;
 CONSTCD11
 year_month_weekday_last
 operator/(const year& y, const month_weekday_last& mwdl) NOEXCEPT;
-CONSTCD11
-year_month_weekday_last
-operator/(int         y, const month_weekday_last& mwdl) NOEXCEPT;
-CONSTCD11
-year_month_weekday_last
-operator/(const month_weekday_last& mwdl, const year& y) NOEXCEPT;
-CONSTCD11
-year_month_weekday_last
-operator/(const month_weekday_last& mwdl, int         y) NOEXCEPT;
+
+
+
 // Detailed interface
 // day
 class day
 {
     unsigned char d_;
 public:
-    day() = default;
+    
     explicit CONSTCD11 day(unsigned d) NOEXCEPT;
     CONSTCD14 day& operator++()    NOEXCEPT;
     CONSTCD14 day  operator++(int) NOEXCEPT;
@@ -39604,10 +39574,10 @@ public:
 };
 CONSTCD11 bool operator==(const month& x, const month& y) NOEXCEPT;
 CONSTCD11 bool operator!=(const month& x, const month& y) NOEXCEPT;
-CONSTCD11 bool operator< (const month& x, const month& y) NOEXCEPT;
-CONSTCD11 bool operator> (const month& x, const month& y) NOEXCEPT;
-CONSTCD11 bool operator<=(const month& x, const month& y) NOEXCEPT;
-CONSTCD11 bool operator>=(const month& x, const month& y) NOEXCEPT;
+
+
+
+
 CONSTCD14 month  operator+(const month&  x, const months& y) NOEXCEPT;
 CONSTCD14 month  operator+(const months& x,  const month& y) NOEXCEPT;
 CONSTCD14 month  operator-(const month&  x, const months& y) NOEXCEPT;
@@ -39728,18 +39698,18 @@ public:
     CONSTCD11 bool ok() const NOEXCEPT;
 };
 CONSTCD11 bool operator==(const year_month& x, const year_month& y) NOEXCEPT;
-CONSTCD11 bool operator!=(const year_month& x, const year_month& y) NOEXCEPT;
-CONSTCD11 bool operator< (const year_month& x, const year_month& y) NOEXCEPT;
-CONSTCD11 bool operator> (const year_month& x, const year_month& y) NOEXCEPT;
-CONSTCD11 bool operator<=(const year_month& x, const year_month& y) NOEXCEPT;
+
+
+
+
 CONSTCD11 bool operator>=(const year_month& x, const year_month& y) NOEXCEPT;
 CONSTCD14 year_month operator+(const year_month& ym, const months& dm) NOEXCEPT;
 CONSTCD14 year_month operator+(const months& dm, const year_month& ym) NOEXCEPT;
 CONSTCD14 year_month operator-(const year_month& ym, const months& dm) NOEXCEPT;
-CONSTCD11 months operator-(const year_month& x, const year_month& y) NOEXCEPT;
-CONSTCD11 year_month operator+(const year_month& ym, const years& dy) NOEXCEPT;
-CONSTCD11 year_month operator+(const years& dy, const year_month& ym) NOEXCEPT;
-CONSTCD11 year_month operator-(const year_month& ym, const years& dy) NOEXCEPT;
+
+
+
+
 template<class CharT, class Traits>
 std::basic_ostream<CharT, Traits>&
 operator<<(std::basic_ostream<CharT, Traits>& os, const year_month& ym);
@@ -39757,10 +39727,10 @@ public:
 };
 CONSTCD11 bool operator==(const month_day& x, const month_day& y) NOEXCEPT;
 CONSTCD11 bool operator!=(const month_day& x, const month_day& y) NOEXCEPT;
-CONSTCD11 bool operator< (const month_day& x, const month_day& y) NOEXCEPT;
-CONSTCD11 bool operator> (const month_day& x, const month_day& y) NOEXCEPT;
-CONSTCD11 bool operator<=(const month_day& x, const month_day& y) NOEXCEPT;
-CONSTCD11 bool operator>=(const month_day& x, const month_day& y) NOEXCEPT;
+
+
+
+
 template<class CharT, class Traits>
 std::basic_ostream<CharT, Traits>&
 operator<<(std::basic_ostream<CharT, Traits>& os, const month_day& md);
