@@ -5410,7 +5410,7 @@ public:
     table_schema_version version() const ;
     double bloom_filter_fp_chance() const ;
     sstring thrift_key_validator() const;
-    const compression_parameters& get_compressor_params() const ;
+    
     bool is_dense() const {
         return _raw._is_dense;
     }
@@ -5423,15 +5423,15 @@ public:
     thrift_schema& thrift() {
         return _thrift;
     }
-    const sstring& comment() const ;
+    
     bool is_counter() const {
         return _raw._is_counter;
     }
-    const cf_type type() const ;
+    
     bool is_super() const {
         return _raw._type == cf_type::super;
     }
-    gc_clock::duration gc_grace_seconds() const ;
+    
     gc_clock::duration paxos_grace_seconds() const;
     double dc_local_read_repair_chance() const ;
     bool compaction_enabled() const ;
@@ -5445,8 +5445,8 @@ public:
     // Find a column definition given column ordinal id in the schema
     const column_definition& column_at(ordinal_column_id ordinal_id) const;
     const_iterator regular_begin() const;
-    const_iterator static_end() const;
-    const_iterator static_lower_bound(const bytes& name) const;
+    
+    
     const_iterator static_upper_bound(const bytes& name) const;
     static data_type column_name_type(const column_definition& def, const data_type& regular_column_name_type);
     data_type column_name_type(const column_definition& def) const;
@@ -6134,13 +6134,13 @@ private:
     void fill_substreams() requires (!IsForward) ;
     struct forward_iterator_data {
         input_stream _in = simple_input_stream();
-        void skip() ;
-        value_type deserialize_next() ;
+        
+        
     };
     struct reverse_iterator_data {
         std::reverse_iterator<utils::chunked_vector<input_stream>::const_iterator> _substream_it;
-        void skip() ;
-        value_type deserialize_next() ;
+        
+        
     };
 public:
     vector_deserializer() noexcept
@@ -6182,8 +6182,8 @@ public:
     static_assert(std::sentinel_for<iterator, iterator>);
     iterator begin() noexcept requires(IsForward) ;
     const_iterator begin() const noexcept requires(IsForward) ;
-    const_iterator cbegin() const noexcept requires(IsForward) ;
-    iterator end() noexcept requires(IsForward) ;
+    
+    
     const_iterator end() const noexcept requires(IsForward) ;
     const_iterator cend() const noexcept requires(IsForward) ;
 };
@@ -6233,8 +6233,8 @@ class function_name;
 class function {
 public:
     using opt_bytes = std::optional<bytes>;
-    virtual bool is_native() const = 0;
-    virtual bool requires_thread() const = 0;
+    
+    
     virtual bool is_aggregate() const = 0;
     virtual void print(std::ostream& os) const = 0;
     virtual sstring column_name(const std::vector<sstring>& column_names) const = 0;
@@ -6313,12 +6313,12 @@ constexpr bool check_sstable_versions(const std::array<sstable_version_types, S1
     return expected == S2;
 }
 static_assert(check_sstable_versions(all_sstable_versions, writable_sstable_versions, oldest_writable_sstable_format));
- auto get_highest_sstable_version() ;
-sstable_version_types version_from_string(std::string_view s);
-sstable_format_types format_from_string(std::string_view s);
+ 
+
+
 extern const std::unordered_map<sstable_version_types, seastar::sstring, seastar::enum_hash<sstable_version_types>> version_string;
 extern const std::unordered_map<sstable_format_types, seastar::sstring, seastar::enum_hash<sstable_format_types>> format_string;
- int operator<=>(sstable_version_types a, sstable_version_types b) ;
+ 
 }
 template <>
 struct fmt::formatter<sstables::sstable_version_types> : fmt::formatter<std::string_view> {
@@ -6389,15 +6389,12 @@ public:
             , _i(_singular && !v._type.begin(v._packed)->size() ?
                     v._type.end(v._packed) : v._type.begin(v._packed))
         { }
-        iterator(const legacy_compound_view& v, end_tag)
-            : _offset(v._type.is_singular() && !v._type.begin(v._packed)->size() ? 0 : -2)
-            , _i(v._type.end(v._packed))
-        { }
+        
         // Default constructor is incorrectly needed for c++20
         // weakly_incrementable concept requires for ranges.
         // Will be fixed by https://wg21.link/P2325R3 but still
         // needed for now.
-        iterator() ;
+        
         value_type operator*() const {
             int32_t component_size = _i->size();
             if (_offset == -2) {
@@ -6454,13 +6451,11 @@ public:
     iterator begin() const {
         return iterator(*this);
     }
-    iterator end() const ;
+    
 };
 // Converts compound_type<> representation to legacy representation
 // @packed is assumed to be serialized using supplied @type.
-template <typename CompoundType>
-static
-bytes to_legacy(CompoundType& type, managed_bytes_view packed) ;
+ ;
 class composite_view;
 // Represents a value serialized according to Origin's CompositeType.
 // If is_compound is true, then the value is one or more components encoded as:
@@ -6660,7 +6655,7 @@ public:
         friend class composite_view;
     };
      ;
-    static composite static_prefix(const schema& s) ;
+    
     explicit operator bytes_view() const {
         return _bytes;
     }
@@ -6694,18 +6689,17 @@ class composite_view final {
     bytes_view _bytes;
     bool _is_compound;
 public:
-    composite_view(bytes_view b, bool is_compound = true) 
-    ;
+    
     composite_view(const composite& c) 
     ;
     composite_view() 
     ;
-    std::vector<bytes_view> explode() const ;
-    composite::iterator begin() const ;
+    
+    
     composite::iterator end() const ;
     boost::iterator_range<composite::iterator> components() const ;
-    composite::eoc last_eoc() const ;
-    auto values() const ;
+    
+    
     size_t size() const ;
     bool empty() const ;
     bool is_static() const ;
@@ -6770,11 +6764,11 @@ struct partial_validation_results {
     size_t unvalidated_tail;
     size_t bytes_needed_for_tail;
 };
-partial_validation_results validate_partial(const uint8_t* data, size_t len);
+
 }
 // If data represents a correct UTF-8 string, return std::nullopt,
 // otherwise return a position of first error byte.
-std::optional<size_t> validate_with_error_position_fragmented(FragmentedView auto fv) ;
+
 } // namespace utf8
 } // namespace utils
 namespace replica {
@@ -6860,8 +6854,8 @@ public:
     // See begin()
     // Returns a range of managed_bytes_view
     // Returns a range of managed_bytes_view
-    bool is_empty() const ;
-    explicit operator bool() const ;
+    
+    
     // For backward compatibility with existing code.
     bool is_empty(const schema& s) const ;
 };
@@ -6875,10 +6869,10 @@ protected:
         return TopLevel::get_compound_type(s);
     }
 private:
-    static const data_type& get_singular_type(const schema& s) ;
+    
 public:
     struct with_schema_wrapper {
-        with_schema_wrapper(const schema& s, const TopLevel& key)  ;
+        
         const schema& s;
         const TopLevel& key;
     };
@@ -6895,9 +6889,9 @@ public:
         return from_exploded(v);
     }
     static TopLevel from_exploded(const schema& s, const std::vector<managed_bytes>& v) ;
-    static TopLevel from_exploded_view(const std::vector<bytes_view>& v) ;
+    
     // We don't allow optional values, but provide this method as an efficient adaptor
-    static TopLevel from_optional_exploded(const schema& s, std::span<const bytes_opt> v) ;
+    
     static TopLevel from_optional_exploded(const schema& s, std::span<const managed_bytes_opt> v) ;
     static TopLevel from_deeply_exploded(const schema& s, const std::vector<data_value>& v) ;
      ;
@@ -6932,10 +6926,10 @@ public:
     };
     struct equality {
         typename TopLevel::compound _t;
-        equality(const schema& s)  ;
-        bool operator()(const TopLevel& o1, const TopLevel& o2) const ;
-        bool operator()(const TopLevelView& o1, const TopLevel& o2) const ;
-        bool operator()(const TopLevel& o1, const TopLevelView& o2) const ;
+        
+        
+        
+        
     };
     bool equal(const schema& s, const TopLevel& other) const {
         return get_compound_type(s)->equal(representation(), other.representation());
@@ -7053,9 +7047,8 @@ public:
     // See prefix_equality_less_compare.
     struct prefix_equal_tri_compare {
         typename TopLevel::compound prefix_type;
-        prefix_equal_tri_compare(const schema& s) 
-        ;
-        std::strong_ordering operator()(const TopLevel& k1, const TopLevel& k2) const ;
+        
+        
     };
 };
 class partition_key_view : public compound_view_wrapper<partition_key_view> {
@@ -7079,8 +7072,8 @@ public:
     // A trichotomic comparator for ordering compatible with Origin.
     std::strong_ordering legacy_tri_compare(const schema& s, partition_key_view o) const;
     // Checks if keys are equal in a way which is compatible with Origin.
-    bool legacy_equal(const schema& s, partition_key_view o) const ;
-    void validate(const schema& s) const ;
+    
+    
     // A trichotomic comparator which orders keys according to their ordering on the ring.
     std::strong_ordering ring_order_tri_compare(const schema& s, partition_key_view o) const;
 };
@@ -7104,19 +7097,17 @@ public:
         return partition_key(managed_bytes(c_type::serialize_value(std::forward<RangeOfSerializedComponents>(v))));
     }
     static partition_key from_nodetool_style_string(const schema_ptr s, const sstring& key);
-    partition_key(std::vector<bytes> v)
-        : compound_wrapper(managed_bytes(c_type::serialize_value(std::move(v))))
-    { }
+    
     using compound = lw_shared_ptr<c_type>;
-    static partition_key from_bytes(bytes_view b) ;
+    
     static const compound& get_compound_type(const schema& s) ;
     // Returns key's representation which is compatible with Origin.
     // The result is valid as long as the schema is live.
     const legacy_compound_view<c_type> legacy_form(const schema& s) const ;
     // A trichotomic comparator for ordering compatible with Origin.
-    std::strong_ordering legacy_tri_compare(const schema& s, const partition_key& o) const ;
+    
     // Checks if keys are equal in a way which is compatible with Origin.
-    bool legacy_equal(const schema& s, const partition_key& o) const ;
+    
     void validate(const schema& s) const ;
 };
 template <>
@@ -7140,8 +7131,8 @@ struct fmt::formatter<partition_key::with_schema_wrapper> : fmt::formatter<std::
 class exploded_clustering_prefix {
     std::vector<bytes> _v;
 public:
-    exploded_clustering_prefix(std::vector<bytes>&& v) : _v(std::move(v)) {}
-    exploded_clustering_prefix() ;
+    
+    
     size_t size() const ;
 };
 class clustering_key_prefix_view : public prefix_compound_view_wrapper<clustering_key_prefix_view, clustering_key> {
@@ -7160,10 +7151,8 @@ public:
     clustering_key_prefix(std::vector<bytes> v)
         : prefix_compound_wrapper(compound::element_type::serialize_value(std::move(v)))
     { }
-    clustering_key_prefix(std::vector<managed_bytes> v)
-        : prefix_compound_wrapper(compound::element_type::serialize_value(std::move(v)))
-    { }
-    clustering_key_prefix(std::initializer_list<bytes> v) : clustering_key_prefix(std::vector(v)) {}
+    
+    
     clustering_key_prefix(clustering_key_prefix&& v) = default;
     clustering_key_prefix(const clustering_key_prefix& v) = default;
     clustering_key_prefix(clustering_key_prefix& v) = default;
@@ -7174,8 +7163,8 @@ public:
     static const compound& get_compound_type(const schema& s) {
         return s.clustering_key_prefix_type();
     }
-    static clustering_key_prefix from_clustering_prefix(const schema& s, const exploded_clustering_prefix& prefix) ;
-    static bool make_full(const schema& s, clustering_key_prefix& ck) ;
+    
+    
 };
 template <>
 struct fmt::formatter<clustering_key_prefix> : fmt::formatter<std::string_view> {
@@ -7275,9 +7264,9 @@ private:
     // Bound wrappers for compile-time dispatch and safety.
     struct start_bound_ref { const optional<bound>& b; };
     struct end_bound_ref { const optional<bound>& b; };
-    start_bound_ref start_bound() const ;
-    end_bound_ref end_bound() const ;
-    static bool greater_than_or_equal(end_bound_ref end, start_bound_ref start, IntervalComparatorFor<T> auto&& cmp) ;
+    
+    
+    
 public:
     // the point is before the interval (works only for non wrapped intervals)
     // Comparator must define a total ordering on T.
@@ -7285,13 +7274,13 @@ public:
     // Comparator must define a total ordering on T.
     // check if two intervals overlap.
     // Comparator must define a total ordering on T.
-    static wrapping_interval make_starting_with(bound b) ;
+    
     static wrapping_interval make_ending_with(bound b) ;
     bool is_singular() const {
         return _singular;
     }
-    bool is_full() const ;
-    void reverse() ;
+    
+    
     const optional<bound>& start() const {
         return _start;
     }
@@ -7315,11 +7304,11 @@ public:
     // Returns intervals which cover all values covered by this interval but not covered by the other interval.
     // Ranges are not overlapping and ordered.
     // Comparator must define a total ordering on T.
-    std::vector<wrapping_interval> subtract(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const ;
+    
     // split interval in two around a split_point. split_point has to be inside the interval
     // split_point will belong to first interval
     // Comparator must define a total ordering on T.
-    std::pair<wrapping_interval<T>, wrapping_interval<T>> split(const T& split_point, IntervalComparatorFor<T> auto&& cmp) const ;
+    
     // Create a sub-interval including values greater than the split_point. Returns std::nullopt if
     // split_point is after the end (but not included in the interval, in case of wraparound intervals)
     // Comparator must define a total ordering on T.
@@ -7729,8 +7718,8 @@ public:
     virtual ~sharder() = default;
     virtual unsigned shard_of(const token& t) const;
     virtual token token_for_next_shard(const token& t, shard_id shard, unsigned spans = 1) const;
-    unsigned shard_count() const ;
-    unsigned sharding_ignore_msb() const ;
+    
+    
     bool operator==(const sharder& o) const ;
 };
 } //namespace dht
@@ -7767,8 +7756,8 @@ public:
     struct less_comparator {
         schema_ptr s;
         bool operator()(const decorated_key& k1, const decorated_key& k2) const;
-        bool operator()(const decorated_key& k1, const ring_position& k2) const;
-        bool operator()(const ring_position& k1, const decorated_key& k2) const;
+        
+        
     };
     bool equal(const schema& s, const decorated_key& other) const;
     bool less_compare(const schema& s, const decorated_key& other) const;
@@ -7780,12 +7769,12 @@ public:
     const dht::token& token() const noexcept ;
     const partition_key& key() const ;
     size_t external_memory_usage() const ;
-    size_t memory_usage() const ;
+    
 };
 class decorated_key_equals_comparator {
     const schema& _schema;
 public:
-    explicit decorated_key_equals_comparator(const schema& schema)  ;
+    
     bool operator()(const dht::decorated_key& k1, const dht::decorated_key& k2) const ;
 };
 using decorated_key_opt = std::optional<decorated_key>;
@@ -7843,8 +7832,8 @@ private:
     token_bound _token_bound{}; // valid when !_key
     std::optional<partition_key> _key;
 public:
-    static ring_position min() noexcept ;
-    static ring_position max() noexcept ;
+    
+    
     const dht::token& token() const noexcept ;
     // Valid when !has_key()
     // Returns -1 if smaller than keys with the same token, +1 if greater.
@@ -7939,7 +7928,7 @@ public:
         , _key(v._key ? std::make_optional(*v._key) : std::nullopt)
         , _weight(v._weight)
     { }
-    const dht::token& token() const noexcept ;
+    
     // Only when key() == std::nullopt
     // Only when key() != std::nullopt
 };
@@ -7974,7 +7963,7 @@ struct ring_position_comparator_for_sstables {
 // "less" comparator giving the same order as ring_position_comparator
 struct ring_position_less_comparator {
     ring_position_comparator tri;
-    ring_position_less_comparator(const schema& s) : tri(s) {}
+    
     template<typename T, typename U>
     bool operator()(const T& lh, const U& rh) const ;
 };
@@ -7995,12 +7984,11 @@ unsigned shard_of(const schema&, const token&);
 inline decorated_key decorate_key(const schema& s, partition_key&& key) {
     return s.get_partitioner().decorate_key(s, std::move(key));
 }
- token get_token(const schema& s, partition_key_view key) ;
-dht::partition_range to_partition_range(dht::token_range);
-dht::partition_range_vector to_partition_ranges(const dht::token_range_vector& ranges, utils::can_yield can_yield = utils::can_yield::no);
+ 
+
+
 // Each shard gets a sorted, disjoint vector of ranges
-std::map<unsigned, dht::partition_range_vector>
-split_range_to_shards(dht::partition_range pr, const schema& s);
+
 // Intersect a partition_range with a shard and return the the resulting sub-ranges, in sorted order
 future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const schema& s, const dht::partition_range& pr, shard_id shard);
 std::unique_ptr<dht::i_partitioner> make_partitioner(sstring name);
@@ -8062,10 +8050,10 @@ public:
     }
     sstring to_sstring() const;
     friend inline bool operator==(const inet_address& x, const inet_address& y) noexcept = default;
-    friend bool operator<(const inet_address& x, const inet_address& y) noexcept ;
+    
     friend struct std::hash<inet_address>;
     using opt_family = std::optional<net::inet_address::family>;
-    static future<inet_address> lookup(sstring, opt_family family = {}, opt_family preferred = {});
+    
 };
 std::ostream& operator<<(std::ostream& os, const inet_address& x);
 }
