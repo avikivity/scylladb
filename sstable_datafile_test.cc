@@ -53153,22 +53153,7 @@ std::istream &std::operator>>(std::istream &is, std::unordered_map<seastar::sstr
 template <>
 std::istream &std::operator>>(std::istream &is, std::vector<seastar::sstring> &res);
 thread_local unsigned utils::config_file::s_shard_id = 0;
-bool utils::config_file::config_src::matches(std::string_view name) const
-{ // The below line provides support for option names in the "long_name,short_name" format,
-// such as "workdir,W". We only want the long name ("workdir") to be used in the YAML.
-// But since at some point (due to a bug) the YAML config parser expected the silly
-// double form ("workdir,W") instead, we support both for backward compatibility.
-std::string_view long_name = _name.substr(0, _name.find_first_of(','));
-if (_name == name || long_name == name)
-{
-    return true;
-}
-if (!_alias.empty() && _alias == name)
-{
-    return true;
-}
-return false;
-}
+
 void utils::config_file::add(std::initializer_list<cfg_ref> cfgs) { _cfgs.insert(_cfgs.end(), cfgs.begin(), cfgs.end()); }
 void utils::config_file::add(const std::vector<cfg_ref> &cfgs) { _cfgs.insert(_cfgs.end(), cfgs.begin(), cfgs.end()); }
 bpo::options_description utils::config_file::get_options_description()
