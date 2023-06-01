@@ -1,0 +1,1 @@
+diff -u sstable_datafile_test.cc $(ls -t  /tmp/cvise-ClangBinarySearchPass*/*/sstable_datafile_test.cc | tail -n 1)
