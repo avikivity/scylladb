@@ -1683,8 +1683,8 @@ public:
         static constexpr mask_type mask = make_mask<items...>();
         template<enum_type Elem>
         static constexpr bool contains() ;
-        static bool contains(enum_type e) ;
-        static bool contains(prepared e) ;
+        
+        
         static constexpr enum_set<Enum> unfreeze() {
             return enum_set<Enum>(mask);
         }
@@ -1842,8 +1842,8 @@ public:
     // are invalidated, e.g. due to internal events like compaction or eviction.
     // When the value returned by this method doesn't change, references obtained
     // between invocations remain valid.
-    uint64_t invalidate_counter() const noexcept ;
-    void invalidate_references() noexcept ;
+    
+    
 };
 class standard_allocation_strategy : public allocation_strategy {
 public:
@@ -1942,10 +1942,9 @@ class allocator_lock {
     allocation_strategy* _prev;
 public:
     allocator_lock(allocation_strategy& alloc) ;
-    ~allocator_lock() ;
+    
 };
-template<typename Func>
-decltype(auto) with_allocator(allocation_strategy& alloc, Func&& func) ;
+ ;
 class marshal_exception : public std::exception {
     sstring _why;
 public:
@@ -2633,9 +2632,8 @@ public:
         , _next_fragments(other._next_fragments)
         , _size(other._size)
     {}
-    template <std::invocable<bytes_view> Func>
-    std::invoke_result_t<Func, bytes_view> with_linearized(Func&& func) const ;
-    friend managed_bytes_basic_view<mutable_view::no> build_managed_bytes_view_from_internals(bytes_view current_fragment, blob_storage* next_fragment, size_t size);
+     ;
+    
 };
 static_assert(FragmentedView<managed_bytes_view>);
 static_assert(FragmentedMutableView<managed_bytes_mutable_view>);
@@ -2681,8 +2679,8 @@ inline bool operator==(const managed_bytes_view& a, const managed_bytes_view& b)
     return a.size_bytes() == b.size_bytes() && compare_unsigned(a, b) == 0;
 }
  std::ostream& operator<<(std::ostream& os, const managed_bytes_view& v) ;
- std::ostream& operator<<(std::ostream& os, const managed_bytes& b) ;
-std::ostream& operator<<(std::ostream& os, const managed_bytes_opt& b);
+ 
+
 class bytes_ostream {
 public:
     using size_type = bytes::size_type;
@@ -2946,9 +2944,8 @@ public:
     void remove_current() ;
     buffer_view prefix(size_t n) const ;
     bytes_view current_fragment() ;
-    bytes linearize() const ;
-    template<typename Function>
-    decltype(auto) with_linearized(Function&& fn) const
+    
+    
     ;
     implementation extract_implementation() const ;
 };
@@ -3159,8 +3156,8 @@ public:
     }
     int64_t timestamp() const noexcept ;
     friend ::fmt::formatter<UUID>;
-    sstring to_sstring() const ;
-    friend std::ostream& operator<<(std::ostream& out, const UUID& uuid);
+    
+    
     bool operator==(const UUID& v) const noexcept = default;
     // Please note that this comparator does not preserve timeuuid
     // monotonicity. For this reason you should avoid using it for
@@ -3487,8 +3484,8 @@ class options final {
     delta_mode _delta_mode = delta_mode::full;
     int _ttl = 86400; // 24h in seconds
 public:
-    options(const std::map<sstring, sstring>& map);
-    std::map<sstring, sstring> to_map() const;
+    
+    
     sstring to_sstring() const;
     bool enabled() const ;
     bool operator==(const options& o) const;
@@ -3626,12 +3623,8 @@ public:
         using difference_type = ptrdiff_t;
         using pointer = const bytes_view*;
         using reference = const bytes_view&;
-        iterator() = default;
-        iterator(vector_type::const_iterator it, bytes_view current, size_t left) noexcept
-            : _it(it)
-            , _left(left)
-            , _current(current)
-        { }
+        
+        
         reference operator*() const noexcept ;
         pointer operator->() const noexcept ;
         iterator& operator++() noexcept ;
@@ -4174,8 +4167,8 @@ public:
     // We need the following overloads just to avoid ambiguity because
     // seastar::net::inet_address is implicitly constructible from a
     // const sstring&.
-    data_value(const char*);
-    data_value(const std::string&);
+    
+    
     data_value(const sstring&);
     // Do not allow construction of a data_value from nullptr. The reason is
     // that this is error prone, for example: it conflicts with `const char*` overload
@@ -4289,16 +4282,16 @@ public:
     bool less(bytes_view v1, bytes_view v2) const { return compare(v1, v2) < 0; }
     // returns a callable that can be called with two byte_views, and calls this->less() on them.
     serialized_compare as_less_comparator() const ;
-    serialized_tri_compare as_tri_comparator() const ;
-    static data_type parse_type(const sstring& name);
-    size_t hash(bytes_view v) const;
-    size_t hash(managed_bytes_view v) const;
+    
+    
+    
+    
     bool equal(bytes_view v1, bytes_view v2) const;
     bool equal(bytes_view v1, managed_bytes_view v2) const;
     std::strong_ordering compare(bytes_view v1, bytes_view v2) const;
     std::strong_ordering compare(managed_bytes_view v1, managed_bytes_view v2) const;
-    std::strong_ordering compare(managed_bytes_view v1, bytes_view v2) const;
-    std::strong_ordering compare(bytes_view v1, managed_bytes_view v2) const;
+    
+    
 private:
     // Explicitly instantiated in .cc
     template <FragmentedView View> data_value deserialize_impl(View v) const;
@@ -4347,10 +4340,10 @@ public:
     bool is_counter() const;
     bool is_string() const;
     bool is_collection() const;
-    bool is_map() const ;
+    
     // Lists and sets are similar: they are both represented as std::vector<data_value>
     // @sa listlike_collection_type_impl
-    bool is_listlike() const ;
+    
     bool is_multi_cell() const;
     bool is_atomic() const { return !is_multi_cell(); }
     bool is_reversed() const { return _kind == kind::reversed; }
@@ -4454,7 +4447,7 @@ template <typename... T>
 struct simple_tuple_hash;
 template <>
 struct simple_tuple_hash<> {
-    size_t operator()() const ;
+    
 };
 template <typename Arg0, typename... Args >
 struct simple_tuple_hash<std::vector<Arg0>, Args...> {
@@ -4471,7 +4464,7 @@ struct simple_tuple_hash<std::vector<Arg0>, Args...> {
 };
 template <typename Arg0, typename... Args>
 struct simple_tuple_hash<Arg0, Args...> {
-    size_t operator()(const Arg0& arg0, const Args&... args) const ;
+    
 };
 template <typename InternedType, typename... BaseTypes>
 class type_interning_helper {
@@ -4584,10 +4577,8 @@ struct hash<shared_ptr<const abstract_type>> : boost::hash<shared_ptr<abstract_t
 // FIXME: make more explicit
 bytes
 to_bytes(bytes_view x) ;
-bytes_opt
-to_bytes_opt(bytes_view_opt bv) ;
-bytes_view_opt
-as_bytes_view_opt(const bytes_opt& bv) ;
+
+
 // FIXME: make more explicit
 inline
 bytes
@@ -4705,9 +4696,8 @@ public:
         serialize_value(values, managed_bytes_mutable_view(b));
         return b;
     }
-    template<typename T>
-    static managed_bytes serialize_value(std::initializer_list<T> values) ;
-    managed_bytes serialize_optionals(std::span<const bytes_opt> values) const ;
+     ;
+    
     managed_bytes serialize_optionals(std::span<const managed_bytes_opt> values) const ;
     class iterator {
     public:
@@ -4774,8 +4764,8 @@ public:
         assert(AllowPrefixes == allow_prefixes::yes);
         return std::distance(begin(v), end(v)) == (ssize_t)_types.size();
     }
-    bool is_empty(managed_bytes_view v) const ;
-    bool is_empty(const managed_bytes& v) const ;
+    
+    
     bool equal(managed_bytes_view v1, managed_bytes_view v2) const {
         return with_linearized(v1, [&] (bytes_view bv1) {
             return with_linearized(v2, [&] (bytes_view bv2) {
@@ -4816,9 +4806,9 @@ private:
 public:
     std::map<sstring, sstring> get_options() const ;
     bool operator==(const compression_parameters& other) const;
-    static compression_parameters no_compression() ;
+    
 private:
-    void validate_options(const std::map<sstring, sstring>&);
+    
 };
 namespace sstables {
 enum class compaction_strategy_type {
@@ -4896,15 +4886,14 @@ class collection_column_computation final : public column_computation {
             const partition_key& key, const db::view::clustering_or_static_row& update, const std::optional<db::view::clustering_or_static_row>& existing) const;
 public:
     static collection_column_computation for_keys(const bytes& collection_name) ;
-    static collection_column_computation for_values(const bytes& collection_name) ;
-    static collection_column_computation for_entries(const bytes& collection_name) ;
+    
+    
     static column_computation_ptr for_target_type(std::string_view type, const bytes& collection_name);
     virtual bytes serialize() const override;
     virtual bytes compute_value(const schema& schema, const partition_key& key) const override;
     virtual column_computation_ptr clone() const override ;
-    virtual bool depends_on_non_primary_key_column() const override ;
-    std::vector<db::view::view_key_and_action> compute_values_with_action(const schema& schema, const partition_key& key,
-            const db::view::clustering_or_static_row& row, const std::optional<db::view::clustering_or_static_row>& existing) const;
+    
+    
 };
 namespace api {
 using timestamp_type = int64_t;
@@ -4956,10 +4945,10 @@ public:
     per_partition_rate_limit_options() = default;
     per_partition_rate_limit_options(std::map<sstring, sstring> map);
     std::map<sstring, sstring> to_map() const;
-     std::optional<uint32_t> get_max_ops_per_second(operation_type op_type) const ;
-     void set_max_writes_per_second(std::optional<uint32_t> v) ;
-     std::optional<uint32_t> get_max_writes_per_second() const ;
-     void set_max_reads_per_second(std::optional<uint32_t> v) ;
+     
+     
+     
+     
      std::optional<uint32_t> get_max_reads_per_second() const ;
 };
 }
@@ -4988,7 +4977,7 @@ public:
     const ::shared_ptr<column_identifier> name;
     const data_type type;
     column_specification(std::string_view ks_name_, std::string_view cf_name_, ::shared_ptr<column_identifier> name_, data_type type_);
-    lw_shared_ptr<column_specification> with_alias(::shared_ptr<column_identifier> alias) ;
+    
 };
 }
 namespace dht {
@@ -5024,7 +5013,7 @@ public:
     // Test the mask for use of a given column id.
     // @sa boost::dynamic_bistet docs
     // Logical or
-    void union_with(const column_set& with) ;
+    
 private:
     bitset _mask;
 };
@@ -5060,8 +5049,8 @@ private:
 public:
     speculative_retry(type t, double v) : _t(t), _v(v) {}
     sstring to_sstring() const ;
-    static speculative_retry from_sstring(sstring str) ;
-    type get_type() const ;
+    
+    
     double get_value() const ;
     bool operator==(const speculative_retry& other) const = default;
 };
@@ -5192,8 +5181,8 @@ public:
     uint32_t component_index() const ;
     uint32_t position() const ;
     bool is_on_all_components() const;
-    bool is_part_of_cell_name() const ;
-    api::timestamp_type dropped_at() const ;
+    
+    
     friend bool operator==(const column_definition&, const column_definition&);
 };
 class schema_builder;
@@ -5246,8 +5235,8 @@ public:
     const std::vector<column_mapping_entry>& columns() const ;
     column_count_type n_static() const ;
     const column_mapping_entry& column_at(column_kind kind, column_id id) const ;
-    const column_mapping_entry& static_column_at(column_id id) const ;
-    const column_mapping_entry& regular_column_at(column_id id) const ;
+    
+    
 };
 class raw_view_info final {
     table_id _base_id;
@@ -5278,10 +5267,10 @@ public:
     v3_columns(const v3_columns&) = delete;
     static v3_columns from_v2_schema(const schema&);
 public:
-    const std::vector<column_definition>& all_columns() const;
-    const std::unordered_map<bytes, const column_definition*>& columns_by_name() const;
-    bool is_static_compact() const;
-    bool is_compact() const;
+    
+    
+    
+    
     void apply_to(schema_builder&) const;
 };
 namespace query {
@@ -39743,10 +39732,10 @@ public:
     CONSTCD11 date::month month() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
 };
-CONSTCD11 bool operator==(const month_day_last& x, const month_day_last& y) NOEXCEPT;
-CONSTCD11 bool operator!=(const month_day_last& x, const month_day_last& y) NOEXCEPT;
-CONSTCD11 bool operator< (const month_day_last& x, const month_day_last& y) NOEXCEPT;
-CONSTCD11 bool operator> (const month_day_last& x, const month_day_last& y) NOEXCEPT;
+
+
+
+
 CONSTCD11 bool operator<=(const month_day_last& x, const month_day_last& y) NOEXCEPT;
 CONSTCD11 bool operator>=(const month_day_last& x, const month_day_last& y) NOEXCEPT;
 template<class CharT, class Traits>
@@ -39815,10 +39804,10 @@ private:
     static CONSTCD14 year_month_day from_days(days dp) NOEXCEPT;
     CONSTCD14 days to_days() const NOEXCEPT;
 };
-CONSTCD11 bool operator==(const year_month_day& x, const year_month_day& y) NOEXCEPT;
-CONSTCD11 bool operator!=(const year_month_day& x, const year_month_day& y) NOEXCEPT;
-CONSTCD11 bool operator< (const year_month_day& x, const year_month_day& y) NOEXCEPT;
-CONSTCD11 bool operator> (const year_month_day& x, const year_month_day& y) NOEXCEPT;
+
+
+
+
 CONSTCD11 bool operator<=(const year_month_day& x, const year_month_day& y) NOEXCEPT;
 CONSTCD11 bool operator>=(const year_month_day& x, const year_month_day& y) NOEXCEPT;
 CONSTCD14 year_month_day operator+(const year_month_day& ymd, const months& dm) NOEXCEPT;
@@ -39852,14 +39841,10 @@ public:
 };
 CONSTCD11
     bool operator==(const year_month_day_last& x, const year_month_day_last& y) NOEXCEPT;
-CONSTCD11
-    bool operator!=(const year_month_day_last& x, const year_month_day_last& y) NOEXCEPT;
-CONSTCD11
-    bool operator< (const year_month_day_last& x, const year_month_day_last& y) NOEXCEPT;
-CONSTCD11
-    bool operator> (const year_month_day_last& x, const year_month_day_last& y) NOEXCEPT;
-CONSTCD11
-    bool operator<=(const year_month_day_last& x, const year_month_day_last& y) NOEXCEPT;
+
+
+
+
 CONSTCD11
     bool operator>=(const year_month_day_last& x, const year_month_day_last& y) NOEXCEPT;
 CONSTCD14
@@ -39988,8 +39973,8 @@ operator<<(std::basic_ostream<CharT, Traits>& os, const year_month_weekday_last&
 #if !defined(_MSC_VER) || (_MSC_VER >= 1900)
 inline namespace literals
 {
-CONSTCD11 date::day  operator "" _d(unsigned long long d) NOEXCEPT;
-CONSTCD11 date::year operator "" _y(unsigned long long y) NOEXCEPT;
+
+
 // CONSTDATA date::month jan{1};
 // CONSTDATA date::month feb{2};
 // CONSTDATA date::month mar{3};
@@ -40025,9 +40010,8 @@ class save_stream
     std::ios::fmtflags flags_;
     std::locale loc_;
 public:
-    ~save_stream()
-    ;
-    save_stream(const save_stream&) = delete;
+    
+    
     save_stream& operator=(const save_stream&) = delete;
     explicit save_stream(std::basic_ostream<CharT, Traits>& os)
         : os_(os)
@@ -45533,9 +45517,9 @@ template <typename T, const log_heap_options &opts>
 struct log_heap_element_traits<T, opts, false>
 {
 using bucket_type = typename T::bucket_type;
-static void cache_bucket(T &, typename log_heap_bucket_index<opts>::type);
-static size_t cached_bucket(const T &);
-static size_t hist_key(const T &);
+
+
+
 };
 template <typename T, const log_heap_options &opts>
     requires requires() {
@@ -45573,8 +45557,7 @@ public:
     struct end_tag
     {
     };
-    bool operator==(const hist_iterator &other) const noexcept
-    ;
+    
 };
 using iterator = hist_iterator<false>;
 using const_iterator = hist_iterator<true>;
@@ -45684,12 +45667,9 @@ buffers_type _bufs;
 size_t _size = 0;
 public:
 // Strong exception guarantees
-void clear();
-memory_data_sink_buffers() = default;
-memory_data_sink_buffers(memory_data_sink_buffers &&other)
-    : _bufs(std::move(other._bufs)), _size(std::exchange(other._size, 0))
-{
-}
+
+
+
 };
 class memory_data_sink : public data_sink_impl
 {
@@ -45727,7 +45707,7 @@ public:
         uint64_t size;
         std::time_t last_modified;
     };
-    data_sink make_upload_sink(sstring object_name);
+    
     void update_config(endpoint_config_ptr);
     struct handle
     {
@@ -49801,14 +49781,14 @@ private:
     segment *allocate_or_fallback_to_reserve();
     segment *segment_from_idx(size_t idx) noexcept { return _store.segment_from_idx(idx); }
     size_t idx_from_segment(const segment *seg) const noexcept { return _store.idx_from_segment(seg); }
-    size_t max_segments() const noexcept ;
+    
     bool can_allocate_more_segments() const noexcept { return _allocation_enabled && _store.can_allocate_more_segments(); }
     bool compact_segment(segment *seg);
 public:
-    explicit segment_pool(logalloc::tracker::impl &tracker);
+    
     logalloc::tracker::impl &tracker() { return _tracker; }
-    void prime(size_t available_memory, size_t min_free_memory);
-    void use_standard_allocator_segment_pool_backend(size_t available_memory);
+    
+    
     segment *new_segment(region::impl *r);
     segment_descriptor &descriptor(segment *seg) noexcept
     {
@@ -49823,10 +49803,10 @@ public:
     void set_emergency_reserve_max(size_t new_size) noexcept ;
     size_t emergency_reserve_max() const noexcept { return _emergency_reserve_max; }
     void set_current_emergency_reserve_goal(size_t goal) noexcept { _current_emergency_reserve_goal = goal; }
-    void clear_allocation_failure_flag() noexcept ;
-    bool allocation_failure_flag() const noexcept;
-    void refill_emergency_reserve();
-    void add_non_lsa_memory_in_use(size_t n) noexcept;
+    
+    
+    
+    
     void subtract_non_lsa_memory_in_use(size_t n) noexcept;
     size_t non_lsa_memory_in_use() const noexcept ;
     size_t total_memory_in_use() const noexcept { return _non_lsa_memory_in_use + _segments_in_use * segment::size; }
@@ -51369,13 +51349,13 @@ timeuuid_type_impl::timeuuid_type_impl() : concrete_type<utils::UUID>(kind::time
 timestamp_type_impl::timestamp_type_impl() : simple_type_impl(kind::timestamp, timestamp_type_name, 8) {}
 static boost::posix_time::ptime get_time(const boost::smatch &sm)
 ;
-static boost::posix_time::time_duration get_utc_offset(const std::string &s);
-int64_t timestamp_from_string(sstring_view s);
+
+
 simple_date_type_impl::simple_date_type_impl() : simple_type_impl{kind::simple_date, simple_date_type_name, {}}
 {
 }
-static date::year_month_day get_simple_date_time(const boost::smatch &sm);
-static uint32_t serialize(const std::string &input, int64_t days);
+
+
 time_type_impl::time_type_impl() : simple_type_impl{kind::time, time_type_name, {}}
 {
 }
@@ -52943,8 +52923,8 @@ impl(fs::path path) : _path(std::move(path)), _fd(file_desc::open(_path.native()
         throw std::system_error(errno, std::system_category(), "Could not acquire lock: " + _path.native());
     }
 }
-impl(impl &&) = default;
-~impl();
+
+
 fs::path _path;
 file_desc _fd;
 };
@@ -53118,10 +53098,8 @@ if (catch_type->__do_catch(ex_type, &raw_ptr, 1))
 return nullptr;
 }
 namespace bpo = boost::program_options;
-template <>
-std::istream &std::operator>>(std::istream &is, std::unordered_map<seastar::sstring, seastar::sstring> &map);
-template <>
-std::istream &std::operator>>(std::istream &is, std::vector<seastar::sstring> &res);
+
+
 thread_local unsigned utils::config_file::s_shard_id = 0;
 
 void utils::config_file::add(std::initializer_list<cfg_ref> cfgs) { _cfgs.insert(_cfgs.end(), cfgs.begin(), cfgs.end()); }
