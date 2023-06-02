@@ -21302,9 +21302,7 @@ struct replay_position {
     static constexpr segment_id_type cpu_mask = ~ts_mask;
     segment_id_type id;
     position_type pos;
-    replay_position(segment_id_type i = 0, position_type p = 0)
-        : id(i), pos(p)
-    {}
+    
      ;
 };
 class commitlog;
@@ -21376,8 +21374,8 @@ public:
     
     
     bool is_view() const;
-    table_schema_version digest() const;
-    std::optional<sstring> partitioner() const;
+    
+    
     // Returns true iff any mutations contain any live cells
 };
 class mutation;
@@ -21401,8 +21399,7 @@ class result_set_row {
 public:
     
     // Look up a deserialized row cell value by column name
-    const data_value*
-    get_data_value(const sstring& column_name) const ;
+    
     // Look up a deserialized row cell value by column name
     template<typename T>
     std::optional<T>
@@ -21449,11 +21446,11 @@ class extensions;
 class config;
 class schema_ctxt {
 public:
-    schema_ctxt(const replica::database&);
+    
     schema_ctxt(distributed<replica::database>&);
     schema_ctxt(distributed<service::storage_proxy>&);
-    const db::extensions& extensions() const ;
-    const unsigned murmur3_partitioner_ignore_msb_bits() const ;
+    
+    
     uint32_t schema_registry_grace_period() const {
         return _schema_registry_grace_period;
     }
@@ -21514,14 +21511,14 @@ std::vector<mutation> adjust_schema_for_schema_features(std::vector<mutation> sc
 future<std::set<sstring>> merge_keyspaces(distributed<service::storage_proxy>& proxy, schema_result&& before, schema_result&& after);
 seastar::future<std::vector<shared_ptr<cql3::functions::user_function>>> create_functions_from_schema_partition(replica::database& db, lw_shared_ptr<query::result_set> result);
 future<std::map<sstring, schema_ptr>> create_tables_from_tables_partition(distributed<service::storage_proxy>& proxy, const schema_result::mapped_type& result);
-std::vector<mutation> make_drop_table_mutations(lw_shared_ptr<keyspace_metadata> keyspace, schema_ptr table, api::timestamp_type timestamp);
+
 schema_ptr create_table_from_mutations(const schema_ctxt&, schema_mutations, std::optional<table_schema_version> version = {});
 view_ptr create_view_from_mutations(const schema_ctxt&, schema_mutations, std::optional<table_schema_version> version = {});
 future<std::vector<view_ptr>> create_views_from_schema_partition(distributed<service::storage_proxy>& proxy, const schema_result::mapped_type& result);
 schema_mutations make_schema_mutations(schema_ptr s, api::timestamp_type timestamp, bool with_columns);
 
 
-std::vector<mutation> make_create_view_mutations(lw_shared_ptr<keyspace_metadata> keyspace, view_ptr view, api::timestamp_type timestamp);
+
 class preserve_version_tag {};
 using preserve_version = bool_class<preserve_version_tag>;
 template<typename K, typename V>
@@ -21628,8 +21625,7 @@ template <>
 struct serializer<tombstone> {
   ;
   ;
-  template <typename Input>
-  static void skip(Input& buf);
+  ;
 };
 template <>
 struct serializer<const tombstone> : public serializer<tombstone>
@@ -21813,28 +21809,26 @@ public:
         reader_permit _permit;
         friend class flat_mutation_reader_v2;
     protected:
-        template<typename... Args>
-        void push_mutation_fragment(Args&&... args) ;
+         ;
         void clear_buffer() ;
-        void reserve_additional(size_t n) ;
+        
         void clear_buffer_to_next_partition();
-        template<typename Source>
-        future<bool> fill_buffer_from(Source&);
+        ;
         const tracked_buffer& buffer() const ;
     public:
-        impl(schema_ptr s, reader_permit permit) : _buffer(permit), _schema(std::move(s)), _permit(std::move(permit)) { }
-        virtual ~impl() ;
+        
+        
         virtual future<> fill_buffer() = 0;
         virtual future<> next_partition() = 0;
         bool is_end_of_stream() const ;
         bool is_buffer_empty() const ;
         bool is_buffer_full() const ;
-        bool is_close_required() const ;
+        
         void set_close_required() ;
         static constexpr size_t default_max_buffer_size_in_bytes() ;
         mutation_fragment_v2 pop_mutation_fragment() ;
         void unpop_mutation_fragment(mutation_fragment_v2 mf) ;
-        future<mutation_fragment_v2_opt> operator()() ;
+        
         template<typename Consumer>
         requires FlatMutationReaderConsumerV2<Consumer>
         // Stops when consumer returns stop_iteration::yes or end of stream is reached.
@@ -21901,7 +21895,7 @@ public:
                     , _consumer(std::move(c))
             { }
             future<stop_iteration> operator()(mutation_fragment_v2&& mf) ;
-            future<stop_iteration> consume(static_row&& sr) ;
+            
         private:
         };
     public:
@@ -21951,14 +21945,14 @@ public:
         size_t buffer_size() const ;
         tracked_buffer detach_buffer() noexcept ;
         void move_buffer_content_to(impl& other) ;
-        void check_abort() ;
+        
         db::timeout_clock::time_point timeout() const noexcept ;
         void set_timeout(db::timeout_clock::time_point timeout) noexcept ;
     };
 private:
     std::unique_ptr<impl> _impl;
-    flat_mutation_reader_v2() = default;
-    explicit operator bool() const noexcept ;
+    
+    
     friend class optimized_optional<flat_mutation_reader_v2>;
     void do_upgrade_schema(const schema_ptr&);
     static void on_close_error(std::unique_ptr<impl>, std::exception_ptr ep) noexcept;
@@ -21966,9 +21960,9 @@ public:
     
     
     flat_mutation_reader_v2(flat_mutation_reader_v2&&) = default;
-    flat_mutation_reader_v2& operator=(const flat_mutation_reader_v2&) = delete;
+    
     flat_mutation_reader_v2& operator=(flat_mutation_reader_v2&& o) noexcept;
-    ~flat_mutation_reader_v2();
+    
     future<mutation_fragment_v2_opt> operator()() ;
     template <typename Consumer>
     requires FlatMutationReaderConsumerV2<Consumer>
@@ -22007,7 +22001,7 @@ public:
         void on_end_of_stream() const { }
     };
     struct no_filter {
-        bool operator()(const dht::decorated_key& dk) const ;
+        
     };
     template<typename Consumer, typename Filter>
     requires FlattenedConsumerV2<Consumer> && FlattenedConsumerFilterV2<Filter>
@@ -22482,8 +22476,8 @@ struct serializer<no_marker_view> {
 struct tombstone_view {
     utils::input_stream v;
     operator tombstone() const ;
-    auto timestamp() const ;
-    auto deletion_time() const ;
+    
+    
 };
 template<>
 struct serializer<tombstone_view> {
@@ -22510,8 +22504,7 @@ template<>
 struct serializer<dead_cell_view> {
      ;
      ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
 };
 struct dead_marker_view {
     utils::input_stream v;
@@ -22570,8 +22563,7 @@ struct expiring_marker_view {
 };
 template<>
 struct serializer<expiring_marker_view> {
-    template<typename Input>
-    static expiring_marker_view read(Input& v) ;
+     ;
      ;
      ;
 };
@@ -24827,9 +24819,7 @@ public:
 class mutation_partition_view {
     utils::input_stream _in;
 private:
-    mutation_partition_view(utils::input_stream v)
-        : _in(v)
-    { }
+    
     ;
     ;
     struct accept_ordered_cookie {
@@ -24878,7 +24868,7 @@ private:
     deletable_row* _current_row = nullptr;
     Consumer& _consumer;
     stop_iteration _stop_consuming = stop_iteration::no;
-    stop_iteration flush_rows_and_tombstones(position_in_partition_view pos) ;
+    
 public:
     frozen_mutation_consumer_adaptor(schema_ptr s, Consumer& consumer)
         : _schema(*s)
@@ -24895,7 +24885,7 @@ public:
     virtual stop_iteration accept_row(position_in_partition_view key, row_tombstone deleted_at, row_marker rm, is_dummy dummy, is_continuous continuous) override ;
     void accept_row_cell(column_id id, atomic_cell cell) override ;
     virtual void accept_row_cell(column_id id, collection_mutation_view collection) override ;
-    auto on_end_of_partition() ;
+    
 };
 // Immutable, compact form of mutation.
 //
@@ -24913,7 +24903,7 @@ private:
     partition_key _pk;
 private:
     partition_key deserialize_key() const;
-    ser::mutation_view mutation_view() const;
+    
 public:
      // FIXME: Should replace column_family_id()
     // The supplied schema must be of the same version as the schema of
@@ -24984,7 +24974,7 @@ class frozen_mutation_fragment {
     bytes_ostream _bytes;
 public:
     
-    const bytes_ostream& representation() const ;
+    
 };
 class frozen_mutation_and_schema;
 namespace replica {
@@ -25037,7 +25027,7 @@ private:
     std::optional<clustering_key_prefix> _key;
     deletable_row _row;
 public:
-    const std::optional<clustering_key_prefix>& key() const ;
+    
     row_tombstone tomb() const ;
     const row_marker& marker() const ;
     const row& cells() const ;
@@ -25060,7 +25050,7 @@ class view_updates final {
     mutable size_t _op_count = 0;
     const bool _backing_secondary_index;
 public:
-    void generate_update(data_dictionary::database db, const partition_key& base_key, const clustering_or_static_row& update, const std::optional<clustering_or_static_row>& existing, gc_clock::time_point now);
+    
 private:
     struct view_row_entry {
         deletable_row* _row;
@@ -25157,18 +25147,18 @@ private:
     this_node _is_this_node;
     idx_type _idx = -1;
 public:
-    const locator::topology* topology() const noexcept ;
+    
     const locator::host_id& host_id() const noexcept ;
     const inet_address& endpoint() const noexcept ;
     const endpoint_dc_rack& dc_rack() const noexcept ;
     // Is this "localhost"?
-    this_node is_this_node() const noexcept ;
+    
     // idx < 0 means "unassigned"
     
     
     static std::string to_string(state);
 private:
-    static node_holder make(const locator::topology* topology, locator::host_id id, inet_address endpoint, endpoint_dc_rack dc_rack, state state, node::this_node is_this_node = this_node::no, idx_type idx = -1);
+    
     
     
     friend class topology;
@@ -25195,7 +25185,7 @@ public:
     const node* find_node(host_id id) const noexcept;
     // Looks up a node by its inet_address.
     // Returns a pointer to the node if found, or nullptr otherwise.
-    const node* find_node(const inet_address& ep) const noexcept;
+    
     // Finds a node by its index
     // Returns a pointer to the node if found, or nullptr otherwise.
     // Returns true if a node with given host_id is found
@@ -25239,7 +25229,7 @@ public:
     ;
      ;
     void sort_by_proximity(inet_address address, inet_address_vector_replica_set& addresses) const;
-    void for_each_node(std::function<void(const node*)> func) const;
+    
 private:
     unsigned _shard;
     config _cfg;
@@ -25352,7 +25342,7 @@ struct numeric_limits<utils::tagged_tagged_integer<Final, Tag, ValueType>> : pub
     using tagged_tagged_integer_t = utils::tagged_tagged_integer<Final, Tag, ValueType>;
     using value_limits = numeric_limits<ValueType>;
     static_assert(numeric_limits<ValueType>::is_specialized && numeric_limits<ValueType>::is_bounded);
-    static constexpr tagged_tagged_integer_t min() ;
+    
     
 };
 } // namespace std
