@@ -35833,7 +35833,7 @@ class data_listeners;
 class large_data_handler;
 class system_keyspace;
 class table_selector;
-future<> system_keyspace_make(db::system_keyspace& sys_ks, distributed<replica::database>& db, distributed<service::storage_service>& ss, sharded<gms::gossiper>& g, sharded<service::raft_group_registry>& raft_gr, db::config& cfg, system_table_load_phase phase);
+
 namespace view {
 class view_update_generator;
 }
@@ -35878,12 +35878,7 @@ public:
     using iterator = decltype(_memtables)::iterator;
     using const_iterator = decltype(_memtables)::const_iterator;
 public:
-    memtable_list(
-            seal_immediate_fn_type seal_immediate_fn,
-            std::function<schema_ptr()> cs,
-            dirty_memory_manager* dirty_memory_manager,
-            replica::table_stats& table_stats,
-            seastar::scheduling_group compaction_scheduling_group = seastar::current_scheduling_group())  ;
+    
     // # 8904 - this method is akin to std::set::erase(key_type), not
     // erase(iterator). Should be tolerant against non-existing.
     // Synchronously swaps the active memtable with a new, empty one,
@@ -36155,8 +36150,8 @@ public:
     future<std::vector<locked_cell>> lock_counter_cells(const mutation& m, db::timeout_clock::time_point timeout);
 private:
 public:
-    table(column_family&&) = delete; // 'this' is being captured during construction
-    ~table();
+     // 'this' is being captured during construction
+    
     const schema_ptr& schema() const ;
     void set_schema(schema_ptr);
     // Applies given mutation to this column family
@@ -36388,8 +36383,8 @@ private:
     serialized_action _update_memtable_flush_static_shares_action;
     utils::observer<float> _memtable_flush_static_shares_observer;
 public:
-    data_dictionary::database as_data_dictionary() const;
-    std::shared_ptr<data_dictionary::user_types_storage> as_user_types_storage() const noexcept;
+    
+    
     const data_dictionary::user_types_storage& user_types() const noexcept;
 private:
     using system_keyspace = bool_class<struct system_keyspace_tag>;
@@ -36401,9 +36396,9 @@ public:
     public:
     };
     column_family& find_column_family(std::string_view ks, std::string_view name);
-    const column_family& find_column_family(std::string_view ks, std::string_view name) const;
-    column_family& find_column_family(const table_id&);
-    const column_family& find_column_family(const table_id&) const;
+    
+    
+    
     /// Revert the system read concurrency to the normal value.
     ///
     /// When started the database uses a higher initial concurrency for system
@@ -36500,7 +36495,7 @@ namespace rjson {
 class error : public std::exception {
     std::string _msg;
 public:
-    error() = default;
+    
     error(const std::string& msg) : _msg(msg) {}
 };
 }
@@ -36538,10 +36533,10 @@ public:
 };
 class missing_value : public error {
 public:
-    missing_value(std::string_view name);
+    
 };
 // Returns an object representing JSON's null
- rjson::value null_value() ;
+ 
 // Returns an empty JSON object - {}
  rjson::value empty_object() ;
 // Returns an empty JSON array - []
@@ -36588,12 +36583,11 @@ using chunked_content = std::vector<temporary_buffer<char>>;
 // function so that we can start freeing chunks as soon as we parse them.
 // Creates a JSON value (of JSON string type) out of internal string representations.
 // The string value is copied, so str's liveness does not need to be persisted.
-rjson::value from_string(std::string_view view);
+
 // Returns a pointer to JSON member if it exists, nullptr otherwise
 // Returns a reference to JSON member if it exists, throws otherwise
  ;
-template<typename T>
-std::optional<T> get_opt(const rjson::value& value, std::string_view name) ;
+ ;
 // The various add*() functions below *add* a new member to a JSON object.
 // They all assume that a member with the same key (name) doesn't already
 // exist in that object, so they are meant to be used just to build a new
@@ -36605,7 +36599,7 @@ std::optional<T> get_opt(const rjson::value& value, std::string_view name) ;
 // Adds a member to a given JSON object by moving the member - allocates the name.
 // Throws if base is not a JSON object.
 // Assumes a member with the same name does not yet exist in base.
-void add_with_string_name(rjson::value& base, std::string_view name, rjson::value&& member);
+
 // Adds a string member to a given JSON object by assigning its reference - allocates the name.
 // NOTICE: member string liveness must be ensured to be at least as long as base's.
 // Throws if base is not a JSON object.
@@ -36634,7 +36628,7 @@ void replace_with_string_name(rjson::value& base, std::string_view name, rjson::
 // Adds a value to a JSON list by moving the item to its end.
 // Throws if base_array is not a JSON array.
 // Remove a member from a JSON object. Throws if value isn't an object.
-bool remove_member(rjson::value& value, std::string_view name);
+
 struct single_value_comp {
     bool operator()(const rjson::value& r1, const rjson::value& r2) const;
 };
@@ -36691,7 +36685,7 @@ namespace cdc {
 struct operation_result_tracker;
 class db_context;
 class metadata;
-bool is_log_name(const std::string_view& table_name);
+
 /// \brief CDC service, responsible for schema listeners
 ///
 /// CDC service will listen for schema changes and iff CDC is enabled/changed
@@ -36701,7 +36695,7 @@ class cdc_service final : public async_sharded_service<cdc::cdc_service> {
     class impl;
     std::unique_ptr<impl> _impl;
 public:
-    future<> stop();
+    
     cdc_service(service::storage_proxy&, cdc::metadata&, service::migration_notifier&);
     // If any of the mutations are cdc enabled, optionally selects preimage, and adds the
     // appropriate augments to set the log entries.
@@ -36757,16 +36751,16 @@ public:
             data_type regular_column_name_type,
             sstring comment = "");
     schema_builder(const schema_ptr);
-    static int register_static_configurator(static_configurator&& configurator);
-    const sstring& ks_name() const ;
+    
+    
     const sstring& cf_name() const ;
     schema_builder& set_comment(const sstring& s) ;
-    const sstring& comment() const ;
-    schema_builder& set_default_time_to_live(gc_clock::duration t) ;
+    
+    
     gc_clock::duration default_time_to_live() const ;
     schema_builder& set_compaction_strategy_options(std::map<sstring, sstring>&& options);
-    schema_builder& set_caching_options(caching_options c) ;
-    schema_builder& set_is_dense(bool is_dense) ;
+    
+    
     schema_builder& set_is_compound(bool is_compound) ;
     schema_builder& set_is_counter(bool is_counter) {
         _raw._is_counter = is_counter;
@@ -36776,9 +36770,9 @@ public:
     schema_builder& with_sharder(unsigned shard_count, unsigned sharding_ignore_msb_bits);
     class default_names {
     public:
-        default_names(const schema_builder&);
+        
         default_names(const schema::raw_schema&);
-        sstring partition_key_name();
+        
         sstring clustering_name();
         sstring compact_value_name();
     private:
@@ -36804,12 +36798,12 @@ public:
     schema_builder& with(compact_storage);
     schema_builder& with_version(table_schema_version);
     schema_builder& with_view_info(table_id base_id, sstring base_name, bool include_all_columns, sstring where_clause);
-    schema_builder& with_view_info(const schema& base_schema, bool include_all_columns, sstring where_clause) ;
-    schema_builder& with_index(const index_metadata& im);
+    
+    
     ;
-    default_names get_default_names() const ;
+    
     // Equivalent to with(cp).build()
-    schema_ptr build(compact_storage cp);
+    
     schema_ptr build();
 private:
     friend class default_names;
@@ -36824,7 +36818,7 @@ using async_schema_loader = std::function<future<frozen_schema>(table_schema_ver
 using schema_loader = std::function<frozen_schema(table_schema_version)>;
 class schema_version_not_found : public std::runtime_error {
 public:
-    schema_version_not_found(table_schema_version v);
+    
 };
 class schema_version_loading_failed : public std::runtime_error {
 public:
@@ -36861,9 +36855,9 @@ class schema_registry_entry : public enable_lw_shared_from_this<schema_registry_
     friend class schema_registry;
 public:
     ;
-    schema_ptr load(frozen_schema);
-    future<schema_ptr> start_loading(async_schema_loader);
-    schema_ptr get_schema(); // call only when state >= LOADED
+    
+    
+     // call only when state >= LOADED
     // Can be called from other shards
     bool is_synced() const;
     // Initiates asynchronous schema sync or returns ready future when is already synced.
@@ -36911,14 +36905,14 @@ public:
     schema_ptr get(table_schema_version) const;
     // Looks up schema version. Throws schema_version_not_found when not found
     // or loading is in progress.
-    frozen_schema get_frozen(table_schema_version) const;
+    
     // Attempts to add given schema to the registry. If the registry already
     // knows about the schema, returns existing entry, otherwise returns back
     // the schema which was passed as argument. Users should prefer to use the
     // schema_ptr returned by this method instead of the one passed to it,
     // because doing so ensures that the entry will be kept in the registry as
     // long as the schema is actively used.
-    schema_ptr learn(const schema_ptr&);
+    
 };
 schema_registry& local_schema_registry();
 // Schema pointer which can be safely accessed/passed across shards via
@@ -37069,8 +37063,8 @@ class result_message {
 public:
     class visitor;
     class visitor_base;
-    const std::vector<sstring>& warnings() const ;
-    virtual std::optional<unsigned> move_to_shard() const ;
+    
+    
     virtual bool is_exception() const ;
     virtual void throw_if_exception() const ;
     //
@@ -37084,7 +37078,7 @@ public:
     class bounce_to_shard;
     class exception;
 };
-std::ostream& operator<<(std::ostream& os, const result_message& msg);
+
 }
 }
 namespace cql3 {
@@ -37109,11 +37103,11 @@ public:
 private:
     cache_key_type _key;
 public:
-    cache_key_type& key() ;
+    
     const cache_key_type& key() const ;
     static const cql_prepared_id_type& cql_id(const prepared_cache_key_type& key) ;
-    static thrift_prepared_id_type thrift_id(const prepared_cache_key_type& key) ;
-    bool operator==(const prepared_cache_key_type& other) const = default;
+    
+    
 };
 class prepared_statements_cache {
 public:
@@ -37195,8 +37189,8 @@ public:
         size_t operator()(const view& kv) ;
     };
     struct view_equal {
-        bool operator()(const authorized_prepared_statements_cache_key& k1, const view& k2) ;
-        bool operator()(const view& k2, const authorized_prepared_statements_cache_key& k1) ;
+        
+        
     };
 private:
     cache_key_type _key;
@@ -37229,7 +37223,7 @@ public:
         static void inc_misses() noexcept ;
         static void inc_blocks() noexcept ;
         static void inc_evictions() noexcept ;
-        static void inc_privileged_on_cache_size_eviction() noexcept ;
+        
     };
 private:
     using cache_key_type = authorized_prepared_statements_cache_key;
@@ -37727,7 +37721,7 @@ public:
 namespace utils {
 class bad_exception_container_access : public std::exception {
 public:
-    const char* what() const noexcept override ;
+    
 };
 // A variant-like type capable of holding one of the allowed exception types.
 // This allows inspecting the exception in the error handling code without
@@ -38150,38 +38144,29 @@ class cql_test_env {
 public:
     ;
     virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_cql(sstring_view text) = 0;
-    virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_cql(
-            sstring_view text, std::unique_ptr<cql3::query_options> qo) = 0;
+    
     /// Processes queries (which must be modifying queries) as a batch.
-    virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_batch(
-        const std::vector<sstring_view>& queries, std::unique_ptr<cql3::query_options> qo) = 0;
+    
     virtual future<cql3::prepared_cache_key_type> prepare(sstring query) = 0;
     virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_prepared(
         cql3::prepared_cache_key_type id,
         cql3::raw_value_vector_with_unset values,
         db::consistency_level cl = db::consistency_level::ONE) = 0;
-    virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_prepared_with_qo(
-        cql3::prepared_cache_key_type id,
-        std::unique_ptr<cql3::query_options> qo) = 0;
+    
     virtual future<std::vector<mutation>> get_modification_mutations(const sstring& text) = 0;
-    virtual future<> create_table(std::function<schema(std::string_view)> schema_maker) = 0;
+    
     virtual future<> require_keyspace_exists(const sstring& ks_name) = 0;
     virtual future<> require_table_exists(const sstring& ks_name, const sstring& cf_name) = 0;
-    virtual future<> require_table_exists(std::string_view qualified_name) = 0;
-    virtual future<> require_table_does_not_exist(const sstring& ks_name, const sstring& cf_name) = 0;
-    virtual future<> require_column_has_value(
-        const sstring& table_name,
-        std::vector<data_value> pk,
-        std::vector<data_value> ck,
-        const sstring& column_name,
-        data_value expected) = 0;
-    virtual future<> stop() = 0;
+    
+    
+    
+    
     virtual service::client_state& local_client_state() = 0;
     virtual replica::database& local_db() = 0;
     virtual cql3::query_processor& local_qp() = 0;
     virtual distributed<replica::database>& db() = 0;
-    virtual distributed<cql3::query_processor> & qp() = 0;
-    virtual auth::service& local_auth_service() = 0;
+    
+    
     virtual db::view::view_builder& local_view_builder() = 0;
     
     
@@ -38344,10 +38329,7 @@ class clustering_interval_set {
         position_in_partition_with_schema()
             : _pos(position_in_partition::for_static_row())
         { }
-        position_in_partition_with_schema(schema_ptr s, position_in_partition pos)
-            : _schema(std::move(s))
-            , _pos(std::move(pos))
-        { }
+        
     };
 private:
     // We want to represent intervals of clustering keys, not position_in_partitions,
@@ -38358,7 +38340,7 @@ private:
     set_type _set;
 public:
     // Constructs from legacy clustering_row_ranges
-    query::clustering_row_ranges to_clustering_row_ranges() const ;
+    
     class position_range_iterator {
     public:
         using iterator_category = std::input_iterator_tag;
@@ -38376,10 +38358,10 @@ public:
     };
 public:
     // Returns true iff this set is fully contained in the other set.
-    bool overlaps(const schema& s, const position_range& range) const ;
+    
     // Adds given clustering range to this interval set.
     // The range may overlap with this set.
-    void add(const schema& s, const position_range& r) ;
+    
     void add(const schema& s, const clustering_interval_set& other) ;
     position_range_iterator begin() const ;
     position_range_iterator end() const ;
@@ -38432,15 +38414,15 @@ public:
     using assert_function = noncopyable_function<void(const column_definition&, const atomic_cell_or_collection*)>;
     
     flat_reader_assertions_v2& may_produce_tombstones(position_range range) ;
-    flat_reader_assertions_v2& produces_range_tombstone_change(const range_tombstone_change& rtc_) ;
-    flat_reader_assertions_v2& produces_partition_end() ;
+    
+    
     flat_reader_assertions_v2& produces(const schema& s, const mutation_fragment_v2& mf) ;
     flat_reader_assertions_v2& produces_end_of_stream() ;
-    flat_reader_assertions_v2& produces(mutation_fragment_v2::kind k, std::vector<int> ck_elements, bool make_full_key = false) ;
+    
      ;
-    void has_monotonic_positions() ;
-    flat_reader_assertions_v2& fast_forward_to(const dht::partition_range& pr) ;
-    flat_reader_assertions_v2& next_partition() ;
+    
+    
+    
     flat_reader_assertions_v2& fast_forward_to(position_range pr) ;
     flat_reader_assertions_v2& fast_forward_to(const clustering_key& ck1, const clustering_key& ck2) ;
 };
@@ -38813,11 +38795,10 @@ Real get_real(Real min, Real max, RandomEngine& engine) {
     auto dist = std::uniform_real_distribution<Real>(min, max);
     return dist(engine);
 }
-template <typename Real, typename RandomEngine>
-Real get_real(Real max, RandomEngine& engine) ;
+ ;
 /// Returns true with probability p.
 /// p = 1.0 means 100%.
-bool with_probability(double p) ;
+
 template <typename Real, typename RandomEngine>
 Real get_real(RandomEngine& engine) {
     return get_real<Real>(Real{0}, std::numeric_limits<Real>::max(), engine);
@@ -38828,14 +38809,12 @@ template <typename Real>
 Real get_real(Real max) ;
 template <typename Real>
 Real get_real() ;
-template <typename RandomEngine>
- bool get_bool(RandomEngine& engine) ;
- bool get_bool() ;
+ ;
+ 
  bytes get_bytes(size_t n) ;
  bytes get_bytes() ;
-template <typename RandomEngine>
- sstring get_sstring(size_t n, RandomEngine& engine) ;
- sstring get_sstring(size_t n) ;
+ ;
+ 
  sstring get_sstring() ;
 // Picks a random subset of size `m` from the given vector.
 template <typename T>
@@ -38911,15 +38890,15 @@ template <typename LHS, typename RHS>
     return do_check(condition, sl, fmt::format("{} {}= {}", lhs, condition ? "=" : "!", rhs));
 }
 void do_require(bool condition, std::source_location sl, std::string_view msg);
- void require(bool condition, std::source_location sl = std::source_location::current()) ;
+ 
  ;
 
  
 
 }
-int read_collection_size(bytes_view& in);
-bytes_view read_collection_key(bytes_view& in);
-bytes_view read_collection_value_nonnull(bytes_view& in);
+
+
+
 template <FragmentedView View>
 int read_collection_size(View& in) {
     return read_simple<int32_t>(in);
@@ -39071,7 +39050,7 @@ void amortized_reserve(T& v, size_t desired_capacity) {
 namespace utils {
 namespace ascii {
 bool validate(const uint8_t *data, size_t len);
- bool validate(bytes_view string) ;
+ 
 } // namespace ascii
 } // namespace utils
 // The declared below get_signature() method makes the Signature string for AWS
@@ -39098,7 +39077,7 @@ std::string get_signature(std::string_view access_key_id, std::string_view secre
 static inline constexpr std::vector<temporary_buffer<char>>* unsigned_content = nullptr;
 // Same for datestamp checking
 static inline auto omit_datestamp_expiration_check = std::nullopt;
-std::string format_time_point(db_clock::time_point tp);
+
 } // aws namespace
 } // utils namespace
 // A coarser and faster version of std::steady_clock, using
@@ -39133,27 +39112,14 @@ public:
     data_input(bytes_view&& v)
             : _view(std::move(v)) {
     }
-    data_input(const bytes& b)
-            : data_input(bytes_view(b)) {
-    }
-    data_input(const bytes& b, size_t off, size_t n = bytes::npos)
-            : data_input(
-                    bytes_view(b.c_str() + off, std::min(b.size() - off, n))) {
-        if (off > b.size()) {
-            throw std::out_of_range("Offset out of range");
-        }
-    }
-    template<typename T>
-    data_input(const std::basic_string_view<T>& view)
-            : data_input(
-                    bytes_view(reinterpret_cast<const int8_t *>(view.data()),
-                            view.size() * sizeof(T))) {
-    }
     
     
     
     
-    bool has_next() const ;
+    
+    
+    
+    
     void ensure(size_t s) const ;
     template<typename T> T peek() const;
     template<typename T> T read();
