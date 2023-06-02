@@ -8984,7 +8984,7 @@ private:
     template <FragmentedView View> data_value deserialize_impl(View v) const;
 public:
      ;
-    data_value deserialize_value(bytes_view v) const ;
+    
 };
 // a list or a set
 class listlike_collection_type_impl : public collection_type_impl {
@@ -9074,7 +9074,7 @@ public:
     using collection_type_impl::deserialize;
     template <FragmentedView View> data_value deserialize(View v) const;
 };
-data_value make_list_value(data_type type, list_type_impl::native_type value);
+
 class user_type_impl;
 namespace Json {
 class Value;
@@ -9267,9 +9267,9 @@ protected:
     std::vector<data_type> _types;
     
     tuple_type_impl(kind k, sstring name, std::vector<data_type> types, bool freeze_inner);
-    tuple_type_impl(std::vector<data_type> types, bool freze_inner);
+    
 public:
-    tuple_type_impl(std::vector<data_type> types);
+    
     static shared_ptr<const tuple_type_impl> get_instance(std::vector<data_type> types);
     data_type type(size_t i) const {
         return _types[i];
@@ -9304,7 +9304,7 @@ private:
     void set_contains_collections();
     friend abstract_type;
 };
-data_value make_tuple_value(data_type tuple_type, tuple_type_impl::native_type value);
+
 class user_type_impl : public tuple_type_impl, public data_dictionary::keyspace_element {
     using intern = type_interning_helper<user_type_impl, sstring, bytes, std::vector<bytes>, std::vector<data_type>, bool>;
 public:
@@ -9316,15 +9316,7 @@ private:
     const bool _is_multi_cell;
 public:
     using native_type = std::vector<data_value>;
-    user_type_impl(sstring keyspace, bytes name, std::vector<bytes> field_names, std::vector<data_type> field_types, bool is_multi_cell)
-            : tuple_type_impl(kind::user, make_name(keyspace, name, field_names, field_types, is_multi_cell), field_types, false )
-            , _keyspace(std::move(keyspace))
-            , _name(std::move(name))
-            , _field_names(std::move(field_names))
-            , _string_field_names(boost::copy_range<std::vector<sstring>>(_field_names | boost::adaptors::transformed(
-                    [] (const bytes& field_name) { return utf8_type->to_string(field_name); })))
-            , _is_multi_cell(is_multi_cell) {
-    }
+    
     static shared_ptr<const user_type_impl> get_instance(sstring keyspace, bytes name,
             std::vector<bytes> field_names, std::vector<data_type> field_types, bool multi_cell);
     data_type field_type(size_t i) const ;
@@ -9336,23 +9328,19 @@ public:
     sstring get_name_as_cql_string() const;
     
     
-    virtual sstring element_type() const override ;
+    
     virtual std::ostream& describe(std::ostream& os) const override;
 private:
-    static sstring make_name(sstring keyspace,
-                             bytes name,
-                             std::vector<bytes> field_names,
-                             std::vector<data_type> field_types,
-                             bool is_multi_cell);
+    
 };
-data_value make_user_value(data_type tuple_type, user_type_impl::native_type value);
+
 constexpr size_t max_udt_fields = std::numeric_limits<int16_t>::max();
 // The following two functions are used to translate field indices (used to identify fields inside non-frozen UDTs)
 // from/to a serialized bytes representation to be stored in mutations and sstables.
 // Refer to collection_mutation.hh for a detailed description on how the serialized indices are used inside mutations.
-bytes serialize_field_index(size_t);
+
 size_t deserialize_field_index(const bytes_view&);
-size_t deserialize_field_index(managed_bytes_view);
+
 namespace utils {
 }
 struct empty_type_impl final : public abstract_type {
@@ -9400,15 +9388,15 @@ struct duration_type_impl final : public concrete_type<cql_duration> {
 };
 struct timestamp_type_impl final : public simple_type_impl<db_clock::time_point> {
     timestamp_type_impl();
-    static db_clock::time_point from_sstring(sstring_view s);
+    
 };
 struct simple_date_type_impl final : public simple_type_impl<uint32_t> {
     simple_date_type_impl();
-    static uint32_t from_sstring(sstring_view s);
+    
 };
 struct time_type_impl final : public simple_type_impl<int64_t> {
     time_type_impl();
-    static int64_t from_sstring(sstring_view s);
+    
 };
 struct string_type_impl : public concrete_type<sstring> {
     string_type_impl(kind k, sstring name);
@@ -9626,7 +9614,7 @@ public:
     // Like trigger() but can be aborted
     // Like trigger(), but defers invocation of the action to allow for batching
     // more requests.
-    future<> trigger_later() ;
+    
     // Waits for all invocations initiated in the past.
     // The adaptor is to be used as an argument to utils::observable.observe()
     // When the notification happens the adaptor just triggers the action
@@ -9675,17 +9663,17 @@ class updateable_value : public updateable_value_base {
 private:
     const updateable_value_source<T>* source() const;
 public:
-    updateable_value() = default;
+    
     explicit updateable_value(T value) : _value(std::move(value)) {}
-    explicit updateable_value(const updateable_value_source<T>& source);
+    
     updateable_value(const updateable_value& v);
     
     
     
     
     const T& operator()() const ;
-    operator const T& () const ;
-    const T& get() const ;
+    
+    
     observer<T> observe(std::function<void (const T&)> callback) const;
     friend class updateable_value_source_base;
     template <typename U>
@@ -9748,7 +9736,7 @@ class config_type {
 private:
      ;
 public:
-    std::string_view name() const ;
+    
     
 };
 template <typename T>
@@ -9789,8 +9777,7 @@ public:
     protected:
         virtual const void* current_value() const = 0;
     public:
-        config_src(config_file* cf, std::string_view name, const config_type* type, std::string_view desc) 
-        ;
+        
         
         
         config_file * get_config_file() const ;
@@ -9822,23 +9809,13 @@ public:
     public:
         typedef T type;
         typedef named_value<T> MyType;
-        named_value(config_file* file, std::string_view name, std::string_view alias, liveness liveness_, value_status vs, const T& t = T(), std::string_view desc = {},
-                std::initializer_list<T> allowed_values = {})
-            : config_src(file, name, alias, &config_type_for<T>, desc)
-            , _value_status(vs)
-            , _liveness(liveness_)
-            , _allowed_values(std::move(allowed_values)) {
-            file->add(*this, std::make_unique<the_value_type>(std::move(t)));
-        }
         
         
-        named_value(config_file* file, std::string_view name, value_status vs, const T& t = T(), std::string_view desc = {},
-                std::initializer_list<T> allowed_values = {})
-                : named_value(file, name, {}, liveness::MustRestart, vs, t, desc, allowed_values) {
-        }
+        
+        
         value_status status() const noexcept override ;
         config_source source() const noexcept override ;
-        const T& operator()() const ;
+        
         
         
         void add_command_line_option(bpo::options_description_easy_init&) override;
@@ -9851,7 +9828,7 @@ public:
         future<bool> set_value_on_all_shards(sstring, config_source = config_source::Internal) override;
     };
     typedef std::reference_wrapper<config_src> cfg_ref;
-    config_file(std::initializer_list<cfg_ref> = {});
+    
     
     
     void add(std::initializer_list<cfg_ref>);
@@ -9868,7 +9845,7 @@ public:
     using configs = std::vector<cfg_ref>;
     configs set_values() const;
     configs unset_values() const;
-    const configs& values() const ;
+    
     future<> broadcast_to_all_shards();
 private:
     configs
@@ -9908,8 +9885,7 @@ namespace std {
 
 template<typename V, typename... Args>
 std::istream& operator>>(std::istream&, std::vector<V, Args...>&);
-template<>
-std::istream& operator>>(std::istream&, std::vector<seastar::sstring>&);
+
 extern template
 std::istream& operator>>(std::istream&, std::vector<seastar::sstring>&);
  ;
@@ -10002,17 +9978,17 @@ private:
             const schema& target_schema,
             mutation_partition& target);
     virtual void accept_partition_tombstone(tombstone t) override;
-    void accept_static_cell(column_id id, atomic_cell cell);
+    
     virtual void accept_static_cell(column_id id, atomic_cell_view cell) override;
     virtual void accept_static_cell(column_id id, collection_mutation_view collection) override;
     virtual void accept_row_tombstone(const range_tombstone& rt) override;
     virtual void accept_row(position_in_partition_view key, const row_tombstone& deleted_at, const row_marker& rm, is_dummy dummy, is_continuous continuous) override;
-    void accept_row_cell(column_id id, atomic_cell cell);
+    
     virtual void accept_row_cell(column_id id, atomic_cell_view cell) override;
     virtual void accept_row_cell(column_id id, collection_mutation_view collection) override;
     // Appends the cell to dst upgrading it to the new schema.
     // Cells must have monotonic names.
-    static void append_cell(row& dst, column_kind kind, const column_definition& new_def, const column_definition& old_def, const atomic_cell_or_collection& cell);
+    
 };
 namespace cql3 {
 class column_identifier_raw;
@@ -10028,12 +10004,12 @@ public:
     };
     
     column_identifier(bytes bytes_, data_type type);
-    column_identifier(bytes bytes_, sstring text);
-    bool operator==(const column_identifier& other) const;
+    
+    
     const sstring& text() const { return _text; }
     const bytes& name() const;
-    sstring to_string() const;
-    sstring to_cql_string() const;
+    
+    
 #if 0
     public ColumnIdentifier clone(AbstractAllocator allocator)
     {
@@ -10549,10 +10525,7 @@ private:
 
 class resource_kind_mismatch : public std::invalid_argument {
 public:
-    explicit resource_kind_mismatch(resource_kind expected, resource_kind actual)
-        : std::invalid_argument(
-            format("This resource has kind '{}', but was expected to have kind '{}'.", actual, expected)) {
-    }
+    
 };
 /// A "data" view of \ref resource.
 ///
@@ -10567,7 +10540,7 @@ public:
     std::optional<std::string_view> keyspace() const;
     std::optional<std::string_view> table() const;
 };
-std::ostream& operator<<(std::ostream&, const data_resource_view&);
+
 ///
 /// A "role" view of \ref resource.
 ///
@@ -10582,7 +10555,7 @@ public:
     explicit role_resource_view(const resource&);
     std::optional<std::string_view> role() const;
 };
-std::ostream& operator<<(std::ostream&, const role_resource_view&);
+
 ///
 /// A "service_level" view of \ref resource.
 ///
@@ -10593,7 +10566,7 @@ public:
     ///
     explicit service_level_resource_view(const resource&);
 };
-std::ostream& operator<<(std::ostream&, const service_level_resource_view&);
+
 ///
 /// A "function" view of \ref resource.
 ///
@@ -10683,7 +10656,7 @@ public:
     ///
     /// An anonymous user.
     ///
-    authenticated_user() = default;
+    
     
     
 };
@@ -11769,7 +11742,7 @@ public:
     
     
     
-    timestamped_val_ptr timestamped_value_ptr() noexcept ;
+    
 };
 }
 namespace std {
@@ -12128,7 +12101,7 @@ struct updateable_timeout_config {
     timeout_option_t truncate_timeout_in_ms;
     timeout_option_t cas_timeout_in_ms;
     timeout_option_t other_timeout_in_ms;
-    timeout_config current_values() const;
+    
 };
 using timeout_config_selector = db::timeout_clock::duration (timeout_config::*);
 extern const timeout_config infinite_timeout_config;
