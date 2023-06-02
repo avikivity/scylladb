@@ -12192,9 +12192,9 @@ public:
         return *_state_ptr;
     }
 };
- void set_user_timestamp(const trace_state_ptr& p, api::timestamp_type val) ;
- void add_prepared_statement(const trace_state_ptr& p, prepared_checked_weak_ptr& prepared) ;
- void set_username(const trace_state_ptr& p, const std::optional<auth::authenticated_user>& user) ;
+ 
+ 
+ 
  ;
  ;
 // global_trace_state_ptr is a helper class that may be used for creating spans
@@ -12417,7 +12417,7 @@ private:
 public:
     struct internal_tag {};
     struct external_tag {};
-    const timeout_config& get_timeout_config() const ;
+    
     qos::service_level_controller& get_service_level_controller() const ;
     ///
     /// `nullptr` for internal instances.
@@ -12431,7 +12431,7 @@ public:
     }
 #endif
     
-    sstring& get_raw_keyspace() noexcept ;
+    
 public:
     /// \brief A user can login if it's anonymous, or if it exists and the `LOGIN` option for the user is `true`.
 private:
@@ -12583,8 +12583,7 @@ public:
         // To make it assignable and to avoid taking a schema_ptr, we
         // wrap the schema reference.
         std::reference_wrapper<const schema> _s;
-        tri_compare(const schema& s) : _s(s)
-        { }
+        
         std::strong_ordering operator()(const clustering_key_prefix& p1, int32_t w1, const clustering_key_prefix& p2, int32_t w2) const {
             auto type = _s.get().clustering_key_prefix_type();
             auto res = prefix_equality_tri_compare(type->types().begin(),
@@ -12598,7 +12597,7 @@ public:
             auto d2 = p2.size(_s);
             return ((d1 <= d2) ? w1 << 1 : 1) <=> ((d2 <= d1) ? w2 << 1 : 1);
         }
-        std::strong_ordering operator()(const bound_view b, const clustering_key_prefix& p) const ;
+        
         
         
     };
@@ -12612,7 +12611,7 @@ public:
             return _cmp(p1, w1, p2, w2) < 0;
         }
         bool operator()(const bound_view b, const clustering_key_prefix& p) const ;
-        bool operator()(const clustering_key_prefix& p, const bound_view b) const ;
+        
         bool operator()(const bound_view b1, const bound_view b2) const {
             return operator()(b1._prefix, weight(b1._kind), b2._prefix, weight(b2._kind));
         }
@@ -12620,7 +12619,7 @@ public:
     bool equal(const schema& s, const bound_view other) const {
         return _kind == other._kind && _prefix.get().equal(s, other._prefix.get());
     }
-    bool adjacent(const schema& s, const bound_view other) const ;
+    
     static bound_view bottom() {
         return {_empty_prefix, bound_kind::incl_start};
     }
@@ -12659,7 +12658,7 @@ public:
         return out << "{bound: prefix=" << b._prefix.get() << ", kind=" << b._kind << "}";
     }
 };
-lexicographical_relation relation_for_lower_bound(composite_view v) ;
+
 
 enum class bound_weight : int8_t {
     before_all_prefixed = -1,
@@ -12703,7 +12702,7 @@ struct fmt::formatter<partition_region> : fmt::formatter<std::string_view> {
         std::abort(); // compiler will error before we reach here
     }
 };
-partition_region parse_partition_region(std::string_view);
+
 class position_in_partition_view {
     friend class position_in_partition;
     partition_region _type;
@@ -12715,7 +12714,7 @@ public:
         , _bound_weight(weight)
         , _ck(ck)
     { }
-    bool is_before_key() const ;
+    
     
 private:
     // Returns placement of this position_in_partition relative to *_ck,
@@ -12767,7 +12766,7 @@ public:
     position_in_partition_view reversed() const ;
     friend fmt::formatter<printer>;
     friend fmt::formatter<position_in_partition_view>;
-    friend bool no_clustering_row_between(const schema&, position_in_partition_view, position_in_partition_view);
+    
 };
 template <>
 struct fmt::formatter<position_in_partition_view> : fmt::formatter<std::string_view> {
@@ -12811,17 +12810,12 @@ public:
     struct before_clustering_row_tag_t { };
     struct range_tag_t { };
     using range_tombstone_tag_t = range_tag_t;
-    position_in_partition(before_clustering_row_tag_t, clustering_key_prefix ck)
-        : _type(partition_region::clustered), _bound_weight(bound_weight::before_all_prefixed), _ck(std::move(ck)) { }
-    position_in_partition(before_clustering_row_tag_t, position_in_partition_view pos)
-        : _type(partition_region::clustered)
-        , _bound_weight(pos._bound_weight != bound_weight::equal ? pos._bound_weight : bound_weight::before_all_prefixed)
-        , _ck(*pos._ck) { }
+    
+    
     position_in_partition(range_tag_t, bound_view bv)
         : _type(partition_region::clustered), _bound_weight(position_weight(bv.kind())), _ck(bv.prefix()) { }
-    position_in_partition(range_tag_t, bound_kind kind, clustering_key_prefix&& prefix)
-        : _type(partition_region::clustered), _bound_weight(position_weight(kind)), _ck(std::move(prefix)) { }
-    position_in_partition(after_static_row_tag_t)  ;
+    
+    
     explicit position_in_partition(position_in_partition_view view) 
         ;
     position_in_partition& operator=(position_in_partition_view view) {
@@ -12839,8 +12833,8 @@ public:
     // If given position is a clustering row position, returns a position
     // right before it. Otherwise, returns it unchanged.
     // The position "pos" must be a clustering position.
-    static position_in_partition before_key(position_in_partition_view pos) ;
-    static position_in_partition before_key(clustering_key ck) ;
+    
+    
     static position_in_partition after_key(const schema& s, clustering_key ck) ;
     // If given position is a clustering row position, returns a position
     // right after it. Otherwise returns it unchanged.
@@ -12852,8 +12846,8 @@ public:
     static position_in_partition for_partition_end() ;
     static position_in_partition for_static_row() ;
     static position_in_partition min() ;
-    static position_in_partition for_range_start(const query::clustering_range&);
-    static position_in_partition for_range_end(const query::clustering_range&);
+    
+    
      ;
     const clustering_key_prefix& key() const ;
     operator position_in_partition_view() const {
@@ -12908,12 +12902,8 @@ public:
         std::strong_ordering operator()(const position_in_partition_view& a, const position_in_partition_view& b) const {
             return compare(a, b);
         }
-        std::strong_ordering operator()(const position_in_partition& a, const position_in_partition_view& b) const {
-            return compare(a, b);
-        }
-        std::strong_ordering operator()(const position_in_partition_view& a, const position_in_partition& b) const {
-            return compare(a, b);
-        }
+        
+        
     };
     class less_compare {
         tri_compare _cmp;
@@ -12930,8 +12920,7 @@ public:
     };
     class equal_compare {
         clustering_key_prefix::equality _equal;
-        template<typename T, typename U>
-        bool compare(const T& a, const U& b) const ;
+         ;
     public:
         
     };
@@ -12953,7 +12942,7 @@ struct view_and_holder {
 };
 // Returns true if and only if there can't be any clustering_row with position > a and < b.
 // It is assumed that a <= b.
-bool no_clustering_row_between(const schema& s, position_in_partition_view a, position_in_partition_view b) ;
+
 // Returns true if and only if there can't be any clustering_row with position >= a and < b.
 // It is assumed that a <= b.
 
@@ -12975,10 +12964,10 @@ public:
         : _start(std::move(start))
         , _end(std::move(end))
     { }
-    void set_start(position_in_partition pos) ;
+    
     void set_end(position_in_partition pos) ;
     const position_in_partition& start() const& ;
-    position_in_partition&& start() && ;
+    
     const position_in_partition& end() const& ;
     
     
@@ -13043,7 +13032,7 @@ public:
     
     // An empty value is not null, but it has 0 bytes of data.
     // An empty int value can be created in CQL using blobasint(0x).
-    bool is_empty_value() const ;
+    
     bool is_value() const ;
     
     template <typename Func>
@@ -13370,7 +13359,7 @@ enum class result_request {
 struct result_options {
     result_request request = result_request::only_result;
     digest_algorithm digest_algo = query::digest_algorithm::none;
-    static result_options only_result() ;
+    
 };
 class result_digest {
 public:
@@ -13680,7 +13669,7 @@ template<typename Output>
 struct writer_of_qr_row {
     Output& _out;
     state_of_qr_row<Output> _state;
-    qr_row__cells<Output> start_cells() && ;
+    
     after_qr_row__cells<Output> skip_cells() && ;
 };
 template<typename Output>
@@ -13703,7 +13692,7 @@ struct qr_clustered_row__cells__cells {
     size_type _count = 0;
     
   
-  void add(std::optional<qr_cell_view> v) ;
+  
   after_qr_clustered_row__cells__cells<Output> end_cells() && ;
   
   
@@ -13712,12 +13701,9 @@ template<typename Output>
 struct qr_clustered_row__cells {
     Output& _out;
     state_of_qr_clustered_row__cells<Output> _state;
-    qr_clustered_row__cells(Output& out, state_of_qr_clustered_row<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
+    
     qr_clustered_row__cells__cells<Output> start_cells() && ;
-    after_qr_clustered_row__cells__cells<Output> skip_cells() && ;
+    
 };
 template<typename Output>
 struct after_qr_clustered_row__key {
@@ -13746,20 +13732,19 @@ struct qr_partition__rows {
     state_of_qr_partition<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
-    qr_partition__rows(Output& out, state_of_qr_partition<Output> state) 
-            ;
+    
   writer_of_qr_clustered_row<Output> add() ;
-  void add(qr_clustered_row_view v) ;
+  
   after_qr_partition__rows<Output> end_rows() && ;
-  vector_position pos() const ;
-  void rollback(const vector_position& vp) ;
+  
+  
 };
 template<typename Output>
 struct after_qr_partition__static_row {
     Output& _out;
     state_of_qr_partition<Output> _state;
     qr_partition__rows<Output> start_rows() && ;
-    after_qr_partition__rows<Output> skip_rows() && ;
+    
 };
 template<typename Output>
 struct after_qr_partition__static_row__cells {
@@ -13775,7 +13760,7 @@ struct qr_partition__static_row__cells {
     size_type _count = 0;
     
   
-  void add(std::optional<qr_cell_view> v) ;
+  
   after_qr_partition__static_row__cells<Output> end_cells() && ;
   
   
@@ -13784,12 +13769,9 @@ template<typename Output>
 struct qr_partition__static_row {
     Output& _out;
     state_of_qr_partition__static_row<Output> _state;
-    qr_partition__static_row(Output& out, state_of_qr_partition<Output> state)
-            : _out(out)
-            , _state{start_frame(out), std::move(state)}
-            {}
+    
     qr_partition__static_row__cells<Output> start_cells() && ;
-    after_qr_partition__static_row__cells<Output> skip_cells() && ;
+    
 };
 template<typename Output>
 struct after_qr_partition__key {
@@ -13888,8 +13870,7 @@ public:
     };
     // for error reporting
 };
-std::ostream&
-operator<<(std::ostream& os, const assignment_testable& at) ;
+
 }
 class mutation;
 class atomic_cell_or_collection;
