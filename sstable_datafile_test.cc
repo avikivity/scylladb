@@ -19340,7 +19340,7 @@ public:
     public:
         printer(const schema& s, const static_row& r)  ;
         
-        printer(printer&&) = delete;
+        
         friend std::ostream& operator<<(std::ostream& os, const printer& p);
     };
     friend std::ostream& operator<<(std::ostream& os, const printer& p);
@@ -19349,17 +19349,14 @@ class partition_start final {
     dht::decorated_key _key;
     tombstone _partition_tombstone;
 public:
-    partition_start(dht::decorated_key pk, tombstone pt)
-        : _key(std::move(pk))
-        , _partition_tombstone(std::move(pt))
-    { }
-    dht::decorated_key& key() ;
+    
+    
     const dht::decorated_key& key() const ;
     const tombstone& partition_tombstone() const ;
     tombstone& partition_tombstone() ;
     position_in_partition_view position() const;
-    size_t external_memory_usage(const schema&) const ;
-    size_t memory_usage(const schema& s) const ;
+    
+    
     bool equal(const schema& s, const partition_start& other) const ;
     friend std::ostream& operator<<(std::ostream& is, const partition_start& row);
 };
@@ -19369,7 +19366,7 @@ public:
     
     
     bool equal(const schema& s, const partition_end& other) const ;
-    friend std::ostream& operator<<(std::ostream& is, const partition_end& row);
+    
 };
 template<typename T, typename ReturnType>
 concept MutationFragmentConsumer =
@@ -19438,42 +19435,15 @@ private:
     friend class position_in_partition;
 public:
     struct clustering_row_tag_t { };
-    template<typename... Args>
-    mutation_fragment(clustering_row_tag_t, const schema& s, reader_permit permit, Args&&... args)
-        : _kind(kind::clustering_row)
-        , _data(std::make_unique<data>(std::move(permit)))
-    {
-        new (&_data->_clustering_row) clustering_row(std::forward<Args>(args)...);
-        reset_memory(s);
-    }
+    
     mutation_fragment(const schema& s, reader_permit permit, static_row&& r);
     mutation_fragment(const schema& s, reader_permit permit, clustering_row&& r);
     mutation_fragment(const schema& s, reader_permit permit, range_tombstone&& r);
     mutation_fragment(const schema& s, reader_permit permit, partition_start&& r);
     mutation_fragment(const schema& s, reader_permit permit, partition_end&& r);
-    mutation_fragment(const schema& s, reader_permit permit, const mutation_fragment& o)
-        : _kind(o._kind), _data(std::make_unique<data>(std::move(permit))) {
-        switch (_kind) {
-            case kind::static_row:
-                new (&_data->_static_row) static_row(s, o._data->_static_row);
-                break;
-            case kind::clustering_row:
-                new (&_data->_clustering_row) clustering_row(s, o._data->_clustering_row);
-                break;
-            case kind::range_tombstone:
-                new (&_data->_range_tombstone) range_tombstone(o._data->_range_tombstone);
-                break;
-            case kind::partition_start:
-                new (&_data->_partition_start) partition_start(o._data->_partition_start);
-                break;
-            case kind::partition_end:
-                new (&_data->_partition_end) partition_end(o._data->_partition_end);
-                break;
-        }
-        reset_memory(s, o._data->_memory.resources());
-    }
+    
     mutation_fragment(mutation_fragment&& other) = default;
-    mutation_fragment& operator=(mutation_fragment&& other) noexcept ;
+    
     [[gnu::always_inline]]
     ~mutation_fragment() {
         if (_data) {
@@ -19493,9 +19463,9 @@ public:
     const clustering_key_prefix& key() const;
     
     
-    bool is_clustering_row() const ;
+    
     bool is_range_tombstone() const ;
-    bool is_partition_start() const ;
+    
     const static_row& as_static_row() const & ;
     const clustering_row& as_clustering_row() const & ;
     const range_tombstone& as_range_tombstone() const & ;
@@ -19583,7 +19553,7 @@ public:
 private:
     size_t calculate_memory_usage(const schema& s) const ;
 };
-std::ostream& operator<<(std::ostream&, mutation_fragment::kind);
+
 // range_tombstone_stream is a helper object that simplifies producing a stream
 // of range tombstones and merging it with a stream of clustering rows.
 // Tombstones are added using apply() and retrieved using get_next().
@@ -19618,7 +19588,7 @@ public:
     const range_tombstone& peek_next() const;
     // Forgets all tombstones which are not relevant for any range starting at given position.
     void forward_to(position_in_partition_view);
-    void apply(range_tombstone&& rt) ;
+    
     void reset();
     bool empty() const;
     friend std::ostream& operator<<(std::ostream& out, const range_tombstone_stream&);
@@ -19649,19 +19619,13 @@ class range_tombstone_change {
     position_in_partition _pos;
     ::tombstone _tomb;
 public:
-    range_tombstone_change(position_in_partition pos, tombstone tomb)
-        : _pos(std::move(pos))
-        , _tomb(tomb)
-    { }
-    range_tombstone_change(position_in_partition_view pos, tombstone tomb)
-        : _pos(pos)
-        , _tomb(tomb)
-    { }
+    
+    
     const position_in_partition& position() const & ;
-    position_in_partition position() && ;
-    void set_position(position_in_partition pos) ;
+    
+    
     ::tombstone tombstone() const ;
-    void set_tombstone(::tombstone tomb) ;
+    
     
     
     
@@ -19744,7 +19708,7 @@ private:
 private:
     kind _kind;
     std::unique_ptr<data> _data;
-    mutation_fragment_v2() = default;
+    
     explicit operator bool() const noexcept ;
     void destroy_data() noexcept;
     void reset_memory(const schema& s, std::optional<reader_resources> res = {});
@@ -19752,42 +19716,15 @@ private:
     friend class position_in_partition;
 public:
     struct clustering_row_tag_t { };
-    template<typename... Args>
-    mutation_fragment_v2(clustering_row_tag_t, const schema& s, reader_permit permit, Args&&... args)
-        : _kind(kind::clustering_row)
-        , _data(std::make_unique<data>(std::move(permit)))
-    {
-        new (&_data->_clustering_row) clustering_row(std::forward<Args>(args)...);
-        _data->_memory.reset_to(reader_resources::with_memory(calculate_memory_usage(s)));
-    }
+    
     mutation_fragment_v2(const schema& s, reader_permit permit, static_row&& r);
     mutation_fragment_v2(const schema& s, reader_permit permit, clustering_row&& r);
     mutation_fragment_v2(const schema& s, reader_permit permit, range_tombstone_change&& r);
     mutation_fragment_v2(const schema& s, reader_permit permit, partition_start&& r);
     mutation_fragment_v2(const schema& s, reader_permit permit, partition_end&& r);
-    mutation_fragment_v2(const schema& s, reader_permit permit, const mutation_fragment_v2& o)
-        : _kind(o._kind), _data(std::make_unique<data>(std::move(permit))) {
-        switch (_kind) {
-            case kind::static_row:
-                new (&_data->_static_row) static_row(s, o._data->_static_row);
-                break;
-            case kind::clustering_row:
-                new (&_data->_clustering_row) clustering_row(s, o._data->_clustering_row);
-                break;
-            case kind::range_tombstone_change:
-                new (&_data->_range_tombstone_chg) range_tombstone_change(o._data->_range_tombstone_chg);
-                break;
-            case kind::partition_start:
-                new (&_data->_partition_start) partition_start(o._data->_partition_start);
-                break;
-            case kind::partition_end:
-                new (&_data->_partition_end) partition_end(o._data->_partition_end);
-                break;
-        }
-        _data->_memory.reset_to(o._data->_memory.resources());
-    }
+    
     mutation_fragment_v2(mutation_fragment_v2&& other) = default;
-    mutation_fragment_v2& operator=(mutation_fragment_v2&& other) noexcept ;
+    
     [[gnu::always_inline]]
     ~mutation_fragment_v2() {
         if (_data) {
@@ -19800,16 +19737,16 @@ public:
     bool has_key() const ;
     // Requirements: has_key() == true
     const clustering_key_prefix& key() const;
-    kind mutation_fragment_kind() const ;
     
     
-    bool is_range_tombstone_change() const ;
+    
+    
     bool is_partition_start() const ;
     
     
     
     
-    partition_end&& as_end_of_partition() && ;
+    
     const static_row& as_static_row() const & ;
     const clustering_row& as_clustering_row() const & ;
     const range_tombstone_change& as_range_tombstone_change() const & ;
@@ -19904,7 +19841,7 @@ public:
 private:
     size_t calculate_memory_usage(const schema& s) const ;
 };
-std::ostream& operator<<(std::ostream&, mutation_fragment_v2::kind);
+
 // F gets a stream element as an argument and returns the new value which replaces that element
 // in the transformed stream.
 template<typename F>
@@ -19994,7 +19931,7 @@ public:
     ;
     // Discards deletion information for positions < lower_bound.
     // After this, the lowest position of emitted range_tombstone_change will be before_key(lower_bound).
-    void trim(const position_in_partition& lower_bound) ;
+    
     // Emits range_tombstone_change fragments with positions smaller than upper_bound
     // for accumulated range tombstones. If end_of_range = true, range tombstone
     // change fragments with position equal to upper_bound may also be emitted.
@@ -20008,8 +19945,8 @@ public:
     // FIXME: respect preemption
      ;
     
-    void reset() ;
-    bool discardable() const ;
+    
+    
 };
 struct mutation_consume_cookie {
     using crs_iterator_type = mutation_partition::rows_type::iterator;
@@ -20064,23 +20001,21 @@ public:
     mutation(schema_ptr schema, partition_key key_)
         : _ptr(std::make_unique<data>(std::move(key_), std::move(schema)))
     { }
-    mutation(schema_ptr schema, dht::decorated_key key, const mutation_partition& mp)
-        : _ptr(std::make_unique<data>(std::move(schema), std::move(key), mp))
-    { }
+    
     mutation(schema_ptr schema, dht::decorated_key key, mutation_partition&& mp)
         : _ptr(std::make_unique<data>(std::move(schema), std::move(key), std::move(mp)))
     { }
     mutation(const mutation& m)
     ;
     mutation(mutation&&) = default;
-    mutation& operator=(mutation&& x) = default;
+    
     mutation& operator=(const mutation& m);
     void set_static_cell(const column_definition& def, atomic_cell_or_collection&& value);
-    void set_static_cell(const bytes& name, const data_value& value, api::timestamp_type timestamp, ttl_opt ttl = {});
+    
     void set_clustered_cell(const clustering_key& key, const bytes& name, const data_value& value, api::timestamp_type timestamp, ttl_opt ttl = {});
     void set_clustered_cell(const clustering_key& key, const column_definition& def, atomic_cell_or_collection&& value);
-    void set_cell(const clustering_key_prefix& prefix, const bytes& name, const data_value& value, api::timestamp_type timestamp, ttl_opt ttl = {});
-    void set_cell(const clustering_key_prefix& prefix, const column_definition& def, atomic_cell_or_collection&& value);
+    
+    
     // Upgrades this mutation to a newer schema. The new schema must
     // be obtained using only valid schema transformation:
     //  * primary key column count must not change
@@ -20098,7 +20033,7 @@ public:
     //   m2.upgrade(m1.schema());
     //
     void upgrade(const schema_ptr&);
-    const partition_key& key() const ;;
+    ;
     const dht::decorated_key& decorated_key() const ;;
     
     
@@ -20135,7 +20070,7 @@ public:
     template<FlattenedConsumerV2 Consumer>
     auto consume_gently(Consumer& consumer, consume_in_reverse reverse, mutation_consume_cookie cookie = {}) && -> future<mutation_consume_result<decltype(consumer.consume_end_of_stream())>>;
     // See mutation_partition::live_row_count()
-    uint64_t live_row_count(gc_clock::time_point query_time = gc_clock::time_point::min()) const;
+    
     void apply(mutation&&);
     void apply(const mutation&);
     void apply(const mutation_fragment&);
@@ -20145,7 +20080,7 @@ public:
     // Returns a subset of this mutation holding only information relevant for given clustering ranges.
     // Range tombstones will be trimmed to the boundaries of the clustering ranges.
     mutation sliced(const query::clustering_row_ranges&) const;
-    unsigned shard_of() const ;
+    
     // Returns a mutation which contains the same writes but in a minimal form.
     // Drops data covered by tombstones.
     // Does not drop expired tombstones.
@@ -20239,8 +20174,7 @@ using mutation_opt = optimized_optional<mutation>;
 // serialization format, only on actual data stored.
 template<>
 struct appending_hash<mutation> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const mutation& m) const ;
+     ;
 };
 // Returns a range into partitions containing mutations covered by the range.
 // partitions must be sorted according to decorated key.
@@ -20600,7 +20534,7 @@ struct experimental_features_t {
         TABLETS,
     };
     static std::map<sstring, feature> map(); // See enum_option.
-    static std::vector<enum_option<experimental_features_t>> all();
+    
 };
 /// A restriction that can be in three modes: true (the operation is disabled),
 /// false (the operation is allowed), or warn (the operation is allowed but
@@ -20983,11 +20917,7 @@ namespace util {
 /// build a CQL "select" statement with the desired parameters.
 /// If select_all_columns==true, all columns are selected and the value of
 /// selected_columns is ignored.
-std::unique_ptr<cql3::statements::raw::select_statement> build_select_statement(
-        const sstring_view& cf_name,
-        const sstring_view& where_clause,
-        bool select_all_columns,
-        const std::vector<column_definition>& selected_columns);
+
 /// maybe_quote() takes an identifier - the name of a column, table or
 /// keyspace name - and transforms it to a string which can be used in CQL
 /// commands. Namely, if the identifier is not entirely lower-case (including
@@ -21354,7 +21284,7 @@ class per_partition_rate_limit_extension : public schema_extension {
     per_partition_rate_limit_options _options;
 public:
     static constexpr auto NAME = "per_partition_rate_limit";
-    per_partition_rate_limit_extension() = default;
+    
     
     
     const per_partition_rate_limit_options& get_options() const {
