@@ -785,7 +785,7 @@ void hash3_x64_128(InputIterator in, uint32_t length, uint64_t seed, std::array<
     result[0] = h1;
     result[1] = h2;
 }
-void hash3_x64_128(bytes_view key, uint64_t seed, std::array<uint64_t, 2>& result);
+
 } // namespace murmur_hash
 } // namespace utils
 namespace utils {
@@ -1248,8 +1248,7 @@ public:
         return size() == other.size() && std::equal(_begin, _end, other.begin());
     }
 };
-template <typename T, size_t N>
-std::ostream& operator<<(std::ostream& os, const utils::small_vector<T, N>& v) ;
+ ;
 }
 // chunked_vector is a vector-like container that uses discontiguous storage.
 // It provides fast random access, the ability to append at the end, and aims
@@ -1311,7 +1310,7 @@ private:
     T* addr(size_t i) const {
         return &_chunks[i / max_chunk_capacity()][i % max_chunk_capacity()];
     }
-    void check_bounds(size_t i) const ;
+    
     static void migrate(T* begin, T* end, T* result);
 public:
     using value_type = T;
@@ -1323,31 +1322,25 @@ public:
     using const_pointer = const T*;
 public:
     chunked_vector() = default;
-    chunked_vector(const chunked_vector& x);
+    
     chunked_vector(chunked_vector&& x) noexcept;
-    template <typename Iterator>
-    chunked_vector(Iterator begin, Iterator end);
-    template <std::ranges::range Range>
-    chunked_vector(const Range& r) : chunked_vector(r.begin(), r.end()) {}
-    explicit chunked_vector(size_t n, const T& value = T());
+    ;
+    
+    
     ~chunked_vector();
     chunked_vector& operator=(const chunked_vector& x);
-    chunked_vector& operator=(chunked_vector&& x) noexcept;
+    
     bool empty() const ;
     size_t size() const {
         return _size;
     }
-    size_t capacity() const ;
+    
     void push_back(const T& x) {
         reserve_for_push_back();
         new (addr(_size)) T(x);
         ++_size;
     }
-    void push_back(T&& x) {
-        reserve_for_push_back();
-        new (addr(_size)) T(std::move(x));
-        ++_size;
-    }
+    
     template <typename... Args>
     T& emplace_back(Args&&... args) {
         reserve_for_push_back();
@@ -1359,11 +1352,11 @@ public:
         --_size;
         addr(_size)->~T();
     }
-    const T& back() const ;
-    T& back() ;
+    
+    
     void clear();
     void shrink_to_fit();
-    void resize(size_t n);
+    
     void reserve(size_t n) {
         if (n > _capacity) {
             make_room(n, false);
@@ -1384,7 +1377,7 @@ public:
     /// necessary.
     ///
     /// \returns the memory that remains to be reserved
-    size_t external_memory_usage() const;
+    
 public:
     template <class ValueType>
     class iterator_type {
@@ -1403,12 +1396,12 @@ public:
         iterator_type(const chunk_ptr* chunks, size_t i) : _chunks(chunks), _i(i) {}
     public:
         iterator_type() = default;
-        iterator_type(const iterator_type<std::remove_const_t<ValueType>>& x) : _chunks(x._chunks), _i(x._i) {} // needed for iterator->const_iterator conversion
+         // needed for iterator->const_iterator conversion
         reference operator*() const {
             return *addr();
         }
         pointer operator->() const ;
-        reference operator[](ssize_t n) const ;
+        
         iterator_type& operator++() {
             ++_i;
             return *this;
@@ -1419,7 +1412,7 @@ public:
             return *this;
         }
         iterator_type operator--(int) ;
-        iterator_type& operator+=(ssize_t n) ;
+        
         friend ssize_t operator-(iterator_type a, iterator_type b) {
             return a._i - b._i;
         }
@@ -1565,7 +1558,7 @@ private:
     } _shard_stats;
     stats& _stats = _shard_stats;
 public:
-    virtual bool is_present(hashed_key key) override;
+    
 };
 struct murmur3_bloom_filter: public bloom_filter {
 };
@@ -1605,7 +1598,7 @@ struct super_enum {
     using sequence_type = typename std::underlying_type<enum_type>::type;
     template <enum_type first, enum_type... rest>
     struct valid_sequence {
-        static constexpr bool apply(sequence_type v) noexcept ;
+        
     };
     template <enum_type first>
     struct valid_sequence<first> {
@@ -1614,15 +1607,14 @@ struct super_enum {
     static constexpr sequence_type sequence_for() {
         return static_cast<sequence_type>(Elem);
     }
-    static sequence_type sequence_for(enum_type elem) ;
+    
     static constexpr sequence_type max_sequence = sequence_for<max<Items...>::value>();
     static constexpr sequence_type min_sequence = sequence_for<min<Items...>::value>();
     static_assert(min_sequence >= 0, "negative enum values unsupported");
 };
 class bad_enum_set_mask : public std::invalid_argument {
 public:
-    bad_enum_set_mask() : std::invalid_argument("Bit mask contains invalid enumeration indices.") {
-    }
+    
 };
 template<typename Enum>
 class enum_set {
@@ -1652,7 +1644,7 @@ public:
     }
     struct prepared {
         mask_type mask;
-        bool operator==(const prepared& o) const ;
+        
     };
      ;
     static_assert(std::numeric_limits<mask_type>::max() >= ((size_t)1 << Enum::max_sequence), "mask type too small");
@@ -1661,13 +1653,12 @@ public:
     bool contains(enum_type e) const ;
     template<enum_type e>
     void remove() ;
-    void remove(enum_type e) ;
+    
     template<enum_type e>
     void set() {
         _mask |= mask_for<e>();
     }
-    template<enum_type e>
-    void set_if(bool condition) ;
+     ;
      ;
     template<enum_type... items>
     struct frozen {
@@ -1680,8 +1671,7 @@ public:
             return mask_for<first>() | make_mask<second, rest...>();
         }
         static constexpr mask_type mask = make_mask<items...>();
-        template<enum_type Elem>
-        static constexpr bool contains() ;
+         ;
         
         
         static constexpr enum_set<Enum> unfreeze() {
@@ -1874,7 +1864,7 @@ public:
     }
 };
 extern standard_allocation_strategy standard_allocation_strategy_instance;
-standard_allocation_strategy& standard_allocator() ;
+
 inline
 allocation_strategy*& current_allocation_strategy_ptr() {
     static thread_local allocation_strategy* current = &standard_allocation_strategy_instance;
@@ -1940,16 +1930,16 @@ using alloc_strategy_unique_ptr = std::unique_ptr<T, alloc_strategy_deleter<T>>;
 class allocator_lock {
     allocation_strategy* _prev;
 public:
-    allocator_lock(allocation_strategy& alloc) ;
+    
     
 };
  ;
 class marshal_exception : public std::exception {
     sstring _why;
 public:
-    marshal_exception() = delete;
+    
     marshal_exception(sstring why) : _why(sstring("marshaling error: ") + why) {}
-    virtual const char* what() const noexcept override { return _why.c_str(); }
+    
 };
 // Speed up compilation of code using throw_with_backtrace<marshal_exception,
 // sstring> by compiling it only once (in types.cc), and elsewhere say that
@@ -2028,7 +2018,7 @@ public:
     bool empty() const ;
 };
 single_fragment_range(bytes_view) -> single_fragment_range<mutable_view::no>;
-single_fragment_range(bytes_mutable_view) -> single_fragment_range<mutable_view::yes>;
+
 /// Empty fragment range.
 struct empty_fragment_range {
     using fragment_type = bytes_view;
@@ -2099,11 +2089,9 @@ struct fragment_range {
         value_type _current;
     public:
         fragment_iterator() : _view(value_type()) {}
-        fragment_iterator(const View& v) : _view(v) {
-            _current = _view.current_fragment();
-        }
+        
         fragment_iterator& operator++() ;
-        fragment_iterator operator++(int) ;
+        
         reference operator*() const ;
         pointer operator->() const ;
         bool operator==(const fragment_iterator& i) const ;
@@ -2343,19 +2331,7 @@ struct blob_storage {
     {
         *backref = this;
     }
-    blob_storage(blob_storage&& o) noexcept
-        : backref(o.backref)
-        , size(o.size)
-        , frag_size(o.frag_size)
-        , next(o.next)
-    {
-        *backref = this;
-        o.next = nullptr;
-        if (next) {
-            next->backref = &next;
-        }
-        memcpy(data, o.data, frag_size);
-    }
+    
     size_t storage_size() const noexcept {
         return sizeof(*this) + frag_size;
     }
@@ -2370,7 +2346,7 @@ class managed_bytes {
     };
     union u {
         u() {}
-        ~u() {}
+        
         blob_storage::ref_type ptr;
         small_blob small;
     } _u;
@@ -2409,7 +2385,7 @@ public:
     managed_bytes() ;
     managed_bytes(const blob_storage::char_type* ptr, size_type size)
         : managed_bytes(bytes_view(ptr, size)) {}
-    explicit managed_bytes(const bytes& b) : managed_bytes(static_cast<bytes_view>(b)) {}
+    
     template <FragmentedView View>
     explicit managed_bytes(View v);
     managed_bytes(initialized_later, size_type size) {
@@ -2523,11 +2499,11 @@ public:
         }
         return *this;
     }
-    bool operator==(const managed_bytes& o) const ;
+    
     bytes_view::value_type& operator[](size_type index) {
         return value_at_index(index);
     }
-    const bytes_view::value_type& operator[](size_type index) const ;
+    
     size_type size() const {
         if (external()) {
             return _u.ptr->size;
@@ -2617,7 +2593,7 @@ public:
         v.remove_prefix(index);
         return v.current_fragment().front();
     }
-    bytes linearize() const ;
+    
     bool is_linearized() const {
         return _current_fragment.size() == _size;
     }
@@ -2638,7 +2614,7 @@ static_assert(FragmentedView<managed_bytes_view>);
 static_assert(FragmentedMutableView<managed_bytes_mutable_view>);
 using managed_bytes_opt = std::optional<managed_bytes>;
 using managed_bytes_view_opt = std::optional<managed_bytes_view>;
- bytes to_bytes(const managed_bytes& v) ;
+ 
 inline bytes to_bytes(managed_bytes_view v) {
     return linearized(v);
 }
@@ -2650,8 +2626,7 @@ inline bytes to_bytes(managed_bytes_view v) {
 /// managed_bytes_opt.
 ///
 /// \note copies data
-managed_bytes_view
-build_managed_bytes_view_from_internals(bytes_view current_fragment, blob_storage* next_fragment, size_t size) ;
+
 template<>
 struct appending_hash<managed_bytes_view> {
     template<Hasher Hasher>
@@ -2714,7 +2689,7 @@ public:
         chunk* _current = nullptr;
     public:
         bytes_view operator*() const ;
-        bytes_view operator->() const ;
+        
         fragment_iterator& operator++() ;
         fragment_iterator operator++(int) ;
         bool operator==(const fragment_iterator&) const = default;
