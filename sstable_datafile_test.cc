@@ -29528,10 +29528,8 @@ public:
     partition_slice_builder& without_partition_key_columns();
     partition_slice_builder& without_clustering_key_columns();
     partition_slice_builder& reversed();
-    template <query::partition_slice::option OPTION>
-    partition_slice_builder& with_option() ;
-    template <query::partition_slice::option OPTION>
-    partition_slice_builder& with_option_toggled() ;
+     ;
+     ;
     partition_slice_builder& with_partition_row_limit(uint64_t limit);
     query::partition_slice build();
 };
@@ -29587,9 +29585,8 @@ union maybe_key {
     maybe_key(const maybe_key&) = delete;
      ;
     
-    template <typename... Args>
-    void replace(Args&&... args) noexcept ;
-    void replace(maybe_key&& other) = delete; // not to be called by chance
+     ;
+     // not to be called by chance
 };
 // For .{do_something_with_data}_and_dispose methods below
 template <typename T>
@@ -30086,7 +30083,7 @@ template <typename K, typename Key, typename Less, size_t Size, key_search Searc
 struct searcher { };
 template <typename K, typename Key, typename Less, size_t Size>
 struct searcher<K, Key, Less, Size, key_search::linear> {
-    static size_t gt(const K& k, const maybe_key<Key, Less>* keys, size_t nr, Less less) noexcept ;;
+    ;
 };
 template <typename K, typename Less, size_t Size>
 requires SimpleLessCompare<K, Less>
@@ -30145,17 +30142,17 @@ class node final {
         tree* _rightmost_tree;
     };
     node* get_next() const noexcept ;
-    void set_next(node *n) noexcept ;
+    
     node* get_prev() const noexcept ;
-    void set_prev(node* n) noexcept ;
+    
     // Links the new node n right after the current one
-    void link(node& n) noexcept ;
+    
     void unlink() noexcept ;
-    node(const node& other) = delete;
+    
      ;
     kid_index index_for(node *n) const noexcept ;
     bool need_refill() const noexcept ;
-    bool can_grab_from() const noexcept ;
+    
     
     
     void shift_right(size_t s) noexcept ;
@@ -31072,7 +31069,7 @@ class mutation_fragment_v1_stream final {
     template<typename Arg>
     mutation_fragment wrap(Arg arg) const ;
 public:
-    const schema_ptr& schema() const noexcept ;
+    
     future<mutation_fragment_opt> operator()() {
         if (_row) [[unlikely]] {
             co_return wrap(std::move(*std::exchange(_row, std::nullopt)));
@@ -31091,7 +31088,7 @@ public:
         }
         co_return bool(co_await _reader.peek());
     }
-    future<> fast_forward_to(const dht::partition_range& pr) ;
+    
 private:
     template<typename Consumer>
     struct consumer_adapter {
@@ -31240,16 +31237,8 @@ public:
     void set_train(bool v) noexcept ;
     struct dummy_entry_tag{};
     struct evictable_tag{};
-    cache_entry(dummy_entry_tag)
-        : _key{dht::token(), partition_key::make_empty()}
-    {
-        _flags._dummy_entry = true;
-    }
-    cache_entry(schema_ptr s, const dht::decorated_key& key, const mutation_partition& p)
-        : _schema(std::move(s))
-        , _key(key)
-        , _pe(partition_entry::make_evictable(*_schema, mutation_partition(*_schema, p)))
-    { }
+    
+    
     // It is assumed that pe is fully continuous
     // pe must be evictable.
     // Called when all contents have been evicted.
@@ -31560,8 +31549,7 @@ class partition_snapshot_row_cursor final {
         rows_entry::tri_compare _cmp;
         partition_snapshot_row_cursor& _cur;
     public:
-        explicit version_heap_less_compare(partition_snapshot_row_cursor& cur) 
-        ;
+        
     };
     // Removes the next row from _heap and puts it into _current_row
     // lower_bound is in the query schema domain
@@ -31708,7 +31696,7 @@ public:
     // FIXME: Eventually we should return a composite_query_result here
     // which holds the vector of query results and which can be quickly turned
     // into packet fragments by the transport layer without copying the data.
-    foreign_ptr<lw_shared_ptr<query::result>> get();
+    
 };
 }
 #pragma GCC diagnostic push
@@ -31718,11 +31706,11 @@ class xx_hasher {
     static constexpr size_t digest_size = 16;
     XXH64_state_t _state;
 public:
-    explicit xx_hasher(uint64_t seed = 0) noexcept ;
+    
     void update(const char* ptr, size_t length) noexcept ;
     bytes finalize() ;
-    std::array<uint8_t, digest_size> finalize_array() ;
-    uint64_t finalize_uint64() ;
+    
+    
 private:
      ;
 };
@@ -31743,10 +31731,10 @@ public:
     ~cryptopp_hasher();
     
     cryptopp_hasher(const cryptopp_hasher&);
-    cryptopp_hasher& operator=(cryptopp_hasher&&) noexcept;
-    cryptopp_hasher& operator=(const cryptopp_hasher&);
+    
+    
     bytes finalize();
-    std::array<uint8_t, size> finalize_array();
+    
     void update(const char* ptr, size_t length) noexcept override;
     // Use update and finalize to compute the hash over the full view.
     
@@ -31756,7 +31744,7 @@ class sha256_hasher final : public cryptopp_hasher<sha256_hasher, 32> {};
 namespace query {
 struct noop_hasher {
     
-    std::array<uint8_t, 16> finalize_array() ;;
+    ;
 };
 class digester final {
     std::variant<noop_hasher, md5_hasher, xx_hasher, legacy_xx_hasher_without_null_digest> _impl;
@@ -31826,14 +31814,14 @@ public:
         , _memory_accounter(std::move(memory_accounter))
         , _tombstone_limit(tombstone_limit)
     { }
-    builder(builder&&) = delete; // _out is captured by reference
+     // _out is captured by reference
     void mark_as_short_read() ;
-    short_read is_short_read() const ;
+    
     result_memory_accounter& memory_accounter() ;
     stop_iteration bump_and_check_tombstone_limit() ;
     
     
-    uint32_t partition_count() const ;
+    
     // Starts new partition and returns a builder for its contents.
     // Invalidates all previously obtained builders
     partition_writer add_partition(const schema& s, const partition_key& key) ;
@@ -31864,7 +31852,7 @@ public:
     stop_iteration consume(static_row&& sr, tombstone current_tombstone);
     // Requires that cr.has_any_live_data()
     stop_iteration consume(clustering_row&& cr, row_tombstone current_tombstone);
-    stop_iteration consume(range_tombstone_change&&) ;
+    
     uint64_t consume_end_of_stream();
 };
 class query_result_builder {
@@ -31949,7 +31937,7 @@ private:
     metrics _metrics;
     seastar::metrics::metric_groups _metric_group;
 private:
-    void register_metrics();
+    
 protected:
     
 public:
@@ -32197,7 +32185,7 @@ public:
 private:
 public:
 private:
-    future<> release_queued_allocations();
+    
     
     
 private: // from region_listener
@@ -32599,7 +32587,7 @@ class sstable;
 namespace seastar {
 template <>
 struct lw_shared_ptr_deleter<sstables::sstable> {
-    static void dispose(sstables::sstable* sst);
+    
 };
 }
 namespace sstables {
@@ -32615,14 +32603,14 @@ struct fmt::formatter<sstables::shared_sstable> : fmt::formatter<std::string_vie
     }
 };
 namespace std {
- std::ostream& operator<<(std::ostream& os, const sstables::shared_sstable& sst) ;
+ 
 } // namespace std
 namespace sstables {
 using run_id = utils::tagged_uuid<struct run_id_tag>;
 } // namespace sstables
 // While the sstable code works with char, bytes_view works with int8_t
 // (signed char). Rather than change all the code, let's do a cast.
-static bytes_view to_bytes_view(const temporary_buffer<char>& b) ;
+
 namespace sstables {
 template<typename T>
 concept Writer =
@@ -32966,11 +32954,7 @@ public:
     bool with_train() const noexcept ;
     void set_train(bool v) noexcept ;
     friend class memtable;
-    memtable_entry(schema_ptr s, dht::decorated_key key, mutation_partition p)
-        : _schema(std::move(s))
-        , _key(std::move(key))
-        , _pe(*_schema, std::move(p))
-    { }
+    
     memtable_entry(memtable_entry&& o) noexcept;
     // Frees elements of the entry in batches.
     // Returns stop_iteration::yes iff there are no more elements to free.
@@ -33384,7 +33368,7 @@ class compaction_strategy {
 public:
     // Return a list of sstables to be compacted after applying the strategy.
     
-    std::vector<compaction_descriptor> get_cleanup_compaction_jobs(table_state& table_s, std::vector<shared_sstable> candidates) const;
+    
     // Some strategies may look at the compacted and resulting sstables to
     // get some useful information for subsequent compactions.
     // Return if parallel compaction is allowed by strategy.
@@ -34157,7 +34141,7 @@ class user_types_metadata {
     std::unordered_map<bytes, user_type> _user_types;
 public:
     bool has_type(const bytes& name) const ;
-    friend std::ostream& operator<<(std::ostream& os, const user_types_metadata& m);
+    
 };
 class user_types_storage {
 public:
@@ -34167,7 +34151,7 @@ public:
 class dummy_user_types_storage : public user_types_storage {
     user_types_metadata _empty;
 public:
-    virtual const user_types_metadata& get(const sstring& ks) const override ;
+    
 };
 }
 namespace data_dictionary {
@@ -34353,7 +34337,7 @@ using io_error_handler = std::function<void (std::exception_ptr)>;
 using io_error_handler_gen = std::function<io_error_handler (disk_error_signal_type&)>;
 io_error_handler default_io_error_handler(disk_error_signal_type& signal);
 // generates handler that handles exception for a given signal
-io_error_handler_gen default_io_error_handler_gen();
+
 extern thread_local io_error_handler commit_error_handler;
 extern thread_local io_error_handler sstable_write_error_handler;
 extern thread_local io_error_handler general_disk_error_handler;
@@ -35940,7 +35924,7 @@ private:
     locator::effective_replication_map_factory& _erm_factory;
 public:
     explicit keyspace(lw_shared_ptr<keyspace_metadata> metadata, config cfg, locator::effective_replication_map_factory& erm_factory);
-    sstring column_family_directory(const sstring& base_path, const sstring& name, table_id uuid) const;
+    
 };
 using no_such_keyspace = data_dictionary::no_such_keyspace;
 using no_such_column_family = data_dictionary::no_such_column_family;
@@ -35975,7 +35959,7 @@ public:
     struct drain_progress {
         int32_t total_cfs;
         int32_t remaining_cfs;
-        drain_progress& operator+=(const drain_progress& other) ;
+        
     };
 private:
     replica::cf_stats _cf_stats;
@@ -36207,7 +36191,7 @@ using type = rapidjson::Type;
 inline constexpr size_t default_max_nested_level = 78;
 class malformed_value : public error {
 public:
-    malformed_value(std::string_view name, std::string_view value);
+    
 };
 class missing_value : public error {
 public:
@@ -36218,7 +36202,7 @@ public:
 // Returns an empty JSON object - {}
  rjson::value empty_object() ;
 // Returns an empty JSON array - []
- rjson::value empty_array() ;
+ 
 // Returns an empty JSON string - ""
  rjson::value empty_string() ;
 // Convert the JSON value to a string with JSON syntax, the opposite of parse().
@@ -53243,8 +53227,7 @@ std::array<uint8_t, size> finalize_array();
 template <typename T, size_t size>
 cryptopp_hasher<T, size>::~cryptopp_hasher() = default;
 
-template <typename T, size_t size>
-cryptopp_hasher<T, size> &cryptopp_hasher<T, size>::operator=(cryptopp_hasher &&o) noexcept = default;
+
 template class cryptopp_hasher<md5_hasher, 16>;
 template class cryptopp_hasher<sha256_hasher, 32>;
 using namespace std::chrono_literals;
