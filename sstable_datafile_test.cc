@@ -229,8 +229,8 @@ public:
     using duration = std::chrono::duration<rep, period>;
     using time_point = std::chrono::time_point<gc_clock, duration>;
     static constexpr auto is_steady = base::is_steady;
-    static constexpr std::time_t to_time_t(time_point t) ;
-    static constexpr time_point from_time_t(std::time_t t) ;
+    
+    
     static time_point now() noexcept ;
 };
 using expiry_opt = std::optional<gc_clock::time_point>;
@@ -285,8 +285,7 @@ public:
         return std::chrono::duration_cast<std::chrono::seconds>(t.time_since_epoch()).count();
     }
 };
-static
-gc_clock::time_point to_gc_clock(db_clock::time_point tp) noexcept ;
+
 inline
 constexpr uint64_t clmul_u32_constexpr(uint32_t p1, uint32_t p2) {
     uint64_t result = 0;
@@ -334,7 +333,7 @@ inline constexpr uint32_t crc32_fold_barrett_u64_constexpr(uint64_t p) {
     x0 = clmul_u64_low_constexpr(x0 & mask32, barrett_reduction_constants[1]);
     return (x0 ^ x1) >> 32;
 }
-uint32_t crc32_fold_barrett_u64_in_m128(__m128i x0) ;
+
 uint32_t crc32_fold_barrett_u64_native(uint64_t p) ;
 inline
 constexpr
@@ -404,14 +403,14 @@ using bytes_view = std::basic_string_view<int8_t>;
 using bytes_mutable_view = basic_mutable_view<bytes_view::value_type>;
 using bytes_opt = std::optional<bytes>;
 using sstring_view = std::string_view;
- bytes_view to_bytes_view(sstring_view view) ;
+ 
 struct fmt_hex {
     const bytes_view& v;
     fmt_hex(const bytes_view& v) noexcept : v(v) {}
 };
 sstring to_hex(bytes_view b);
-sstring to_hex(const bytes& b);
-sstring to_hex(const bytes_opt& b);
+
+
 std::ostream& operator<<(std::ostream& os, const bytes& b);
 template <>
 struct fmt::formatter<fmt_hex> {
@@ -524,7 +523,7 @@ struct hash<bytes_view> {
     }
 };
 } // namespace std
- std::strong_ordering compare_unsigned(bytes_view v1, bytes_view v2) ;
+ 
 namespace db {
 /// CQL consistency levels.
 ///
@@ -697,7 +696,7 @@ public:
 // FIXME: serialize() and serialized_size() not implemented. We should only be serializing to
 // disk, not in the wire.
 struct i_filter {
-    virtual bool is_present(const bytes_view& key) = 0;
+    
     virtual bool is_present(hashed_key) = 0;
 };
 }
@@ -46591,7 +46590,7 @@ const schema &_s;
 mutation_partition &_mp;
 
 
-void operator()(partition_start ps);
+
 };
 void mutation_partition::apply_row_tombstone(const schema &schema, clustering_key_prefix prefix, tombstone t)
 {
@@ -46656,69 +46655,11 @@ return i->row();
 ;
 ;
 ;
-template <typename Hasher>
-void appending_hash<row>::operator()(Hasher &h, const row &cells, const schema &s, column_kind kind, const query::column_id_vector &columns, max_timestamp &max_ts) const
-{
-for (auto id : columns)
-{
-    const cell_and_hash *cell_and_hash = cells.find_cell_and_hash(id);
-    if (!cell_and_hash)
-    {
-        feed_hash(h, appending_hash<row>::null_hash_value);
-        continue;
-    }
-    auto &&def = s.column_at(kind, id);
-    if (def.is_atomic())
-    {
-        max_ts.update(cell_and_hash->cell.as_atomic_cell(def).timestamp());
-        if constexpr (query::using_hash_of_hash_v<Hasher>)
-        {
-        if (cell_and_hash->hash)
-        {
-            feed_hash(h, *cell_and_hash->hash);
-        }
-        else
-        {
-            Hasher cellh;
-            feed_hash(cellh, cell_and_hash->cell.as_atomic_cell(def), def);
-            feed_hash(h, cellh.finalize_uint64());
-        }
-        }
-        else
-        {
-        feed_hash(h, cell_and_hash->cell.as_atomic_cell(def), def);
-        }
-    }
-    else
-    {
-        auto cm = cell_and_hash->cell.as_collection_mutation();
-        max_ts.update(cm.last_update(*def.type));
-        if constexpr (query::using_hash_of_hash_v<Hasher>)
-        {
-        if (cell_and_hash->hash)
-        {
-            feed_hash(h, *cell_and_hash->hash);
-        }
-        else
-        {
-            Hasher cellh;
-            feed_hash(cellh, cm, def);
-            feed_hash(h, cellh.finalize_uint64());
-        }
-        }
-        else
-        {
-        feed_hash(h, cm, def);
-        }
-    }
-}
-}
-// Instantiation for mutation_test.cc
-template void appending_hash<row>::operator()<xx_hasher>(xx_hasher &h, const row &cells, const schema &s, column_kind kind, const query::column_id_vector &columns, max_timestamp &max_ts) const;
+;
 template <typename RowWriter>
 static void get_compacted_row_slice(const schema &s, const query::partition_slice &slice, column_kind kind, const row &cells, const query::column_id_vector &columns, RowWriter &writer);
-bool has_any_live_data(const schema &s, column_kind kind, const row &cells, tombstone tomb, gc_clock::time_point now);
-std::ostream &operator<<(std::ostream &os, const std::pair<column_id, const atomic_cell_or_collection::printer &> &c);
+
+
 // Transforms given range of printable into a range of strings where each element
 // in the original range is prefxied with given string.
 template <typename RangeOfPrintable>
@@ -47553,7 +47494,7 @@ struct fmt::formatter<apply_resume> : fmt::formatter<std::string_view>
 template <typename FormatContext>
 auto format(const apply_resume &res, FormatContext &ctx) const { return fmt::format_to(ctx.out(), "{{{}, {}}}", int(res._stage), res._pos); }
 };
-std::ostream &operator<<(std::ostream &os, const mutation_partition_v2::printer &p);
+
 // Returns true if the mutation_partition_v2 represents no writes.
 using namespace db;
 static_assert(MutationViewVisitor<mutation_partition_view_virtual_visitor>);
@@ -47561,7 +47502,7 @@ mutation_partition_view_virtual_visitor::~mutation_partition_view_virtual_visito
 namespace
 {
 using atomic_cell_variant = boost::variant<ser::live_cell_view, ser::expiring_cell_view, ser::dead_cell_view, ser::counter_cell_view, ser::unknown_variant_type>;
-atomic_cell read_atomic_cell(const abstract_type &type, atomic_cell_variant cv, atomic_cell::collection_member cm = atomic_cell::collection_member::no);
+
 ;
 row_marker read_row_marker(boost::variant<ser::live_marker_view, ser::expiring_marker_view, ser::dead_marker_view, ser::no_marker_view, ser::unknown_variant_type> rmv)
 {
@@ -47760,24 +47701,14 @@ auto rt = construct_range_tombstone_entry(std::move(start), std::move(end), std:
 rev.insert(it, *rt);
 rt.release();
 }
-range_tombstone_list::range_tombstones_type::iterator range_tombstone_list::find(const schema &s, const range_tombstone_entry &rt)
-{
-bound_view::compare less(s);
-auto it = _tombstones.find(rt, [less](auto &&rt1, auto &&rt2)
-                           { return less(rt1.end_bound(), rt2.end_bound()); });
-if (it != _tombstones.end() && it->tombstone().equal(s, rt.tombstone()))
-{
-    return it;
-}
-return _tombstones.end();
-}
+
 // See reversibly_mergeable.hh
 namespace
 {
 struct bv_order_by_end
 {
     bound_view::compare less;
-    bv_order_by_end(const schema &s) : less(s) {}
+    
     bool operator()(bound_view v, const range_tombstone_entry &rt) const;
 };
 struct bv_order_by_start
@@ -49245,8 +49176,8 @@ private:
 public:
     region_sanitizer(const bool &report_backtrace);
     void on_region_destruction() noexcept;
-    void on_allocation(const void *ptr, size_t size) noexcept;
-    void on_free(const void *ptr, size_t size) noexcept;
+    
+    
     void on_migrate(const void *src, size_t size, const void *dst) noexcept
     {
         run_and_handle_errors([&]
@@ -49277,10 +49208,10 @@ class background_reclaimer
     bool _stopping = false;
     static constexpr size_t free_memory_threshold = 60'000'000;
 private:
-    bool have_work() const ;
-    void main_loop_wake();
-    future<> main_loop();
-    void adjust_shares();
+    
+    
+    
+    
 public:
 };
 class segment_pool;
@@ -49322,18 +49253,18 @@ public:
     // Returns the amount by which segment_pool.total_memory_in_use() has decreased.
     size_t compact_and_evict(size_t reserve_segments, size_t bytes, is_preemptible p);
     void full_compaction();
-    void reclaim_all_free_segments();
-    occupancy_stats global_occupancy() const noexcept;
+    
+    
     occupancy_stats region_occupancy() const noexcept;
-    occupancy_stats occupancy() const noexcept;
-    size_t non_lsa_used_space() const noexcept; // Set the minimum number of segments reclaimed during single reclamation cycle.
+    
+     // Set the minimum number of segments reclaimed during single reclamation cycle.
     void set_reclamation_step(size_t step_in_segments) noexcept ;
     size_t reclamation_step() const noexcept { return _reclamation_step; } // Abort on allocation failure from LSA
-    void enable_abort_on_bad_alloc() noexcept;
-    bool should_abort_on_bad_alloc() const noexcept;
-    void setup_background_reclaim(scheduling_group sg); // const bool&, so interested parties can save a reference and see updates.
+    
+    
+     // const bool&, so interested parties can save a reference and see updates.
     const bool &sanitizer_report_backtrace() const;
-    void set_sanitizer_report_backtrace(bool rb);
+    
     bool try_set_active_timer(reclaim_timer &timer)
     {
         if (_active_timer)
@@ -49467,11 +49398,10 @@ private:
     static memory::memory_layout allocate_memory(size_t segments)
     ;
 public:
-    standard_memory_segment_store_backend(size_t segments) : segment_store_backend(allocate_memory(segments), false), _available_segments((_layout.end - _segments_base) / segment_size) {}
-    virtual void *alloc_segment_memory() noexcept override
-    ;
-    virtual void free_segment_memory(void *seg) noexcept override;
-    virtual size_t free_memory() const noexcept override;
+    
+    
+    
+    
 };
 static constexpr size_t segment_npos = size_t(-1); // Segments are allocated from a large contiguous memory area.
 class contiguous_memory_segment_store
@@ -49479,11 +49409,11 @@ class contiguous_memory_segment_store
     std::unique_ptr<segment_store_backend> _backend;
 public:
     size_t non_lsa_reserve = 0;
-    contiguous_memory_segment_store() : _backend(std::make_unique<seastar_memory_segment_store_backend>()) {}
+    
     struct with_standard_memory_backend
     {
     };
-    void use_standard_allocator_segment_pool_backend(size_t available_memory);
+    
     const segment *segment_from_idx(size_t idx) const noexcept;
     segment *segment_from_idx(size_t idx) noexcept { return reinterpret_cast<segment *>(_backend->segments_base()) + idx; }
     size_t idx_from_segment(const segment *seg) const noexcept
@@ -49585,13 +49515,13 @@ public:
     
     
     
-    void subtract_non_lsa_memory_in_use(size_t n) noexcept;
-    size_t non_lsa_memory_in_use() const noexcept ;
+    
+    
     size_t total_memory_in_use() const noexcept { return _non_lsa_memory_in_use + _segments_in_use * segment::size; }
     size_t total_free_memory() const noexcept ;
     struct reservation_goal;
-    void set_region(segment *seg, region::impl *r) noexcept;
-    void set_region(segment_descriptor &desc, region::impl *r) noexcept;
+    
+    
     size_t reclaim_segments(size_t target, is_preemptible preempt);
     void reclaim_all_free_segments();
 private:
@@ -49619,10 +49549,8 @@ private: // CLOCK_MONOTONIC_COARSE is not quite what we want -- to look for stal
     {
         occupancy_stats region_occupancy;
         tracker::stats pool_stats;
-        friend stats operator-(const stats &s1, const stats &s2)
-        ;
-        stats &operator-=(const stats &other)
-        ;
+        
+        
     };
     clock::duration _duration_threshold;
     const char *_name;
@@ -49650,11 +49578,9 @@ public:
     size_t set_memory_released(size_t memory_released) noexcept { return this->_memory_released = memory_released; }
 private:
     void sample_stats(stats &data);
-    template <typename T>
-    void log_if_changed(log_level level, const char *name, T before, T now) const noexcept
+    
     ;
-    template <typename T>
-    void log_if_any(log_level level, const char *name, T value) const noexcept;
+    ;
     template <typename T>
     void log_if_any_mem(log_level level, const char *name, T value) const noexcept;
     ;
@@ -50255,8 +50181,8 @@ public:
         pool.on_memory_eviction(pool.statistics().memory_freed - freed);
         return ret;
     }
-    void make_evictable(eviction_fn fn) noexcept;
-    const eviction_fn &evictor() const noexcept;
+    
+    
     friend class region;
     friend class lsa_buffer;
     friend class region_evictable_occupancy_ascending_less_comparator;
@@ -51098,10 +51024,8 @@ template <typename T>
 simple_type_impl<T>::simple_type_impl(abstract_type::kind k, sstring name, std::optional<uint32_t> value_length_if_fixed) : concrete_type<T>(k, std::move(name), std::move(value_length_if_fixed)) {}
 template <typename T>
 integer_type_impl<T>::integer_type_impl(abstract_type::kind k, sstring name, std::optional<uint32_t> value_length_if_fixed) : simple_type_impl<T>(k, name, std::move(value_length_if_fixed)) {}
-template <typename T>
-static bytes decompose_value(T v);
-template <typename T>
-static T parse_int(const integer_type_impl<T> &t, sstring_view s);
+;
+;
 // Note that although byte_type is of a fixed size,
 // Cassandra (erroneously) treats it as a variable-size
 // so we have to pass disengaged optional for the value size
@@ -51418,10 +51342,8 @@ struct is_byte_order_equal_visitor
 }
 bool abstract_type::is_byte_order_equal() const { return visit(*this, is_byte_order_equal_visitor{}); }
 static bool check_compatibility(const tuple_type_impl &t, const abstract_type &previous, bool (abstract_type::*predicate)(const abstract_type &) const);
-static bool is_fixed_size_int_type(const abstract_type &t)
-;
-static sstring cql3_type_name_impl(const abstract_type &t)
-;
+
+
 void write_collection_value(bytes::iterator &out, data_type type, const data_value &value)
 {
 if (value.is_null())
@@ -52208,13 +52130,13 @@ catch (const marshal_exception &)
 }
 }
 // Count number of ':' which are not preceded by '\'.
-static std::size_t count_segments(sstring_view v);
+
 // Split on ':', unless it's preceded by '\'.
-static std::vector<sstring_view> split_field_strings(sstring_view v);
+
 // Replace "\:" with ":" and "\@" with "@".
-static std::string unescape(sstring_view s);
+
 // Replace ":" with "\:" and "@" with "\@".
-static std::string escape(sstring_view s);
+
 // Concat list of bytes into a single bytes.
 static bytes concat_fields(const std::vector<bytes> &fields, const std::vector<int32_t> field_len);
 static size_t concrete_serialized_size(const byte_type_impl::native_type &) { return sizeof(int8_t); }
@@ -52274,8 +52196,8 @@ struct from_string_visitor
     sstring_view s;
     ;
     ;
-    bytes operator()(const inet_addr_type_impl &t);
-    bytes operator()(const tuple_type_impl &t);
+    
+    
     bytes operator()(const collection_type_impl &);
 };
 }
@@ -52321,8 +52243,7 @@ struct to_string_impl_visitor
 }
 static sstring to_string_impl(const abstract_type &t, const void *v) { return visit(t, v, to_string_impl_visitor{}); }
 sstring abstract_type::to_string_impl(const data_value &v) const { return ::to_string_impl(*this, get_value_ptr(v)); }
-static bool check_compatibility(const tuple_type_impl &t, const abstract_type &previous, bool (abstract_type::*predicate)(const abstract_type &) const)
-;
+
 // Needed to handle ReversedType in value-compatibility checks.
 static bool is_value_compatible_with_internal(const abstract_type &t, const abstract_type &other)
 ;
@@ -52343,8 +52264,7 @@ for (uint32_t i = 0; i < types.size(); ++i)
 }
 return new_types;
 }
-static std::optional<data_type> update_user_type_aux(const tuple_type_impl &t, const shared_ptr<const user_type_impl> updated)
-;
+
 namespace
 {
 struct native_value_clone_visitor
@@ -52381,8 +52301,8 @@ struct native_typeid_visitor
 {
     template <typename N, typename A>
     const std::type_info &operator()(const concrete_type<N, A> &);
-    const std::type_info &operator()(const reversed_type_impl &t);
-    const std::type_info &operator()(const counter_type_impl &);
+    
+    
     const std::type_info &operator()(const empty_type_impl &);
 };
 }
@@ -52472,8 +52392,8 @@ else
 }
 }
 static bytes_ostream serialize_for_cql_aux(const map_type_impl &, collection_mutation_view_description mut);
-static bytes_ostream serialize_for_cql_aux(const set_type_impl &, collection_mutation_view_description mut);
-static bytes_ostream serialize_for_cql_aux(const list_type_impl &, collection_mutation_view_description mut);
+
+
 static bytes_ostream serialize_for_cql_aux(const user_type_impl &type, collection_mutation_view_description mut);
 bytes serialize_field_index(size_t idx)
 {
@@ -53015,8 +52935,8 @@ __builtin_unreachable();
 }
 using u32 = uint32_t;
 using u64 = uint64_t;
-static u64 pmul(u32 p1, u32 p2);
-static u32 pmul_mod(u32 p1, u32 p2);
+
+
 static u32 mul_by_x_pow_mul8(u32 p, u64 e)
 ;
 template <int bits>
@@ -53067,7 +52987,7 @@ namespace utils
 namespace s3
 {
 static logging::logger s3l("s3");
-future<> ignore_reply(const http::reply &rep, input_stream<char> &&in_);
+
 class dns_connection_factory : public http::experimental::connection_factory
 {
 protected:
@@ -53081,7 +53001,7 @@ protected:
     };
     lw_shared_ptr<state> _state;
     shared_future<> _done;
-    future<> initialize(bool use_https);
+    
 public:
 }; // TODO: possibly move this to seastar's http subsystem.
 class client::upload_sink : public data_sink_impl
@@ -53480,8 +53400,8 @@ partition_slice::partition_slice(partition_slice &&) = default;
  // Only needed because selection_statement::execute does copies of its read_command
                                                                                          // in the map-reduce op.
 
-static void write_partial_partition(ser::writer_of_qr_partition<bytes_ostream> &&pw, const ser::qr_partition_view &pv, uint64_t rows_to_include);
-std::ostream &operator<<(std::ostream &out, const query::forward_result::printer &p);
+
+
 }
 std::atomic<int64_t> clocks_offset;
 partition_slice_builder::partition_slice_builder(const schema &schema) : _schema(schema)
@@ -53970,7 +53890,7 @@ namespace utf8
         uint8_t more_bytes_needed;
     };
     static codepoint_status evaluate_codepoint(const uint8_t *data, size_t len); // 3x faster than boost utf_to_utf
-    static partial_validation_results validate_partial_naive(const uint8_t *data, size_t len);
+    
 } // namespace utf8
 }
 // namespace utils
@@ -54139,9 +54059,9 @@ class like_matcher::impl
 bytes _pattern;
 boost::u32regex _re; // Performs pattern matching.
 public:
-void reset(bytes_view pattern);
+
 private:
-void init_re();
+
 };
 like_matcher::~like_matcher() = default;
 like_matcher::like_matcher(like_matcher &&that) noexcept = default;
@@ -54152,7 +54072,7 @@ thread_local error_injection<false> error_injection<false>::_local;
 }
 // namespace utils
 using namespace seastar;
-static const Elf64_Nhdr *get_nt_build_id(dl_phdr_info *info);
+
 namespace ser
 {
 logging::logger serlog("serializer");
