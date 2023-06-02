@@ -2838,14 +2838,14 @@ public:
     // Returns the amount of bytes written so far
     size_type size() const ;
     // For the FragmentRange concept
-    size_type size_bytes() const ;
+    
     void append(const bytes_ostream& o) ;
     // Removes n bytes from the end of the bytes_ostream.
     // Beware of O(n) algorithm.
-    void remove_suffix(size_t n) ;
+    
     // begin() and end() form an input range to bytes_view representing fragments.
     // Any modification of this instance invalidates iterators.
-    output_iterator write_begin() ;
+    
     boost::iterator_range<fragment_iterator> fragments() const ;
     struct position {
         chunk* _chunk;
@@ -2901,11 +2901,11 @@ public:
         using pointer = const bytes_view*;
         using reference = const bytes_view&;
         using difference_type = std::ptrdiff_t;
-        iterator(bytes_view current, size_t left, FragmentIterator next)  ;
+        
         bytes_view operator*() const ;
-        const bytes_view* operator->() const ;
+        
         iterator& operator++() ;
-        iterator operator++(int) ;
+        
         bool operator==(const iterator& other) const ;
     };
     using const_iterator = iterator;
@@ -2963,8 +2963,7 @@ template<> struct serializer<uint64_t> : public integral_serializer<uint64_t> {}
 ;
 template<typename T, typename Output>
  void serialize(Output& out, const T& v) ;;
-template<typename T, typename Output>
- void serialize(Output& out, const std::reference_wrapper<T> v) ;
+ ;
 template<typename T, typename Input>
 inline auto deserialize(Input& in, boost::type<T> t) {
     return serializer<T>::read(in);
@@ -2973,18 +2972,14 @@ template<typename T, typename Input>
  void skip(Input& v, boost::type<T>) ;
 ;
 ;
-template<typename Stream, typename T>
-void set_size(Stream& os, const T& obj);
+;
 template<typename Buffer, typename T>
 Buffer serialize_to_buffer(const T& v, size_t head_space = 0);
 template<typename T, typename Buffer>
 T deserialize_from_buffer(const Buffer&, boost::type<T>, size_t head_space = 0);
-template<typename Output, typename ...T>
-void serialize(Output& out, const boost::variant<T...>& v);
-template<typename Input, typename ...T>
-boost::variant<T...> deserialize(Input& in, boost::type<boost::variant<T...>>);
-template<typename Output, typename ...T>
-void serialize(Output& out, const std::variant<T...>& v);
+;
+;
+;
 ;
 struct unknown_variant_type {
     size_type index;
@@ -3117,9 +3112,9 @@ public:
     constexpr UUID(int64_t most_sig_bits, int64_t least_sig_bits) noexcept
         : most_sig_bits(most_sig_bits), least_sig_bits(least_sig_bits) {}
     // May throw marshal_exception is failed to parse uuid string.
-    explicit UUID(const sstring& uuid_string) : UUID(sstring_view(uuid_string)) { }
+    
     explicit UUID(const char * s)  ;
-    explicit UUID(sstring_view uuid_string);
+    
     int64_t get_most_significant_bits() const noexcept ;
     int64_t get_least_significant_bits() const noexcept ;
     int version() const noexcept {
@@ -3128,7 +3123,7 @@ public:
     bool is_timestamp() const noexcept {
         return version() == 1;
     }
-    int64_t timestamp() const noexcept ;
+    
     friend ::fmt::formatter<UUID>;
     
     
@@ -3151,7 +3146,7 @@ public:
         serialize_int64(out, least_sig_bits);
     }
 };
- UUID null_uuid() noexcept ;
+ 
 UUID make_random_uuid() noexcept;
 // Read 8 most significant bytes of timeuuid from serialized bytes
 inline uint64_t timeuuid_read_msb(const int8_t *b) noexcept {
@@ -3213,11 +3208,11 @@ struct tagged_uuid {
     utils::UUID id;
     std::strong_ordering operator<=>(const tagged_uuid&) const noexcept = default;
     explicit operator bool() const noexcept ;
-    static tagged_uuid create_random_id() noexcept ;
+    
     static tagged_uuid create_null_id() noexcept ;
     explicit tagged_uuid(const utils::UUID& uuid) noexcept : id(uuid) {}
     tagged_uuid() = default;
-    const utils::UUID& uuid() const noexcept ;
+    
 };
 } // namespace utils
 template<>
@@ -3226,8 +3221,7 @@ struct appending_hash<utils::UUID> {
 };
 template<typename Tag>
 struct appending_hash<utils::tagged_uuid<Tag>> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const utils::tagged_uuid<Tag>& id) const noexcept ;
+     ;
 };
 namespace std {
 template<>
@@ -3340,9 +3334,8 @@ public:
         assert(uuid.is_timestamp());
         return uuid;
     }
-    static UUID get_time_UUID_raw(decimicroseconds when, int64_t clock_seq_and_node)
-    ;
-    static UUID get_random_time_UUID_from_micros(std::chrono::microseconds when_in_micros) ;
+    
+    
     // Generate a time-based (Version 1) UUID using
     // a microsecond-precision Unix time and a unique number in
     // range [0, 131072).
@@ -3355,9 +3348,8 @@ public:
     // \throws timeuuid_submicro_out_of_range
     //
     static UUID get_name_UUID(sstring_view str);
-    static UUID get_name_UUID(const unsigned char* s, size_t len);
-    static UUID min_time_UUID(decimicroseconds timestamp = decimicroseconds{0})
-    ;
+    
+    
      ;
     template <std::intmax_t N, std::intmax_t D>
     static decimicroseconds from_unix_timestamp(std::chrono::duration<int64_t, std::ratio<N, D>> d) {
@@ -3388,7 +3380,7 @@ public:
     //      auto negated_uuid = UUID_gen::negate(original_uuid);
     //      assert(original_uuid != negated_uuid);
     //      assert(original_uuid == UUID_gen::negate(negated_uuid));
-    static UUID negate(UUID);
+    
 };
 // for the curious, here is how I generated START_EPOCH
 //        Calendar c = Calendar.getInstance(TimeZone.getTimeZone("GMT-0"));
@@ -3461,7 +3453,7 @@ public:
     
     
     sstring to_sstring() const;
-    bool enabled() const ;
+    
     bool operator==(const options& o) const;
 };
 } // namespace cdc
@@ -3480,7 +3472,7 @@ using days_counter = cql_duration_counter<int32_t, struct day_tag>;
 using nanoseconds_counter = cql_duration_counter<int64_t, struct nanosecond_tag>;
 class cql_duration_error : public std::invalid_argument {
 public:
-    explicit cql_duration_error(std::string_view what) : std::invalid_argument(what.data()) {}
+    
 };
 //
 // A duration of time.
@@ -3581,11 +3573,7 @@ public:
         , _current_size(std::min(it->size() - position, total_size))
         , _total_size(total_size)
     { }
-    explicit view(bytes_view bv) noexcept
-        : _current_position(reinterpret_cast<const char*>(bv.data()))
-        , _current_size(bv.size())
-        , _total_size(bv.size())
-    { }
+    
     using fragment_type = bytes_view;
     class iterator {
         vector_type::const_iterator _it;
@@ -3600,7 +3588,7 @@ public:
         
         
         reference operator*() const noexcept ;
-        pointer operator->() const noexcept ;
+        
         iterator& operator++() noexcept ;
         iterator operator++(int) noexcept ;
         bool operator==(const iterator& other) const noexcept ;
@@ -3616,7 +3604,7 @@ public:
     bytes_view current_fragment() const noexcept ;
     // Invalidates iterators
     void remove_suffix(size_t n) noexcept ;
-    bool operator==(const fragmented_temporary_buffer::view& other) const noexcept ;
+    
 };
 static_assert(FragmentRange<fragmented_temporary_buffer::view>);
 static_assert(FragmentedView<fragmented_temporary_buffer::view>);
@@ -3682,14 +3670,9 @@ public:
         }
     };
     static_assert(fragmented_temporary_buffer_concepts::ExceptionThrower<default_exception_thrower>);
-    istream(const vector_type& fragments, size_t total_size) noexcept
-        : _current(fragments.begin())
-        , _current_position(total_size ? _current->get() : nullptr)
-        , _current_end(total_size ? _current->get() + _current->size() : nullptr)
-        , _bytes_left(total_size)
-    { }
+    
     size_t bytes_left() const noexcept ;
-    void skip(size_t n) noexcept ;
+    
     template<typename T, typename ExceptionThrower = default_exception_thrower>
     requires fragmented_temporary_buffer_concepts::ExceptionThrower<ExceptionThrower>
     T read(ExceptionThrower&& exceptions = default_exception_thrower()) {
@@ -3804,7 +3787,7 @@ public:
         , _msg(std::move(msg))
     { }
     virtual const char* what() const noexcept override { return _msg.c_str(); }
-    exception_code code() const ;
+    
 };
 class server_exception : public cassandra_exception {
 public:
@@ -3878,9 +3861,7 @@ public:
 };
 class keyspace_not_defined_exception : public invalid_request_exception {
 public:
-    keyspace_not_defined_exception(std::string cause) noexcept
-        : invalid_request_exception(std::move(cause))
-    { }
+    
 };
 class overflow_error_exception : public invalid_request_exception {
 public:
@@ -3891,9 +3872,7 @@ public:
 };
 class syntax_exception : public request_validation_exception {
 public:
-    syntax_exception(sstring msg) noexcept
-        : request_validation_exception(exception_code::SYNTAX_ERROR, std::move(msg))
-    { }
+    
 };
 class configuration_exception : public request_validation_exception {
 public:
@@ -4128,11 +4107,9 @@ private:
     template <typename T>
     static data_value make_new(data_type type, T&& value);
 public:
-    ~data_value();
+    ;
     data_value(const data_value&);
-    data_value(data_value&& x) noexcept : _value(x._value), _type(std::move(x._type)) {
-        x._value = nullptr;
-    }
+    
     // common conversions from C++ types to database types
     // note: somewhat dangerous, consider a factory function instead
     explicit data_value(bytes);
@@ -4158,10 +4135,10 @@ public:
     data_value(int32_t);
     data_value(int64_t);
     data_value(utils::UUID);
-    data_value(float);
+    ;
     data_value(double);
     data_value(net::ipv4_address);
-    data_value(net::ipv6_address);
+    
     data_value(seastar::net::inet_address);
     data_value(simple_date_native_type);
     data_value(db_clock::time_point);
@@ -4170,11 +4147,11 @@ public:
     data_value(date_type_native_type);
     data_value(cql_duration);
     data_value(empty_type_representation);
-    explicit data_value(std::optional<bytes>);
+    
     ;
     ;
-    data_value& operator=(const data_value&);
-    data_value& operator=(data_value&&);
+    
+    ;
     const data_type& type() const {
         return _type;
     }
@@ -4185,7 +4162,7 @@ public:
     void serialize(bytes::iterator& out) const;
     bytes_opt serialize() const;
     bytes serialize_nonnull() const;
-    friend bool operator==(const data_value& x, const data_value& y);
+    
     friend class abstract_type;
     static data_value make_null(data_type type) {
         return data_value(nullptr, std::move(type));
@@ -4396,7 +4373,7 @@ public:
     }
     friend class abstract_type;
 };
-bool operator==(const data_value& x, const data_value& y);
+
 using bytes_view_opt = std::optional<bytes_view>;
 using managed_bytes_view_opt = std::optional<managed_bytes_view>;
 static inline
@@ -5557,8 +5534,7 @@ extern logger seastar_logger;
 }
 namespace ser {
  ;
-template<typename Stream, typename T>
-void set_size(Stream& os, const T& obj) ;
+ ;
  ;
  ;
 template<bool Fast, typename T>
@@ -52406,13 +52382,7 @@ thread_local const shared_ptr<const abstract_type> double_type(make_shared<doubl
 thread_local const shared_ptr<const abstract_type> counter_type(make_shared<counter_type_impl>());
 thread_local const shared_ptr<const abstract_type> duration_type(make_shared<duration_type_impl>());
 thread_local const data_type empty_type(make_shared<empty_type_impl>());
-data_value::~data_value()
-{
-if (_value)
-{
-    native_value_delete(*_type, _value);
-}
-}
+
 data_value::data_value(const data_value &v) : _value(nullptr), _type(v._type)
 {
 if (v._value)
@@ -52420,13 +52390,7 @@ if (v._value)
     _value = _type->native_value_clone(v._value);
 }
 }
-data_value &data_value::operator=(data_value &&x)
-{
-auto tmp = std::move(x);
-std::swap(tmp._value, this->_value);
-std::swap(tmp._type, this->_type);
-return *this;
-}
+
 data_value::data_value(bytes v) : data_value(make_new(bytes_type, v)) {}
 data_value::data_value(sstring &&v) : data_value(make_new(utf8_type, std::move(v))) {}
 data_value::data_value(std::string_view v) : data_value(sstring(v)) {}
@@ -52438,7 +52402,7 @@ data_value::data_value(int16_t v) : data_value(make_new(short_type, v)) {}
 data_value::data_value(int32_t v) : data_value(make_new(int32_type, v)) {}
 data_value::data_value(int64_t v) : data_value(make_new(long_type, v)) {}
 data_value::data_value(utils::UUID v) : data_value(make_new(uuid_type, v)) {}
-data_value::data_value(float v) : data_value(make_new(float_type, v)) {}
+
 data_value::data_value(double v) : data_value(make_new(double_type, v)) {}
 data_value::data_value(seastar::net::inet_address v) : data_value(make_new(inet_addr_type, v)) {}
 data_value::data_value(seastar::net::ipv4_address v) : data_value(seastar::net::inet_address(v)) {}
