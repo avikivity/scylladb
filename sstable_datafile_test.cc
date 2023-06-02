@@ -16313,10 +16313,8 @@ public:
             other._parent.t->do_set_root(*this);
         }
     }
-    node(const node& other) = delete;
-    ~node() {
-        assert(_base.num_keys == 0);
-    }
+    
+    
     size_t storage_size() const noexcept {
         return is_linear() ? linear_node_size(_base.capacity) :
             is_leaf() ? leaf_node_size : inner_node_size;
@@ -16371,11 +16369,11 @@ private:
     }
     
     
-    bool can_grab_from() const noexcept ;
+    
     bool can_push_to() const noexcept {
         return _base.num_keys < NodeSize;
     }
-    bool can_merge_with(const node& n) const noexcept ;
+    
     // Make a room for a new key (and kid) at \at position
     void shift_right(size_t at) noexcept {
         for (size_t i = _base.num_keys; i > at; i--) {
@@ -16610,7 +16608,7 @@ private:
         nr->_base.flags |= node_base::NODE_ROOT;
         t->do_set_root(*nr);
     }
-    void collapse_root() noexcept ;
+    
     void grab_from_left(node* left, key_index idx) noexcept {
         shift_right(0);
         _parent.n->move_key(idx - 1, *this, 0);
@@ -16634,22 +16632,9 @@ private:
     
     
     void refill() noexcept ;
-    void light_refill() noexcept ;
-    void remove_from_inner(kid_index idx) noexcept ;
-    template <typename KFunc>
-    void clear(KFunc&& k_clear) noexcept {
-        size_t nk = _base.num_keys;
-        _base.num_keys = 0;
-        if (!is_leaf()) {
-            for (kid_index i = 0; i <= nk; i++) {
-                _kids[i]->clear(k_clear);
-                destroy(*_kids[i]);
-            }
-        }
-        for (key_index i = 0; i < nk; i++) {
-            k_clear(_base.keys[i]);
-        }
-    }
+    
+    
+    
     template <typename Cloner, typename Deleter>
     node* clone(node*& left_leaf, node*& right_leaf, Cloner&& cloner, Deleter&& deleter) const ;
     size_t size_slow() const noexcept ;
@@ -16684,9 +16669,7 @@ private:
             assert(leaf == ret->is_leaf());
             return ret;
         }
-        ~prealloc() {
-            drain();
-        }
+        
     };
 };
 } // namespace
@@ -16707,9 +16690,7 @@ protected:
     // Prevent destruction of a linked evictable. While we could unlink the evictable here
     // in the destructor, we can't perform proper accounting for that without access to the
     // head of the containing list.
-    ~evictable() {
-        assert(!_lru_link.is_linked());
-    }
+    
 public:
     ;
     virtual void on_evicted() noexcept = 0;
@@ -16759,13 +16740,13 @@ struct managed_ref {
     T& operator*() {
         return _ptr->_value;
     }
-    const T& operator*() const ;
+    
     T* operator->() ;
     const T* operator->() const ;
     explicit operator bool() const {
         return _ptr != nullptr;
     }
-    size_t external_memory_usage() const ;
+    
 };
 template<typename T>
 requires std::is_nothrow_move_constructible_v<T>
@@ -16826,7 +16807,7 @@ static inline unsigned array_search_8_eq(uint8_t val, const uint8_t* array) {
 }
 unsigned array_search_16_eq(uint8_t val, const uint8_t* array);
 unsigned array_search_32_eq(uint8_t val, const uint8_t* array);
-unsigned array_search_x32_eq(uint8_t val, const uint8_t* array, int nr);
+
 }
 class size_calculator;
 namespace compact_radix_tree {
@@ -16849,7 +16830,7 @@ template <>
 inline unsigned find_in_array<32>(uint8_t val, const uint8_t* arr) {
     return utils::array_search_32_eq(val, arr);
 }
-template <> unsigned find_in_array<64>(uint8_t val, const uint8_t* arr) ;
+
 // A union of any number of types.
 template <typename... Ts>
 struct variadic_union;
@@ -18255,7 +18236,7 @@ template <typename Collection>
 class immutable_collection {
     Collection* _col;
 public:
-    immutable_collection(Collection& col)  ;
+    
 #define DO_WRAP_METHOD(method, is_const)                                                                           \
     template <typename... Args>                                                                                    \
     auto method(Args&&... args) is_const noexcept(noexcept(std::declval<is_const Collection>().method(args...))) { \
@@ -18288,18 +18269,18 @@ class tombstone_gc_options;
 class tombstone_gc_state {
     per_table_history_maps* _repair_history_maps;
 public:
-    tombstone_gc_state() = delete;
+    
     tombstone_gc_state(per_table_history_maps* maps) noexcept : _repair_history_maps(maps) {}
     struct get_gc_before_for_range_result {
         gc_clock::time_point min_gc_before;
         gc_clock::time_point max_gc_before;
         bool knows_entire_range;
     };
-    get_gc_before_for_range_result get_gc_before_for_range(schema_ptr s, const dht::token_range& range, const gc_clock::time_point& query_time) const;
+    
     gc_clock::time_point get_gc_before_for_key(schema_ptr s, const dht::decorated_key& dk, const gc_clock::time_point& query_time) const;
-    void update_repair_time(table_id id, const dht::token_range& range, gc_clock::time_point repair_time);
+    
 };
-void validate_tombstone_gc_options(const tombstone_gc_options* options, data_dictionary::database db, sstring ks_name);
+
 class mutation_fragment;
 class mutation_partition_view;
 class mutation_partition_visitor;
@@ -18310,24 +18291,20 @@ struct cell_hash {
     using size_type = uint64_t;
     static constexpr size_type no_hash = 0;
     size_type hash = no_hash;
-    explicit operator bool() const noexcept ;
+    
 };
 template<>
 struct appending_hash<cell_hash> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const cell_hash& ch) const ;
+     ;
 };
 using cell_hash_opt = seastar::optimized_optional<cell_hash>;
 struct cell_and_hash {
     atomic_cell_or_collection cell;
     mutable cell_hash_opt hash;
-    cell_and_hash() = default;
     
     
-    cell_and_hash(atomic_cell_or_collection&& cell, cell_hash_opt hash)
-        : cell(std::move(cell))
-        , hash(hash)
-    { }
+    
+    
 };
 class compaction_garbage_collector;
 //
@@ -18356,7 +18333,7 @@ public:
     // Returns a pointer to cell's value or nullptr if column is not set.
     const atomic_cell_or_collection* find_cell(column_id id) const;
     // Returns a pointer to cell's value and hash or nullptr if column is not set.
-    const cell_and_hash* find_cell_and_hash(column_id id) const;
+    
     template<typename Func>
     void remove_if(Func&& func) {
         _cells.weed([func, this] (column_id id, cell_and_hash& cah) {
@@ -18383,8 +18360,7 @@ public:
     // Calls Func(column_id, cell_and_hash&) or Func(column_id, atomic_cell_and_collection&)
     // for each cell in this row, depending on the concrete Func type.
     // noexcept if Func doesn't throw.
-    template<typename Func>
-    void for_each_cell(Func&& func) ;
+     ;
     template<typename Func>
     void for_each_cell(Func&& func) const {
         _cells.walk([func] (column_id id, const cell_and_hash& cah) {
@@ -18392,8 +18368,7 @@ public:
             return true;
         });
     }
-    template<typename Func>
-    void for_each_cell_until(Func&& func) const ;
+     ;
     // Merges cell's value into the row.
     // Weak exception guarantees.
     void apply(const column_definition& column, const atomic_cell_or_collection& cell, cell_hash_opt hash = cell_hash_opt());
@@ -18447,7 +18422,7 @@ public:
         
         friend std::ostream& operator<<(std::ostream& os, const printer& p);
     };
-    friend std::ostream& operator<<(std::ostream& os, const printer& p);
+    
 };
 // Like row, but optimized for the case where the row doesn't exist (e.g. static rows)
 class lazy_row {
@@ -18457,20 +18432,20 @@ public:
     lazy_row() = default;
     explicit lazy_row(row&& r) ;
     lazy_row(const schema& s, column_kind kind, const lazy_row& r) ;
-    lazy_row(const schema& s, column_kind kind, const row& r) ;
+    
     row& maybe_create() {
         if (!_row) {
             _row = make_managed<row>();
         }
         return *_row;
     }
-    const row& get_existing() const & ;
+    
     row& get_existing() & ;
-    row&& get_existing() && ;
+    
     const row& get() const ;
     size_t size() const ;
     bool empty() const ;
-    void reserve(column_id nr) ;
+    
     // Returns a pointer to cell's value or nullptr if column is not set.
     // Returns a pointer to cell's value and hash or nullptr if column is not set.
     // Calls Func(column_id, cell_and_hash&) or Func(column_id, atomic_cell_and_collection&)
@@ -18502,7 +18477,7 @@ public:
     // Monotonic exception guarantees
     void apply_monotonically(const schema& s, column_kind kind, row&& src) ;
     // Monotonic exception guarantees
-    void apply_monotonically(const schema& s, column_kind kind, lazy_row&& src) ;
+    
     // Expires cells based on query_time. Expires tombstones based on gc_before
     // and max_purgeable. Removes cells covered by tomb.
     // Returns true iff there are any live cells left.
@@ -18533,7 +18508,7 @@ public:
         const lazy_row& _row;
     public:
         
-        printer(printer&&) = delete;
+        
         friend std::ostream& operator<<(std::ostream& os, const printer& p);
     };
 };
@@ -18545,8 +18520,7 @@ struct max_timestamp {
 template<>
 struct appending_hash<row> {
     static constexpr int null_hash_value = 0xbeefcafe;
-    template<typename Hasher>
-    void operator()(Hasher& h, const row& cells, const schema& s, column_kind kind, const query::column_id_vector& columns, max_timestamp& max_ts) const;
+    ;
 };
 class row_marker;
 int compare_row_marker_for_merge(const row_marker& left, const row_marker& right) noexcept;
@@ -18574,13 +18548,13 @@ public:
     }
     bool is_live(tombstone t, gc_clock::time_point now) const ;
     // Can be called only when !is_missing().
-    bool is_dead(gc_clock::time_point now) const ;
+    
     // Can be called only when is_live().
     bool is_expiring() const {
         return _ttl != no_ttl;
     }
     // Can be called only when is_expiring().
-    gc_clock::duration ttl() const ;
+    
     // Can be called only when is_expiring().
     gc_clock::time_point expiry() const {
         return _expiry;
@@ -18608,7 +18582,7 @@ public:
     
     // Consistent with operator==()
      ;
-    friend std::ostream& operator<<(std::ostream& os, const row_marker& rm);
+    
 };
 template<>
 struct appending_hash<row_marker> {
@@ -18671,21 +18645,17 @@ struct fmt::formatter<shadowable_tombstone> : fmt::formatter<std::string_view> {
 };
 template<>
 struct appending_hash<shadowable_tombstone> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const shadowable_tombstone& t) const ;
+     ;
 };
 class row_tombstone {
     tombstone _regular;
     shadowable_tombstone _shadowable; // _shadowable is always >= _regular
 public:
-    explicit row_tombstone(tombstone regular, shadowable_tombstone shadowable)
-            : _regular(std::move(regular))
-            , _shadowable(std::move(shadowable)) {
-    }
+    
     explicit row_tombstone(tombstone regular)  ;
     row_tombstone() = default;
     std::strong_ordering operator<=>(const row_tombstone& t) const ;
-    bool operator==(const row_tombstone& t) const ;
+    
     explicit operator bool() const {
         return bool(_shadowable);
     }
@@ -18693,7 +18663,7 @@ public:
     const gc_clock::time_point max_deletion_time() const ;
     const tombstone& regular() const ;
     const shadowable_tombstone& shadowable() const ;
-    bool is_shadowable() const ;
+    
     void maybe_shadow(const row_marker& marker) noexcept {
         _shadowable.maybe_shadow(_regular, marker);
     }
