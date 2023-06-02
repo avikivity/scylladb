@@ -28588,11 +28588,11 @@ public:
         uint64_t memory_compacted;
         uint64_t memory_evicted;
         friend stats operator+(const stats& s1, const stats& s2) ;
-        friend stats operator-(const stats& s1, const stats& s2) ;
-        stats& operator+=(const stats& other) ;
-        stats& operator-=(const stats& other) ;
+        
+        
+        
     };
-    void configure(const config& cfg);
+    
     future<> stop();
 private:
     std::unique_ptr<impl> _impl;
@@ -28739,8 +28739,8 @@ private:
     shared_ptr<basic_region_impl> _impl;
 private:
 public:
-    region(const region& other) = delete;
-    void listen(region_listener* listener);
+    
+    
     // Allocates a buffer of a given size.
     // The buffer's pointer will be aligned to 4KB.
     // Note: it is wasteful to allocate buffers of sizes which are not a multiple of the alignment.
@@ -28971,8 +28971,8 @@ public:
     const partition_version& operator*() const ;
     partition_version* operator->() ;
     const partition_version* operator->() const ;
-    bool is_unique_owner() const ;
-    void mark_as_unique_owner() ;
+    
+    
 };
 class partition_entry;
 class cache_tracker;
@@ -29085,25 +29085,18 @@ public:
     partition_entry(const schema&, mutation_partition);
     // Returns a reference to partition_entry containing given pv,
     // assuming pv.is_referenced_from_entry().
-    static partition_entry& container_of(partition_version& pv) ;
+    
     // Constructs an evictable entry
     // Strong exception guarantees for the state of mp.
-    partition_entry(evictable_tag, const schema& s, mutation_partition&& mp);
+    
     ~partition_entry();
     // Frees elements of this entry in batches.
     // Active snapshots are detached, data referenced by them is not cleared.
     // Returns stop_iteration::yes iff there are no more elements to free.
     stop_iteration clear_gently(cache_tracker*) noexcept;
     static partition_entry make_evictable(const schema& s, mutation_partition&& mp);
-    static partition_entry make_evictable(const schema& s, const mutation_partition& mp);
-    partition_entry(partition_entry&& pe) noexcept
-        : _snapshot(pe._snapshot), _version(std::move(pe._version))
-    {
-        if (_snapshot) {
-            _snapshot->_entry = this;
-        }
-        pe._snapshot = nullptr;
-    }
+    
+    
     // Removes data contained by this entry, but not owned by snapshots.
     // Snapshots will be unlinked and evicted independently by reclaimer.
     // This entry is invalid after this and can only be destroyed.
@@ -29264,7 +29257,7 @@ public:
     public:
         const sstring& what() const ;
         explicit operator bool() const ;
-        bool operator!() const ;
+        
     };
 private:
     const ::schema& _schema;
@@ -29273,7 +29266,7 @@ private:
     dht::decorated_key _prev_partition_key;
     tombstone _current_tombstone;
 private:
-    validation_result validate(dht::token t, const partition_key* pkey);
+    
 public:
     /// Validate the monotonicity of the fragment kind.
     ///
@@ -29370,20 +29363,20 @@ class mutation_fragment_stream_validating_filter {
     std::string_view _name_view; // always valid
     mutation_fragment_stream_validation_level _validation_level;
 private:
-    mutation_fragment_stream_validating_filter(const char* name_literal, sstring name_value, const schema& s, mutation_fragment_stream_validation_level level);
+    
 public:
     /// Constructor.
     ///
     /// \arg name is used in log messages to identify the validator, the
     ///     schema identity is added automatically
     /// \arg compare_keys enable validating clustering key monotonicity
-    mutation_fragment_stream_validating_filter(sstring name, const schema& s, mutation_fragment_stream_validation_level level);
+    
     mutation_fragment_stream_validating_filter(const char* name, const schema& s, mutation_fragment_stream_validation_level level);
     mutation_fragment_stream_validating_filter(mutation_fragment_stream_validating_filter&&) = delete;
     mutation_fragment_stream_validating_filter(const mutation_fragment_stream_validating_filter&) = delete;
     sstring full_name() const;
-    bool operator()(const dht::decorated_key& dk);
-    bool operator()(mutation_fragment_v2::kind kind, position_in_partition_view pos, std::optional<tombstone> new_current_tombstone);
+    
+    
     /// Equivalent to `operator()(mf.kind(), mf.position())`
     /// Equivalent to `operator()(partition_end{})`
     bool on_end_of_partition();
@@ -29430,8 +29423,8 @@ class mutation_compactor_garbage_collector : public compaction_garbage_collector
     row _row;
 public:
     explicit mutation_compactor_garbage_collector(const schema& schema)  ;
-    void start_collecting_static_row() ;
-    void start_collecting_clustering_row(clustering_key ckey) ;
+    
+    
      ;
      ;
 };
@@ -29571,14 +29564,8 @@ public:
     /// Reset limits and query-time to the new page's ones and re-emit the
     /// partition-header and static row if there are clustering rows or range
     /// tombstones left in the partition.
-    template <typename Consumer>
-    requires CompactedFragmentsConsumerV2<Consumer>
-    void start_new_page(uint64_t row_limit,
-            uint32_t partition_limit,
-            gc_clock::time_point query_time,
-            partition_region next_fragment_region,
-            Consumer& consumer) ;
-    bool are_limits_reached() const ;
+     ;
+    
     /// Detach the internal state of the compactor
     ///
     /// The state is represented by the last seen partition header, static row
@@ -29681,9 +29668,9 @@ struct compact_for_compaction_v2 : compact_mutation_v2<compact_for_sstables::yes
 class range_tombstone_assembler {
     std::optional<range_tombstone_change> _prev_rt;
 private:
-    bool has_active_tombstone() const ;
+    
 public:
-    tombstone get_current_tombstone() const ;
+    
     std::optional<range_tombstone_change> get_range_tombstone_change() && ;
     void reset() ;
     std::optional<range_tombstone> consume(const schema& s, range_tombstone_change&& rt) ;
@@ -29699,8 +29686,8 @@ class mutation_rebuilder {
     mutation_opt _m;
 public:
     explicit mutation_rebuilder(schema_ptr s) : _s(std::move(s)) { }
-    stop_iteration consume_end_of_partition() ;
-    mutation_opt consume_end_of_stream() ;
+    
+    
 };
 // Builds the mutation corresponding to the next partition in the mutation fragment stream.
 // Implements FlattenedConsumerV2, MutationFragmentConsumerV2 and FlatMutationReaderConsumerV2.
@@ -29713,8 +29700,8 @@ public:
     mutation_rebuilder_v2(schema_ptr s) : _s(std::move(s)), _builder(_s) { }
 public:
     stop_iteration consume(partition_start mf) ;
-    stop_iteration consume(partition_end) ;
-    stop_iteration consume(mutation_fragment_v2&& mf) ;
+    
+    
 public:
     void consume_new_partition(const dht::decorated_key& dk) ;
     stop_iteration consume(tombstone t) ;
@@ -29736,8 +29723,7 @@ private:
     const schema& _schema;
     const mutation_partition& _p;
 private:
-    template<typename Writer>
-    static void write_serialized(Writer&& out, const schema&, const mutation_partition&);
+    ;
 public:
     using count_type = uint32_t;
 public:
@@ -29750,13 +29736,9 @@ struct partition {
     uint32_t _row_count_low_bits;
     frozen_mutation _m; // FIXME: We don't need cf UUID, which frozen_mutation includes.
     uint32_t _row_count_high_bits;
-    partition(uint64_t row_count, frozen_mutation m)
-        : _row_count_low_bits(static_cast<uint32_t>(row_count))
-        , _m(std::move(m))
-        , _row_count_high_bits(static_cast<uint32_t>(row_count >> 32))
-    { }
-    uint32_t row_count_low_bits() const ;
-    uint32_t row_count_high_bits() const ;
+    
+    
+    
     uint64_t row_count() const ;
     const frozen_mutation& mut() const ;
 };
@@ -29771,19 +29753,18 @@ class reconcilable_result {
     utils::chunked_vector<partition> _partitions;
     uint32_t _row_count_high_bits;
 public:
-    reconcilable_result& operator=(reconcilable_result&&) = default;
-    reconcilable_result(uint32_t row_count_low_bits, utils::chunked_vector<partition> partitions, query::short_read short_read,
-                        uint32_t row_count_high_bits, query::result_memory_tracker memory_tracker = { });
+    
+    
     reconcilable_result(uint64_t row_count, utils::chunked_vector<partition> partitions, query::short_read short_read,
                         query::result_memory_tracker memory_tracker = { });
     const utils::chunked_vector<partition>& partitions() const;
     query::short_read is_short_read() const ;
     size_t memory_usage() const ;
-    bool operator==(const reconcilable_result& other) const;
+    
     struct printer {
         const reconcilable_result& self;
         schema_ptr schema;
-        friend std::ostream& operator<<(std::ostream&, const printer&);
+        
     };
     printer pretty_printer(schema_ptr) const;
 };
@@ -29818,22 +29799,11 @@ public:
     stop_iteration consume_end_of_partition();
     reconcilable_result consume_end_of_stream();
 };
-future<query::result> to_data_query_result(
-        const reconcilable_result&,
-        schema_ptr,
-        const query::partition_slice&,
-        uint64_t row_limit,
-        uint32_t partition_limit,
-        query::result_options opts = query::result_options::only_result());
+
 // Query the content of the mutation.
 //
 // The mutation is destroyed in the process, see `mutation::consume()`.
-query::result query_mutation(
-        mutation&& m,
-        const query::partition_slice& slice,
-        uint64_t row_limit = query::max_rows,
-        gc_clock::time_point now = gc_clock::now(),
-        query::result_options opts = query::result_options::only_result());
+
 // Performs a query for counter updates.
 // Partition visitor which builds mutation_partition corresponding to the data its fed with.
 class partition_builder final : public mutation_partition_visitor {
@@ -29845,7 +29815,7 @@ public:
     // @p will hold the result of building.
     // @p must be empty.
     void accept_row_cell(column_id id, atomic_cell&& cell) ;
-    virtual void accept_row_cell(column_id id, collection_mutation_view collection) override ;
+    
 };
 //
 // Fluent builder for query::partition_slice.
@@ -29866,7 +29836,7 @@ class partition_slice_builder {
     uint64_t _partition_row_limit = query::partition_max_rows;
 public:
     partition_slice_builder(const schema& schema);
-    partition_slice_builder(const schema& schema, query::partition_slice slice);
+    
     partition_slice_builder& with_static_column(bytes name);
     partition_slice_builder& with_no_static_columns();
     partition_slice_builder& with_regular_column(bytes name);
@@ -29937,9 +29907,8 @@ union maybe_key {
     void reset() noexcept { v = utils::simple_key_unused_value; }
     ~maybe_key() {}
     maybe_key(const maybe_key&) = delete;
-    template <typename... Args>
-    void emplace(Args&&... args) noexcept ;
-    void emplace(maybe_key&& other) noexcept ;
+     ;
+    
     template <typename... Args>
     void replace(Args&&... args) noexcept ;
     void replace(maybe_key&& other) = delete; // not to be called by chance
@@ -30451,11 +30420,11 @@ struct searcher<K, int64_t, Less, Size, key_search::linear> {
 };
 template <typename K, typename Key, typename Less, size_t Size>
 struct searcher<K, Key, Less, Size, key_search::binary> {
-    static size_t gt(const K& k, const maybe_key<Key, Less>* keys, size_t nr, Less less) noexcept ;
+    
 };
 template <typename K, typename Key, typename Less, size_t Size>
 struct searcher<K, Key, Less, Size, key_search::both> {
-    static size_t gt(const K& k, const maybe_key<Key, Less>* keys, size_t nr, Less less) noexcept ;
+    
 };
 template <typename Key, typename T, typename Less, size_t NodeSize, key_search Search, with_debug Debug>
 class node final {
@@ -30509,8 +30478,8 @@ class node final {
     kid_index index_for(node *n) const noexcept ;
     bool need_refill() const noexcept ;
     bool can_grab_from() const noexcept ;
-    bool can_push_to() const noexcept ;
-    bool can_merge_with(const node& n) const noexcept ;
+    
+    
     void shift_right(size_t s) noexcept ;
     void shift_left(size_t s) noexcept ;
     // Helper for assert(). See comment for do_insert for details.
@@ -31380,11 +31349,11 @@ private:
 public:
     using register_metrics = bool_class<class register_metrics_tag>;
     // Inserts e such that it will be evicted right before more_recent in the absence of later touches.
-    seastar::memory::reclaiming_result evict_from_lru_shallow() noexcept;
+    
 };
 class flat_mutation_reader_v2;
 class reader_permit;
-flat_mutation_reader_v2 make_empty_flat_reader_v2(schema_ptr s, reader_permit permit);
+
 using namespace seastar;
 class mutation_source;
 class position_in_partition;
@@ -32056,8 +32025,8 @@ class result_merger {
     const uint64_t _max_rows;
     const uint32_t _max_partitions;
 public:
-    void reserve(size_t size) ;
-    void operator()(foreign_ptr<lw_shared_ptr<query::result>> r) ;
+    
+    
     // FIXME: Eventually we should return a composite_query_result here
     // which holds the vector of query results and which can be quickly turned
     // into packet fragments by the transport layer without copying the data.
@@ -32077,14 +32046,13 @@ public:
     std::array<uint8_t, digest_size> finalize_array() ;
     uint64_t finalize_uint64() ;
 private:
-    template<typename OutIterator>
-    void serialize_to(OutIterator&& out) ;
+     ;
 };
 // Used to specialize templates in order to fix a bug
 // in handling null values: #4567
 class legacy_xx_hasher_without_null_digest : public xx_hasher {
 public:
-    explicit legacy_xx_hasher_without_null_digest(uint64_t seed = 0) noexcept : xx_hasher(seed) {}
+    
 };
 template<typename H>
 concept HasherReturningBytes = HasherReturning<H, bytes>;
@@ -32093,9 +32061,9 @@ template <typename T, size_t size> class cryptopp_hasher : public hasher {
     struct impl;
     std::unique_ptr<impl> _impl;
 public:
-    cryptopp_hasher();
+    
     ~cryptopp_hasher();
-    cryptopp_hasher(cryptopp_hasher&&) noexcept;
+    
     cryptopp_hasher(const cryptopp_hasher&);
     cryptopp_hasher& operator=(cryptopp_hasher&&) noexcept;
     cryptopp_hasher& operator=(const cryptopp_hasher&);
@@ -32103,13 +32071,13 @@ public:
     std::array<uint8_t, size> finalize_array();
     void update(const char* ptr, size_t length) noexcept override;
     // Use update and finalize to compute the hash over the full view.
-    static bytes calculate(const std::string_view& s);
+    
 };
 class md5_hasher final : public cryptopp_hasher<md5_hasher, 16> {};
 class sha256_hasher final : public cryptopp_hasher<sha256_hasher, 32> {};
 namespace query {
 struct noop_hasher {
-    void update(const char* ptr, size_t length) noexcept ;
+    
     std::array<uint8_t, 16> finalize_array() ;;
 };
 class digester final {
@@ -32118,7 +32086,7 @@ public:
     explicit digester(digest_algorithm algo) ;
     template<typename T, typename... Args>
     void feed_hash(const T& value, Args&&... args) ;;
-    std::array<uint8_t, 16> finalize_array() ;
+    
 };
 using default_hasher = xx_hasher;
 template<typename Hasher>
@@ -32143,29 +32111,7 @@ class result::partition_writer {
     uint32_t& _partition_count;
     api::timestamp_type& _last_modified;
 public:
-    partition_writer(
-        result_request request,
-        const partition_slice& slice,
-        const clustering_row_ranges& ranges,
-        ser::query_result__partitions<bytes_ostream>& pw,
-        ser::vector_position pos,
-        ser::after_qr_partition__key<bytes_ostream> w,
-        digester& digest,
-        uint64_t& row_count,
-        uint32_t& partition_count,
-        api::timestamp_type& last_modified)
-        : _request(request)
-        , _w(std::move(w))
-        , _slice(slice)
-        , _ranges(ranges)
-        , _pw(pw)
-        , _pos(std::move(pos))
-        , _digest(digest)
-        , _digest_pos(digest)
-        , _row_count(row_count)
-        , _partition_count(partition_count)
-        , _last_modified(last_modified)
-    { }
+    
     bool requested_digest() const ;
     bool requested_result() const ;
     ser::after_qr_partition__key<bytes_ostream> start() ;
@@ -32207,8 +32153,8 @@ public:
     short_read is_short_read() const ;
     result_memory_accounter& memory_accounter() ;
     stop_iteration bump_and_check_tombstone_limit() ;
-    const partition_slice& slice() const ;
-    uint64_t row_count() const ;
+    
+    
     uint32_t partition_count() const ;
     // Starts new partition and returns a builder for its contents.
     // Invalidates all previously obtained builders
@@ -32327,9 +32273,9 @@ private:
 private:
     void register_metrics();
 protected:
-    void on_timer() noexcept;
+    
 public:
-    rate_limiter_base();
+    
     // (For testing purposes only)
     // Increments the counter for given (label, token) and returns
     // the new value of the counter.
@@ -32574,8 +32520,8 @@ private:
 public:
 private:
     future<> release_queued_allocations();
-    void notify_unspooled_pressure_relieved();
-    friend void region_group_binomial_group_sanity_check(const region_group::region_heap& bh);
+    
+    
 private: // from region_listener
     virtual void moved(logalloc::region* old_address, logalloc::region* new_address) override;
 public:
@@ -32625,17 +32571,17 @@ public:
     // returns a pointer to the largest region (in terms of memory usage) that sits below this
     // region group. This includes the regions owned by this region group as well as all of its
     // children.
-    size_tracked_region* get_largest_region() noexcept;
+    
     // Shutdown is mandatory for every user who has set a threshold
     // Can be called at most once.
-    future<> shutdown() noexcept;
+    
     size_t blocked_requests() const noexcept;
     uint64_t blocked_requests_counter() const noexcept;
 private:
     // Returns true if and only if constraints of this group are not violated.
     // That's taking into account any constraints imposed by enclosing (parent) groups.
-    bool execution_permitted() noexcept;
-    uint64_t top_region_evictable_space() const noexcept;
+    
+    
     virtual void add(logalloc::region* child) override; // from region_listener
     virtual void del(logalloc::region* child) override; // from region_listener
     friend class ::test_region_group;
@@ -32645,7 +32591,7 @@ class dirty_memory_manager;
 class sstable_write_permit final {
     friend class dirty_memory_manager;
     std::optional<semaphore_units<>> _permit;
-    sstable_write_permit() noexcept = default;
+    
     explicit sstable_write_permit(semaphore_units<>&& units) noexcept
             : _permit(std::move(units)) {
     }
@@ -32830,7 +32776,7 @@ template <typename TagType, TagType Tag, typename T>
 struct disk_tagged_union_member {
     // stored as: tag, value-size-on-disk, value
     using tag_type = TagType;
-    static constexpr tag_type tag() ;
+    
     using type = T;
     T value;
 };
@@ -32847,8 +32793,7 @@ struct disk_set_of_tagged_union {
     using hash_type = std::conditional_t<std::is_enum<TagType>::value, enum_hash<TagType>, TagType>;
     using value_type = boost::variant<Members...>;
     std::unordered_map<tag_type, value_type, hash_type> data;
-    template <TagType Tag, typename T>
-    T* get() ;
+     ;
      ;
      ;
     struct serdes;
@@ -32931,7 +32876,7 @@ namespace sstables {
 class key_view {
     managed_bytes_view _bytes;
 public:
-    key_view() : _bytes() {}
+    
     template <std::invocable<bytes_view> Func>
     std::invoke_result_t<Func, bytes_view> with_linearized(Func&& func) const {
         return ::with_linearized(_bytes, func);
@@ -33731,7 +33676,7 @@ class compaction_strategy_state;
 namespace compaction {
 class table_state {
 public:
-    virtual ~table_state() ;
+    
     // min threshold as defined by table.
 };
 } // namespace compaction
@@ -33760,7 +33705,7 @@ class compaction_strategy {
     ::shared_ptr<compaction_strategy_impl> _compaction_strategy_impl;
 public:
     // Return a list of sstables to be compacted after applying the strategy.
-    compaction_descriptor get_major_compaction_job(table_state& table_s, std::vector<shared_sstable> candidates);
+    
     std::vector<compaction_descriptor> get_cleanup_compaction_jobs(table_state& table_s, std::vector<shared_sstable> candidates) const;
     // Some strategies may look at the compacted and resulting sstables to
     // get some useful information for subsequent compactions.
@@ -34243,8 +34188,8 @@ private:
     // * The blessed read finishes and a new blessed permit is choosen.
     // * Memory consumption falls below the limit.
     // closes reader in the background.
-    uint64_t get_serialize_limit() const;
-    uint64_t get_kill_limit() const;
+    
+    
     // Throws std::bad_alloc if memory consumed is oom_kill_limit_multiply_threshold more than the memory limit.
 public:
     struct no_limits { };
@@ -34556,11 +34501,11 @@ struct storage_options {
         sstring bucket;
         sstring endpoint;
         static constexpr std::string_view name = "S3";
-        bool operator==(const s3&) const = default;
+        
     };
     using value_type = std::variant<local, s3>;
     value_type value = local{};
-    storage_options() = default;
+    
 };
 } // namespace data_dictionary
 namespace data_dictionary {
@@ -34594,7 +34539,7 @@ using namespace seastar;
 namespace utils {
 class barrier_aborted_exception : public std::exception {
 public:
-    virtual const char* what() const noexcept override ;
+    
 };
 // Shards-coordination mechanism that allows shards to wait each other at
 // certain points. The barrier should be copied to each shard, then when
@@ -34655,13 +34600,13 @@ public:
 private:
     utils::UUID _value;
 public:
-    generation_type() = delete;
+    
     // use zero as the timestamp to differentiate from the regular timeuuid,
     // and use the least_sig_bits to encode the value of generation identifier.
     explicit constexpr generation_type(int_t value) noexcept
         : _value(utils::UUID_gen::create_time(std::chrono::milliseconds::zero()), value) {}
     constexpr int_t as_int() const noexcept ;
-    static generation_type from_string(const std::string& s) ;
+    
     // convert to data_value
     //
     // this function is used when performing queries to SSTABLES_REGISTRY in
@@ -34674,7 +34619,7 @@ public:
     // should always be greater than zero, we use this fact to tell a regular
     // timeuuid from a timeuuid converted from a bigint -- we just use zero
     // for its timestamp of the latter.
-    explicit operator data_value() const noexcept ;
+    
 };
  ;
 template <typename Target = std::vector<sstables::generation_type>>
@@ -53809,8 +53754,7 @@ std::array<uint8_t, size> finalize_array();
 };
 template <typename T, size_t size>
 cryptopp_hasher<T, size>::~cryptopp_hasher() = default;
-template <typename T, size_t size>
-cryptopp_hasher<T, size>::cryptopp_hasher(cryptopp_hasher &&o) noexcept = default;
+
 template <typename T, size_t size>
 cryptopp_hasher<T, size> &cryptopp_hasher<T, size>::operator=(cryptopp_hasher &&o) noexcept = default;
 template class cryptopp_hasher<md5_hasher, 16>;
