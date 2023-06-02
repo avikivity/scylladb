@@ -25373,7 +25373,7 @@ public:
     using time_point = std::chrono::time_point<logical_clock, duration>;
     static constexpr bool is_steady = true;
     
-    time_point now() const noexcept ;
+    
     static constexpr time_point min() ;
 private:
     time_point _now = min();
@@ -25978,15 +25978,15 @@ public:
     // Note: the function is not exception safe!
     // It must be called only on a temporary copy of the token_metadata
     future<> update_normal_tokens(std::unordered_set<token> tokens, inet_address endpoint);
-    const std::unordered_map<token, inet_address>& get_token_to_endpoint() const;
-    const std::unordered_set<inet_address>& get_leaving_endpoints() const;
-    const std::unordered_map<token, inet_address>& get_bootstrap_tokens() const;
+    
+    
+    
     void update_topology(inet_address ep, endpoint_dc_rack dr, std::optional<node::state> opt_st = std::nullopt);
     
     
     topology& get_topology();
     const topology& get_topology() const;
-    void debug_show() const;
+    
     /// Return the unique host ID for an end-point or nullopt if not found.
     /// Parses the \c host_id_string either as a host uuid or as an ip address and returns the mapping.
     /// Throws std::invalid_argument on parse error or std::runtime_error if the host_id wasn't found.
@@ -25996,7 +25996,7 @@ public:
     // Is this node being replaced by another node
     // Is any node being replaced by another node
     future<token_metadata> clone_only_token_map() const noexcept;
-    future<token_metadata> clone_after_all_left() const noexcept;
+    
     future<> clear_gently() noexcept;
     static boost::icl::interval<token>::interval_type range_to_interval(range<dht::token> r);
     // returns empty vector if keyspace_name not found.
@@ -26150,7 +26150,7 @@ public:
     };
     explicit feature(feature_service& service, std::string_view name, bool enabled = false);
     // Has to run inside seastar::async context
-    const sstring& name() const ;
+    
     // Will call the callback functor when this feature is enabled, unless
     // the returned listener_registration is destroyed earlier.
 };
@@ -26333,7 +26333,7 @@ public:
     std::unordered_map<sstring, creator_type>& classes() {
         return _classes;
     }
-    const std::unordered_map<sstring, creator_type>& classes() const ;
+    
     sstring to_qualified_class_name(std::string_view class_name) const;
 };
 template<typename BaseType, typename... Args>
@@ -26358,7 +26358,7 @@ public:
     using result_type = typename base_registry::result_type;
     using creator_type = std::function<result_type(Args...)>;
 public:
-    static void register_class(sstring name, creator_type creator) ;
+    
     template<typename T>
     static void register_class(sstring name) {
         registry().template register_class<T>(std::move(name));
@@ -26377,7 +26377,7 @@ struct class_registrator {
     class_registrator(const sstring& name) {
         class_registry<BaseType, Args...>::template register_class<T>(name);
     }
-    class_registrator(const sstring& name, typename class_registry<BaseType, Args...>::creator_type creator) ;
+    
 };
 template<typename BaseType, typename... Args>
 typename nonstatic_class_registry<BaseType, Args...>::result_type nonstatic_class_registry<BaseType, Args...>::create(const sstring& name, Args&&... args) {
@@ -26555,7 +26555,7 @@ public:
     // Note: must be called with initialized, non-empty token_metadata.
     // Caller must ensure that token_metadata will not change throughout the call.
     future<std::unordered_map<dht::token_range, inet_address_vector_replica_set>> get_range_addresses(const token_metadata& tm) const;
-    future<dht::token_range_vector> get_pending_address_ranges(const token_metadata_ptr tmptr, std::unordered_set<token> pending_tokens, inet_address pending_address, locator::endpoint_dc_rack dr) const;
+    
 };
 using replication_strategy_ptr = seastar::shared_ptr<const abstract_replication_strategy>;
 using mutable_replication_strategy_ptr = seastar::shared_ptr<abstract_replication_strategy>;
@@ -26575,12 +26575,12 @@ protected:
     token_metadata_ptr _tmptr;
     size_t _replication_factor;
 public:
-    effective_replication_map(replication_strategy_ptr, token_metadata_ptr, size_t replication_factor) noexcept;
-    virtual ~effective_replication_map() = default;
+    
+    
     const abstract_replication_strategy& get_replication_strategy() const noexcept ;
     
     
-    const topology& get_topology() const noexcept ;
+    
     size_t get_replication_factor() const noexcept ;
     /// Returns addresses of replicas for a given token.
     /// Does not include pending replicas except for a pending replica which
@@ -26809,7 +26809,7 @@ public:
     shared_ptr<stream_session> session;
     table_id cf_id;
 public:
-    virtual void abort() = 0;
+    
     
 };
 } // namespace streaming
@@ -26996,7 +26996,7 @@ public:
 private:
     future<> update_io_throughput(uint32_t value_mbs);
 public:
-    void update_finished_percentage(streaming::stream_reason reason, float percentage);
+    
 };
 } // namespace streaming
 namespace streaming {
@@ -27091,7 +27091,7 @@ private:
 public:
     
     
-    stream_plan& transfer_ranges(inet_address to, sstring keyspace, dht::token_range_vector ranges, std::vector<sstring> column_families);
+    
 public:
 };
 } // namespace streaming
@@ -27122,7 +27122,7 @@ public:
     private:
         sstring _source_dc;
     public:
-        virtual bool should_include(const locator::topology& topo, inet_address endpoint) override ;
+        
     };
     range_streamer(distributed<replica::database>& db, sharded<streaming::stream_manager>& sm, const token_metadata_ptr tmptr, abort_source& abort_source, std::unordered_set<token> tokens,
             inet_address address, locator::endpoint_dc_rack dr, sstring description, streaming::stream_reason reason)
@@ -27146,7 +27146,7 @@ public:
         _source_filters.emplace(std::move(filter));
     }
     future<> add_ranges(const sstring& keyspace_name, locator::vnode_effective_replication_map_ptr erm, dht::token_range_vector ranges, gms::gossiper& gossiper, bool is_replacing);
-    void add_tx_ranges(const sstring& keyspace_name, std::unordered_map<inet_address, dht::token_range_vector> ranges_per_endpoint);
+    
     
 private:
     
@@ -27155,10 +27155,7 @@ private:
     std::unordered_map<dht::token_range, std::vector<inet_address>>
     get_all_ranges_with_strict_sources_for(const sstring& keyspace_name, locator::vnode_effective_replication_map_ptr erm, dht::token_range_vector desired_ranges, gms::gossiper& gossiper);
 private:
-    std::unordered_map<inet_address, dht::token_range_vector>
-    get_range_fetch_map(const std::unordered_map<dht::token_range, std::vector<inet_address>>& ranges_with_sources,
-                        const std::unordered_set<std::unique_ptr<i_source_filter>>& source_filters,
-                        const sstring& keyspace);
+    
 #if 0
     // For testing purposes
     Multimap<String, Map.Entry<InetAddress, Collection<Range<Token>>>> toFetch()
@@ -27198,17 +27195,17 @@ namespace utils {
         
         
         file_lock(file_lock&&) noexcept;
-        ~file_lock();
-        file_lock& operator=(file_lock&&) = default;
+        
+        
         static future<file_lock> acquire(fs::path);
-        fs::path path() const;
-        sstring to_string() const ;
+        
+        
     private:
         class impl;
         file_lock(fs::path);
         std::unique_ptr<impl> _impl;
     };
-    std::ostream& operator<<(std::ostream& out, const file_lock& f);
+    
 }
 using namespace seastar;
 namespace db {
@@ -27249,7 +27246,7 @@ namespace seastar { class logger; }
 typedef std::function<bool (const std::system_error &)> system_error_lambda_t;
 
 
-bool is_timeout_exception(std::exception_ptr e);
+
 class storage_io_error : public std::exception {
 private:
     std::error_code _code;
@@ -27571,9 +27568,9 @@ public:
     // Needed by seastar::sharded
 public:
     bool is_enabled() const;
-    void finish_shadow_round();
+    
     bool is_in_shadow_round() const;
-    void goto_shadow_round();
+    
 public:
 public:
 public:
@@ -27643,10 +27640,10 @@ struct estimated_histogram {
     int64_t _count = 0;
     int64_t _sample_sum = 0;
     estimated_histogram(int bucket_count = 90) ;
-    seastar::metrics::histogram get_histogram(size_t lower_bucket = 1, size_t max_buckets = 16) const ;
+    
     seastar::metrics::histogram get_histogram(duration minmal_latency, size_t max_buckets = 16) const ;
 private:
-    void new_offsets(int size) ;
+    
 public:
     
 };
@@ -27662,7 +27659,7 @@ private:
     time_point _stop;
 public:
     
-    latency_counter& check_and_stop() ;
+    
     static time_point now() ;
 };
 }
@@ -27679,7 +27676,7 @@ public:
         _alpha = 1 - std::exp(-std::chrono::duration_cast<std::chrono::seconds>(tick_interval).count()/
                 static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(interval).count()));
     }
-    void add(uint64_t val = 1) ;
+    
     
     
     double rate() const ;
@@ -27700,11 +27697,7 @@ public:
     double variance;
     int64_t sample_mask;
     boost::circular_buffer<int64_t> sample;
-    basic_ihistogram(size_t size = 1024, int64_t _sample_mask = 0x80)
-            : count(0), total(0), min(0), max(0), sum(0), started(0), mean(0), variance(0),
-              sample_mask(_sample_mask), sample(
-                    size) {
-    }
+    
      ;
     
     ;
@@ -27756,7 +27749,7 @@ public:
         return res;
     }
     void update() noexcept ;
-    uint64_t count() const ;
+    
 };
 class timed_rate_moving_average {
     rates_moving_average _rates;
@@ -27768,7 +27761,7 @@ public:
     
     
     
-    rate_moving_average rate() const noexcept ;
+    
 };
 class summary_calculator {
     std::vector<double> _quantiles = { 0.5, 0.95, 0.99};
@@ -27806,8 +27799,7 @@ public:
         _last_update = 0;
         _summary.update();}), hist(size, 0) {
     }
-    template <typename Rep, typename Ratio>
-    void mark(std::chrono::duration<Rep, Ratio> dur) noexcept ;
+     ;
     
 };
 }
@@ -27825,8 +27817,8 @@ public:
     frozen_schema(const schema_ptr&);
     frozen_schema(frozen_schema&&) = default;
     frozen_schema(const frozen_schema&) = default;
-    frozen_schema& operator=(const frozen_schema&) = default;
-    frozen_schema& operator=(frozen_schema&&) = default;
+    
+    
     schema_ptr unfreeze(const db::schema_ctxt&) const;
     const bytes_ostream& representation() const;
 };
@@ -27845,8 +27837,7 @@ struct serializer<schema_mutations> {
   ;
   template <typename Input>
   static schema_mutations read(Input& buf);
-  template <typename Input>
-  static void skip(Input& buf);
+  ;
 };
 template <>
 struct serializer<const schema_mutations> : public serializer<schema_mutations>
@@ -27855,8 +27846,7 @@ template <>
 struct serializer<frozen_schema> {
   ;
   ;
-  template <typename Input>
-  static void skip(Input& buf);
+  ;
 };
 template <>
 struct serializer<const frozen_schema> : public serializer<frozen_schema>
@@ -27912,8 +27902,7 @@ template<typename Output>
 struct writer_of_schema {
     Output& _out;
     state_of_schema<Output> _state;
-    writer_of_schema(Output& out) 
-            ;
+    
     after_schema__version<Output> write_version(const table_schema_version& t) && ;
 };
 } // ser
