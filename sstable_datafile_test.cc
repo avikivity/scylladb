@@ -7688,26 +7688,26 @@ public:
     bool less_compare(const schema& s, const ring_position& other) const;
     // Trichotomic comparators defining total ordering on the union of
     // decorated_key and ring_position objects.
-    std::strong_ordering tri_compare(const schema& s, const decorated_key& other) const;
+    
     std::strong_ordering tri_compare(const schema& s, const ring_position& other) const;
     const dht::token& token() const noexcept ;
     const partition_key& key() const ;
-    size_t external_memory_usage() const ;
+    
     
 };
 class decorated_key_equals_comparator {
     const schema& _schema;
 public:
     
-    bool operator()(const dht::decorated_key& k1, const dht::decorated_key& k2) const ;
+    
 };
 using decorated_key_opt = std::optional<decorated_key>;
 class i_partitioner {
 public:
     using ptr_type = std::unique_ptr<i_partitioner>;
-    i_partitioner() = default;
+    
     virtual ~i_partitioner() {}
-    decorated_key decorate_key(const schema& s, const partition_key& key) const ;
+    
     decorated_key decorate_key(const schema& s, partition_key&& key) const {
         auto token = get_token(s, key);
         return { std::move(token), std::move(key) };
@@ -7717,7 +7717,7 @@ public:
     // FIXME: token.tokenFactory
     //virtual token.tokenFactory gettokenFactory() = 0;
     virtual const sstring name() const = 0;
-    bool operator==(const i_partitioner& o) const ;
+    
 };
 //
 // Represents position in the ring of partitions, where partitions are ordered
@@ -7765,7 +7765,7 @@ public:
     const std::optional<partition_key>& key() const ;
     bool has_key() const ;
     // Call only when has_key()
-    dht::decorated_key as_decorated_key() const ;
+    
     // Trichotomic comparator defining a total ordering on ring_position objects
     // "less" comparator corresponding to tri_compare()
 };
@@ -7797,8 +7797,8 @@ class ring_position_view {
     const partition_key* _key; // Can be nullptr
     int8_t _weight;
 private:
-    ring_position_view() noexcept : _token(nullptr), _key(nullptr), _weight(0) { }
-    explicit operator bool() const noexcept ;
+    
+    
 public:
     using token_bound = ring_position::token_bound;
     struct after_key_tag {};
@@ -7840,13 +7840,9 @@ public:
     using token_bound = ring_position::token_bound;
     struct after_key_tag {};
     using after_key = bool_class<after_key_tag>;
-    ring_position_ext(const dht::ring_position& pos, after_key after = after_key::no)
-        : _token(pos.token())
-        , _key(pos.key())
-        , _weight(pos.has_key() ? bool(after) : pos.relation_to_keys())
-    { }
-    ring_position_ext(const ring_position_ext& pos) = default;
-    ring_position_ext& operator=(const ring_position_ext& other) = default;
+    
+    
+    
     ring_position_ext(ring_position_view v)
         : _token(*v._token)
         , _key(v._key ? std::make_optional(*v._key) : std::nullopt)
@@ -7896,13 +7892,13 @@ struct token_comparator {
     std::strong_ordering operator()(const token& t1, const token& t2) const;
 };
 std::ostream& operator<<(std::ostream& out, const decorated_key& t);
-std::ostream& operator<<(std::ostream& out, const i_partitioner& p);
+
 class partition_ranges_view {
     const dht::partition_range* _data = nullptr;
     size_t _size = 0;
 public:
 };
-std::ostream& operator<<(std::ostream& out, partition_ranges_view v);
+
 unsigned shard_of(const schema&, const token&);
  decorated_key decorate_key(const schema& s, const partition_key& key) ;
 inline decorated_key decorate_key(const schema& s, partition_key&& key) {
@@ -7914,7 +7910,7 @@ inline decorated_key decorate_key(const schema& s, partition_key&& key) {
 // Each shard gets a sorted, disjoint vector of ranges
 
 // Intersect a partition_range with a shard and return the the resulting sub-ranges, in sorted order
-future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const schema& s, const dht::partition_range& pr, shard_id shard);
+
 std::unique_ptr<dht::i_partitioner> make_partitioner(sstring name);
 // Returns a sorted and deoverlapped list of ranges that are
 // the result of subtracting all ranges from ranges_to_subtract.
@@ -7948,11 +7944,9 @@ public:
         : _addr(net::ipv4_address(ip)) {
     }
     inet_address(const net::inet_address& addr) noexcept : _addr(addr) {}
-    inet_address(const socket_address& sa) noexcept
-        : inet_address(sa.addr())
-    {}
+    
     const net::inet_address& addr() const noexcept ;
-    inet_address(const inet_address&) = default;
+    
     operator const seastar::net::inet_address&() const noexcept {
         return _addr;
     }
@@ -7979,7 +7973,7 @@ public:
     using opt_family = std::optional<net::inet_address::family>;
     
 };
-std::ostream& operator<<(std::ostream& os, const inet_address& x);
+
 }
 namespace std {
 template<>
@@ -8220,14 +8214,10 @@ struct max_result_size {
 private:
     uint64_t page_size = 0;
 public:
-    max_result_size() = delete;
+    
     explicit max_result_size(uint64_t max_size) : soft_limit(max_size), hard_limit(max_size) { }
-    explicit max_result_size(uint64_t soft_limit, uint64_t hard_limit) : soft_limit(soft_limit), hard_limit(hard_limit) { }
-    max_result_size(uint64_t soft_limit, uint64_t hard_limit, uint64_t page_size)
-            : soft_limit(soft_limit)
-            , hard_limit(hard_limit)
-            , page_size(page_size)
-    { }
+    
+    
     uint64_t get_page_size() const ;
     
     friend class ser::serializer<query::max_result_size>;
@@ -8272,7 +8262,7 @@ public:
     static constexpr cql_protocol_version_type latest_version = 4;
     explicit cql_serialization_format(cql_protocol_version_type version) : _version(version) {}
     static cql_serialization_format latest() { return cql_serialization_format{latest_version}; }
-    cql_protocol_version_type protocol_version() const ;
+    
     void ensure_supported() const {
         if (_version < 3) {
             throw std::runtime_error("cql protocol version must be 3 or later");
@@ -8401,17 +8391,17 @@ public:
         column_id_vector regular_columns, option_set options,
         std::unique_ptr<specific_ranges> specific_ranges = nullptr,
         uint64_t partition_row_limit = partition_max_rows);
-    partition_slice(clustering_row_ranges ranges, const schema& schema, const column_set& mask, option_set options);
+    
     partition_slice(const partition_slice&);
     partition_slice(partition_slice&&);
     ;
     
     const clustering_row_ranges& row_ranges(const schema&, const partition_key&) const;
-    void set_range(const schema&, const partition_key&, clustering_row_ranges);
+    
     
     
     // FIXME: possibly make this function return a const ref instead.
-    const uint32_t partition_row_limit_high_bits() const ;
+    
     const uint64_t partition_row_limit() const ;
     [[nodiscard]]
     bool is_reversed() const {
@@ -8560,7 +8550,7 @@ struct tombstone final {
         : tombstone(api::missing_timestamp, {})
     { }
     std::strong_ordering operator<=>(const tombstone& t) const = default;
-    bool operator==(const tombstone&) const = default;
+    
     explicit operator bool() const {
         return timestamp != api::missing_timestamp;
     }
@@ -8589,7 +8579,7 @@ struct fmt::formatter<tombstone> : fmt::formatter<std::string_view> {
         }
      }
 };
-static std::ostream& operator<<(std::ostream& out, const tombstone& t) ;
+
 template<>
 struct appending_hash<tombstone> {
     template<typename Hasher>
@@ -8763,7 +8753,7 @@ protected:
     explicit basic_atomic_cell_view(managed_bytes_basic_view<is_mutable> v) : _view(std::move(v)) { }
     friend class atomic_cell_or_collection;
 public:
-    operator basic_atomic_cell_view<mutable_view::no>() const noexcept ;
+    
     bool is_counter_update() const {
         return atomic_cell_type::is_counter_update(_view);
     }
@@ -8775,7 +8765,7 @@ public:
     bool is_live_and_has_ttl() const {
         return atomic_cell_type::is_live_and_has_ttl(_view);
     }
-    bool is_dead(gc_clock::time_point now) const ;
+    
     bool is_covered_by(tombstone t, bool is_counter) const ;
     // Can be called on live and dead cells
     api::timestamp_type timestamp() const {
@@ -8789,7 +8779,7 @@ public:
         return atomic_cell_type::value(_view);
     }
     // Can be called on live cells only
-    size_t value_size() const ;
+    
     // Can be called on live counter update cells only
     int64_t counter_update_value() const {
         return atomic_cell_type::counter_update_value(_view);
@@ -8815,8 +8805,7 @@ public:
 class atomic_cell_view final : public basic_atomic_cell_view<mutable_view::no> {
     atomic_cell_view(managed_bytes_view v)
         : basic_atomic_cell_view(v) {}
-    template<mutable_view is_mutable>
-    atomic_cell_view(basic_atomic_cell_view<is_mutable> view)  ;
+      ;
     friend class atomic_cell;
 public:
     static atomic_cell_view from_bytes(const abstract_type& t, managed_bytes_view v) {
@@ -8849,20 +8838,18 @@ public:
     atomic_cell(atomic_cell&& o) noexcept : _data(std::move(o._data)) {
         set_view(_data);
     }
-    atomic_cell& operator=(const atomic_cell&) = delete;
     
     
-    atomic_cell(const abstract_type& t, atomic_cell_view other);
+    
+    
     static atomic_cell make_dead(api::timestamp_type timestamp, gc_clock::time_point deletion_time);
     static atomic_cell make_live(const abstract_type& type, api::timestamp_type timestamp, bytes_view value,
                                  collection_member = collection_member::no);
     static atomic_cell make_live_counter_update(api::timestamp_type timestamp, int64_t value);
     static atomic_cell make_live(const abstract_type&, api::timestamp_type timestamp, bytes_view value,
         gc_clock::time_point expiry, gc_clock::duration ttl, collection_member = collection_member::no);
-    static atomic_cell make_live(const abstract_type&, api::timestamp_type timestamp, managed_bytes_view value,
-        gc_clock::time_point expiry, gc_clock::duration ttl, collection_member = collection_member::no);
-    static atomic_cell make_live(const abstract_type&, api::timestamp_type timestamp, ser::buffer_view<bytes_ostream::fragment_iterator> value,
-        gc_clock::time_point expiry, gc_clock::duration ttl, collection_member = collection_member::no);
+    
+    
     static atomic_cell make_live_uninitialized(const abstract_type& type, api::timestamp_type timestamp, size_t size);
     friend class atomic_cell_or_collection;
     
@@ -8932,7 +8919,7 @@ public:
     // Requires a type to reconstruct the structural information.
     bool is_any_live(const abstract_type&, tombstone t = tombstone(), gc_clock::time_point tp = gc_clock::time_point::min()) const;
     // The maximum of timestamps of the mutation's cells and tombstone.
-    api::timestamp_type last_update(const abstract_type&) const;
+    
     // Given a function that operates on a collection_mutation_view_description,
     // calls it on the corresponding description of `this`.
     template <typename F>
@@ -8944,7 +8931,7 @@ public:
         const abstract_type& _type;
         const collection_mutation_view& _cmv;
     public:
-        printer(const abstract_type& type, const collection_mutation_view& cmv)  ;
+        
         
     };
 };
@@ -8961,14 +8948,14 @@ class collection_mutation {
 public:
     managed_bytes _data;
     
-    collection_mutation(const abstract_type&, collection_mutation_view);
+    
     collection_mutation(const abstract_type&, managed_bytes);
     operator collection_mutation_view() const;
 };
 collection_mutation merge(const abstract_type&, collection_mutation_view, collection_mutation_view);
 collection_mutation difference(const abstract_type&, collection_mutation_view, collection_mutation_view);
 // Serializes the given collection of cells to a sequence of bytes ready to be sent over the CQL protocol.
-bytes_ostream serialize_for_cql(const abstract_type&, collection_mutation_view);
+
 namespace cql3 {
 class column_specification;
 }
@@ -8983,7 +8970,7 @@ public:
     bool is_multi_cell() const { return _is_multi_cell; }
     virtual data_type name_comparator() const = 0;
     virtual data_type value_comparator() const = 0;
-    lw_shared_ptr<cql3::column_specification> make_collection_receiver(const cql3::column_specification& collection, bool is_key) const;
+    
     virtual bool is_compatible_with_frozen(const collection_type_impl& previous) const = 0;
     virtual bool is_value_compatible_with_frozen(const collection_type_impl& previous) const = 0;
     template <typename Iterator>
@@ -8996,7 +8983,7 @@ private:
     // Explicitly instantiated in types.cc
     template <FragmentedView View> data_value deserialize_impl(View v) const;
 public:
-    template <FragmentedView View> data_value deserialize_value(View v) const ;
+     ;
     data_value deserialize_value(bytes_view v) const ;
 };
 // a list or a set
