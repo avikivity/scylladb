@@ -13895,7 +13895,7 @@ private:
 public:
     static constexpr auto size = size_t(offset::total_size);
 public:
-    basic_counter_shard_view() = default;
+    
     explicit basic_counter_shard_view(managed_bytes_basic_view<is_mutable> v) noexcept
         : _base(v) { }
     counter_id id() const { return read<counter_id>(offset::id); }
@@ -13919,7 +13919,7 @@ public:
         managed_bytes_mutable_view other_view = other._base.substr(off, size);
         copy_fragmented_view(this_view, other_view);
     }
-    bool operator==(const basic_counter_shard_view& other) const ;
+    
     struct less_compare_by_id {
         bool operator()(const basic_counter_shard_view& x, const basic_counter_shard_view& y) const {
             return x.id() < y.id();
@@ -14064,13 +14064,13 @@ private:
             _current_view = basic_counter_shard_view<is_mutable>(_current.substr(_pos, counter_shard_view::size));
             return *this;
         }
-        shard_iterator operator++(int) noexcept ;
+        
         shard_iterator& operator--() noexcept {
             _pos -= counter_shard_view::size;
             _current_view = basic_counter_shard_view<is_mutable>(_current.substr(_pos, counter_shard_view::size));
             return *this;
         }
-        shard_iterator operator--(int) noexcept ;
+        
         bool operator==(const shard_iterator& other) const noexcept {
             return _pos == other._pos;
         }
@@ -14094,7 +14094,7 @@ public:
         assert(!_cell.is_counter_update());
     }
     api::timestamp_type timestamp() const { return _cell.timestamp(); }
-    static data_type total_value_type() ;
+    
     int64_t total_value() const ;
     
     
@@ -14106,7 +14106,7 @@ struct counter_cell_view : basic_counter_cell_view<mutable_view::no> {
     // Computes a counter cell containing minimal amount of data which, when
     // applied to 'b' returns the same cell as 'a' and 'b' applied together.
     static std::optional<atomic_cell> difference(atomic_cell_view a, atomic_cell_view b);
-    friend std::ostream& operator<<(std::ostream& os, counter_cell_view ccv);
+    
 };
 struct counter_cell_mutable_view : basic_counter_cell_view<mutable_view::yes> {
     using basic_counter_cell_view::basic_counter_cell_view;
@@ -14725,7 +14725,7 @@ void for_each_expression(const expression& e, Fn for_each_func) {
 }
 /// Counts binary_operator atoms b for which f(b) is true.
 size_t count_if(const expression& e, const noncopyable_function<bool (const binary_operator&)>& f);
- bool has_slice(const expression& e) ;
+ 
  bool is_compare(oper_t op) ;
 // Check whether the given expression represents
 // a call to the token() function.
@@ -15005,12 +15005,12 @@ public:
     atomic_cell_or_collection copy(const abstract_type&) const;
     collection_mutation_view as_collection_mutation() const;
     bool equals(const abstract_type& type, const atomic_cell_or_collection& other) const;
-    size_t external_memory_usage(const abstract_type&) const;
+    
     class printer {
         const column_definition& _cdef;
         const atomic_cell_or_collection& _cell;
     public:
-        printer(const column_definition& cdef, const atomic_cell_or_collection& cell)  ;
+        
         
         
         
@@ -15020,23 +15020,19 @@ public:
 // Not part of atomic_cell.hh to avoid cyclic dependency between types.hh and atomic_cell.hh
 template<>
 struct appending_hash<collection_mutation_view> {
-    template<typename Hasher>
-    void operator()(Hasher& h, collection_mutation_view cell, const column_definition& cdef) const ;
+     ;
 };
 template<>
 struct appending_hash<atomic_cell_view> {
-    template<typename Hasher>
-    void operator()(Hasher& h, atomic_cell_view cell, const column_definition& cdef) const ;
+     ;
 };
 template<>
 struct appending_hash<atomic_cell> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const atomic_cell& cell, const column_definition& cdef) const ;
+     ;
 };
 template<>
 struct appending_hash<collection_mutation> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const collection_mutation& cm, const column_definition& cdef) const ;
+     ;
 };
 template<>
 struct appending_hash<atomic_cell_or_collection> {
@@ -15053,7 +15049,7 @@ class hashing_partition_visitor : public mutation_partition_visitor {
 public:
     
     
-    virtual void accept_row_cell(column_id id, collection_mutation_view cell) override ;
+    
 };
 namespace bi = boost::intrusive;
 class range_tombstone final {
@@ -15090,14 +15086,14 @@ public:
     // Range tombstone covers all rows with positions p such that: position() <= p < end_position()
     position_in_partition_view position() const;
     position_in_partition_view end_position() const;
-    bool empty() const noexcept ;
+    
     explicit operator bool() const noexcept ;
     bool equal(const schema& s, const range_tombstone& other) const {
         return tomb == other.tomb && start_bound().equal(s, other.start_bound()) && end_bound().equal(s, other.end_bound());
     }
     struct compare {
         bound_view::compare _c;
-        compare(const schema& s) : _c(s) {}
+        
         bool operator()(const range_tombstone& rt1, const range_tombstone& rt2) const {
             return _c(rt1.start_bound(), rt2.start_bound());
         }
@@ -15115,7 +15111,7 @@ public:
     // The start bounds of this and src are required to be equal. The start bound
     // of this is not changed. The start bound of the remainder (if there is any)
     // is larger than the end bound of this.
-    std::optional<range_tombstone> apply(const schema& s, range_tombstone&& src);
+    
     // Intersects the range of this tombstone with [pos, +inf) and replaces
     // the range of the tombstone if there is an overlap.
     // Returns true if there is an overlap. When returns false, the tombstone
@@ -15146,7 +15142,7 @@ public:
     
     
     size_t memory_usage(const schema& s) const noexcept ;
-    size_t minimal_memory_usage(const schema& s) const noexcept ;
+    
 };
 template<>
 struct appending_hash<range_tombstone>  {
@@ -15216,10 +15212,7 @@ public:
             bi::member_hook<range_tombstone_entry, bi::set_member_hook<bi::link_mode<bi::auto_unlink>>, &range_tombstone_entry::_link>,
             bi::compare<range_tombstone_entry::compare>,
             bi::constant_time_size<false>>;
-    range_tombstone_entry(const range_tombstone_entry& rt)
-        : _tombstone(rt._tombstone)
-    {
-    }
+    
     range_tombstone_entry(range_tombstone_entry&& rt) noexcept
             : _tombstone(std::move(rt._tombstone))
     {
@@ -15235,11 +15228,11 @@ public:
     }
     range_tombstone& tombstone() noexcept { return _tombstone; }
     const range_tombstone& tombstone() const noexcept { return _tombstone; }
-    const bound_view start_bound() const ;
-    const bound_view end_bound() const { return _tombstone.end_bound(); }
+    
+    
     position_in_partition_view position() const { return _tombstone.position(); }
     position_in_partition_view end_position() const { return _tombstone.end_position(); }
-    size_t memory_usage(const schema& s) const noexcept ;
+    
 private:
     void update_node(bi::set_member_hook<bi::link_mode<bi::auto_unlink>>& other_link) noexcept {
         if (other_link.is_linked()) {
@@ -15298,10 +15291,8 @@ class range_tombstone_list final {
         virtual range_tombstones_type::iterator insert(range_tombstones_type::iterator it, range_tombstone_entry& new_rt);
         virtual range_tombstones_type::iterator erase(range_tombstones_type::iterator it);
         virtual void update(range_tombstones_type::iterator it, range_tombstone&& new_rt);
-        void revert() noexcept;
-        void cancel() noexcept {
-            _ops.clear();
-        }
+        ;
+        
     };
     class nop_reverter : public reverter {
     public:
@@ -15329,8 +15320,8 @@ public:
     
     
     range_tombstone_list& operator=(range_tombstone_list&&) = default;
-    ~range_tombstone_list();
-    size_t size() const noexcept ;
+    ;
+    
     bool empty() const noexcept ;
     auto begin() noexcept {
         return _tombstones.begin();
@@ -15338,7 +15329,7 @@ public:
     auto begin() const noexcept {
         return _tombstones.begin();
     }
-    auto rbegin() noexcept ;
+    
     auto rbegin() const noexcept ;
     auto end() noexcept {
         return _tombstones.end();
@@ -15346,10 +15337,10 @@ public:
     auto end() const noexcept {
         return _tombstones.end();
     }
-    auto rend() noexcept ;
     
     
-    void apply(const schema& s, const range_tombstone& rt) ;
+    
+    
     void apply(const schema& s, range_tombstone&& rt) {
         apply(s, std::move(rt.start), rt.start_kind, std::move(rt.end), rt.end_kind, std::move(rt.tomb));
     }
@@ -15359,7 +15350,7 @@ public:
         apply_reversibly(s, std::move(start), start_kind, std::move(end), end_kind, std::move(tomb), rev);
     }
     // Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
-    void apply_monotonically(const schema& s, const range_tombstone& rt);
+    
     // Merges another list with this object.
     // Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
     /// Merges another list with this object.
@@ -15404,7 +15395,7 @@ public:
     // Removes elements of this list in batches.
     // Returns stop_iteration::yes iff there is no more elements to remove.
     stop_iteration clear_gently() noexcept;
-    void apply(const schema& s, const range_tombstone_list& rt_list);
+    
     // See reversibly_mergeable.hh
     reverter apply_reversibly(const schema& s, range_tombstone_list& rt_list);
     bool equal(const schema&, const range_tombstone_list&) const;
@@ -15449,12 +15440,12 @@ concept Comparable = requires (const T1& a, const T2& b, Compare cmp) {
 namespace utils {
 template <bool Debug>
 struct neat_id {
-    unsigned int operator()() const noexcept ;
+    
 };
 template <>
 struct neat_id<true> {
     unsigned int _id;
-    static unsigned int _next() noexcept ;
+    
     
     
 };
@@ -15502,7 +15493,7 @@ public:
     bool is_linear() const noexcept { return flags & NODE_LINEAR; }
     bool is_inline() const noexcept { return flags & NODE_INLINE; }
     node_base(const node_base&) = delete;
-    node_base(node_base&&) = delete;
+    
     key_index index_for(const member_hook* hook) const noexcept {
         for (key_index i = 0; i < num_keys; i++) {
             if (keys[i] == hook) {
@@ -15533,17 +15524,12 @@ public:
         to.keys[0] = this;
         _node = &to;
     }
-    member_hook() noexcept = default;
-    member_hook(const member_hook&) = delete;
+    
+    
     ~member_hook() {
         assert(!attached());
     }
-    member_hook(member_hook&& other) noexcept : _node(other._node) {
-        if (attached()) {
-            _node->reattach(this, &other);
-            other._node = nullptr;
-        }
-    }
+    
     template <typename K, member_hook K::* Hook>
     const K* to_key() const noexcept ;
     template <typename K, member_hook K::* Hook>
@@ -16221,11 +16207,11 @@ struct searcher<K, Key, Hook, Compare, key_search::linear> {
 };
 template <typename K, typename Key, member_hook Key::* Hook, typename Compare>
 struct searcher<K, Key, Hook, Compare, key_search::binary> {
-    static key_index ge(const K& k, const node_base& node, const Compare& cmp, bool& match) ;
+    
 };
 template <typename K, typename Key, member_hook Key::* Hook, typename Compare>
 struct searcher<K, Key, Hook, Compare, key_search::both> {
-    static key_index ge(const K& k, const node_base& node, const Compare& cmp, bool& match) ;
+    
 };
 template <typename Key, member_hook Key::* Hook, typename Compare, size_t NodeSize, size_t LinearThreshold, key_search Search, with_debug Debug>
 class node {
@@ -16296,17 +16282,13 @@ private:
     void move_kid(kid_index f, node& n, kid_index t) noexcept {
         n.set_kid(t, _kids[f]);
     }
-    void unlink_corner_leaf() noexcept ;
+    
     static const node* from_base(const node_base* nb) noexcept ;
     static node* from_base(node_base* nb) noexcept {
         assert(!nb->is_inline());
         return boost::intrusive::get_parent_from_member(nb, &node::_base);
     }
-    template <typename Disp>
-    static void dispose_key(member_hook* hook, Disp&& disp) noexcept {
-        hook->_node = nullptr;
-        disp(hook->to_key<Key, Hook>());
-    }
+    
 public:
     node(size_t cap, unsigned short flags) noexcept : _base(0, cap, flags) { }
     node(node&& other) noexcept : node(other._base.capacity, std::move(other)) {}
@@ -47433,7 +47415,7 @@ inline Result squashed(const partition_version_ref &v, Map &&map, Reduce &&reduc
 std::ostream &operator<<(std::ostream &out, const partition_entry::printer &p);
 position_in_partition_view range_tombstone::position() const { return position_in_partition_view(position_in_partition_view::range_tombstone_tag_t(), start_bound()); }
 position_in_partition_view range_tombstone::end_position() const { return position_in_partition_view(position_in_partition_view::range_tombstone_tag_t(), end_bound()); }
-range_tombstone_list::~range_tombstone_list() { _tombstones.clear_and_dispose(current_deleter<range_tombstone_entry>()); }
+
 template <typename... Args>
 static auto construct_range_tombstone_entry(Args &&...args) { return alloc_strategy_unique_ptr<range_tombstone_entry>(current_allocator().construct<range_tombstone_entry>(range_tombstone(std::forward<Args>(args)...))); }
 void range_tombstone_list::apply_reversibly(const schema &s, clustering_key_prefix start_key, bound_kind start_kind, clustering_key_prefix end_key, bound_kind end_kind, tombstone tomb, reverter &rev)
@@ -47606,15 +47588,7 @@ void range_tombstone_list::reverter::update(range_tombstones_type::iterator it, 
 _ops.emplace_back(std::in_place_type<update_undo_op>, std::move(it->tombstone()), *it);
 it->tombstone() = std::move(new_rt);
 }
-void range_tombstone_list::reverter::revert() noexcept
-{
-for (auto &&rt : _ops | boost::adaptors::reversed)
-{
-    seastar::visit(rt, [this](auto &op)
-                   { op.undo(_s, _dst); });
-}
-cancel();
-}
+
 range_tombstone_list::range_tombstones_type::iterator range_tombstone_list::nop_reverter::insert(range_tombstones_type::iterator it, range_tombstone_entry &new_rt) { return _dst._tombstones.insert_before(it, new_rt); }
 range_tombstone_list::range_tombstones_type::iterator range_tombstone_list::nop_reverter::erase(range_tombstones_type::iterator it) { return _dst._tombstones.erase_and_dispose(it, alloc_strategy_deleter<range_tombstone_entry>()); }
 void range_tombstone_list::nop_reverter::update(range_tombstones_type::iterator it, range_tombstone &&new_rt) { *it = std::move(new_rt); }
