@@ -36204,7 +36204,7 @@ public:
 // Returns an empty JSON array - []
  
 // Returns an empty JSON string - ""
- rjson::value empty_string() ;
+ 
 // Convert the JSON value to a string with JSON syntax, the opposite of parse().
 // The representation is dense - without any redundant indentation.
 std::string print(const rjson::value& value, size_t max_nested_level = default_max_nested_level);
@@ -36219,13 +36219,13 @@ std::string print(const rjson::value& value, size_t max_nested_level = default_m
 // Note: input value must remain valid for the call, but is _not_ required to be valid
 // until future resolves - i.e. the full json -> text conversion is done _before_ 
 // pushing fully to stream. I.e. it is valid to do `return print(rjson::value("... something..."), os);`
-seastar::future<> print(const rjson::value& value, seastar::output_stream<char>&, size_t max_nested_level = default_max_nested_level);
+
 // Returns a string_view to the string held in a JSON value (which is
 // assumed to hold a string, i.e., v.IsString() == true). This is a view
 // to the existing data - no copying is done.
  std::string_view to_string_view(const rjson::value& v) ;
 // Copies given JSON value - involves allocation
-rjson::value copy(const rjson::value& value);
+
 // Parses a JSON value from given string or raw character array.
 // The string/char array liveness does not need to be persisted,
 // as parse() will allocate member names and values.
@@ -36322,8 +36322,8 @@ Map parse_to_map(std::string_view raw) {
 // This function exists for historical reasons as well.
 rjson::value from_string_map(const std::map<sstring, sstring>& map);
 // The function operates on sstrings for historical reasons.
-sstring quote_json_string(const sstring& value);
- bytes base64_decode(const value& v) ;
+
+ 
 } // end namespace rjson
 namespace std {
 std::ostream& operator<<(std::ostream& os, const rjson::value& v);
@@ -36358,7 +36358,7 @@ class cdc_service final : public async_sharded_service<cdc::cdc_service> {
     std::unique_ptr<impl> _impl;
 public:
     
-    cdc_service(service::storage_proxy&, cdc::metadata&, service::migration_notifier&);
+    
     // If any of the mutations are cdc enabled, optionally selects preimage, and adds the
     // appropriate augments to set the log entries.
     // Iff post-image is enabled for any of these, a non-empty callback is also
@@ -36415,7 +36415,7 @@ public:
     schema_builder(const schema_ptr);
     
     
-    const sstring& cf_name() const ;
+    
     schema_builder& set_comment(const sstring& s) ;
     
     
@@ -36423,7 +36423,7 @@ public:
     schema_builder& set_compaction_strategy_options(std::map<sstring, sstring>&& options);
     
     
-    schema_builder& set_is_compound(bool is_compound) ;
+    
     schema_builder& set_is_counter(bool is_counter) {
         _raw._is_counter = is_counter;
         return *this;
@@ -36459,7 +36459,7 @@ public:
     schema_builder& with_collection(bytes name, data_type type);
     schema_builder& with(compact_storage);
     schema_builder& with_version(table_schema_version);
-    schema_builder& with_view_info(table_id base_id, sstring base_name, bool include_all_columns, sstring where_clause);
+    
     
     
     ;
@@ -36545,14 +36545,14 @@ class schema_registry {
     std::unordered_map<table_schema_version, lw_shared_ptr<schema_registry_entry>> _entries;
     std::unique_ptr<db::schema_ctxt> _ctxt;
     friend class schema_registry_entry;
-    schema_registry_entry& get_entry(table_schema_version) const;
+    
     // Duration for which unused entries are kept alive to avoid
     // too frequent re-requests and syncs. Default is 1 second.
     schema_registry_entry::erase_clock::duration grace_period() const;
 public:
     ~schema_registry();
     // workaround to this object being magically appearing from nowhere.
-    void init(const db::schema_ctxt&);
+    
     // Looks up schema by version or loads it using supplied loader.
     schema_ptr get_or_load(table_schema_version, const schema_loader&);
     // Looks up schema by version or returns an empty pointer if not available.
@@ -36561,10 +36561,10 @@ public:
     // deferring. The loader is copied must be alive only until this method
     // returns. If the loader fails, the future resolves with
     // schema_version_loading_failed.
-    future<schema_ptr> get_or_load(table_schema_version, const async_schema_loader&);
+    
     // Looks up schema version. Throws schema_version_not_found when not found
     // or loading is in progress.
-    schema_ptr get(table_schema_version) const;
+    
     // Looks up schema version. Throws schema_version_not_found when not found
     // or loading is in progress.
     
@@ -36767,7 +36767,7 @@ private:
 public:
     
     const cache_key_type& key() const ;
-    static const cql_prepared_id_type& cql_id(const prepared_cache_key_type& key) ;
+    
     
     
 };
@@ -36778,13 +36778,13 @@ public:
         uint64_t privileged_entries_evictions_on_size = 0;
         uint64_t unprivileged_entries_evictions_on_size = 0;
     };
-    static stats& shard_stats() ;
+    
     struct prepared_cache_stats_updater {
         static void inc_hits() noexcept ;
         static void inc_misses() noexcept ;
         static void inc_blocks() noexcept ;
         static void inc_evictions() noexcept ;
-        static void inc_privileged_on_cache_size_eviction() noexcept ;
+        
     };
 private:
     using cache_key_type = typename prepared_cache_key_type::cache_key_type;
@@ -36827,7 +36827,7 @@ public:
 };
 }
 namespace std { // for prepared_statements_cache log printouts
- std::ostream& operator<<(std::ostream& os, const typename cql3::prepared_cache_key_type::cache_key_type& p) ;
+ 
  std::ostream& operator<<(std::ostream& os, const cql3::prepared_cache_key_type& p) ;
 template<>
 struct hash<cql3::prepared_cache_key_type> final {
@@ -36838,7 +36838,7 @@ struct hash<cql3::prepared_cache_key_type> final {
 }
 namespace cql3 {
 struct authorized_prepared_statements_cache_size {
-    size_t operator()(const statements::prepared_statement::checked_weak_ptr& val) ;
+    
 };
 class authorized_prepared_statements_cache_key {
 public:
@@ -36848,7 +36848,7 @@ public:
         const cql3::prepared_cache_key_type& prep_cache_key_ref;
     };
     struct view_hasher {
-        size_t operator()(const view& kv) ;
+        
     };
     struct view_equal {
         
@@ -36879,7 +36879,7 @@ public:
         uint64_t authorized_prepared_statements_privileged_entries_evictions_on_size = 0;
         uint64_t authorized_prepared_statements_unprivileged_entries_evictions_on_size = 0;
     };
-    static stats& shard_stats() ;
+    
     struct authorized_prepared_statements_cache_stats_updater {
         static void inc_hits() noexcept ;
         static void inc_misses() noexcept ;
@@ -37736,13 +37736,10 @@ class query_processor::migration_subscriber : public service::migration_listener
     query_processor* _qp;
 public:
 private:
-    bool should_invalidate(
-            sstring ks_name,
-            std::optional<sstring> cf_name,
-            ::shared_ptr<cql_statement> statement);
+    
 };
 }
-void eventually(noncopyable_function<void ()> f, size_t max_attempts = 17) ;
+
 bool eventually_true(noncopyable_function<bool ()> f) ;
 #define REQUIRE_EVENTUALLY_EQUAL(a, b) BOOST_REQUIRE(eventually_true([&] { return a == b; }))
 #define CHECK_EVENTUALLY_EQUAL(a, b) BOOST_CHECK(eventually_true([&] { return a == b; }))
@@ -37770,7 +37767,7 @@ class raft_group_registry;
 }
 class not_prepared_exception : public std::runtime_error {
 public:
-    not_prepared_exception(const cql3::prepared_cache_key_type& id) : std::runtime_error(format("Not prepared: {}", id)) {}
+    
 };
 namespace db {
     class config;
@@ -37790,7 +37787,7 @@ struct scheduling_groups {
 // created once and used across all envs. This method allows retrieving them to
 // be used in tests.
 // Not thread safe!
-future<scheduling_groups> get_scheduling_groups();
+
 class cql_test_config {
 public:
     seastar::shared_ptr<db::config> db_config;
@@ -37809,11 +37806,8 @@ public:
     
     /// Processes queries (which must be modifying queries) as a batch.
     
-    virtual future<cql3::prepared_cache_key_type> prepare(sstring query) = 0;
-    virtual future<::shared_ptr<cql_transport::messages::result_message>> execute_prepared(
-        cql3::prepared_cache_key_type id,
-        cql3::raw_value_vector_with_unset values,
-        db::consistency_level cl = db::consistency_level::ONE) = 0;
+    
+    
     
     virtual future<std::vector<mutation>> get_modification_mutations(const sstring& text) = 0;
     
@@ -37823,13 +37817,13 @@ public:
     
     
     
-    virtual service::client_state& local_client_state() = 0;
+    
     virtual replica::database& local_db() = 0;
-    virtual cql3::query_processor& local_qp() = 0;
+    
     virtual distributed<replica::database>& db() = 0;
     
     
-    virtual db::view::view_builder& local_view_builder() = 0;
+    
     
     
 };
@@ -37952,7 +37946,7 @@ public:
     void rename_partition_column(const sstring& from, const sstring& to);
     void rename_clustering_column(const sstring& from, const sstring& to);
     std::vector<mutation_description>& unordered_mutations() ;
-    const std::vector<mutation_description>& unordered_mutations() const ;
+    
     struct table {
         sstring schema_changes_log;
         schema_ptr schema;
@@ -37988,9 +37982,7 @@ class clustering_interval_set {
         schema_ptr _schema;
         position_in_partition _pos;
     public:
-        position_in_partition_with_schema()
-            : _pos(position_in_partition::for_static_row())
-        { }
+        
         
     };
 private:
@@ -38013,7 +38005,7 @@ public:
     private:
         set_type::iterator _i;
     public:
-        position_range_iterator(set_type::iterator i) : _i(i) {}
+        
         position_range operator*() const ;
         bool operator==(const position_range_iterator& other) const = default;
         position_range_iterator& operator++() ;
@@ -38024,7 +38016,7 @@ public:
     // Adds given clustering range to this interval set.
     // The range may overlap with this set.
     
-    void add(const schema& s, const clustering_interval_set& other) ;
+    
     position_range_iterator begin() const ;
     position_range_iterator end() const ;
 };
@@ -38075,7 +38067,7 @@ public:
     
     using assert_function = noncopyable_function<void(const column_definition&, const atomic_cell_or_collection*)>;
     
-    flat_reader_assertions_v2& may_produce_tombstones(position_range range) ;
+    
     
     
     flat_reader_assertions_v2& produces(const schema& s, const mutation_fragment_v2& mf) ;
@@ -38086,7 +38078,7 @@ public:
     
     
     flat_reader_assertions_v2& fast_forward_to(position_range pr) ;
-    flat_reader_assertions_v2& fast_forward_to(const clustering_key& ck1, const clustering_key& ck2) ;
+    
 };
 flat_reader_assertions_v2 assert_that(flat_mutation_reader_v2 r) ;
 struct local_shard_only_tag { };
@@ -38181,13 +38173,13 @@ public:
 };
 void for_each_schema_change(std::function<void(schema_ptr, const std::vector<mutation>&,
                                                schema_ptr, const std::vector<mutation>&)>);
-void compare_readers(const schema&, flat_mutation_reader_v2 authority, flat_mutation_reader_v2 tested, const std::vector<position_range>& fwd_ranges);
+
 // Forward `r` to each range in `fwd_ranges` and consume all fragments produced by `r` in these ranges.
 // Build a mutation out of these fragments.
 //
 // Assumes that for each subsequent `r1`, `r2` in `fwd_ranges`, `r1.end() <= r2.start()`.
 // Must be run in a seastar::thread.
-mutation forwardable_reader_to_mutation(flat_mutation_reader_v2 r, const std::vector<position_range>& fwd_ranges);
+
 ///
 /// Random schema and random data generation related utilities.
 ///
@@ -38197,7 +38189,7 @@ class random_schema_specification {
     sstring _keyspace_name;
 public:
     explicit random_schema_specification(sstring keyspace_name) : _keyspace_name(std::move(keyspace_name)) { }
-    virtual ~random_schema_specification() = default;
+    
     // Should be the same for all invocations
     const sstring& keyspace_name() const { return _keyspace_name; }
     // Should be unique on the instance level.
@@ -38224,7 +38216,7 @@ private:
 public:
     explicit type_generator(random_schema_specification& spec);
     // This is captured.
-    type_generator(type_generator&&) = delete;
+    
     data_type operator()(std::mt19937& engine, is_multi_cell multi_cell);
 };
 /// The default random schema specification.
@@ -38259,7 +38251,7 @@ private:
     std::unordered_map<const abstract_type*, size_t> _regular_value_min_sizes;
 public:
     value_generator();
-    value_generator(value_generator&&) = delete;
+    
     /// Only for atomic types.
     size_t min_size(const abstract_type& type);
     atomic_value_generator get_atomic_value_generator(const abstract_type& type);
@@ -38402,7 +38394,7 @@ future<std::vector<mutation>> generate_random_mutations(
 future<std::vector<mutation>> generate_random_mutations(tests::random_schema& random_schema, size_t partition_count);
 } // namespace tests
 namespace tests::random {
- std::default_random_engine& gen() ;
+ 
 /// Produces random integers from a set of steps.
 ///
 /// Each step has a weight and a uniform distribution that determines the range
