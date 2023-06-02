@@ -6408,9 +6408,8 @@ public:
     ;
     explicit composite(bytes&& b) 
     ;
-    explicit composite(const composite_view& v);
-    composite() 
-    ;
+    
+    
     using size_type = uint16_t;
     using eoc_type = int8_t;
     enum class eoc : eoc_type {
@@ -6626,18 +6625,17 @@ public:
     
     composite_view(const composite& c) 
     ;
-    composite_view() 
-    ;
     
     
-    composite::iterator end() const ;
+    
+    
     boost::iterator_range<composite::iterator> components() const ;
     
     
-    size_t size() const ;
+    
     bool empty() const ;
     bool is_static() const ;
-    bool is_valid() const ;
+    
     explicit operator bytes_view() const {
         return _bytes;
     }
@@ -6764,9 +6762,9 @@ protected:
     compound_view_wrapper(managed_bytes_view v)
         : _bytes(v)
     { }
-    static const auto& get_compound_type(const schema& s) ;
+    
 public:
-    std::vector<bytes> explode(const schema& s) const ;
+    
     managed_bytes_view representation() const ;
     struct less_compare {
         typename TopLevelView::compound _t;
@@ -6791,7 +6789,7 @@ public:
     
     
     // For backward compatibility with existing code.
-    bool is_empty(const schema& s) const ;
+    
 };
 template <typename TopLevel, typename TopLevelView>
 class compound_wrapper {
@@ -6814,7 +6812,7 @@ public:
     static TopLevel make_empty() {
         return from_exploded(std::vector<bytes>());
     }
-    static TopLevel make_empty(const schema&) ;
+    
     template<typename RangeOfSerializedComponents>
     static TopLevel from_exploded(RangeOfSerializedComponents&& v) {
         return TopLevel::from_range(std::forward<RangeOfSerializedComponents>(v));
@@ -6822,11 +6820,11 @@ public:
     static TopLevel from_exploded(const schema& s, const std::vector<bytes>& v) {
         return from_exploded(v);
     }
-    static TopLevel from_exploded(const schema& s, const std::vector<managed_bytes>& v) ;
+    
     
     // We don't allow optional values, but provide this method as an efficient adaptor
     
-    static TopLevel from_optional_exploded(const schema& s, std::span<const managed_bytes_opt> v) ;
+    
     static TopLevel from_deeply_exploded(const schema& s, const std::vector<data_value>& v) ;
      ;
     TopLevelView view() const {
@@ -6836,7 +6834,7 @@ public:
         return view();
     }
     // FIXME: return views
-    std::vector<bytes> explode(const schema& s) const ;
+    
     std::vector<bytes> explode() const {
         std::vector<bytes> result;
         for (managed_bytes_view c : components()) {
@@ -6844,7 +6842,7 @@ public:
         }
         return result;
     }
-    std::vector<managed_bytes> explode_fragmented() const ;
+    
     struct tri_compare {
         typename TopLevel::compound _t;
     };
@@ -6868,7 +6866,7 @@ public:
     bool equal(const schema& s, const TopLevel& other) const {
         return get_compound_type(s)->equal(representation(), other.representation());
     }
-    bool equal(const schema& s, const TopLevelView& other) const ;
+    
     operator managed_bytes_view() const
     ;
     const managed_bytes& representation() const {
@@ -6886,7 +6884,7 @@ public:
     bool is_empty() const {
         return _bytes.empty();
     }
-    explicit operator bool() const ;
+    
     // For backward compatibility with existing code.
     bool is_empty(const schema& s) const {
         return is_empty();
@@ -6899,12 +6897,12 @@ public:
     auto components(const schema& s) const {
         return components();
     }
-    managed_bytes_view get_component(const schema& s, size_t idx) const ;
+    
     // Returns the number of components of this compound.
     size_t size(const schema& s) const {
         return std::distance(begin(s), end(s));
     }
-    size_t minimal_external_memory_usage() const ;
+    
 };
 template <typename TopLevel, typename PrefixTopLevel>
 class prefix_view_on_full_compound {
@@ -6966,7 +6964,7 @@ protected:
     prefix_compound_wrapper(managed_bytes&& b) : base(std::move(b)) {}
 public:
     using prefix_view_type = prefix_view_on_prefix_compound<TopLevel>;
-    prefix_view_type prefix_view(const schema& s, unsigned prefix_len) const ;
+    
     bool is_full(const schema& s) const {
         return TopLevel::get_compound_type(s)->is_full(base::_bytes);
     }
@@ -7004,12 +7002,12 @@ public:
     // The result is valid as long as the schema is live.
     const legacy_compound_view<c_type> legacy_form(const schema& s) const;
     // A trichotomic comparator for ordering compatible with Origin.
-    std::strong_ordering legacy_tri_compare(const schema& s, partition_key_view o) const;
+    
     // Checks if keys are equal in a way which is compatible with Origin.
     
     
     // A trichotomic comparator which orders keys according to their ordering on the ring.
-    std::strong_ordering ring_order_tri_compare(const schema& s, partition_key_view o) const;
+    
 };
 template <>
 struct fmt::formatter<partition_key_view> : fmt::formatter<std::string_view> {
@@ -7030,19 +7028,19 @@ public:
     static partition_key from_range(RangeOfSerializedComponents&& v) {
         return partition_key(managed_bytes(c_type::serialize_value(std::forward<RangeOfSerializedComponents>(v))));
     }
-    static partition_key from_nodetool_style_string(const schema_ptr s, const sstring& key);
+    
     
     using compound = lw_shared_ptr<c_type>;
     
     static const compound& get_compound_type(const schema& s) ;
     // Returns key's representation which is compatible with Origin.
     // The result is valid as long as the schema is live.
-    const legacy_compound_view<c_type> legacy_form(const schema& s) const ;
+    
     // A trichotomic comparator for ordering compatible with Origin.
     
     // Checks if keys are equal in a way which is compatible with Origin.
     
-    void validate(const schema& s) const ;
+    
 };
 template <>
 struct fmt::formatter<partition_key> : fmt::formatter<std::string_view> {
@@ -7067,7 +7065,7 @@ class exploded_clustering_prefix {
 public:
     
     
-    size_t size() const ;
+    
 };
 class clustering_key_prefix_view : public prefix_compound_view_wrapper<clustering_key_prefix_view, clustering_key> {
 public:
@@ -7090,7 +7088,7 @@ public:
     clustering_key_prefix(clustering_key_prefix&& v) = default;
     clustering_key_prefix(const clustering_key_prefix& v) = default;
     clustering_key_prefix(clustering_key_prefix& v) = default;
-    clustering_key_prefix& operator=(const clustering_key_prefix&) = default;
+    
     clustering_key_prefix& operator=(clustering_key_prefix&) = default;
     clustering_key_prefix& operator=(clustering_key_prefix&&) = default;
     using compound = lw_shared_ptr<compound_type<allow_prefixes::yes>>;
@@ -7116,8 +7114,7 @@ struct fmt::formatter<clustering_key_prefix::with_schema_wrapper> : fmt::formatt
 };
 template<>
 struct appending_hash<partition_key_view> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const partition_key_view& pk, const schema& s) const ;
+     ;
 };
 template<>
 struct appending_hash<partition_key> {
@@ -7126,8 +7123,7 @@ struct appending_hash<partition_key> {
 };
 template<>
 struct appending_hash<clustering_key_prefix_view> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const clustering_key_prefix_view& ck, const schema& s) const ;
+     ;
 };
 template<>
 struct appending_hash<clustering_key_prefix> {
@@ -7142,11 +7138,7 @@ template <typename LessComparator, typename T>
 concept IntervalLessComparatorFor = requires (T a, T b, LessComparator& cmp) {
     { cmp(a, b) } -> std::same_as<bool>;
 };
-bool
-require_ordering_and_on_equal_return(
-        std::strong_ordering input,
-        std::strong_ordering match_to_return_true,
-        bool return_if_equal) ;
+
 template<typename T>
 class interval_bound {
     T _value;
@@ -7157,10 +7149,10 @@ public:
               , _inclusive(inclusive)
     { }
     const T& value() const & { return _value; }
-    T&& value() && ;
+    
     bool is_inclusive() const { return _inclusive; }
-    bool operator==(const interval_bound& other) const ;
-    bool equal(const interval_bound& other, IntervalComparatorFor<T> auto&& cmp) const ;
+    
+    
 };
 template<typename T>
 class nonwrapping_interval;
@@ -7209,7 +7201,7 @@ public:
     // check if two intervals overlap.
     // Comparator must define a total ordering on T.
     
-    static wrapping_interval make_ending_with(bound b) ;
+    
     bool is_singular() const {
         return _singular;
     }
@@ -7231,7 +7223,7 @@ public:
     std::pair<wrapping_interval, wrapping_interval> unwrap() const ;
     // the point is inside the interval
     // Comparator must define a total ordering on T.
-    bool contains(const T& point, IntervalComparatorFor<T> auto&& cmp) const ;
+    
     // Returns true iff all values contained by other are also contained by this.
     // Comparator must define a total ordering on T.
     bool contains(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const ;
@@ -7246,7 +7238,7 @@ public:
     // Create a sub-interval including values greater than the split_point. Returns std::nullopt if
     // split_point is after the end (but not included in the interval, in case of wraparound intervals)
     // Comparator must define a total ordering on T.
-    std::optional<wrapping_interval<T>> split_after(const T& split_point, IntervalComparatorFor<T> auto&& cmp) const ;
+    
     template<typename Bound, typename Transformer, typename U = transformed_type<Transformer>>
     static std::optional<typename wrapping_interval<U>::bound> transform_bound(Bound&& b, Transformer&& transformer) {
         if (b) {
@@ -7256,13 +7248,12 @@ public:
     }
     // Transforms this interval into a new interval of a different value type
     // Supplied transformer should transform value of type T (the old type) into value of type U (the new type).
-    template<typename Transformer, typename U = transformed_type<Transformer>>
-    wrapping_interval<U> transform(Transformer&& transformer) && ;
+     ;
     template<typename Transformer, typename U = transformed_type<Transformer>>
     wrapping_interval<U> transform(Transformer&& transformer) const & {
         return wrapping_interval<U>(transform_bound(_start, transformer), transform_bound(_end, transformer), _singular);
     }
-    bool equal(const wrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const ;
+    
     bool operator==(const wrapping_interval& other) const ;
     ;
 private:
@@ -7512,8 +7503,7 @@ public:
     template<typename U>
     friend std::ostream& operator<<(std::ostream& out, const nonwrapping_interval<U>& r);
 };
-template<typename U>
-std::ostream& operator<<(std::ostream& out, const nonwrapping_interval<U>& r) ;
+ ;
 template<template<typename> typename T, typename U>
 concept Interval = std::is_same<T<U>, wrapping_interval<U>>::value || std::is_same<T<U>, nonwrapping_interval<U>>::value;
 // Allow using interval<T> in a hash table. The hash function 31 * left +
@@ -7614,7 +7604,7 @@ struct raw_token_less_comparator {
         return k;
     }
 };
-const token& minimum_token() noexcept;
+
 const token& maximum_token() noexcept;
 std::strong_ordering operator<=>(const token& t1, const token& t2);
 // Returns a successor for token t.
@@ -7638,7 +7628,7 @@ struct fmt::formatter<dht::token> : fmt::formatter<std::string_view> {
     }
 };
 namespace dht {
- sstring cpu_sharding_algorithm_name() ;
+ 
 std::vector<uint64_t> init_zero_based_shard_start(unsigned shards, unsigned sharding_ignore_msb_bits);
 unsigned shard_of(unsigned shard_count, unsigned sharding_ignore_msb_bits, const token& t);
 token token_for_next_shard(const std::vector<uint64_t>& shard_start, unsigned shard_count, unsigned sharding_ignore_msb_bits, const token& t, shard_id shard, unsigned spans);
@@ -7654,7 +7644,7 @@ public:
     virtual token token_for_next_shard(const token& t, shard_id shard, unsigned spans = 1) const;
     
     
-    bool operator==(const sharder& o) const ;
+    
 };
 } //namespace dht
 namespace utils {
