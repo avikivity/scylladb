@@ -5023,7 +5023,7 @@ class column_definition final {
 public:
     struct name_comparator {
         data_type type;
-        name_comparator(data_type type) : type(type) {}
+        
         bool operator()(const column_definition& cd1, const column_definition& cd2) const {
             return type->less(cd1.name(), cd2.name());
         }
@@ -5088,11 +5088,11 @@ public:
     column_definition& operator=(column_definition&& other) = default;
     bool is_static() const { return kind == column_kind::static_column; }
     bool is_regular() const ;
-    bool is_partition_key() const ;
-    bool is_clustering_key() const ;
+    
+    
     bool is_primary_key() const ;
     bool is_atomic() const { return _is_atomic; }
-    bool is_multi_cell() const ;
+    
     bool is_counter() const { return _is_counter; }
     // "virtual columns" appear in a materialized view as placeholders for
     // unselected columns, with liveness information but without data, and
@@ -5110,7 +5110,7 @@ public:
     void set_computed(column_computation_ptr computation) ;
     // Columns hidden from CQL cannot be in any way retrieved by the user,
     // either explicitly or via the '*' operator, or functions, aggregates, etc.
-    bool is_hidden_from_cql() const ;
+    
     const sstring& name_as_text() const;
     const bytes& name() const;
     sstring name_as_cql_string() const;
@@ -5146,13 +5146,13 @@ class column_mapping_entry {
 public:
     column_mapping_entry(bytes name, data_type type)
         : _name(std::move(name)), _type(std::move(type)), _is_atomic(_type->is_atomic()) { }
-    column_mapping_entry(bytes name, sstring type_name);
+    
     const bytes& name() const ;
-    const data_type& type() const ;
+    
     const sstring& type_name() const ;
-    bool is_atomic() const ;
+    
 };
-bool operator==(const column_mapping_entry& lhs, const column_mapping_entry& rhs);
+
 // Encapsulates information needed for converting mutations between different schema versions.
 //
 // Unsafe to access across shards.
@@ -5172,7 +5172,7 @@ public:
     { }
     const std::vector<column_mapping_entry>& columns() const ;
     column_count_type n_static() const ;
-    const column_mapping_entry& column_at(column_kind kind, column_id id) const ;
+    
     
     
 };
@@ -5183,7 +5183,7 @@ class raw_view_info final {
     sstring _where_clause;
 public:
 };
-std::ostream& operator<<(std::ostream& os, const raw_view_info& view);
+
 class view_info;
 // Represents a column set which is compactible with Cassandra 3.x.
 //
@@ -5200,16 +5200,16 @@ class v3_columns {
 public:
     v3_columns(std::vector<column_definition> columns, bool is_dense, bool is_compound);
     v3_columns() = default;
-    v3_columns(v3_columns&&) = default;
-    v3_columns& operator=(v3_columns&&) = default;
-    v3_columns(const v3_columns&) = delete;
+    
+    
+    
     static v3_columns from_v2_schema(const schema&);
 public:
     
     
     
     
-    void apply_to(schema_builder&) const;
+    
 };
 namespace query {
 class partition_slice;
@@ -5317,7 +5317,7 @@ private:
     column_count_type _clustering_key_size;
     column_count_type _regular_column_count;
     column_count_type _static_column_count;
-    extensions_map& extensions() ;
+    
     friend class db::extensions;
     friend class schema_builder;
 public:
@@ -5336,15 +5336,15 @@ private:
     struct reversed_tag { };
     lw_shared_ptr<cql3::column_specification> make_column_specification(const column_definition& def) const;
     void rebuild();
-    schema(const schema&, const std::function<void(schema&)>&);
+    
     class private_tag{};
 public:
     schema(private_tag, const raw_schema&, std::optional<raw_view_info>, const schema_static_props& props);
     schema(const schema&);
     // See \ref make_reversed().
-    schema(reversed_tag, const schema&);
+    
     ~schema();
-    const schema_static_props& static_props() const ;
+    
     table_schema_version version() const ;
     double bloom_filter_fp_chance() const ;
     sstring thrift_key_validator() const;
@@ -5371,34 +5371,34 @@ public:
     }
     
     gc_clock::duration paxos_grace_seconds() const;
-    double dc_local_read_repair_chance() const ;
-    bool compaction_enabled() const ;
+    
+    
     const cdc::options& cdc_options() const;
     const ::tombstone_gc_options& tombstone_gc_options() const;
-    const db::per_partition_rate_limit_options& per_partition_rate_limit_options() const ;
+    
     const dht::i_partitioner& get_partitioner() const;
-    bool has_custom_partitioner() const;
+    
     const column_definition* get_column_definition(const bytes& name) const;
     const column_definition& column_at(column_kind, column_id) const;
     // Find a column definition given column ordinal id in the schema
     const column_definition& column_at(ordinal_column_id ordinal_id) const;
-    const_iterator regular_begin() const;
     
     
-    const_iterator static_upper_bound(const bytes& name) const;
+    
+    
     static data_type column_name_type(const column_definition& def, const data_type& regular_column_name_type);
     data_type column_name_type(const column_definition& def) const;
-    const column_definition& clustering_column_at(column_id id) const;
+    
     const column_definition& regular_column_at(column_id id) const;
     const column_definition& static_column_at(column_id id) const;
-    bool is_last_partition_key(const column_definition& def) const;
+    
     bool has_multi_cell_collections() const;
     bool has_static_columns() const;
     column_count_type columns_count(column_kind kind) const;
     column_count_type partition_key_size() const;
     column_count_type clustering_key_size() const { return _clustering_key_size; }
     column_count_type static_columns_count() const { return _static_column_count; }
-    column_count_type regular_columns_count() const ;
+    
     // Returns a range of column definitions
     const_iterator_range_type partition_key_columns() const;
     // Returns a range of column definitions
@@ -5414,9 +5414,9 @@ public:
     const columns_type& all_columns() const {
         return _raw._columns;
     }
-    const auto& dropped_columns() const ;
-    const auto& collections() const ;
-    gc_clock::duration default_time_to_live() const ;
+    
+    
+    
     data_type make_legacy_default_validator() const;
     const sstring& ks_name() const {
         return _raw._ks_name;
@@ -5480,7 +5480,7 @@ public:
     //      assert(reverse_schema->get_reversed().get() == schema.get());
     //      assert(schema->get_reversed().get() == reverse_schema.get());
     //
-    schema_ptr get_reversed() const;
+    
 };
 lw_shared_ptr<const schema> make_shared_schema(std::optional<table_id> id, std::string_view ks_name, std::string_view cf_name,
     std::vector<schema::column> partition_key, std::vector<schema::column> clustering_key, std::vector<schema::column> regular_columns,
@@ -5489,7 +5489,7 @@ bool operator==(const schema&, const schema&);
 class view_ptr final {
     schema_ptr _schema;
 public:
-    view_ptr() = default;
+    
     operator schema_ptr() const noexcept {
         return _schema;
     }
@@ -6080,10 +6080,7 @@ private:
         
     };
 public:
-    vector_deserializer() noexcept
-        : _in(simple_input_stream())
-        , _size(0)
-    { }
+    
     explicit vector_deserializer(input_stream in)
         : _in(std::move(in))
         , _size(deserialize(_in, boost::type<uint32_t>()))
@@ -6106,23 +6103,23 @@ public:
         using pointer = value_type*;
         using reference = value_type&;
         using difference_type = ssize_t;
-        iterator() noexcept = default;
+        
         bool operator==(const iterator& it) const noexcept ;
         // Deserializes and returns the item, effectively incrementing the iterator..
         value_type operator*() const ;
         iterator& operator++() ;
         iterator operator++(int) ;
-        ssize_t operator-(const iterator& it) const noexcept ;
+        
     };
     using const_iterator = iterator;
     static_assert(std::input_iterator<iterator>);
     static_assert(std::sentinel_for<iterator, iterator>);
-    iterator begin() noexcept requires(IsForward) ;
+    
     const_iterator begin() const noexcept requires(IsForward) ;
     
     
     const_iterator end() const noexcept requires(IsForward) ;
-    const_iterator cend() const noexcept requires(IsForward) ;
+    
 };
 static_assert(std::ranges::range<vector_deserializer<int>>);
 }
@@ -6172,7 +6169,7 @@ public:
     using opt_bytes = std::optional<bytes>;
     
     
-    virtual bool is_aggregate() const = 0;
+    
     virtual void print(std::ostream& os) const = 0;
     virtual sstring column_name(const std::vector<sstring>& column_names) const = 0;
     friend class function_call;
@@ -6212,8 +6209,8 @@ private:
     shared_ptr<aggregate_function> _reducible;
 private:
 public:
-    virtual void print(std::ostream& os) const override;
-    virtual sstring column_name(const std::vector<sstring>& column_names) const override;
+    
+    
 };
 }
 }
