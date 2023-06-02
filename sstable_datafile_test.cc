@@ -22882,11 +22882,9 @@ struct serializer<collection_cell_view> {
     static collection_cell_view read(Input& v) ;
     template<typename Output>
     static void write(Output& out, collection_cell_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
 };
-template<typename Input>
- void skip(Input& v, boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>>) ;
+ ;
 template<typename Input>
 boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type> deserialize(Input& v, boost::type<boost::variant<live_cell_view, expiring_cell_view, dead_cell_view, counter_cell_view, unknown_variant_type>>) ;
  ;
@@ -25099,12 +25097,8 @@ private:
     mutation_partition_view(utils::input_stream v)
         : _in(v)
     { }
-    template<typename Visitor>
-    requires MutationViewVisitor<Visitor>
-    void do_accept(const column_mapping&, Visitor& visitor) const;
-    template<typename Visitor>
-    requires MutationViewVisitor<Visitor>
-    future<> do_accept_gently(const column_mapping&, Visitor& visitor) const;
+    ;
+    ;
     struct accept_ordered_cookie {
         bool accepted_partition_tombstone = false;
         bool accepted_static_row = false;
@@ -25122,8 +25116,8 @@ private:
     };
     ;
 public:
-    std::optional<clustering_key> first_row_key() const;
-    std::optional<clustering_key> last_row_key() const;
+    
+    
 };
 class mutation;
 class flat_mutation_reader_v2;
@@ -25204,10 +25198,8 @@ public:
     // Note that `consume_end_of_partition()` and `consume_end_of_stream()`
     // will be called each time the consume is stopping, regardless of whether
     // you are pausing or the consumption is ending for good.
-    template<FlattenedConsumerV2 Consumer>
-    auto consume(schema_ptr s, Consumer& consumer) const -> frozen_mutation_consume_result<decltype(consumer.consume_end_of_stream())>;
-    template<FlattenedConsumerV2 Consumer>
-    auto consume(schema_ptr s, frozen_mutation_consumer_adaptor<Consumer>& adaptor) const -> frozen_mutation_consume_result<decltype(adaptor.consumer().consume_end_of_stream())>;
+    ;
+    ;
     // Consumes the frozen mutation's content.
     //
     // The consume operation is stoppable:
@@ -25221,11 +25213,11 @@ public:
     auto consume_gently(schema_ptr s, Consumer& consumer) const -> future<frozen_mutation_consume_result<decltype(consumer.consume_end_of_stream())>>;
     template<FlattenedConsumerV2 Consumer>
     auto consume_gently(schema_ptr s, frozen_mutation_consumer_adaptor<Consumer>& adaptor) const -> future<frozen_mutation_consume_result<decltype(adaptor.consumer().consume_end_of_stream())>>;
-    unsigned shard_of(const schema& s) const ;
+    
     struct printer {
         const frozen_mutation& self;
         schema_ptr schema;
-        friend std::ostream& operator<<(std::ostream&, const printer&);
+        
     };
     // Same requirements about the schema as unfreeze().
 };
@@ -25253,13 +25245,12 @@ public:
 };
 static constexpr size_t default_frozen_fragment_size = 128 * 1024;
 using frozen_mutation_consumer_fn = std::function<future<stop_iteration>(frozen_mutation, bool)>;
-future<> fragment_and_freeze(flat_mutation_reader_v2 mr, frozen_mutation_consumer_fn c,
-                             size_t fragment_size = default_frozen_fragment_size);
+
 class reader_permit;
 class frozen_mutation_fragment {
     bytes_ostream _bytes;
 public:
-    explicit frozen_mutation_fragment(bytes_ostream bytes) : _bytes(std::move(bytes)) { }
+    
     const bytes_ostream& representation() const ;
 };
 class frozen_mutation_and_schema;
@@ -25296,11 +25287,9 @@ public:
     // view.
     const bool use_only_for_reads;
     // A constructor for a base info that can facilitate reads and writes from the materialized view.
-    base_dependent_view_info(schema_ptr base_schema,
-            std::vector<column_id>&& base_regular_columns_in_view_pk,
-            std::vector<column_id>&& base_static_columns_in_view_pk);
+    
     // A constructor for a base info that can facilitate only reads from the materialized view.
-    base_dependent_view_info(bool has_base_non_pk_columns_in_view_pk, std::optional<bytes>&& column_missing_in_base);
+    
 };
 // Immutable snapshot of view's base-schema-dependent part.
 using base_info_ptr = lw_shared_ptr<const base_dependent_view_info>;
@@ -25442,13 +25431,13 @@ public:
     // Is this "localhost"?
     this_node is_this_node() const noexcept ;
     // idx < 0 means "unassigned"
-    idx_type idx() const noexcept ;
-    state get_state() const noexcept ;
+    
+    
     static std::string to_string(state);
 private:
     static node_holder make(const locator::topology* topology, locator::host_id id, inet_address endpoint, endpoint_dc_rack dc_rack, state state, node::this_node is_this_node = this_node::no, idx_type idx = -1);
-    node_holder clone() const;
-    void set_topology(const locator::topology* topology) noexcept ;
+    
+    
     friend class topology;
 };
 class topology {
@@ -25464,10 +25453,10 @@ public:
     // Optionally updates node's current host_id, endpoint, or DC/rack.
     // Note: the host_id may be updated from null to non-null after a new node gets a new, random host_id,
     // or a peer node host_id may be updated when the node is replaced with another node using the same ip address.
-    const node* update_node(node* node, std::optional<host_id> opt_id, std::optional<inet_address> opt_ep, std::optional<endpoint_dc_rack> opt_dr, std::optional<node::state> opt_st);
+    
     // Removes a node using its host_id
     // Returns true iff the node was found and removed.
-    bool remove_node(host_id id);
+    
     // Looks up a node by its host_id.
     // Returns a pointer to the node if found, or nullptr otherwise.
     const node* find_node(host_id id) const noexcept;
@@ -25514,9 +25503,8 @@ public:
     // The specified node must exist.
     // Get rack of a node identified by endpoint
     // The specified node must exist.
-    auto get_local_dc_filter() const noexcept ;;
-    template <std::ranges::range Range>
-     size_t count_local_endpoints(const Range& endpoints) const ;
+    ;
+     ;
     void sort_by_proximity(inet_address address, inet_address_vector_replica_set& addresses) const;
     void for_each_node(std::function<void(const node*)> func) const;
 private:
@@ -25632,7 +25620,7 @@ struct numeric_limits<utils::tagged_tagged_integer<Final, Tag, ValueType>> : pub
     using value_limits = numeric_limits<ValueType>;
     static_assert(numeric_limits<ValueType>::is_specialized && numeric_limits<ValueType>::is_bounded);
     static constexpr tagged_tagged_integer_t min() ;
-    static constexpr tagged_tagged_integer_t max() ;
+    
 };
 } // namespace std
 namespace raft {
@@ -25661,7 +25649,7 @@ public:
     using duration = std::chrono::duration<rep, period>;
     using time_point = std::chrono::time_point<logical_clock, duration>;
     static constexpr bool is_steady = true;
-    void advance(duration diff = duration{1}) ;
+    
     time_point now() const noexcept ;
     static constexpr time_point min() ;
 private:
@@ -26258,8 +26246,8 @@ public:
     token_metadata(token_metadata&&) noexcept; // Can't use "= default;" - hits some static_assert in unique_ptr
     token_metadata& operator=(token_metadata&&) noexcept;
     ~token_metadata();
-    const std::vector<token>& sorted_tokens() const;
-    const tablet_metadata& tablets() const;
+    
+    
     void set_tablets(tablet_metadata);
     // Update token->endpoint mappings for a given \c endpoint.
     // \c tokens are all the tokens that are now owned by \c endpoint.
@@ -26271,8 +26259,8 @@ public:
     const std::unordered_set<inet_address>& get_leaving_endpoints() const;
     const std::unordered_map<token, inet_address>& get_bootstrap_tokens() const;
     void update_topology(inet_address ep, endpoint_dc_rack dr, std::optional<node::state> opt_st = std::nullopt);
-    boost::iterator_range<tokens_iterator> ring_range(const token& start) const;
-    boost::iterator_range<tokens_iterator> ring_range(dht::ring_position_view start) const;
+    
+    
     topology& get_topology();
     const topology& get_topology() const;
     void debug_show() const;
@@ -26433,9 +26421,9 @@ public:
     protected:
         bool _started = false;
     public:
-        listener& operator=(listener&&) = delete;
+        
         // Has to run inside seastar::async context
-        virtual void on_enabled() = 0;
+        
     };
     explicit feature(feature_service& service, std::string_view name, bool enabled = false);
     // Has to run inside seastar::async context
@@ -26555,14 +26543,14 @@ public:
 public:
     // Reverse of `make_full_token_string`.
     // Reverse of `make_cdc_generation_id_string`.
-    static versioned_value cql_ready(bool value) ;;
+    ;
 }; // class versioned_value
 } // namespace gms
 class no_such_class : public std::runtime_error {
 public:
     using runtime_error::runtime_error;
 };
- bool is_class_name_qualified(std::string_view class_name) ;
+ 
 // BaseType is a base type of a type hierarchy that this registry will hold
 // Args... are parameters for object's constructor
 template<typename BaseType, typename... Args>
@@ -26867,8 +26855,8 @@ public:
     effective_replication_map(replication_strategy_ptr, token_metadata_ptr, size_t replication_factor) noexcept;
     virtual ~effective_replication_map() = default;
     const abstract_replication_strategy& get_replication_strategy() const noexcept ;
-    const token_metadata& get_token_metadata() const noexcept ;
-    const token_metadata_ptr& get_token_metadata_ptr() const noexcept ;
+    
+    
     const topology& get_topology() const noexcept ;
     size_t get_replication_factor() const noexcept ;
     /// Returns addresses of replicas for a given token.
@@ -27099,13 +27087,13 @@ public:
     table_id cf_id;
 public:
     virtual void abort() = 0;
-    virtual stream_summary get_summary() const ;
+    
 };
 } // namespace streaming
 namespace streaming {
 struct stream_detail {
     table_id cf_id;
-    stream_detail() = default;
+    
 };
 } // namespace streaming
 namespace streaming {
@@ -27378,8 +27366,8 @@ private:
     bool _range_added = false;
     bool _aborted = false;
 public:
-    stream_plan& request_ranges(inet_address from, sstring keyspace, dht::token_range_vector ranges, std::vector<sstring> column_families);
-    stream_plan& transfer_ranges(inet_address to, sstring keyspace, dht::token_range_vector ranges);
+    
+    
     stream_plan& transfer_ranges(inet_address to, sstring keyspace, dht::token_range_vector ranges, std::vector<sstring> column_families);
 public:
 };
@@ -27436,9 +27424,9 @@ public:
     }
     future<> add_ranges(const sstring& keyspace_name, locator::vnode_effective_replication_map_ptr erm, dht::token_range_vector ranges, gms::gossiper& gossiper, bool is_replacing);
     void add_tx_ranges(const sstring& keyspace_name, std::unordered_map<inet_address, dht::token_range_vector> ranges_per_endpoint);
-    void add_rx_ranges(const sstring& keyspace_name, std::unordered_map<inet_address, dht::token_range_vector> ranges_per_endpoint);
+    
 private:
-    bool use_strict_sources_for_ranges(const sstring& keyspace_name, const locator::vnode_effective_replication_map_ptr& erm);
+    
     std::unordered_map<dht::token_range, std::vector<inet_address>>
     get_all_ranges_with_sources_for(const sstring& keyspace_name, locator::vnode_effective_replication_map_ptr erm, dht::token_range_vector desired_ranges);
     std::unordered_map<dht::token_range, std::vector<inet_address>>
@@ -27457,8 +27445,8 @@ private:
 #endif
     const token_metadata& get_token_metadata() ;
 public:
-    future<> stream_async();
-    size_t nr_ranges_to_stream();
+    
+    
 private:
     distributed<replica::database>& _db;
     sharded<streaming::stream_manager>& _stream_manager;
@@ -27484,8 +27472,8 @@ namespace fs = std::filesystem;
 namespace utils {
     class file_lock {
     public:
-        file_lock() = delete;
-        file_lock(const file_lock&) = delete;
+        
+        
         file_lock(file_lock&&) noexcept;
         ~file_lock();
         file_lock& operator=(file_lock&&) = default;
@@ -27536,8 +27524,8 @@ private:
 #endif
 namespace seastar { class logger; }
 typedef std::function<bool (const std::system_error &)> system_error_lambda_t;
-bool check_exception(system_error_lambda_t f);
-bool is_system_error_errno(int err_no);
+
+
 bool is_timeout_exception(std::exception_ptr e);
 class storage_io_error : public std::exception {
 private:
@@ -27548,9 +27536,7 @@ public:
         : _code{e.code()}
         , _what{std::string("Storage I/O error: ") + std::to_string(e.code().value()) + ": " + e.what()}
     { }
-    virtual const char* what() const noexcept override {
-        return _what.c_str();
-    }
+    
 };
 // Rethrow exception if not null
 //
@@ -27842,15 +27828,15 @@ private:
 public:
     // removes ALL endpoint states; should only be called after shadow gossip
 private:
-    future<> handle_major_state_change(inet_address ep, const endpoint_state& eps);
+    
 public:
     bool is_alive(inet_address ep) const;
     bool is_dead_state(const endpoint_state& eps) const;
     // Wait for nodes to be alive on all shards
-    future<> wait_alive(std::vector<gms::inet_address> nodes, std::chrono::milliseconds timeout);
+    
     // Get live members synchronized to all shards
     future<std::set<inet_address>> get_live_members_synchronized();
-    future<> apply_state_locally(std::map<inet_address, endpoint_state> map);
+    
 private:
     // notify that a local application state is going to change (doesn't get triggered for remote changes)
     // notify that an application state has changed
@@ -27939,7 +27925,7 @@ struct estimated_histogram {
 private:
     void new_offsets(int size) ;
 public:
-    const std::vector<int64_t>& get_bucket_offsets() const ;
+    
 };
 }
 namespace utils {
@@ -27952,7 +27938,7 @@ private:
     time_point _start;
     time_point _stop;
 public:
-    duration latency() const ;
+    
     latency_counter& check_and_stop() ;
     static time_point now() ;
 };
@@ -27971,8 +27957,8 @@ public:
                 static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(interval).count()));
     }
     void add(uint64_t val = 1) ;
-    void update() ;
-    bool is_initilized() const ;
+    
+    
     double rate() const ;
 };
 template <typename Unit>
@@ -27996,9 +27982,8 @@ public:
               sample_mask(_sample_mask), sample(
                     size) {
     }
-    template <typename Rep, typename Ratio>
-    void mark(std::chrono::duration<Rep, Ratio> dur) ;
-    void mark(latency_counter& lc) ;
+     ;
+    
     ;
 };
  ;
@@ -28016,10 +28001,10 @@ struct rate_moving_average {
     uint64_t count = 0;
     double rates[3] = {0};
     double mean_rate = 0;
-    rate_moving_average& operator +=(const rate_moving_average& o) ;
-    friend rate_moving_average operator+ (rate_moving_average a, const rate_moving_average& b);
+    
+    
 };
- rate_moving_average operator+ (rate_moving_average a, const rate_moving_average& b) ;
+ 
 class rates_moving_average {
     latency_counter::time_point start_time;
     moving_average rates[3] = {{std::chrono::minutes(1), meter_timer::tick_interval()}, {std::chrono::minutes(5), meter_timer::tick_interval()}, {std::chrono::minutes(15), meter_timer::tick_interval()}};
@@ -28027,9 +28012,8 @@ public:
     // _count is public so the collectd will be able to use it.
     // for all other cases use the count() method
     uint64_t _count = 0;
-    rates_moving_average() : start_time(latency_counter::now()) {
-    }
-    void mark(uint64_t n = 1) ;
+    
+    
     rate_moving_average rate() const {
         rate_moving_average res;
         double elapsed = std::chrono::duration_cast<std::chrono::seconds>(latency_counter::now() - start_time).count();
@@ -28057,10 +28041,10 @@ class timed_rate_moving_average {
 public:
     timed_rate_moving_average() : _timer([this]{_rates.update();}) {
     }
-    rates_moving_average& operator()() noexcept ;
-    const rates_moving_average& operator()() const noexcept ;
-    void mark(uint64_t n = 1) noexcept ;
-    uint64_t count() const noexcept ;
+    
+    
+    
+    
     rate_moving_average rate() const noexcept ;
 };
 class summary_calculator {
@@ -28101,11 +28085,11 @@ public:
     }
     template <typename Rep, typename Ratio>
     void mark(std::chrono::duration<Rep, Ratio> dur) noexcept ;
-    void mark(latency_counter& lc) noexcept ;
+    
 };
 }
  ;
-seastar::metrics::histogram to_metrics_summary(const utils::summary_calculator& summary) noexcept;
+
 namespace db {
 class schema_ctxt;
 }
@@ -28146,10 +28130,8 @@ struct serializer<const schema_mutations> : public serializer<schema_mutations>
 {};
 template <>
 struct serializer<frozen_schema> {
-  template <typename Output>
-  static void write(Output& buf, const frozen_schema& v);
-  template <typename Input>
-  static frozen_schema read(Input& buf);
+  ;
+  ;
   template <typename Input>
   static void skip(Input& buf);
 };
@@ -28182,10 +28164,8 @@ template<>
 struct serializer<schema_view> {
     template<typename Input>
     static schema_view read(Input& v) ;
-    template<typename Output>
-    static void write(Output& out, schema_view v) ;
-    template<typename Input>
-    static void skip(Input& v) ;
+     ;
+     ;
 };
 ////// State holders
 template<typename Output>
@@ -28228,10 +28208,10 @@ class inet_address;
 }
 extern logging::logger startlog;
 class bad_configuration_error : public std::exception {};
-std::set<gms::inet_address> get_seeds_from_db_config(const db::config& cfg);
+
 class service_set {
 public:
-    service_set();
+    
     ;
      ;
      ;
@@ -28282,9 +28262,9 @@ public:
     /// Runs the compiled pattern on \c text.
     ///
     /// \return true iff text matches constructor's pattern.
-    bool operator()(bytes_view text) const;
+    
     /// Resets pattern if different from the current one.
-    void reset(bytes_view pattern);
+    
 };
 namespace seastar {
 class data_source;
@@ -28371,13 +28351,8 @@ public:
     struct incomplete_tag {};
     // Constructs an empty instance which is fully discontinuous except for the partition tombstone.
     mutation_partition_v2(incomplete_tag, const schema& s, tombstone);
-    static mutation_partition_v2 make_incomplete(const schema& s, tombstone t = {}) ;
-    mutation_partition_v2(schema_ptr s)
-        : _rows()
-#ifdef SEASTAR_DEBUG
-        , _schema_version(s->version())
-#endif
-    { }
+    
+    
     // Assumes that p is fully continuous.
     // Assumes that p is fully continuous.
     // Consistent with equal()
@@ -28510,10 +28485,10 @@ public:
     // Inserts this before elem.
     T* prev() const ;
     T* last() const ;
-    iterator<T> iterator_to() ;
-    range all_elements() ;
-    reversed_range all_elements_reversed() ;
-    range elements_from_this() ;
+    
+    
+    
+    
 };
 //  A movable pointer-like object paired with exactly one other object of the same type. 
 //  The two objects which are paired with each other point at each other.
