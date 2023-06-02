@@ -38440,10 +38440,8 @@ T get_int(RandomEngine& engine) {
 }
 template<typename T>
 T get_int() ;
-template<typename T>
-T get_int(T max) ;
-template<typename T>
-T get_int(T min, T max) ;
+ ;
+ ;
 template <typename Real, typename RandomEngine>
 Real get_real(Real min, Real max, RandomEngine& engine) {
     auto dist = std::uniform_real_distribution<Real>(min, max);
@@ -38457,16 +38455,14 @@ template <typename Real, typename RandomEngine>
 Real get_real(RandomEngine& engine) {
     return get_real<Real>(Real{0}, std::numeric_limits<Real>::max(), engine);
 }
-template <typename Real>
-Real get_real(Real min, Real max) ;
-template <typename Real>
-Real get_real(Real max) ;
+ ;
+ ;
 template <typename Real>
 Real get_real() ;
  ;
  
  bytes get_bytes(size_t n) ;
- bytes get_bytes() ;
+ 
  ;
  
  sstring get_sstring() ;
@@ -38620,7 +38616,7 @@ public:
         parse();
         return *this;
     }
-    void operator++(int) ;
+    
     bool operator==(const listlike_partial_deserializing_iterator& x) const {
         return _remain == x._remain;
     }
@@ -38760,12 +38756,8 @@ struct coarse_steady_clock {
 };
 class data_input {
 public:
-    data_input(const bytes_view& v)
-            : _view(v) {
-    }
-    data_input(bytes_view&& v)
-            : _view(std::move(v)) {
-    }
+    
+    
     
     
     
@@ -38950,9 +38942,9 @@ class year_month_weekday;
 class year_month_weekday_last;
 // date composition operators
 CONSTCD11 year_month operator/(const year& y, const month& m) NOEXCEPT;
-CONSTCD11 year_month operator/(const year& y, int          m) NOEXCEPT;
+
 CONSTCD11 month_day operator/(const day& d, const month& m) NOEXCEPT;
-CONSTCD11 month_weekday operator/(const weekday_indexed& wdi, const month& m) NOEXCEPT;
+
 CONSTCD11 year_month_day operator/(const year_month& ym, const day& d) NOEXCEPT;
 CONSTCD11 year_month_day operator/(const year_month& ym, int        d) NOEXCEPT;
 
@@ -38968,18 +38960,10 @@ CONSTCD11
 CONSTCD11
 year_month_weekday
 operator/(const year_month& ym, const weekday_indexed& wdi) NOEXCEPT;
-CONSTCD11
-year_month_weekday
-operator/(const year&        y, const month_weekday&   mwd) NOEXCEPT;
-CONSTCD11
-year_month_weekday
-operator/(int                y, const month_weekday&   mwd) NOEXCEPT;
-CONSTCD11
-year_month_weekday
-operator/(const month_weekday& mwd, const year&          y) NOEXCEPT;
-CONSTCD11
-year_month_weekday
-operator/(const month_weekday& mwd, int                  y) NOEXCEPT;
+
+
+
+
 CONSTCD11
 year_month_weekday_last
 operator/(const year_month& ym, const weekday_last& wdl) NOEXCEPT;
@@ -39015,7 +38999,7 @@ public:
 CONSTCD11 day  operator+(const day&  x, const days& y) NOEXCEPT;
 CONSTCD11 day  operator+(const days& x, const day&  y) NOEXCEPT;
 CONSTCD11 day  operator-(const day&  x, const days& y) NOEXCEPT;
-CONSTCD11 days operator-(const day&  x, const day&  y) NOEXCEPT;
+
 ;
 // month
 class month
@@ -39033,14 +39017,14 @@ public:
     CONSTCD11 explicit operator unsigned() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
 };
-CONSTCD11 bool operator==(const month& x, const month& y) NOEXCEPT;
-CONSTCD11 bool operator!=(const month& x, const month& y) NOEXCEPT;
+
+
 
 
 
 
 CONSTCD14 month  operator+(const month&  x, const months& y) NOEXCEPT;
-CONSTCD14 month  operator+(const months& x,  const month& y) NOEXCEPT;
+
 CONSTCD14 month  operator-(const month&  x, const months& y) NOEXCEPT;
 
 ;
@@ -39049,7 +39033,7 @@ class year
 {
     int64_t y_;
 public:
-    year() = default;
+    
     explicit CONSTCD11 year(int64_t y) NOEXCEPT;
     CONSTCD14 year& operator++()    NOEXCEPT;
     CONSTCD14 year  operator++(int) NOEXCEPT;
@@ -39072,9 +39056,9 @@ public:
 
 
 CONSTCD11 year  operator+(const year&  x, const years& y) NOEXCEPT;
-CONSTCD11 year  operator+(const years& x, const year&  y) NOEXCEPT;
+
 CONSTCD11 year  operator-(const year&  x, const years& y) NOEXCEPT;
-CONSTCD11 years operator-(const year&  x, const year&  y) NOEXCEPT;
+
 ;
 // weekday
 class weekday
@@ -39083,7 +39067,7 @@ class weekday
 public:
     
     explicit CONSTCD11 weekday(unsigned wd) NOEXCEPT;
-    explicit weekday(int) = delete;
+    
     CONSTCD11 weekday(const sys_days& dp) NOEXCEPT;
     CONSTCD11 explicit weekday(const local_days& dp) NOEXCEPT;
     CONSTCD14 weekday& operator++()    NOEXCEPT;
@@ -39099,10 +39083,10 @@ public:
 private:
     static CONSTCD11 unsigned char weekday_from_days(int z) NOEXCEPT;
 };
-CONSTCD11 bool operator==(const weekday& x, const weekday& y) NOEXCEPT;
-CONSTCD11 bool operator!=(const weekday& x, const weekday& y) NOEXCEPT;
+
+
 CONSTCD14 weekday operator+(const weekday& x, const days&    y) NOEXCEPT;
-CONSTCD14 weekday operator+(const days&    x, const weekday& y) NOEXCEPT;
+
 CONSTCD14 weekday operator-(const weekday& x, const days&    y) NOEXCEPT;
 
 ;
@@ -39119,9 +39103,7 @@ public:
 };
 
 
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const weekday_indexed& wdi);
+;
 // weekday_last
 class weekday_last
 {
@@ -39157,28 +39139,26 @@ public:
 
 
 CONSTCD14 year_month operator+(const year_month& ym, const months& dm) NOEXCEPT;
-CONSTCD14 year_month operator+(const months& dm, const year_month& ym) NOEXCEPT;
+
 CONSTCD14 year_month operator-(const year_month& ym, const months& dm) NOEXCEPT;
 
 
 
 
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const year_month& ym);
+;
 // month_day
 class month_day
 {
     date::month m_;
     date::day   d_;
 public:
-    month_day() = default;
+    
     CONSTCD11 month_day(const date::month& m, const date::day& d) NOEXCEPT;
     CONSTCD11 date::month month() const NOEXCEPT;
     CONSTCD11 date::day   day() const NOEXCEPT;
     CONSTCD14 bool ok() const NOEXCEPT;
 };
-CONSTCD11 bool operator==(const month_day& x, const month_day& y) NOEXCEPT;
+
 
 
 
@@ -39198,7 +39178,7 @@ public:
 
 
 
-CONSTCD11 bool operator<=(const month_day_last& x, const month_day_last& y) NOEXCEPT;
+
 
 ;
 // month_weekday
@@ -39215,9 +39195,7 @@ public:
 };
 
 
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const month_weekday& mwd);
+;
 // month_weekday_last
 class month_weekday_last
 {
@@ -39230,8 +39208,7 @@ public:
     CONSTCD11 date::weekday_last weekday_last() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
 };
-CONSTCD11
-    bool operator==(const month_weekday_last& x, const month_weekday_last& y) NOEXCEPT;
+
 
 ;
 // class year_month_day
@@ -39241,7 +39218,7 @@ class year_month_day
     date::month m_;
     date::day   d_;
 public:
-    year_month_day() = default;
+    
     CONSTCD11 year_month_day(const date::year& y, const date::month& m,
                              const date::day& d) NOEXCEPT;
     CONSTCD14 year_month_day(const year_month_day_last& ymdl) NOEXCEPT;
@@ -39265,10 +39242,10 @@ private:
 
 
 
-CONSTCD11 bool operator<=(const year_month_day& x, const year_month_day& y) NOEXCEPT;
-CONSTCD11 bool operator>=(const year_month_day& x, const year_month_day& y) NOEXCEPT;
+
+
 CONSTCD14 year_month_day operator+(const year_month_day& ymd, const months& dm) NOEXCEPT;
-CONSTCD14 year_month_day operator+(const months& dm, const year_month_day& ymd) NOEXCEPT;
+
 CONSTCD14 year_month_day operator-(const year_month_day& ymd, const months& dm) NOEXCEPT;
 
 
@@ -39303,24 +39280,16 @@ public:
 CONSTCD14
 year_month_day_last
 operator+(const year_month_day_last& ymdl, const months& dm) NOEXCEPT;
-CONSTCD14
-year_month_day_last
-operator+(const months& dm, const year_month_day_last& ymdl) NOEXCEPT;
-CONSTCD11
-year_month_day_last
-operator+(const year_month_day_last& ymdl, const years& dy) NOEXCEPT;
-CONSTCD11
-year_month_day_last
-operator+(const years& dy, const year_month_day_last& ymdl) NOEXCEPT;
+
+
+
 CONSTCD14
 year_month_day_last
 operator-(const year_month_day_last& ymdl, const months& dm) NOEXCEPT;
 CONSTCD11
 year_month_day_last
 operator-(const year_month_day_last& ymdl, const years& dy) NOEXCEPT;
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const year_month_day_last& ymdl);
+;
 // year_month_weekday
 class year_month_weekday
 {
@@ -39353,9 +39322,7 @@ private:
 CONSTCD14
 year_month_weekday
 operator+(const year_month_weekday& ymwd, const months& dm) NOEXCEPT;
-CONSTCD14
-year_month_weekday
-operator+(const months& dm, const year_month_weekday& ymwd) NOEXCEPT;
+
 
 
 CONSTCD14
