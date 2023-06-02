@@ -4174,7 +4174,7 @@ public:
     friend class empty_type_impl;
     ;
     ;
-    friend std::ostream& operator<<(std::ostream&, const data_value&);
+    
     friend data_value make_tuple_value(data_type, maybe_empty<std::vector<data_value>>);
     friend data_value make_set_value(data_type, maybe_empty<std::vector<data_value>>);
     friend data_value make_list_value(data_type, maybe_empty<std::vector<data_value>>);
@@ -4237,7 +4237,7 @@ public:
     
     
     
-    bool equal(bytes_view v1, bytes_view v2) const;
+    
     bool equal(bytes_view v1, managed_bytes_view v2) const;
     std::strong_ordering compare(bytes_view v1, bytes_view v2) const;
     std::strong_ordering compare(managed_bytes_view v1, managed_bytes_view v2) const;
@@ -4263,9 +4263,9 @@ public:
     // Explicitly instantiated in .cc
     template <FragmentedView View> void validate(const View& v) const;
     void validate(bytes_view view) const;
-    bool is_compatible_with(const abstract_type& previous) const;
+    
     shared_ptr<const abstract_type> underlying_type() const;
-    bool is_value_compatible_with(const abstract_type& other) const;
+    
     bool references_user_type(const sstring& keyspace, const bytes& name) const;
     // For types that contain (or are equal to) the given user type (e.g., a set of elements of this type),
     // updates them with the new version of the type ('updated'). For other types does nothing.
@@ -4283,11 +4283,9 @@ public:
     sstring to_string(bytes_view bv) const {
         return to_string_impl(deserialize(bv));
     }
-    sstring to_string(const bytes& b) const {
-        return to_string(bytes_view(b));
-    }
+    
     sstring to_string_impl(const data_value& v) const;
-    bytes from_string(sstring_view text) const;
+    
     bool is_counter() const;
     bool is_string() const;
     bool is_collection() const;
@@ -4299,7 +4297,7 @@ public:
     bool is_atomic() const { return !is_multi_cell(); }
     bool is_reversed() const { return _kind == kind::reversed; }
     bool is_tuple() const;
-    bool is_user_type() const ;
+    
     bool is_native() const;
     cql3::cql3_type as_cql3_type() const;
     const sstring& cql3_type_name() const;
@@ -4313,7 +4311,7 @@ public:
     bool contains_collection() const;
     // Checks whether a bound value of this type has to be reserialized.
     // This can be for example because there is a set inside that needs to be sorted.
-    bool bound_value_needs_to_be_reserialized() const;
+    
     friend class list_type_impl;
 private:
     mutable sstring _cql3_type_name;
@@ -4364,7 +4362,7 @@ public:
     data_value make_value(native_type value) const {
         return make_value(std::make_unique<native_type>(std::move(value)));
     }
-    data_value make_null() const ;
+    
     data_value make_empty() const {
         return make_value(native_type(empty_t()));
     }
@@ -4436,14 +4434,7 @@ class reversed_type_impl : public abstract_type {
     using intern = type_interning_helper<reversed_type_impl, data_type>;
     friend struct shared_ptr_make_helper<reversed_type_impl, true>;
     data_type _underlying_type;
-    reversed_type_impl(data_type t)
-        : abstract_type(kind::reversed, "org.apache.cassandra.db.marshal.ReversedType(" + t->name() + ")",
-                        t->value_length_if_fixed())
-        , _underlying_type(t)
-    {
-        _contains_set_or_map = _underlying_type->contains_set_or_map();
-        _contains_collection = _underlying_type->contains_collection();
-    }
+    
 public:
     const data_type& underlying_type() const {
         return _underlying_type;
@@ -4526,8 +4517,7 @@ struct hash<shared_ptr<const abstract_type>> : boost::hash<shared_ptr<abstract_t
 }
 // FIXME: make more explicit
 // FIXME: make more explicit
-bytes
-to_bytes(bytes_view x) ;
+
 
 
 // FIXME: make more explicit
@@ -4537,9 +4527,7 @@ to_bytes(const sstring& x) {
     return bytes(reinterpret_cast<const int8_t*>(x.c_str()), x.size());
 }
 // FIXME: make more explicit
-template<typename Type>
-static
-typename Type::value_type deserialize_value(Type& t, bytes_view v) ;
+ ;
 template<typename T>
 T read_simple(bytes_view& v) ;
  ;
@@ -4552,15 +4540,15 @@ View read_simple_bytes(View& v, size_t n) {
     v.remove_prefix(n);
     return prefix;
 }
- sstring read_simple_short_string(bytes_view& v) ;
+ 
 size_t collection_size_len();
 size_t collection_value_len();
 void write_collection_size(bytes::iterator& out, int size);
 void write_collection_size(managed_bytes_mutable_view&, int size);
 void write_collection_value(bytes::iterator& out, bytes_view_opt val_bytes);
-void write_collection_value(managed_bytes_mutable_view&, bytes_view_opt val_bytes);
+
 void write_collection_value(managed_bytes_mutable_view&, const managed_bytes_view_opt& val_bytes);
-void write_int32(bytes::iterator& out, int32_t value);
+
 // Splits a serialized collection into a vector of elements, but does not recursively deserialize the elements.
 // Does not perform validation.
 template <FragmentedView View>
@@ -4571,8 +4559,7 @@ using user_type = shared_ptr<const user_type_impl>;
 using tuple_type = shared_ptr<const tuple_type_impl>;
 template<>
 struct appending_hash<data_type> {
-    template<typename Hasher>
-    void operator()(Hasher& h, const data_type& v) const ;
+     ;
 };
 enum class allow_prefixes { no, yes };
 template<allow_prefixes AllowPrefixes = allow_prefixes::no>
@@ -4595,7 +4582,7 @@ public:
         , _byte_order_comparable(false)
         , _is_reversed(_types.size() == 1 && _types[0]->is_reversed())
     { }
-    compound_type(compound_type&&) = default;
+    
     auto const& types() const {
         return _types;
     }
@@ -4649,7 +4636,7 @@ public:
     }
      ;
     
-    managed_bytes serialize_optionals(std::span<const managed_bytes_opt> values) const ;
+    
     class iterator {
     public:
         using iterator_category = std::input_iterator_tag;
@@ -4683,12 +4670,12 @@ public:
             read_current();
         }
         iterator(end_iterator_tag, const managed_bytes_view& v) : _v() {}
-        iterator() ;
+        
         iterator& operator++() {
             read_current();
             return *this;
         }
-        iterator operator++(int) ;
+        
         const value_type& operator*() const { return _current; }
         const value_type* operator->() const { return &_current; }
         bool operator==(const iterator& i) const { return _remaining == i._remaining; }
@@ -4709,7 +4696,7 @@ public:
             });
         });
     }
-    std::strong_ordering compare(bytes_view b1, bytes_view b2) const ;
+    
     // Retruns true iff given prefix has no missing components
     bool is_full(managed_bytes_view v) const {
         assert(AllowPrefixes == allow_prefixes::yes);
@@ -4787,7 +4774,7 @@ class caching_options {
     friend class schema;
     caching_options();
 public:
-    bool enabled() const ;
+    
     std::map<sstring, sstring> to_map() const;
     sstring to_sstring() const;
     static caching_options get_disabled_caching_options();
@@ -4808,7 +4795,7 @@ using column_computation_ptr = std::unique_ptr<column_computation>;
 class column_computation {
 public:
     virtual ~column_computation() = default;
-    static column_computation_ptr deserialize(bytes_view raw);
+    
     virtual column_computation_ptr clone() const = 0;
     virtual bytes serialize() const = 0;
     virtual bytes compute_value(const schema& schema, const partition_key& key) const = 0;
@@ -4816,11 +4803,11 @@ public:
 };
 class legacy_token_column_computation : public column_computation {
 public:
-    virtual column_computation_ptr clone() const override ;
+    
 };
 class token_column_computation : public column_computation {
 public:
-    virtual bytes compute_value(const schema& schema, const partition_key& key) const override;
+    
 };
 class collection_column_computation final : public column_computation {
     enum class kind {
@@ -4830,18 +4817,18 @@ class collection_column_computation final : public column_computation {
     };
     const bytes _collection_name;
     const kind _kind;
-    collection_column_computation(const bytes& collection_name, kind kind)  ;
+    
     using collection_kv = std::pair<bytes_view, atomic_cell_view>;
     void operate_on_collection_entries(
             std::invocable<collection_kv*, collection_kv*, tombstone> auto&& old_and_new_row_func, const schema& schema,
             const partition_key& key, const db::view::clustering_or_static_row& update, const std::optional<db::view::clustering_or_static_row>& existing) const;
 public:
-    static collection_column_computation for_keys(const bytes& collection_name) ;
     
     
-    static column_computation_ptr for_target_type(std::string_view type, const bytes& collection_name);
-    virtual bytes serialize() const override;
-    virtual bytes compute_value(const schema& schema, const partition_key& key) const override;
+    
+    
+    
+    
     virtual column_computation_ptr clone() const override ;
     
     
@@ -4862,7 +4849,7 @@ public:
     using period = typename duration::period;
     using time_point = std::chrono::time_point<timestamp_clock, duration>;
     static constexpr bool is_steady = base::is_steady;
-    static time_point now() ;
+    
 };
 static
 timestamp_type new_timestamp() ;
@@ -4877,12 +4864,12 @@ public:
     tombstone_gc_options() = default;
     const tombstone_gc_mode& mode() const ;
     explicit tombstone_gc_options(const std::map<seastar::sstring, seastar::sstring>& map);
-    const std::chrono::seconds& propagation_delay_in_seconds() const ;
+    
     std::map<seastar::sstring, seastar::sstring> to_map() const;
     seastar::sstring to_sstring() const;
     bool operator==(const tombstone_gc_options&) const = default;
 };
-std::ostream& operator<<(std::ostream& os, const tombstone_gc_mode& m);
+
 using namespace seastar;
 namespace db {
 class per_partition_rate_limit_options final {
@@ -4894,13 +4881,13 @@ private:
     std::optional<uint32_t> _max_reads_per_second;
 public:
     per_partition_rate_limit_options() = default;
-    per_partition_rate_limit_options(std::map<sstring, sstring> map);
-    std::map<sstring, sstring> to_map() const;
+    
+    
      
      
      
      
-     std::optional<uint32_t> get_max_reads_per_second() const ;
+     
 };
 }
 namespace replica {
@@ -4973,8 +4960,8 @@ class schema_builder;
 // Useful functions to manipulate the schema's comparator field
 namespace cell_comparator {
 sstring to_sstring(const schema& s);
-bool check_compound(sstring comparator);
-void read_collections(schema_builder& builder, sstring comparator);
+
+
 }
 namespace db {
 class extensions;
@@ -4983,13 +4970,13 @@ class extensions;
 enum class column_kind { partition_key, clustering_key, static_column, regular_column };
 enum class column_view_virtual { no, yes };
 sstring to_sstring(column_kind k);
-bool is_compatible(column_kind k1, column_kind k2);
+
 enum class cf_type : uint8_t {
     standard,
     super,
 };
  sstring cf_type_to_sstring(cf_type t) ;
- cf_type sstring_to_cf_type(sstring name) ;
+ 
 struct speculative_retry {
     enum class type {
         NONE, CUSTOM, PERCENTILE, ALWAYS
@@ -5002,7 +4989,7 @@ public:
     sstring to_sstring() const ;
     
     
-    double get_value() const ;
+    
     bool operator==(const speculative_retry& other) const = default;
 };
 typedef std::unordered_map<sstring, sstring> index_options_map;
