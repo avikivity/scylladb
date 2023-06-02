@@ -39124,9 +39124,8 @@ public:
     template<typename T> T peek() const;
     template<typename T> T read();
     bytes_view read_view(size_t len) ;
-    template <typename SizeType>
-    bytes_view read_view_to_blob() ;
-    void skip(size_t s) ;
+     ;
+    
 private:
     template<typename T> size_t ssize(const T &) const;
     template<std::integral T>
@@ -39308,14 +39307,10 @@ CONSTCD11 year_month_day operator/(const year_month& ym, int        d) NOEXCEPT;
 
 CONSTCD11
     year_month_day_last operator/(const year_month& ym,   last_spec) NOEXCEPT;
-CONSTCD11
-    year_month_day_last operator/(const year& y, const month_day_last& mdl) NOEXCEPT;
-CONSTCD11
-    year_month_day_last operator/(int         y, const month_day_last& mdl) NOEXCEPT;
-CONSTCD11
-    year_month_day_last operator/(const month_day_last& mdl, const year& y) NOEXCEPT;
-CONSTCD11
-    year_month_day_last operator/(const month_day_last& mdl, int         y) NOEXCEPT;
+
+
+
+
 CONSTCD11
 year_month_weekday
 operator/(const year_month& ym, const weekday_indexed& wdi) NOEXCEPT;
@@ -39357,25 +39352,23 @@ public:
     CONSTCD11 explicit operator unsigned() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
 };
-CONSTCD11 bool operator==(const day& x, const day& y) NOEXCEPT;
-CONSTCD11 bool operator!=(const day& x, const day& y) NOEXCEPT;
-CONSTCD11 bool operator< (const day& x, const day& y) NOEXCEPT;
-CONSTCD11 bool operator> (const day& x, const day& y) NOEXCEPT;
-CONSTCD11 bool operator<=(const day& x, const day& y) NOEXCEPT;
-CONSTCD11 bool operator>=(const day& x, const day& y) NOEXCEPT;
+
+
+
+
+
+
 CONSTCD11 day  operator+(const day&  x, const days& y) NOEXCEPT;
 CONSTCD11 day  operator+(const days& x, const day&  y) NOEXCEPT;
 CONSTCD11 day  operator-(const day&  x, const days& y) NOEXCEPT;
 CONSTCD11 days operator-(const day&  x, const day&  y) NOEXCEPT;
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const day& d);
+;
 // month
 class month
 {
     unsigned char m_;
 public:
-    month() = default;
+    
     explicit CONSTCD11 month(unsigned m) NOEXCEPT;
     CONSTCD14 month& operator++()    NOEXCEPT;
     CONSTCD14 month  operator++(int) NOEXCEPT;
@@ -39395,10 +39388,8 @@ CONSTCD11 bool operator!=(const month& x, const month& y) NOEXCEPT;
 CONSTCD14 month  operator+(const month&  x, const months& y) NOEXCEPT;
 CONSTCD14 month  operator+(const months& x,  const month& y) NOEXCEPT;
 CONSTCD14 month  operator-(const month&  x, const months& y) NOEXCEPT;
-CONSTCD14 months operator-(const month&  x,  const month& y) NOEXCEPT;
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const month& m);
+
+;
 // year
 class year
 {
@@ -39420,25 +39411,23 @@ public:
     static CONSTCD11 year min() NOEXCEPT;
     static CONSTCD11 year max() NOEXCEPT;
 };
-CONSTCD11 bool operator==(const year& x, const year& y) NOEXCEPT;
-CONSTCD11 bool operator!=(const year& x, const year& y) NOEXCEPT;
-CONSTCD11 bool operator< (const year& x, const year& y) NOEXCEPT;
-CONSTCD11 bool operator> (const year& x, const year& y) NOEXCEPT;
-CONSTCD11 bool operator<=(const year& x, const year& y) NOEXCEPT;
-CONSTCD11 bool operator>=(const year& x, const year& y) NOEXCEPT;
+
+
+
+
+
+
 CONSTCD11 year  operator+(const year&  x, const years& y) NOEXCEPT;
 CONSTCD11 year  operator+(const years& x, const year&  y) NOEXCEPT;
 CONSTCD11 year  operator-(const year&  x, const years& y) NOEXCEPT;
 CONSTCD11 years operator-(const year&  x, const year&  y) NOEXCEPT;
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const year& y);
+;
 // weekday
 class weekday
 {
     unsigned char wd_;
 public:
-    weekday() = default;
+    
     explicit CONSTCD11 weekday(unsigned wd) NOEXCEPT;
     explicit weekday(int) = delete;
     CONSTCD11 weekday(const sys_days& dp) NOEXCEPT;
@@ -39461,10 +39450,8 @@ CONSTCD11 bool operator!=(const weekday& x, const weekday& y) NOEXCEPT;
 CONSTCD14 weekday operator+(const weekday& x, const days&    y) NOEXCEPT;
 CONSTCD14 weekday operator+(const days&    x, const weekday& y) NOEXCEPT;
 CONSTCD14 weekday operator-(const weekday& x, const days&    y) NOEXCEPT;
-CONSTCD14 days    operator-(const weekday& x, const weekday& y) NOEXCEPT;
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const weekday& wd);
+
+;
 // weekday_indexed
 class weekday_indexed
 {
@@ -39476,8 +39463,8 @@ public:
     CONSTCD11 unsigned index() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
 };
-CONSTCD11 bool operator==(const weekday_indexed& x, const weekday_indexed& y) NOEXCEPT;
-CONSTCD11 bool operator!=(const weekday_indexed& x, const weekday_indexed& y) NOEXCEPT;
+
+
 template<class CharT, class Traits>
 std::basic_ostream<CharT, Traits>&
 operator<<(std::basic_ostream<CharT, Traits>& os, const weekday_indexed& wdi);
@@ -39490,18 +39477,16 @@ public:
     CONSTCD11 date::weekday weekday() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
 };
-CONSTCD11 bool operator==(const weekday_last& x, const weekday_last& y) NOEXCEPT;
-CONSTCD11 bool operator!=(const weekday_last& x, const weekday_last& y) NOEXCEPT;
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const weekday_last& wdl);
+
+
+;
 // year_month
 class year_month
 {
     date::year  y_;
     date::month m_;
 public:
-    year_month() = default;
+    
     CONSTCD11 year_month(const date::year& y, const date::month& m) NOEXCEPT;
     CONSTCD11 date::year  year()  const NOEXCEPT;
     CONSTCD11 date::month month() const NOEXCEPT;
@@ -39511,12 +39496,12 @@ public:
     CONSTCD14 year_month& operator-=(const years& dy) NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
 };
-CONSTCD11 bool operator==(const year_month& x, const year_month& y) NOEXCEPT;
 
 
 
 
-CONSTCD11 bool operator>=(const year_month& x, const year_month& y) NOEXCEPT;
+
+
 CONSTCD14 year_month operator+(const year_month& ym, const months& dm) NOEXCEPT;
 CONSTCD14 year_month operator+(const months& dm, const year_month& ym) NOEXCEPT;
 CONSTCD14 year_month operator-(const year_month& ym, const months& dm) NOEXCEPT;
@@ -39540,14 +39525,12 @@ public:
     CONSTCD14 bool ok() const NOEXCEPT;
 };
 CONSTCD11 bool operator==(const month_day& x, const month_day& y) NOEXCEPT;
-CONSTCD11 bool operator!=(const month_day& x, const month_day& y) NOEXCEPT;
 
 
 
 
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const month_day& md);
+
+;
 // month_day_last
 class month_day_last
 {
@@ -39562,10 +39545,8 @@ public:
 
 
 CONSTCD11 bool operator<=(const month_day_last& x, const month_day_last& y) NOEXCEPT;
-CONSTCD11 bool operator>=(const month_day_last& x, const month_day_last& y) NOEXCEPT;
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const month_day_last& mdl);
+
+;
 // month_weekday
 class month_weekday
 {
@@ -39578,8 +39559,8 @@ public:
     CONSTCD11 date::weekday_indexed weekday_indexed() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
 };
-CONSTCD11 bool operator==(const month_weekday& x, const month_weekday& y) NOEXCEPT;
-CONSTCD11 bool operator!=(const month_weekday& x, const month_weekday& y) NOEXCEPT;
+
+
 template<class CharT, class Traits>
 std::basic_ostream<CharT, Traits>&
 operator<<(std::basic_ostream<CharT, Traits>& os, const month_weekday& mwd);
@@ -39597,11 +39578,8 @@ public:
 };
 CONSTCD11
     bool operator==(const month_weekday_last& x, const month_weekday_last& y) NOEXCEPT;
-CONSTCD11
-    bool operator!=(const month_weekday_last& x, const month_weekday_last& y) NOEXCEPT;
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const month_weekday_last& mwdl);
+
+;
 // class year_month_day
 class year_month_day
 {
@@ -39638,12 +39616,10 @@ CONSTCD11 bool operator>=(const year_month_day& x, const year_month_day& y) NOEX
 CONSTCD14 year_month_day operator+(const year_month_day& ymd, const months& dm) NOEXCEPT;
 CONSTCD14 year_month_day operator+(const months& dm, const year_month_day& ymd) NOEXCEPT;
 CONSTCD14 year_month_day operator-(const year_month_day& ymd, const months& dm) NOEXCEPT;
-CONSTCD11 year_month_day operator+(const year_month_day& ymd, const years& dy)  NOEXCEPT;
-CONSTCD11 year_month_day operator+(const years& dy, const year_month_day& ymd)  NOEXCEPT;
-CONSTCD11 year_month_day operator-(const year_month_day& ymd, const years& dy)  NOEXCEPT;
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const year_month_day& ymd);
+
+
+
+;
 // year_month_day_last
 class year_month_day_last
 {
@@ -39664,14 +39640,12 @@ public:
     CONSTCD14 explicit operator local_days() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
 };
-CONSTCD11
-    bool operator==(const year_month_day_last& x, const year_month_day_last& y) NOEXCEPT;
 
 
 
 
-CONSTCD11
-    bool operator>=(const year_month_day_last& x, const year_month_day_last& y) NOEXCEPT;
+
+
 CONSTCD14
 year_month_day_last
 operator+(const year_month_day_last& ymdl, const months& dm) NOEXCEPT;
@@ -39720,22 +39694,16 @@ private:
     static CONSTCD14 year_month_weekday from_days(days dp) NOEXCEPT;
     CONSTCD14 days to_days() const NOEXCEPT;
 };
-CONSTCD11
-    bool operator==(const year_month_weekday& x, const year_month_weekday& y) NOEXCEPT;
-CONSTCD11
-    bool operator!=(const year_month_weekday& x, const year_month_weekday& y) NOEXCEPT;
+
+
 CONSTCD14
 year_month_weekday
 operator+(const year_month_weekday& ymwd, const months& dm) NOEXCEPT;
 CONSTCD14
 year_month_weekday
 operator+(const months& dm, const year_month_weekday& ymwd) NOEXCEPT;
-CONSTCD11
-year_month_weekday
-operator+(const year_month_weekday& ymwd, const years& dy) NOEXCEPT;
-CONSTCD11
-year_month_weekday
-operator+(const years& dy, const year_month_weekday& ymwd) NOEXCEPT;
+
+
 CONSTCD14
 year_month_weekday
 operator-(const year_month_weekday& ymwd, const months& dm) NOEXCEPT;
@@ -39768,33 +39736,23 @@ public:
 private:
     CONSTCD14 days to_days() const NOEXCEPT;
 };
-CONSTCD11
-bool
-operator==(const year_month_weekday_last& x, const year_month_weekday_last& y) NOEXCEPT;
-CONSTCD11
-bool
-operator!=(const year_month_weekday_last& x, const year_month_weekday_last& y) NOEXCEPT;
+
+
 CONSTCD14
 year_month_weekday_last
 operator+(const year_month_weekday_last& ymwdl, const months& dm) NOEXCEPT;
 CONSTCD14
 year_month_weekday_last
 operator+(const months& dm, const year_month_weekday_last& ymwdl) NOEXCEPT;
-CONSTCD11
-year_month_weekday_last
-operator+(const year_month_weekday_last& ymwdl, const years& dy) NOEXCEPT;
-CONSTCD11
-year_month_weekday_last
-operator+(const years& dy, const year_month_weekday_last& ymwdl) NOEXCEPT;
+
+
 CONSTCD14
 year_month_weekday_last
 operator-(const year_month_weekday_last& ymwdl, const months& dm) NOEXCEPT;
 CONSTCD11
 year_month_weekday_last
 operator-(const year_month_weekday_last& ymwdl, const years& dy) NOEXCEPT;
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const year_month_weekday_last& ymwdl);
+;
 #if !defined(_MSC_VER) || (_MSC_VER >= 1900)
 inline namespace literals
 {
@@ -39837,7 +39795,7 @@ class save_stream
 public:
     
     
-    save_stream& operator=(const save_stream&) = delete;
+    
     explicit save_stream(std::basic_ostream<CharT, Traits>& os)
         : os_(os)
         , fill_(os.fill())
@@ -45249,8 +45207,8 @@ future<> close() noexcept;
 };
 static fs::path operator/(const fs::path &lhs, const char *rhs)
 ;
-static fs::path operator/(const fs::path &lhs, const sstring &rhs);
-static fs::path operator/(const fs::path &lhs, std::string_view rhs);
+
+
 static fs::path operator/(const fs::path &lhs, const std::string &rhs);
 namespace bi = boost::intrusive;
 // Returns largest N such that 2^N <= v.
@@ -45397,12 +45355,12 @@ bool contains_above_min() const noexcept
     return _watermark > 0;
 }
 const_iterator begin() const noexcept;
-const_iterator end() const noexcept;
-iterator begin() noexcept;
-iterator end() noexcept;
+
+
+
 // Returns a range of buckets starting from that with the smaller values.
 // Each bucket is a range of const T&.
-const auto &buckets() const noexcept;
+
 // Pops one of the largest elements in the histogram.
 void pop_one_of_largest() noexcept
 {
@@ -45438,8 +45396,7 @@ void erase(T &v) noexcept
     maybe_adjust_watermark();
 }
 // Merges the specified histogram, moving all elements from it into this.
-void merge(log_heap &other)
-;
+
 private:
 void maybe_adjust_watermark() noexcept
 {
@@ -45461,11 +45418,11 @@ mutable std::optional<query::partition_slice> _partition_slice;
 db::view::base_info_ptr _base_info;
 mutable bool _has_computed_column_depending_on_base_non_primary_key;
 public:
-view_info(const schema &schema, const raw_view_info &raw_view_info);
-const raw_view_info &raw() const;
-const table_id &base_id() const;
-const sstring &base_name() const;
-bool include_all_columns() const;
+
+
+
+
+
 bool has_base_non_pk_columns_in_view_pk() const;
 bool has_computed_column_depending_on_base_non_primary_key() const;
 /// Returns a pointer to the base_dependent_view_info which matches the current
@@ -45545,7 +45502,7 @@ public:
         }
         shared_ptr<client> to_client() &&;
     };
-    future<> close();
+    
 };
 } // s3 namespace
 using namespace seastar;
@@ -45652,8 +45609,7 @@ concept MapLike = Container<T> && requires(T x) {
 };
 template <HasClearGentlyMethod T>
 future<> clear_gently(T &o) noexcept;
-template <typename T>
-future<> clear_gently(foreign_ptr<T> &o) noexcept;
+;
 template <SharedPointer T>
 future<> clear_gently(T &o) noexcept;
 template <SmartPointer T>
@@ -45703,8 +45659,7 @@ future<> clear_gently(T &o) noexcept
 {
     return futurize_invoke(std::bind(&T::clear_gently, &o));
 }
-template <typename T>
-future<> clear_gently(foreign_ptr<T> &o) noexcept;
+;
 template <SharedPointer T>
 future<> clear_gently(T &o) noexcept
 {
@@ -45808,9 +45763,7 @@ future<> clear_gently(seastar::optimized_optional<T> &opt) noexcept
     }
 }
 }
-template <typename Container>
-boost::iterator_range<typename Container::iterator>
-unconst(Container &c, boost::iterator_range<typename Container::const_iterator> r);
+;
 template <typename Container>
 typename Container::iterator
 unconst(Container &c, typename Container::const_iterator i);
@@ -46047,10 +46000,10 @@ else
 return std::strong_ordering::equal;
 }
 std::ostream &operator<<(std::ostream &os, const atomic_cell_view &acv);
-std::ostream &operator<<(std::ostream &os, const atomic_cell &ac);
-std::ostream &operator<<(std::ostream &os, const atomic_cell_view::printer &acvp);
-std::ostream &operator<<(std::ostream &os, const atomic_cell::printer &acp);
-std::ostream &operator<<(std::ostream &os, const atomic_cell_or_collection::printer &p);
+
+
+
+
 //
 // Representation layout:
 //
@@ -46583,8 +46536,8 @@ mf.visit(seastar::make_visitor([&](const clustering_row &cr)
 template void appending_hash<mutation_fragment>::operator()<xx_hasher>(xx_hasher &h, const mutation_fragment &cells, const schema &s) const;
 logging::logger validator_log("mutation_fragment_stream_validator");
 static mutation_fragment_v2::kind to_mutation_fragment_kind_v2(mutation_fragment::kind k);
-static sstring format_partition_key(const schema &s, const dht::decorated_key &pkey, const char *prefix = "");
-static mutation_fragment_stream_validator::validation_result ooo_key_result(const schema &s, dht::token t, const partition_key *pkey, dht::decorated_key prev_key);
+
+
 namespace
 {
 [[noreturn]] void on_validation_error(seastar::logger &l, const mutation_fragment_stream_validating_filter &zis, mutation_fragment_stream_validator::validation_result res)
@@ -46636,8 +46589,8 @@ struct mutation_fragment_applier
 {
 const schema &_s;
 mutation_partition &_mp;
-void operator()(range_tombstone rt);
-void operator()(const static_row &sr);
+
+
 void operator()(partition_start ps);
 };
 void mutation_partition::apply_row_tombstone(const schema &schema, clustering_key_prefix prefix, tombstone t)
