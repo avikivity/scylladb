@@ -39328,12 +39328,8 @@ operator+(const year_month_weekday& ymwd, const months& dm) NOEXCEPT;
 CONSTCD14
 year_month_weekday
 operator-(const year_month_weekday& ymwd, const months& dm) NOEXCEPT;
-CONSTCD11
-year_month_weekday
-operator-(const year_month_weekday& ymwd, const years& dy) NOEXCEPT;
-template<class CharT, class Traits>
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const year_month_weekday& ymwdi);
+
+;
 // year_month_weekday_last
 class year_month_weekday_last
 {
@@ -39362,17 +39358,13 @@ private:
 CONSTCD14
 year_month_weekday_last
 operator+(const year_month_weekday_last& ymwdl, const months& dm) NOEXCEPT;
-CONSTCD14
-year_month_weekday_last
-operator+(const months& dm, const year_month_weekday_last& ymwdl) NOEXCEPT;
+
 
 
 CONSTCD14
 year_month_weekday_last
 operator-(const year_month_weekday_last& ymwdl, const months& dm) NOEXCEPT;
-CONSTCD11
-year_month_weekday_last
-operator-(const year_month_weekday_last& ymwdl, const years& dy) NOEXCEPT;
+
 ;
 #if !defined(_MSC_VER) || (_MSC_VER >= 1900)
 inline namespace literals
@@ -39417,12 +39409,7 @@ public:
     
     
     
-    explicit save_stream(std::basic_ostream<CharT, Traits>& os)
-        : os_(os)
-        , fill_(os.fill())
-        , flags_(os.flags())
-        , loc_(os.getloc())
-        {}
+    
 };
 #ifdef __GNUC__
 // GCC complains about __int128 with -pedantic or -pedantic-errors
@@ -44468,10 +44455,7 @@ parse(std::basic_istream<CharT, Traits>& is, const CharT* format,
 }
 }  // namespace date
 #endif  // DATE_H
-template <typename Dividend, typename Divisor>
-// requires Integral<Dividend> && Integral<Divisor>
-auto
-div_ceil(Dividend dividend, Divisor divisor) ;
+ ;
 namespace utils {
 class dynamic_bitset {
     using int_type = uint64_t;
@@ -44511,7 +44495,7 @@ public:
     void set(size_t n) noexcept;
     // undefined if n >= size
     void clear(size_t n) noexcept;
-    size_t size() const noexcept ;
+    
     size_t find_first_set() const noexcept;
     size_t find_next_set(size_t n) const noexcept;
     size_t find_last_set() const noexcept;
@@ -44523,8 +44507,7 @@ namespace utils
 class injected_error : public std::runtime_error
 {
 public:
-    injected_error(const sstring &err_name)
-        : runtime_error{err_name} {}
+    
 };
 extern logging::logger errinj_logger;
 template <bool injection_enabled>
@@ -44537,8 +44520,7 @@ class error_injection
     {
     public:
         using is_transparent = std::true_type;
-        template <typename TypeLeft, typename TypeRight>
-        bool operator()(const TypeLeft &left, const TypeRight &right) const;
+        ;
     };
     // Map enabled-injection-name -> is-one-shot
     // TODO: change to unordered_set once we have heterogeneous lookups
@@ -44548,8 +44530,8 @@ class error_injection
 public:
     // \brief Enter into error injection if it's enabled
     // \param name error injection name to check
-    bool enter(const std::string_view &name);
-    void enable(const std::string_view &injection_name, bool one_shot = false);
+    
+    
     void disable(const std::string_view &injection_name);
     // \brief Inject a lambda call
     // \param f lambda to be run
@@ -44794,7 +44776,7 @@ fs::path _dir;
 show_hidden _show_hidden;
 public:
 static future<> scan_dir(fs::path dir, dir_entry_types type, walker_type walker);
-static future<> scan_dir(fs::path dir, dir_entry_types type, show_hidden do_show_hidden, walker_type walker);
+
 private:
 };
 class directory_lister
@@ -44824,7 +44806,7 @@ future<std::optional<directory_entry>> get();
 //
 // Close aborts the lister, waking up get() if any is waiting,
 // and waits for all background work to complete.
-future<> close() noexcept;
+
 };
 static fs::path operator/(const fs::path &lhs, const char *rhs)
 ;
@@ -44975,7 +44957,7 @@ bool contains_above_min() const noexcept
 {
     return _watermark > 0;
 }
-const_iterator begin() const noexcept;
+
 
 
 
@@ -45111,16 +45093,13 @@ public:
         std::time_t last_modified;
     };
     
-    void update_config(endpoint_config_ptr);
+    
     struct handle
     {
         std::string _host;
         global_factory _gf;
     public:
-        handle(const client &cln)
-            : _host(cln._host), _gf(cln._gf)
-        {
-        }
+        
         shared_ptr<client> to_client() &&;
     };
     
@@ -45385,9 +45364,7 @@ future<> clear_gently(seastar::optimized_optional<T> &opt) noexcept
 }
 }
 ;
-template <typename Container>
-typename Container::iterator
-unconst(Container &c, typename Container::const_iterator i);
+;
 namespace utils
 {
 static constexpr size_t uleb64_express_bits = 12;
@@ -45620,7 +45597,7 @@ else
 }
 return std::strong_ordering::equal;
 }
-std::ostream &operator<<(std::ostream &os, const atomic_cell_view &acv);
+
 
 
 
@@ -46156,7 +46133,7 @@ mf.visit(seastar::make_visitor([&](const clustering_row &cr)
 // Instantiation for repair/row_level.cc
 template void appending_hash<mutation_fragment>::operator()<xx_hasher>(xx_hasher &h, const mutation_fragment &cells, const schema &s) const;
 logging::logger validator_log("mutation_fragment_stream_validator");
-static mutation_fragment_v2::kind to_mutation_fragment_kind_v2(mutation_fragment::kind k);
+
 
 
 namespace
@@ -46274,8 +46251,7 @@ static void get_compacted_row_slice(const schema &s, const query::partition_slic
 
 // Transforms given range of printable into a range of strings where each element
 // in the original range is prefxied with given string.
-template <typename RangeOfPrintable>
-static auto prefixed(const sstring &prefix, const RangeOfPrintable &r);
+;
 constexpr gc_clock::duration row_marker::no_ttl;
 constexpr gc_clock::duration row_marker::dead;
 int compare_row_marker_for_merge(const row_marker &left, const row_marker &right) noexcept
@@ -47176,7 +47152,7 @@ inline Result squashed(const partition_version_ref &v, Map &&map, Reduce &&reduc
         reduce);
 }
 }
-std::ostream &operator<<(std::ostream &out, const partition_entry::printer &p);
+
 position_in_partition_view range_tombstone::position() const { return position_in_partition_view(position_in_partition_view::range_tombstone_tag_t(), start_bound()); }
 position_in_partition_view range_tombstone::end_position() const { return position_in_partition_view(position_in_partition_view::range_tombstone_tag_t(), end_bound()); }
 
@@ -47321,7 +47297,7 @@ struct bv_order_by_end
 {
     bound_view::compare less;
     
-    bool operator()(bound_view v, const range_tombstone_entry &rt) const;
+    
 };
 struct bv_order_by_start
 {
@@ -47385,7 +47361,7 @@ managed_bytes_view collection_mutation_input_stream::read_fragmented(size_t n) {
 bool collection_mutation_input_stream::empty() const { return _src.empty(); }
 collection_mutation::collection_mutation(const abstract_type &type, managed_bytes data) : _data(std::move(data)) {}
 collection_mutation_view atomic_cell_or_collection::as_collection_mutation() const { return collection_mutation_view{managed_bytes_view(_data)}; }
-std::ostream &operator<<(std::ostream &os, const collection_mutation_view::printer &cmvp);
+
 template <typename Iterator>
 static collection_mutation serialize_collection_mutation(const abstract_type &type, const tombstone &tomb, boost::iterator_range<Iterator> cells)
 {
@@ -48338,8 +48314,8 @@ static constexpr auto _collection_str = "org.apache.cassandra.db.marshal.ColumnT
 }
 struct column_less_comparator
 {
-bool operator()(const column_definition &def, const bytes &name);
-bool operator()(const bytes &name, const column_definition &def);
+
+
 };
 data_type schema::column_name_type(const column_definition &def, const data_type &regular_column_name_type)
 {
@@ -48779,7 +48755,7 @@ private:
     void on_error() { abort(); }
 public:
     region_sanitizer(const bool &report_backtrace);
-    void on_region_destruction() noexcept;
+    
     
     
     void on_migrate(const void *src, size_t size, const void *dst) noexcept
@@ -48787,8 +48763,7 @@ public:
         run_and_handle_errors([&]
                               {             auto it_src = _allocations.find(src);             if (it_src == _allocations.end()) {                 logger.error("Attempting to migrate an object at {} (size: {}) that does not exist",                              src, size);                 on_error();             }             if (it_src->second.size != size) {                 logger.error("Mismatch between allocation and migration size of object at {}: {} vs. {}\n"                              "Allocated at:\n{}",                              src, it_src->second.size, size, it_src->second.backtrace);                 on_error();             }             auto [ it_dst, success ] = _allocations.emplace(dst, std::move(it_src->second));             if (!success) {                 logger.error("Attempting to migrate an {} byte object to an already occupied address {}:\n"                              "Migrated object allocated from:\n{}\n"                              "Previous allocation of {} bytes at the destination:\n{}",                              size, dst, it_src->second.backtrace, it_dst->second.size, it_dst->second.backtrace);                 on_error();             }             _allocations.erase(it_src); });
     }
-    void merge(region_sanitizer &other) noexcept
-    ;
+    
 };
 logging::logger region_sanitizer::logger("lsa-sanitizer");
 struct segment;
@@ -48848,15 +48823,15 @@ public:
     void enable_reclaim() noexcept { --_reclaiming_disabled_depth; }
     logalloc::segment_pool &segment_pool() { return *_segment_pool; }
     void register_region(region::impl *);
-    void unregister_region(region::impl *) noexcept;
+    
     size_t reclaim(size_t bytes, is_preemptible p); // Compacts one segment at a time from sparsest segment to least sparse until work_waiting_on_reactor returns true
     // or there are no more segments to compact.
-    idle_cpu_handler_result compact_on_idle(work_waiting_on_reactor check_for_work); // Releases whole segments back to the segment pool.
+     // Releases whole segments back to the segment pool.
     // After the call, if there is enough evictable memory, the amount of free segments in the pool
     // will be at least reserve_segments + div_ceil(bytes, segment::size).
     // Returns the amount by which segment_pool.total_memory_in_use() has decreased.
     size_t compact_and_evict(size_t reserve_segments, size_t bytes, is_preemptible p);
-    void full_compaction();
+    
     
     
     occupancy_stats region_occupancy() const noexcept;
@@ -48878,8 +48853,7 @@ public:
         _active_timer = &timer;
         return true;
     }
-    bool try_reset_active_timer(reclaim_timer &timer)
-    ;
+    
 private:                                                                                            // Like compact_and_evict() but assumes that reclaim_lock is held around the operation.
     size_t compact_and_evict_locked(size_t reserve_segments, size_t bytes, is_preemptible preempt); // Like reclaim() but assumes that reclaim_lock is held around the operation.
     size_t reclaim_locked(size_t bytes, is_preemptible p);
@@ -48981,10 +48955,10 @@ public:
 class seastar_memory_segment_store_backend : public segment_store_backend
 {
 public:
-    seastar_memory_segment_store_backend() : segment_store_backend(memory::get_memory_layout(), true) {}
+    
     virtual void *alloc_segment_memory() noexcept override ;
-    virtual void free_segment_memory(void *seg) noexcept override ;
-    virtual size_t free_memory() const noexcept override ;
+    
+    
 }; // Segments storage is allocated via `mmap()`.
 // This area cannot be shrunk or enlarged, so freeing segments doesn't increase
 // memory availability.
@@ -48999,8 +48973,7 @@ private:
     free_segment *_freelist = nullptr;
     size_t _available_segments; // for fast free_memory()
 private:
-    static memory::memory_layout allocate_memory(size_t segments)
-    ;
+    
 public:
     
     
@@ -49018,7 +48991,7 @@ public:
     {
     };
     
-    const segment *segment_from_idx(size_t idx) const noexcept;
+    
     segment *segment_from_idx(size_t idx) noexcept { return reinterpret_cast<segment *>(_backend->segments_base()) + idx; }
     size_t idx_from_segment(const segment *seg) const noexcept
     {
@@ -49045,7 +49018,7 @@ public:
         seg->~segment();
         _backend->free_segment_memory(seg);
     }
-    size_t max_segments() const noexcept ;
+    
     bool can_allocate_more_segments() const noexcept { return _backend->can_allocate_more_segments(non_lsa_reserve); }
 };
 using segment_store = contiguous_memory_segment_store; // Segment pool implementation for the seastar allocator.
@@ -49107,12 +49080,12 @@ public:
         uintptr_t index = idx_from_segment(seg);
         return _segments[index];
     } // Returns segment containing given object or nullptr.
-    segment *containing_segment(const void *obj) noexcept;
+    
     segment *segment_from(const segment_descriptor &desc) noexcept;
     void free_segment(segment *) noexcept;
     void free_segment(segment *, segment_descriptor &) noexcept;
     size_t current_emergency_reserve_goal() const noexcept { return _current_emergency_reserve_goal; }
-    void set_emergency_reserve_max(size_t new_size) noexcept ;
+    
     size_t emergency_reserve_max() const noexcept { return _emergency_reserve_max; }
     void set_current_emergency_reserve_goal(size_t goal) noexcept { _current_emergency_reserve_goal = goal; }
     
