@@ -27990,7 +27990,7 @@ seastar::data_source make_limiting_data_source(seastar::data_source&& src,
 namespace dht {
 class murmur3_partitioner final : public i_partitioner {
 public:
-    murmur3_partitioner() = default;
+    
     virtual const sstring name() const override { return "org.apache.cassandra.dht.Murmur3Partitioner"; }
     virtual token get_token(const schema& s, partition_key_view key) const override;
     virtual token get_token(const sstables::key_view& key) const override;
@@ -28062,7 +28062,7 @@ public:
     struct copy_comparators_only {};
     struct incomplete_tag {};
     // Constructs an empty instance which is fully discontinuous except for the partition tombstone.
-    mutation_partition_v2(incomplete_tag, const schema& s, tombstone);
+    
     
     
     // Assumes that p is fully continuous.
@@ -28251,8 +28251,7 @@ public:
         }
         return boost::intrusive::get_parent_from_member(get(), paired_member);
     }
-    template<typename T>
-    const T* get(entangled T::* paired_member) const ;
+     ;
 };
 namespace logalloc {
 struct occupancy_stats;
@@ -28299,13 +28298,13 @@ public:
         uint64_t memory_freed;
         uint64_t memory_compacted;
         uint64_t memory_evicted;
-        friend stats operator+(const stats& s1, const stats& s2) ;
+        
         
         
         
     };
     
-    future<> stop();
+    
 private:
     std::unique_ptr<impl> _impl;
     memory::reclaimer _reclaimer;
@@ -28314,8 +28313,8 @@ private:
     memory::reclaiming_result reclaim(seastar::memory::reclaimer::request);
 public:
     tracker();
-    ~tracker();
-    stats statistics() const;
+    ;
+    
     //
     // Tries to reclaim given amount of bytes in total using all compactible
     // and evictable regions. Returns the number of bytes actually reclaimed.
@@ -28328,7 +28327,7 @@ public:
     // Compacts as much as possible. Very expensive, mainly for testing.
     // Guarantees that every live object from reclaimable regions will be moved.
     // Invalidates references to objects in all compactible and evictable regions.
-    void full_compaction();
+    
     // Returns aggregate statistics for all pools.
     // Returns statistics for all segments allocated by LSA on this shard.
     // Returns amount of allocated memory not managed by LSA
@@ -28664,7 +28663,7 @@ public:
     // Frees elements of this version in batches.
     // Returns stop_iteration::yes iff there are no more elements to free.
     const mutation_partition_v2& partition() const ;
-    bool is_referenced() const ;
+    
     // Returns true iff this version is directly referenced from a partition_entry (is its newset version).
     
     
@@ -28678,10 +28677,10 @@ class partition_version_ref {
     friend class partition_version;
 public:
     
-    ~partition_version_ref() ;
-    partition_version& operator*() ;
+    
+    
     const partition_version& operator*() const ;
-    partition_version* operator->() ;
+    
     const partition_version* operator->() const ;
     
     
@@ -28793,7 +28792,7 @@ public:
     // Constructs a non-evictable entry holding empty partition
     partition_entry() = default;
     // Constructs a non-evictable entry
-    explicit partition_entry(mutation_partition_v2);
+    
     partition_entry(const schema&, mutation_partition);
     // Returns a reference to partition_entry containing given pv,
     // assuming pv.is_referenced_from_entry().
@@ -28805,7 +28804,7 @@ public:
     // Frees elements of this entry in batches.
     // Active snapshots are detached, data referenced by them is not cleared.
     // Returns stop_iteration::yes iff there are no more elements to free.
-    stop_iteration clear_gently(cache_tracker*) noexcept;
+    
     static partition_entry make_evictable(const schema& s, mutation_partition&& mp);
     
     
@@ -28946,7 +28945,7 @@ class compaction_garbage_collector {
 public:
     virtual ~compaction_garbage_collector() = default;
     virtual void collect(column_id id, atomic_cell) = 0;
-    virtual void collect(column_id id, collection_mutation_description) = 0;
+    
     virtual void collect(row_marker) = 0;
 };
 enum class mutation_fragment_stream_validation_level {
@@ -28965,10 +28964,10 @@ public:
     class validation_result {
         sstring _what;
     private:
-        explicit validation_result() = default;
+        
     public:
         const sstring& what() const ;
-        explicit operator bool() const ;
+        
         
     };
 private:
@@ -29058,7 +29057,7 @@ public:
     /// The previous valid partition key.
     ///
     /// Call only if operator()(const dht::decorated_key&) was used.
-    const dht::decorated_key& previous_partition_key() const ;
+    
 };
 struct invalid_mutation_fragment_stream : public std::runtime_error {
     explicit invalid_mutation_fragment_stream(std::runtime_error e);
@@ -29084,16 +29083,16 @@ public:
     /// \arg compare_keys enable validating clustering key monotonicity
     
     mutation_fragment_stream_validating_filter(const char* name, const schema& s, mutation_fragment_stream_validation_level level);
-    mutation_fragment_stream_validating_filter(mutation_fragment_stream_validating_filter&&) = delete;
-    mutation_fragment_stream_validating_filter(const mutation_fragment_stream_validating_filter&) = delete;
+    
+    
     sstring full_name() const;
     
     
     /// Equivalent to `operator()(mf.kind(), mf.position())`
     /// Equivalent to `operator()(partition_end{})`
-    bool on_end_of_partition();
+    
     void on_end_of_stream();
-    mutation_fragment_stream_validator& validator() ;
+    
 };
 static bool has_ck_selector(const query::clustering_row_ranges& ranges) ;
 enum class compact_for_sstables {
@@ -29196,9 +29195,9 @@ private:
      ;
     ;
     ;
-    bool can_gc(tombstone t) ;;
+    ;
 public:
-    compact_mutation_state(compact_mutation_state&&) = delete; // Because 'this' is captured
+     // Because 'this' is captured
     compact_mutation_state(const schema& s, gc_clock::time_point query_time, const query::partition_slice& slice, uint64_t limit,
               uint32_t partition_limit, mutation_fragment_stream_validation_level validation_level = mutation_fragment_stream_validation_level::token)
         : _schema(s)
@@ -29215,39 +29214,17 @@ public:
     {
         static_assert(!sstable_compaction(), "This constructor cannot be used for sstable compaction.");
     }
-    compact_mutation_state(const schema& s, gc_clock::time_point compaction_time,
-            std::function<api::timestamp_type(const dht::decorated_key&)> get_max_purgeable,
-            const tombstone_gc_state& gc_state)
-        : _schema(s)
-        , _query_time(compaction_time)
-        , _get_max_purgeable(std::move(get_max_purgeable))
-        , _can_gc([this] (tombstone t) { return can_gc(t); })
-        , _slice(s.full_slice())
-        , _tombstone_gc_state(gc_state)
-        , _last_dk({dht::token(), partition_key::make_empty()})
-        , _last_pos(position_in_partition::for_partition_end())
-        , _collector(std::make_unique<mutation_compactor_garbage_collector>(_schema))
-        // We already have a validator for compaction in the sstable writer, no need to validate twice
-        , _validator("mutation_compactor for compaction", _schema, mutation_fragment_stream_validation_level::none)
-    {
-        static_assert(sstable_compaction(), "This constructor can only be used for sstable compaction.");
-    }
+    
     void consume_new_partition(const dht::decorated_key& dk) ;
     template <typename Consumer, typename GCConsumer>
     requires CompactedFragmentsConsumerV2<Consumer> && CompactedFragmentsConsumerV2<GCConsumer>
     void consume(tombstone t, Consumer& consumer, GCConsumer& gc_consumer) ;
-    template <typename Consumer>
-    requires CompactedFragmentsConsumerV2<Consumer>
-    void force_partition_not_empty(Consumer& consumer) ;
+     ;
     template <typename Consumer, typename GCConsumer>
     requires CompactedFragmentsConsumerV2<Consumer> && CompactedFragmentsConsumerV2<GCConsumer>
     stop_iteration consume(static_row&& sr, Consumer& consumer, GCConsumer& gc_consumer) ;
-    template <typename Consumer, typename GCConsumer>
-    requires CompactedFragmentsConsumerV2<Consumer> && CompactedFragmentsConsumerV2<GCConsumer>
-    stop_iteration consume(clustering_row&& cr, Consumer& consumer, GCConsumer& gc_consumer) ;
-    template <typename Consumer, typename GCConsumer>
-    requires CompactedFragmentsConsumerV2<Consumer> && CompactedFragmentsConsumerV2<GCConsumer>
-    stop_iteration consume(range_tombstone_change&& rtc, Consumer& consumer, GCConsumer& gc_consumer) ;
+     ;
+     ;
     template <typename Consumer, typename GCConsumer>
     requires CompactedFragmentsConsumerV2<Consumer> && CompactedFragmentsConsumerV2<GCConsumer>
     stop_iteration consume_end_of_partition(Consumer& consumer, GCConsumer& gc_consumer) ;
@@ -29268,7 +29245,7 @@ public:
     }
     /// The decorated key of the partition the compaction is positioned in.
     /// Can be null if the compaction wasn't started yet.
-    const dht::decorated_key* current_partition() const ;
+    
     // Only updated when SSTableCompaction == compact_for_sstables::no.
     // Only meaningful if compaction has started already (current_partition() != nullptr).
     position_in_partition_view current_position() const ;
@@ -29287,8 +29264,8 @@ public:
     /// allows the compaction state to be stored in the compacted reader.
     /// If the currently compacted partition is exhausted a disengaged optional
     /// is returned -- in this case there is no state to detach.
-    std::optional<detached_compaction_state> detach_state() && ;
-    const compaction_stats& stats() const ;
+    
+    
 };
 template<compact_for_sstables SSTableCompaction, typename Consumer, typename GCConsumer>
 requires CompactedFragmentsConsumerV2<Consumer> && CompactedFragmentsConsumerV2<GCConsumer>
@@ -29307,14 +29284,7 @@ public:
         , _gc_consumer(std::move(gc_consumer)) {
     }
     // Can only be used for compact_for_sstables::yes
-    compact_mutation_v2(const schema& s, gc_clock::time_point compaction_time,
-            std::function<api::timestamp_type(const dht::decorated_key&)> get_max_purgeable,
-            const tombstone_gc_state& gc_state,
-            Consumer consumer, GCConsumer gc_consumer = GCConsumer())
-        : _state(make_lw_shared<compact_mutation_state<SSTableCompaction>>(s, compaction_time, get_max_purgeable, gc_state))
-        , _consumer(std::move(consumer))
-        , _gc_consumer(std::move(gc_consumer)) {
-    }
+    
     compact_mutation_v2(lw_shared_ptr<compact_mutation_state<SSTableCompaction>> state, Consumer consumer,
                      GCConsumer gc_consumer = GCConsumer())
         : _state(std::move(state))
@@ -29383,7 +29353,7 @@ private:
     
 public:
     
-    std::optional<range_tombstone_change> get_range_tombstone_change() && ;
+    
     void reset() ;
     std::optional<range_tombstone> consume(const schema& s, range_tombstone_change&& rt) ;
     void on_end_of_stream() ;
@@ -29391,7 +29361,7 @@ public:
     // Returns false if flush() won't return anything for sure.
     bool needs_flush() const ;
     std::optional<range_tombstone> flush(const schema& s, position_in_partition_view pos) ;
-    bool discardable() const ;
+    
 };
 class mutation_rebuilder {
     schema_ptr _s;
@@ -29411,7 +29381,7 @@ class mutation_rebuilder_v2 {
 public:
     mutation_rebuilder_v2(schema_ptr s) : _s(std::move(s)), _builder(_s) { }
 public:
-    stop_iteration consume(partition_start mf) ;
+    
     
     
 public:
@@ -29428,7 +29398,7 @@ template<typename Output>
 class writer_of_mutation_partition;
 }
 class mutation_partition_serializer {
-    static size_t size(const schema&, const mutation_partition&);
+    
 public:
     using size_type = uint32_t;
 private:
@@ -29451,7 +29421,7 @@ struct partition {
     
     
     
-    uint64_t row_count() const ;
+    
     const frozen_mutation& mut() const ;
 };
 // The partitions held by this object are ordered according to dht::decorated_key ordering and non-overlapping.
@@ -29471,14 +29441,14 @@ public:
                         query::result_memory_tracker memory_tracker = { });
     const utils::chunked_vector<partition>& partitions() const;
     query::short_read is_short_read() const ;
-    size_t memory_usage() const ;
+    
     
     struct printer {
         const reconcilable_result& self;
         schema_ptr schema;
         
     };
-    printer pretty_printer(schema_ptr) const;
+    
 };
 class reconcilable_result_builder {
     const schema& _schema;
@@ -29498,11 +29468,7 @@ private:
     stop_iteration consume(range_tombstone&& rt);
 public:
     // Expects table schema (non-reversed) and half-reversed (legacy) slice when building results for reverse query.
-    reconcilable_result_builder(const schema& s, const query::partition_slice& slice,
-                                query::result_memory_accounter&& accounter) noexcept
-        : _schema(s), _slice(slice), _reversed(_slice.options.contains(query::partition_slice::option::reversed))
-        , _memory_accounter(std::move(accounter))
-    { }
+    
     void consume_new_partition(const dht::decorated_key& dk);
     void consume(tombstone t);
     stop_iteration consume(static_row&& sr, tombstone, bool is_alive);
@@ -29526,7 +29492,7 @@ private:
 public:
     // @p will hold the result of building.
     // @p must be empty.
-    void accept_row_cell(column_id id, atomic_cell&& cell) ;
+    
     
 };
 //
@@ -48980,7 +48946,7 @@ tracker_reclaimer_lock::~tracker_reclaimer_lock() { _tracker_impl.enable_reclaim
 tracker::tracker() : _impl(std::make_unique<impl>()), _reclaimer([this](seastar::memory::reclaimer::request r)
                                                                  { return reclaim(r); },
                                                                  memory::reclaimer_scope::sync) {}
-tracker::~tracker() {}
+
 size_t tracker::reclaim(size_t bytes) { return _impl->reclaim(bytes, is_preemptible::no); }
 struct alignas(segment_size) segment
 {
