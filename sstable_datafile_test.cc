@@ -29222,58 +29222,6 @@ struct write_stats {
     // total write attempts
     split_stats writes_attempts;
     split_stats writes_errors;
-    uint64_t cas_write_timeout_due_to_uncertainty = 0;
-    uint64_t cas_failed_read_round_optimization = 0;
-    uint16_t cas_now_pruning = 0;
-    uint64_t cas_prune = 0;
-    uint64_t cas_coordinator_dropped_prune = 0;
-    uint64_t cas_replica_dropped_prune = 0;
-    std::chrono::microseconds last_mv_flow_control_delay; // delay added for MV flow control in the last request
-public:
-protected:
-    seastar::metrics::metric_groups _metrics;
-};
-struct stats : public write_stats {
-    seastar::metrics::metric_groups _metrics;
-    utils::timed_rate_moving_average read_timeouts;
-    utils::timed_rate_moving_average read_unavailables;
-    utils::timed_rate_moving_average read_rate_limited_by_replicas;
-    utils::timed_rate_moving_average read_rate_limited_by_coordinator;
-    utils::timed_rate_moving_average range_slice_timeouts;
-    utils::timed_rate_moving_average range_slice_unavailables;
-    utils::timed_rate_moving_average cas_read_timeouts;
-    utils::timed_rate_moving_average cas_read_unavailables;
-    utils::estimated_histogram cas_read_contention;
-    uint64_t read_repair_attempts = 0;
-    uint64_t read_repair_repaired_blocking = 0;
-    uint64_t read_repair_repaired_background = 0;
-    uint64_t global_read_repairs_canceled_due_to_concurrent_write = 0;
-    // number of mutations received as a coordinator
-    uint64_t received_mutations = 0;
-    // number of counter updates received as a leader
-    uint64_t received_counter_updates = 0;
-    // number of forwarded mutations
-    uint64_t forwarded_mutations = 0;
-    uint64_t forwarding_errors = 0;
-    // number of read requests received as a replica
-    uint64_t replica_data_reads = 0;
-    uint64_t replica_digest_reads = 0;
-    uint64_t replica_mutation_data_reads = 0;
-    uint64_t replica_cross_shard_ops = 0;
-    utils::timed_rate_moving_average_summary_and_histogram read;
-    utils::timed_rate_moving_average_summary_and_histogram range;
-    utils::timed_rate_moving_average_summary_and_histogram cas_read;
-    uint64_t reads = 0;
-    uint64_t foreground_reads = 0; // client still waits for the read
-    uint64_t read_retries = 0; // read is retried with new limit
-    uint64_t speculative_digest_reads = 0;
-    uint64_t speculative_data_reads = 0;
-    uint64_t cas_read_unfinished_commit = 0;
-    uint64_t cas_foreground = 0;
-    uint64_t cas_total_running = 0;
-    uint64_t cas_total_operations = 0;
-    // Data read attempts
-    split_stats data_read_attempts;
     split_stats data_read_completed;
     split_stats data_read_errors;
     // Digest read attempts
@@ -29534,32 +29482,6 @@ public:
         uint64_t reads_enqueued_for_admission = 0;
         // Total number of reads enqueued to wait for memory.
         uint64_t reads_enqueued_for_memory = 0;
-        // Total number of reads admitted immediately, without queueing
-        uint64_t reads_admitted_immediately = 0;
-        // Total number of reads enqueued because ready_list wasn't empty
-        uint64_t reads_queued_because_ready_list = 0;
-        // Total number of reads enqueued because there are permits who need CPU to make progress
-        uint64_t reads_queued_because_need_cpu_permits = 0;
-        // Total number of reads enqueued because there weren't enough memory resources
-        uint64_t reads_queued_because_memory_resources = 0;
-        // Total number of reads enqueued because there weren't enough count resources
-        uint64_t reads_queued_because_count_resources = 0;
-        // Total number of reads enqueued to be maybe admitted after evicting some inactive reads
-        uint64_t reads_queued_with_eviction = 0;
-        // Total number of permits created so far.
-        uint64_t total_permits = 0;
-        // Current number of permits.
-        uint64_t current_permits = 0;
-        // Current number permits needing CPU to make progress.
-        uint64_t need_cpu_permits = 0;
-        // Current number of permits awaiting I/O or an operation running on a remote shard.
-        uint64_t awaits_permits = 0;
-        // Current number of reads reading from the disk.
-        uint64_t disk_reads = 0;
-        // The number of sstables read currently.
-        uint64_t sstables_read = 0;
-        // Permits waiting on something: admission, memory or execution
-        uint64_t waiters = 0;
     };
     using permit_list_type = bi::list<
             reader_permit::impl,
@@ -29586,136 +29508,6 @@ private:
     public:
     };
     wait_queue _wait_list;
-    permit_list_type _ready_list;
-    condition_variable _ready_list_cv;
-    permit_list_type _inactive_reads;
-    // Stores permits that are not in any of the above list.
-    permit_list_type _permit_list;
-    sstring _name;
-    size_t _max_queue_length = std::numeric_limits<size_t>::max();
-    utils::updateable_value<uint32_t> _serialize_limit_multiplier;
-    utils::updateable_value<uint32_t> _kill_limit_multiplier;
-    stats _stats;
-    bool _stopped = false;
-    bool _evicting = false;
-    gate _close_readers_gate;
-    gate _permit_gate;
-    std::optional<future<>> _execution_loop_future;
-    reader_permit::impl* _blessed_permit = nullptr;
-private:
-    [[nodiscard]] flat_mutation_reader_v2 detach_inactive_reader(reader_permit::impl&, evict_reason reason) noexcept;
-    [[nodiscard]] std::exception_ptr check_queue_size(std::string_view queue_name);
-    // Add the permit to the wait queue and return the future which resolves when
-    // the permit is admitted (popped from the queue).
-    enum class wait_on { admission, memory };
-    // Check whether permit can be admitted or not.
-    // The wait list is not taken into consideration, this is the caller's
-    // responsibility.
-    // A return value of can_admit::maybe means admission might be possible if
-    // some of the inactive readers are evicted.
-    enum class can_admit { no, maybe, yes };
-    enum class reason { all_ok = 0, ready_list, need_cpu_permits, memory_resources, count_resources };
-    struct admit_result { can_admit decision; reason why; };
-    // Request more memory for the permit.
-    // Request is instantly granted while memory consumption of all reads is
-    // below _kill_limit_multiplier.
-    // After memory consumption goes above the above limit, only one reader
-    // (permit) is allowed to make progress, this method will block for all other
-    // one, until:
-    // * The blessed read finishes and a new blessed permit is choosen.
-    // * Memory consumption falls below the limit.
-    // closes reader in the background.
-    
-    
-    // Throws std::bad_alloc if memory consumed is oom_kill_limit_multiply_threshold more than the memory limit.
-public:
-    struct no_limits { };
-    /// Create a semaphore with the specified limits
-    ///
-    /// The semaphore's name has to be unique!
-    /// Create a semaphore with practically unlimited count and memory.
-    ///
-    /// And conversely, no queue limit either.
-    /// The semaphore's name has to be unique!
-    /// A helper constructor *only for tests* that supplies default arguments.
-    /// The other constructors have default values removed so 'production-code'
-    /// is forced to specify all of them manually to avoid bugs.
-    struct for_tests{};
-    /// Returns the name of the semaphore
-    ///
-    /// If the semaphore has no name, "unnamed reader concurrency semaphore" is returned.
-    /// Register an inactive read.
-    ///
-    /// The semaphore will evict this read when there is a shortage of
-    /// permits. This might be immediate, during this register call.
-    /// Clients can use the returned handle to unregister the read, when it
-    /// stops being inactive and hence evictable, or to set the optional
-    /// notify_handler and ttl.
-    ///
-    /// The semaphore takes ownership of the passed in reader for the duration
-    /// of its inactivity and it may evict it to free up resources if necessary.
-    /// Set the inactive read eviction notification handler and optionally eviction ttl.
-    ///
-    /// The semaphore may evict this read when there is a shortage of
-    /// permits or after the given ttl expired.
-    ///
-    /// The notification handler will be called when the inactive read is evicted
-    /// passing with the reason it was evicted to the handler.
-    ///
-    /// Note that the inactive read might have already been evicted if
-    /// the caller may yield after the register_inactive_read returned the handle
-    /// and before calling set_notify_handler. In this case, the caller must revalidate
-    /// the inactive_read_handle before calling this function.
-    /// Unregister the previously registered inactive read.
-    ///
-    /// If the read was not evicted, the inactive read object, passed in to the
-    /// register call, will be returned. Otherwise a nullptr is returned.
-    /// Try to evict an inactive read.
-    ///
-    /// Return true if an inactive read was evicted and false otherwise
-    /// (if there was no reader to evict).
-    /// Clear all inactive reads.
-    /// Evict all inactive reads the belong to the table designated by the id.
-private:
-    // The following two functions are extension points for
-    // future inheriting classes that needs to run some stop
-    // logic just before or just after the current stop logic.
-public:
-    /// Stop the reader_concurrency_semaphore and clear all inactive reads.
-    ///
-    /// Wait on all async background work to complete.
-    /// Make an admitted permit
-    ///
-    /// The permit is already in an admitted state after being created, this
-    /// method includes waiting for admission.
-    /// The permit is associated with a schema, which is the schema of the table
-    /// the read is executed against, and the operation name, which should be a
-    /// name such that we can identify the operation which created this permit.
-    /// Ideally this should be a unique enough name that we not only can identify
-    /// the kind of read, but the exact code-path that was taken.
-    ///
-    /// Some permits cannot be associated with any table, so passing nullptr as
-    /// the schema parameter is allowed.
-    /// Make a tracking only permit
-    ///
-    /// The permit is not admitted. It is intended for reads that bypass the
-    /// normal concurrency control, but whose resource usage we still want to
-    /// keep track of, as part of that concurrency control.
-    /// The permit is associated with a schema, which is the schema of the table
-    /// the read is executed against, and the operation name, which should be a
-    /// name such that we can identify the operation which created this permit.
-    /// Ideally this should be a unique enough name that we not only can identify
-    /// the kind of read, but the exact code-path that was taken.
-    ///
-    /// Some permits cannot be associated with any table, so passing nullptr as
-    /// the schema parameter is allowed.
-    /// Run the function through the semaphore's execution stage with an admitted permit
-    ///
-    /// First a permit is obtained via the normal admission route, as if
-    /// it was created  with \ref obtain_permit(), then func is enqueued to be
-    /// run by the semaphore's execution loop. This emulates an execution stage,
-    /// as it allows batching multiple funcs to be run together. Unlike an
-    /// execution stage, with_permit() accepts a type-erased function, which
     /// allows for more flexibility in what functions are batched together.
     /// Use only functions that share most of their code to benefit from the
     /// instruction-cache warm-up!
@@ -29768,32 +29560,6 @@ protected:
     std::variant<flat_mutation_reader_v2, reader_concurrency_semaphore::inactive_read_handle> _reader;
     dht::partition_ranges_view _query_ranges;
     querier_config _qr_config;
-public:
-};
-/// One-stop object for serving queries.
-///
-/// Encapsulates all state and logic for serving all pages for a given range
-/// of a query on a given shard. Can be used with any CompactedMutationsConsumer
-/// certified result-builder.
-/// Intended to be created on the first page of a query then saved and reused on
-/// subsequent pages.
-/// (1) Create with the parameters of your query.
-/// (2) Call consume_page() with your consumer to consume the contents of the
-///     next page.
-/// (3) At the end of the page save the querier if you expect more pages.
-///     The are_limits_reached() method can be used to determine whether the
-///     page was filled or not. Also check your result builder for short reads.
-///     Most result builders have memory-accounters that will stop the read
-///     once some memory limit was reached. This is called a short read as the
-///     read stops before the row and/or partition limits are reached.
-/// (4) At the beginning of the next page validate whether it can be used with
-///     the page's schema and start position. In case a schema or position
-///     mismatch is detected the querier shouldn't be used to produce the next
-///     page. It should be dropped instead and a new one should be created
-///     instead.
-class querier : public querier_base {
-    lw_shared_ptr<compact_for_query_state_v2> _compaction_state;
-public:
      ;
 };
 /// Local state of a multishard query.
@@ -29871,32 +29637,6 @@ private:
 public:
     // this is captured
     /// Lookup a data querier in the cache.
-    ///
-    /// Queriers are found based on `key` and `range`. There may be multiple
-    /// queriers for the same `key` differentiated by their read range. Since
-    /// each subsequent page may have a narrower read range then the one before
-    /// it ranges cannot be simply matched based on equality. For matching we
-    /// use the fact that the coordinator splits the query range into
-    /// non-overlapping ranges. Thus both bounds of any range, or in case of
-    /// singular ranges only the start bound are guaranteed to be unique.
-    ///
-    /// The found querier is checked for a matching position and schema version.
-    /// The start position of the querier is checked against the start position
-    /// of the page using the `range' and `slice'.
-    /// Lookup a mutation querier in the cache.
-    ///
-    /// See \ref lookup_data_querier().
-    /// Lookup a shard mutation querier in the cache.
-    ///
-    /// See \ref lookup_data_querier().
-    /// Change the ttl of cache entries
-    ///
-    /// Applies only to entries inserted after the change.
-    /// Evict a querier.
-    ///
-    /// Return true if a querier was evicted and false otherwise (if the cache
-    /// is empty).
-    /// Close all queriers and wait on background work.
     ///
     /// Should be used before destroying the querier_cache.
 };
@@ -30574,58 +30314,6 @@ Slice<T>::Slice(T *s, std::size_t count) noexcept {
 }
 template <typename T>
 T *Slice<T>::data() const noexcept {
-  return reinterpret_cast<T *>(slicePtr(this));
-}
-template <typename T>
-std::size_t Slice<T>::size() const noexcept {
-  return sliceLen(this);
-}
-template <typename T>
-std::size_t Slice<T>::length() const noexcept {
-  return this->size();
-}
-template <typename T>
-bool Slice<T>::empty() const noexcept {
-  return this->size() == 0;
-}
-template <typename T>
-T &Slice<T>::operator[](std::size_t n) const noexcept {
-  assert(n < this->size());
-  auto ptr = static_cast<char *>(slicePtr(this)) + size_of<T>() * n;
-  return *reinterpret_cast<T *>(ptr);
-}
-template <typename T>
-T &Slice<T>::at(std::size_t n) const {
-  if (n >= this->size()) {
-    panic<std::out_of_range>("rust::Slice index out of range");
-  }
-  return (*this)[n];
-}
-template <typename T>
-T &Slice<T>::front() const noexcept {
-  assert(!this->empty());
-  return (*this)[0];
-}
-template <typename T>
-T &Slice<T>::back() const noexcept {
-  assert(!this->empty());
-  return (*this)[this->size() - 1];
-}
-template <typename T>
-typename Slice<T>::iterator::reference
-Slice<T>::iterator::operator*() const noexcept {
-  return *static_cast<T *>(this->pos);
-}
-template <typename T>
-typename Slice<T>::iterator::pointer
-Slice<T>::iterator::operator->() const noexcept {
-  return static_cast<T *>(this->pos);
-}
-template <typename T>
-typename Slice<T>::iterator::reference Slice<T>::iterator::operator[](
-    typename Slice<T>::iterator::difference_type n) const noexcept {
-  auto ptr = static_cast<char *>(this->pos) + this->stride * n;
-  return *reinterpret_cast<T *>(ptr);
 }
 template <typename T>
 typename Slice<T>::iterator &Slice<T>::iterator::operator++() noexcept {
@@ -30678,32 +30366,6 @@ typename Slice<T>::iterator Slice<T>::iterator::operator-(
 template <typename T>
 typename Slice<T>::iterator::difference_type
 Slice<T>::iterator::operator-(const iterator &other) const noexcept {
-  auto diff = std::distance(static_cast<char *>(other.pos),
-                            static_cast<char *>(this->pos));
-  return diff / this->stride;
-}
-template <typename T>
-bool Slice<T>::iterator::operator==(const iterator &other) const noexcept {
-  return this->pos == other.pos;
-}
-template <typename T>
-bool Slice<T>::iterator::operator!=(const iterator &other) const noexcept {
-  return this->pos != other.pos;
-}
-template <typename T>
-bool Slice<T>::iterator::operator<(const iterator &other) const noexcept {
-  return this->pos < other.pos;
-}
-template <typename T>
-bool Slice<T>::iterator::operator<=(const iterator &other) const noexcept {
-  return this->pos <= other.pos;
-}
-template <typename T>
-bool Slice<T>::iterator::operator>(const iterator &other) const noexcept {
-  return this->pos > other.pos;
-}
-template <typename T>
-bool Slice<T>::iterator::operator>=(const iterator &other) const noexcept {
   return this->pos >= other.pos;
 }
 template <typename T>
@@ -30808,32 +30470,6 @@ template <typename T>
 Box<T> Box<T>::from_raw(T *raw) noexcept {
   Box box = uninit{};
   box.ptr = raw;
-  return box;
-}
-template <typename T>
-T *Box<T>::into_raw() noexcept {
-  T *raw = this->ptr;
-  this->ptr = nullptr;
-  return raw;
-}
-template <typename T>
-Box<T>::Box(uninit) noexcept {}
-#endif // CXXBRIDGE1_RUST_BOX
-#ifndef CXXBRIDGE1_RUST_VEC
-#define CXXBRIDGE1_RUST_VEC
-template <typename T>
-Vec<T>::Vec(std::initializer_list<T> init) : Vec{} {
-  this->reserve_total(init.size());
-  std::move(init.begin(), init.end(), std::back_inserter(*this));
-}
-template <typename T>
-Vec<T>::Vec(const Vec &other) : Vec() {
-  this->reserve_total(other.size());
-  std::copy(other.begin(), other.end(), std::back_inserter(*this));
-}
-template <typename T>
-Vec<T>::Vec(Vec &&other) noexcept : repr(other.repr) {
-  new (&other) Vec();
 }
 template <typename T>
 Vec<T>::~Vec() noexcept {
@@ -30912,58 +30548,6 @@ template <typename T>
 void Vec<T>::reserve(std::size_t new_cap) {
   this->reserve_total(new_cap);
 }
-template <typename T>
-void Vec<T>::push_back(const T &value) {
-  this->emplace_back(value);
-}
-template <typename T>
-void Vec<T>::push_back(T &&value) {
-  this->emplace_back(std::move(value));
-}
-template <typename T>
-template <typename... Args>
-void Vec<T>::emplace_back(Args &&...args) {
-  auto size = this->size();
-  this->reserve_total(size + 1);
-  ::new (reinterpret_cast<T *>(reinterpret_cast<char *>(this->data()) +
-                               size * size_of<T>()))
-      T(std::forward<Args>(args)...);
-  this->set_len(size + 1);
-}
-template <typename T>
-void Vec<T>::clear() {
-  this->truncate(0);
-}
-template <typename T>
-typename Vec<T>::iterator Vec<T>::begin() noexcept {
-  return Slice<T>(this->data(), this->size()).begin();
-}
-template <typename T>
-typename Vec<T>::iterator Vec<T>::end() noexcept {
-  return Slice<T>(this->data(), this->size()).end();
-}
-template <typename T>
-typename Vec<T>::const_iterator Vec<T>::begin() const noexcept {
-  return this->cbegin();
-}
-template <typename T>
-typename Vec<T>::const_iterator Vec<T>::end() const noexcept {
-  return this->cend();
-}
-template <typename T>
-typename Vec<T>::const_iterator Vec<T>::cbegin() const noexcept {
-  return Slice<const T>(this->data(), this->size()).begin();
-}
-template <typename T>
-typename Vec<T>::const_iterator Vec<T>::cend() const noexcept {
-  return Slice<const T>(this->data(), this->size()).end();
-}
-template <typename T>
-void Vec<T>::swap(Vec &rhs) noexcept {
-  using std::swap;
-  swap(this->repr, rhs.repr);
-}
-// Internal API only intended for the cxxbridge code generator.
 template <typename T>
 Vec<T>::Vec(unsafe_bitcopy_t, const Vec &bits) noexcept : repr(bits.repr) {}
 #endif // CXXBRIDGE1_RUST_VEC
@@ -31458,110 +31042,6 @@ private:
     // easily result in failure.
     seastar::named_semaphore _sstable_deletion_sem = {1, named_semaphore_exception_factory{"sstable deletion"}};
     // Ensures that concurrent updates to sstable set will work correctly
-    seastar::named_semaphore _sstable_set_mutation_sem = {1, named_semaphore_exception_factory{"sstable set mutation"}};
-    mutable row_cache _cache; // Cache covers only sstables.
-    // Initialized when the table is populated via update_sstables_known_generation.
-    std::optional<sstables::sstable_generation_generator> _sstable_generation_generator;
-    db::replay_position _highest_rp;
-    db::replay_position _flush_rp;
-    db::replay_position _lowest_allowed_rp;
-    // Provided by the database that owns this commitlog
-    db::commitlog* _commitlog;
-    bool _durable_writes;
-    sstables::sstables_manager& _sstables_manager;
-    secondary_index::secondary_index_manager _index_manager;
-    bool _compaction_disabled_by_user = false;
-    bool _tombstone_gc_enabled = true;
-    utils::phased_barrier _flush_barrier;
-    std::vector<view_ptr> _views;
-    std::unique_ptr<cell_locker> _counter_cell_locks; // Memory-intensive; allocate only when needed.
-    // Labels used to identify writes and reads for this table in the rate_limiter structure.
-    db::rate_limiter::label _rate_limiter_label_for_writes;
-    db::rate_limiter::label _rate_limiter_label_for_reads;
-    seastar::metrics::metric_groups _metrics;
-    // holds average cache hit rate of all shards
-    // recalculated periodically
-    cache_temperature _global_cache_hit_rate = cache_temperature(0.0f);
-    // holds cache hit rates per each node in a cluster
-    // may not have information for some node, since it fills
-    // in dynamically
-    std::unordered_map<gms::inet_address, cache_hit_rate> _cluster_cache_hit_rates;
-    // Operations like truncate, flush, query, etc, may depend on a column family being alive to
-    // complete.  Some of them have their own gate already (like flush), used in specialized wait
-    // logic. That is particularly useful if there is a particular
-    // order in which we need to close those gates. For all the others operations that don't have
-    // such needs, we have this generic _async_gate, which all potentially asynchronous operations
-    // have to get.  It will be closed by stop().
-    seastar::gate _async_gate;
-    double _cached_percentile = -1;
-    lowres_clock::time_point _percentile_cache_timestamp;
-    std::chrono::milliseconds _percentile_cache_value;
-    // Phaser used to synchronize with in-progress writes. This is useful for code that,
-    // after some modification, needs to ensure that news writes will see it before
-    // it can proceed, such as the view building code.
-    utils::phased_barrier _pending_writes_phaser;
-    // Corresponding phaser for in-progress reads.
-    utils::phased_barrier _pending_reads_phaser;
-    // Corresponding phaser for in-progress streams
-    utils::phased_barrier _pending_streams_phaser;
-    // Corresponding phaser for in-progress flushes
-    utils::phased_barrier _pending_flushes_phaser;
-    // This field cashes the last truncation time for the table.
-    // The master resides in system.truncated table
-    db_clock::time_point _truncated_at = db_clock::time_point::min();
-    bool _is_bootstrap_or_replace = false;
-public:
-    // Ensures that concurrent preemptible mutations to sstable lists will produce correct results.
-    // User will hold this permit until done with all updates. As soon as it's released, another concurrent
-    // attempt to update the lists will be able to proceed.
-    struct sstable_list_builder {
-        using permit_t = semaphore_units<seastar::named_semaphore_exception_factory>;
-        permit_t permit;
-        // Builds new sstable set from existing one, with new sstables added to it and old sstables removed from it.
-    };
-private:
-    using compaction_group_ptr = std::unique_ptr<compaction_group>;
-    std::vector<std::unique_ptr<compaction_group>> make_compaction_groups();
-    // Return compaction group if table owns a single one. Otherwise, null is returned.
-    // Select a compaction group from a given token.
-    // Select a compaction group from a given key.
-    // Select a compaction group from a given sstable based on its token range.
-    // Returns a list of all compaction groups.
-    const std::vector<std::unique_ptr<compaction_group>>& compaction_groups() const noexcept;
-    // Safely iterate through compaction groups, while performing async operations on them.
-    // Helpers which add sstable on behalf of a compaction group and refreshes compound set.
-    // Caller must keep m alive.
-    struct merge_comparator;
-    // update the sstable generation, making sure (in calculate_generation_for_new_table)
-    // that new new sstables don't overwrite this one.
-private:
-private:
-    mutation_source_opt _virtual_reader;
-    std::optional<noncopyable_function<future<>(const frozen_mutation&)>> _virtual_writer;
-    // Creates a mutation reader which covers given sstables.
-    // Caller needs to ensure that column_family remains live (FIXME: relax this).
-    // The 'range' parameter must be live as long as the reader is used.
-    // Mutations returned by the reader will all have given schema.
-    // Compound sstable set must be refreshed whenever any of its managed sets are changed
-    std::chrono::steady_clock::time_point _sstable_writes_disabled_at;
-    // reserve_fn will be called before any element is added to readers
-public:
-    // This function should be called when this column family is ready for writes, IOW,
-    // to produce SSTables. Extensive details about why this is important can be found
-    // in Scylla's Github Issue #1014
-    //
-    // Nothing should be writing to SSTables before we have the chance to populate the
-    // existing SSTables and calculate what should the next generation number be.
-    //
-    // However, if that happens, we want to protect against it in a way that does not
-    // involve overwriting existing tables. This is one of the ways to do it: every
-    // column family starts in an unwriteable state, and when it can finally be written
-    // to, we mark it as writeable.
-    //
-    // Note that this *cannot* be a part of add_column_family. That adds a column family
-    // to a db in memory only, and if anybody is about to write to a CF, that was most
-    // likely already called. We need to call this explicitly when we are sure we're ready
-    // to issue disk operations safely.
     // Creates a mutation reader which covers all data sources for this column family.
     // Caller needs to ensure that column_family remains live (FIXME: relax this).
     // Note: for data queries use query() instead.
@@ -31614,32 +31094,6 @@ public:
     // the saved querier from the previous page (if there was one) and after
     // completion it contains the to-be saved querier for the next page (if
     // there is one). Pass nullptr when queriers are not saved.
-     // discards memtable(s) without flushing them to disk.
-    // Start a compaction of all sstables in a process known as major compaction
-    // Active memtable is flushed first to guarantee that data like tombstone,
-    // sitting in the memtable, will be compacted with shadowed data.
-private:
-    using snapshot_file_set = foreign_ptr<std::unique_ptr<std::unordered_set<sstring>>>;
-    // Writes the table schema and the manifest of all files in the snapshot directory.
-public:
-    future<std::unordered_map<sstring, snapshot_details>> get_snapshot_details();
-    future<std::unordered_set<sstring>> get_sstables_by_partition_key(const sstring& key) const;
-    // Triggers offstrategy compaction, if needed, in the background.
-    // Performs offstrategy compaction, if needed, returning
-    // a future<bool> that is resolved when offstrategy_compaction completes.
-    // The future value is true iff offstrategy compaction was required.
-    // Reader's schema must be the same as the base schema of each of the views.
-private:
-    mutable row_locker _row_locker;
-    // One does not need to wait on this future if all we are interested in, is
-    // initiating the write.  The writes initiated here will eventually
-    // complete, and the seastar::gate below will make sure they are all
-    // completed before we stop() this column_family.
-    //
-    // But it is possible to synchronously wait for the seal to complete by
-    // waiting on this future. This is useful in situations where we want to
-    // synchronously flush data to disk.
-    //
     // The function never fails.
     // It either succeeds eventually after retrying or aborts.
 public:
@@ -31770,32 +31224,6 @@ private:
     backlog_controller::scheduling_group _flush_sg;
     flush_controller _memtable_controller;
     drain_progress _drain_progress {};
-    reader_concurrency_semaphore _read_concurrency_sem;
-    reader_concurrency_semaphore _streaming_concurrency_sem;
-    reader_concurrency_semaphore _compaction_concurrency_sem;
-    reader_concurrency_semaphore _system_read_concurrency_sem;
-    db::timeout_semaphore _view_update_concurrency_sem{max_memory_pending_view_updates()};
-    cache_tracker _row_cache_tracker;
-    seastar::shared_ptr<db::view::view_update_generator> _view_update_generator;
-    inheriting_concrete_execution_stage<
-            future<>,
-            database*,
-            schema_ptr,
-            const frozen_mutation&,
-            tracing::trace_state_ptr,
-            db::timeout_clock::time_point,
-            db::commitlog_force_sync,
-            db::per_partition_rate_limit::info> _apply_stage;
-    flat_hash_map<sstring, keyspace> _keyspaces;
-    std::unordered_map<table_id, lw_shared_ptr<column_family>> _column_families;
-    using ks_cf_to_uuid_t =
-        flat_hash_map<std::pair<sstring, sstring>, table_id, utils::tuple_hash, string_pair_eq>;
-    ks_cf_to_uuid_t _ks_cf_to_uuid;
-    std::unique_ptr<db::commitlog> _commitlog;
-    std::unique_ptr<db::commitlog> _schema_commitlog;
-    utils::updateable_value_source<table_schema_version> _version;
-    uint32_t _schema_change_count = 0;
-    // compaction_manager object is referenced by all column families of a database.
     compaction_manager& _compaction_manager;
     seastar::metrics::metric_groups _metrics;
     bool _enable_incremental_backups = false;
@@ -31848,32 +31276,6 @@ public:
     ///
     /// nullopt -> the decision should be delegated to replicas
     /// can_proceed::no -> operation should be rejected
-    /// can_proceed::yes -> operation should be accepted
-    future<std::tuple<lw_shared_ptr<query::result>, cache_temperature>> query(schema_ptr, const query::read_command& cmd, query::result_options opts,
-                                                                  const dht::partition_range_vector& ranges, tracing::trace_state_ptr trace_state,
-                                                                  db::timeout_clock::time_point timeout, db::per_partition_rate_limit::info rate_limit_info = std::monostate{});
-    future<std::tuple<reconcilable_result, cache_temperature>> query_mutations(schema_ptr, const query::read_command& cmd, const dht::partition_range& range,
-                                                tracing::trace_state_ptr trace_state, db::timeout_clock::time_point timeout);
-    // Apply the mutation atomically.
-    // Throws timed_out_error when timeout is reached.
-    // Apply mutations atomically.
-    // On restart, either all mutations will be replayed or none of them.
-    // All mutations must belong to the same commitlog domain.
-    // All mutations must be owned by the current shard (in terms of dht::shard_of).
-    // Mutations may be partially visible to reads during the call.
-    // Mutations may be partially visible to reads until restart on exception (FIXME).
-    struct snapshot_details_result {
-        sstring snapshot_name;
-        db::snapshot_ctl::snapshot_details details;
-    };
-    future<std::vector<snapshot_details_result>> get_snapshot_details();
-    // Returns the list of ranges held by this endpoint
-    // The returned list is sorted, and its elements are non overlapping and non wrap-around.
-    // flush a table identified by the given id on all shards.
-    // flush a single table in a keyspace on all shards.
-    // flush a list of tables in a keyspace on all shards.
-    // flush all tables in a keyspace on all shards.
-public:
 private:
     static future<std::vector<foreign_ptr<lw_shared_ptr<table>>>> get_table_on_all_shards(sharded<database>& db, table_id uuid);
     struct table_truncate_state;
@@ -32446,32 +31848,6 @@ class ring_position_range_vector_sharder {
     std::optional<ring_position_range_sharder> _current_sharder;
 private:
 public:
-    // Initializes the `ring_position_range_vector_sharder` with the ranges to be processesd.
-    // Input ranges should be non-overlapping (although nothing bad will happen if they do
-    // overlap).
-    // Fetches the next range-shard mapping. When the input range is exhausted, std::nullopt is
-    // returned. Within an input range, results are contiguous and non-overlapping (but since input
-    // ranges usually are discontiguous, overall the results are not contiguous). Together, the results
-    // span the input ranges.
-    //
-    // The result is augmented with an `element` field which indicates the index from the input vector
-    // that the result belongs to.
-    //
-    // Results are returned sorted by index within the vector first, then within each vector item
-};
-// Incrementally divides a `partition_range` into sub-ranges wholly owned by a single shard.
-// Unlike ring_position_range_sharder, it only returns result for a shard number provided by the caller.
-class selective_token_range_sharder {
-    const sharder& _sharder;
-    dht::token_range _range;
-    shard_id _shard;
-    bool _done = false;
-    shard_id _next_shard;
-    dht::token _start_token;
-    std::optional<range_bound<dht::token>> _start_boundary;
-public:
-    // Initializes the selective_token_range_sharder with a token range and shard_id of interest.
-    // Returns the next token_range that is both wholly contained within the input range and also
     // wholly owned by the input shard_id. When the input range is exhausted, std::nullopt is returned.
     // Note if the range does not intersect the shard at all, std::nullopt will be returned immediately.
 };
@@ -32966,58 +32342,6 @@ buffer_view_to_managed_bytes_view(std::optional<ser::buffer_view<bytes_ostream::
 namespace cql3 {
 class untyped_result_set;
 class result_generator {
-    schema_ptr _schema;
-    foreign_ptr<lw_shared_ptr<query::result>> _result;
-    lw_shared_ptr<const query::read_command> _command;
-    shared_ptr<const selection::selection> _selection;
-    cql_stats* _stats;
-private:
-    friend class untyped_result_set;
-    template<typename Visitor>
-    class query_result_visitor {
-        const schema& _schema;
-        std::vector<bytes> _partition_key;
-        std::vector<bytes> _clustering_key;
-        uint64_t _partition_row_count = 0;
-        uint64_t _total_row_count = 0;
-        Visitor& _visitor;
-        const selection::selection& _selection;
-    private:
-    public:
-    };
-public:
-     ;
-};
-}
-namespace cql3 {
-class metadata {
-public:
-    enum class flag : uint8_t {
-        GLOBAL_TABLES_SPEC = 0,
-        HAS_MORE_PAGES = 1,
-        NO_METADATA = 2,
-    };
-    using flag_enum = super_enum<flag,
-        flag::GLOBAL_TABLES_SPEC,
-        flag::HAS_MORE_PAGES,
-        flag::NO_METADATA>;
-    using flag_enum_set = enum_set<flag_enum>;
-    struct column_info {
-    // Please note that columnCount can actually be smaller than names, even if names is not null. This is
-    // used to include columns in the resultSet that we need to do post-query re-orderings
-    // (SelectStatement.orderResults) but that shouldn't be sent to the user as they haven't been requested
-    // (CASSANDRA-4911). So the serialization code will exclude any columns in name whose index is >= columnCount.
-        std::vector<lw_shared_ptr<column_specification>> _names;
-        uint32_t _column_count;
-    };
-private:
-    flag_enum_set _flags;
-private:
-    lw_shared_ptr<column_info> _column_info;
-    lw_shared_ptr<const service::pager::paging_state> _paging_state;
-public:
-    // The maximum number of values that the ResultSet can hold. This can be bigger than columnCount due to CASSANDRA-4911
-private:
 public:
 };
 
@@ -33486,32 +32810,6 @@ public:
     // Data modifications will usually be performed with consistency level ONE
     // and schema changes will not be announced to other nodes.
     // Because of that, changing global schema state (e.g. modifying non-local tables,
-    // creating namespaces, etc) is explicitly forbidden via this interface.
-    //
-    // note: optimized for convenience, not performance.
-    // Like execute_batch, but is allowed to return exceptions as result_message::exception.
-    // The result_message::exception must be explicitly handled.
-    friend class migration_subscriber;
-private:
-    ///
-    /// \tparam ResultMsgType type of the returned result message (CQL or Thrift)
-    /// \tparam PreparedKeyGenerator a function that generates the prepared statement cache key for given query and
-    ///         keyspace
-    /// \tparam IdGetter a function that returns the corresponding prepared statement ID (CQL or Thrift) for a given
-    ////        prepared statement cache key
-    /// \param query_string
-    /// \param client_state
-    /// \param id_gen prepared ID generator, called before the first deferring
-    /// \param id_getter prepared ID getter, passed to deferred context by reference. The caller must ensure its
-    ////       liveness.
-    /// \return
-     ;;
-};
-class query_processor::migration_subscriber : public service::migration_listener {
-    query_processor* _qp;
-public:
-private:
-    
 };
 }
 
@@ -35280,32 +34578,6 @@ template <class To, class Rep, class Period>
 // round up
 template <class To, class Rep, class Period>
 ;
-template <class Rep, class Period,
-          class = typename std::enable_if
-          <
-              std::numeric_limits<Rep>::is_signed
-          >::type>
-CONSTCD11
-std::chrono::duration<Rep, Period>
-abs(std::chrono::duration<Rep, Period> d)
-{
-    return d >= d.zero() ? d : -d;
-}
-// round down
-template <class To, class Clock, class FromDuration>
-CONSTCD11
-inline
-std::chrono::time_point<Clock, To>
-floor(const std::chrono::time_point<Clock, FromDuration>& tp)
-{
-    using std::chrono::time_point;
-    return time_point<Clock, To>{floor<To>(tp.time_since_epoch())};
-}
-// round to nearest, to even on tie
-template <class To, class Clock, class FromDuration>
-CONSTCD11
-inline
-std::chrono::time_point<Clock, To>
 round(const std::chrono::time_point<Clock, FromDuration>& tp)
 {
     using std::chrono::time_point;
@@ -36138,32 +35410,6 @@ operator<(const month_day& x, const month_day& y) NOEXCEPT
 }
 CONSTCD11
 inline
-bool
-operator>(const month_day& x, const month_day& y) NOEXCEPT
-{
-    return y < x;
-}
-CONSTCD11
-inline
-bool
-operator<=(const month_day& x, const month_day& y) NOEXCEPT
-{
-    return !(y < x);
-}
-CONSTCD11
-inline
-bool
-operator>=(const month_day& x, const month_day& y) NOEXCEPT
-{
-    return !(x < y);
-}
-template<class CharT, class Traits>
-inline
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const month_day& md)
-{
-    return os << md.month() << '/' << md.day();
-}
 // month_day_last
 CONSTCD11 inline month month_day_last::month() const NOEXCEPT {return m_;}
 CONSTCD11 inline bool month_day_last::ok() const NOEXCEPT {return m_.ok();}
@@ -36476,32 +35722,6 @@ operator+(const years& dy, const year_month_day_last& ymdl) NOEXCEPT
 }
 CONSTCD11
 inline
-year_month_day_last
-operator-(const year_month_day_last& ymdl, const years& dy) NOEXCEPT
-{
-    return ymdl + (-dy);
-}
-// year_month_day
-CONSTCD11
-inline
-year_month_day::year_month_day(const date::year& y, const date::month& m,
-                               const date::day& d) NOEXCEPT
-    : y_(y)
-    , m_(m)
-    , d_(d)
-    {}
-CONSTCD14
-inline
-year_month_day::year_month_day(const year_month_day_last& ymdl) NOEXCEPT
-    : y_(ymdl.year())
-    , m_(ymdl.month())
-    , d_(ymdl.day())
-    {}
-CONSTCD14
-inline
-year_month_day::year_month_day(sys_days dp) NOEXCEPT
-    : year_month_day(from_days(dp.time_since_epoch()))
-    {}
 CONSTCD14
 inline
 year_month_day::year_month_day(local_days dp) NOEXCEPT
@@ -37932,32 +37152,6 @@ to_stream(std::basic_ostream<CharT, Traits>& os, const CharT* fmt,
                     detail::save_stream<CharT, Traits> _(os);
                     os.fill('0');
                     os.flags(std::ios::dec | std::ios::right);
-                    os.width(2);
-                    os << static_cast<unsigned>(ymd.month()) << CharT{'/'};
-                    os.width(2);
-                    os << static_cast<unsigned>(ymd.day()) << CharT{'/'};
-                    os.width(2);
-                    os << static_cast<int64_t>(ymd.year()) % 100;
-                }
-                else
-                {
-                    os << CharT{'%'} << modified << *fmt;
-                    modified = CharT{};
-                }
-                command = false;
-            }
-            else
-                os << *fmt;
-            break;
-        case 'F':
-            if (command)
-            {
-                if (modified == CharT{})
-                    os << floor<days>(tp);
-                else
-                {
-                    os << CharT{'%'} << modified << *fmt;
-                    modified = CharT{};
                 }
                 command = false;
             }
@@ -38088,32 +37282,6 @@ to_stream(std::basic_ostream<CharT, Traits>& os, const CharT* fmt,
                     facet.put(os, os, os.fill(), &tm, begin(f), end(f));
                     modified = CharT{};
                 }
-                else if (modified == CharT{})
-                {
-                    if (hms.minutes() < minutes{10})
-                        os << CharT{'0'};
-                    os << hms.minutes().count();
-                }
-                else
-                {
-                    os << CharT{'%'} << modified << *fmt;
-                    modified = CharT{};
-                }
-            }
-            else
-                os << *fmt;
-            break;
-        case 't':
-            if (command)
-            {
-                if (modified == CharT{})
-                    os << CharT{'\t'};
-                else
-                {
-                    os << CharT{'%'} << modified << *fmt;
-                    modified = CharT{};
-                }
-                command = false;
             }
             else
                 os << *fmt;
