@@ -10190,32 +10190,6 @@ public:
     
 };
 
- 
-}
-///
-/// The user name, or "anonymous".
-///
-template <>
-struct fmt::formatter<auth::authenticated_user> : fmt::formatter<std::string_view> {
-    template <typename FormatContext>
-    auto format(const auth::authenticated_user& u, FormatContext& ctx) const {
-        if (u.name) {
-            return fmt::format_to(ctx.out(), "{}", *u.name);
-        } else {
-            return fmt::format_to(ctx.out(), "{}", "anonymous");
-        }
-    }
-};
-namespace std {
-template <>
-struct hash<auth::authenticated_user> final {
-    size_t operator()(const auth::authenticated_user &u) const {
-        return std::hash<std::optional<sstring>>()(u.name);
-    }
-};
-}
-namespace auth {
-///
 /// A stateful SASL challenge which supports many authentication schemes (depending on the implementation).
 ///
 class sasl_challenge {
@@ -10710,32 +10684,6 @@ struct do_nothing_loading_cache_stats {
 /// read in a non-blocking way as long as it's frequently accessed. Note however that since reloading is an asynchronous
 /// procedure it may get delayed by other running task. Therefore choosing the "expiration" too close to the ("refresh" + "max load latency")
 /// value one risks to have his/her cache values evicted when the system is heavily loaded.
-///
-/// The cache is also limited in size and if adding the next value is going
-/// to exceed the cache size limit the least recently used value(s) is(are) going to be evicted until the size of the cache
-/// becomes such that adding the new value is not going to break the size limit. If the new entry's size is greater than
-/// the cache size then the get_XXX(...) method is going to return a future with the loading_cache::entry_is_too_big exception.
-///
-/// The cache is comprised of 2 dynamic sections.
-/// Total size of both sections should not exceed the maximum cache size.
-/// New cache entry is always added to the unprivileged section.
-/// After a cache entry is read more than SectionHitThreshold times it moves to the second (privileged) cache section.
-/// Both sections' entries obey expiration and reload rules as explained above.
-/// When cache entries need to be evicted due to a size restriction unprivileged section least recently used entries are evicted first.
-/// If cache size is still too big event after there are no more entries in the unprivileged section the least recently used entries
-/// from the privileged section are going to be evicted till the cache size restriction is met.
-///
-/// The size of the cache is defined as a sum of sizes of all cached entries.
-/// The size of each entry is defined by the value returned by the \tparam EntrySize predicate applied on it.
-///
-/// The get(key) or get_ptr(key) methods ensures that the "loader" callback is called only once for each cached entry regardless of how many
-/// callers are calling for the get_XXX(key) for the same "key" at the same time. Only after the value is evicted from the cache
-/// it's going to be "loaded" in the context of get_XXX(key). As long as the value is cached get_XXX(key) is going to return the
-/// cached value immediately and reload it in the background every "refresh" time period as described above.
-///
-/// \tparam Key type of the cache key
-/// \tparam Tp type of the cached value
-/// \tparam SectionHitThreshold number of hits after which a cache item is going to be moved to the privileged cache section.
 /// \tparam ReloadEnabled if loading_cache_reload_enabled::yes allow reloading the values otherwise don't reload
 /// \tparam EntrySize predicate to calculate the entry size
 /// \tparam Hash hash function
@@ -11360,32 +11308,6 @@ public:
     /// \returns an exceptional future with \ref role_already_included if granting the role would be redundant, or
     /// create a cycle.
     ///
-    ///
-    /// Revoke `role_name` from `revokee_name`.
-    ///
-    /// \returns an exceptional future with \ref nonexistant_role if either the role or the revokee do not exist.
-    ///
-    /// \returns an exceptional future with \ref revoke_ungranted_role if the role was not granted.
-    ///
-    ///
-    /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
-    ///
-    ///
-    /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
-    ///
-    ///
-    /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
-    ///
-    ///
-    /// \returns the value of the named attribute, if one is set.
-    ///
-    virtual future<std::optional<sstring>> get_attribute(std::string_view role_name, std::string_view attribute_name) = 0;
-    ///
-    /// \returns a mapping of each role's value for the named attribute, if one is set for the role.
-    ///
-    /// Sets `attribute_name` with `attribute_value` for `role_name`.
-    /// \returns an exceptional future with nonexistant_role if the role does not exist.
-    ///
     /// Removes `attribute_name` for `role_name`.
     /// \returns an exceptional future with nonexistant_role if the role does not exist.
     /// \note: This is a no-op if the role does not have the named attribute set.
@@ -11438,32 +11360,6 @@ class service final : public seastar::peering_sharded_service<service> {
     authenticator::ptr_type _authenticator;
     role_manager::ptr_type _role_manager;
     // Only one of these should be registered, so we end up with some unused instances. Not the end of the world.
-    std::unique_ptr<::service::migration_listener> _migration_listener;
-    std::function<void(uint32_t)> _permissions_cache_cfg_cb;
-    serialized_action _permissions_cache_config_action;
-    utils::observer<uint32_t> _permissions_cache_max_entries_observer;
-    utils::observer<uint32_t> _permissions_cache_update_interval_in_ms_observer;
-    utils::observer<uint32_t> _permissions_cache_validity_in_ms_observer;
-public:
-    ///
-    /// This constructor is intended to be used when the class is sharded via \ref seastar::sharded. In that case, the
-    /// arguments must be copyable, which is why we delay construction with instance-construction instructions instead
-    /// of the instances themselves.
-    ///
-    ///
-    /// \returns an exceptional future with \ref nonexistant_role if the named role does not exist.
-    ///
-    ///
-    /// Like \ref get_permissions, but never returns cached permissions.
-    ///
-    ///
-    /// Query whether the named role has been granted a role that is a superuser.
-    ///
-    /// A role is always granted to itself. Therefore, a role that "is" a superuser also "has" superuser.
-    ///
-    /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
-    ///
-    ///
     /// Return the set of all roles granted to the given role, including itself and roles granted through other roles.
     ///
     /// \returns an exceptional future with \ref nonexistent_role if the role does not exist.
@@ -11490,32 +11386,6 @@ struct command_desc {
 ///
 ///
 /// Create a role with optional authentication information.
-///
-/// \returns an exceptional future with \ref role_already_exists if the user or role exists.
-///
-/// \returns an exceptional future with \ref unsupported_authentication_option if an unsupported option is included.
-///
-///
-/// Alter an existing role and its authentication information.
-///
-/// \returns an exceptional future with \ref nonexistant_role if the named role does not exist.
-///
-/// \returns an exceptional future with \ref unsupported_authentication_option if an unsupported option is included.
-///
-///
-/// Drop a role from the system, including all permissions and authentication information.
-///
-/// \returns an exceptional future with \ref nonexistant_role if the named role does not exist.
-///
-///
-/// Check if `grantee` has been granted the named role.
-///
-/// \returns an exceptional future with \ref nonexistent_role if `grantee` or `name` do not exist.
-///
-///
-/// Check if the authenticated user has been granted the named role.
-///
-/// \returns an exceptional future with \ref nonexistent_role if the user or `name` do not exist.
 ///
 ///
 /// \returns an exceptional future with \ref nonexistent_role if the named role does not exist.
@@ -11672,32 +11542,6 @@ public:
 private:
     shared_ptr<tracing> _local_tracing_ptr;
     trace_state_props_set _state_props;
-    lw_shared_ptr<one_session_records> _records;
-    // Used for calculation of time passed since the beginning of a tracing
-    // session till each tracing event. Secondary slow-query-logging sessions inherit `_start` from parents.
-    elapsed_clock::time_point _start;
-    std::optional<uint64_t> _supplied_start_ts_us; // Parent's `_start`, as microseconds from POSIX epoch.
-    std::chrono::microseconds _slow_query_threshold;
-    state _state = state::inactive;
-    struct params_values;
-    struct params_values_deleter {
-        void operator()(params_values* pv) ;
-    };
-    class params_ptr {
-    private:
-        std::unique_ptr<params_values, params_values_deleter> _vals;
-    public:
-    } _params_ptr;
-public:
-private:
-    template <typename Func>
-    requires std::is_invocable_r_v<sstring, Func>
-    void begin(const seastar::lazy_eval<Func>& lf, gms::inet_address client) {
-        begin(lf(), client);
-    }
-    void set_batchlog_endpoints(const inet_address_vector_replica_set& val);
-    ;
-    ;
     ;
 };
 class trace_state_ptr final {
@@ -12712,58 +12556,6 @@ private:
     template <typename Values>
     requires std::same_as<Values, raw_value_vector_with_unset> || std::same_as<Values, raw_value_view_vector_with_unset>
     explicit query_options(query_options&& o, std::vector<Values> values_ranges);
-public:
-    template <typename Values>
-    requires std::same_as<Values, raw_value_vector_with_unset> || std::same_as<Values, raw_value_view_vector_with_unset>
-    static query_options make_batch_options(query_options&& o, std::vector<Values> values_ranges) {
-        return query_options(std::move(o), std::move(values_ranges));
-    }
-    // It can't be const because of prepare()
-    static thread_local query_options DEFAULT;
-    // forInternalUse
-    // Mainly for the sake of BatchQueryOptions
-    const std::optional<std::vector<sstring_view>>& get_names() const noexcept {
-        return _names;
-    }
-    const std::vector<cql3::raw_value_view>& get_values() const noexcept {
-        return _value_views;
-    }
-    const cql_config& get_cql_config() const {
-        return _cql_config;
-    }
-    // Generate a next unique list sequence for list append, e.g.
-    // a = a + [val1, val2, ...]
-    int next_list_append_seq() const {
-        return _list_append_seq++;
-    }
-    // To preserve prepend monotonicity within a batch, each next
-    // value must get a timestamp that's smaller than the previous one:
-    // BEGIN BATCH
-    //      UPDATE t SET l = [1, 2] + l WHERE pk = 0;
-    //      UPDATE t SET l = [3] + l WHERE pk = 0;
-    //      UPDATE t SET l = [4] + l WHERE pk = 0;
-    // APPLY BATCH
-    // SELECT l FROM t WHERE pk = 0;
-    //  l
-    // ------------
-    // [4, 3, 1, 2]
-    //
-    // This function reserves the given number of prepend entries
-    // and returns an id for the first prepended entry (it
-    // got to be the smallest one, to preserve the order of
-    // a multi-value append).
-    //
-    // @retval sequence number of the first entry of a multi-value
-    // append. To get the next value, add 1.
-    int next_list_prepend_seq(int num_entries, int max_entries) const {
-        if (_list_append_seq + num_entries < max_entries) {
-            _list_append_seq += num_entries;
-            return max_entries - _list_append_seq;
-        }
-        return max_entries;
-    }
-    void prepare(const std::vector<lw_shared_ptr<column_specification>>& specs);
-private:
 };
 template <typename Values>
 requires std::same_as<Values, raw_value_vector_with_unset> || std::same_as<Values, raw_value_view_vector_with_unset>
@@ -13362,32 +13154,6 @@ public:
 //   -> accept_partition_end()
 //   -> accept_new_partition()
 //   -> accept_new_row()
-//   -> accept_new_row()
-//   -> accept_new_row()
-//   -> accept_partition_end()
-//   ...
-//
-struct result_visitor {
-};
-template<typename Visitor>
-concept ResultVisitor = requires(Visitor visitor, const partition_key& pkey,
-                                      uint64_t row_count, const clustering_key& ckey,
-                                      const result_row_view& static_row, const result_row_view& row)
-{
-    visitor.accept_new_partition(pkey, row_count);
-    visitor.accept_new_partition(row_count);
-    visitor.accept_new_row(ckey, static_row, row);
-    visitor.accept_new_row(static_row, row);
-    visitor.accept_partition_end(static_row);
-};
-class result_view {
-    ser::query_result_view _v;
-    friend class result_merger;
-public:
-     ;
-     ;
-     ;
-};
 }
 namespace cql3 {
 class assignment_testable {
@@ -14142,32 +13908,6 @@ struct collection_constructor {
     // After prepare always holds a valid type, although it might be reversed_type(collection_type).
     data_type type;
 };
-// Constructs an object of a user-defined type
-struct usertype_constructor {
-    using elements_map_type = std::unordered_map<column_identifier, expression>;
-    elements_map_type elements;
-    // Might be nullptr before prepare.
-    // After prepare always holds a valid type, although it might be reversed_type(user_type).
-    data_type type;
-};
-// now that all expression types are fully defined, we can define expression::impl
-struct expression::impl final {
-    using variant_type = std::variant<
-            conjunction, binary_operator, column_value, unresolved_identifier,
-            column_mutation_attribute, function_call, cast, field_selection,
-            bind_variable, untyped_constant, constant, tuple_constructor, collection_constructor,
-            usertype_constructor, subscript>;
-    variant_type v;
-};
-template <invocable_on_expression Visitor>
-decltype(auto) visit(Visitor&& visitor, const expression& e) {
-    return std::visit(std::forward<Visitor>(visitor), e._v->v);
-}
-template <invocable_on_expression_ref Visitor>
-decltype(auto) visit(Visitor&& visitor, expression& e) {
-    return std::visit(std::forward<Visitor>(visitor), e._v->v);
-}
- ;
  ;
  ;
  ;
@@ -14272,32 +14012,6 @@ size_t count_if(const expression& e, const noncopyable_function<bool (const bina
 // Uses column_defintion::operator== for comparison, columns with the same name but different schema will not be equal.
 // Checks whether this expression contains a nonpure function.
 // The expression must be prepared, so that function names are converted to function pointers.
-// Checks whether the given column has an EQ restriction in the expression.
-// EQ restriction is `col = ...` or `(col, col2) = ...`
-// IN restriction is NOT an EQ restriction, this function will not look for IN restrictions.
-// Uses column_defintion::operator== for comparison, columns with the same name but different schema will not be equal.
-/// Replaces every column_definition in an expression with this one.  Throws if any LHS is not a single
-/// column_value.
-// Replaces all occurences of token(p1, p2) on the left hand side with the given colum.
-// For example this changes token(p1, p2) < token(1, 2) to my_column_name < token(1, 2).
-// Schema is needed to find out which calls to token() describe the partition token.
-// Recursively copies e and returns it. Calls replace_candidate() on all nodes. If it returns nullopt,
-// continue with the copying. If it returns an expression, that expression replaces the current node.
-// Adjust an expression for rows that were fetched using query::partition_slice::options::collections_as_maps
-// Prepares a binary operator received from the parser.
-// Does some basic type checks but no advanced validation.
-// Pre-compile any constant LIKE patterns and return equivalent expression
-// Test all elements of exprs for assignment. If all are exact match, return exact match. If any is not assignable,
-// return not assignable. Otherwise, return weakly assignable.
-// Extracts all binary operators which have the given column on their left hand side.
-// Extracts only single-column restrictions.
-// Does not include multi-column restrictions.
-// Does not include token() restrictions.
-// Does not include boolean constant restrictions.
-// For example "WHERE c = 1 AND (a, c) = (2, 1) AND token(p) < 2 AND FALSE" will return {"c = 1"}.
-// Takes a prepared expression and calculates its value.
-// Evaluates bound values, calls functions and returns just the bytes and type.
-std::vector<std::pair<managed_bytes, managed_bytes>> get_map_elements(const cql3::raw_value&);
 // Gets the elements of a constant which can be a list, set, tuple or user type
 // Get elements of list<tuple<>> as vector<vector<managed_bytes_opt>
 // It is useful with IN restrictions like (a, b) IN [(1, 2), (3, 4)].
@@ -20096,32 +19810,6 @@ public:
     named_value<uint16_t> alternator_port;
     named_value<uint16_t> alternator_https_port;
     named_value<sstring> alternator_address;
-    named_value<bool> alternator_enforce_authorization;
-    named_value<sstring> alternator_write_isolation;
-    named_value<uint32_t> alternator_streams_time_window_s;
-    named_value<uint32_t> alternator_timeout_in_ms;
-    named_value<double> alternator_ttl_period_in_seconds;
-    named_value<bool> abort_on_ebadf;
-    named_value<uint16_t> redis_port;
-    named_value<uint16_t> redis_ssl_port;
-    named_value<sstring> redis_read_consistency_level;
-    named_value<sstring> redis_write_consistency_level;
-    named_value<uint16_t> redis_database_count;
-    named_value<string_map> redis_keyspace_replication_strategy_options;
-    named_value<bool> sanitizer_report_backtrace;
-    named_value<bool> flush_schema_tables_after_modification;
-    // Options to restrict (forbid, warn or somehow limit) certain operations
-    // or options which non-expert users are more likely to regret than to
-    // enjoy:
-    named_value<tri_mode_restriction> restrict_replication_simplestrategy;
-    named_value<tri_mode_restriction> restrict_dtcs;
-    named_value<tri_mode_restriction> restrict_twcs_without_default_ttl;
-    named_value<bool> restrict_future_timestamp;
-    named_value<bool> ignore_truncation_record;
-    named_value<bool> force_schema_commit_log;
-    named_value<uint32_t> task_ttl_seconds;
-    named_value<uint32_t> nodeops_watchdog_timeout_seconds;
-    named_value<uint32_t> nodeops_heartbeat_interval_seconds;
     named_value<bool> cache_index_pages;
     named_value<unsigned> x_log2_compaction_groups;
     named_value<bool> consistent_cluster_management;
@@ -20304,58 +19992,6 @@ public:
     }
 #endif
 #if 0
-    public Map<String, String> getKeyValueParameters() throws SyntaxException
-    {
-        if (isEOS())
-            return Collections.emptyMap();
-        if (str.charAt(idx) != '(')
-            throw new IllegalStateException();
-        Map<String, String> map = new HashMap<String, String>();
-        ++idx; // skipping '('
-        while (skipBlankAndComma())
-        {
-            if (str.charAt(idx) == ')')
-            {
-                ++idx;
-                return map;
-            }
-            String k = readNextIdentifier();
-            String v = "";
-            skipBlank();
-            if (str.charAt(idx) == '=')
-            {
-                ++idx;
-                skipBlank();
-                v = readNextIdentifier();
-            }
-            else if (str.charAt(idx) != ',' && str.charAt(idx) != ')')
-            {
-                throwSyntaxError("unexpected character '" + str.charAt(idx) + "'");
-            }
-            map.put(k, v);
-        }
-        throw new SyntaxException(String.format("Syntax error parsing '%s' at char %d: unexpected end of string", str, idx));
-    }
-#endif
-    std::tuple<sstring, bytes, std::vector<bytes>, std::vector<data_type>> get_user_type_parameters();
-#if 0
-    public Map<Byte, AbstractType<?>> getAliasParameters() throws SyntaxException, ConfigurationException
-    {
-        Map<Byte, AbstractType<?>> map = new HashMap<Byte, AbstractType<?>>();
-        if (isEOS())
-            return map;
-        if (str.charAt(idx) != '(')
-            throw new IllegalStateException();
-        ++idx; // skipping '('
-        while (skipBlankAndComma())
-        {
-            if (str.charAt(idx) == ')')
-            {
-                ++idx;
-                return map;
-            }
-            String alias = readNextIdentifier();
-            if (alias.length() != 1)
     }
     public static String stringifyAliasesParameters(Map<Byte, AbstractType<?>> aliases)
     {
@@ -20382,32 +20018,6 @@ public:
     public static String stringifyTypeParameters(List<AbstractType<?>> types, boolean ignoreFreezing)
     {
         StringBuilder sb = new StringBuilder("(");
-        for (int i = 0; i < types.size(); i++)
-        {
-            if (i > 0)
-                sb.append(",");
-            sb.append(types.get(i).toString(ignoreFreezing));
-        }
-        return sb.append(')').toString();
-    }
-    public static String stringifyCollectionsParameters(Map<ByteBuffer, ? extends CollectionType> collections)
-    {
-        StringBuilder sb = new StringBuilder();
-        sb.append('(');
-        boolean first = true;
-        for (Map.Entry<ByteBuffer, ? extends CollectionType> entry : collections.entrySet())
-        {
-            if (!first)
-                sb.append(',');
-            first = false;
-            sb.append(ByteBufferUtil.bytesToHex(entry.getKey())).append(":");
-            sb.append(entry.getValue());
-        }
-        sb.append(')');
-        return sb.toString();
-    }
-    public static String stringifyUserTypeParameters(String keysace, ByteBuffer typeName, List<ByteBuffer> columnNames, List<AbstractType<?>> columnTypes)
-    {
         StringBuilder sb = new StringBuilder();
         sb.append('(').append(keysace).append(",").append(ByteBufferUtil.bytesToHex(typeName));
         for (int i = 0; i < columnNames.size(); i++)
@@ -20850,84 +20460,6 @@ struct serializer<const partition_end> : public serializer<partition_end>
 using seastar::future;
 /// \brief Represents a stream of mutation fragments.
 ///
-/// Mutation fragments represent writes to the database.
-///
-/// Each fragment has an implicit position in the database,
-/// which also determines its position in the stream relative to other fragments.
-/// The global position of a fragment is a tuple ordered lexicographically:
-///
-///    (ring_position of a partition key, position_in_partition)
-///
-/// The stream has a hierarchical form. All fragments which occur
-/// between partition_start and partition_end represent writes to the partition
-/// identified by the partition_start::key(). The partition key is not repeated
-/// with inner fragments.
-///
-/// The stream of mutation fragments conforms to the following form:
-///
-///   stream ::= partition*
-///   partition ::= partition_start static_row? clustered* partition_end
-///   clustered ::= clustering_row | range_tombstone_change
-///
-/// Deletions of ranges of rows within a given partition are represented with range_tombstone_change fragments.
-/// At any point in the stream there is a single active clustered tombstone.
-/// It is initially equal to the neutral tombstone when the stream of each partition starts.
-/// range_tombstone_change fragments signify changes of the active clustered tombstone.
-/// All fragments emitted while a given clustered tombstone is active are affected by that tombstone.
-/// The clustered tombstone is independent from the partition tombstone carried in partition_start.
-/// The partition tombstone takes effect for all fragments within the partition.
-///
-/// The stream guarantees that each partition ends with a neutral active clustered tombstone
-/// by closing active tombstones with a range_tombstone_change.
-/// In fast-forwarding mode, each sub-stream ends with a neutral active clustered tombstone.
-///
-/// All fragments within a partition have weakly monotonically increasing position().
-/// Consecutive range_tombstone_change fragments may share the position.
-/// All clustering row fragments within a partition have strictly monotonically increasing position().
-///
-/// \section Clustering restrictions
-///
-/// A stream may produce writes relevant to only some clustering ranges, for
-/// example by specifying clustering ranges in a partition_slice passed to
-/// mutation_source::make_reader(). This will make the stream return information
-/// for a subset of writes that it would normally return should the stream be
-/// unrestricted.
-///
-/// The restricted stream obeys the following rules:
-///
-///   0) The stream must contain fragments corresponding to all writes
-///      which are relevant to the requested ranges.
-///
-///   1) The ranges of non-neutral clustered tombstones must be enclosed in requested
-///      ranges. In other words, range tombstones don't extend beyond boundaries of requested ranges.
-///
-///   2) The stream will not return writes which are absent in the unrestricted stream,
-///      both for the requested clustering ranges and not requested ranges.
-///      This means that it's safe to populate cache with all the returned information.
-///      Even though it may be incomplete for non-requested ranges, it won't contain
-///      incorrect information.
-///
-///   3) All clustered fragments have position() which is within the requested
-///      ranges or, in case of range_tombstone_change fragments, equal to the end bound.
-///
-///   4) Streams may produce redundant range_tombstone_change fragments
-///      which do not change the current clustered tombstone, or have the same position.
-///
-/// \section Intra-partition fast-forwarding mode
-///
-/// The stream can operate in an alternative mode when streamed_mutation::forwarding::yes
-/// is passed to the stream constructor (see mutation_source).
-///
-/// In this mode, the original stream is not produced at once, but divided into sub-streams, where
-/// each is produced at a time, ending with the end-of-stream condition (is_end_of_stream()).
-/// The user needs to explicitly advance the stream to the next sub-stream by calling
-/// fast_forward_to() or next_partition().
-///
-/// The original stream is divided like this:
-///
-///    1) For every partition, the first sub-stream will contain
-///       partition_start and the static_row
-///
 ///    2) Calling fast_forward_to() moves to the next sub-stream within the
 ///       current partition. The stream will contain all fragments relevant to
 ///       the position_range passed to fast_forward_to().
@@ -21292,32 +20824,6 @@ public:
     // The actual buffer size of the reader.
     // Altough we consistently refer to this as buffer size throught the code
     // we really use "buffer size" as the size of the collective memory
-    // used by all the mutation fragments stored in the buffer of the reader.
-    size_t buffer_size() const {
-        return _impl->buffer_size();
-    }
-    const tracked_buffer& buffer() const {
-        return _impl->buffer();
-    }
-    // Detach the internal buffer of the reader.
-    // Roughly equivalent to depleting it by calling pop_mutation_fragment()
-    // until is_buffer_empty() returns true.
-    // The reader will need to allocate a new buffer on the next fill_buffer()
-    // call.
-    tracked_buffer detach_buffer() noexcept {
-        return _impl->detach_buffer();
-    }
-    // Moves the buffer content to `other`.
-    //
-    // If the buffer of `other` is empty this is very efficient as the buffers
-    // are simply swapped. Otherwise the content of the buffer is moved
-    // fragmuent-by-fragment.
-    // Allows efficient implementation of wrapping readers that do no
-    // transformation to the fragment stream.
-    void move_buffer_content_to(impl& other) {
-        _impl->move_buffer_content_to(other);
-    }
-    // Causes this reader to conform to s.
     // Multiple calls of upgrade_schema() compose, effects of prior calls on the stream are preserved.
     void upgrade_schema(const schema_ptr& s) {
         if (__builtin_expect(s != schema(), false)) {
@@ -21470,58 +20976,6 @@ range_tombstone serializer<range_tombstone>::read(Input& buf) {
   auto __local_4 = (in.size()>0) ?
     deserialize(in, boost::type<bound_kind>()) : bound_kind::incl_end;
   range_tombstone res {std::move(__local_0), std::move(__local_1), std::move(__local_2), std::move(__local_3), std::move(__local_4)};
-  return res;
- });
-}
-template <typename Input>
-void serializer<range_tombstone>::skip(Input& buf) {
- seastar::with_serialized_stream(buf, [] (auto& buf) {
-  size_type size = deserialize(buf, boost::type<size_type>());
-  buf.skip(size - sizeof(size_type));
- });
-}
-template <typename Output>
-void serializer<column_mapping_entry>::write(Output& buf, const column_mapping_entry& obj) {
-  set_size(buf, obj);
-  static_assert(is_equivalent<decltype(obj.name()), bytes>::value, "member value has a wrong type");
-  serialize(buf, obj.name());
-  static_assert(is_equivalent<decltype(obj.type_name()), sstring>::value, "member value has a wrong type");
-  serialize(buf, obj.type_name());
-}
-template <typename Input>
-column_mapping_entry serializer<column_mapping_entry>::read(Input& buf) {
- return seastar::with_serialized_stream(buf, [] (auto& buf) {
-  size_type size = deserialize(buf, boost::type<size_type>());
-  auto in = buf.read_substream(size - sizeof(size_type));
-  auto __local_0 = deserialize(in, boost::type<bytes>());
-  auto __local_1 = deserialize(in, boost::type<sstring>());
-  column_mapping_entry res {std::move(__local_0), std::move(__local_1)};
-  return res;
- });
-}
-template <typename Input>
-void serializer<column_mapping_entry>::skip(Input& buf) {
- seastar::with_serialized_stream(buf, [] (auto& buf) {
-  size_type size = deserialize(buf, boost::type<size_type>());
-  buf.skip(size - sizeof(size_type));
- });
-}
-template <typename Output>
-void serializer<column_mapping>::write(Output& buf, const column_mapping& obj) {
-  set_size(buf, obj);
-  static_assert(is_equivalent<decltype(obj.columns()), std::vector<column_mapping_entry>>::value, "member value has a wrong type");
-  serialize(buf, obj.columns());
-  static_assert(is_equivalent<decltype(obj.n_static()), uint32_t>::value, "member value has a wrong type");
-  serialize(buf, obj.n_static());
-}
-template <typename Input>
-column_mapping serializer<column_mapping>::read(Input& buf) {
- return seastar::with_serialized_stream(buf, [] (auto& buf) {
-  size_type size = deserialize(buf, boost::type<size_type>());
-  auto in = buf.read_substream(size - sizeof(size_type));
-  auto __local_0 = deserialize(in, boost::type<std::vector<column_mapping_entry>>());
-  auto __local_1 = deserialize(in, boost::type<uint32_t>());
-  column_mapping res {std::move(__local_0), std::move(__local_1)};
   return res;
  });
 }
@@ -21863,32 +21317,6 @@ struct clustering_row_view {
 template<>
 struct serializer<clustering_row_view> {
      ;
-     ;
-     ;
-};
-struct mutation_partition_view {
-    utils::input_stream v;
-};
-template<>
-struct serializer<mutation_partition_view> {
-     ;
-     ;
-     ;
-};
-struct canonical_mutation_view {
-    utils::input_stream v;
-};
-template<>
-struct serializer<canonical_mutation_view> {
-     ;
-     ;
-     ;
-};
-struct mutation_view {
-    utils::input_stream v;
-};
-template<>
-struct serializer<mutation_view> {
      ;
      ;
      ;
@@ -22436,188 +21864,6 @@ struct after_clustering_row__row__marker {
 };
 template<typename Output>
 struct after_clustering_row__row__marker__live_marker__created_at {
-    Output& _out;
-    state_of_clustering_row__row__marker__live_marker<Output> _state;
-};
-template<typename Output>
-struct clustering_row__row__marker__live_marker {
-    Output& _out;
-    state_of_clustering_row__row__marker__live_marker<Output> _state;
-};
-template<typename Output>
-struct after_clustering_row__row__marker__expiring_marker__expiry {
-    Output& _out;
-    state_of_clustering_row__row__marker__expiring_marker<Output> _state;
-};
-template<typename Output>
-struct after_clustering_row__row__marker__expiring_marker__ttl {
-    Output& _out;
-    state_of_clustering_row__row__marker__expiring_marker<Output> _state;
-};
-template<typename Output>
-struct after_clustering_row__row__marker__expiring_marker__lm {
-    Output& _out;
-    state_of_clustering_row__row__marker__expiring_marker<Output> _state;
-};
-template<typename Output>
-struct after_clustering_row__row__marker__expiring_marker__lm__created_at {
-    Output& _out;
-    state_of_clustering_row__row__marker__expiring_marker__lm<Output> _state;
-};
-template<typename Output>
-struct clustering_row__row__marker__expiring_marker__lm {
-    Output& _out;
-    state_of_clustering_row__row__marker__expiring_marker__lm<Output> _state;
-};
-template<typename Output>
-struct clustering_row__row__marker__expiring_marker {
-    Output& _out;
-    state_of_clustering_row__row__marker__expiring_marker<Output> _state;
-     ;
-};
-template<typename Output>
-struct after_clustering_row__row__marker__dead_marker__tomb {
-    Output& _out;
-    state_of_clustering_row__row__marker__dead_marker<Output> _state;
-};
-template<typename Output>
-struct mutation_partition__tomb {
-    Output& _out;
-    state_of_mutation_partition__tomb<Output> _state;
-};
-template<typename Output>
-struct writer_of_mutation_partition {
-    Output& _out;
-    state_of_mutation_partition<Output> _state;
-};
-template<typename Output>
-struct after_canonical_mutation__partition {
-    Output& _out;
-    state_of_canonical_mutation<Output> _state;
-};
-template<typename Output>
-struct after_canonical_mutation__partition__rows {
-    Output& _out;
-    state_of_canonical_mutation__partition<Output> _state;
-};
-template<typename Output>
-struct canonical_mutation__partition__rows {
-    Output& _out;
-    state_of_canonical_mutation__partition<Output> _state;
-        place_holder<Output> _size;
-    size_type _count = 0;
-};
-template<typename Output>
-struct after_canonical_mutation__partition__range_tombstones {
-    Output& _out;
-    state_of_canonical_mutation__partition<Output> _state;
-};
-template<typename Output>
-struct canonical_mutation__partition__range_tombstones {
-    Output& _out;
-    state_of_canonical_mutation__partition<Output> _state;
-        place_holder<Output> _size;
-    size_type _count = 0;
-};
-template<typename Output>
-struct after_canonical_mutation__partition__static_row {
-    Output& _out;
-    state_of_canonical_mutation__partition<Output> _state;
-};
-template<typename Output>
-struct after_canonical_mutation__partition__static_row__columns {
-    Output& _out;
-    state_of_canonical_mutation__partition__static_row<Output> _state;
-};
-template<typename Output>
-struct canonical_mutation__partition__static_row__columns {
-    Output& _out;
-    state_of_canonical_mutation__partition__static_row<Output> _state;
-        place_holder<Output> _size;
-    size_type _count = 0;
-};
-template<typename Output>
-struct canonical_mutation__partition__static_row {
-    Output& _out;
-    state_of_canonical_mutation__partition__static_row<Output> _state;
-};
-template<typename Output>
-struct after_canonical_mutation__partition__tomb {
-    Output& _out;
-    state_of_canonical_mutation__partition<Output> _state;
-     ;
-};
-template<typename Output>
-struct after_canonical_mutation__partition__tomb__deletion_time {
-    Output& _out;
-    state_of_canonical_mutation__partition__tomb<Output> _state;
-};
-template<typename Output>
-struct after_canonical_mutation__partition__tomb__timestamp {
-    Output& _out;
-    state_of_canonical_mutation__partition__tomb<Output> _state;
-};
-template<typename Output>
-struct canonical_mutation__partition__tomb {
-    Output& _out;
-    state_of_canonical_mutation__partition__tomb<Output> _state;
-};
-template<typename Output>
-struct canonical_mutation__partition {
-    Output& _out;
-    state_of_canonical_mutation__partition<Output> _state;
-};
-template<typename Output>
-struct after_canonical_mutation__mapping {
-    Output& _out;
-    state_of_canonical_mutation<Output> _state;
-     ;
-};
-template<typename Output>
-struct after_canonical_mutation__key {
-    Output& _out;
-    state_of_canonical_mutation<Output> _state;
-};
-template<typename Output>
-struct after_canonical_mutation__schema_version {
-    Output& _out;
-    state_of_canonical_mutation<Output> _state;
-};
-template<typename Output>
-struct after_canonical_mutation__table_id {
-    Output& _out;
-    state_of_canonical_mutation<Output> _state;
-};
-template<typename Output>
-struct writer_of_canonical_mutation {
-    Output& _out;
-    state_of_canonical_mutation<Output> _state;
-};
-template<typename Output>
-struct after_mutation__partition {
-    Output& _out;
-    state_of_mutation<Output> _state;
-};
-template<typename Output>
-struct after_mutation__partition__rows {
-    Output& _out;
-    state_of_mutation__partition<Output> _state;
-};
-template<typename Output>
-struct mutation__partition__rows {
-    Output& _out;
-    state_of_mutation__partition<Output> _state;
-        place_holder<Output> _size;
-    size_type _count = 0;
-};
-template<typename Output>
-struct after_mutation__partition__range_tombstones {
-    Output& _out;
-    state_of_mutation__partition<Output> _state;
-};
-template<typename Output>
-struct mutation__partition__range_tombstones {
-    Output& _out;
     state_of_mutation__partition<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
@@ -22671,32 +21917,6 @@ struct mutation__partition {
     state_of_mutation__partition<Output> _state;
 };
 template<typename Output>
-struct after_mutation__key {
-    Output& _out;
-    state_of_mutation<Output> _state;
-     ;
-};
-template<typename Output>
-struct after_mutation__schema_version {
-    Output& _out;
-    state_of_mutation<Output> _state;
-};
-template<typename Output>
-struct after_mutation__table_id {
-    Output& _out;
-    state_of_mutation<Output> _state;
-};
-template<typename Output>
-struct writer_of_mutation {
-    state_of_mutation_fragment__fragment__clustering_row__row__cells<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__deleted_at {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-     ;
-};
-template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__deleted_at__deletion_time {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__deleted_at<Output> _state;
@@ -22748,84 +21968,6 @@ struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> _state;
-};
-template<typename Output>
-struct mutation_fragment__fragment__clustering_row__row__marker__expiring_marker {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
-     ;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__deletion_time {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb__timestamp {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> _state;
-};
-template<typename Output>
-struct mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker__tomb<Output> _state;
-};
-template<typename Output>
-struct mutation_fragment__fragment__clustering_row__row__marker__dead_marker {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__dead_marker<Output> _state;
-};
-template<typename Output>
-struct mutation_fragment__fragment__clustering_row__row__marker__no_marker {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__no_marker<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__key {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker<Output> _state;
-     ;
-     ;
-     ;
-     ;
-};
-template<typename Output>
-struct mutation_fragment__fragment__clustering_row__row {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-};
-template<typename Output>
-struct mutation_fragment__fragment__clustering_row {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row<Output> _state;
-     ;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__static_row__cells {
-    Output& _out;
-    state_of_mutation_fragment__fragment__static_row<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__static_row__cells__columns {
-    Output& _out;
-    state_of_mutation_fragment__fragment__static_row__cells<Output> _state;
-};
-template<typename Output>
-struct mutation_fragment__fragment__static_row__cells__columns {
-    Output& _out;
-    state_of_mutation_fragment__fragment__static_row__cells<Output> _state;
-        place_holder<Output> _size;
-    size_type _count = 0;
-};
-template<typename Output>
-struct mutation_fragment__fragment__static_row__cells {
     Output& _out;
     state_of_mutation_fragment__fragment__static_row__cells<Output> _state;
 };
