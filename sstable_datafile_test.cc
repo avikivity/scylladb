@@ -142,19 +142,6 @@ struct appending_hash<T> {
         feed_hash(h, static_cast<std::underlying_type_t<T>>(value));
     }
 };
-template<typename T>
-struct appending_hash<std::optional<T>>  {
-    template<typename H>
-    requires Hasher<H>
-    void operator()(H& h, const std::optional<T>& value) const noexcept {
-        if (value) {
-            feed_hash(h, true);
-            feed_hash(h, *value);
-        } else {
-            feed_hash(h, false);
-        }
-    }
-};
 template<size_t N>
 struct appending_hash<char[N]>  {
     template<typename H>
@@ -427,19 +414,6 @@ public:
     // "20010db8".
     //
     // but the format specifier can be used to customize how the bytes
-    // are printed. for instance, to print an bytes_view like IPv6. so
-    // the format specfier would be "{:2:}", where
-    // - "2": bytes are printed in groups of 2 bytes
-    // - ":": each group is delimeted by ":"
-    // and the formatted output will look like:
-    // "2001:0db8:0000"
-    //
-    // or we can mimic how the default format of used by hexdump using
-    // "{:2 }", where
-    // - "2": bytes are printed in group of 2 bytes
-    // - " ": each group is delimeted by " "
-    // and the formatted output will look like:
-    // "2001 0db8 0000"
     //
     // or we can just print each bytes and separate them by a dash using
     // "{:1-}"
@@ -583,71 +557,6 @@ class BloomCalculations {
     private static final int EXCESS = 20;
     static final double[][] probs = new double[][]{
         {1.0}, // dummy row representing 0 buckets per element
-        {1.0, 1.0}, // dummy row representing 1 buckets per element
-        {1.0, 0.393,  0.400},
-        {1.0, 0.283,  0.237,   0.253},
-        {1.0, 0.221,  0.155,   0.147,   0.160},
-        {1.0, 0.181,  0.109,   0.092,   0.092,   0.101}, // 5
-        {1.0, 0.154,  0.0804,  0.0609,  0.0561,  0.0578,   0.0638},
-        {1.0, 0.133,  0.0618,  0.0423,  0.0359,  0.0347,   0.0364},
-        {1.0, 0.118,  0.0489,  0.0306,  0.024,   0.0217,   0.0216,   0.0229},
-        {1.0, 0.105,  0.0397,  0.0228,  0.0166,  0.0141,   0.0133,   0.0135,   0.0145},
-        {1.0, 0.0952, 0.0329,  0.0174,  0.0118,  0.00943,  0.00844,  0.00819,  0.00846}, // 10
-        {1.0, 0.0869, 0.0276,  0.0136,  0.00864, 0.0065,   0.00552,  0.00513,  0.00509},
-        {1.0, 0.08,   0.0236,  0.0108,  0.00646, 0.00459,  0.00371,  0.00329,  0.00314},
-        {1.0, 0.074,  0.0203,  0.00875, 0.00492, 0.00332,  0.00255,  0.00217,  0.00199,  0.00194},
-        {1.0, 0.0689, 0.0177,  0.00718, 0.00381, 0.00244,  0.00179,  0.00146,  0.00129,  0.00121,  0.0012},
-        {1.0, 0.0645, 0.0156,  0.00596, 0.003,   0.00183,  0.00128,  0.001,    0.000852, 0.000775, 0.000744}, // 15
-        {1.0, 0.0606, 0.0138,  0.005,   0.00239, 0.00139,  0.000935, 0.000702, 0.000574, 0.000505, 0.00047,  0.000459},
-        {1.0, 0.0571, 0.0123,  0.00423, 0.00193, 0.00107,  0.000692, 0.000499, 0.000394, 0.000335, 0.000302, 0.000287, 0.000284},
-        {1.0, 0.054,  0.0111,  0.00362, 0.00158, 0.000839, 0.000519, 0.00036,  0.000275, 0.000226, 0.000198, 0.000183, 0.000176},
-        {1.0, 0.0513, 0.00998, 0.00312, 0.0013,  0.000663, 0.000394, 0.000264, 0.000194, 0.000155, 0.000132, 0.000118, 0.000111, 0.000109},
-        {1.0, 0.0488, 0.00906, 0.0027,  0.00108, 0.00053,  0.000303, 0.000196, 0.00014,  0.000108, 8.89e-05, 7.77e-05, 7.12e-05, 6.79e-05, 6.71e-05} // 20
-    };  // the first column is a dummy column representing K=0.
-    private static final int[] optKPerBuckets = new int[probs.length];
-    static
-    {
-        for (int i = 0; i < probs.length; i++)
-        {
-            double min = Double.MAX_VALUE;
-            double[] prob = probs[i];
-            for (int j = 0; j < prob.length; j++)
-            {
-                if (prob[j] < min)
-                {
-                    min = prob[j];
-                    optKPerBuckets[i] = Math.max(minK, j);
-                }
-            }
-        }
-    }
-    public static BloomSpecification computeBloomSpec(int bucketsPerElement)
-    {
-        assert bucketsPerElement >= 1;
-        assert bucketsPerElement <= probs.length - 1;
-        return new BloomSpecification(optKPerBuckets[bucketsPerElement], bucketsPerElement);
-    }
-    public static class BloomSpecification
-    {
-        final int K; // number of hash functions.
-        final int bucketsPerElement;
-        public BloomSpecification(int k, int bucketsPerElement)
-        {
-            K = k;
-            this.bucketsPerElement = bucketsPerElement;
-        }
-        public String toString()
-        {
-            return String.format("BloomSpecification(K=%d, bucketsPerElement=%d)", K, bucketsPerElement);
-        }
-    }
-    public static BloomSpecification computeBloomSpec(int maxBucketsPerElement, double maxFalsePosProb)
-    {
-        assert maxBucketsPerElement >= 1;
-        assert maxBucketsPerElement <= probs.length - 1;
-        int maxK = probs[maxBucketsPerElement].length - 1;
-        // Handle the trivial cases
-        if(maxFalsePosProb >= probs[minBuckets][minK]) {
             throw new UnsupportedOperationException("Cannot compute probabilities for " + numElements + " elements.");
         }
         return Math.min(BloomCalculations.probs.length - 1, (int)v);
@@ -791,19 +700,6 @@ std::ostream& operator<<(std::ostream& os, const Range& items) {
 }
 template <typename T, typename... Args>
 std::ostream& operator<<(std::ostream& os, const std::set<T, Args...>& items) {
-    return utils::format_range(os, items);
-}
-template <typename T, typename... Args>
-std::ostream& operator<<(std::ostream& os, const std::unordered_set<T, Args...>& items) {
-    return utils::format_range(os, items);
-}
-template <typename K, typename V, typename... Args>
-std::ostream& operator<<(std::ostream& os, const std::map<K, V, Args...>& items) {
-    return utils::format_range(os, items);
-}
-template <typename... Args>
-std::ostream& operator<<(std::ostream& os, const boost::transformed_range<Args...>& items) {
-    return utils::format_range(os, items);
 }
 template <typename T, std::size_t N>
 std::ostream& operator<<(std::ostream& os, const std::array<T, N>& items) {
@@ -1103,19 +999,6 @@ public:
             auto after = std::distance(pos, end());
             if (__builtin_expect(pos == end(), true)) {
                 _end = std::uninitialized_copy(first, last, end());
-                return pos;
-            } else if (after > new_count) {
-                std::uninitialized_move(end() - new_count, end(), end());
-                std::move_backward(pos, end() - new_count, end());
-                try {
-                    std::copy(first, last, pos);
-                } catch (...) {
-                    std::move(pos + new_count, end() + new_count, pos);
-                    std::destroy(end(), end() + new_count);
-                    throw;
-                }
-            } else {
-                std::uninitialized_move(pos, end(), pos + new_count);
                 auto mid = std::next(first, after);
                 try {
                     std::uninitialized_copy(mid, last, end());
@@ -1155,19 +1038,6 @@ public:
         reserve_at_least(size() + 1);
         auto pos = _begin + idx;
         if (pos != _end) {
-            new (_end) T(std::move(_end[-1]));
-            std::move_backward(pos, _end - 1, _end);
-            pos->~T();
-        }
-        try {
-            new (pos) T(std::forward<Args>(args)...);
-        } catch (...) {
-            if (pos != _end) {
-                new (pos) T(std::move(pos[1]));
-                std::move(pos + 2, _end + 1, pos + 1);
-                _end->~T();
-            }
-            throw;
         }
     }
     void pop_back() noexcept {
@@ -1181,19 +1051,6 @@ public:
         auto last = const_cast<iterator>(clast);
         std::move(last, end(), first);
         auto nend = _end - (clast - cfirst);
-        std::destroy(nend, _end);
-        _end = nend;
-        return first;
-    }
-    void swap(small_vector& other) noexcept {
-        std::swap(*this, other);
-    }
-    auto operator<=>(const small_vector& other) const noexcept requires std::three_way_comparable<T> {
-        return std::lexicographical_compare_three_way(this->begin(), this->end(),
-                                                      other.begin(), other.end());
-    }
-    bool operator==(const small_vector& other) const noexcept {
-        return size() == other.size() && std::equal(_begin, _end, other.begin());
     }
 };
  ;
@@ -1207,19 +1064,6 @@ public:
 // libstdc++ still results in large contiguous allocations: std::deque
 // keeps the items in small (512-byte) chunks, and then keeps a contiguous
 // vector listing these chunks. This chunk vector can grow pretty big if the
-// std::deque grows big: When an std::deque contains just 8 MB of data, it
-// needs 16384 chunks, and the vector listing those needs 128 KB.
-//
-// Therefore, in chunked_vector we use much larger 128 KB chunks (this is
-// configurable, with the max_contiguous_allocation template parameter).
-// With 128 KB chunks, the contiguous vector listing them is 256 times
-// smaller than it would be in std::dequeue with its 512-byte chunks.
-//
-// In particular, when a chunked_vector stores up to 2 GB of data, the
-// largest contiguous allocation is guaranteed to be 128 KB: 2 GB of data
-// fits in 16384 chunks of 128 KB each, and the vector of 16384 8-byte
-// pointers requires another 128 KB allocation.
-//
 // Remember, however, that when the chunked_vector grows beyond 2 GB, its
 // largest contiguous allocation (used to store the chunk list) continues to
 // grow as O(N). This is not a problem for current real-world uses of
@@ -1311,19 +1155,6 @@ public:
         }
     }
     /// Reserve some of the memory.
-    ///
-    /// Allows reserving the memory chunk-by-chunk, avoiding stalls when a lot of
-    /// chunks are needed. To drive the reservation to completion, call this
-    /// repeatedly with the value returned from the previous call until it
-    /// returns 0, yielding between calls when necessary. Example usage:
-    ///
-    ///     return do_until([&size] { return !size; }, [&my_vector, &size] () mutable {
-    ///         size = my_vector.reserve_partial(size);
-    ///     });
-    ///
-    /// Here, `do_until()` takes care of yielding between iterations when
-    /// necessary.
-    ///
     /// \returns the memory that remains to be reserved
     
 public:
@@ -1415,19 +1246,6 @@ template <typename T, size_t max_contiguous_allocation>
 size_t
 chunked_vector<T, max_contiguous_allocation>::make_room(size_t n, bool stop_after_one) {
     // First, if the last chunk is below max_chunk_capacity(), enlarge it
-    auto last_chunk_capacity_deficit = _chunks.size() * max_chunk_capacity() - _capacity;
-    if (last_chunk_capacity_deficit) {
-        auto last_chunk_capacity = max_chunk_capacity() - last_chunk_capacity_deficit;
-        auto capacity_increase = std::min(last_chunk_capacity_deficit, n - _capacity);
-        auto new_last_chunk_capacity = last_chunk_capacity + capacity_increase;
-        // FIXME: realloc? maybe not worth the complication; only works for PODs
-        auto new_last_chunk = new_chunk(new_last_chunk_capacity);
-        if (_size > _capacity - last_chunk_capacity) {
-            migrate(addr(_capacity - last_chunk_capacity), addr(_size), new_last_chunk.get());
-        }
-        _chunks.back() = std::move(new_last_chunk);
-        _capacity += capacity_increase;
-    }
     // Reduce reallocations in the _chunks vector
     auto nr_chunks = (n + max_chunk_capacity() - 1) / max_chunk_capacity();
     _chunks.reserve(nr_chunks);
@@ -1467,19 +1285,6 @@ chunked_vector<T, max_contiguous_allocation>::shrink_to_fit() {
     }
     auto overcapacity = _size - _capacity;
     if (overcapacity) {
-        auto new_last_chunk_capacity = _size - (_chunks.size() - 1) * max_chunk_capacity();
-        // FIXME: realloc? maybe not worth the complication; only works for PODs
-        auto new_last_chunk = new_chunk(new_last_chunk_capacity);
-        migrate(addr((_chunks.size() - 1) * max_chunk_capacity()), addr(_size), new_last_chunk.get());
-        _chunks.back() = std::move(new_last_chunk);
-        _capacity = _size;
-    }
-}
-template <typename T, size_t max_contiguous_allocation>
-void
-chunked_vector<T, max_contiguous_allocation>::clear() {
-    while (_size > 0) {
-        pop_back();
     }
     shrink_to_fit();
 }
@@ -1844,19 +1649,6 @@ template<typename T>
 using alloc_strategy_unique_ptr = std::unique_ptr<T, alloc_strategy_deleter<T>>;
 //
 // Passing allocators to objects.
-//
-// The same object type can be allocated using different allocators, for
-// example standard allocator (for temporary data), or log-structured
-// allocator for long-lived data. In case of LSA, objects may be allocated
-// inside different LSA regions. Objects should be freed only from the region
-// which owns it.
-//
-// There's a problem of how to ensure correct usage of allocators. Storing the
-// reference to the allocator used for construction of some object inside that
-// object is a possible solution. This has a disadvantage of extra space
-// overhead per-object though. We could avoid that if the code which decides
-// about which allocator to use is also the code which controls object's life
-// time. That seems to be the case in current uses, so a simplified scheme of
 // passing allocators will do. Allocation strategy is set in a thread-local
 // context, as shown below. From there, aware objects pick up the allocation
 // strategy. The code controling the objects must ensure that object allocated
@@ -2091,19 +1883,6 @@ public:
 using single_fragmented_view = basic_single_fragmented_view<mutable_view::no>;
 using single_fragmented_mutable_view = basic_single_fragmented_view<mutable_view::yes>;
 static_assert(FragmentedView<single_fragmented_view>);
-static_assert(FragmentedMutableView<single_fragmented_mutable_view>);
-static_assert(FragmentRange<fragment_range<single_fragmented_view>>);
-static_assert(FragmentRange<fragment_range<single_fragmented_mutable_view>>);
-template<FragmentedView View, typename Function>
-requires std::invocable<Function, View> && std::invocable<Function, single_fragmented_view>
-decltype(auto) with_simplified(const View& v, Function&& fn)
-{
-    if (v.size_bytes() == v.current_fragment().size()) [[likely]] {
-        return fn(single_fragmented_view(v.current_fragment()));
-    } else {
-        return fn(v);
-    }
-}
 template<FragmentedView View>
 void skip_empty_fragments(View& v) {
     while (!v.empty() && v.current_fragment().empty()) {
@@ -2988,19 +2767,6 @@ inline bool gc_clock_using_3_1_0_serialization = false;
  ;
 }
 // The following is a redesigned subset of Java's DataOutput,
-// DataOutputStream, DataInput, DataInputStream, etc. It allows serializing
-// several primitive types (e.g., integer, string, etc.) to an object which
-// is only capable of write()ing a single byte (write(char)) or an array of
-// bytes (write(char *, int)), and deserializing the same data from an object
-// with a char read() interface.
-//
-// The format of this serialization is identical to the format used by
-// Java's DataOutputStream class. This is important to allow us communicate
-// with nodes running Java version of the code.
-//
-// We only support the subset actually used in Cassandra, and the subset
-// that is reversible, i.e., can be read back by data_input. For example,
-// we only support DataOutput.writeUTF(string) and not
 // DataOutput.writeChars(string) - because the latter does not include
 // the length, which is necessary for reading the string back.
 class UTFDataFormatException { };
@@ -3248,19 +3014,6 @@ private:
     // be constructed after it.
     static thread_local UUID_gen _instance;
     decimicroseconds _last_used_time = decimicroseconds{0};
-    UUID_gen()
-    {
-        // make sure someone didn't whack the clockSeqAndNode by changing the order of instantiation.
-        assert(clock_seq_and_node != 0);
-    }
-    // Return decimicrosecond time based on the system time,
-    // in milliseconds. If the current millisecond hasn't change
-    // from the previous call, increment the previously used
-    // value by one decimicrosecond.
-    // NOTE: In the original Java code this function was
-    // "synchronized". This isn't needed since in Scylla we do not
-    // need monotonicity between time UUIDs created at different
-    // shards and UUID code uses thread local state on each shard.
     int64_t create_time_safe() {
         using std::chrono::system_clock;
         auto millis = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
@@ -3456,19 +3209,6 @@ public:
     //
     //    The allowed units are:
     //      - "y": years
-    //      - "mo": months
-    //      - "w": weeks
-    //      - "d": days
-    //      - "h": hours
-    //      - "m": minutes
-    //      - "s": seconds
-    //      - "ms": milliseconds
-    //      - "us" or "µs": microseconds
-    //      - "ns": nanoseconds
-    //
-    //    Units are case-insensitive.
-    //
-    // 2. ISO-8601 format. "P[n]Y[n]M[n]DT[n]H[n]M[n]S" or "P[n]W". All specifiers are optional. Examples are
     //    "P23Y1M" or "P10W".
     //
     // 3. ISO-8601 alternate format. "P[YYYY]-[MM]-[DD]T[hh]:[mm]:[ss]". All specifiers are mandatory. An example is
@@ -3833,19 +3573,6 @@ public:
     const sstring ks_name;
     const sstring cf_name;
 private:
-public:
-};
-class recognition_exception : public std::runtime_error {
-public:
-    ;
-};
-class unsupported_operation_exception : public std::runtime_error {
-public:
-};
-class function_execution_exception : public cassandra_exception {
-public:
-    const sstring ks_name;
-    const sstring func_name;
     const std::vector<sstring> args;
 };
 }
@@ -37464,32 +37191,6 @@ to_stream(std::basic_ostream<CharT, Traits>& os, const CharT* fmt,
                 command = false;
             }
             else
-                os << *fmt;
-            break;
-        case 'y':
-            if (command)
-            {
-                auto y = static_cast<int64_t>(year_month_day{floor<days>(tp)}.year());
-                if (modified != CharT{})
-                {
-                    const CharT f[] = {'%', modified, *fmt};
-                    tm.tm_year = y - 1900;
-                    facet.put(os, os, os.fill(), &tm, begin(f), end(f));
-                    modified = CharT{};
-                }
-                else if (modified == CharT{})
-                {
-                    y = std::abs(y) % 100;
-                    if (y < 10)
-                        os << CharT{'0'};
-                    os << y;
-                }
-                command = false;
-            }
-            else
-                os << *fmt;
-            break;
-        case 'Y':
             if (command)
             {
                 auto y = year_month_day{floor<days>(tp)}.year();
@@ -37516,32 +37217,6 @@ to_stream(std::basic_ostream<CharT, Traits>& os, const CharT* fmt,
             break;
         case 'z':
             if (command)
-            {
-                if (offset_sec == nullptr)
-                    throw std::runtime_error("Can not format local_time with %z");
-                auto m = duration_cast<minutes>(*offset_sec);
-                auto neg = m < minutes{0};
-                m = abs(m);
-                auto h = duration_cast<hours>(m);
-                m -= h;
-                if (neg)
-                    os << CharT{'-'};
-                else
-                    os << CharT{'+'};
-                if (h < hours{10})
-                    os << CharT{'0'};
-                os << h.count();
-                if (modified != CharT{})
-                    os << CharT{':'};
-                if (m < minutes{10})
-                    os << CharT{'0'};
-                os << m.count();
-                command = false;
-                modified = CharT{};
-            }
-            else
-                os << *fmt;
-            break;
         case 'Z':
             if (command)
             {
@@ -37671,32 +37346,6 @@ format(const std::locale& loc, const std::basic_string<CharT, Traits>& fmt,
 {
     std::basic_ostringstream<CharT, Traits> os;
     os.imbue(loc);
-    to_stream(os, fmt.c_str(), tp);
-    return os.str();
-}
-template <class CharT, class Traits, class Duration>
-std::basic_string<CharT, Traits>
-format(const std::basic_string<CharT, Traits>& fmt, const local_time<Duration>& tp)
-{
-    std::basic_ostringstream<CharT, Traits> os;
-    to_stream(os, fmt.c_str(), tp);
-    return os.str();
-}
-template <class CharT, class Traits, class Duration>
-std::basic_string<CharT, Traits>
-format(const std::locale& loc, const std::basic_string<CharT, Traits>& fmt,
-       const sys_time<Duration>& tp)
-{
-    std::basic_ostringstream<CharT, Traits> os;
-    os.imbue(loc);
-    to_stream(os, fmt.c_str(), tp);
-    return os.str();
-}
-template <class CharT, class Traits, class Duration>
-std::basic_string<CharT, Traits>
-format(const std::basic_string<CharT, Traits>& fmt, const sys_time<Duration>& tp)
-{
-    std::basic_ostringstream<CharT, Traits> os;
     to_stream(os, fmt.c_str(), tp);
     return os.str();
 }
@@ -38108,32 +37757,6 @@ parse(std::basic_istream<CharT, Traits>& is,
                     if (modified == CharT{})
                         read(is, rs{Y, 1, width == -1 ? 4u : width}, CharT{'-'},
                                  ru{m, 1, 2}, CharT{'-'}, ru{d, 1, 2});
-                    else
-                        read(is, CharT{'%'}, width, modified, *fmt);
-                    command = nullptr;
-                    width = -1;
-                    modified = CharT{};
-                }
-                else
-                    read(is, *fmt);
-                break;
-            case 'd':
-            case 'e':
-                if (command)
-                {
-                    if (modified == CharT{})
-                        read(is, rs{d, 1, width == -1 ? 2u : width});
-                    else if (modified == CharT{'O'})
-                    {
-                        ios_base::iostate err = ios_base::goodbit;
-                        f.get(is, 0, is, err, &tm, command, fmt+1);
-                        command = nullptr;
-                        width = -1;
-                        modified = CharT{};
-                        if ((err & ios::failbit) == 0)
-                            d = tm.tm_mday;
-                        is.setstate(err);
-                    }
                     else
                         read(is, CharT{'%'}, width, modified, *fmt);
                     command = nullptr;
@@ -38972,32 +38595,6 @@ public:
         {
         disable(name);
         }
-        errinj_logger.debug("Triggering exception injection \"{}\"", name);
-        return make_exception_future<>(exception_factory());
-    }
-    future<> enable_on_all(const std::string_view &injection_name, bool one_shot = false)
-    {
-        return smp::invoke_on_all([injection_name = sstring(injection_name), one_shot]
-                                  {
-            auto& errinj = _local;
-            errinj.enable(injection_name, one_shot); });
-    }
-    static future<> disable_on_all(const std::string_view &injection_name)
-    {
-        return smp::invoke_on_all([injection_name = sstring(injection_name)]
-                                  {
-            auto& errinj = _local;
-            errinj.disable(injection_name); });
-    }
-    static future<> disable_on_all()
-    {
-        return smp::invoke_on_all([]
-                                  {
-            auto& errinj = _local;
-            errinj.disable_all(); });
-    }
-    static std::vector<sstring> enabled_injections_on_all()
-    {
         // TODO: currently we always enable an injection on all shards at once,
         // so returning the list from the current shard will do.
         // In future different shards may have different enabled sets,
@@ -40142,32 +39739,6 @@ void mutation_fragment_v2::destroy_data() noexcept
 {
 switch (_kind)
 {
-case kind::static_row:
-    _data->_static_row.~static_row();
-    break;
-case kind::clustering_row:
-    _data->_clustering_row.~clustering_row();
-    break;
-case kind::range_tombstone_change:
-    _data->_range_tombstone_chg.~range_tombstone_change();
-    break;
-case kind::partition_start:
-    _data->_partition_start.~partition_start();
-    break;
-case kind::partition_end:
-    _data->_partition_end.~partition_end();
-    break;
-}
-}
-void mutation_fragment_v2::reset_memory(const schema &s, std::optional<reader_resources> res)
-{
-try
-{
-    _data->_memory.reset_to(res ? *res : reader_resources::with_memory(calculate_memory_usage(s)));
-}
-catch (...)
-{
-    destroy_data();
     throw;
 }
 }
@@ -40714,32 +40285,6 @@ void mutation_partition::compact_for_compaction(const schema &s, can_gc_fn &can_
 check_schema(s);
 static const std::vector<query::clustering_range> all_rows = {query::clustering_range::make_open_ended_both_sides()};
 bool drop_tombstones_unconditionally = false;
-do_compact(s, dk, compaction_time, all_rows, true, false, query::partition_max_rows, can_gc, drop_tombstones_unconditionally, gc_state);
-}
-void mutation_partition::compact_for_compaction_drop_tombstones_unconditionally(const schema &s, const dht::decorated_key &dk)
-{
-check_schema(s);
-static const std::vector<query::clustering_range> all_rows = {query::clustering_range::make_open_ended_both_sides()};
-bool drop_tombstones_unconditionally = true;
-auto compaction_time = gc_clock::time_point::max();
-do_compact(s, dk, compaction_time, all_rows, true, false, query::partition_max_rows, always_gc, drop_tombstones_unconditionally, tombstone_gc_state(nullptr));
-}
-// Returns true if the mutation_partition represents no writes.
-bool mutation_partition::empty() const
-{
-if (_tombstone.timestamp != api::missing_timestamp)
-{
-    return false;
-}
-return !_static_row.size() && _rows.empty() && _row_tombstones.empty();
-}
-bool deletable_row::is_live(const schema &s, column_kind kind, tombstone base_tombstone, gc_clock::time_point query_time) const
-{ // _created_at corresponds to the row marker cell, present for rows
-// created with the 'insert' statement. If row marker is live, we know the
-// row is live. Otherwise, a row is considered live if it has any cell
-// which is live.
-base_tombstone.apply(_deleted_at.tomb());
-return _marker.is_live(base_tombstone, query_time) || _cells.is_live(s, kind, base_tombstone, query_time);
 }
 bool row::is_live(const schema &s, column_kind kind, tombstone base_tombstone, gc_clock::time_point query_time) const { return has_any_live_data(s, kind, *this, base_tombstone, query_time); }
 bool mutation_partition::is_static_row_live(const schema &s, gc_clock::time_point query_time) const
@@ -42690,32 +42235,6 @@ schema_registry::~schema_registry() = default;
 schema_registry_entry::erase_clock::duration schema_registry::grace_period() const { return std::chrono::seconds(_ctxt->schema_registry_grace_period()); }
 void schema_registry_entry::detach_schema() noexcept
 {
-slogger.trace("Deactivating {}", _version);
-_schema = nullptr;
-_erase_timer.arm(_registry.grace_period());
-}
-future<> schema_registry_entry::maybe_sync(std::function<future<>()> syncer)
-{
-switch (_sync_state)
-{
-case schema_registry_entry::sync_state::SYNCED:
-    return make_ready_future<>();
-case schema_registry_entry::sync_state::SYNCING:
-    return _synced_promise.get_shared_future();
-case schema_registry_entry::sync_state::NOT_SYNCED:
-{
-    slogger.debug("Syncing {}", _version);
-    _synced_promise = {};
-    auto f = do_with(std::move(syncer), [](auto &syncer)
-                     { return syncer(); });
-    auto sf = _synced_promise.get_shared_future();
-    _sync_state = schema_registry_entry::sync_state::SYNCING; // Move to background.
-    (void)f.then_wrapped([this, self = shared_from_this()](auto &&f)
-                         {                 if (_sync_state != sync_state::SYNCING) {                     f.ignore_ready_future();                     return;                 }                 if (f.failed()) {                     slogger.debug("Syncing of {} failed", _version);                     _sync_state = schema_registry_entry::sync_state::NOT_SYNCED;                     _synced_promise.set_exception(f.get_exception());                 } else {                     slogger.debug("Synced {}", _version);                     _sync_state = schema_registry_entry::sync_state::SYNCED;                     _synced_promise.set_value();                 } });
-    return sf;
-}
-}
-abort();
 }
 bool schema_registry_entry::is_synced() const { return _sync_state == sync_state::SYNCED; }
 void schema_registry_entry::mark_synced()
@@ -43522,32 +43041,6 @@ segment *segment_pool::allocate_segment(size_t reserve)
     //    system allocator. However, if the free memory is below set threshold
     //    this step is skipped.
     // 3. Finally, the algorithm ties to compact and evict data stored in LSA
-    //    memory in order to reclaim enough segments.
-    //
-    do
-    {
-        tracker_reclaimer_lock rl(_tracker);
-        if (_free_segments > reserve)
-        {
-        auto free_idx = _lsa_free_segments_bitmap.find_last_set();
-        _lsa_free_segments_bitmap.clear(free_idx);
-        auto seg = segment_from_idx(free_idx);
-        --_free_segments;
-        return seg;
-        }
-        if (can_allocate_more_segments())
-        {
-        memory::disable_abort_on_alloc_failure_temporarily dfg;
-        auto [seg, idx] = _store.allocate_segment();
-        if (!seg)
-        {
-            continue;
-        }
-        _lsa_owned_segments_bitmap.set(idx);
-        return seg;
-        }
-    } while (_tracker.compact_and_evict(reserve, _tracker.reclamation_step() * segment::size, is_preemptible::no));
-    return nullptr;
 }
 void segment_pool::deallocate_segment(segment *seg) noexcept
 {
@@ -44094,32 +43587,6 @@ static void reclaim_from_evictable(region::impl &r, size_t target_mem_in_use, is
         llogger.debug("Evicting from region {}, occupancy={} until it's compactible", r.id(), r.occupancy());
         }
         while (r.occupancy().used_space() > used_target || !r.is_compactible())
-        {
-        if (r.evict_some() == memory::reclaiming_result::reclaimed_nothing)
-        {
-            if (r.is_compactible())
-            { // Need to make forward progress in case there is nothing to evict.
-                break;
-            }
-            llogger.debug("Unable to evict more, evicted {} bytes", used - r.occupancy().used_space());
-            return;
-        }
-        if (r.segment_pool().total_memory_in_use() <= target_mem_in_use)
-        {
-            llogger.debug("Target met after evicting {} bytes", used - r.occupancy().used_space());
-            return;
-        }
-        if (preempt && need_preempt())
-        {
-            llogger.debug("reclaim_from_evictable preempted");
-            return;
-        }
-        } // If there are many compactible segments, we will keep compacting without
-        // entering the eviction loop above. So the preemption check there is not
-        // sufficient and we also need to check here.
-        //
-        // Note that a preemptible reclaim_from_evictable may not do any real progress,
-        // but it doesn't need to. Preemptible (background) reclaim is an optimization.
         // If the system is overwhelmed, and reclaim_from_evictable keeps getting
         // preempted without doing any useful work, then eventually memory will be
         // exhausted and reclaim will be called synchronously, without preemption.
@@ -44302,32 +43769,6 @@ template <>
 size_t hist_key<logalloc::segment_descriptor>(const logalloc::segment_descriptor &desc) { return desc.free_space(); }
 using namespace seastar;
 using namespace seastar;
-class buffer_data_source_impl : public data_source_impl
-{
-private:
-temporary_buffer<char> _buf;
-public:
-buffer_data_source_impl(temporary_buffer<char> &&buf) : _buf(std::move(buf)) {}
-buffer_data_source_impl(buffer_data_source_impl &&) noexcept = default;
-virtual future<temporary_buffer<char>> get() override;
-};
-input_stream<char> make_buffer_input_stream(temporary_buffer<char> &&buf, seastar::noncopyable_function<size_t()> &&limit_generator)
-{
-auto res = data_source{std::make_unique<buffer_data_source_impl>(std::move(buf))};
-return input_stream<char>{make_limiting_data_source(std::move(res), std::move(limit_generator))};
-}
-using namespace seastar;
-class limiting_data_source_impl final : public data_source_impl
-{
-data_source _src;
-seastar::noncopyable_function<size_t()> _limit_generator;
-temporary_buffer<char> _buf;
-
-public:
-
-
-};
-
 namespace utils
 {
 void updateable_value_source_base::for_each_ref(std::function<void(updateable_value_base *ref)> func)
@@ -44770,32 +44211,6 @@ namespace murmur_hash
         k2 ^= ((uint64_t)key[11]) << 24;
         case 11:
         k2 ^= ((uint64_t)key[10]) << 16;
-        case 10:
-        k2 ^= ((uint64_t)key[9]) << 8;
-        case 9:
-        k2 ^= ((uint64_t)key[8]) << 0;
-        k2 *= c2;
-        k2 = rotl64(k2, 33);
-        k2 *= c1;
-        h2 ^= k2;
-        case 8:
-        k1 ^= ((uint64_t)key[7]) << 56;
-        case 7:
-        k1 ^= ((uint64_t)key[6]) << 48;
-        case 6:
-        k1 ^= ((uint64_t)key[5]) << 40;
-        case 5:
-        k1 ^= ((uint64_t)key[4]) << 32;
-        case 4:
-        k1 ^= ((uint64_t)key[3]) << 24;
-        case 3:
-        k1 ^= ((uint64_t)key[2]) << 16;
-        case 2:
-        k1 ^= ((uint64_t)key[1]) << 8;
-        case 1:
-        k1 ^= ((uint64_t)key[0]);
-        k1 *= c1;
-        k1 = rotl64(k1, 31);
         k1 *= c2;
         h1 ^= k1;
         }; //----------
@@ -47136,32 +46551,6 @@ std::ostream &operator<<(std::ostream &out, cause c)
     case cause::LEGACY_COMPOSITE_KEYS:
         return out << "LEGACY_COMPOSITE_KEYS";
     case cause::COLLECTION_RANGE_TOMBSTONES:
-        return out << "COLLECTION_RANGE_TOMBSTONES";
-    case cause::RANGE_DELETES:
-        return out << "RANGE_DELETES";
-    case cause::THRIFT:
-        return out << "THRIFT";
-    case cause::VALIDATION:
-        return out << "VALIDATION";
-    case cause::REVERSED:
-        return out << "REVERSED";
-    case cause::COMPRESSION:
-        return out << "COMPRESSION";
-    case cause::NONATOMIC:
-        return out << "NONATOMIC";
-    case cause::CONSISTENCY:
-        return out << "CONSISTENCY";
-    case cause::HINT:
-        return out << "HINT";
-    case cause::SUPER:
-        return out << "SUPER";
-    case cause::WRAP_AROUND:
-        return out << "WRAP_AROUND";
-    case cause::STORAGE_SERVICE:
-        return out << "STORAGE_SERVICE";
-    case cause::API:
-        return out << "API";
-    case cause::SCHEMA_CHANGE:
         return out << "SCHEMA_CHANGE";
     case cause::MIXED_CF:
         return out << "MIXED_CF";
