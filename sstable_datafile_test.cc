@@ -10814,19 +10814,6 @@ public:
     // - The time the primary session was in a "foreground" state is the time
     //   reported as a session's "duration".
     // - Traces that have arrived during the "background" state will be recorded
-    //   as usual but their "elapsed" time will be greater or equal to the
-    //   session's "duration".
-    //
-    // Secondary sessions may only be in an "inactive" or in a "foreground"
-    // states.
-    enum class state {
-        inactive,
-        foreground,
-        background
-    };
-private:
-    shared_ptr<tracing> _local_tracing_ptr;
-    trace_state_props_set _state_props;
     ;
 };
 class trace_state_ptr final {
@@ -10853,19 +10840,6 @@ public:
  
  
  
- ;
- ;
-// global_trace_state_ptr is a helper class that may be used for creating spans
-// of an existing tracing session on other shards. When a tracing span on a
-// different shard is needed global_trace_state_ptr would create a secondary
-// tracing session on that shard similarly to what we do when we create tracing
-// spans on remote Nodes.
-//
-// The usage is straight forward:
-// 1. Create a global_trace_state_ptr from the existing trace_state_ptr object.
-// 2. Pass it to the execution unit that (possibly) runs on a different shard
-//    and pass the global_trace_state_ptr object instead of a trace_state_ptr
-//    object.
 class global_trace_state_ptr {
     unsigned _cpu_of_origin;
     trace_state_ptr _ptr;
@@ -10905,19 +10879,6 @@ struct service_level_options {
     // on the type of the parameter - e.g. for timeouts, a min value is preferred.
 };
 using service_levels_info = std::map<sstring, service_level_options>;
-///
-/// A logical argument error for a service_level statement operation.
-///
-class service_level_argument_exception : public std::invalid_argument {
-public:
-    using std::invalid_argument::invalid_argument;
-};
-///
-/// An exception to indicate that the service level given as parameter doesn't exist.
-///
-class nonexistant_service_level_exception : public service_level_argument_exception {
-public:
-};
 }
 // This class supports atomic removes (by using a lock and returning a
 // future) and non atomic insert and iteration (by using indexes).
@@ -11022,19 +10983,6 @@ public:
     };
     using workload_type = qos::service_level_options::workload_type;
     // This class is used to move client_state between shards
-    // It is created on a shard that owns client_state than passed
-    // to a target shard where client_state_for_another_shard::get()
-    // can be called to obtain a shard local copy.
-    class client_state_for_another_shard {
-    private:
-        const client_state* _cs;
-        seastar::sharded<auth::service>* _auth_service;
-        friend client_state;
-    public:
-    };
-private:
-    friend client_state_for_another_shard;
-private:
     sstring _keyspace;
 #if 0
     private static final Logger logger = LoggerFactory.getLogger(ClientState.class);
@@ -11061,19 +11009,6 @@ private:
     // that should have an ability to modify system keyspace.
     bool _is_internal;
     bool _is_thrift;
-    // The biggest timestamp that was returned by getTimestamp/assigned to a query
-    static thread_local api::timestamp_type _last_timestamp_micros;
-    // Address of a client
-    socket_address _remote_address;
-    // Only populated for external client state.
-    auth::service* _auth_service{nullptr};
-    qos::service_level_controller* _sl_controller{nullptr};
-    // For restoring default values in the timeout config
-    timeout_config _default_timeout_config;
-    timeout_config _timeout_config;
-    workload_type _workload_type = workload_type::unspecified;
-public:
-    struct internal_tag {};
     struct external_tag {};
     
     qos::service_level_controller& get_service_level_controller() const ;
@@ -11086,45 +11021,6 @@ public:
     public SocketAddress getRemoteAddress()
     {
         return remoteAddress;
-    }
-#endif
-    
-    
-public:
-    /// \brief A user can login if it's anonymous, or if it exists and the `LOGIN` option for the user is `true`.
-private:
-public:
-     // unauthorized_exception on error
-#if 0
-    public void ensureIsSuper(String message) throws UnauthorizedException
-    {
-        if (DatabaseDescriptor.getAuthenticator().requireAuthentication() && (user == null || !user.isSuper()))
-            throw new UnauthorizedException(message);
-    }
-    private static void validateKeyspace(String keyspace) throws InvalidRequestException
-    {
-        if (keyspace == null)
-            throw new InvalidRequestException("You have not set a keyspace for this session");
-    }
-#endif
-#if 0
-    public static SemanticVersion[] getCQLSupportedVersion()
-    {
-        return new SemanticVersion[]{ QueryProcessor.CQL_VERSION };
-    }
-    private Set<Permission> authorize(IResource resource)
-    {
-        // AllowAllAuthorizer or manually disabled caching.
-        if (Auth.permissionsCache == null)
-            return DatabaseDescriptor.getAuthorizer().authorize(user, resource);
-        try
-        {
-            return Auth.permissionsCache.get(Pair.create(user, resource));
-        }
-        catch (ExecutionException e)
-        {
-            throw new RuntimeException(e);
-        }
     }
 #endif
 private:
@@ -11178,19 +11074,6 @@ public:
         return _client_state;
     }
     const client_state& get_client_state() const {
-        return _client_state;
-    }
-    api::timestamp_type get_timestamp() {
-        return _client_state.get_timestamp();
-    }
-    service_permit get_permit() const& {
-        return _permit;
-    }
-    service_permit&& get_permit() && {
-        return std::move(_permit);
-    }
-    qos::service_level_controller& get_service_level_controller() const {
-        return _client_state.get_service_level_controller();
     }
 };
 }
@@ -11646,19 +11529,6 @@ public:
     using replicas_per_token_range = std::unordered_map<dht::token_range, std::vector<locator::host_id>>;
 private:
     partition_key _partition_key;
-    std::optional<clustering_key> _clustering_key;
-    uint32_t _remaining_low_bits;
-    query_id _query_uuid;
-    replicas_per_token_range _last_replicas;
-    std::optional<db::read_repair_decision> _query_read_repair_decision;
-    uint32_t _rows_fetched_for_last_partition_low_bits;
-    uint32_t _remaining_high_bits;
-    uint32_t _rows_fetched_for_last_partition_high_bits;
-    bound_weight _ck_weight = bound_weight::equal;
-    partition_region _region = partition_region::partition_start;
-public:
-    // IDL ctor
-    // sets position to at the given clustering key
 };
 }
 }
@@ -11815,19 +11685,6 @@ private:
     // used to make all time-based UUIDs:
     // 1) share the same microsecond,
     // 2) monotonic
-    // 3) unique.
-    mutable int _list_append_seq = 0;
-    // Cached `function_call` evaluation results. `function_call` AST nodes
-    // are created for each function with side effects in a CQL query, i.e.
-    // non-deterministic functions (`uuid()`, `now()` and some others
-    // timeuuid-related).
-    //
-    // These nodes are evaluated either when a query itself is executed
-    // or query restrictions are computed (e.g. partition/clustering
-    // key ranges for LWT requests).
-    //
-    // We need to cache the calls since otherwise when handling a
-    // `bounce_to_shard` request for an LWT query, we can possibly enter an
     // infinite bouncing loop (in case a function is used to calculate
     // partition key ranges for a query), since the results can be different
     // each time. Furthermore, we don't support bouncing more than one time.
@@ -11984,19 +11841,6 @@ public:
 //   - high allocation rate due to fine-grained object structure
 //
 // On replica side, the query results are probably going to be serialized in
-// the transport layer anyway, so serializing the results up-front doesn't add
-// net work. There is no processing of the query results on replica other than
-// concatenation in case of range queries and checksum calculation. If query
-// results are collected in serialized form from different cores, we can
-// concatenate them without copying by simply appending the fragments into the
-// packet.
-//
-// On coordinator side, the query results would have to be parsed from the
-// transport layer buffers anyway, so the fact that iterators parse it also
-// doesn't add net work, but again saves allocations and copying. The CQL
-// server doesn't need complex data structures to process the results, it just
-// goes over it linearly consuming it.
-//
 // The coordinator side could be optimized even further for CQL queries which
 // do not need processing (eg. select * from cf where ...). We could make the
 // replica send the query results in the format which is expected by the CQL
@@ -12231,19 +12075,6 @@ struct state_of_query_result {
 ////// Nodes
 template<typename Output>
 struct after_qr_cell__ttl {
-    Output& _out;
-    state_of_qr_cell<Output> _state;
-};
-template<typename Output>
-struct after_qr_cell__value {
-    Output& _out;
-    state_of_qr_cell<Output> _state;
-};
-template<typename Output>
-struct after_qr_cell__expiry {
-    Output& _out;
-    state_of_qr_cell<Output> _state;
-     ;
 };
 template<typename Output>
 struct after_qr_cell__timestamp {
@@ -12257,19 +12088,6 @@ struct writer_of_qr_cell {
 };
 template<typename Output>
 struct after_qr_row__cells {
-    Output& _out;
-    state_of_qr_row<Output> _state;
-};
-template<typename Output>
-struct writer_of_std__optional__qr_cell {
-    Output& _out;
-};
-template<typename Output>
-struct qr_row__cells {
-    Output& _out;
-    state_of_qr_row<Output> _state;
-        place_holder<Output> _size;
-    size_type _count = 0;
 };
 template<typename Output>
 struct writer_of_qr_row {
@@ -12751,19 +12569,6 @@ public:
     class with_function;
     class with_anonymous_function;
     class with_field_selection;
-    class with_cast;
-};
-class selectable::with_function : public selectable {
-    functions::function_name _function_name;
-    std::vector<shared_ptr<selectable>> _args;
-public:
-};
-class selectable::with_anonymous_function : public selectable {
-    shared_ptr<functions::function> _function;
-    std::vector<shared_ptr<selectable>> _args;
-public:
-};
-class selectable::with_cast : public selectable {
     ::shared_ptr<selectable> _arg;
     data_type _type;
 public:
@@ -12790,32 +12595,6 @@ private:
     std::vector<const column_definition*> _columns;
     ::shared_ptr<metadata> _metadata;
     const bool _collect_timestamps;
-    const bool _collect_TTLs;
-    const bool _contains_static_columns;
-    bool _is_trivial;
-protected:
-    using trivial = bool_class<class trivial_tag>;
-public:
-    // Overriden by SimpleSelection when appropriate.
-private:
-public:
-     ;
-    friend class result_set_builder;
-};
-class result_set_builder {
-private:
-    std::unique_ptr<result_set> _result_set;
-    std::unique_ptr<selectors> _selectors;
-    const std::vector<size_t> _group_by_cell_indices; ///< Indices in \c current of cells holding GROUP BY values.
-    std::vector<managed_bytes_opt> _last_group; ///< Previous row's group: all of GROUP BY column values.
-    bool _group_began; ///< Whether a group began being formed.
-public:
-    std::optional<std::vector<managed_bytes_opt>> current;
-private:
-    std::vector<api::timestamp_type> _timestamps;
-    std::vector<int32_t> _ttls;
-    const gc_clock::time_point _now;
-public:
      ;
     class nop_filter {
     public:
@@ -12998,19 +12777,6 @@ concept ExpressionElement
 template <typename Func>
 concept invocable_on_expression
         = std::invocable<Func, conjunction>
-        && std::invocable<Func, binary_operator>
-        && std::invocable<Func, column_value>
-        && std::invocable<Func, subscript>
-        && std::invocable<Func, unresolved_identifier>
-        && std::invocable<Func, column_mutation_attribute>
-        && std::invocable<Func, function_call>
-        && std::invocable<Func, cast>
-        && std::invocable<Func, field_selection>
-        && std::invocable<Func, bind_variable>
-        && std::invocable<Func, untyped_constant>
-        && std::invocable<Func, constant>
-        && std::invocable<Func, tuple_constructor>
-        && std::invocable<Func, collection_constructor>
         && std::invocable<Func, usertype_constructor>
         ;
 template <typename Func>
@@ -13102,19 +12868,6 @@ struct binary_operator {
 };
 /// A conjunction of restrictions.
 struct conjunction {
-    std::vector<expression> children;
-};
-// Gets resolved eventually into a column_value.
-struct unresolved_identifier {
-    ::shared_ptr<column_identifier_raw> ident;
-};
-// An attribute attached to a column mutation: writetime or ttl
-struct column_mutation_attribute {
-    enum class attribute_kind { writetime, ttl };
-    attribute_kind kind;
-    // note: only unresolved_identifier is legal here now. One day, when prepare()
-    // on expressions yields expressions, column_value will also be legal here.
-    expression column;
 };
 struct function_call {
     std::variant<functions::function_name, shared_ptr<db::functions::function>> func;
@@ -13128,19 +12881,6 @@ struct function_call {
     // set and the call is not considered when using or populating the cache.
     //
     // For example in a query like:
-    // INSERT INTO t (pk) VALUES (uuid()) IF NOT EXISTS
-    // The query should be executed on a shard that has the pk partition,
-    // but it changes with each uuid() call.
-    // uuid() call result is cached and sent to the proper shard.
-    //
-    // Cache id is kept in shared_ptr because of how prepare_context works.
-    // During fill_prepare_context all function cache ids are collected
-    // inside prepare_context.
-    // Later when some condition occurs we might decide to clear
-    // cache ids of all function calls found in prepare_context.
-    // However by this time these function calls could have been
-    // copied multiple times. Prepare_context keeps a shared_ptr
-    // to function_call ids, and then clearing the shared id
     // clears it in all possible copies.
     // This logic was introduced back when everything was shared_ptr<term>,
     // now a better solution might exist.
@@ -13167,19 +12907,6 @@ struct bind_variable {
 // (we know if it's floating or int) but not sized.
 struct untyped_constant {
     enum type_class { integer, floating_point, string, boolean, duration, uuid, hex, null };
-    type_class partial_type;
-    sstring raw_text;
-};
-// Represents a constant value with known value and type
-// For null and unset the type can sometimes be set to empty_type
-struct constant {
-    cql3::raw_value value;
-    // Never nullptr, for NULL and UNSET might be empty_type
-    data_type type;
-};
-// Denotes construction of a tuple from its elements, e.g.  ('a', ?, some_column) in CQL.
-struct tuple_constructor {
-    std::vector<expression> elements;
     // Might be nullptr before prepare.
     // After prepare always holds a valid type, although it might be reversed_type(tuple_type).
     data_type type;
@@ -13219,19 +12946,6 @@ using value_set = std::variant<value_list, nonwrapping_range<managed_bytes>>;
 /// matching values for the partition token function call instead of the column.
 ///
 /// An expression restricts possible values of a column or token:
-/// - `A>5` restricts A from below
-/// - `A>5 AND A>6 AND B<10 AND A=12 AND B>0` restricts A to 12 and B to between 0 and 10
-/// - `A IN (1, 3, 5)` restricts A to 1, 3, or 5
-/// - `A IN (1, 3, 5) AND A>3` restricts A to just 5
-/// - `A=1 AND A<=0` restricts A to an empty list; no value is able to satisfy the expression
-/// - `A>=NULL` also restricts A to an empty list; all comparisons to NULL are false
-/// - an expression without A "restricts" A to unbounded range
-/// Turns value_set into a range, unless it's a multi-valued list (in which case this throws).
-/// A range of all X such that X op val.
-/// True iff the index can support the entire expression.
-/// True iff any of the indices from the manager can support the entire expression.  If allow_local, use all
-/// indices; otherwise, use only global indices.
-// Looks at each column indivudually and checks whether some index can support restrictions on this single column.
 // Expression has to consist only of single column restrictions.
 extern std::ostream& operator<<(std::ostream&, const expression::printer&);
 // Looks into the expression and finds the given expression variant
@@ -13284,45 +12998,6 @@ size_t count_if(const expression& e, const noncopyable_function<bool (const bina
 // Check whether the given expression represents
 // a call to the token() function.
 /// Check whether the expression contains a binary_operator whose LHS is a call to the token
-/// function representing a partition key token.
-/// Examples:
-/// For expression: "token(p1, p2, p3) < 123 AND c = 2" returns true
-/// For expression: "p1 = token(1, 2, 3) AND c = 2" return false
-/// Given a Boolean expression, compute its factors such as e=f1 AND f2 AND f3 ...
-/// If the expression is TRUE, may return no factors (happens today for an
-/// empty conjunction).
-/// Run the given function for each element in the top level conjunction.
-/// True iff binary_operator involves a collection.
-// Checks whether the given column occurs in the expression.
-// Uses column_defintion::operator== for comparison, columns with the same name but different schema will not be equal.
-// Checks whether this expression contains a nonpure function.
-// The expression must be prepared, so that function names are converted to function pointers.
-// Gets the elements of a constant which can be a list, set, tuple or user type
-// Get elements of list<tuple<>> as vector<vector<managed_bytes_opt>
-// It is useful with IN restrictions like (a, b) IN [(1, 2), (3, 4)].
-// `type` parameter refers to the list<tuple<>> type.
-utils::chunked_vector<std::vector<managed_bytes_opt>> get_list_of_tuples_elements(const cql3::raw_value&, const abstract_type& type);
-// Retrieves information needed in prepare_context.
-// Collects the column specification for the bind variables in this expression.
-// Sets lwt_cache_id field in function_calls.
-// Checks whether there is a bind_variable inside this expression
-// It's important to note, that even when there are no bind markers,
-// there can be other things that prevent immediate evaluation of an expression.
-// For example an expression can contain calls to nonpure functions.
-// Checks whether this expression contains restrictions on one single column.
-// There might be more than one restriction, but exactly one column.
-// The expression must be prepared.
-// Gets the only column from a single_column_restriction expression.
-// A comparator that orders columns by their position in the schema
-// For primary key columns the `id` field is used to determine their position.
-// Other columns are assumed to have position std::numeric_limits<uint32_t>::max().
-// In case the position is the same they are compared by their name.
-// This comparator has been used in the original restricitons code to keep
-// restrictions for each column sorted by their place in the schema.
-// It's not recommended to use this comparator with columns of different kind
-// (partition/clustering/nonprimary) because the id field is unique
-// for (kind, schema). So a partition and clustering column might
-// have the same id within one schema.
 struct schema_pos_column_definition_comparator {
 };
 // Extracts column_defs from the expression and sorts them using schema_pos_column_definition_comparator.
@@ -13362,19 +13037,6 @@ public:
             _debug = false;
         }
         return ctx.begin();
-    }
-    template <typename FormatContext>
-    auto format(const cql3::expr::expression& expr, FormatContext& ctx) const {
-        std::ostringstream os;
-        os << cql3::expr::expression::printer{.expr_to_print = expr, .debug_mode = _debug};
-        return fmt::format_to(ctx.out(), "{}", os.str());
-    }
-};
-/// Required for fmt::join() to work on expression::printer.
-template <>
-struct fmt::formatter<cql3::expr::expression::printer> {
-    constexpr auto parse(format_parse_context& ctx) {
-        return ctx.end();
     }
     template <typename FormatContext>
     auto format(const cql3::expr::expression::printer& pr, FormatContext& ctx) const {
@@ -13440,19 +13102,6 @@ public:
         const bool _by_uuid;
     private:
     public:
-    };
-    // Set a single field inside a user-defined type.
-    class set_field : public raw_update {
-        const shared_ptr<column_identifier> _field;
-        const expr::expression _value;
-    private:
-    public:
-    };
-    // Delete a single field inside a user-defined type.
-    // Equivalent to setting the field to null.
-    class field_deletion : public raw_deletion {
-        const shared_ptr<column_identifier::raw> _id;
-        const shared_ptr<column_identifier> _field;
     public:
     };
     class addition : public raw_update {
@@ -13492,19 +13141,6 @@ public:
     public:
     };
     class setter_by_index : public operation_skip_if_unset {
-    protected:
-        expr::expression _idx;
-    public:
-        
-    };
-    class setter_by_uuid : public setter_by_index {
-    public:
-    };
-    class appender : public operation_skip_if_unset {
-    public:
-        using operation_skip_if_unset::operation_skip_if_unset;
-    };
-    class prepender : public operation_skip_if_unset {
     public:
         using operation_skip_if_unset::operation_skip_if_unset;
     };
@@ -13544,19 +13180,6 @@ public:
         
     };
     
-};
-// Not part of atomic_cell.hh to avoid cyclic dependency between types.hh and atomic_cell.hh
-template<>
-struct appending_hash<collection_mutation_view> {
-     ;
-};
-template<>
-struct appending_hash<atomic_cell_view> {
-     ;
-};
-template<>
-struct appending_hash<atomic_cell> {
-     ;
 };
 template<>
 struct appending_hash<collection_mutation> {
@@ -13648,19 +13271,6 @@ public:
     // pos must satisfy:
     //   1) before_all_clustered_rows() <= pos
     //   2) !pos.is_clustering_row() - because range_tombstone bounds can't represent such positions
-    
-    // Intersects the range of this tombstone with [start, end) and replaces
-    // the range of the tombstone if there is an overlap.
-    // Returns true if there is an overlap and false otherwise. When returns false, the tombstone
-    // is not modified.
-    //
-    // start and end must satisfy:
-    //   1) has_clustering_key() == true
-    //   2) is_clustering_row() == false
-    //
-    // Also: start <= end
-    
-    // Assumes !pos.is_clustering_row(), because range_tombstone bounds can't represent such positions
     
     // Assumes !pos.is_clustering_row(), because range_tombstone bounds can't represent such positions
     
@@ -13882,19 +13492,6 @@ public:
     // Merges another list with this object.
     // Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
     /// Merges another list with this object.
-    /// The other list must be governed by the same allocator as this object.
-    ///
-    /// Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
-    /// The other list will be left in a state such that it would still commute with this object to the same state as it
-    /// would if the call didn't fail.
-public:
-    using iterator_range = boost::iterator_range<const_iterator>;
-    // Returns range tombstones which overlap with given range
-    // Returns range tombstones which overlap with [start, end)
-    // Returns range tombstones with ends inside [start, before).
-    // Returns range tombstones with starts inside (after, end].
-    // Pops the first element and bans (in theory) further additions
-    // The list is assumed not to be empty
     // Ensures that every range tombstone is strictly contained within given clustering ranges.
     // Preserves all information which may be relevant for rows from that ranges.
     void trim(const schema& s, const query::clustering_row_ranges&);
@@ -14231,19 +13828,6 @@ public:
             x = cmp(*kptr, *hint);
             if (x == 0) {
                 return std::pair(iterator(hint), false);
-            }
-        }
-        if (x < 0) {
-            x = std::strong_ordering::greater;
-            if (hint != begin()) {
-                auto prev = std::prev(hint);
-                x = cmp(*kptr, *prev);
-                if (x == 0) {
-                    return std::pair(iterator(prev), false);
-                }
-            }
-            if (x > 0) {
-                return std::pair(hint.insert_before(std::move(kptr)), true);
             }
         }
         return insert(std::move(kptr), std::move(cmp));
@@ -17158,19 +16742,6 @@ public:
     }
 };
 template <>
-struct fmt::formatter<shadowable_tombstone> : fmt::formatter<std::string_view> {
-    template <typename FormatContext>
-    auto format(const shadowable_tombstone& t, FormatContext& ctx) const {
-        if (t) {
-            return fmt::format_to(ctx.out(),
-                                  "{{shadowable tombstone: timestamp={}, deletion_time={}}}",
-                                  t.tomb().timestamp, t.tomb(), t.tomb().deletion_time.time_since_epoch().count());
-        } else {
-            return fmt::format_to(ctx.out(),
-                                  "{{shadowable tombstone: none}}");
-        }
-     }
-};
 template<>
 struct appending_hash<shadowable_tombstone> {
      ;
@@ -17392,32 +16963,6 @@ struct apply_resume {
     position_in_partition _pos;
     stage _stage;
 };
-// Represents a set of writes made to a single partition.
-//
-// The object is schema-dependent. Each instance is governed by some
-// specific schema version. Accessors require a reference to the schema object
-// of that version.
-//
-// There is an operation of addition defined on mutation_partition objects
-// (also called "apply"), which gives as a result an object representing the
-// sum of writes contained in the addends. For instances governed by the same
-// schema, addition is commutative and associative.
-//
-// In addition to representing writes, the object supports specifying a set of
-// partition elements called "continuity". This set can be used to represent
-// lack of information about certain parts of the partition. It can be
-// specified which ranges of clustering keys belong to that set. We say that a
-// key range is continuous if all keys in that range belong to the continuity
-// set, and discontinuous otherwise. By default everything is continuous.
-// The static row may be also continuous or not.
-// Partition tombstone is always continuous.
-//
-// Continuity is ignored by instance equality. It's also transient, not
-// preserved by serialization.
-//
-// Continuity is represented internally using flags on row entries. The key
-// range between two consecutive entries (both ends exclusive) is continuous
-// if and only if rows_entry::continuous() is true for the later entry. The
 // range starting after the last entry is assumed to be continuous. The range
 // corresponding to the key of the entry is continuous if and only if
 // rows_entry::dummy() is false.
@@ -17470,19 +17015,6 @@ public:
     
     // Consistent with equal()
      ;
-    class printer {
-        const schema& _schema;
-        const mutation_partition& _mutation_partition;
-    public:
-        printer(const schema& s, const mutation_partition& mp)  ;
-        
-        
-        
-    };
-    friend std::ostream& operator<<(std::ostream& os, const printer& p);
-public:
-    // Makes sure there is a dummy entry after all clustered rows. Doesn't affect continuity.
-    // Doesn't invalidate iterators.
     
     
     void set_static_row_continuous(bool value) ;
