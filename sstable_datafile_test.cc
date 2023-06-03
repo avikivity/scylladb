@@ -648,32 +648,6 @@ class BloomCalculations {
         int maxK = probs[maxBucketsPerElement].length - 1;
         // Handle the trivial cases
         if(maxFalsePosProb >= probs[minBuckets][minK]) {
-            return new BloomSpecification(2, optKPerBuckets[2]);
-        }
-        if (maxFalsePosProb < probs[maxBucketsPerElement][maxK]) {
-            throw new UnsupportedOperationException(String.format("Unable to satisfy %s with %s buckets per element",
-                                                                  maxFalsePosProb, maxBucketsPerElement));
-        }
-        // First find the minimal required number of buckets:
-        int bucketsPerElement = 2;
-        int K = optKPerBuckets[2];
-        while(probs[bucketsPerElement][K] > maxFalsePosProb){
-            bucketsPerElement++;
-            K = optKPerBuckets[bucketsPerElement];
-        }
-        // Now that the number of buckets is sufficient, see if we can relax K
-        // without losing too much precision.
-        while(probs[bucketsPerElement][K - 1] <= maxFalsePosProb){
-            K--;
-        }
-        return new BloomSpecification(K, bucketsPerElement);
-    }
-    public static int maxBucketsPerElement(long numElements)
-    {
-        numElements = Math.max(1, numElements);
-        double v = (Long.MAX_VALUE - EXCESS) / (double)numElements;
-        if (v < 1.0)
-        {
             throw new UnsupportedOperationException("Cannot compute probabilities for " + numElements + " elements.");
         }
         return Math.min(BloomCalculations.probs.length - 1, (int)v);
@@ -1194,32 +1168,6 @@ public:
                 _end->~T();
             }
             throw;
-        }
-        _end++;
-        return pos;
-    }
-    iterator insert(const_iterator cpos, const T& obj) {
-        return emplace(cpos, obj);
-    }
-    iterator insert(const_iterator cpos, T&& obj) {
-        return emplace(cpos, std::move(obj));
-    }
-    void resize(size_t n) {
-        if (n < size()) {
-            erase(end() - (size() - n), end());
-        } else if (n > size()) {
-            reserve_at_least(n);
-            _end = std::uninitialized_value_construct_n(_end, n - size());
-        }
-    }
-    void resize(size_t n, const T& value) {
-        if (n < size()) {
-            erase(end() - (size() - n), end());
-        } else if (n > size()) {
-            reserve_at_least(n);
-            auto nend = _begin + n;
-            std::uninitialized_fill(_end, nend, value);
-            _end = nend;
         }
     }
     void pop_back() noexcept {
@@ -5988,59 +5936,6 @@ struct serializer<sstring> {
         in.read(v.data(), sz);
         return v;
     }
-    template<typename Output>
-    static void write(Output& out, const sstring& v) {
-        safe_serialize_as_uint32(out, uint32_t(v.size()));
-        out.write(v.data(), v.size());
-    }
-    template<typename Input>
-    static void skip(Input& in) {
-        in.skip(deserialize(in, boost::type<size_type>()));
-    }
-};
-template<typename T>
-struct serializer<std::unique_ptr<T>> {
-    template<typename Input>
-    static std::unique_ptr<T> read(Input& in) {
-        std::unique_ptr<T> v;
-        auto b = deserialize(in, boost::type<bool>());
-        if (b) {
-            v = std::make_unique<T>(deserialize(in, boost::type<T>()));
-        }
-        return v;
-    }
-    template<typename Output>
-    static void write(Output& out, const std::unique_ptr<T>& v) {
-        serialize(out, bool(v));
-        if (v) {
-            serialize(out, *v);
-        }
-    }
-    template<typename Input>
-    static void skip(Input& in) {
-        auto present = deserialize(in, boost::type<bool>());
-        if (present) {
-            serializer<T>::skip(in);
-        }
-    }
-};
-template<typename Enum>
-struct serializer<enum_set<Enum>> {
-     ;
-     ;
-     ;
-};
-template<>
-struct serializer<std::monostate> {
-    template<typename Input>
-    static std::monostate read(Input& in) {
-        return std::monostate{};
-    }
-    template<typename Output>
-    static void write(Output& out, std::monostate v) {}
-    template<typename Input>
-    static void skip(Input& in) {
-    }
 };
  ;
  ;
@@ -7461,32 +7356,6 @@ private:
         return std::upper_bound(r.begin(), r.end(), value, std::forward<LessComparator>(cmp));
     }
 public:
-    // Return the lower bound of the specified sequence according to these bounds.
-    template<typename Range, IntervalLessComparatorFor<T> LessComparator>
-    typename std::remove_reference<Range>::type::const_iterator lower_bound(Range&& r, LessComparator&& cmp) const {
-        return start()
-            ? (start()->is_inclusive()
-                ? do_lower_bound(start()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_())
-                : do_upper_bound(start()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_()))
-            : std::cbegin(r);
-    }
-    // Return the upper bound of the specified sequence according to these bounds.
-    template<typename Range, IntervalLessComparatorFor<T> LessComparator>
-    typename std::remove_reference<Range>::type::const_iterator upper_bound(Range&& r, LessComparator&& cmp) const {
-        return end()
-             ? (end()->is_inclusive()
-                ? do_upper_bound(end()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_())
-                : do_lower_bound(end()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_()))
-             : (is_singular()
-                ? do_upper_bound(start()->value(), std::forward<Range>(r), std::forward<LessComparator>(cmp), built_in_())
-                : std::cend(r));
-    }
-    // Returns a subset of the range that is within these bounds.
-    template<typename Range, IntervalLessComparatorFor<T> LessComparator>
-    boost::iterator_range<typename std::remove_reference<Range>::type::const_iterator>
-    slice(Range&& range, LessComparator&& cmp) const {
-        return boost::make_iterator_range(lower_bound(range, cmp), upper_bound(range, cmp));
-    }
     // Returns the intersection between this interval and other.
     std::optional<nonwrapping_interval> intersection(const nonwrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
         auto p = std::minmax(_interval, other._interval, [&cmp] (auto&& a, auto&& b) {
@@ -8085,111 +7954,6 @@ private:
     shared_ptr<tracing> _local_tracing_ptr;
 public:
     utils::UUID session_id;
-    session_record session_rec;
-    std::chrono::seconds ttl;
-    std::deque<event_record> events_recs;
-    std::unique_ptr<backend_session_state_base> backend_state_ptr;
-    bool do_log_slow_query = false;
-    // A pointer to the records counter of the corresponding state new records
-    // of this tracing session should consume from (e.g. "cached" or "pending
-    // for write").
-    uint64_t* budget_ptr;
-    // Each tracing session object represents a single tracing span.
-    //
-    // Each span has a span ID. In order to be able to build a full tree of all
-    // spans of the same query we need a parent span ID as well.
-    span_id parent_id;
-    span_id my_span_id;
-private:
-    bool _is_pending_for_write = false;
-};
-class tracing : public seastar::async_sharded_service<tracing> {
-public:
-    static const gc_clock::duration write_period;
-    // maximum number of sessions pending for write per shard
-    static constexpr int max_pending_sessions = 1000;
-    // expectation of an average number of trace records per session
-    static constexpr int exp_trace_events_per_session = 10;
-    // maximum allowed pending records per-shard
-    static constexpr int max_pending_trace_records = max_pending_sessions * exp_trace_events_per_session;
-    // number of pending sessions that would trigger a write event
-    static constexpr int write_event_sessions_threshold = 100;
-    // number of pending records that would trigger a write event
-    static constexpr int write_event_records_threshold = write_event_sessions_threshold * exp_trace_events_per_session;
-    // Number of events when an info message is printed
-    static constexpr int log_warning_period = 10000;
-    static const std::chrono::microseconds default_slow_query_duraion_threshold;
-    static const std::chrono::seconds default_slow_query_record_ttl;
-    struct stats {
-        uint64_t dropped_sessions = 0;
-        uint64_t dropped_records = 0;
-        uint64_t trace_records_count = 0;
-        uint64_t trace_errors = 0;
-    } stats;
-private:
-    // A number of currently active tracing sessions
-    uint64_t _active_sessions = 0;
-    // Below are 3 counters that describe the total amount of tracing records on
-    // this shard. Each counter describes a state in which a record may be.
-    //
-    // Each record may only be in a specific state at every point of time and
-    // thereby it must be accounted only in one and only one of the three
-    // counters below at any given time.
-    //
-    // The sum of all three counters should not be greater than
-    // (max_pending_trace_records + write_event_records_threshold) at any time
-    // (actually it can get as high as a value above plus (max_pending_sessions)
-    // if all sessions are primary but we won't take this into an account for
-    // simplicity).
-    //
-    // The same is about the number of outstanding sessions: it may not be
-    // greater than (max_pending_sessions + write_event_sessions_threshold) at
-    // any time.
-    //
-    // If total number of tracing records is greater or equal to the limit
-    // above, the new trace point is going to be dropped.
-    //
-    // If current number or records plus the expected number of trace records
-    // per session (exp_trace_events_per_session) is greater than the limit
-    // above new sessions will be dropped. A new session will also be dropped if
-    // there are too many active sessions.
-    //
-    // When the record or a session is dropped the appropriate statistics
-    // counters are updated and there is a rate-limited warning message printed
-    // to the log.
-    //
-    // Every time a number of records pending for write is greater or equal to
-    // (write_event_records_threshold) or a number of sessions pending for
-    // write is greater or equal to (write_event_sessions_threshold) a write
-    // event is issued.
-    //
-    // Every 2 seconds a timer would write all pending for write records
-    // available so far.
-    // Total number of records cached in the active sessions that are not going
-    // to be written in the next write event
-    uint64_t _cached_records = 0;
-    // Total number of records that are currently being written to I/O
-    uint64_t _flushing_records = 0;
-    // Total number of records in the _pending_for_write_records_bulk. All of
-    // them are going to be written to the I/O during the next write event.
-    uint64_t _pending_for_write_records_count = 0;
-    records_bulk _pending_for_write_records_bulk;
-    timer<lowres_clock> _write_timer;
-    // _down becomes FALSE after the local service is fully initialized and
-    // tracing records are allowed to be created and collected. It becomes TRUE
-    // after the shutdown() call and prevents further write attempts to I/O
-    // backend.
-    bool _down = true;
-    // If _slow_query_logging_enabled is enabled, a query processor keeps all
-    // trace events related to the query until in the end it can decide
-    // if the query was slow to be saved.
-    bool _slow_query_logging_enabled = false;
-    // If _ignore_trace_events is enabled, tracing::trace ignores all tracing
-    // events as well as creating trace_state descendants with trace_info to
-    // track tracing sessions only. This is used to implement lightweight
-    // slow query tracing.
-    bool _ignore_trace_events = false;
-    std::unique_ptr<i_tracing_backend_helper> _tracing_backend_helper_ptr;
     sstring _thread_name;
     sstring _tracing_backend_helper_class_name;
     seastar::metrics::metric_groups _metrics;
@@ -9594,32 +9358,6 @@ class serialized_action {
 public:
     template <typename... T>
     using future = seastar::future<T...>;
-private:
-    std::function<future<>()> _func;
-    seastar::shared_future<> _pending;
-    seastar::semaphore _sem;
-private:
-public:
-    serialized_action(std::function<future<>()> func)
-        : _func(std::move(func))
-        , _sem(1)
-    { }
-    // Makes sure that a new action will be started after this call and
-    // returns a future which resolves when that action completes.
-    // At most one action can run at any given moment.
-    // A single action is started on behalf of all earlier triggers.
-    //
-    // When action is not currently running, it is started immediately if !later or
-    // at some point in time soon after current fiber defers when later is true.
-    // Like trigger() but can be aborted
-    // Like trigger(), but defers invocation of the action to allow for batching
-    // more requests.
-    
-    // Waits for all invocations initiated in the past.
-    // The adaptor is to be used as an argument to utils::observable.observe()
-    // When the notification happens the adaptor just triggers the action
-    // Note, that all arguments provided by the notification callback are lost,
-    // its up to the action to get the needed values
     // Also, the future<> returned from .trigger() is ignored, the action code
     // runs in the background. The user should .join() the action if it needs
     // to wait for it to finish on stop/drain/shutdown
@@ -10140,32 +9878,6 @@ private:
     class raw_ut;
     class raw_tuple;
 public:
-    enum class kind : int8_t {
-        ASCII, BIGINT, BLOB, BOOLEAN, COUNTER, DOUBLE, EMPTY, FLOAT, INT, SMALLINT, TINYINT, INET, TEXT, TIMESTAMP, UUID, TIMEUUID, DATE, TIME, DURATION
-    };
-    using kind_enum = super_enum<kind,
-        kind::ASCII,
-        kind::BIGINT,
-        kind::BLOB,
-        kind::BOOLEAN,
-        kind::COUNTER,
-        kind::DOUBLE,
-        kind::EMPTY,
-        kind::FLOAT,
-        kind::INET,
-        kind::INT,
-        kind::SMALLINT,
-        kind::TINYINT,
-        kind::TEXT,
-        kind::TIMESTAMP,
-        kind::UUID,
-        kind::TIMEUUID,
-        kind::DATE,
-        kind::TIME,
-        kind::DURATION>;
-    using kind_enum_set = enum_set<kind_enum>;
-    static thread_local cql3_type ascii;
-    static thread_local cql3_type bigint;
     static thread_local cql3_type blob;
     static thread_local cql3_type boolean;
     static thread_local cql3_type double_;
@@ -10192,163 +9904,6 @@ public:
         private final AbstractType<?> type;
         public Custom(AbstractType<?> type)
         {
-            this.type = type;
-        }
-        public Custom(String className) throws SyntaxException, ConfigurationException
-        {
-            this(TypeParser.parse(className));
-        }
-        public boolean isCollection()
-        {
-            return false;
-        }
-        public AbstractType<?> getType()
-        {
-            return type;
-        }
-        @Override
-        public final boolean equals(Object o)
-        {
-            if(!(o instanceof Custom))
-                return false;
-            Custom that = (Custom)o;
-            return type.equals(that.type);
-        }
-        @Override
-        public final int hashCode()
-        {
-            return type.hashCode();
-        }
-        @Override
-        public String toString()
-        {
-            return "'" + type + "'";
-        }
-    }
-    public static class Collection implements CQL3Type
-    {
-        private final CollectionType type;
-        public Collection(CollectionType type)
-        {
-            this.type = type;
-        }
-        public AbstractType<?> getType()
-        {
-            return type;
-        }
-        public boolean isCollection()
-        {
-            return true;
-        }
-        @Override
-        public final boolean equals(Object o)
-        {
-            if(!(o instanceof Collection))
-                return false;
-            Collection that = (Collection)o;
-            return type.equals(that.type);
-        }
-        @Override
-        public final int hashCode()
-        {
-            return type.hashCode();
-        }
-        @Override
-        public String toString()
-        {
-            boolean isFrozen = !this.type.isMultiCell();
-            StringBuilder sb = new StringBuilder(isFrozen ? "frozen<" : "");
-            switch (type.kind)
-            {
-                case LIST:
-                    AbstractType<?> listType = ((ListType)type).getElementsType();
-                    sb.append("list<").append(listType.asCQL3Type());
-                    break;
-                case SET:
-                    AbstractType<?> setType = ((SetType)type).getElementsType();
-                    sb.append("set<").append(setType.asCQL3Type());
-                    break;
-                case MAP:
-                    AbstractType<?> keysType = ((MapType)type).getKeysType();
-                    AbstractType<?> valuesType = ((MapType)type).getValuesType();
-                    sb.append("map<").append(keysType.asCQL3Type()).append(", ").append(valuesType.asCQL3Type());
-                    break;
-                default:
-                    throw new AssertionError();
-            }
-            sb.append(">");
-            if (isFrozen)
-                sb.append(">");
-            return sb.toString();
-        }
-    }
-    public static class UserDefined implements CQL3Type
-    {
-        // Keeping this separatly from type just to simplify toString()
-        private final String name;
-        private final UserType type;
-        private UserDefined(String name, UserType type)
-        {
-            this.name = name;
-            this.type = type;
-        }
-        public static UserDefined create(UserType type)
-        {
-            return new UserDefined(UTF8Type.instance.compose(type.name), type);
-        }
-        public boolean isCollection()
-        {
-            return false;
-        }
-        public AbstractType<?> getType()
-        {
-            return type;
-        }
-        @Override
-        public final boolean equals(Object o)
-        {
-            if(!(o instanceof UserDefined))
-                return false;
-            UserDefined that = (UserDefined)o;
-            return type.equals(that.type);
-        }
-        @Override
-        public final int hashCode()
-        {
-            return type.hashCode();
-        }
-        @Override
-        public String toString()
-        {
-            return name;
-        }
-    }
-    public static class Tuple implements CQL3Type
-    {
-        private final TupleType type;
-        private Tuple(TupleType type)
-        {
-            this.type = type;
-        }
-        public static Tuple create(TupleType type)
-        {
-            return new Tuple(type);
-        }
-        public boolean isCollection()
-        {
-            return false;
-        }
-        public AbstractType<?> getType()
-        {
-            return type;
-        }
-        @Override
-        public final boolean equals(Object o)
-        {
-            if(!(o instanceof Tuple))
-                return false;
-            Tuple that = (Tuple)o;
-            return type.equals(that.type);
         }
         @Override
         public final int hashCode()
@@ -10583,32 +10138,6 @@ public:
 };
 ///
 /// Parse a resource from its name.
-///
-/// \throws \ref invalid_resource_name when the name is malformed.
-///
-inline resource make_functions_resource(std::string_view keyspace, std::string_view function_name, std::vector<::shared_ptr<cql3::cql3_type::raw>> function_signature) {
-    return resource(functions_resource_t{}, keyspace, function_name, function_signature);
-}
-sstring encode_signature(std::string_view name, std::vector<data_type> args);
-std::pair<sstring, std::vector<data_type>> decode_signature(std::string_view encoded_signature);
-}
-template <>
-struct fmt::formatter<auth::resource_kind> : fmt::formatter<std::string_view> {
-    template <typename FormatContext>
-    auto format(const auth::resource_kind kind, FormatContext& ctx) const {
-        using enum auth::resource_kind;
-        switch (kind) {
-        case data:
-            return formatter<std::string_view>::format("data", ctx);
-        case role:
-            return formatter<std::string_view>::format("role", ctx);
-        case service_level:
-            return formatter<std::string_view>::format("service_level", ctx);
-        case functions:
-            return formatter<std::string_view>::format("functions", ctx);
-        }
-        std::abort();
-    }
 };
 namespace std {
 template <>
@@ -20562,112 +20091,6 @@ public:
     named_value<float> memtable_flush_static_shares;
     named_value<float> compaction_static_shares;
     named_value<bool> compaction_enforce_min_threshold;
-    named_value<sstring> cluster_name;
-    named_value<sstring> listen_address;
-    named_value<sstring> listen_interface;
-    named_value<bool> listen_interface_prefer_ipv6;
-    named_value<sstring> work_directory;
-    named_value<sstring> commitlog_directory;
-    named_value<sstring> schema_commitlog_directory;
-    named_value<string_list> data_file_directories;
-    named_value<sstring> hints_directory;
-    named_value<sstring> view_hints_directory;
-    named_value<sstring> saved_caches_directory;
-    named_value<sstring> commit_failure_policy;
-    named_value<sstring> disk_failure_policy;
-    named_value<sstring> endpoint_snitch;
-    named_value<sstring> rpc_address;
-    named_value<sstring> rpc_interface;
-    named_value<bool> rpc_interface_prefer_ipv6;
-    named_value<seed_provider_type> seed_provider;
-    named_value<uint32_t> compaction_throughput_mb_per_sec;
-    named_value<uint32_t> compaction_large_partition_warning_threshold_mb;
-    named_value<uint32_t> compaction_large_row_warning_threshold_mb;
-    named_value<uint32_t> compaction_large_cell_warning_threshold_mb;
-    named_value<uint32_t> compaction_rows_count_warning_threshold;
-    named_value<uint32_t> compaction_collection_elements_count_warning_threshold;
-    named_value<uint32_t> memtable_total_space_in_mb;
-    named_value<uint32_t> concurrent_reads;
-    named_value<uint32_t> concurrent_writes;
-    named_value<uint32_t> concurrent_counter_writes;
-    named_value<bool> incremental_backups;
-    named_value<bool> snapshot_before_compaction;
-    named_value<uint32_t> phi_convict_threshold;
-    named_value<uint32_t> failure_detector_timeout_in_ms;
-    named_value<sstring> commitlog_sync;
-    named_value<uint32_t> commitlog_segment_size_in_mb;
-    named_value<uint32_t> commitlog_sync_period_in_ms;
-    named_value<uint32_t> commitlog_sync_batch_window_in_ms;
-    named_value<int64_t> commitlog_total_space_in_mb;
-    named_value<bool> commitlog_reuse_segments; // unused. retained for upgrade compat
-    named_value<int64_t> commitlog_flush_threshold_in_mb;
-    named_value<bool> commitlog_use_o_dsync;
-    named_value<bool> commitlog_use_hard_size_limit;
-    named_value<bool> compaction_preheat_key_cache;
-    named_value<uint32_t> concurrent_compactors;
-    named_value<uint32_t> in_memory_compaction_limit_in_mb;
-    named_value<bool> preheat_kernel_page_cache;
-    named_value<uint32_t> sstable_preemptive_open_interval_in_mb;
-    named_value<bool> defragment_memory_on_idle;
-    named_value<sstring> memtable_allocation_type;
-    named_value<double> memtable_cleanup_threshold;
-    named_value<uint32_t> file_cache_size_in_mb;
-    named_value<uint32_t> memtable_flush_queue_size;
-    named_value<uint32_t> memtable_flush_writers;
-    named_value<uint32_t> memtable_heap_space_in_mb;
-    named_value<uint32_t> memtable_offheap_space_in_mb;
-    named_value<uint32_t> column_index_size_in_kb;
-    named_value<uint32_t> column_index_auto_scale_threshold_in_kb;
-    named_value<uint32_t> index_summary_capacity_in_mb;
-    named_value<uint32_t> index_summary_resize_interval_in_minutes;
-    named_value<double> reduce_cache_capacity_to;
-    named_value<double> reduce_cache_sizes_at;
-    named_value<uint32_t> stream_throughput_outbound_megabits_per_sec;
-    named_value<uint32_t> inter_dc_stream_throughput_outbound_megabits_per_sec;
-    named_value<uint32_t> stream_io_throughput_mb_per_sec;
-    named_value<bool> trickle_fsync;
-    named_value<uint32_t> trickle_fsync_interval_in_kb;
-    named_value<bool> auto_bootstrap;
-    named_value<uint32_t> batch_size_warn_threshold_in_kb;
-    named_value<uint32_t> batch_size_fail_threshold_in_kb;
-    named_value<sstring> broadcast_address;
-    named_value<bool> listen_on_broadcast_address;
-    named_value<sstring> initial_token;
-    named_value<uint32_t> num_tokens;
-    named_value<sstring> partitioner;
-    named_value<uint16_t> storage_port;
-    named_value<bool> auto_snapshot;
-    named_value<uint32_t> key_cache_keys_to_save;
-    named_value<uint32_t> key_cache_save_period;
-    named_value<uint32_t> key_cache_size_in_mb;
-    named_value<uint32_t> row_cache_keys_to_save;
-    named_value<uint32_t> row_cache_size_in_mb;
-    named_value<uint32_t> row_cache_save_period;
-    named_value<sstring> memory_allocator;
-    named_value<uint32_t> counter_cache_size_in_mb;
-    named_value<uint32_t> counter_cache_save_period;
-    named_value<uint32_t> counter_cache_keys_to_save;
-    named_value<uint32_t> tombstone_warn_threshold;
-    named_value<uint32_t> tombstone_failure_threshold;
-    named_value<uint32_t> max_partition_key_restrictions_per_query;
-    named_value<uint32_t> max_clustering_key_restrictions_per_query;
-    named_value<uint64_t> max_memory_for_unlimited_query_soft_limit;
-    named_value<uint64_t> max_memory_for_unlimited_query_hard_limit;
-    named_value<uint32_t> reader_concurrency_semaphore_serialize_limit_multiplier;
-    named_value<uint32_t> reader_concurrency_semaphore_kill_limit_multiplier;
-    named_value<uint32_t> twcs_max_window_count;
-    named_value<unsigned> initial_sstable_loading_concurrency;
-    named_value<bool> enable_3_1_0_compatibility_mode;
-    named_value<bool> enable_user_defined_functions;
-    named_value<unsigned> user_defined_function_time_limit_ms;
-    named_value<unsigned> user_defined_function_allocation_limit_bytes;
-    named_value<unsigned> user_defined_function_contiguous_allocation_limit_bytes;
-    named_value<uint32_t> schema_registry_grace_period;
-    named_value<uint32_t> max_concurrent_requests_per_shard;
-    named_value<bool> cdc_dont_rewrite_streams;
-    named_value<tri_mode_restriction> strict_allow_filtering;
-    named_value<bool> reversed_reads_auto_bypass_cache;
-    named_value<bool> enable_optimized_reversed_reads;
     named_value<bool> enable_cql_config_updates;
     named_value<bool> enable_parallelized_aggregation;
     named_value<uint16_t> alternator_port;
@@ -20933,59 +20356,6 @@ public:
             }
             String alias = readNextIdentifier();
             if (alias.length() != 1)
-                throwSyntaxError("An alias should be a single character");
-            char aliasChar = alias.charAt(0);
-            if (aliasChar < 33 || aliasChar > 127)
-                throwSyntaxError("An alias should be a single character in [0..9a..bA..B-+._&]");
-            skipBlank();
-            if (!(str.charAt(idx) == '=' && str.charAt(idx+1) == '>'))
-                throwSyntaxError("expecting '=>' token");
-            idx += 2;
-            skipBlank();
-            try
-            {
-                map.put((byte)aliasChar, parse());
-            }
-            catch (SyntaxException e)
-            {
-                SyntaxException ex = new SyntaxException(String.format("Exception while parsing '%s' around char %d", str, idx));
-                ex.initCause(e);
-                throw ex;
-            }
-        }
-        throw new SyntaxException(String.format("Syntax error parsing '%s' at char %d: unexpected end of string", str, idx));
-    }
-    public Map<ByteBuffer, CollectionType> getCollectionsParameters() throws SyntaxException, ConfigurationException
-    {
-        Map<ByteBuffer, CollectionType> map = new HashMap<>();
-        if (isEOS())
-            return map;
-        if (str.charAt(idx) != '(')
-            throw new IllegalStateException();
-        ++idx; // skipping '('
-        while (skipBlankAndComma())
-        {
-            if (str.charAt(idx) == ')')
-            {
-                ++idx;
-                return map;
-            }
-            ex.initCause(e.getTargetException());
-            throw ex;
-        }
-    }
-    private void throwSyntaxError(String msg) throws SyntaxException
-    {
-        throw new SyntaxException(String.format("Syntax error parsing '%s' at char %d: %s", str, idx, msg));
-    }
-#endif
-    // skip all blank and at best one comma, return true if there not EOS
-    // left idx positioned on the character stopping the read
-#if 0
-    public char readNextChar()
-    {
-        skipBlank();
-        return str.charAt(idx++);
     }
     public static String stringifyAliasesParameters(Map<Byte, AbstractType<?>> aliases)
     {
@@ -23318,59 +22688,6 @@ struct after_mutation__table_id {
 };
 template<typename Output>
 struct writer_of_mutation {
-    Output& _out;
-    state_of_mutation<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment {
-    Output& _out;
-    state_of_mutation_fragment<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__deletion_time {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at__timestamp {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> _state;
-};
-template<typename Output>
-struct mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__cells {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__cells__columns {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__cells<Output> _state;
-};
-template<typename Output>
-struct mutation_fragment__fragment__clustering_row__row__cells__columns {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__cells<Output> _state;
-        place_holder<Output> _size;
-    size_type _count = 0;
-};
-template<typename Output>
-struct mutation_fragment__fragment__clustering_row__row__cells {
-    Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__cells<Output> _state;
 };
 template<typename Output>
@@ -25332,59 +24649,6 @@ public:
     sstring file_name;
     direction dir;
     long current_bytes;
-    long total_bytes;
-};
-} // namespace streaming
-namespace db {
-class config;
-class system_distributed_keyspace;
-namespace view {
-class view_update_generator;
-}
-}
-namespace service {
-class migration_manager;
-};
-namespace netw {
-class messaging_service;
-};
-namespace gms {
-class gossiper;
-}
-namespace streaming {
-struct stream_bytes {
-    int64_t bytes_sent = 0;
-    int64_t bytes_received = 0;
-};
-class stream_manager : public gms::i_endpoint_state_change_subscriber, public enable_shared_from_this<stream_manager>, public peering_sharded_service<stream_manager> {
-    using inet_address = gms::inet_address;
-    using endpoint_state = gms::endpoint_state;
-    using application_state = gms::application_state;
-    using versioned_value = gms::versioned_value;
-private:
-    sharded<replica::database>& _db;
-    sharded<db::system_distributed_keyspace>& _sys_dist_ks;
-    sharded<db::view::view_update_generator>& _view_update_generator;
-    sharded<netw::messaging_service>& _ms;
-    sharded<service::migration_manager>& _mm;
-    gms::gossiper& _gossiper;
-    std::unordered_map<plan_id, shared_ptr<stream_result_future>> _initiated_streams;
-    std::unordered_map<plan_id, shared_ptr<stream_result_future>> _receiving_streams;
-    std::unordered_map<plan_id, std::unordered_map<gms::inet_address, stream_bytes>> _stream_bytes;
-    uint64_t _total_incoming_bytes{0};
-    uint64_t _total_outgoing_bytes{0};
-    semaphore _mutation_send_limiter{256};
-    seastar::metrics::metric_groups _metrics;
-    std::unordered_map<streaming::stream_reason, float> _finished_percentage;
-    utils::updateable_value<uint32_t> _io_throughput_mbs;
-    serialized_action _io_throughput_updater = serialized_action([this] { return update_io_throughput(_io_throughput_mbs()); });
-    std::optional<utils::observer<uint32_t>> _io_throughput_option_observer;
-public:
-public:
-private:
-    future<> update_io_throughput(uint32_t value_mbs);
-public:
-    
 };
 } // namespace streaming
 namespace streaming {
@@ -25650,59 +24914,6 @@ public:
 //
 // Helps with the common coroutine exception-handling idiom:
 //
-//  std::exception_ptr ex;
-//  try {
-//      ...
-//  } catch (...) {
-//      ex = std::current_exception();
-//  }
-//
-//  // release resource(s)
-//  maybe_rethrow_exception(std::move(ex));
-//
-//  return result;
-//
-namespace utils::internal {
-#if defined(OPTIMIZED_EXCEPTION_HANDLING_AVAILABLE)
-void* try_catch_dynamic(std::exception_ptr& eptr, const std::type_info* catch_type) noexcept;
-template<typename Ex>
-class nested_exception : public Ex, public std::nested_exception {
-private:
-    void set_nested_exception(std::exception_ptr nested_eptr) {
-        // Hack: libstdc++'s std::nested_exception has just one field
-        // which is a std::exception_ptr. It is initialized
-        // to std::current_exception on its construction, but we override
-        // it here.
-        auto* nex = dynamic_cast<std::nested_exception*>(this);
-        // std::nested_exception is virtual without any base classes,
-        // so according to the ABI we just need to skip the vtable pointer
-        // and align
-        auto* nptr = reinterpret_cast<std::exception_ptr*>(
-                seastar::align_up(
-                        reinterpret_cast<char*>(nex) + sizeof(void*),
-                        alignof(std::nested_exception)));
-        *nptr = std::move(nested_eptr);
-    }
-public:
-    explicit nested_exception(const Ex& ex, std::exception_ptr&& nested_eptr)
-            : Ex(ex) {
-        set_nested_exception(std::move(nested_eptr));
-    }
-    explicit nested_exception(Ex&& ex, std::exception&& nested_eptr)
-            : Ex(std::move(ex)) {
-        set_nested_exception(std::move(nested_eptr));
-    }
-};
-#endif
-} // utils::internal
-/// If the exception_ptr holds an exception which would match on a `catch (T&)`
-/// clause, returns a pointer to it. Otherwise, returns `nullptr`.
-///
-/// The exception behind the pointer is valid as long as the exception
-/// behind the exception_ptr is valid.
- ;
-/// Analogous to std::throw_with_nested, but instead of capturing the currently
-/// thrown exception, takes the exception to be nested inside as an argument,
 /// and does not throw the new exception but rather returns it.
  ;
 namespace utils {
@@ -25862,59 +25073,6 @@ private:
     seastar::gate _background_msg;
     std::unordered_map<gms::inet_address, syn_msg_pending> _syn_handlers;
     std::unordered_map<gms::inet_address, ack_msg_pending> _ack_handlers;
-    bool _advertise_myself = true;
-    // Map ip address and generation number
-    generation_for_nodes _advertise_to_nodes;
-    future<> _failure_detector_loop_done{make_ready_future<>()} ;
-public:
-    // Get current generation number for the given nodes
-    // Only respond echo message listed in nodes with the generation number
-public:
-public:
-    using endpoint_locks_map = utils::loading_shared_values<inet_address, semaphore>;
-    struct endpoint_permit {
-        endpoint_locks_map::entry_ptr _ptr;
-        semaphore_units<> _units;
-    };
-private:
-    std::unordered_map<inet_address, endpoint_state> _endpoint_state_map;
-    // Used for serializing changes to _endpoint_state_map and running of associated change listeners.
-    endpoint_locks_map _endpoint_locks;
-public:
-    const std::vector<sstring> DEAD_STATES = {
-        versioned_value::REMOVING_TOKEN,
-        versioned_value::REMOVED_TOKEN,
-        versioned_value::STATUS_LEFT,
-    };
-    const std::vector<sstring> SILENT_SHUTDOWN_STATES = {
-        versioned_value::REMOVING_TOKEN,
-        versioned_value::REMOVED_TOKEN,
-        versioned_value::STATUS_LEFT,
-        versioned_value::HIBERNATE,
-        versioned_value::STATUS_BOOTSTRAPPING,
-        versioned_value::STATUS_UNKNOWN,
-    };
-    static constexpr std::chrono::milliseconds INTERVAL{1000};
-    static constexpr std::chrono::hours A_VERY_LONG_TIME{24 * 3};
-    static constexpr std::chrono::milliseconds GOSSIP_SETTLE_MIN_WAIT_MS{5000};
-    // Maximimum difference between remote generation value and generation
-    // value this node would get if this node were restarted that we are
-    // willing to accept about a peer.
-    static constexpr generation_type::value_type MAX_GENERATION_DIFFERENCE = 86400 * 365;
-    std::chrono::milliseconds fat_client_timeout;
-private:
-    std::default_random_engine _random_engine{std::random_device{}()};
-    atomic_vector<shared_ptr<i_endpoint_state_change_subscriber>> _subscribers;
-    std::list<std::vector<inet_address>> _endpoints_to_talk_with;
-    utils::chunked_vector<inet_address> _live_endpoints;
-    uint64_t _live_endpoints_version = 0;
-    std::unordered_set<inet_address> _pending_mark_alive_endpoints;
-    std::unordered_map<inet_address, clk::time_point> _unreachable_endpoints;
-    semaphore _endpoint_update_semaphore = semaphore(1);
-    std::set<inet_address> _seeds;
-    std::map<inet_address, clk::time_point> _just_removed_endpoints;
-    std::map<inet_address, clk::time_point> _expire_time_endpoint_map;
-    bool _in_shadow_round = false;
     std::unordered_map<inet_address, clk::time_point> _shadow_unreachable_endpoints;
     utils::chunked_vector<inet_address> _shadow_live_endpoints;
     // replicate shard 0 live endpoints across all other shards.
@@ -26975,59 +26133,6 @@ class static_row;
 // partition_snapshot - a handle to some particular partition_version. It allows
 //                      only reads and itself is immutable the partition version
 //                      it represents won't be modified as long as the snapshot
-//                      is alive.
-//
-// pe - partition_entry
-// pv - partition_version
-// ps - partition_snapshot
-// ps(u) - partition_snapshot marked as unique owner
-// Scene I. Write-only loads
-//   pv
-//   ^
-//   |
-//   pe
-// In case of write-only loads all incoming mutations are directly applied
-// to the partition_version that partition_entry is pointing to. The list
-// of partition_versions contains only a single element.
-//
-// Scene II. Read-only loads
-//   pv
-//   ^
-//   |
-//   pe <- ps
-// In case of read-only scenarios there is only a single partition_snapshot
-// object that points to the partition_entry. There is only a single
-// partition_version.
-//
-// Scene III. Writes and reads
-//   pv -- pv -- pv
-//   ^     ^     ^
-//   |     |     |
-//   pe    ps    ps
-// If the partition_entry that needs to be modified is currently read from (i.e.
-// there exist a partition_snapshot pointing to it) instead of applying new
-// mutation directly a new partition version is created and added at the front
-// of the list. partition_entry points to the new version (so that it has the
-// most recent view of stored data) while the partition_snapshot points to the
-// same partition_version it pointed to before (so that the data it sees doesn't
-// change).
-// As a result the list may contain multiple partition versions used by
-// different partition snapshots.
-// When the partition_snapshot is destroyed partition_versions are squashed
-// together to minimize the amount of elements on the list.
-//
-// Scene IV. Schema upgrade
-//   pv    pv --- pv
-//   ^     ^      ^
-//   |     |      |
-//   pe    ps(u)  ps
-// When there is a schema upgrade the list of partition versions pointed to
-// by partition_entry is replaced by a new single partition_version that is a
-// result of squashing and upgrading the old versions.
-// Old versions not used by any partition snapshot are removed. The first
-// partition snapshot on the list is marked as unique which means that upon
-// its destruction it won't attempt to squash versions but instead remove
-// the unused ones and pass the "unique owner" mark the next snapshot on the
 // list (if there is any).
 //
 // Scene V. partition_entry eviction
@@ -28671,59 +27776,6 @@ class node final {
         nr->_num_keys = 1;
         nr->_keys[0].emplace(std::move(sep));
         nr->_kids[0].n = this;
-        nr->_kids[1].n = &nn;
-        _flags &= ~node::NODE_ROOT;
-        _parent = nr;
-        nn._parent = nr;
-        nr->_flags |= node::NODE_ROOT;
-        t->do_set_root(nr);
-    }
-    void insert_key(Key k, node_or_data nd, Less less, prealloc& nodes) noexcept {
-        kid_index i = index_for(k, less);
-        insert(i, std::move(k), nd, less, nodes);
-    }
-    void insert(kid_index i, Key k, node_or_data nd, Less less, prealloc& nodes) noexcept {
-        if (_num_keys == NodeSize) {
-            insert_into_full(i, std::move(k), nd, less, nodes);
-        } else {
-            do_insert(i, std::move(k), nd, less);
-        }
-    }
-    void insert(kid_index i, Key k, data* d, Less less) {
-        prealloc nodes;
-        node* cur = this;
-        while (cur->_num_keys == NodeSize) {
-            nodes.push();
-            if (cur->is_root()) {
-                nodes.push();
-                break;
-            }
-            cur = cur->_parent;
-        }
-        insert(i, std::move(k), node_or_data{.d = d}, less, nodes);
-        assert(nodes.empty());
-    }
-    void remove_from(key_index i, Less less) noexcept {
-        _keys[i].reset();
-        shift_left(i);
-        if (!is_root()) {
-            if (need_refill()) {
-                refill(less);
-            }
-        } else if (_num_keys == 0 && !is_leaf()) {
-            node* nr;
-            nr = _kids[0].n;
-            nr->_flags |= node::NODE_ROOT;
-            _root_tree->do_set_root(nr);
-            _flags &= ~node::NODE_ROOT;
-            _parent = nullptr;
-            drop();
-        }
-    }
-    void merge_kids(node& t, node& n, key_index sep_idx, Less less) noexcept {
-        n.merge_into(t, std::move(_keys[sep_idx].v));
-        n.drop();
-        remove_from(sep_idx, less);
     }
     void refill(Less less) noexcept {
         node& p = *_parent, *left, *right;
@@ -29042,59 +28094,6 @@ public:
     // A helper for keeping the array sorted
     template <typename K, typename Compare>
     requires Comparable<K, T, Compare>
-    const_iterator lower_bound(const K& val, Compare cmp, bool& match) const {
-        int i = 0;
-        do {
-            auto x = cmp(_data[i].object, val);
-            if (x >= 0) {
-                match = (x == 0);
-                break;
-            }
-        } while (!_data[i++].object.is_tail());
-        return &_data[i].object;
-    }
-    template <typename K, typename Compare>
-    requires Comparable<K, T, Compare>
-    iterator lower_bound(const K& val, Compare cmp, bool& match) {
-        return const_cast<iterator>(const_cast<const intrusive_array*>(this)->lower_bound(val, std::move(cmp), match));
-    }
-    template <typename K, typename Compare>
-    requires Comparable<K, T, Compare>
-    const_iterator lower_bound(const K& val, Compare cmp) const {
-        bool match = false;
-        return lower_bound(val, cmp, match);
-    }
-    template <typename K, typename Compare>
-    requires Comparable<K, T, Compare>
-    iterator lower_bound(const K& val, Compare cmp) {
-        return const_cast<iterator>(const_cast<const intrusive_array*>(this)->lower_bound(val, std::move(cmp)));
-    }
-    // And its peer ... just to be used
-    template <typename K, typename Compare>
-    requires Comparable<K, T, Compare>
-    const_iterator upper_bound(const K& val, Compare cmp) const {
-        int i = 0;
-        do {
-            if (cmp(_data[i].object, val) > 0) {
-                break;
-            }
-        } while (!_data[i++].object.is_tail());
-        return &_data[i].object;
-    }
-    template <typename K, typename Compare>
-    requires Comparable<K, T, Compare>
-    iterator upper_bound(const K& val, Compare cmp) {
-        return const_cast<iterator>(const_cast<const intrusive_array*>(this)->upper_bound(val, std::move(cmp)));
-    }
-    template <typename Func>
-    requires Disposer<Func, T>
-    void for_each(Func&& fn) noexcept {
-        bool tail = false;
-        for (int i = 0; !tail; i++) {
-            tail = _data[i].object.is_tail();
-            fn(&_data[i].object);
-        }
-    }
     size_t size() const noexcept { return number_of_elements(); }
     static intrusive_array& from_element(T* ptr, int& idx) noexcept {
         idx = 0;
@@ -40278,59 +39277,6 @@ public:
         , m_(std::chrono::duration_cast<std::chrono::minutes>(abs(since_midnight) - h_))
         , s_(abs(since_midnight) - h_ - m_)
         {}
-    CONSTCD11 explicit time_of_day_storage(std::chrono::hours h, std::chrono::minutes m,
-                                           std::chrono::seconds s, precision sub_s,
-                                           unsigned md) NOEXCEPT
-        : base(h, false, md)
-        , m_(m)
-        , s_(s + sub_s)
-        {}
-    CONSTCD11 std::chrono::hours hours() const NOEXCEPT {return h_;}
-    CONSTCD11 std::chrono::minutes minutes() const NOEXCEPT {return m_;}
-    CONSTCD14 std::chrono::seconds& seconds() NOEXCEPT {return s_.seconds();}
-    CONSTCD11 std::chrono::seconds seconds() const NOEXCEPT {return s_.seconds();}
-    CONSTCD11 precision subseconds() const NOEXCEPT {return s_.subseconds();}
-    CONSTCD11 unsigned mode() const NOEXCEPT {return mode_;}
-    CONSTCD14 explicit operator precision() const NOEXCEPT
-    {
-        auto p = to24hr() + s_.to_duration() + m_;
-        if (neg_)
-            p = -p;
-        return p;
-    }
-    CONSTCD14 precision to_duration() const NOEXCEPT
-    {
-        return static_cast<precision>(*this);
-    }
-    CONSTCD14 time_of_day_storage& make24() NOEXCEPT {base::make24(); return *this;}
-    CONSTCD14 time_of_day_storage& make12() NOEXCEPT {base::make12(); return *this;}
-    template<class CharT, class Traits>
-    friend
-    std::basic_ostream<CharT, Traits>&
-    operator<<(std::basic_ostream<CharT, Traits>& os, const time_of_day_storage& t)
-    {
-        using namespace std;
-        detail::save_stream<CharT, Traits> _(os);
-        if (t.neg_)
-            os << '-';
-        os.fill('0');
-        os.flags(std::ios::dec | std::ios::right);
-        if (t.mode_ != am && t.mode_ != pm)
-            os.width(2);
-        os << t.h_.count() << ':';
-        os.width(2);
-        os << t.m_.count() << ':' << t.s_;
-        switch (t.mode_)
-        {
-        case am:
-            os << "am";
-            break;
-        case pm:
-            os << "pm";
-            break;
-        }
-        return os;
-    }
 };
 }  // namespace detail
 template <class Duration>
@@ -41709,59 +40655,6 @@ parse(std::basic_istream<CharT, Traits>& is,
                 break;
             case 'M':
                 if (command)
-                {
-                    if (modified == CharT{})
-                    modified = CharT{};
-                }
-                else
-                    read(is, *fmt);
-                break;
-            case 'y':
-                if (command)
-                {
-                    if (modified == CharT{})
-                        read(is, ru{y, 1, width == -1 ? 2u : width});
-                    else
-                    {
-                        ios_base::iostate err = ios_base::goodbit;
-                        f.get(is, 0, is, err, &tm, command, fmt+1);
-                        if ((err & ios::failbit) == 0)
-                            Y = tm.tm_year + 1900;
-                        is.setstate(err);
-                    }
-                    command = nullptr;
-                    width = -1;
-                    modified = CharT{};
-                }
-                else
-                    read(is, *fmt);
-                break;
-            case 'g':
-                if (command)
-                {
-                    if (modified == CharT{})
-                        read(is, ru{g, 1, width == -1 ? 2u : width});
-                    else
-                        read(is, CharT{'%'}, width, modified, *fmt);
-                    command = nullptr;
-                    width = -1;
-                    modified = CharT{};
-                }
-                else
-                    read(is, *fmt);
-                break;
-            case 'G':
-                if (command)
-                {
-                    if (modified == CharT{})
-                        read(is, rs{G, 1, width == -1 ? 4u : width});
-                    else
-                        read(is, CharT{'%'}, width, modified, *fmt);
-                    command = nullptr;
-                    width = -1;
-                    modified = CharT{};
-                }
-                else
                     read(is, *fmt);
                 break;
             case 'U':
@@ -42238,59 +41131,6 @@ parse(std::basic_istream<CharT, Traits>& is,
     detail::parse(is, format.c_str(), tp, &abbrev, &offset);
 }
 // const CharT* formats
-template <class Duration, class CharT>
-inline
-detail::parse_sys_manip<Duration, CharT>
-parse(const CharT* format, sys_time<Duration>& tp)
-{
-    return {format, tp};
-}
-template <class Duration, class CharT, class Traits>
-inline
-detail::parse_sys_manip<Duration, CharT, Traits>
-parse(const CharT* format, sys_time<Duration>& tp,
-      std::basic_string<CharT, Traits>& abbrev)
-{
-    return {format, tp, &abbrev};
-}
-template <class Duration, class CharT>
-inline
-detail::parse_sys_manip<Duration, CharT>
-parse(const CharT* format, sys_time<Duration>& tp, std::chrono::minutes& offset)
-{
-    return {format, tp, nullptr, &offset};
-}
-template <class Duration, class CharT, class Traits>
-inline
-detail::parse_sys_manip<Duration, CharT, Traits>
-parse(const CharT* format, sys_time<Duration>& tp,
-      std::basic_string<CharT, Traits>& abbrev, std::chrono::minutes& offset)
-{
-    return {format, tp, &abbrev, &offset};
-}
-template <class Duration, class CharT, class Traits>
-inline
-detail::parse_sys_manip<Duration, CharT, Traits>
-parse(const CharT* format, sys_time<Duration>& tp,
-      std::chrono::minutes& offset, std::basic_string<CharT, Traits>& abbrev)
-{
-    return {format, tp, &abbrev, &offset};
-}
-template <class Duration, class CharT>
-inline
-detail::parse_local_manip<Duration, CharT>
-parse(const CharT* format, local_time<Duration>& tp)
-{
-    return {format, tp};
-}
-template <class Duration, class CharT, class Traits>
-inline
-detail::parse_local_manip<Duration, CharT, Traits>
-parse(const CharT* format, local_time<Duration>& tp,
-      std::basic_string<CharT, Traits>& abbrev)
-{
-    return {format, tp, &abbrev};
-}
 template <class Duration, class CharT>
 inline
 detail::parse_local_manip<Duration, CharT>
@@ -43617,59 +42457,6 @@ void mutation::apply(const mutation &m)
 {
 mutation_application_stats app_stats;
 partition().apply(*schema(), m.partition(), *m.schema(), app_stats);
-}
-void mutation::apply(const mutation_fragment &mf) { partition().apply(*schema(), mf); }
-mutation &mutation::operator=(const mutation &m) { return *this = mutation(m); }
-mutation mutation::operator+(const mutation &other) const
-{
-auto m = *this;
-m.apply(other);
-return m;
-}
-mutation &mutation::operator+=(const mutation &other)
-{
-apply(other);
-return *this;
-}
-mutation &mutation::operator+=(mutation &&other)
-{
-apply(std::move(other));
-return *this;
-}
-mutation mutation::sliced(const query::clustering_row_ranges &ranges) const { return mutation(schema(), decorated_key(), partition().sliced(*schema(), ranges)); }
-mutation mutation::compacted() const
-{
-auto m = *this;
-m.partition().compact_for_compaction(*schema(), always_gc, m.decorated_key(), gc_clock::time_point::min(), tombstone_gc_state(nullptr));
-return m;
-}
-mutation reverse(mutation mut)
-{
-auto reverse_schema = mut.schema()->make_reversed();
-mutation_rebuilder_v2 reverse_rebuilder(reverse_schema);
-return *std::move(mut).consume(reverse_rebuilder, consume_in_reverse::yes).result;
-}
-std::ostream &operator<<(std::ostream &os, const mutation &m)
-{
-const ::schema &s = *m.schema();
-const auto &dk = m.decorated_key();
-fmt::print(os, "{{table: '{}.{}', key: {{", s.ks_name(), s.cf_name());
-auto type_iterator = dk._key.get_compound_type(s)->types().begin();
-auto column_iterator = s.partition_key_columns().begin();
-for (auto &&e : dk._key.components(s))
-{
-    os << "'" << column_iterator->name_as_text() << "': " << (*type_iterator)->to_string(to_bytes(e)) << ", ";
-    ++type_iterator;
-    ++column_iterator;
-}
-fmt::print(os, "token: {}}}, ", dk._token);
-os << mutation_partition::printer(s, m.partition()) << "\n}";
-return os;
-}
-std::ostream &operator<<(std::ostream &os, const clustering_row::printer &p)
-{
-auto &row = p._clustering_row;
-return os << "{clustering_row: ck " << row._ck << " dr " << deletable_row::printer(p._schema, row._row) << "}";
 }
 std::ostream &operator<<(std::ostream &os, const static_row::printer &p) { return os << "{static_row: " << row::printer(p._schema, column_kind::static_column, p._static_row._cells) << "}"; }
 std::ostream &operator<<(std::ostream &os, const partition_start &ph)
@@ -50931,59 +49718,6 @@ return *this;
 }
 partition_slice_builder &partition_slice_builder::with_regular_column(bytes name)
 {
-if (!_regular_columns)
-{
-    _regular_columns = query::column_id_vector();
-}
-const column_definition *def = _schema.get_column_definition(name);
-if (!def)
-{
-    throw std::runtime_error(format("No such column: {}", _schema.regular_column_name_type()->to_string(name)));
-}
-if (!def->is_regular())
-{
-    throw std::runtime_error(format("Column is not regular: {}", _schema.column_name_type(*def)->to_string(name)));
-}
-_regular_columns->push_back(def->id);
-return *this;
-}
-partition_slice_builder &partition_slice_builder::with_no_static_columns()
-{
-_static_columns = query::column_id_vector();
-return *this;
-}
-partition_slice_builder &partition_slice_builder::with_static_column(bytes name)
-{
-if (!_static_columns)
-{
-    _static_columns = query::column_id_vector();
-}
-const column_definition *def = _schema.get_column_definition(name);
-if (!def)
-{
-    throw std::runtime_error(format("No such column: {}", utf8_type->to_string(name)));
-}
-if (!def->is_static())
-{
-    throw std::runtime_error(format("Column is not static: {}", utf8_type->to_string(name)));
-}
-_static_columns->push_back(def->id);
-return *this;
-}
-partition_slice_builder &partition_slice_builder::reversed()
-{
-_options.set<query::partition_slice::option::reversed>();
-return *this;
-}
-partition_slice_builder &partition_slice_builder::without_partition_key_columns()
-{
-_options.remove<query::partition_slice::option::send_partition_key>();
-return *this;
-}
-partition_slice_builder &partition_slice_builder::without_clustering_key_columns()
-{
-_options.remove<query::partition_slice::option::send_clustering_key>();
-return *this;
 }
 partition_slice_builder &partition_slice_builder::with_partition_row_limit(uint64_t limit)
 {
@@ -51353,112 +50087,6 @@ namespace utf8
         0,
         0,
         0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
-        1,
-        2,
-        3,
-    }; // Map "First Byte" to 8-th item of range table (0xC2 ~ 0xF4)
-    alignas(16) static const int8_t s_first_range_tbl[] = {
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        8,
-        8,
-        8,
-        8,
-    }; // Range table, map range index to min and max values
-    // Index 0    : 00 ~ 7F (First Byte, ascii)
-    // Index 1,2,3: 80 ~ BF (Second, Third, Fourth Byte)
-    // Index 4    : A0 ~ BF (Second Byte after E0)
-    // Index 5    : 80 ~ 9F (Second Byte after ED)
-    // Index 6    : 90 ~ BF (Second Byte after F0)
-    // Index 7    : 80 ~ 8F (Second Byte after F4)
-    // Index 8    : C2 ~ F4 (First Byte, non ascii)
-    // Index 9~15 : illegal: i >= 127 && i <= -128
-    alignas(16) static const int8_t s_range_min_tbl[] = {
-        '\x00',
-        '\x80',
-        '\x80',
-        '\x80',
-        '\xA0',
-        '\x80',
-        '\x90',
-        '\x80',
-        '\xC2',
-        '\x7F',
-        '\x7F',
-        '\x7F',
-        '\x7F',
-        '\x7F',
-        '\x7F',
-        '\x7F',
-    };
-    alignas(16) static const int8_t s_range_max_tbl[] = {
-        '\x7F',
-        '\xBF',
-        '\xBF',
-        '\xBF',
-        '\xBF',
-        '\x9F',
-        '\xBF',
-        '\x8F',
-        '\xF4',
-        '\x80',
-        '\x80',
-        '\x80',
-        '\x80',
-        '\x80',
-        '\x80',
-        '\x80',
-    }; // Tables for fast handling of four special First Bytes(E0,ED,F0,F4), after
-    // which the Second Byte are not 80~BF. It contains "range index adjustment".
-    // +------------+---------------+------------------+----------------+
-    // | First Byte | original range| range adjustment | adjusted range |
-    // +------------+---------------+------------------+----------------+
-    // | E0         | 2             | 2                | 4              |
-    // +------------+---------------+------------------+----------------+
-    // | ED         | 2             | 3                | 5              |
-    // +------------+---------------+------------------+----------------+
-    // | F0         | 3             | 3                | 6              |
-    // +------------+---------------+------------------+----------------+
-    // | F4         | 4             | 4                | 8              |
-    // +------------+---------------+------------------+----------------+
-    // index1 -> E0, index14 -> ED
-    alignas(16) static const int8_t s_df_ee_tbl[] = {
-        0,
-        2,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        3,
-        0,
-    }; // index1 -> F0, index5 -> F4
-    alignas(16) static const int8_t s_ef_fe_tbl[] = {
-        0,
-        3,
         0,
         0,
         0,
@@ -52203,59 +50831,6 @@ std::vector<mutation> table_description::build_mutations(schema_ptr s) const
 {
     auto ms = boost::copy_range<std::vector<mutation>>(_mutations | boost::adaptors::transformed([&](const mutation_description &md)
                                                                                                  { return md.build(s); }));
-    boost::sort(ms, mutation_decorated_key_less_comparator());
-    return ms;
-}
-table_description::table_description(std::vector<column> partition_key, std::vector<column> clustering_key) : _partition_key(std::move(partition_key)), _clustering_key(std::move(clustering_key)) {}
-void table_description::add_static_column(const sstring &name, data_type type)
-{
-    _change_log.emplace_back(format("added static column \'{}\' of type \'{}\'", name, type->as_cql3_type().to_string()));
-    add_column(_static_columns, name, type);
-}
-void table_description::add_regular_column(const sstring &name, data_type type)
-{
-    _change_log.emplace_back(format("added regular column \'{}\' of type \'{}\'", name, type->as_cql3_type().to_string()));
-    add_column(_regular_columns, name, type);
-}
-void table_description::add_old_static_column(const sstring &name, data_type type) { add_old_column(name, type); }
-void table_description::add_old_regular_column(const sstring &name, data_type type) { add_old_column(name, type); }
-void table_description::remove_static_column(const sstring &name)
-{
-    _change_log.emplace_back(format("removed static column \'{}\'", name));
-    remove_column(_static_columns, name);
-    for (auto &m : _mutations)
-    {
-        m.remove_static_column(name);
-    }
-}
-void table_description::remove_regular_column(const sstring &name)
-{
-    _change_log.emplace_back(format("removed regular column \'{}\'", name));
-    remove_column(_regular_columns, name);
-    for (auto &m : _mutations)
-    {
-        m.remove_regular_column(name);
-    }
-}
-void table_description::alter_partition_column_type(const sstring &name, data_type new_type)
-{
-    _change_log.emplace_back(format("altered partition column \'{}\' type to \'{}\'", name, new_type->as_cql3_type().to_string()));
-    alter_column_type(_partition_key, name, new_type);
-}
-void table_description::alter_clustering_column_type(const sstring &name, data_type new_type)
-{
-    _change_log.emplace_back(format("altered clustering column \'{}\' type to \'{}\'", name, new_type->as_cql3_type().to_string()));
-    alter_column_type(_clustering_key, name, new_type);
-}
-void table_description::alter_static_column_type(const sstring &name, data_type new_type)
-{
-    _change_log.emplace_back(format("altered static column \'{}\' type to \'{}\'", name, new_type->as_cql3_type().to_string()));
-    alter_column_type(_static_columns, name, new_type);
-}
-void table_description::alter_regular_column_type(const sstring &name, data_type new_type)
-{
-    _change_log.emplace_back(format("altered regular column \'{}\' type to \'{}\'", name, new_type->as_cql3_type().to_string()));
-    alter_column_type(_regular_columns, name, new_type);
 }
 void table_description::rename_partition_column(const sstring &from, const sstring &to)
 {
