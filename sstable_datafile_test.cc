@@ -3625,19 +3625,6 @@ std::strong_ordering lexicographical_tri_compare(TypesIterator types_first, Type
         }
         ++first1;
         ++first2;
-        ++types_first;
-    }
-    bool e1 = first1 == last1;
-    bool e2 = first2 == last2;
-    if (e1 && e2) {
-        return static_cast<int>(relation1) <=> static_cast<int>(relation2);
-    }
-    if (e2) {
-        return relation2 == lexicographical_relation::after_all_prefixed ? std::strong_ordering::less : std::strong_ordering::greater;
-    } else if (e1) {
-        return relation1 == lexicographical_relation::after_all_prefixed ? std::strong_ordering::greater : std::strong_ordering::less;
-    } else {
-        return std::strong_ordering::equal;
     }
 }
 // A trichotomic comparator for prefix equality total ordering.
@@ -4184,19 +4171,6 @@ template <> inline thread_local const data_type& data_type_for_v<net::inet_addre
 template <> inline thread_local const data_type& data_type_for_v<bool> = boolean_type;
 template <> inline thread_local const data_type& data_type_for_v<float> = float_type;
 template <> inline thread_local const data_type& data_type_for_v<double> = double_type;
-template <> inline thread_local const data_type& data_type_for_v<cql_duration> = duration_type;
-namespace std {
-template <>
-struct hash<shared_ptr<const abstract_type>> : boost::hash<shared_ptr<abstract_type>> {
-};
-}
-// FIXME: make more explicit
-// FIXME: make more explicit
-
-
-
-// FIXME: make more explicit
-inline
 bytes
 to_bytes(const sstring& x) {
     return bytes(reinterpret_cast<const int8_t*>(x.c_str()), x.size());
@@ -5523,19 +5497,6 @@ public:
       if constexpr (std::is_same_v<Stream, simple_input_stream>) {
         return bytes_view(reinterpret_cast<const int8_t*>(_stream.begin()), _stream.size());
       } else {
-        using iterator_type = typename Stream::iterator_type ;
-        static_assert(FragmentRange<buffer_view<iterator_type>>);
-        return seastar::with_serialized_stream(_stream, seastar::make_visitor(
-            [&] (typename seastar::memory_input_stream<iterator_type >::simple stream) {
-                return buffer_view<iterator_type>(bytes_view(reinterpret_cast<const int8_t*>(stream.begin()),
-                                                        stream.size()));
-            },
-            [&] (typename seastar::memory_input_stream<iterator_type >::fragmented stream) {
-                return buffer_view<iterator_type>(bytes_view(reinterpret_cast<const int8_t*>(stream.first_fragment_data()),
-                                                        stream.first_fragment_size()),
-                                             stream.size(), stream.fragment_iterator());
-            }
-        ));
       }
     }
     [[gnu::always_inline]]
@@ -5588,19 +5549,6 @@ struct serializer<bytes> {
         for (bytes_view frag : v.fragments()) {
             out.write(reinterpret_cast<const char*>(frag.begin()), frag.size());
         }
-    }
-    template<typename Output, typename FragmentedBuffer>
-    requires FragmentRange<FragmentedBuffer>
-    static void write_fragmented(Output& out, FragmentedBuffer&& fragments) {
-        safe_serialize_as_uint32(out, uint32_t(fragments.size_bytes()));
-        for (bytes_view frag : fragments) {
-            out.write(reinterpret_cast<const char*>(frag.begin()), frag.size());
-        }
-    }
-    template<typename Input>
-    static void skip(Input& in) {
-        auto sz = deserialize(in, boost::type<uint32_t>());
-        in.skip(sz);
     }
 };
  ;
@@ -6226,19 +6174,6 @@ public:
         std::strong_ordering operator()(composite_view, composite_view) const;
     };
 };
-template <typename Component>
-struct fmt::formatter<std::pair<Component, composite::eoc>> : fmt::formatter<std::string_view> {
-    template <typename FormatContext>
-    auto format(const std::pair<Component, composite::eoc>& c, FormatContext& ctx) const {
-        if constexpr (std::same_as<Component, bytes_view>) {
-            return fmt::format_to(ctx.out(), "{{value={}; eoc={:#02x}}}",
-                                  fmt_hex(c.first), composite::eoc_type(c.second) & 0xff);
-        } else {
-            return fmt::format_to(ctx.out(), "{{value={}; eoc={:#02x}}}",
-                                  c.first, composite::eoc_type(c.second) & 0xff);
-        }
-    }
-};
 class composite_view final {
     friend class composite;
     bytes_view _bytes;
@@ -6355,19 +6290,6 @@ namespace replica {
 class memtable;
 }
 //
-// This header defines type system for primary key holders.
-//
-// We distinguish partition keys and clustering keys. API-wise they are almost
-// the same, but they're separate type hierarchies.
-//
-// Clustering keys are further divided into prefixed and non-prefixed (full).
-// Non-prefixed keys always have full component set, as defined by schema.
-// Prefixed ones can have any number of trailing components missing. They may
-// differ in underlying representation.
-//
-// The main classes are:
-//
-//   partition_key           - full partition key
 //   clustering_key          - full clustering key
 //   clustering_key_prefix   - clustering key prefix
 //
@@ -6394,19 +6316,6 @@ public:
     struct tri_compare {
         typename TopLevelView::compound _t;
     };
-    struct hashing {
-        typename TopLevelView::compound _t;
-    };
-    struct equality {
-        typename TopLevelView::compound _t;
-    };
-    // begin() and end() return iterators over components of this compound. The iterator yields a managed_bytes_view to the component.
-    // The iterators satisfy InputIterator concept.
-    // See begin()
-    // begin() and end() return iterators over components of this compound. The iterator yields a managed_bytes_view to the component.
-    // The iterators satisfy InputIterator concept.
-    // See begin()
-    // Returns a range of managed_bytes_view
     // Returns a range of managed_bytes_view
     
     
@@ -6589,19 +6498,6 @@ public:
     
     bool is_full(const schema& s) const {
         return TopLevel::get_compound_type(s)->is_full(base::_bytes);
-    }
-    // Can be called only if is_full()
-    // In prefix equality two sequences are equal if any of them is a prefix
-    // of the other. Otherwise lexicographical ordering is applied.
-    // Note: full compounds sorted according to lexicographical ordering are also
-    // sorted according to prefix equality ordering.
-    struct prefix_equality_less_compare {
-        typename TopLevel::compound prefix_type;
-    };
-    // See prefix_equality_less_compare.
-    struct prefix_equal_tri_compare {
-        typename TopLevel::compound prefix_type;
-        
         
     };
 };
@@ -7317,19 +7213,6 @@ public:
 };
 //
 // Represents position in the ring of partitions, where partitions are ordered
-// according to decorated_key ordering (first by token, then by key value).
-// Intended to be used for defining partition ranges.
-//
-// The 'key' part is optional. When it's absent, this object represents a position
-// which is either before or after all keys sharing given token. That's determined
-// by relation_to_keys().
-//
-// For example for the following data:
-//
-//   tokens: |    t1   | t2 |
-//           +----+----+----+
-//   keys:   | k1 | k2 | k3 |
-//
 // The ordering is:
 //
 //   ring_position(t1, token_bound::start) < ring_position(k1)
@@ -7629,19 +7512,6 @@ using trace_state_props_set = enum_set<super_enum<trace_state_props,
 class trace_info {
 public:
     utils::UUID session_id;
-    trace_type type;
-    bool write_on_close;
-    trace_state_props_set state_props;
-    uint32_t slow_query_threshold_us; // in microseconds
-    uint32_t slow_query_ttl_sec; // in seconds
-    span_id parent_id;
-    uint64_t start_ts_us = 0u; // sentinel value (== "unset")
-public:
-};
-struct one_session_records;
-using records_bulk = std::deque<lw_shared_ptr<one_session_records>>;
-struct backend_session_state_base {
-    ;
 };
 struct i_tracing_backend_helper {
     using wall_clock = std::chrono::system_clock;
@@ -8487,19 +8357,6 @@ public:
     // A list or set value can be serialized as a vector<pair<timeuuid, data_value>> or
     // vector<pair<data_value, empty>> respectively. Compare this representation with
     // vector<data_value> without transforming either of the arguments. Since Cassandra doesn't
-    // allow nested multi-cell collections this representation does not transcend to values, and we
-    // don't need to worry about recursing.
-    // @param this          type of the listlike value represented as vector<data_value>
-    // @param map_type      type of the listlike value represented as vector<pair<data_value, data_value>>
-    // @param list          listlike value, represented as vector<data_value>
-    // @param map           listlike value represented as vector<pair<data_value, data_value>>
-    //
-    // This function is used to compare receiver with a literal or parameter marker during condition
-    // evaluation.
-    
-    // A list or set value can be represented as a vector<pair<timeuuid, data_value>> or
-    // vector<pair<data_value, empty>> respectively. Serialize this representation
-    // as a vector of values, not as a vector of pairs.
     
     // Verify that there are no NULL elements. Throws if there are.
     void validate_for_storage(const FragmentedView auto& value) const;
@@ -8526,19 +8383,6 @@ template <typename Iterator>
 requires requires (Iterator it) { {*it} -> std::convertible_to<managed_bytes_view_opt>; }
 managed_bytes
 collection_type_impl::pack_fragmented(Iterator start, Iterator finish, int elements) {
-    size_t len = collection_size_len();
-    size_t psz = collection_value_len();
-    for (auto j = start; j != finish; j++) {
-        auto v = managed_bytes_view_opt(*j);
-        len += (v ? v->size() : 0) + psz;
-    }
-    managed_bytes out(managed_bytes::initialized_later(), len);
-    managed_bytes_mutable_view v(out);
-    write_collection_size(v, elements);
-    while (start != finish) {
-        write_collection_value(v, *start++);
-    }
-    return out;
 }
 extern
 template
@@ -9033,19 +8877,6 @@ namespace utils {
 // observable/observer - a publish/subscribe utility
 //
 // An observable is an object that can broadcast notifications
-// about changes in some state. An observer listens for such notifications
-// in a particular observable it is connected to. Multiple observers can
-// observe a single observable.
-//
-// A connection between an observer and an observable is established when
-// the observer is constructed (using observable::observe()); from then
-// on their life cycles are separate, either can be moved or destroyed
-// without affecting the other.
-//
-// During construction, the observer specifies how to react to a change
-// in the observable's state by specifying a function to be called on
-// a state change. An observable causes the function to be executed
-// by calling its operator()() method.
 //
 // All observers are called without preemption, so an observer should have
 // a small number of observers.
@@ -9176,19 +9007,6 @@ updateable_value<T>::observe(std::function<void (const T&)> callback) const {
     auto* src = source();
     return src ? src->observe(std::move(callback)) : dummy_observer<T>();
 }
-// Automatically updates a value from a utils::updateable_value
-// Where they can be of different types.
-// An optional transfom function can provide an additional transformation
-// when updating the value, like multiplying it by a factor for unit conversion,
-// for example.
-template <typename ValueType, typename UpdateableValueType>
-class transforming_value_updater {
-    ValueType& _value;
-    utils::updateable_value<UpdateableValueType> _updateable_value;
-    serialized_action _updater;
-    utils::observer<UpdateableValueType> _observer;
-public:
-};
 }
 namespace seastar { class file; }
 namespace seastar::json { class json_return_type; }
@@ -9358,19 +9176,6 @@ std::istream& operator>>(std::istream&, std::vector<seastar::sstring>&);
  ;
 }
 namespace utils {
-namespace {
-template<class T, class charT = char>
-class typed_value_ex : public bpo::typed_value<T, charT> {
-public:
-    typedef bpo::typed_value<T, charT> _Super;
-};
- ;
-template <typename T>
-void maybe_multitoken(std::vector<typed_value_ex<T>>* r) {
-    r->multitoken();
-}
- ;
-}
 
 }
 class atomic_cell_view;
@@ -9631,19 +9436,6 @@ public:
         private final AbstractType<?> type;
         public Custom(AbstractType<?> type)
         {
-        }
-        @Override
-        public final int hashCode()
-        {
-            return type.hashCode();
-        }
-        @Override
-        public String toString()
-        {
-            StringBuilder sb = new StringBuilder();
-            sb.append("tuple<");
-            for (int i = 0; i < type.size(); i++)
-            {
                 if (i > 0)
                     sb.append(", ");
                 sb.append(type.type(i).asCQL3Type());
@@ -9878,19 +9670,6 @@ struct hash<auth::resource> {
     static size_t hash_service_level(const auth::service_level_resource_view& rv) {
             return utils::tuple_hash()(std::make_tuple(auth::resource_kind::service_level));
     }
-    static size_t hash_function(const auth::functions_resource_view& fv) {
-        return utils::tuple_hash()(std::make_tuple(auth::resource_kind::functions, fv.keyspace(), fv.function_signature()));
-    }
-    size_t operator()(const auth::resource& r) const {
-        std::size_t value;
-        switch (r._kind) {
-        case auth::resource_kind::data: value = hash_data(auth::data_resource_view(r)); break;
-        case auth::resource_kind::role: value = hash_role(auth::role_resource_view(r)); break;
-        case auth::resource_kind::service_level: value = hash_service_level(auth::service_level_resource_view(r)); break;
-        case auth::resource_kind::functions: value = hash_function(auth::functions_resource_view(r)); break;
-        }
-        return value;
-    }
 };
 }
 namespace auth {
@@ -9917,19 +9696,6 @@ public:
     
 };
 
-/// A stateful SASL challenge which supports many authentication schemes (depending on the implementation).
-///
-class sasl_challenge {
-public:
-    virtual ~sasl_challenge() = default;
-};
-class plain_sasl_challenge : public sasl_challenge {
-public:
-    using completion_callback = std::function<future<authenticated_user>(std::string_view, std::string_view)>;
-private:
-    std::optional<sstring> _username, _password;
-    completion_callback _when_complete;
-};
 }
 namespace db {
     class config;
@@ -9955,32 +9721,6 @@ public:
     using credentials_map = std::unordered_map<sstring, sstring>;
     ///
     /// A fully-qualified (class with package) Java-like name for this implementation.
-    ///
-    ///
-    /// A subset of `supported_options()` that users are permitted to alter for themselves.
-    ///
-    ///
-    /// Authenticate a user given implementation-specific credentials.
-    ///
-    /// If this implementation does not require authentication (\ref require_authentication), an anonymous user may
-    /// result.
-    ///
-    /// \returns an exceptional future with \ref exceptions::authentication_exception if given invalid credentials.
-    ///
-    ///
-    /// Create an authentication record for a new user. This is required before the user can log-in.
-    ///
-    /// The options provided must be a subset of `supported_options()`.
-    ///
-    ///
-    /// Alter the authentication record of an existing user.
-    ///
-    /// The options provided must be a subset of `supported_options()`.
-    ///
-    /// Callers must ensure that the specification of `alterable_options()` is adhered to.
-    ///
-    ///
-    /// Delete the authentication record for a user. This will disallow the user from logging in.
     ///
     ///
     /// Query for custom options (those corresponding to \ref authentication_options::options).
@@ -10020,32 +9760,6 @@ public:
     ///
     /// The optional role name is empty when an anonymous user is authorized. Some implementations may still wish to
     /// grant default permissions in this case.
-    ///
-    ///
-    /// Grant a set of permissions to a role for a particular \ref resource.
-    ///
-    /// \throws \ref unsupported_authorization_operation if granting permissions is not supported.
-    ///
-    ///
-    /// Revoke a set of permissions from a role for a particular \ref resource.
-    ///
-    /// \throws \ref unsupported_authorization_operation if revoking permissions is not supported.
-    ///
-    ///
-    /// Query for all directly granted permissions.
-    ///
-    /// \throws \ref unsupported_authorization_operation if listing permissions is not supported.
-    ///
-    virtual future<std::vector<permission_details>> list_all() const = 0;
-    ///
-    /// Revoke all permissions granted directly to a particular role.
-    ///
-    /// \throws \ref unsupported_authorization_operation if revoking permissions is not supported.
-    ///
-    ///
-    /// Revoke all permissions granted to any role for a particular resource.
-    ///
-    /// \throws \ref unsupported_authorization_operation if revoking permissions is not supported.
     ///
     ///
     /// System resources used internally as part of the implementation. These are made inaccessible to users.
@@ -10112,19 +9826,6 @@ private:
         const value_type& value() const noexcept {
             return *_val;
         }
-        value_type& value() noexcept {
-            return *_val;
-        }
-        /// \brief "Release" the object from the contained value.
-        /// After this call the state of the value kept inside this object is undefined and it may no longer be used.
-        ///
-        /// \return The r-value reference to the value kept inside this object.
-        value_type&& release() {
-            return *std::move(_val);
-        }
-        void set_value(value_type new_val) {
-            _val.emplace(std::move(new_val));
-        }
         bool orphaned() const {
             return !is_linked();
         }
@@ -10177,19 +9878,6 @@ public:
         }
         explicit operator bool() const noexcept { return bool(_e); }
         bool operator==(const entry_ptr&) const = default;
-        element_type& operator*() const noexcept { return _e->value(); }
-        element_type* operator->() const noexcept { return &_e->value(); }
-        /// \brief Get the wrapped value. Avoid the copy if this is the last reference to this value.
-        /// If this is the last reference then the wrapped value is going to be std::move()ed. Otherwise it's going to
-        /// be copied.
-        /// \return The wrapped value.
-        element_type release() {
-            auto res = _e.owned() ? _e->release() : _e->value();
-            _e = nullptr;
-            return res;
-        }
-        // Returns the key this entry is associated with.
-        // Valid if bool(*this).
         const key_type& key() const {
             return _e->key();
         }
@@ -10242,32 +9930,6 @@ public:
             lw_shared_ptr<entry> e;
             future<> f = make_ready_future<>();
             if (i != _set.end()) {
-                e = i->shared_from_this();
-                // take a short cut if the value is ready
-                if (e->ready()) {
-                    Stats::inc_hits();
-                    return make_ready_future<entry_ptr>(entry_ptr(std::move(e)));
-                }
-                f = e->loaded().get_shared_future();
-            } else {
-                Stats::inc_misses();
-                e = make_lw_shared<entry>(*this, key);
-                rehash_before_insert();
-                _set.insert(*e);
-                // get_shared_future() may throw, so make sure to call it before invoking the loader(key)
-                f = e->loaded().get_shared_future();
-                // Future indirectly forwarded to `e`.
-                (void)futurize_invoke([&] { return loader(key); }).then_wrapped([e](future<value_type>&& val_fut) mutable {
-                    if (val_fut.failed()) {
-                        e->loaded().set_exception(val_fut.get_exception());
-                    } else {
-                        e->set_value(val_fut.get0());
-                        e->loaded().set_value();
-                    }
-                });
-            }
-            if (!f.available()) {
-                Stats::inc_blocks();
                 return f.then([e]() mutable {
                     return entry_ptr(std::move(e));
                 });
@@ -10307,19 +9969,6 @@ public:
     //
     // Post-condition: !find(key)
     template<typename KeyType, typename KeyHasher, typename KeyEqual>
-    void remove(const KeyType& key, KeyHasher key_hasher_func, KeyEqual key_equal_func) {
-        set_iterator it = _set.find(key, std::move(key_hasher_func), key_eq<KeyType, KeyEqual>());
-        if (it != _set.end()) {
-            _set.erase(it);
-        }
-    }
-    // Removes a given key from this container.
-    // If a given key is currently loading, the loading will succeed and will return entry_ptr
-    // to the caller, but the value will not be present in the container. It will be removed
-    // when the last entry_ptr dies, as usual.
-    //
-    // Post-condition: !find(key)
-    template<typename KeyType>
     void remove(const KeyType& key) {
         remove(key, Hash(), EqualPred());
     }
@@ -10398,19 +10047,6 @@ struct do_nothing_loading_cache_stats {
 /// \brief Loading cache is a cache that loads the value into the cache using the given asynchronous callback.
 ///
 /// Each cached value if reloading is enabled (\tparam ReloadEnabled == loading_cache_reload_enabled::yes) is reloaded after
-/// the "refresh" time period since it was loaded for the last time.
-///
-/// The values are going to be evicted from the cache if they are not accessed during the "expiration" period or haven't
-/// been reloaded even once during the same period.
-///
-/// If "expiration" is set to zero - the caching is going to be disabled and get_XXX(...) is going to call the "loader" callback
-/// every time in order to get the requested value.
-///
-/// \note In order to avoid the eviction of cached entries due to "aging" of the contained value the user has to choose
-/// the "expiration" to be at least ("refresh" + "max load latency"). This way the value is going to stay in the cache and is going to be
-/// read in a non-blocking way as long as it's frequently accessed. Note however that since reloading is an asynchronous
-/// procedure it may get delayed by other running task. Therefore choosing the "expiration" too close to the ("refresh" + "max load latency")
-/// value one risks to have his/her cache values evicted when the system is heavily loaded.
 /// \tparam ReloadEnabled if loading_cache_reload_enabled::yes allow reloading the values otherwise don't reload
 /// \tparam EntrySize predicate to calculate the entry size
 /// \tparam Hash hash function
@@ -10475,19 +10111,6 @@ class loading_cache {
         }
         bool ready() const noexcept {
             return _lru_entry_ptr;
-        }
-        lru_entry* lru_entry_ptr() const noexcept {
-            return _lru_entry_ptr;
-        }
-    private:
-        void touch() noexcept {
-            _last_read = loading_cache_clock_type::now();
-            if (_lru_entry_ptr) {
-                _lru_entry_ptr->touch();
-            }
-        }
-        void set_anchor_back_reference(lru_entry* lru_entry_ptr) noexcept {
-            _lru_entry_ptr = lru_entry_ptr;
         }
     };
 private:
@@ -10827,19 +10450,6 @@ private:
         // too small, because this could lead to starving the unprivileged section.
         // For example if the cache could store at most 50 entries and there are 49 entries in
         // privileged section, after adding 5 entries (that would go to unprivileged
-        // section) 4 of them would get evicted and only the 5th one would stay.
-        // This caused problems with BATCH statements where all prepared statements
-        // in the batch have to stay in cache at the same time for the batch to correctly
-        // execute.
-        auto minimum_unprivileged_section_size = _cfg.max_size / 2;
-        while (memory_footprint() >= _cfg.max_size && _unprivileged_section_size > minimum_unprivileged_section_size) {
-            drop_unprivileged_entry();
-        }
-        while (memory_footprint() >= _cfg.max_size && !_lru_list.empty()) {
-            drop_privileged_entry();
-        }
-        // If dropping entries from privileged section did not help,
-        // we have to drop entries from unprivileged section,
         // going below minimum_unprivileged_section_size.
         while (memory_footprint() >= _cfg.max_size) {
             drop_unprivileged_entry();
@@ -11022,19 +10632,6 @@ public:
     /// \returns an exceptional future with \ref role_already_exists for a role that has previously been created.
     ///
     ///
-    /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
-    ///
-    ///
-    /// \returns an exceptional future with \ref nonexistant_role if the role does not exist.
-    ///
-    ///
-    /// Grant `role_name` to `grantee_name`.
-    ///
-    /// \returns an exceptional future with \ref nonexistant_role if either the role or the grantee do not exist.
-    ///
-    /// \returns an exceptional future with \ref role_already_included if granting the role would be redundant, or
-    /// create a cycle.
-    ///
     /// Removes `attribute_name` for `role_name`.
     /// \returns an exceptional future with nonexistant_role if the role does not exist.
     /// \note: This is a no-op if the role does not have the named attribute set.
@@ -11061,19 +10658,6 @@ struct service_config final {
 /// authenticator, or authorizer imply restrictions on the rest.
 ///
 /// This exception is thrown when an invalid combination of modules is selected, with a message explaining the
-/// incompatibility.
-///
-class incompatible_module_combination : public std::invalid_argument {
-public:
-    using std::invalid_argument::invalid_argument;
-};
-///
-/// Client for access-control in the system.
-///
-/// Access control encompasses user/role management, authentication, and authorization. This client provides access to
-/// the dynamically-loaded implementations of these modules (through the `underlying_*` member functions), but also
-/// builds on their functionality with caching and abstractions for common operations.
-///
 /// All state associated with access-control is stored externally to any particular instance of this class.
 ///
 /// peering_sharded_service inheritance is needed to be able to access shard local authentication service
@@ -11100,32 +10684,6 @@ private:
 ///
 /// A description of a CQL command from which auth::service can tell whether or not this command could endanger
 /// internal data on which auth::service depends.
-struct command_desc {
-    auth::permission permission; ///< Nature of the command's alteration.
-    const ::auth::resource& resource; ///< Resource impacted by this command.
-    enum class type {
-        ALTER_WITH_OPTS, ///< Command is ALTER ... WITH ...
-        OTHER
-    } type_ = type::OTHER;
-};
-///
-/// Protected resources cannot be modified even if the performer has permissions to do so.
-///
-///
-/// Create a role with optional authentication information.
-///
-///
-/// \returns an exceptional future with \ref nonexistent_role if the named role does not exist.
-///
-/// \returns an exceptional future with \ref unsupported_authorization_operation if granting permissions is not
-/// supported.
-///
-///
-/// Like \ref grant_permissions, but grants all applicable permissions on the resource.
-///
-/// \returns an exceptional future with \ref nonexistent_role if the named role does not exist.
-///
-/// \returns an exceptional future with \ref unsupported_authorization_operation if granting permissions is not
 /// supported.
 ///
 ///
