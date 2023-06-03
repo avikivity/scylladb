@@ -49095,21 +49095,21 @@ public:
     
     
     size_t total_memory_in_use() const noexcept { return _non_lsa_memory_in_use + _segments_in_use * segment::size; }
-    size_t total_free_memory() const noexcept ;
+    
     struct reservation_goal;
     
     
     size_t reclaim_segments(size_t target, is_preemptible preempt);
-    void reclaim_all_free_segments();
+    
 private:
     tracker::stats _stats{};
 public:
     const tracker::stats &statistics() const noexcept { return _stats; }
     inline void on_segment_compaction(size_t used_size) noexcept;
-    inline void on_memory_allocation(size_t size) noexcept;
-    inline void on_memory_deallocation(size_t size) noexcept;
+    
+    
     inline void on_memory_eviction(size_t size) noexcept;
-    size_t unreserved_free_segments() const noexcept ;
+    
     size_t free_segments() const noexcept { return _free_segments; }
 };
 struct reclaim_timer
@@ -49158,8 +49158,7 @@ private:
     
     ;
     ;
-    template <typename T>
-    void log_if_any_mem(log_level level, const char *name, T value) const noexcept;
+    ;
     ;
 };
 size_t segment_pool::reclaim_segments(size_t target, is_preemptible preempt)
@@ -49381,7 +49380,7 @@ class region_impl final : public basic_region_impl
     private:
         explicit object_descriptor(uint32_t n) noexcept : _n(n) {}
     public:
-        object_descriptor(allocation_strategy::migrate_fn migrator) noexcept : _n(migrator->index() * 2 + 1) {}
+        
         static object_descriptor make_dead(size_t size) noexcept { return object_descriptor(size * 2); }
         allocation_strategy::migrate_fn migrator() const noexcept { return static_migrators()[_n / 2]; }
         uint8_t alignment() const noexcept { return migrator()->align(); }                             // excluding descriptor
@@ -49397,7 +49396,7 @@ class region_impl final : public basic_region_impl
         // index() (i.e. -- suitable for express encoding)
         void encode(char *&pos, size_t encoded_size, size_t size) const noexcept { utils::uleb64_express_encode(pos, _n, encoded_size, size, poison<char>, unpoison); }
         static object_descriptor decode_forwards(const char *&pos) noexcept { return object_descriptor(utils::uleb64_decode_forwards(pos, poison<char>, unpoison)); }
-        static object_descriptor decode_backwards(const char *&pos) noexcept ;
+        
     };
 private: // lsa_buffer allocator
     segment *_buf_active = nullptr;
@@ -49674,12 +49673,7 @@ private:
         }
     };
 public:
-    explicit region_impl(tracker &tracker, region *region) : basic_region_impl(tracker), _region(region), _sanitizer(tracker.get_impl().sanitizer_report_backtrace()), _id(next_id())
-    {
-        _buf_ptrs_for_compact_segment.reserve(segment::size / buf_align);
-        _preferred_max_contiguous_allocation = max_managed_object_size;
-        tracker_instance._impl->register_region(this);
-    }
+    
     logalloc::segment_pool &segment_pool() const { return _tracker.get_impl().segment_pool(); }
      // Note: allocation is disallowed in this path
     // since we don't instantiate reclaiming_lock
@@ -50026,12 +50020,12 @@ class limiting_data_source_impl final : public data_source_impl
 data_source _src;
 seastar::noncopyable_function<size_t()> _limit_generator;
 temporary_buffer<char> _buf;
-future<temporary_buffer<char>> do_get();
+
 public:
-limiting_data_source_impl(data_source &&src, seastar::noncopyable_function<size_t()> &&limit_generator) : _src(std::move(src)), _limit_generator(std::move(limit_generator)) {}
-virtual future<temporary_buffer<char>> get() override;
+
+
 };
-data_source make_limiting_data_source(data_source &&src, seastar::noncopyable_function<size_t()> &&limit_generator);
+
 namespace utils
 {
 void updateable_value_source_base::for_each_ref(std::function<void(updateable_value_base *ref)> func)
@@ -50143,7 +50137,7 @@ public:
      // Methods needed by rapidjson's Stream concept (see
     // https://rapidjson.org/classrapidjson_1_1_stream.html):
      // Not used in input streams, but unfortunately we still need to implement
-    Ch *PutBegin();
+    
 };
 template <typename Handler, bool EnableYield, typename Buffer = string_buffer>
 struct guarded_yieldable_json_handler : public Handler
@@ -50326,21 +50320,7 @@ namespace utils
 // namespace utils
 logging::logger klog("keys");
 const legacy_compound_view<partition_key_view::c_type> partition_key_view::legacy_form(const schema &s) const { return {*get_compound_type(s), _bytes}; }
-int32_t weight(bound_kind k)
-{
-switch (k)
-{
-case bound_kind::excl_end:
-    return -2;
-case bound_kind::incl_start:
-    return -1;
-case bound_kind::incl_end:
-    return 1;
-case bound_kind::excl_start:
-    return 2;
-}
-abort();
-}
+
 const thread_local clustering_key_prefix bound_view::_empty_prefix = clustering_key::make_empty();
 static bool apply_in_place(const column_definition &cdef, atomic_cell_mutable_view dst, atomic_cell_mutable_view src)
 {
@@ -50554,11 +50534,9 @@ UUID make_random_uuid() noexcept
 // Work around by casting to string.
 using string_view_workaround = std::string;
 static logging::logger tlogger("types");
-bytes_view_opt read_collection_value(bytes_view &in);
+
 void on_types_internal_error(std::exception_ptr ex) { on_internal_error(tlogger, std::move(ex)); }
-template <typename T>
-    requires requires {         typename T::duration;         requires std::same_as<typename T::duration, std::chrono::milliseconds>; }
-sstring time_point_to_string(const T &tp);
+;
 static const char *byte_type_name = "org.apache.cassandra.db.marshal.ByteType";
 static const char *short_type_name = "org.apache.cassandra.db.marshal.ShortType";
 static const char *int32_type_name = "org.apache.cassandra.db.marshal.Int32Type";
@@ -50626,8 +50604,7 @@ boolean_type_impl::boolean_type_impl() : simple_type_impl<bool>(kind::boolean, b
 date_type_impl::date_type_impl() : concrete_type(kind::date, date_type_name, 8) {}
 timeuuid_type_impl::timeuuid_type_impl() : concrete_type<utils::UUID>(kind::timeuuid, timeuuid_type_name, 16) {}
 timestamp_type_impl::timestamp_type_impl() : simple_type_impl(kind::timestamp, timestamp_type_name, 8) {}
-static boost::posix_time::ptime get_time(const boost::smatch &sm)
-;
+
 
 
 simple_date_type_impl::simple_date_type_impl() : simple_type_impl{kind::simple_date, simple_date_type_name, {}}
@@ -50718,8 +50695,7 @@ for (auto val_opt : partially_deserialize_listlike(value))
 }
 template void listlike_collection_type_impl::validate_for_storage(const managed_bytes_view &value) const;
 template void listlike_collection_type_impl::validate_for_storage(const fragmented_temporary_buffer::view &value) const;
-static bool is_compatible_with_aux(const collection_type_impl &t, const abstract_type &previous)
-;
+
 size_t collection_size_len() { return sizeof(int32_t); }
 size_t collection_value_len() { return sizeof(int32_t); }
 void write_collection_size(bytes::iterator &out, int size) { serialize_int32(out, size); }
@@ -51112,7 +51088,7 @@ sstring make_list_type_name(data_type elements, bool is_multi_cell)
 list_type_impl::list_type_impl(data_type elements, bool is_multi_cell) : concrete_type(kind::list, make_list_type_name(elements, is_multi_cell), elements, is_multi_cell) { _contains_set_or_map = _elements->contains_set_or_map(); }
 data_type list_type_impl::name_comparator() const { return timeuuid_type; }
 data_type list_type_impl::value_comparator() const { return _elements; }
-static bool is_value_compatible_with_internal(const abstract_type &t, const abstract_type &other);
+
 static void serialize_list(const list_type_impl &t, const void *value, bytes::iterator &out)
 {
 auto &s = t.from_value(value);
@@ -51397,9 +51373,9 @@ struct visitor
     View v;
     ;
     data_value operator()(const abstract_type &) ;
-    data_value operator()(const list_type_impl &t);
-    data_value operator()(const map_type_impl &t);
-    data_value operator()(const set_type_impl &t);
+    
+    
+    
 };
 return ::visit(*this, visitor{v});
 }
@@ -51516,8 +51492,7 @@ while (v.size_bytes())
 }
 return buf;
 }
-template <typename T>
-decltype(auto) deserialize_value(const T &t, bytes_view v) { return deserialize_value(t, single_fragmented_view(v)); }
+
 namespace
 {
 template <FragmentedView View>
@@ -51715,7 +51690,7 @@ catch (const marshal_exception &)
 // Replace ":" with "\:" and "@" with "\@".
 
 // Concat list of bytes into a single bytes.
-static bytes concat_fields(const std::vector<bytes> &fields, const std::vector<int32_t> field_len);
+
 static size_t concrete_serialized_size(const byte_type_impl::native_type &) { return sizeof(int8_t); }
 static size_t concrete_serialized_size(const short_type_impl::native_type &) { return sizeof(int16_t); }
 static size_t concrete_serialized_size(const int32_type_impl::native_type &) { return sizeof(int32_t); }
@@ -51775,7 +51750,7 @@ struct from_string_visitor
     ;
     
     
-    bytes operator()(const collection_type_impl &);
+    
 };
 }
 template <typename N, typename A, typename F>
@@ -51822,8 +51797,7 @@ static sstring to_string_impl(const abstract_type &t, const void *v) { return vi
 sstring abstract_type::to_string_impl(const data_value &v) const { return ::to_string_impl(*this, get_value_ptr(v)); }
 
 // Needed to handle ReversedType in value-compatibility checks.
-static bool is_value_compatible_with_internal(const abstract_type &t, const abstract_type &other)
-;
+
 static std::optional<std::vector<data_type>> update_types(const std::vector<data_type> types, const user_type updated)
 {
 std::optional<std::vector<data_type>> new_types = std::nullopt;
@@ -51871,16 +51845,15 @@ struct native_value_delete_visitor
     void operator()(const empty_type_impl &) { delete reinterpret_cast<empty_type_representation *>(object); }
 };
 }
-static void native_value_delete(const abstract_type &t, void *object) { visit(t, native_value_delete_visitor{object}); }
+
 namespace
 {
 struct native_typeid_visitor
 {
-    template <typename N, typename A>
-    const std::type_info &operator()(const concrete_type<N, A> &);
+    ;
     
     
-    const std::type_info &operator()(const empty_type_impl &);
+    
 };
 }
 bytes abstract_type::decompose(const data_value &value) const
@@ -51938,7 +51911,7 @@ struct visitor
         t.validate(b);
         return t.to_string(b);
     }
-    sstring operator()(const reversed_type_impl &r) { return r.underlying_type()->get_string(b); }
+    
 };
 return visit(*this, visitor{b});
 }
@@ -51968,10 +51941,10 @@ else
     return shared_from_this();
 }
 }
-static bytes_ostream serialize_for_cql_aux(const map_type_impl &, collection_mutation_view_description mut);
 
 
-static bytes_ostream serialize_for_cql_aux(const user_type_impl &type, collection_mutation_view_description mut);
+
+
 bytes serialize_field_index(size_t idx)
 {
 if (idx >= size_t(std::numeric_limits<int16_t>::max()))
@@ -51987,7 +51960,7 @@ size_t deserialize_field_index(const bytes_view &b)
 assert(b.size() == sizeof(int16_t));
 return read_be<int16_t>(reinterpret_cast<const char *>(b.data()));
 }
-size_t deserialize_field_index(managed_bytes_view b);
+
 thread_local const shared_ptr<const abstract_type> byte_type(make_shared<byte_type_impl>());
 thread_local const shared_ptr<const abstract_type> short_type(make_shared<short_type_impl>());
 thread_local const shared_ptr<const abstract_type> int32_type(make_shared<int32_type_impl>());
@@ -52123,8 +52096,7 @@ namespace utils
 namespace filter
 {
     thread_local bloom_filter::stats bloom_filter::_shard_stats;
-    template <typename Func>
-    void for_each_index(hashed_key hk, int count, int64_t max, filter_format format, Func &&func);
+    ;
 }
 }
 namespace utils
@@ -52191,18 +52163,7 @@ impl(fs::path path) : _path(std::move(path)), _fd(file_desc::open(_path.native()
 fs::path _path;
 file_desc _fd;
 };
-future<utils::file_lock> utils::file_lock::acquire(fs::path path)
-{ // meh. not really any future stuff here. but pretend, for the
-// day when a future version of lock etc is added.
-try
-{
-    return make_ready_future<file_lock>(file_lock(path));
-}
-catch (...)
-{
-    return make_exception_future<utils::file_lock>(std::current_exception());
-}
-}
+
 namespace utils
 {
 void dynamic_bitset::set(size_t n) noexcept
@@ -52302,36 +52263,9 @@ size_t dynamic_bitset::find_last_set() const noexcept
     }
     return pos;
 }
-dynamic_bitset::dynamic_bitset(size_t nr_bits) : _bits_count(nr_bits)
-{
-    auto div_ceil = [](size_t num, size_t den)
-    { return (num + den - 1) / den; }; // 1-64: 1 level
-    // 65-4096: 2 levels
-    // 4097-262144: 3 levels
-    // etc.
-    unsigned nr_levels = div_ceil(log2ceil(align_up(nr_bits, size_t(bits_per_int))), level_shift);
-    _bits.resize(nr_levels);
-    size_t level_bits = nr_bits;
-    for (unsigned level = 0; level != nr_levels; ++level)
-    {
-        auto level_words = align_up(level_bits, bits_per_int) / bits_per_int;
-        _bits[level].resize(level_words);
-        level_bits = level_words; // for next iteration
-    }
+
 }
-}
-std::unique_ptr<bytes_view::value_type[]> managed_bytes::do_linearize_pure() const
-{
-auto b = _u.ptr;
-auto data = std::unique_ptr<bytes_view::value_type[]>(new bytes_view::value_type[b->size]);
-auto e = data.get();
-while (b)
-{
-    e = std::copy_n(b->data, b->frag_size, e);
-    b = b->next;
-}
-return data;
-}
+
 bool should_stop_on_system_error(const std::system_error &e)
 {
 if (e.code().category() == std::system_category())
@@ -52347,19 +52281,7 @@ if (e.code().category() == std::system_category())
 }
 return true;
 }
-void *utils::internal::try_catch_dynamic(std::exception_ptr &eptr, const std::type_info *catch_type) noexcept
-{ // In both libstdc++ and libc++, exception_ptr has just one field
-// which is a pointer to the exception data
-void *raw_ptr = reinterpret_cast<void *&>(eptr);
-const std::type_info *ex_type = utils::abi::get_cxa_exception(raw_ptr)->exceptionType; // __do_catch can return true and set raw_ptr to nullptr, but only in the case
-// when catch_type is a pointer and a nullptr is thrown. try_catch_dynamic
-// doesn't work with catching pointers.
-if (catch_type->__do_catch(ex_type, &raw_ptr, 1))
-{
-    return raw_ptr;
-}
-return nullptr;
-}
+
 namespace bpo = boost::program_options;
 
 
@@ -52502,8 +52424,7 @@ using u32 = uint32_t;
 using u64 = uint64_t;
 
 
-static u32 mul_by_x_pow_mul8(u32 p, u64 e)
-;
+
 template <int bits>
 static constexpr std::array<uint32_t, bits> make_crc32_power_table()
 {
@@ -52546,8 +52467,7 @@ constinit std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_16 = make_crc
 constinit std::array<uint32_t, 256> crc32_x_pow_radix_8_table_base_24 = make_crc32_table(24, radix_bits, one, pows);
 namespace utils
 {
- size_t iovec_len(const std::vector<iovec> &iov)
-;
+ 
 }
 namespace s3
 {
