@@ -22059,19 +22059,6 @@ private:
     using ring_position = dht::ring_position;
 public:
     inet_address peer;
-    int64_t _bytes_sent = 0;
-    int64_t _bytes_received = 0;
-    int _retries;
-    bool _is_aborted =  false;
-    stream_session_state _state = stream_session_state::INITIALIZED;
-    bool _complete_sent = false;
-    bool _received_failed_complete_message = false;
-    session_info _session_info;
-    stream_reason _reason = stream_reason::unspecified;
-public:
-public:
-public:
-public:
 private:
 };
 } // namespace streaming
@@ -22423,19 +22410,6 @@ public:
     // Needed by seastar::sharded
 public:
     bool is_enabled() const;
-    // Get features supported by all the nodes this node knows about
-public:
-private:
-    seastar::metrics::metric_groups _metrics;
-public:
-public:
-private:
-};
-struct gossip_get_endpoint_states_request {
-    // Application states the sender requested
-    std::unordered_set<gms::application_state> application_states;
-};
-struct gossip_get_endpoint_states_response {
     std::unordered_map<gms::inet_address, gms::endpoint_state> endpoint_state_map;
 };
 } // namespace gms
@@ -22735,19 +22709,6 @@ struct writer_of_schema {
     after_schema__version<Output> write_version(const table_schema_version& t) && ;
 };
 } // ser
-namespace db {
-class extensions;
-class seed_provider_type;
-class config;
-namespace view {
-class view_update_generator;
-}
-}
-namespace gms {
-class feature_service;
-class inet_address;
-}
-extern logging::logger startlog;
 class bad_configuration_error : public std::exception {};
 
 class service_set {
@@ -22852,19 +22813,6 @@ class mutation_partition_v2 final {
 public:
     using rows_type = rows_entry::container_type;
     friend class size_calculator;
-private:
-    tombstone _tombstone;
-    lazy_row _static_row;
-    bool _static_row_continuous = true;
-    rows_type _rows;
-#ifdef SEASTAR_DEBUG
-    table_schema_version _schema_version;
-#endif
-    friend class converting_mutation_partition_applier;
-public:
-    struct copy_comparators_only {};
-    struct incomplete_tag {};
-    // Constructs an empty instance which is fully discontinuous except for the partition tombstone.
 public:
     // return a set of rows_entry where each entry represents a CQL row sharing the same clustering key.
     // Returns an iterator range of rows_entry, with only non-dummy entries.
@@ -22930,19 +22878,6 @@ public:
 //  A movable pointer-like object paired with exactly one other object of the same type. 
 //  The two objects which are paired with each other point at each other.
 //  The relationship is symmetrical.
-//
-//  A pair of such objects can be used for implementing bi-directional traversal in data structures.
-//
-//  Moving this object automatically updates the other reference, so the references remain
-//  consistent when the containing objects are managed by LSA.
-//
-//                get()
-//          ------------------>
-//   -----------             -----------
-//  | entangled |~~~~~~~~~~~| entangled |
-//   -----------             -----------
-//          <------------------
-//                get()
 //
 class entangled final {
     entangled* _ref = nullptr;
@@ -23216,19 +23151,6 @@ class allocating_section {
     static constexpr size_t s_min_std_reserve = 1024;
     static constexpr uint64_t s_bytes_per_decay = 10'000'000'000;
     static constexpr unsigned s_segments_per_decay = 100'000;
-    size_t _lsa_reserve = s_min_lsa_reserve; // in segments
-    size_t _std_reserve = s_min_std_reserve; // in bytes
-    size_t _minimum_lsa_emergency_reserve = 0;
-    int64_t _remaining_std_bytes_until_decay = s_bytes_per_decay;
-    int _remaining_lsa_segments_until_decay = s_segments_per_decay;
-private:
-    struct guard {
-        tracker::impl& _tracker;
-        size_t _prev;
-    };
-public:
-    //
-    // Reserves standard allocator and LSA memory for subsequent operations that
     //
     // Throws std::bad_alloc when reserves can't be increased to a sufficient level.
     //
@@ -23242,19 +23164,6 @@ public:
 namespace utils {
 // Represents a deferring operation which defers cooperatively with the caller.
 //
-// The operation is started and resumed by calling run(), which returns
-// with stop_iteration::no whenever the operation defers and is not completed yet.
-// When the operation is finally complete, run() returns with stop_iteration::yes.
-// After that, run() should not be invoked any more.
-//
-// This allows the caller to:
-//   1) execute some post-defer and pre-resume actions atomically
-//   2) have control over when the operation is resumed and in which context,
-//      in particular the caller can cancel the operation at deferring points.
-//
-// One simple way to drive the operation to completion:
-//
-//   coroutine c;
 //   while (c.run() == stop_iteartion::no) {}
 //
 class coroutine final {
@@ -23268,32 +23177,6 @@ private:
 // Makes a coroutine which does nothing.
 }
 class static_row;
-// This is MVCC implementation for mutation_partitions.
-//
-// See docs/dev/mvcc.md for important design information.
-//
-// It is assumed that mutation_partitions are stored in some sort of LSA-managed
-// container (memtable or row cache).
-//
-// partition_entry - the main handle to the mutation_partition, allows writes
-//                   and reads.
-// partition_version - mutation_partition inside a list of partition versions.
-//                     mutation_partition represents just a difference against
-//                     the next one in the list. To get a single
-//                     mutation_partition fully representing this version one
-//                     needs to merge this one and all its successors in the
-//                     list.
-// partition_snapshot - a handle to some particular partition_version. It allows
-//                      only reads and itself is immutable the partition version
-//                      it represents won't be modified as long as the snapshot
-// list (if there is any).
-//
-// Scene V. partition_entry eviction
-//   pv
-//   ^
-//   |
-//   ps(u)
-// When partition_entry is removed (e.g. because it was evicted from cache)
 // the partition versions are removed in a similar manner than in the schema
 // upgrade scenario. The unused ones are destroyed right away and the first
 // snapshot on the list is marked as unique owner so that on its destruction
@@ -23411,19 +23294,6 @@ class real_dirty_memory_accounter;
 // objects called versions. The logical mutation_partition state represented
 // by that chain is equal to reducing the chain using mutation_partition::apply()
 // from left (latest version) to right.
-//
-// We distinguish evictable and non-evictable partition entries. Entries which
-// are non-evictable have all their elements non-evictable and fully continuous.
-// Partition snapshots inherit evictability of the entry, which remains invariant
-// for a snapshot.
-//
-// After evictable partition_entry is linked into a cache_tracker, that cache_tracker
-// must always be passed to methods which accept a pointer to a cache_tracker.
-// Also, evict() must be called before the entry is unlinked from a cache_tracker.
-// For non-evictable entries, no_cache_tracker should be passed to methods which accept a cache_tracker.
-//
-// As long as an entry is linked to a cache_tracker, it must belong to a cache_entry.
-// partition_version objects may be linked with a cache_tracker and detached from a cache_entry
 // if owned by a snapshot.
 //
 class partition_entry {
@@ -23437,19 +23307,6 @@ public:
     struct evictable_tag {};
     // Constructs a non-evictable entry holding empty partition
     partition_entry() = default;
-    // Must not be called when is_locked().
-    // Returns a reference to existing version with an active snapshot of given phase
-    // or creates a new version and returns a reference to it.
-    // Doesn't affect value or continuity of the partition.
-    // needs to be called with reclaiming disabled
-    // Must not be called when is_locked().
-    // Snapshots with different values of phase will point to different partition_version objects.
-    // When is_locked(), read() can only be called with a phase which is <= the phase of the current snapshot.
-    class printer {
-        const schema& _schema;
-        const partition_entry& _partition_entry;
-    public:
-    };
 };
 // Monotonic exception guarantees
 // Double-ended chained list of partition_version objects
@@ -23476,19 +23333,6 @@ class mutation_cleaner_impl final {
     using snapshot_list = boost::intrusive::slist<partition_snapshot,
         boost::intrusive::member_hook<partition_snapshot, boost::intrusive::slist_member_hook<>, &partition_snapshot::_cleaner_hook>,
                 boost::intrusive::cache_last<true>>;
-    struct worker {
-        condition_variable cv;
-        snapshot_list snapshots;
-        logalloc::allocating_section alloc_section;
-        bool done = false; // true means the worker was abandoned and cannot access the mutation_cleaner_impl instance.
-    };
-private:
-    logalloc::region& _region;
-    cache_tracker* _tracker;
-    mutation_cleaner* _cleaner;
-    partition_version_list _versions;
-    lw_shared_ptr<worker> _worker_state;
-    mutation_application_stats& _app_stats;
     seastar::scheduling_group _scheduling_group;
     std::function<void(size_t)> _on_space_freed;
 private:
@@ -23567,19 +23411,6 @@ public:
 private:
     const ::schema& _schema;
     mutation_fragment_v2::kind _prev_kind;
-    /// the current tombstone (range tombstone change fragments).
-    ///
-    /// \returns true if the mutation fragment kind is valid.
-    /// Validates the monotonicity of the mutation fragment.
-    ///
-    /// Equivalent to calling `operator()(mf.kind(), mf.position())`.
-    /// See said overload for more details.
-    ///
-    /// \returns true if the mutation fragment kind is valid.
-    /// Validates the monotonicity of the token.
-    ///
-    /// Does not check fragment level monotonicity.
-    /// Advances the previous token, but only if the validation passes.
     /// Cannot be used in parallel with the `dht::decorated_key`
     /// overload.
     ///
@@ -23593,32 +23424,6 @@ private:
     ///
     /// \returns true if the partition key is valid.
     /// Reset the state of the validator to the given partition
-    ///
-    /// Reset the state of the validator as if it has just validated a valid
-    /// partition start with the provided key. This can be used t force a reset
-    /// to a given partition that is normally invalid and hence wouldn't advance
-    /// the internal state. This can be used by users that can correct such
-    /// invalid streams and wish to continue validating it.
-    /// Reset the state of the validator to the given fragment
-    ///
-    /// Reset the state of the validator as if it has just validated a valid
-    /// fragment. This can be used t force a reset to a given fragment that is
-    /// normally invalid and hence wouldn't advance the internal state. This
-    /// can be used by users that can correct such invalid streams and wish to
-    /// continue validating it.
-    /// Validate that the stream was properly closed.
-    ///
-    /// \returns false if the last partition wasn't closed, i.e. the last
-    /// fragment wasn't a `partition_end` fragment.
-    /// The previous valid fragment kind.
-    /// The previous valid position.
-    ///
-    /// Call only if operator()(position_in_partition_view) was used.
-    /// Get the current effective tombstone
-    ///
-    /// Call only if operator()(mutation_fragment_v2) or
-    /// operator()(mutation_fragment_v2::kind, position_in_partition_view, std::optional<tombstone>)
-    /// was not used.
     /// The previous valid partition key.
     ///
     /// Call only if operator()(dht::token) or operator()(const dht::decorated_key&) was used.
@@ -24321,19 +24126,6 @@ public:
     template <typename K = Key>
     iterator lower_bound(const K& k) noexcept {
         bool match;
-        return get_bound(k, false, match);
-    }
-    template <typename K = Key>
-    const_iterator lower_bound(const K& k) const noexcept {
-        bool match;
-        return get_bound(k, false, match);
-    }
-    template <typename K = Key>
-    iterator lower_bound(const K& k, bool& match) noexcept {
-        return get_bound(k, false, match);
-    }
-    template <typename K = Key>
-    const_iterator lower_bound(const K& k, bool& match) const noexcept {
         return get_bound(k, false, match);
     }
     // Returns the least x out of those less(k, x)
@@ -25452,19 +25244,6 @@ public:
         uint64_t static_row_insertions;
         uint64_t concurrent_misses_same_key;
         uint64_t partition_merges;
-        uint64_t rows_processed_from_memtable;
-        uint64_t rows_dropped_from_memtable;
-        uint64_t rows_merged_from_memtable;
-        uint64_t dummy_processed_from_memtable;
-        uint64_t rows_covered_by_range_tombstones_from_memtable;
-        uint64_t partition_evictions;
-        uint64_t partition_removals;
-        uint64_t row_evictions;
-        uint64_t row_removals;
-        uint64_t partitions;
-        uint64_t rows;
-        uint64_t mispopulations;
-        uint64_t underlying_recreations;
         uint64_t underlying_partition_skips;
         uint64_t underlying_row_skips;
         uint64_t reads;
@@ -25660,19 +25439,6 @@ public:
 };
 using mutation_source_opt = optimized_optional<mutation_source>;
 namespace bi = boost::intrusive;
-class row_cache;
-class cache_tracker;
-class flat_mutation_reader_v2;
-namespace replica {
-class memtable_entry;
-}
-namespace cache {
-class autoupdating_underlying_reader;
-class cache_flat_mutation_reader;
-class read_context;
-class lsa_manager;
-}
-// Intrusive set entry which holds partition data.
 //
 // TODO: Make memtables use this format too.
 class cache_entry {
@@ -25764,32 +25530,6 @@ private:
     cache_tracker& _tracker;
     stats _stats{};
     schema_ptr _schema;
-    partitions_type _partitions; // Cached partitions are complete.
-    // The snapshots used by cache are versioned. The version number of a snapshot is
-    // called the "population phase", or simply "phase". Between updates, cache
-    // represents the same snapshot.
-    //
-    // Update doesn't happen atomically. Before it completes, some entries reflect
-    // the old snapshot, while others reflect the new snapshot. After update
-    // completes, all entries must reflect the new snapshot. There is a race between the
-    // update process and populating reads. Since after the update all entries must
-    // reflect the new snapshot, reads using the old snapshot cannot be allowed to
-    // insert data which will no longer be reached by the update process. The whole
-    // range can be therefore divided into two sub-ranges, one which was already
-    // processed by the update and one which hasn't. Each key can be assigned a
-    // population phase which determines to which range it belongs, as well as which
-    // snapshot it reflects. The methods snapshot_of() and phase_of() can
-    // be used to determine this.
-    //
-    // In general, reads are allowed to populate given range only if the phase
-    // of the snapshot they use matches the phase of all keys in that range
-    // when the population is committed. This guarantees that the range will
-    // be reached by the update process or already has been in its entirety.
-    // In case of phase conflict, current solution is to give up on
-    // population. Since the update process is a scan, it's sufficient to
-    // check when committing the population if the start and end of the range
-    // have the same phases and that it's the same phase as that of the start
-    // of the range at the time when reading began.
     mutation_source _underlying;
     phase_type _underlying_phase = partition_snapshot::min_phase;
     mutation_source_opt _prev_snapshot;
@@ -25816,45 +25556,6 @@ private:
     cache_entry& do_find_or_create_entry(const dht::decorated_key& key, const previous_entry_pointer* previous,
                                  CreateEntry&& create_entry, VisitEntry&& visit_entry);
     // Ensures that partition entry for given key exists in cache and returns a reference to it.
-    // Prepares the entry for reading. "phase" must match the current phase of the entry.
-    //
-    // Since currently every entry has to have a complete tombstone, it has to be provided here.
-    // The entry which is returned will have the tombstone applied to it.
-    //
-    // Must be run under reclaim lock
-    // Creates (or touches) a cache entry for missing partition so that sstables are not
-    // poked again for it.
-    // Only active phases are accepted.
-    // Reference valid only until next deferring point.
-    // Returns population phase for given position in the ring.
-    // snapshot_for_phase() can be called to obtain mutation_source for given phase, but
-    // only until the next deferring point.
-    //
-    // internal_updater is only kept alive until its invocation returns.
-public:
-public:
-    // Implements mutation_source for this cache, see mutation_reader.hh
-    // User needs to ensure that the row_cache object stays alive
-    // as long as the reader is used.
-    // The range must not wrap around.
-    // Same as make_reader, but returns an empty optional instead of a no-op reader when there is nothing to
-    // read. This is an optimization.
-public:
-    // Populate cache from given mutation, which must be fully continuous.
-    // Intended to be used only in tests.
-    // Can only be called prior to any reads.
-    // Finds the entry in cache for a given key.
-    // Intended to be used only in tests.
-    // Synchronizes cache with the underlying data source from a memtable which
-    // has just been flushed to the underlying data source.
-    // The memtable can be queried during the process, but must not be written.
-    // After the update is complete, memtable is empty.
-    // Like update(), synchronizes cache with an incremental change to the underlying
-    // mutation source, but instead of inserting and merging data, invalidates affected ranges.
-    // Can be thought of as a more fine-grained version of invalidate(), which invalidates
-    // as few elements as possible.
-    // Refreshes snapshot. Must only be used if logical state in the underlying data
-    // source hasn't changed.
     // Returns true iff the object is valid.
     // Call only when valid.
     // Brings the object back to validity and returns true iff the snapshot contains the row.
@@ -25946,32 +25647,6 @@ public:
     // When reversed is true then the cursor will operate in reversed direction.
     // When reversed, s must be a reversed schema relative to snp->schema()
     // Positions and fragments accepted and returned by the cursor are from the domain of s.
-    // Iterators are from the table's schema domain.
-    // If is_in_latest_version() then this returns an iterator to the entry under cursor in the latest version.
-    // Returns true iff the iterators obtained since the cursor was last made valid
-    // are still valid. Note that this doesn't mean that the cursor itself is valid.
-    // Marks the iterators as valid without refreshing them.
-    // Call only when the iterators are known to be valid.
-    // Advances cursor to the first entry with position >= pos, if such entry exists.
-    // If no such entry exists, the cursor is positioned at an extreme position in the direction of
-    // the cursor (min for reversed cursor, max for forward cursor) and not pointing at a row
-    // but still valid.
-    //
-    // continuous() is always valid after the call, even if not pointing at a row.
-    // Returns true iff the cursor is pointing at a row after the call.
-    // Returns true iff the cursor is pointing at a row.
-    // Advances to the next row, if any.
-    // If there is no next row, advances to the extreme position in the direction of the cursor
-    // (position_in_partition::before_all_clustering_rows() or position_in_partition::after_all_clustering_rows)
-    // and does not point at a row.
-    // Information about the range, continuous() and range_tombstone(), is still valid in this case.
-    // Call only when valid, not necessarily pointing at a row.
-    // Can be called when cursor is pointing at a row.
-    // Returns true iff the key range adjacent to the cursor's position from the side of smaller keys
-    // is marked as continuous.
-    // Can be called when cursor is valid, not necessarily pointing at a row.
-    // Returns the range tombstone for the key range adjacent to the cursor's position from the side of smaller keys.
-    // Excludes the range for the row itself. That information is returned by range_tombstone_for_row().
     // It's possible that range_tombstone() is empty and range_tombstone_for_row() is not empty.
     // Can be called when cursor is pointing at a row.
     // Returns the range tombstone covering the row under the cursor.
@@ -25985,19 +25660,6 @@ public:
     requires std::is_invocable_v<Consumer, deletable_row>
     void consume_row(Consumer&& consumer) {
         for (position_in_version& v : _current_row) {
-            if (v.unique_owner) {
-                consumer(std::move(v.it->row()));
-            } else {
-                consumer(deletable_row(_schema, v.it->row()));
-            }
-        }
-    }
-    // Can be called only when cursor is valid and pointing at a row.
-    template <typename Consumer>
-    requires std::is_invocable_v<Consumer, const deletable_row&>
-    void consume_row(Consumer&& consumer) const {
-        for (const position_in_version& v : _current_row) {
-            consumer(v.it->row());
         }
     }
     // Returns memory footprint of row entries under the cursor.
@@ -26024,19 +25686,6 @@ public:
     // Otherwise returns nullptr.
     // Doesn't change logical value of mutation_partition or continuity of the snapshot.
     // The cursor doesn't have to be valid.
-    // The cursor is invalid after the call.
-    // When returns an engaged optional, the attributes of the cursor: continuous() and range_tombstone()
-    // are valid, as if the cursor was advanced to the requested position.
-    // Assumes the snapshot is evictable and not populated by means other than ensure_entry_if_complete().
-    // Subsequent calls to ensure_entry_if_complete() or advance_to() must be given weakly monotonically increasing
-    // positions unless iterators are invalidated across the calls.
-    // The cursor must not be a reversed-order cursor.
-    // Use only with evictable snapshots.
-    // Brings the entry pointed to by the cursor to the front of the LRU
-    // Cursor must be valid and pointing at a row.
-    // Use only with evictable snapshots.
-    // Position of the cursor in the cursor schema domain.
-    // Can be called when cursor is pointing at a row, even when invalid, or when valid.
     // Position of the cursor in the table schema domain.
     // Can be called when cursor is pointing at a row, even when invalid, or when valid.
     ;
@@ -26271,45 +25920,6 @@ private:
         uint32_t lossy_counting_decrease = 0;
     };
 public:
-    struct can_proceed_tag{};
-    using can_proceed = seastar::bool_class<can_proceed_tag>;
-    // Identifies a type of operation which is counted separately from other
-    // operations. For example, reads and writes for given table should have
-    // separate labels.
-    struct label {
-    private:
-        // The current ID used to identify the label in the rate limiter.
-        // It is assigned on first use.
-        uint32_t _label = 0;
-        friend class rate_limiter_base;
-    };
-private:
-    uint32_t _current_bucket = 0;
-    uint32_t _current_ops_in_bucket = 0;
-    uint32_t _current_entries_in_time_window = 0;
-    uint32_t _next_label = 1;
-    uint32_t _current_time_window = 0;
-    const uint32_t _salt;
-    utils::chunked_vector<entry> _entries;
-    std::vector<time_window_entry> _time_window_history;
-    metrics _metrics;
-    seastar::metrics::metric_groups _metric_group;
-private:
-    
-protected:
-    
-public:
-    
-    // (For testing purposes only)
-    // Increments the counter for given (label, token) and returns
-    // the new value of the counter.
-    // Increments the counter for given (label, token).
-    // If the counter indicates that the partition is over the limit,
-    // returns can_proceed::no with some probability.
-    //
-    // The `random_variable` parameter should be a value from range [0, 1).
-    // It is used as the source of randomness - the function chooses a threshold
-    // and accepts if and only if `random_variable` is below it.
     //
     // The probability is calculated in such a way that statistically
     // only `limit` operations per second are admitted.
@@ -26414,32 +26024,6 @@ public:
 // The region_group class keeps track of two memory use counts:
 //
 //  - real memory: this is LSA memory used by memtables, whether active or being
-//            flushed. 
-//  - spooled memory: this is LSA memory used by memtables undergoing a flush
-//            that has been copied to an sstable. It a subset of
-//            real memory. Once a flushing memtable is sealed, its spooled memory
-//            drops to zero and real memory drops by the size of the memtable.
-//
-// Since the control loop is interested in (real memory) - (spooled memory), we keep
-// track of the difference as unspooled memory.
-//
-// real memory and unspooled memory react to events in this way:
-//   - data added to memtable: both real memory and unspooled memory increase by the same amount
-//            (spooled memory does not change). Note the increase can actually be a decrease if
-//            data was deleted or overwritten.
-//   - part of the memtable was flushed to disk: unspooled memory decreases (spooled memory
-//            increases)
-//
-// Users of a region_group configure reclaim with an unspooled memory soft limit (where
-// sstable flush starts, but allocation can still continue), an unspooled memory hard limit (where
-// allocation cannot proceed until sstable flush makes progress),
-// and callbacks that are called when reclaiming is required and no longer necessary.
-// There is also a real memory hard limit.
-//
-// These callbacks will be called when the dirty memory manager
-// see relevant changes in the memory pressure conditions for this region_group. By specializing
-// those methods - which are a nop by default - the callers initiate memtable flusing to
-// free real and unspooled memory.
 // The following restrictions apply to implementations of start_reclaiming() and stop_reclaiming():
 //
 //  - must not use any region or region_group objects, because they're invoked synchronously
@@ -26518,19 +26102,6 @@ private:
 public:
 private:
     
-    
-    
-private: // from region_listener
-    virtual void moved(logalloc::region* old_address, logalloc::region* new_address) override;
-public:
-    // When creating a region_group, one can specify an optional throttle_threshold parameter. This
-    // parameter won't affect normal allocations, but an API is provided, through the region_group's
-    // method run_when_memory_available(), to make sure that a given function is only executed when
-    // the total memory for the region group (and all of its parents) is lower or equal to the
-    // region_group's throttle_treshold (and respectively for its parents).
-    //
-    // The deferred_work_sg parameter specifies a scheduling group in which to run allocations
-    // (given to run_when_memory_available()) when they must be deferred due to lack of memory
     // at the time the call to run_when_memory_available() was made.
     // It would be easier to call update, but it is unfortunately broken in boost versions up to at
     // least 1.59.
@@ -26544,19 +26115,6 @@ public:
     //    the full update cycle even then.
     virtual void increase_usage(logalloc::region* r, ssize_t delta) override ;
     virtual void decrease_evictable_usage(logalloc::region* r) override ;
-    virtual void decrease_usage(logalloc::region* r, ssize_t delta) override ;
-    //
-    // Make sure that the function specified by the parameter func only runs when this region_group,
-    // as well as each of its ancestors have a memory_used() amount of memory that is lesser or
-    // equal the throttle_threshold, as specified in the region_group's constructor.
-    //
-    // region_groups that did not specify a throttle_threshold will always allow for execution.
-    //
-    // In case current memory_used() is over the threshold, a non-ready future is returned and it
-    // will be made ready at some point in the future, at which memory usage in the offending
-    // region_group (either this or an ancestor) falls below the threshold.
-    //
-    // Requests that are not allowed for execution are queued and released in FIFO order within the
     // same region_group, but no guarantees are made regarding release ordering across different
     // region_groups.
     //
@@ -26675,19 +26233,6 @@ struct disk_string {
         return value == rhs.value;
     }
 };
-struct disk_string_vint_size {
-    bytes value;
-    explicit operator bytes_view() const {
-        return value;
-    }
-    bool operator==(const disk_string_vint_size& rhs) const {
-        return value == rhs.value;
-    }
-};
-template <typename Size>
-struct disk_string_view {
-    bytes_view value;
-};
 template<typename SizeType>
 struct disk_data_value_view {
     atomic_cell_value_view value;
@@ -26739,19 +26284,6 @@ struct disk_set_of_tagged_union {
     using hash_type = std::conditional_t<std::is_enum<TagType>::value, enum_hash<TagType>, TagType>;
     using value_type = boost::variant<Members...>;
     std::unordered_map<tag_type, value_type, hash_type> data;
-     ;
-     ;
-     ;
-    struct serdes;
-    static struct serdes s_serdes;
-};
-}
-namespace std {
-template <typename Size>
-struct hash<sstables::disk_string<Size>> {
-    size_t operator()(const sstables::disk_string<Size>& s) const {
-        return std::hash<bytes>()(s.value);
-    }
 };
 }
 namespace utils {
@@ -26765,19 +26297,6 @@ struct streaming_histogram {
     public Map<Double, Long> getAsMap()
     {
         return Collections.unmodifiableMap(bin);
-        {
-            long size = typeSizes.sizeof(histogram.maxBinSize);
-            Map<Double, Long> entries = histogram.getAsMap();
-            size += typeSizes.sizeof(entries.size());
-            // size of entries = size * (8(double) + 8(long))
-            size += entries.size() * (8 + 8);
-            return size;
-        }
-    }
-    @Override
-    public boolean equals(Object o)
-    {
-        if (this == o)
             return true;
         if (!(o instanceof StreamingHistogram))
             return false;
@@ -26817,19 +26336,6 @@ private:
     bytes _bytes;
 public:
      ;
-    // Unfortunately, the _bytes field for the partition_key are not public. We can't move.
-    explicit operator bytes_view() const {
-        return _bytes;
-    }
-    const bytes& get_bytes() const {
-        return _bytes;
-    }
-    friend key minimum_key();
-};
- ;
- ;
-class decorated_key_view {
-    dht::token _token;
     key_view _partition_key;
 public:
 };
@@ -26882,19 +26388,6 @@ concept self_describing = requires (T& obj, sstable_version_types v, sample_desc
 };
 struct commitlog_interval {
     db::replay_position start;
-    db::replay_position end;
-};
-struct deletion_time {
-    int32_t local_deletion_time;
-    int64_t marked_for_delete_at;
-     ;
-};
-struct option {
-    disk_string<uint16_t> key;
-    disk_string<uint16_t> value;
-     ;
-};
-struct filter {
     uint32_t hashes;
     disk_array<uint32_t, uint64_t> buckets;
      ;
@@ -26934,19 +26427,6 @@ struct summary_ka {
         uint32_t size_at_full_sampling;
     } header;
     // The position in the Summary file for each of the indexes.
-    // NOTE1 that its actual size is determined by the "size" parameter, not
-    // by its preceding size_at_full_sampling
-    // NOTE2: They are laid out in *MEMORY* order, not BE.
-    // NOTE3: The sizes in this array represent positions in the memory stream,
-    // not the file. The memory stream effectively begins after the header,
-    // so every position here has to be added of sizeof(header).
-    utils::chunked_vector<uint32_t> positions;   // can be large, so use a deque instead of a vector
-    utils::chunked_vector<summary_entry> entries;
-    disk_string<uint32_t> first_key;
-    disk_string<uint32_t> last_key;
-    // NOTE4: There is a structure written by Cassandra into the end of the Summary
-    // file, after the field last_key, that we haven't understand yet, but we know
-    // that its content isn't related to the summary itself.
     // The structure is basically as follow:
     // struct { disk_string<uint16_t>; uint32_t; uint64_t; disk_string<uint16_t>; }
     // Another interesting fact about this structure is that it is apparently always
@@ -27090,19 +26570,6 @@ constexpr static int64_t no_deletion_time = std::numeric_limits<int32_t>::max();
 // Corresponding to Cassandra's MAX_DELETION_TIME
 constexpr static int64_t max_deletion_time = std::numeric_limits<int32_t>::max() - 1;
 struct statistics {
-    disk_array<uint32_t, std::pair<metadata_type, uint32_t>> offsets; // ordered by metadata_type
-    std::unordered_map<metadata_type, std::unique_ptr<metadata>> contents;
-};
-enum class column_mask : uint8_t {
-    none = 0x0,
-    deletion = 0x01,
-    expiration = 0x02,
-    counter = 0x04,
-    counter_update = 0x08,
-    range_tombstone = 0x10,
-    shadowable = 0x40
-};
-class unfiltered_flags_m final {
     static const uint8_t USE_ROW_TIMESTAMP = 0x08u;
     static const uint8_t USE_ROW_TTL = 0x10u;
     uint8_t _flags;
@@ -27155,19 +26622,6 @@ private:
     logalloc::allocating_section _read_section;
     logalloc::allocating_section _allocating_section;
     partitions_type partitions;
-    // Clears this memtable gradually without consuming the whole CPU.
-    // Never resolves with a failed future.
-    // Applies mutation to this memtable.
-    // The mutation is upgraded to current schema.
-    // The mutation is upgraded to current schema.
-public:
-    // Creates a reader of data in this memtable for given partition range.
-    //
-    // Live readers share ownership of the memtable instance, so caller
-    // doesn't need to ensure that memtable remains live.
-    //
-    // The 'range' parameter must be live as long as the reader is being used
-    //
     // Mutations returned by the reader will all have given schema.
     // Same as make_flat_reader, but returns an empty optional instead of a no-op reader when there is nothing to
     // read. This is an optimization.
