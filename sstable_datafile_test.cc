@@ -52531,7 +52531,7 @@ public:
         virtual std::unique_ptr<file_handle_impl> clone() const override { return std::make_unique<readable_file_handle_impl>(_h, _object_name); }
         virtual shared_ptr<file_impl> to_file() && override { return make_shared<readable_file>(std::move(_h).to_client(), std::move(_object_name)); }
     };
-    virtual std::unique_ptr<file_handle_impl> dup() override;
+    
     virtual future<uint64_t> size(void) override;
     virtual future<struct stat> stat(void) override;
     virtual future<size_t> read_dma(uint64_t pos, void *buffer, size_t len, const io_priority_class &pc) override;
@@ -52564,7 +52564,7 @@ std::unique_ptr<dht::i_partitioner> make_partitioner(sstring partitioner_name)
         throw std::runtime_error(format("Partitioner {} is not supported, supported partitioners = {{ {} }} : {}", partitioner_name, supported_partitioners, e.what()));
     }
 }
-future<utils::chunked_vector<partition_range>> split_range_to_single_shard(const schema &s, const partition_range &pr, shard_id shard);
+
 }
 namespace dht
 {
@@ -52580,7 +52580,7 @@ inline int64_t long_token(const token &t)
 static const token min_token{token::kind::before_all_keys, 0};
 static const token max_token{token::kind::after_all_keys, 0};
 const token &maximum_token() noexcept { return max_token; }
-static float ratio_helper(int64_t a, int64_t b);
+
 uint64_t unbias(const token &t) { return uint64_t(long_token(t)) + uint64_t(std::numeric_limits<int64_t>::min()); }
 token bias(uint64_t n) { return token(token::kind::key, n - uint64_t(std::numeric_limits<int64_t>::min())); }
 inline unsigned zero_based_shard_of(uint64_t token, unsigned shards, unsigned sharding_ignore_msb_bits)
@@ -52659,7 +52659,7 @@ token token_for_next_shard(const std::vector<uint64_t> &shard_start, unsigned sh
     }
     return bias(n);
 }
-static dht::token find_first_token_for_shard_in_not_wrap_around_range(const dht::sharder &sharder, dht::token start, dht::token end, size_t shard_idx);
+
 }
 // namespace dht
 namespace dht
@@ -53072,8 +53072,8 @@ struct cryptopp_hasher<T, size>::impl
 static_assert(HashUpdater<T>);
 using impl_type = typename hasher_traits<T>::impl_type;
 impl_type hash{};
-void update(const char *ptr, size_t length) noexcept;
-bytes finalize();
+
+
 std::array<uint8_t, size> finalize_array();
 };
 template <typename T, size_t size>
