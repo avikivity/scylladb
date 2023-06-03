@@ -17054,32 +17054,6 @@ public:
     void apply(const schema& this_schema, const mutation_partition& p, const schema& p_schema,
             mutation_application_stats& app_stats);
     // Use in case this instance and p share the same schema.
-    // Same guarantees as apply(const schema&, mutation_partition&&, const schema&);
-    // Same guarantees and constraints as for apply(const schema&, const mutation_partition&, const schema&).
-    // Applies p to this instance.
-    //
-    // Monotonic exception guarantees. In case of exception the sum of p and this remains the same as before the exception.
-    // This instance and p are governed by the same schema.
-    //
-    // Must be provided with a pointer to the cache_tracker, which owns both this and p.
-    //
-    // Returns stop_iteration::no if the operation was preempted before finished, and stop_iteration::yes otherwise.
-    // On preemption the sum of this and p stays the same (represents the same set of writes), and the state of this
-    // object contains at least all the writes it contained before the call (monotonicity). It may contain partial writes.
-    // Also, some progress is always guaranteed (liveness).
-    //
-    // If returns stop_iteration::yes, then the sum of this and p is NO LONGER the same as before the call,
-    // the state of p is undefined and should not be used for reading.
-    //
-    // The operation can be driven to completion like this:
-    //
-    //   apply_resume res;
-    //   while (apply_monotonically(..., is_preemtable::yes, &res) == stop_iteration::no) { }
-    //
-    // If is_preemptible::no is passed as argument then stop_iteration::no is never returned.
-    //
-    // If is_preemptible::yes is passed, apply_resume must also be passed,
-    // same instance each time until stop_iteration::yes is returned.
     // Weak exception guarantees.
     // Assumes this and p are not owned by a cache_tracker.
     // Converts partition to the new schema. When succeeds the partition should only be accessed
@@ -17275,19 +17249,6 @@ public:
 /// associated with it has an ongoing foreground operation initiated by
 /// its consumer. E.g. a pending `fill_buffer()` call.
 /// This class is an RAII need_cpu marker meant to be used by keeping it alive
-/// while the reader is in need of CPU.
-class reader_permit::need_cpu_guard {
-    reader_permit_opt _permit;
-public:
-    
-    
-};
-/// Mark a permit as awaiting I/O or an operation running on a remote shard.
-///
-/// Conceptually, a permit is considered awaiting, when at least one reader
-/// associated with it is waiting on I/O or a remote shard as part of a
-/// foreground operation initiated by its consumer. E.g. an sstable reader
-/// waiting on a disk read as part of its `fill_buffer()` call.
 /// This class is an RAII awaits marker meant to be used by keeping it alive
 /// until said awaited event completes.
 class reader_permit::awaits_guard {
@@ -17613,19 +17574,6 @@ public:
 private:
     size_t calculate_memory_usage(const schema& s) const ;
 };
-
-// range_tombstone_stream is a helper object that simplifies producing a stream
-// of range tombstones and merging it with a stream of clustering rows.
-// Tombstones are added using apply() and retrieved using get_next().
-//
-// get_next(const rows_entry&) and get_next(const mutation_fragment&) allow
-// merging the stream of tombstones with a stream of clustering rows. If these
-// overloads return disengaged optional it means that there is no tombstone
-// in the stream that should be emitted before the object given as an argument.
-// (And, consequently, if the optional is engaged that tombstone should be
-// emitted first). After calling any of these overloads with a mutation_fragment
-// which is at some position in partition P no range tombstone can be added to
-// the stream which start bound is before that position.
 //
 // get_next() overload which doesn't take any arguments is used to return the
 // remaining tombstones. After it was called no new tombstones can be added
@@ -17964,19 +17912,6 @@ enum class consume_in_reverse {
 template<typename T>
 concept RangeTombstoneChangeConsumer = std::invocable<T, range_tombstone_change>;
 /// Generates range_tombstone_change fragments for a stream of range_tombstone fragments.
-///
-/// The input range_tombstones passed to consume() may be overlapping, but must be weakly ordered by position().
-/// It's ok to pass consecutive range_tombstone objects with the same position.
-///
-/// Generated range_tombstone_change fragments will have strictly monotonic positions.
-///
-/// Example usage:
-///
-///   consume(range_tombstone(1, +inf, t));
-///   flush(2, consumer);
-///   consume(range_tombstone(2, +inf, t));
-///   flush(3, consumer);
-///   consume(range_tombstone(4, +inf, t));
 ///   consume(range_tombstone(4, 7, t));
 ///   flush(5, consumer);
 ///   flush(6, consumer);
@@ -17990,19 +17925,6 @@ public:
     range_tombstone_change_generator(const schema& s) 
     ;
     // Discards deletion information for positions < lower_bound.
-    // After this, the lowest position of emitted range_tombstone_change will be before_key(lower_bound).
-    
-    // Emits range_tombstone_change fragments with positions smaller than upper_bound
-    // for accumulated range tombstones. If end_of_range = true, range tombstone
-    // change fragments with position equal to upper_bound may also be emitted.
-    // After this, only range_tombstones with positions >= upper_bound may be added,
-    // which guarantees that they won't affect the output of this flush.
-    //
-    // If upper_bound == position_in_partition::after_all_clustered_rows(),
-    // emits all remaining range_tombstone_changes.
-    // No range_tombstones may be added after this.
-    //
-    // FIXME: respect preemption
      ;
     
     
@@ -18107,19 +18029,6 @@ public:
     // Consumes the mutation's content.
     //
     // The mutation is in a moved-from alike state after consumption.
-    // There are tree ways to consume the mutation:
-    // * consume_in_reverse::no - consume in forward order, as defined by the
-    //   schema.
-    // * consume_in_reverse::yes - consume in reverse order, as if the schema
-    //   had the opposite clustering order. This effectively reverses the
-    //   mutation's content, according to the native reverse order[1].
-    //
-    // For definition of [1] and [2] see docs/dev/reverse-reads.md.
-    //
-    // The consume operation is pausable and resumable:
-    // * To pause return stop_iteration::yes from one of the consume() methods;
-    // * The consume will now stop and return;
-    // * To resume call consume again and pass the cookie member of the returned
     //   mutation_consume_result as the cookie parameter;
     //
     // Note that `consume_end_of_partition()` and `consume_end_of_stream()`
@@ -18133,19 +18042,6 @@ public:
     
     void apply(mutation&&);
     void apply(const mutation&);
-    void apply(const mutation_fragment&);
-    mutation operator+(const mutation& other) const;
-    mutation& operator+=(const mutation& other);
-    mutation& operator+=(mutation&& other);
-    // Returns a subset of this mutation holding only information relevant for given clustering ranges.
-    // Range tombstones will be trimmed to the boundaries of the clustering ranges.
-    mutation sliced(const query::clustering_row_ranges&) const;
-    
-    // Returns a mutation which contains the same writes but in a minimal form.
-    // Drops data covered by tombstones.
-    // Does not drop expired tombstones.
-    // Does not expire TTLed data.
-    mutation compacted() const;
 private:
     friend std::ostream& operator<<(std::ostream& os, const mutation& m);
 };
@@ -18211,19 +18107,6 @@ auto mutation::consume_gently(Consumer& consumer, consume_in_reverse reverse, mu
     }
     stop = *stop_opt;
     const auto stop_consuming = consumer.consume_end_of_partition();
-    using consume_res_type = decltype(consumer.consume_end_of_stream());
-    if constexpr (std::is_same_v<consume_res_type, void>) {
-        consumer.consume_end_of_stream();
-        co_return mutation_consume_result<void>{stop_consuming, std::move(cookie)};
-    } else {
-        co_return mutation_consume_result<consume_res_type>{stop_consuming, consumer.consume_end_of_stream(), std::move(cookie)};
-    }
-}
-struct mutation_equals_by_key {
-    
-};
-struct mutation_hash_by_key {
-    
 };
 struct mutation_decorated_key_less_comparator {
     bool operator()(const mutation& m1, const mutation& m2) const;
@@ -18432,19 +18315,6 @@ concept HasMapInterface = requires(T t) {
 /// The options parser will parse enum values with the help of the Mapper class, which provides a mapping
 /// between some parsable form (eg, string) and the enum value.  For example, it may map the word "January" to
 /// the enum value JANUARY.
-///
-/// Mapper must have a static method `map()` that returns a map from a streamable key type (eg, string) to the
-/// enum in question.  In fact, enum_option knows which enum it represents only by referencing
-/// Mapper::map().mapped_type.
-///
-/// \note one enum_option holds only one enum value.  When multiple choices are allowed, use
-/// vector<enum_option>.
-///
-/// Example:
-///
-/// struct Type {
-///   enum class ty { a1, a2, b1 };
-///   static unordered_map<string, ty> map();
 /// };
 /// unordered_map<string, Type::ty> Type::map() {
 ///   return {{"a1", Type::ty::a1}, {"a2", Type::ty::a2}, {"b1", Type::ty::b1}};
@@ -18614,32 +18484,6 @@ public:
     using string_map = std::unordered_map<sstring, sstring>;
                     //program_options::string_map;
     using string_list = std::vector<sstring>;
-    using seed_provider_type = db::seed_provider_type;
-    using hinted_handoff_enabled_type = db::hints::host_filter;
-    using error_injection_at_startup = db::error_injection_at_startup;
-    named_value<double> background_writer_scheduling_quota;
-    named_value<bool> auto_adjust_flush_quota;
-    named_value<float> memtable_flush_static_shares;
-    named_value<float> compaction_static_shares;
-    named_value<bool> compaction_enforce_min_threshold;
-    named_value<bool> enable_cql_config_updates;
-    named_value<bool> enable_parallelized_aggregation;
-    named_value<uint16_t> alternator_port;
-    named_value<uint16_t> alternator_https_port;
-    named_value<sstring> alternator_address;
-    named_value<bool> cache_index_pages;
-    named_value<unsigned> x_log2_compaction_groups;
-    named_value<bool> consistent_cluster_management;
-    named_value<double> wasm_cache_memory_fraction;
-    named_value<uint32_t> wasm_cache_timeout_in_ms;
-    named_value<size_t> wasm_cache_instance_size_limit;
-    named_value<uint64_t> wasm_udf_yield_fuel;
-    named_value<uint64_t> wasm_udf_total_fuel;
-    named_value<size_t> wasm_udf_memory_limit;
-    named_value<sstring> relabel_config_file;
-    named_value<sstring> object_storage_config_file;
-    // wasm_udf_reserved_memory is static because the options in db::config
-    // are parsed using seastar::app_template, while this option is used for
     // configuring the Seastar memory subsystem.
     static constexpr size_t wasm_udf_reserved_memory = 50 * 1024 * 1024;
     named_value<unsigned> minimum_keyspace_rf;
@@ -18757,19 +18601,6 @@ namespace util {
  sstring maybe_quote(const sstring& s) ;
 /// quote() takes an identifier - the name of a column, table or keyspace -
 /// and transforms it to a string which can be safely used in CQL commands.
-/// Quoting involves wrapping the name in double-quotes ("). A double-quote
-/// character itself is quoted by doubling it.
-/// Quoting is necessary when the identifier contains non-alpha-numeric
-/// characters, when it contains uppercase letters (which will be folded to
-/// lowercase if not quoted), or when the identifier is one of many CQL
-/// keywords. But it's allowed - and easier - to just unconditionally
-/// quote the identifier name in CQL, so that is what this function does does.
-
-/// single_quote() takes a string and transforms it to a string 
-/// which can be safely used in CQL commands.
-/// Single quoting involves wrapping the name in single-quotes ('). A sigle-quote
-/// character itself is quoted by doubling it.
-/// Single quoting is necessary for dates, IP addresses or string literals.
  
 // Check whether timestamp is not too far in the future as this probably
 // indicates its incorrectness (for example using other units than microseconds).
@@ -18796,45 +18627,6 @@ class type_parser {
     // A cache of parsed string, specially useful for DynamicCompositeType
     private static final Map<String, AbstractType<?>> cache = new HashMap<String, AbstractType<?>>();
     public static final TypeParser EMPTY_PARSER = new TypeParser("", 0);
-#endif
-public:
-#if 0
-    public static AbstractType<?> parse(CharSequence compareWith) throws SyntaxException, ConfigurationException
-    {
-        return parse(compareWith == null ? null : compareWith.toString());
-    }
-    public static String getShortName(AbstractType<?> type)
-    {
-        return type.getClass().getSimpleName();
-    }
-#endif
-#if 0
-    }
-    public static String stringifyAliasesParameters(Map<Byte, AbstractType<?>> aliases)
-    {
-        StringBuilder sb = new StringBuilder();
-        sb.append('(');
-        Iterator<Map.Entry<Byte, AbstractType<?>>> iter = aliases.entrySet().iterator();
-        if (iter.hasNext())
-        {
-            Map.Entry<Byte, AbstractType<?>> entry = iter.next();
-            sb.append((char)(byte)entry.getKey()).append("=>").append(entry.getValue());
-        }
-        while (iter.hasNext())
-        {
-            Map.Entry<Byte, AbstractType<?>> entry = iter.next();
-            sb.append(',').append((char)(byte)entry.getKey()).append("=>").append(entry.getValue());
-        }
-        sb.append(')');
-        return sb.toString();
-    }
-    public static String stringifyTypeParameters(List<AbstractType<?>> types)
-    {
-        return stringifyTypeParameters(types, false);
-    }
-    public static String stringifyTypeParameters(List<AbstractType<?>> types, boolean ignoreFreezing)
-    {
-        StringBuilder sb = new StringBuilder("(");
         StringBuilder sb = new StringBuilder();
         sb.append('(').append(keysace).append(",").append(ByteBufferUtil.bytesToHex(typeName));
         for (int i = 0; i < columnNames.size(); i++)
@@ -19082,19 +18874,6 @@ extern const sstring version;
 // Like all_tables(), but returns schema::cf_name() of each table.
 // saves/creates "ks" + all tables etc, while first deleting all old schema entries (will be rewritten)
 // saves/creates "system_schema" keyspace
-// Calculates schema digest for all non-system keyspaces
-future<std::vector<canonical_mutation>> convert_schema_to_mutations(distributed<service::storage_proxy>& proxy, schema_features);
-std::vector<mutation> adjust_schema_for_schema_features(std::vector<mutation> schema, schema_features features);
-// Must be called on shard 0.
-// Recalculates the local schema version.
-//
-// It is safe to call concurrently with recalculate_schema_version() and merge_schema() in which case it
-// is guaranteed that the schema version we end up with after all calls will reflect the most recent state
-// of feature_service and schema tables.
-future<std::set<sstring>> merge_keyspaces(distributed<service::storage_proxy>& proxy, schema_result&& before, schema_result&& after);
-seastar::future<std::vector<shared_ptr<cql3::functions::user_function>>> create_functions_from_schema_partition(replica::database& db, lw_shared_ptr<query::result_set> result);
-future<std::map<sstring, schema_ptr>> create_tables_from_tables_partition(distributed<service::storage_proxy>& proxy, const schema_result::mapped_type& result);
-
 schema_ptr create_table_from_mutations(const schema_ctxt&, schema_mutations, std::optional<table_schema_version> version = {});
 view_ptr create_view_from_mutations(const schema_ctxt&, schema_mutations, std::optional<table_schema_version> version = {});
 future<std::vector<view_ptr>> create_views_from_schema_partition(distributed<service::storage_proxy>& proxy, const schema_result::mapped_type& result);
@@ -19173,19 +18952,6 @@ struct serializer<query_id> {
   ;
 };
 template <>
-struct serializer<const query_id> : public serializer<query_id>
-{};
-template <>
-struct serializer<locator::host_id> {
-  ;
-  ;
-  ;
-};
-template <>
-struct serializer<const locator::host_id> : public serializer<locator::host_id>
-{};
-} // ser
-namespace ser {
 template <>
 struct serializer<counter_id> {
   ;
@@ -19277,19 +19043,6 @@ struct serializer<const partition_end> : public serializer<partition_end>
 using seastar::future;
 /// \brief Represents a stream of mutation fragments.
 ///
-///    2) Calling fast_forward_to() moves to the next sub-stream within the
-///       current partition. The stream will contain all fragments relevant to
-///       the position_range passed to fast_forward_to().
-///
-///    3) The position_range passed to fast_forward_to() is a clustering key restriction.
-///       Same rules apply as with clustering restrictions described above.
-///
-///    4) The sub-stream will not end with a non-neutral active clustered tombstone. All range tombstones are closed.
-///
-///    5) partition_end is never emitted, the user needs to call next_partition()
-///       to move to the next partition in the original stream, which will open
-///       the initial sub-stream of the next partition.
-///       An empty sub-stream after next_partition() indicates global end-of-stream (no next partition).
 ///
 /// \section Consuming
 ///
@@ -19563,19 +19316,6 @@ public:
     // only be used to skip over data.
     //
     // Monotonicity of positions is preserved by forwarding. That is fragments
-    // emitted after forwarding will have greater positions than any fragments
-    // emitted before forwarding.
-    //
-    // For any range, all range tombstones relevant for that range which are
-    // present in the original stream will be emitted. Range tombstones
-    // emitted before forwarding which overlap with the new range are not
-    // necessarily re-emitted.
-    //
-    // When forwarding mode is not enabled, fast_forward_to()
-    // cannot be used.
-    //
-    // `fast_forward_to` can be called only when the reader is within a partition
-    // and it affects the set of fragments returned from that partition.
     // In particular one must first enter a partition by fetching a `partition_start`
     // fragment before calling `fast_forward_to`.
     future<> fast_forward_to(position_range cr) {
@@ -20083,19 +19823,6 @@ struct serializer<column_view> {
     static column_view read(Input& v) {
       return seastar::with_serialized_stream(v, [] (auto& v) {
         auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return column_view{v_start.read_substream(start_size - v.size())};
-      });
-    }
-    template<typename Output>
-    static void write(Output& out, column_view v) {
-        v.v.copy_to(out);
-    }
-    template<typename Input>
-    static void skip(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        v.skip(read_frame_size(v));
       });
     }
 };
@@ -20133,19 +19860,6 @@ struct clustering_row_view {
 };
 template<>
 struct serializer<clustering_row_view> {
-     ;
-     ;
-     ;
-     ;
-};
- ;
- ;
-struct mutation_fragment_view {
-    utils::input_stream v;
-};
-template<>
-struct serializer<mutation_fragment_view> {
-     ;
      ;
      ;
 };
@@ -20681,19 +20395,6 @@ struct after_clustering_row__row__marker {
 };
 template<typename Output>
 struct after_clustering_row__row__marker__live_marker__created_at {
-    state_of_mutation__partition<Output> _state;
-        place_holder<Output> _size;
-    size_type _count = 0;
-};
-template<typename Output>
-struct after_mutation__partition__static_row {
-    Output& _out;
-    state_of_mutation__partition<Output> _state;
-};
-template<typename Output>
-struct after_mutation__partition__static_row__columns {
-    Output& _out;
-    state_of_mutation__partition__static_row<Output> _state;
 };
 template<typename Output>
 struct mutation__partition__static_row__columns {
@@ -20772,32 +20473,6 @@ template<typename Output>
 struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__ttl {
     Output& _out;
     state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm__created_at {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm<Output> _state;
-};
-template<typename Output>
-struct mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__lm {
-};
-template<typename Output>
-struct mutation_fragment__fragment__partition_start {
-    Output& _out;
-    state_of_mutation_fragment__fragment__partition_start<Output> _state;
-};
-template<typename Output>
-struct writer_of_mutation_fragment {
-    Output& _out;
-    state_of_mutation_fragment<Output> _state;
-     ;
-     ;
-     ;
 };
 } // ser
 namespace ser {
@@ -20928,19 +20603,6 @@ public:
     // Automatically upgrades the stored mutation to the supplied schema with custom column mapping.
     mutation unfreeze_upgrading(schema_ptr schema, const column_mapping& cm) const;
     // Consumes the frozen mutation's content.
-    //
-    // The consume operation is stoppable:
-    // * To stop, return stop_iteration::yes from one of the consume() methods;
-    // * The consume will now stop and return;
-    //
-    // Note that `consume_end_of_partition()` and `consume_end_of_stream()`
-    // will be called each time the consume is stopping, regardless of whether
-    // you are pausing or the consumption is ending for good.
-    ;
-    ;
-    // Consumes the frozen mutation's content.
-    //
-    // The consume operation is stoppable:
     // * To stop, return stop_iteration::yes from one of the consume() methods;
     // * The consume will now stop and return;
     //
@@ -21058,19 +20720,6 @@ struct view_key_and_action {
 };
 class view_updates final {
     view_ptr _view;
-    const view_info& _view_info;
-    schema_ptr _base;
-    base_info_ptr _base_info;
-    std::unordered_map<partition_key, mutation_partition, partition_key::hashing, partition_key::equality> _updates;
-    mutable size_t _op_count = 0;
-    const bool _backing_secondary_index;
-public:
-    
-private:
-    struct view_row_entry {
-        deletable_row* _row;
-        view_key_and_action::action _action;
-    };
 };
 std::vector<view_and_base> with_base_info_snapshot(std::vector<view_ptr>);
 }
@@ -21188,19 +20837,6 @@ public:
                        std::unordered_map<sstring,
                                           std::unordered_set<inet_address>>>&
     get_datacenter_racks() const {
-        return _dc_racks;
-    }
-    const std::unordered_set<sstring>& get_datacenters() const noexcept {
-        return _datacenters;
-    }
-    // Get dc/rack location of this node
-    const endpoint_dc_rack& get_location() const noexcept {
-        return _this_node ? _this_node->dc_rack() : _cfg.local_dc_rack;
-    }
-    // Get dc/rack location of a node identified by host_id
-    // The specified node must exist.
-    const endpoint_dc_rack& get_location(host_id id) const {
-        return find_node(id)->dc_rack();
     }
     // Get dc/rack location of a node identified by endpoint
     // The specified node must exist.
@@ -21578,19 +21214,6 @@ class shared_token_metadata {
     token_metadata_lock_func _lock_func;
 public:
     // used to construct the shared object as a sharded<> instance
-    // lock_func returns semaphore_units<>
-    // Token metadata changes are serialized
-    // using the schema_tables merge_lock.
-    //
-    // Must be called on shard 0.
-    // mutate_token_metadata_on_all_shards acquires the shared_token_metadata lock,
-    // clones the token_metadata (using clone_async)
-    // and calls an asynchronous functor on
-    // the cloned copy of the token_metadata to mutate it.
-    //
-    // If the functor is successful, the mutated clone
-    // is set back to to the shared_token_metadata,
-    // otherwise, the clone is destroyed.
     // mutate_token_metadata_on_all_shards acquires the shared_token_metadata lock,
     // clones the token_metadata (using clone_async)
     // and calls an asynchronous functor on
@@ -21734,19 +21357,6 @@ public:
     // persist enabled features
     static constexpr const char* ENABLED_FEATURES_KEY = "enabled_features";
 public:
-    gms::feature user_defined_functions { *this, "UDF"sv };
-    gms::feature md_sstable { *this, "MD_SSTABLE_FORMAT"sv };
-    gms::feature me_sstable { *this, "ME_SSTABLE_FORMAT"sv };
-    gms::feature view_virtual_columns { *this, "VIEW_VIRTUAL_COLUMNS"sv };
-    gms::feature digest_insensitive_to_expiry { *this, "DIGEST_INSENSITIVE_TO_EXPIRY"sv };
-    gms::feature computed_columns { *this, "COMPUTED_COLUMNS"sv };
-    gms::feature cdc { *this, "CDC"sv };
-    gms::feature nonfrozen_udts { *this, "NONFROZEN_UDTS"sv };
-    gms::feature hinted_handoff_separate_connection { *this, "HINTED_HANDOFF_SEPARATE_CONNECTION"sv };
-    gms::feature lwt { *this, "LWT"sv };
-    gms::feature per_table_partitioners { *this, "PER_TABLE_PARTITIONERS"sv };
-    gms::feature per_table_caching { *this, "PER_TABLE_CACHING"sv };
-    gms::feature digest_for_null_values { *this, "DIGEST_FOR_NULL_VALUES"sv };
     gms::feature schema_commitlog { *this, "SCHEMA_COMMITLOG"sv };
     gms::feature uda_native_parallelized_aggregation { *this, "UDA_NATIVE_PARALLELIZED_AGGREGATION"sv };
     gms::feature aggregate_storage_options { *this, "AGGREGATE_STORAGE_OPTIONS"sv };
@@ -21824,19 +21434,6 @@ class nonstatic_class_registry {
         static inline type make(Args&& ...args) {
             return std::make_unique<Impl>(std::forward<Args>(args)...);
         }
-    };
-    template<typename T>
-    struct result_for<T, seastar::shared_ptr<T>> {
-        typedef seastar::shared_ptr<T> type;
-        template<typename Impl>
-        static type make(Args&& ...args) ;
-    };
-    template<typename T>
-    struct result_for<T, seastar::lw_shared_ptr<T>> {
-        typedef seastar::lw_shared_ptr<T> type;
-        // lw_shared is not (yet?) polymorph, thus having automatic
-        // instantiation of it makes no sense. This way we get a nice
-        // compilation error if someone messes up.
     };
     template<typename T>
     struct result_for<T, std::shared_ptr<T>> {
@@ -22072,19 +21669,6 @@ public:
     // in a loop.
     // Returns the last stop_iteration result of the called func
     virtual std::optional<std::unordered_set<sstring>> recognized_options(const topology&) const = 0;
-    // Decide if the replication strategy allow removing the node being
-    // replaced from the natural endpoints when a node is being replaced in the
-    // cluster. LocalStrategy is the not allowed to do so because it always
-    // returns the node itself as the natural_endpoints and the node will not
-    // appear in the pending_endpoints.
-    // If returns true then tables governed by this replication strategy have separate
-    // effective_replication_maps.
-    // If returns false, they share the same effective_replication_map, which is per keyspace.
-    // If returns true, then this replication strategy extends per_table_replication_strategy.
-    // Note, a replication strategy may extend per_table_replication_strategy while !is_per_table(),
-    // depending on actual strategy options.
-    // Returns true iff this replication strategy is based on vnodes.
-    // If this is the case, all tables governed by this replication strategy share the effective replication map.
     // Use the token_metadata provided by the caller instead of _token_metadata
     // Note: must be called with initialized, non-empty token_metadata.
     // Caller must ensure that token_metadata will not change throughout the call.
@@ -22163,19 +21747,6 @@ public: // effective_replication_map
 public:
     // get_ranges() returns the list of ranges held by the given endpoint.
     // The list is sorted, and its elements are non overlapping and non wrap-around.
-    // It the analogue of Origin's getAddressRanges().get(endpoint).
-    // This function is not efficient, and not meant for the fast path.
-    //
-    // Note: must be called after token_metadata has been initialized.
-    // get_primary_ranges() returns the list of "primary ranges" for the given
-    // endpoint. "Primary ranges" are the ranges that the node is responsible
-    // for storing replica primarily, which means this is the first node
-    // returned calculate_natural_endpoints().
-    // This function is the analogue of Origin's
-    // StorageService.getPrimaryRangesForEndpoint().
-    //
-    // Note: must be called after token_metadata has been initialized.
-    // get_primary_ranges_within_dc() is similar to get_primary_ranges()
     // except it assigns a primary node for each range within each dc,
     // instead of one node globally.
     //
@@ -22267,19 +21838,6 @@ enum class application_state {
     LOAD,
     SCHEMA,
     DC,
-    RACK,
-    RELEASE_VERSION,
-    REMOVAL_COORDINATOR,
-    INTERNAL_IP,
-    RPC_ADDRESS,
-    X_11_PADDING, // padding specifically for 1.1
-    SEVERITY,
-    NET_VERSION,
-    HOST_ID,
-    TOKENS,
-    SUPPORTED_FEATURES,
-    CACHE_HITRATES,
-    SCHEMA_TABLES_VERSION,
     RPC_READY,
     VIEW_BACKLOG,
     SHARD_COUNT,
@@ -22293,19 +21851,6 @@ class endpoint_state {
 public:
     using clk = seastar::lowres_system_clock;
 private:
-    heart_beat_state _heart_beat_state;
-    std::map<application_state, versioned_value> _application_state;
-    clk::time_point _update_timestamp;
-    bool _is_alive;
-    bool _is_normal = false;
-public:
-    // Valid only on shard 0
-    // Valid only on shard 0
-    // @Deprecated
-};
-} // gms
-namespace gms {
-class i_endpoint_state_change_subscriber {
 public:
 };
 } // namespace gms
@@ -22514,19 +22059,6 @@ private:
     using ring_position = dht::ring_position;
 public:
     inet_address peer;
-    unsigned dst_cpu_id = 0;
-private:
-    stream_manager& _mgr;
-    // should not be null when session is started
-    shared_ptr<stream_result_future> _stream_result;
-    // stream requests to send to the peer
-    std::vector<stream_request> _requests;
-    // streaming tasks are created and managed per ColumnFamily ID
-    std::map<table_id, stream_transfer_task> _transfers;
-    // data receivers, filled after receiving prepare message
-    std::map<table_id, stream_receive_task> _receivers;
-    //private final StreamingMetrics metrics;
-    //private final StreamConnectionFactory factory;
     int64_t _bytes_sent = 0;
     int64_t _bytes_received = 0;
     int _retries;
