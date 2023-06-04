@@ -20470,12 +20470,6 @@ public:
     };
 private:
     const ::schema& _schema;
-    /// \returns true if the partition key is valid.
-    /// Reset the state of the validator to the given partition
-    /// The previous valid partition key.
-    ///
-    /// Call only if operator()(dht::token) or operator()(const dht::decorated_key&) was used.
-    /// The previous valid partition key.
     ///
     /// Call only if operator()(const dht::decorated_key&) was used.
     
@@ -20524,12 +20518,6 @@ template<typename T>
 concept CompactedFragmentsConsumerV2 = requires(T obj, tombstone t, const dht::decorated_key& dk, static_row sr,
         clustering_row cr, range_tombstone_change rtc, tombstone current_tombstone, row_tombstone current_row_tombstone, bool is_alive) {
     obj.consume_new_partition(dk);
-    obj.consume(t);
-    { obj.consume(std::move(sr), current_tombstone, is_alive) } -> std::same_as<stop_iteration>;
-    { obj.consume(std::move(cr), current_row_tombstone, is_alive) } -> std::same_as<stop_iteration>;
-    { obj.consume(std::move(rtc)) } -> std::same_as<stop_iteration>;
-    { obj.consume_end_of_partition() } -> std::same_as<stop_iteration>;
-    obj.consume_end_of_stream();
 };
 struct detached_compaction_state {
     ::partition_start partition_start;
@@ -20548,12 +20536,6 @@ public:
 };
 class mutation_compactor_garbage_collector : public compaction_garbage_collector {
     const schema& _schema;
-    column_kind _kind;
-    std::optional<clustering_key> _ckey;
-    row_tombstone _tomb;
-    row_marker _marker;
-    row _row;
-public:
     explicit mutation_compactor_garbage_collector(const schema& schema)  ;
     
     
@@ -20657,12 +20639,6 @@ public:
             _last_dk = *_dk;
             _dk = &_last_dk;
         }
-        if constexpr (std::is_same_v<std::result_of_t<decltype(&GCConsumer::consume_end_of_stream)(GCConsumer&)>, void>) {
-            gc_consumer.consume_end_of_stream();
-            return consumer.consume_end_of_stream();
-        } else {
-            return std::pair(consumer.consume_end_of_stream(), gc_consumer.consume_end_of_stream());
-        }
     }
     /// The decorated key of the partition the compaction is positioned in.
     /// Can be null if the compaction wasn't started yet.
@@ -20674,18 +20650,6 @@ public:
     /// Reset limits and query-time to the new page's ones and re-emit the
     /// partition-header and static row if there are clustering rows or range
     /// tombstones left in the partition.
-     ;
-    
-    /// Detach the internal state of the compactor
-    ///
-    /// The state is represented by the last seen partition header, static row
-    /// and active range tombstones. Replaying these fragments through a new
-    /// compactor will result in the new compactor being in the same state *this
-    /// is (given the same outside parameters of course). Practically this
-    /// allows the compaction state to be stored in the compacted reader.
-    /// If the currently compacted partition is exhausted a disengaged optional
-    /// is returned -- in this case there is no state to detach.
-    
     
 };
 template<compact_for_sstables SSTableCompaction, typename Consumer, typename GCConsumer>
@@ -20752,18 +20716,6 @@ struct compact_for_compaction_v2 : compact_mutation_v2<compact_for_sstables::yes
 /// The input fragments must be ordered by their position().
 /// The produced range_tombstone objects are non-overlapping and ordered by their position().
 ///
-/// on_end_of_stream() must be called after consuming all fragments to produce the final fragment.
-///
-/// Example usage:
-///
-///   range_tombstone_assembler rta;
-///   if (auto rt_opt = rta.consume(range_tombstone_change(...))) {
-///       produce(*rt_opt);
-///   }
-///   if (auto rt_opt = rta.consume(range_tombstone_change(...))) {
-///       produce(*rt_opt);
-///   }
-///   if (auto rt_opt = rta.flush(position_in_partition(...)) {
 ///       produce(*rt_opt);
 ///   }
 ///   rta.on_end_of_stream();
@@ -20824,12 +20776,6 @@ public:
     using size_type = uint32_t;
 private:
     const schema& _schema;
-    const mutation_partition& _p;
-private:
-    ;
-public:
-    using count_type = uint32_t;
-public:
 };
 class reconcilable_result;
 class frozen_reconcilable_result;
@@ -20944,12 +20890,6 @@ public:
     partition_slice_builder& with_ranges(std::vector<query::clustering_range>);
     // noop if no ranges have been set yet
     partition_slice_builder& mutate_ranges(std::function<void(std::vector<query::clustering_range>&)>);
-    // noop if no specific ranges have been set yet
-    partition_slice_builder& mutate_specific_ranges(std::function<void(query::specific_ranges&)>);
-    partition_slice_builder& without_partition_key_columns();
-    partition_slice_builder& without_clustering_key_columns();
-    partition_slice_builder& reversed();
-     ;
      ;
     partition_slice_builder& with_partition_row_limit(uint64_t limit);
     query::partition_slice build();
@@ -20992,12 +20932,6 @@ union maybe_key {
     Value v;
     template <typename L = Less>
     requires (!SimpleLessCompare<Value, L>)
-    maybe_key() noexcept {}
-    template <typename L = Less>
-    requires (!SimpleLessCompare<Value, L>)
-    void reset() noexcept { v.~Value(); }
-    template <typename L = Less>
-    requires (SimpleLessCompare<Value, L>)
     maybe_key() noexcept : v(utils::simple_key_unused_value) {}
     template <typename L = Less>
     requires (SimpleLessCompare<Value, L>)
@@ -21112,12 +21046,6 @@ private:
             return end();
         }
     }
-    template <typename K>
-    iterator get_bound(const K& k, bool upper, bool& match) noexcept {
-        return iterator(const_cast<const tree*>(this)->get_bound(k, upper, match));
-    }
-public:
-    tree(const tree& other) = delete;
     const tree& operator=(const tree& other) = delete;
     tree& operator=(tree&& other) = delete;
     explicit tree(Less less) noexcept : _less(less) { }
@@ -21166,18 +21094,6 @@ public:
         }
     }
     template <typename K = Key>
-    requires LessNothrowComparable<K, Key, Less>
-    iterator find(const K& k) noexcept {
-        return iterator(const_cast<const tree*>(this)->find(k));
-    }
-    // Returns the least x out of those !less(x, k)
-    template <typename K = Key>
-    iterator lower_bound(const K& k) noexcept {
-        bool match;
-        return get_bound(k, false, match);
-    }
-    // Returns the least x out of those less(k, x)
-    template <typename K = Key>
     iterator upper_bound(const K& k) noexcept {
         bool match;
         return get_bound(k, true, match);
@@ -21196,12 +21112,6 @@ public:
             // Direct hit
             return std::pair(iterator(n._kids[i].d, i), false);
         }
-        data* d = data::create(std::forward<Args>(args)...);
-        auto x = seastar::defer([&d] { data::destroy(*d, default_dispose<T>); });
-        n.insert(i, std::move(k), d, _less);
-        assert(d->attached());
-        x.cancel();
-        return std::pair(iterator(d, i + 1), true);
     }
     template <typename Func>
     requires Disposer<Func, T>
@@ -21238,12 +21148,6 @@ public:
     requires Disposer<Func, T>
     void clear_and_dispose(Func&& disp) noexcept {
         if (_root != nullptr) {
-            _root->clear(
-                [&disp] (data* d) noexcept { data::destroy(*d, disp); },
-                [] (node* n) noexcept { node::destroy(*n); }
-            );
-            node::destroy(*_root);
-            _root = nullptr;
             _left = nullptr;
             _right = nullptr;
         }
@@ -21256,12 +21160,6 @@ private:
         n->_kids[0]._leftmost_tree = this;
     }
     void do_set_right(node *n) noexcept {
-        assert(n->is_rightmost());
-        _right = n;
-        n->_rightmost_tree = this;
-    }
-    void do_set_root(node *n) noexcept {
-        assert(n->is_root());
         n->_root_tree = this;
         _root = n;
     }
@@ -21304,12 +21202,6 @@ public:
             node_ptr leaf = revalidate();
             if (_idx < leaf->_num_keys) {
                 _idx++;
-            } else {
-                if (leaf->is_rightmost()) {
-                    _idx = npos;
-                    _tree = leaf->_rightmost_tree;
-                    return *this;
-                }
                 leaf = leaf->get_next();
                 _idx = 1;
             }
@@ -21408,12 +21300,6 @@ public:
             return emplace_before([&k] (data*) -> Key { return std::move(k); },
                     less, std::forward<Args>(args)...);
         }
-        template <typename... Args>
-        requires CanGetKeyFromValue<T, Key>
-        iterator emplace_before(Less less, Args&&... args) {
-            return emplace_before([] (data* d) -> Key { return d->value.key(); },
-                    less, std::forward<Args>(args)...);
-        }
     private:
         iterator next_after_erase(node* leaf) const noexcept {
             if (super::_idx < leaf->_num_keys) {
@@ -21478,12 +21364,6 @@ public:
         struct stats st;
         st.nodes = 0;
         st.leaves = 0;
-        st.datas = 0;
-        if (_root != nullptr) {
-            st.nodes_filled.resize(NodeSize + 1);
-            st.leaves_filled.resize(NodeSize + 1);
-            _root->fill_stats(st);
-        }
         return st;
     }
 };
@@ -21557,12 +21437,6 @@ class node final {
     
     void unlink() noexcept ;
     
-     ;
-    kid_index index_for(node *n) const noexcept ;
-    bool need_refill() const noexcept ;
-    
-    
-    
     void shift_right(size_t s) noexcept ;
     void shift_left(size_t s) noexcept ;
     // Helper for assert(). See comment for do_insert for details.
@@ -21616,12 +21490,6 @@ class node final {
             }
             if (idx < _num_keys && i < p._num_keys) {
                 node* right = p._kids[i + 1].n;
-                if (right->can_push_to()) {
-                    right->grab_from_left(*this, p._keys[i]);
-                }
-            }
-            if (_num_keys < NodeSize) {
-                do_insert(idx, std::move(k), nd, less);
                 nodes.drain();
                 return;
             }
@@ -21646,12 +21514,6 @@ class node final {
         } else {
             if (idx == NodeHalf + 1) {
                 move_to(*nn, off);
-                sep.emplace(std::move(k));
-                nn->_kids[0] = nd;
-                nn->_kids[0].n->_parent = nn;
-            } else {
-                move_to(*nn, off + 1);
-                sep.emplace(std::move(_keys[off]));
                 nn->_kids[0] = _kids[off + 1];
                 nn->_kids[0].n->_parent = nn;
                 _num_keys--;
@@ -21664,12 +21526,6 @@ class node final {
             }
         }
         assert(equally_split(*nn));
-        if (is_root()) {
-            insert_into_root(*nn, std::move(sep.v), nodes);
-        } else {
-            insert_into_parent(*nn, std::move(sep.v), less, nodes);
-        }
-        sep.reset();
     }
     void do_insert(kid_index i, Key k, node_or_data nd, Less less) noexcept {
         assert(_num_keys < NodeSize);
@@ -21700,18 +21556,6 @@ class node final {
         left = i > 0 ? p._kids[i - 1].n : nullptr;
         right = i < p._num_keys ? p._kids[i + 1].n : nullptr;
         if (left != nullptr && left->can_grab_from()) {
-            grab_from_left(*left, p._keys[i - 1]);
-            return;
-        }
-        if (right != nullptr && right->can_grab_from()) {
-            grab_from_right(*right, p._keys[i]);
-            return;
-        }
-        if (left != nullptr && can_merge_with(*left)) {
-            p.merge_kids(*left, *this, i - 1, less);
-            return;
-        }
-        if (right != nullptr && can_merge_with(*right)) {
             p.merge_kids(*this, *right, i, less);
             return;
         }
@@ -21772,12 +21616,6 @@ public:
     }
     kid_index index_for(const data *d) const noexcept {
         kid_index i;
-        for (i = 1; i <= _num_keys; i++) {
-            if (_kids[i].d == d) {
-                break;
-            }
-        }
-        assert(i <= _num_keys);
         return i;
     }
 private:
@@ -21844,12 +21682,6 @@ public:
         assert(attached());
         _leaf = to;
     }
-private:
-    // Data node may describe a T without fixed size, e.g. an array that grows on
-    // demand. So this helper returns the size of the memory chunk that's required
-    // to carry the node with T of the payload size on board.
-    //
-    // The tree::iterator::reconstruct does this growing (or shrinking).
     size_t storage_size(size_t payload) const noexcept {
         return sizeof(data) - sizeof(T) + payload;
     }
@@ -21916,18 +21748,6 @@ public:
         int i, off = 0;
         bool tail = false;
         for (i = 0; !tail; i++) {
-            if (i == grow.add_pos) {
-                off = 1;
-                continue;
-            }
-            tail = from._data[i - off].object.is_tail();
-            new (&_data[i].object) T(std::move(from._data[i - off].object));
-        }
-        assert(grow.add_pos <= i && i < max_len);
-        new (&_data[grow.add_pos].object) T(std::forward<Args>(args)...);
-        _data[0].object.set_head(true);
-        _data[0].object.set_train(false);
-        if (grow.add_pos == 0) {
             _data[1].object.set_head(false);
         }
         _data[i - off].object.set_tail(true);
@@ -21964,12 +21784,6 @@ public:
         }
         if (_data[0].object.with_train()) {
             _data[i].train_len = other._data[i].train_len;
-        }
-    }
-    ~intrusive_array() {
-        bool tail = false;
-        for (int i = 0; !tail; i++) {
-            tail = _data[i].object.is_tail();
             _data[i].object.~T();
         }
     }
@@ -21982,12 +21796,6 @@ public:
         if (tail) {
             assert(pos > 0);
             _data[pos - 1].object.set_tail(true);
-        } else {
-            while (!tail) {
-                new (&_data[pos].object) T(std::move(_data[pos + 1].object));
-                _data[pos + 1].object.~T();
-                tail = _data[pos++].object.is_tail();
-            }
             _data[0].object.set_head(true);
         }
         _data[0].object.set_train(true);
@@ -22012,12 +21820,6 @@ public:
     size_t size() const noexcept { return number_of_elements(); }
     static intrusive_array& from_element(T* ptr, int& idx) noexcept {
         idx = 0;
-        while (!ptr->is_head()) {
-            assert(idx < max_len); // may the force be with us...
-            idx++;
-            ptr--;
-        }
-        static_assert(offsetof(intrusive_array, _data[0].object) == 0);
         return *reinterpret_cast<intrusive_array*>(ptr);
     }
 };
@@ -22096,12 +21898,6 @@ public:
                 outer_iterator bkt = super::_bucket.erase(less);
                 return iterator(bkt, 0);
             }
-            bool tail = (*super::_bucket)[super::_idx].is_tail();
-            super::_bucket->erase(super::_idx);
-            if (tail) {
-                super::_bucket++;
-                super::_idx = 0;
-            }
             return *this;
         }
         iterator erase(Less less) noexcept { return erase_and_dispose(less, bplus::default_dispose<T>); }
@@ -22114,12 +21910,6 @@ public:
     };
     iterator begin() noexcept { return iterator(_tree.begin(), 0); }
     const_iterator begin() const noexcept { return const_iterator(_tree.begin(), 0); }
-    const_iterator cbegin() const noexcept { return const_iterator(_tree.begin(), 0); }
-    iterator end() noexcept { return iterator(_tree.end(), 0); }
-    const_iterator end() const noexcept { return const_iterator(_tree.end(), 0); }
-    const_iterator cend() const noexcept { return const_iterator(_tree.end(), 0); }
-    explicit double_decker(Less less) noexcept : _tree(less) { }
-    double_decker(const double_decker& other) = delete;
     double_decker(double_decker&& other) noexcept : _tree(std::move(other._tree)) {}
     iterator insert(Key k, T value, Compare cmp) {
         std::pair<outer_iterator, bool> oip = _tree.emplace(std::move(k), std::move(value));
@@ -22186,18 +21976,6 @@ public:
             i = 0;
             hint.key_tail = true;
         }
-        return const_iterator(bkt, i);
-    }
-    template <typename K = Key>
-    requires Comparable<K, T, Compare>
-    iterator lower_bound(const K& key, Compare cmp, bound_hint& hint) {
-        return iterator(const_cast<const double_decker*>(this)->lower_bound(key, std::move(cmp), hint));
-    }
-    template <typename K = Key>
-    requires Comparable<K, T, Compare>
-    const_iterator lower_bound(const K& key, Compare cmp) const {
-        bound_hint hint;
-        return lower_bound(key, cmp, hint);
     }
     template <typename K = Key>
     requires Comparable<K, T, Compare>
@@ -22282,36 +22060,12 @@ public:
     friend class cache::autoupdating_underlying_reader;
     friend class cache::cache_flat_mutation_reader;
     struct stats {
-        uint64_t partition_hits;
-        uint64_t partition_misses;
-        uint64_t row_hits;
-        uint64_t dummy_row_hits;
-        uint64_t row_misses;
-        uint64_t partition_insertions;
-        uint64_t row_insertions;
-        uint64_t static_row_insertions;
-        uint64_t concurrent_misses_same_key;
-        uint64_t partition_merges;
-        uint64_t underlying_partition_skips;
-        uint64_t underlying_row_skips;
-        uint64_t reads;
-        uint64_t reads_with_misses;
-        uint64_t reads_done;
-        uint64_t pinned_dirty_memory_overload;
-        uint64_t range_tombstone_reads;
-        uint64_t row_tombstone_reads;
     };
 private:
     stats _stats{};
     seastar::metrics::metric_groups _metrics;
     logalloc::region _region;
     lru _lru;
-    mutation_cleaner _garbage;
-    mutation_cleaner _memtable_cleaner;
-    mutation_application_stats& _app_stats;
-private:
-public:
-    using register_metrics = bool_class<class register_metrics_tag>;
     // Inserts e such that it will be evicted right before more_recent in the absence of later touches.
     
 };
@@ -22348,24 +22102,12 @@ class mutation_fragment_v1_stream final {
             _rt_assembler.on_end_of_stream();
             co_return std::nullopt;
         }
-        auto ret = std::move(*mfp).consume(*this);
-        if (!ret) [[unlikely]] {
-            // swallowed a range tombstone change, have to read more
-            co_return co_await read_from_underlying();
-        }
-        co_return std::move(ret);
     }
     template<typename Arg>
     mutation_fragment wrap(Arg arg) const ;
 public:
     
     future<mutation_fragment_opt> operator()() {
-        if (_row) [[unlikely]] {
-            co_return wrap(std::move(*std::exchange(_row, std::nullopt)));
-        }
-        if (_reader.is_end_of_stream()) [[unlikely]] {
-            co_return std::nullopt;
-        }
         co_return co_await read_from_underlying();
     }
     future<bool> has_more_fragments() {
