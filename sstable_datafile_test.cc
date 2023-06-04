@@ -9496,12 +9496,6 @@ enum class cause {
     TRIGGERS,
     COUNTERS,
     METRICS,
-    THRIFT,
-    VALIDATION,
-    REVERSED,
-    COMPRESSION,
-    NONATOMIC,
-    CONSISTENCY,
     HINT,
     SUPER,
     WRAP_AROUND, // Support for handling wrap around ranges in queries on database level and below
@@ -9532,24 +9526,12 @@ class updateable_timeout_config;
 /// options are changed whtn the client / connection is still alive.
 struct timeout_config {
     using duration_t = db::timeout_clock::duration;
-    duration_t read_timeout;
-    duration_t write_timeout;
-    duration_t range_read_timeout;
-    duration_t counter_write_timeout;
-    duration_t truncate_timeout;
-    duration_t cas_timeout;
     duration_t other_timeout;
 };
 struct updateable_timeout_config {
     using timeout_option_t = utils::updateable_value<uint32_t>;
     timeout_option_t read_timeout_in_ms;
     timeout_option_t write_timeout_in_ms;
-    timeout_option_t range_read_timeout_in_ms;
-    timeout_option_t counter_write_timeout_in_ms;
-    timeout_option_t truncate_timeout_in_ms;
-    timeout_option_t cas_timeout_in_ms;
-    timeout_option_t other_timeout_in_ms;
-    
 };
 using timeout_config_selector = db::timeout_clock::duration (timeout_config::*);
 extern const timeout_config infinite_timeout_config;
@@ -9568,12 +9550,6 @@ using prepared_checked_weak_ptr = seastar::checked_ptr<seastar::weak_ptr<cql3::s
 class trace_state final {
 public:
     // A primary session may be in 3 states:
-    //   - "inactive": between the creation and a begin() call.
-    //   - "foreground": after a begin() call and before a
-    //     stop_foreground_and_write() call.
-    //   - "background": after a stop_foreground_and_write() call and till the
-    //     state object is destroyed.
-    //
     // - Traces are not allowed while state is in an "inactive" state.
     // - The time the primary session was in a "foreground" state is the time
     //   reported as a session's "duration".
@@ -9652,12 +9628,6 @@ class atomic_vector {
     seastar::rwlock _vec_lock;
 public:
     // This must be called on a thread. The callback function must not
-    // call remove.
-    //
-    // We would take callbacks that take a T&, but we had bugs in the
-    // past with some of those callbacks holding that reference past a
-    // preemption.
-    // The callback function must not call remove.
     //
     // We would take callbacks that take a T&, but we had bugs in the
     // past with some of those callbacks holding that reference past a
@@ -9712,24 +9682,6 @@ private:
     };
     std::unique_ptr<global_controller_data> _global_controller_db;
     static constexpr shard_id global_controller = 0;
-    std::map<sstring, service_level> _service_levels_db;
-    std::unordered_map<sstring, sstring> _role_to_service_level;
-    service_level _default_service_level;
-    service_level_distributed_data_accessor_ptr _sl_data_accessor;
-    sharded<auth::service>& _auth_service;
-    std::chrono::time_point<seastar::lowres_clock> _last_successful_config_update;
-    unsigned _logged_intervals;
-    atomic_vector<qos_configuration_change_subscriber*> _subscribers;
-public:
-    service_level_controller(sharded<auth::service>& auth_service, service_level_options default_service_level_config);
-    future<std::optional<service_level_options>> find_service_level(auth::role_set roles);
-private:
-    enum class  set_service_level_op_type {
-        add_if_not_exists,
-        add,
-        alter
-    };
-public:
     static sstring default_service_level_name;
 };
 }
@@ -9766,18 +9718,6 @@ public:
     private volatile AuthenticatedUser user;
     private volatile String keyspace;
 #endif
-    std::optional<auth::authenticated_user> _user;
-    std::optional<sstring> _driver_name, _driver_version;
-    auth_state _auth_state = auth_state::UNINITIALIZED;
-    // isInternal is used to mark ClientState as used by some internal component
-    // that should have an ability to modify system keyspace.
-    bool _is_internal;
-    bool _is_thrift;
-    struct external_tag {};
-    
-    qos::service_level_controller& get_service_level_controller() const ;
-    ///
-    /// `nullptr` for internal instances.
     ///
     api::timestamp_type get_timestamp() ;
     
@@ -9820,24 +9760,12 @@ private:
 public:
     query_state(client_state& client_state, service_permit permit)
             : _client_state(client_state)
-            , _trace_state_ptr(tracing::trace_state_ptr())
-            , _permit(std::move(permit))
-    {}
-    query_state(client_state& client_state, tracing::trace_state_ptr trace_state_ptr, service_permit permit)
-        : _client_state(client_state)
-        , _trace_state_ptr(std::move(trace_state_ptr))
         , _permit(std::move(permit))
     { }
     const tracing::trace_state_ptr& get_trace_state() const {
         return _trace_state_ptr;
     }
     tracing::trace_state_ptr& get_trace_state() {
-        return _trace_state_ptr;
-    }
-    client_state& get_client_state() {
-        return _client_state;
-    }
-    const client_state& get_client_state() const {
     }
 };
 }
@@ -10042,12 +9970,6 @@ public:
     }
     // Returns a view, as the first element of the returned pair, to before_key(pos._ck)
     // if pos.is_clustering_row() else returns pos as-is.
-    // The second element of the pair needs to be kept alive as long as the first element is used.
-    // The returned view is valid as long as the view passed to this method is valid.
-    // Returns a view to after_all_prefixed(pos._ck) if pos.is_clustering_row() else returns pos as-is.
-    // Returns a view to before_key(pos._ck) if pos.is_clustering_row() else returns pos as-is.
-    
-    // Returns true if all fragments that can be seen for given schema have
     // positions >= than this. partition_start is ignored.
     
     // Valid when has_key() == true
@@ -10126,12 +10048,6 @@ public:
     position_in_partition& operator=(position_in_partition_view view) {
         _type = view._type;
         _bound_weight = view._bound_weight;
-        if (view._ck) {
-            _ck = *view._ck;
-        } else {
-            _ck.reset();
-        }
-        return *this;
     }
     static position_in_partition before_all_clustered_rows() ;
     static position_in_partition after_all_clustered_rows() ;
@@ -10162,12 +10078,6 @@ public:
     // Defines total order on the union of position_and_partition and composite objects.
     //
     // The ordering is compatible with position_range (r). The following is satisfied for
-    // all cells with name c included by the range:
-    //
-    //   r.start() <= c < r.end()
-    //
-    // The ordering on composites given by this is compatible with but weaker than the cell name order.
-    //
     // The ordering on position_in_partition given by this is compatible but weaker than the ordering
     // given by position_in_partition::tri_compare.
     //
@@ -10179,12 +10089,6 @@ public:
         }
         
         
-    };
-    // Less comparator giving the same order as composite_tri_compare.
-    class composite_less_compare {
-        composite_tri_compare _cmp;
-    public:
-         ;
     };
     class tri_compare {
         bound_view::tri_compare _cmp;
@@ -10223,12 +10127,6 @@ public:
         }
         bool operator()(const position_in_partition_view& a, const position_in_partition& b) const ;
     };
-    class equal_compare {
-        clustering_key_prefix::equality _equal;
-         ;
-    public:
-        
-    };
     
     // Create a position which is the same as this one but governed by a schema with reversed clustering key order.
     // Create a position which is the same as this one but governed by a schema with reversed clustering key order.
@@ -10240,18 +10138,6 @@ struct fmt::formatter<position_in_partition> : fmt::formatter<std::string_view> 
         return fmt::format_to(ctx.out(), "{}", position_in_partition_view(pos));
     }
 };
-struct view_and_holder {
-    std::optional<position_in_partition> holder;
-    position_in_partition_view view;
-    
-};
-// Returns true if and only if there can't be any clustering_row with position > a and < b.
-// It is assumed that a <= b.
-
-// Returns true if and only if there can't be any clustering_row with position >= a and < b.
-// It is assumed that a <= b.
-
-// Includes all position_in_partition objects "p" for which: start <= p < end
 // And only those.
 class position_range {
 private:
@@ -10318,12 +10204,6 @@ class raw_value_view {
     //   and all copies still refer to the same underlying data.
     lw_shared_ptr<managed_bytes> _temporary_storage = nullptr;
     // This constructor is only used by make_temporary() and it acquires ownership
-    // of the given buffer. The view created that way refers to its own temporary storage.
-public:
-    
-    
-    // An empty value is not null, but it has 0 bytes of data.
-    // An empty int value can be created in CQL using blobasint(0x).
     
     bool is_value() const ;
     
@@ -10336,12 +10216,6 @@ public:
         }
     }
     template <typename Func>
-    requires std::invocable<Func, bytes_view>
-    decltype(auto) with_linearized(Func f) const {
-        return with_value([&] (const FragmentedView auto& v) {
-            return ::with_linearized(v, std::forward<Func>(f));
-        });
-    }
     size_t size_bytes() const {
         return with_value([&] (const FragmentedView auto& v) {
             return v.size_bytes();
@@ -10354,12 +10228,6 @@ public:
     template <typename ValueType>
     ValueType deserialize(const collection_type_impl& t) const {
         return value_cast<ValueType>(with_value([&] (const FragmentedView auto& v) { return t.deserialize(v); }));
-    }
-    void validate(const abstract_type& t) const {
-        return with_value([&] (const FragmentedView auto& v) { return t.validate(v); });
-    }
-    template <typename ValueType>
-    ValueType validate_and_deserialize(const collection_type_impl& t) const {
         return with_value([&] (const FragmentedView auto& v) {
             t.validate(v);
             return value_cast<ValueType>(t.deserialize(v));
@@ -10377,12 +10245,6 @@ public:
             return view.with_value([] (const FragmentedView auto& v) { return managed_bytes(v); });
         }
         return managed_bytes_opt();
-    }
-    friend managed_bytes_opt to_managed_bytes_opt(cql3::raw_value_view&& view) {
-        if (view._temporary_storage) {
-            return std::move(*view._temporary_storage);
-        }
-        return to_managed_bytes_opt(view);
     }
     friend std::ostream& operator<<(std::ostream& os, const raw_value_view& value);
     friend class raw_value;
@@ -10408,12 +10270,6 @@ using computed_function_values = std::unordered_map<uint8_t, bytes_opt>;
 using unset_bind_variable_vector = utils::small_vector<bool, 16>;
 // Matches a raw_value_view with an unset vector to support CQL binary protocol
 // "unset" values.
-struct raw_value_view_vector_with_unset {
-    std::vector<raw_value_view> values;
-    unset_bind_variable_vector unset;
-    // Constructor with no unset support, for tests and internal queries
-};
-// Matches a raw_value with an unset vector to support CQL binary protocol
 // "unset" values.
 struct raw_value_vector_with_unset {
     std::vector<raw_value> values;
@@ -10444,18 +10300,6 @@ private:
     // We must use the same microsecond-precision timestamp for
     // all cells created by an LWT statement or when a statement
     // has a user-provided timestamp. In case the statement or
-    // a BATCH appends many values to a list, each value should
-    // get a unique and monotonic timeuuid. This sequence is
-    // used to make all time-based UUIDs:
-    // 1) share the same microsecond,
-    // 2) monotonic
-    // infinite bouncing loop (in case a function is used to calculate
-    // partition key ranges for a query), since the results can be different
-    // each time. Furthermore, we don't support bouncing more than one time.
-    // Refs: #8604 (https://github.com/scylladb/scylla/issues/8604)
-    //
-    // Using mutable because `query_state` is not available at
-    // evaluation sites and we only have a const reference to `query_options`.
     mutable computed_function_values _cached_pk_fn_calls;
 private:
     // Batch constructor.
@@ -10498,12 +10342,6 @@ struct short_read_tag { };
 using short_read = bool_class<short_read_tag>;
 // result_memory_limiter, result_memory_accounter and result_memory_tracker
 // form an infrastructure for limiting size of query results.
-//
-// result_memory_limiter is a shard-local object which ensures that all results
-// combined do not use more than 10% of the shard memory.
-//
-// result_memory_accounter is used by result producers, updates the shard-local
-// limits as well as keeps track of the individual maximum result size limit
 // which is 1 MB.
 //
 // result_memory_tracker is just an object that makes sure the
@@ -10516,18 +10354,6 @@ public:
     static constexpr size_t minimum_result_size = 4 * 1024;
     static constexpr size_t maximum_result_size = 1 * 1024 * 1024;
     static constexpr size_t unlimited_result_size = std::numeric_limits<size_t>::max();
-public:
-    // Reserves minimum_result_size and creates new memory accounter for
-    // mutation query. Uses the specified maximum result size and may be
-    // stopped before reaching it due to memory pressure on shard.
-    // Reserves minimum_result_size and creates new memory accounter for
-    // data query. Uses the specified maximum result size, result will *not*
-    // be stopped due to on shard memory pressure in order to avoid digest
-    // mismatches.
-    // Creates a memory accounter for digest reads. Such accounter doesn't
-    // contribute to the shard memory usage, but still stops producing the
-    // result after individual limit has been reached.
-    // Checks whether the result can grow any more, takes into account only
     // the per shard limit.
     // Consumes n bytes from memory limiter and checks whether the result
     // can grow any more (considering just the per-shard limit).
@@ -10552,12 +10378,6 @@ class result_memory_accounter {
 private:
     // Mutation query accounter. Uses provided individual result size limit and
     // will stop when shard memory pressure grows too high.
-    struct mutation_query_tag { };
-    // Data query accounter. Uses provided individual result size limit and
-    // will *not* stop even though shard memory pressure grows too high.
-    struct data_query_tag { };
-    // Digest query accounter. Uses provided individual result size limit and
-    // will *not* stop even though shard memory pressure grows too high. This
     // accounter does not contribute to the shard memory limits.
     struct digest_query_tag { };
     
@@ -10600,18 +10420,6 @@ public:
 // address the following problems, which a structured format has:
 //
 //   - high level of indirection (vector of vectors of vectors of blobs), which
-//     is not CPU cache friendly
-//
-//   - high allocation rate due to fine-grained object structure
-//
-// On replica side, the query results are probably going to be serialized in
-// The coordinator side could be optimized even further for CQL queries which
-// do not need processing (eg. select * from cf where ...). We could make the
-// replica send the query results in the format which is expected by the CQL
-// binary protocol client. So in the typical case the coordinator would just
-// pass the data using zero-copy to the client, prepending a header.
-//
-// Users which need more complex structure of query results can convert this
 // to query::result_set.
 //
 // Related headers:
@@ -11227,12 +11035,6 @@ private:
             return *this;
         }
         
-        shard_iterator& operator--() noexcept {
-            _pos -= counter_shard_view::size;
-            _current_view = basic_counter_shard_view<is_mutable>(_current.substr(_pos, counter_shard_view::size));
-            return *this;
-        }
-        
         bool operator==(const shard_iterator& other) const noexcept {
             return _pos == other._pos;
         }
@@ -11326,12 +11128,6 @@ class selectable;
 class selectable {
 public:
     virtual ~selectable() ;
-    
-protected:
-public:
-    class writetime_or_ttl;
-    class with_function;
-    class with_anonymous_function;
     class with_field_selection;
     ::shared_ptr<selectable> _arg;
     data_type _type;
@@ -11362,24 +11158,6 @@ private:
      ;
     class nop_filter {
     public:
-    };
-    class restrictions_filter {
-        const ::shared_ptr<const restrictions::statement_restrictions> _restrictions;
-        const query_options& _options;
-        const bool _skip_pk_restrictions;
-        const bool _skip_ck_restrictions;
-        mutable bool _current_partition_key_does_not_match = false;
-        mutable bool _current_static_row_does_not_match = false;
-        mutable uint64_t _rows_dropped = 0;
-        mutable uint64_t _remaining;
-        schema_ptr _schema;
-        mutable uint64_t _per_partition_limit;
-        mutable uint64_t _per_partition_remaining;
-        mutable uint64_t _rows_fetched_for_last_partition;
-        mutable std::optional<partition_key> _last_pkey;
-        mutable bool _is_first_partition_on_page = true;
-    public:
-    private:
     };
     // Implements ResultVisitor concept from query.hh
     template<typename Filter = nop_filter>
