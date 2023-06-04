@@ -22924,18 +22924,6 @@ struct commitlog_interval {
     disk_array<uint32_t, uint64_t> buckets;
      ;
     // Create an always positive filter if nothing else is specified.
-};
-// Do this so we don't have to copy on write time. We can just keep a reference.
-struct filter_ref {
-    uint32_t hashes;
-    disk_array_ref<uint32_t, uint64_t> buckets;
-     ;
-};
-enum class indexable_element {
-    partition,
-    cell
-};
-class summary_entry {
 public:
     int64_t raw_token;
     bytes_view key;
@@ -22948,24 +22936,12 @@ struct summary_ka {
     struct header {
         // The minimum possible amount of indexes per group (sampling level)
         uint32_t min_index_interval;
-        // The number of entries in the Summary File
-        uint32_t size;
-        // The memory to be consumed to map the whole Summary into memory.
-        uint64_t memory_size;
-        // The actual sampling level.
-        uint32_t sampling_level;
         // The number of entries the Summary *would* have if the sampling
         // level would be equal to min_index_interval.
         uint32_t size_at_full_sampling;
     } header;
     // The position in the Summary file for each of the indexes.
     // The structure is basically as follow:
-    // struct { disk_string<uint16_t>; uint32_t; uint64_t; disk_string<uint16_t>; }
-    // Another interesting fact about this structure is that it is apparently always
-    // filled with the same data. It's too early to judge that the data is useless.
-    // However, it was tested that Cassandra loads successfully a Summary file with
-    // this structure removed from it. Anyway, let's pay attention to it.
-private:
     class summary_data_memory {
         unsigned _size;
         std::unique_ptr<bytes::value_type[]> _data;
@@ -22978,12 +22954,6 @@ private:
 using summary = summary_ka;
 class file_writer;
 struct metadata {
-};
-;
-;
-// serialized_size() implementation for metadata class
-template <typename Component>
-class metadata_base : public metadata {
 public:
 };
 struct disk_token_bound {
@@ -23080,12 +23050,6 @@ struct scylla_metadata {
             disk_tagged_union_member<scylla_metadata_type, scylla_metadata_type::ScyllaBuildId, scylla_build_id>,
             disk_tagged_union_member<scylla_metadata_type, scylla_metadata_type::ScyllaVersion, scylla_version>
             > data;
-     ;
-};
-static constexpr int DEFAULT_CHUNK_SIZE = 65536;
-// checksums are generated using adler32 algorithm.
-struct checksum {
-    uint32_t chunk_size;
     utils::chunked_vector<uint32_t> checksums;
      ;
 };
@@ -23128,12 +23092,6 @@ public:
     void set_tail(bool v) noexcept ;
     bool with_train() const noexcept ;
     void set_train(bool v) noexcept ;
-    friend class memtable;
-    
-    memtable_entry(memtable_entry&& o) noexcept;
-    // Frees elements of the entry in batches.
-    // Returns stop_iteration::yes iff there are no more elements to free.
-    // Makes the entry conform to given schema.
     // Must be called under allocating section of the region which owns the entry.
 };
 }
@@ -23152,12 +23110,6 @@ private:
     memtable_list *_memtable_list;
     schema_ptr _schema;
     logalloc::allocating_section _read_section;
-    logalloc::allocating_section _allocating_section;
-    partitions_type partitions;
-    // Mutations returned by the reader will all have given schema.
-    // Same as make_flat_reader, but returns an empty optional instead of a no-op reader when there is nothing to
-    // read. This is an optimization.
-    friend class iterator_reader;
 };
 }
 // makes sure that cache update handles real dirty memory correctly.
@@ -23272,36 +23224,18 @@ struct sstable_first_key_less_comparator {
 // SStables in that same run will not overlap with one another.
 class sstable_run {
 public:
-    using sstable_set = std::set<shared_sstable, sstable_first_key_less_comparator>;
-private:
-    sstable_set _all;
-private:
-public:
-    // Returns false if sstable being inserted cannot satisfy the disjoint invariant. Then caller should pick another run for it.
     // Data size of the whole run, meaning it's a sum of the data size of all its fragments.
 };
 class sstable_set : public enable_lw_shared_from_this<sstable_set> {
     std::unique_ptr<sstable_set_impl> _impl;
     schema_ptr _schema;
 public:
-    // Return all runs which contain any of the input sstables.
-    // Return all sstables. It's not guaranteed that sstable_set will keep a reference to the returned list, so user should keep it.
-    // Prefer for_each_sstable() over all() for iteration purposes, as the latter may have to copy all sstables into a temporary
-    // Calls func for each sstable or until it returns stop_iteration::yes
-    // Returns the last stop_iteration value.
-    // Used to incrementally select sstables from sstable set using ring-position.
     // sstable set must be alive during the lifetime of the selector.
     class incremental_selector {
         std::unique_ptr<incremental_selector_impl> _impl;
         dht::ring_position_comparator _cmp;
         mutable std::optional<dht::partition_range> _current_range;
         mutable std::optional<nonwrapping_range<dht::ring_position_view>> _current_range_view;
-        mutable std::vector<shared_sstable> _current_sstables;
-        // Successive calls to `select()' have to pass weakly monotonic
-        // positions (incrementability).
-        //
-        // NOTE: both `selection.sstables` and `selection.next_position`
-        // are only guaranteed to be valid until the next call to
         // `select()`.
     };
     /// Read a range from the sstable set.
@@ -23332,12 +23266,6 @@ using owned_ranges_ptr = lw_shared_ptr<const dht::token_range_vector>;
 namespace sstables {
 enum class compaction_type {
     Compaction = 0,
-    Cleanup = 1,
-    Validation = 2, // Origin uses this for a compaction that is used exclusively for repair
-    Scrub = 3,
-    Index_build = 4,
-    Reshard = 5,
-    Upgrade = 6,
     Reshape = 7,
 };
 struct compaction_completion_desc {
@@ -23368,54 +23296,18 @@ public:
             validate, // validate data, printing all errors found (sstables are only read, not rewritten)
         };
         mode operation_mode = mode::abort;
-        enum class quarantine_mode {
-            include, // scrub all sstables, including quarantined
-            exclude, // scrub only non-quarantined sstables
-            only, // scrub only quarantined sstables
-        };
-        quarantine_mode quarantine_operation_mode = quarantine_mode::include;
     };
     struct reshard {
     };
     struct reshape {
     };
 private:
-    using options_variant = std::variant<regular, cleanup, upgrade, scrub, reshard, reshape>;
-private:
-    options_variant _options;
-private:
-public:
-    static compaction_type_options make_regular() ;
-     ;
-};
-class dummy_tag {};
-using has_only_fully_expired = seastar::bool_class<dummy_tag>;
-struct compaction_descriptor {
-    // List of sstables to be compacted.
-    std::vector<sstables::shared_sstable> sstables;
-    // This is a snapshot of the table's sstable set, used only for the purpose of expiring tombstones.
-    // If this sstable set cannot be provided, expiration will be disabled to prevent data from being resurrected.
-    std::optional<sstables::sstable_set> all_sstables_snapshot;
-    // Level of sstable(s) created by compaction procedure.
-    int level;
-    // Threshold size for sstable(s) to be created.
-    uint64_t max_sstable_bytes;
-    // Can split large partitions at clustering boundary.
-    static constexpr int default_level = 0;
-    static constexpr uint64_t default_max_sstable_bytes = std::numeric_limits<uint64_t>::max();
-    // Return fan-in of this job, which is equal to its number of runs.
     // Enables garbage collection for this descriptor, meaning that compaction will be able to purge expired data
     // Returns total size of all sstables contained in this descriptor
 };
 }
 class reader_permit;
 class compaction_backlog_tracker;
-namespace sstables {
-class sstable_set;
-class compaction_strategy;
-class sstables_manager;
-struct sstable_writer_config;
-}
 namespace compaction {
 class compaction_strategy_state;
 }
@@ -23452,24 +23344,12 @@ class compaction_strategy {
 public:
     // Return a list of sstables to be compacted after applying the strategy.
     
-    
-    // Some strategies may look at the compacted and resulting sstables to
-    // get some useful information for subsequent compactions.
-    // Return if parallel compaction is allowed by strategy.
-    // Return if optimization to rule out sstables based on clustering key filter should be applied.
-    // An estimation of number of compaction for strategy to be satisfied.
     static sstring name(compaction_strategy_type type) ;
     // Returns whether or not interposer consumer is used by a given strategy.
     // Informs the caller (usually the compaction manager) about what would it take for this set of
     // SSTables closer to becoming in-strategy. If this returns an empty compaction descriptor, this
     // means that the sstable set is already in-strategy.
     //
-    // The caller can specify one of two modes: strict or relaxed. In relaxed mode the tolerance for
-    // what is considered offstrategy is higher. It can be used, for instance, for when the system
-    // is restarting and previous compactions were likely in-flight. In strict mode, we are less
-    // tolerant to invariant breakages.
-    //
-    // The caller should also pass a maximum number of SSTables which is the maximum amount of
     // SSTables that can be added into a single job.
 };
 // Creates a compaction_strategy object from one of the strategies available.
@@ -23494,12 +23374,6 @@ struct write_stats {
     split_stats writes_errors;
     split_stats data_read_completed;
     split_stats data_read_errors;
-    // Digest read attempts
-    split_stats digest_read_attempts;
-    split_stats digest_read_completed;
-    split_stats digest_read_errors;
-    // Mutation data read attempts
-    split_stats mutation_data_read_attempts;
     split_stats mutation_data_read_completed;
     split_stats mutation_data_read_errors;
 public:
@@ -23518,12 +23392,6 @@ namespace view {
 struct stats : public service::storage_proxy_stats::write_stats {
     int64_t view_updates_pushed_local = 0;
     int64_t view_updates_pushed_remote = 0;
-    int64_t view_updates_failed_local = 0;
-    int64_t view_updates_failed_remote = 0;
-    using label_instance = seastar::metrics::label_instance;
-private:
-    label_instance _ks_label;
-    label_instance _cf_label;
 };
 } // namespace view
 } // namespace db
@@ -23536,12 +23404,6 @@ struct update_backlog {
 // row_locker provides a mechanism needed by the Materialized Views code to
 // lock clustering rows or entire partitions. The locks are shared/exclusive
 // (a.k.a. read/write) locks, and locking a row always first locks the
-// partition containing it with a shared lock.
-//
-// Each row_locker is local to a shard (obviously), and to one specific
-// column_family. row_locker needs to know the column_family's schema, and
-// if that schema is updated the upgrade() method should be called so that
-// row_locker could release its shared-pointer to the old schema, and take
 // the new.
 class row_locker {
 public:
@@ -23554,12 +23416,6 @@ public:
         single_lock_stats exclusive_row;
         single_lock_stats shared_row;
         single_lock_stats exclusive_partition;
-        single_lock_stats shared_partition;
-    };
-    struct latency_stats_tracker {
-        const dht::decorated_key* _partition;
-        bool _partition_exclusive;
-        const clustering_key_prefix* _row;
         bool _row_exclusive;
     public:
         // Allow move (noexcept) but disallow copy
@@ -23584,36 +23440,12 @@ private:
     std::unordered_map<dht::decorated_key, two_level_lock, decorated_key_hash, decorated_key_equals_comparator> _two_level_locks;
 public:
     // row_locker needs to know the column_family's schema because key
-    // comparisons needs the schema.
-    // If new_schema is different from the current schema, convert this
-    // row_locker to use the new schema, and hold the shared pointer to the
-    // new schema instead of the old schema. This is a trivial operation
-    // requiring just comparison/assignment - the hash tables do not need
-    // to be rebuilt on upgrade().
-    // Lock an entire partition with a shared or exclusive lock.
-    // The key is assumed to belong to the schema saved by row_locker. If you
-    // got a schema with the key, and not sure it's not a new version of the
-    // schema, call upgrade() before taking the lock.
-    // Lock a clustering row with a shared or exclusive lock.
-    // Also, first, takes a shared lock on the partition.
     // The key is assumed to belong to the schema saved by row_locker. If you
     // got a schema with the key, and not sure it's not a new version of the
     // schema, call upgrade() before taking the lock.
 };
 // Simple proportional controller to adjust shares for processes for which a backlog can be clearly
 // defined.
-//
-// Goal is to consume the backlog as fast as we can, but not so fast that we steal all the CPU from
-// incoming requests, and at the same time minimize user-visible fluctuations in the quota.
-//
-// What that translates to is we'll try to keep the backlog's firt derivative at 0 (IOW, we keep
-// backlog constant). As the backlog grows we increase CPU usage, decreasing CPU usage as the
-// backlog diminishes.
-//
-// The exact point at which the controller stops determines the desired CPU usage. As the backlog
-// grows and approach a maximum desired, we need to be more aggressive. We will therefore define two
-// thresholds, and increase the constant as we cross them.
-//
 // Doing that divides the range in three (before the first, between first and second, and after
 // second threshold), and we'll be slow to grow in the first region, grow normally in the second
 // region, and aggressively in the third region.
@@ -23632,30 +23464,12 @@ protected:
     };
     scheduling_group _scheduling_group;
     timer<> _update_timer;
-    std::vector<control_point> _control_points;
-    std::function<float()> _current_backlog;
-    // updating shares for an I/O class may contact another shard and returns a future.
-    future<> _inflight_update;
-    // Used when the controllers are disabled and a static share is used
-    // When that option is deprecated we should remove this.
     float _static_shares;
 public:
 };
 // memtable flush CPU controller.
 //
 // - First threshold is the soft limit line,
-// - Maximum is the point in which we'd stop consuming request,
-// - Second threshold is halfway between them.
-//
-// Below the soft limit, we are in no particular hurry to flush, since it means we're set to
-// complete flushing before we a new memtable is ready. The quota is dirty * q1, and q1 is set to a
-// low number.
-//
-// The first half of the virtual dirty region is where we expect to be usually, so we have a low
-// slope corresponding to a sluggish response between q1 * soft_limit and q2.
-//
-// In the second half, we're getting close to the hard dirty limit so we increase the slope and
-// become more responsive, up to a maximum quota of qmax.
 class flush_controller : public backlog_controller {
     static constexpr float hard_dirty_limit = 1.0f;
 public:
@@ -23686,12 +23500,6 @@ class reader_concurrency_semaphore {
 public:
     using resources = reader_resources;
     friend class reader_permit;
-    enum class evict_reason {
-        permit, // evicted due to permit shortage
-        time, // evicted due to expiring ttl
-        manual, // evicted manually via `try_evict_one_inactive_read()`
-    };
-    using eviction_notify_handler = noncopyable_function<void(evict_reason)>;
     struct stats {
         // The number of inactive reads evicted to free up permits.
         uint64_t permit_based_evictions = 0;
@@ -23704,12 +23512,6 @@ public:
         // Total number of failed reads executed through this semaphore.
         uint64_t total_failed_reads = 0;
         // Total number of reads rejected because the admission queue reached its max capacity
-        uint64_t total_reads_shed_due_to_overload = 0;
-        // Total number of reads killed due to the memory consumption reaching the kill limit.
-        uint64_t total_reads_killed_due_to_kill_limit = 0;
-        // Total number of reads admitted, via all admission paths.
-        uint64_t reads_admitted = 0;
-        // Total number of reads enqueued to wait for admission.
         uint64_t reads_enqueued_for_admission = 0;
         // Total number of reads enqueued to wait for memory.
         uint64_t reads_enqueued_for_memory = 0;
@@ -23740,30 +23542,12 @@ private:
     };
     wait_queue _wait_list;
     ///
-    /// Same as \ref with_permit(), but it uses an already admitted
-    /// permit. Should only be used when a permit is already readily
-    /// available, e.g. when resuming a saved read. Using
-    /// \ref obtain_permit(), then \ref with_ready_permit() is less
-    /// optimal then just using \ref with_permit().
-    /// Set the total resources of the semaphore to \p r.
-    ///
-    /// After this call, \ref initial_resources() will reflect the new value.
-    /// Available resources will be adjusted by the delta.
-    /// Dump diagnostics printout
-    ///
-    /// Use max-lines to cap the number of (permit) lines in the report.
     /// Use 0 for unlimited.
 };
 namespace query {
 extern logging::logger qrlogger;
 /// Consume a page worth of data from the reader.
 ///
-/// Uses `compaction_state` for compacting the fragments and `consumer` for
-/// building the results.
-/// Returns a future containing a tuple with the last consumed clustering key,
-/// or std::nullopt if the last row wasn't a clustering row, and whatever the
-/// consumer's `consume_end_of_stream()` method returns.
- ;
 class querier_base {
     full_position _nominal_pos;
 private:
@@ -23782,12 +23566,6 @@ public:
 ///     appropriate querier lookup() will consider - in addition to the lookup
 ///     key - the read range.
 /// * It does schema version and position checking. In some case a subsequent
-///     page will have a different schema version or will start from a position
-///     that is before the end position of the previous page. lookup() will
-///     recognize these cases and drop the previous querier and create a new one.
-///
-/// Inserted queriers will have a TTL. When this expires the querier is
-/// evicted. This is to avoid excess and unnecessary resource usage due to
 /// abandoned queriers.
 /// Registers cached readers with the reader concurrency semaphore, as inactive
 /// readers, so the latter can evict them if needed.
@@ -23800,18 +23578,6 @@ public:
     struct stats {
         // The number of inserts into the cache.
         uint64_t inserts = 0;
-        // The number of cache lookups.
-        uint64_t lookups = 0;
-        // The subset of lookups that missed.
-        uint64_t misses = 0;
-        // The subset of lookups that hit but the looked up querier had to be
-        // dropped due to position mismatch.
-        uint64_t drops = 0;
-        // The number of queriers evicted due to their TTL expiring.
-        uint64_t time_based_evictions = 0;
-        // The number of queriers evicted to free up resources to be able to
-        // create new readers.
-        uint64_t resource_based_evictions = 0;
         // The number of queriers currently in the cache.
         uint64_t population = 0;
     };
@@ -23823,12 +23589,6 @@ private:
 namespace ser {
 template <typename T>
 class serializer;
-};
-class cache_temperature {
-    float hit_rate;
-public:
-    explicit cache_temperature(float hr)  ;
-    friend struct ser::serializer<cache_temperature>;
 };
 namespace data_dictionary {
 class user_types_metadata {
@@ -23860,18 +23620,6 @@ struct storage_options {
         
     };
     using value_type = std::variant<local, s3>;
-    value_type value = local{};
-    
-};
-} // namespace data_dictionary
-namespace data_dictionary {
-class keyspace_metadata final : public keyspace_element {
-    sstring _name;
-    sstring _strategy_name;
-    locator::replication_strategy_config_options _strategy_options;
-    std::unordered_map<sstring, schema_ptr> _cf_meta_data;
-    bool _durable_writes;
-    user_types_metadata _user_types;
     lw_shared_ptr<const storage_options> _storage_options;
 public:
 };
