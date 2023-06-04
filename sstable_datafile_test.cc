@@ -4246,12 +4246,6 @@ public:
     // unique_ptr, and as such cannot rely on default copying.
     column_definition(const column_definition& other)
             : _name(other._name)
-            , _dropped_at(other._dropped_at)
-            , _is_atomic(other._is_atomic)
-            , _is_counter(other._is_counter)
-            , _is_view_virtual(other._is_view_virtual)
-            , _computation(other.get_computation_ptr())
-            , _thrift_bits(other._thrift_bits)
             , type(other.type)
             , id(other.id)
             , ordinal_id(other.ordinal_id)
@@ -4366,12 +4360,6 @@ public:
 };
 
 class view_info;
-// Represents a column set which is compactible with Cassandra 3.x.
-//
-// This layout differs from the layout Scylla uses in schema/schema_builder for static compact tables.
-// For such tables, Scylla expects all columns to be of regular type and no clustering columns,
-// whereas in v3 those columns are static and there is a clustering column with type matching the
-// cell name comparator and a regular column with type matching the default validator.
 // See issues #2555 and #1474.
 class v3_columns {
     bool _is_dense = false;
@@ -4636,30 +4624,6 @@ public:
     // May be called from different shard
     schema_registry_entry* registry_entry() const noexcept;
     // Returns true iff this schema version was synced with on current node.
-    // Schema version is said to be synced with when its mutations were merged
-    // into current node's schema, so that current node's schema is at least as
-    // recent as this version.
-public:
-    // Make a copy of the schema with reversed clustering order.
-    //
-    // The reversing is revertible, so that:
-    //
-    //      s->make_reversed()->make_reversed()->version() == s->version()
-    //
-    // But note that: `s != s->make_reversed()->make_reversed()` (they are two
-    // different C++ objects).
-    // The schema's version is also reversed using UUID_gen::negate().
-    schema_ptr make_reversed() const;
-    // Get the reversed counterpart of this schema from the schema registry.
-    //
-    // If not present in the registry, create one (via \ref make_reversed()) and
-    // load it. Unlike \ref make_reversed(), this method guarantees that double
-    // reversing will return the very same C++ object:
-    //
-    //      auto schema = make_schema();
-    //      auto reverse_schema = schema->get_reversed();
-    //      assert(reverse_schema->get_reversed().get() == schema.get());
-    //      assert(schema->get_reversed().get() == reverse_schema.get());
     //
     
 };
@@ -4786,12 +4750,6 @@ struct container_traits<utils::chunked_vector<T>> {
 template<typename T, size_t N>
 struct container_traits<std::array<T, N>> {
     struct back_emplacer {
-        std::array<T, N>& c;
-        size_t idx = 0;
-        back_emplacer(std::array<T, N>& c_) : c(c_) {}
-        void operator()(T&& v) {
-            c[idx++] = std::move(v);
-        }
     };
     void resize(std::array<T, N>& c, size_t size) {}
 };
@@ -4924,12 +4882,6 @@ struct serializer<std::chrono::time_point<Clock, Duration>> {
 };
 template<size_t N, typename T>
 struct serializer<std::array<T, N>> {
-    template<typename Input>
-    static std::array<T, N> read(Input& in) {
-        std::array<T, N> v;
-        deserialize_array<T>(in, v, N);
-        return v;
-    }
     template<typename Output>
     static void write(Output& out, const std::array<T, N>& v) {
         serialize_array<T>(out, v);
@@ -5032,24 +4984,12 @@ public:
       }
     }
     [[gnu::always_inline]]
-    operator bytes() && {
-        bytes v(bytes::initialized_later(), _stream.size());
-        _stream.read(reinterpret_cast<char*>(v.begin()), _stream.size());
-        return v;
-    }
-    [[gnu::always_inline]]
     operator managed_bytes() && {
         managed_bytes mb(managed_bytes::initialized_later(), _stream.size());
         for (bytes_mutable_view frag : fragment_range(managed_bytes_mutable_view(mb))) {
             _stream.read(reinterpret_cast<char*>(frag.data()), frag.size());
         }
         return mb;
-    }
-    [[gnu::always_inline]]
-    operator bytes_ostream() && {
-        bytes_ostream v;
-        _stream.copy_to(v);
-        return v;
     }
 };
 template<>
@@ -5092,12 +5032,6 @@ template<typename T>
 struct serializer<std::optional<T>> {
     template<typename Input>
     static std::optional<T> read(Input& in) {
-        std::optional<T> v;
-        auto b = deserialize(in, boost::type<bool>());
-        if (b) {
-            v.emplace(deserialize(in, boost::type<T>()));
-        }
-        return v;
     }
     template<typename Output>
     static void write(Output& out, const std::optional<T>& v) {
@@ -5290,12 +5224,6 @@ struct stateless_aggregate_function final {
     data_type state_type;
     data_type result_type;
     std::vector<data_type> argument_types;
-    bytes_opt initial_state;
-    // aggregates another input
-    // signature: (state_type, argument_types...) -> state_type
-    shared_ptr<scalar_function> aggregation_function;
-    // converts the state type to a result
-    // signature: (state_type) -> result_type
     shared_ptr<scalar_function> state_to_result_function;
     // optional: reduces states computed in parallel
     // signature: (state_type, state_type) -> state_type
@@ -5374,12 +5302,6 @@ struct fmt::formatter<sstables::sstable_format_types> : fmt::formatter<std::stri
 extern logging::logger compound_logger;
 //
 // This header provides adaptors between the representation used by our compound_type<>
-// and representation used by Origin.
-//
-// For single-component keys the legacy representation is equivalent
-// to the only component's serialized form. For composite keys it the following
-// (See org.apache.cassandra.db.marshal.CompositeType):
-//
 //   <representation> ::= ( <component> )+
 //   <component>      ::= <length> <value> <EOC>
 //   <length>         ::= <uint16_t>
@@ -5434,12 +5356,6 @@ public:
         value_type operator*() const {
             int32_t component_size = _i->size();
             if (_offset == -2) {
-                return (component_size >> 8) & 0xff;
-            } else if (_offset == -1) {
-                return component_size & 0xff;
-            } else if (_offset < component_size) {
-                return (*_i)[_offset];
-            } else { // _offset == component_size
                 return 0; // EOC field
             }
         }
@@ -5458,12 +5374,6 @@ public:
         }
     };
     // A trichotomic comparator defined on @CompoundType representations which
-    // orders them according to lexicographical ordering of their corresponding
-    // legacy representations.
-    //
-    //   tri_comparator(t)(k1, k2)
-    //
-    // ...is equivalent to:
     //
     //   compare_unsigned(to_legacy(t, k1), to_legacy(t, k2))
     //
@@ -5536,12 +5446,6 @@ private:
         out = std::copy(val.begin(), val.end(), out);
     }
     template<typename CharOutputIterator>
-    static void write_value(managed_bytes_view val, CharOutputIterator& out) {
-        for (bytes_view frag : fragment_range(val)) {
-            out = std::copy(frag.begin(), frag.end(), out);
-        }
-    }
-    template <typename CharOutputIterator>
     static void write_value(const data_value& val, CharOutputIterator& out) {
         val.serialize(out);
     }
@@ -5554,12 +5458,6 @@ private:
         }
         for (auto&& val : values) {
             write<size_type>(out, static_cast<size_type>(size(val)));
-            write_value(std::forward<decltype(val)>(val), out);
-            // Range tombstones are not keys. For collections, only frozen
-            // values can be keys. Therefore, for as long as it is safe to
-            // assume that this code will be used to create keys, it is safe
-            // to assume the trailing byte is always zero.
-            write<eoc_type>(out, eoc_type(eoc::none));
         }
     }
     template <typename RangeOfSerializedComponents>
@@ -5572,12 +5470,6 @@ private:
             // composite is 65534, not 65535 (or we wouldn't be able to detect if the first 2
             // bytes is the static prefix or not).
             auto value_size = size(*it);
-            if (value_size > static_cast<size_type>(std::numeric_limits<size_type>::max() - uint8_t(is_compound))) {
-                throw std::runtime_error(format("First component size too large: {:d} > {:d}", value_size, std::numeric_limits<size_type>::max() - is_compound));
-            }
-            if (!is_compound) {
-                return value_size;
-            }
             len += sizeof(size_type) + value_size + sizeof(eoc_type);
             ++it;
         }
@@ -5662,12 +5554,6 @@ public:
         iterator(const bytes_view& v, bool is_compound, bool is_static, bool strict_mode = true)
                 : _v(v), _strict_mode(strict_mode) {
             if (is_static) {
-                _v.remove_prefix(2);
-            }
-            if (is_compound) {
-                read_current();
-            } else {
-                _current = component_view(_v, eoc::none);
                 _v.remove_prefix(_v.size());
             }
         }
@@ -5692,12 +5578,6 @@ public:
      ;
     
     explicit operator bytes_view() const {
-        return _bytes;
-    }
-    template <typename Component>
-    friend inline std::ostream& operator<<(std::ostream& os, const std::pair<Component, eoc>& c) {
-        fmt::print(os, "{}", c);
-        return os;
     }
     struct tri_compare {
         const std::vector<data_type>& _types;
@@ -5800,36 +5680,12 @@ class table;
 using column_family = table;
 class memtable_list;
 }
-// mutation.hh
-class mutation;
-class mutation_partition;
-// schema/schema.hh
-class schema;
-class column_definition;
-class column_mapping;
-// schema_mutations.hh
-class schema_mutations;
-// keys.hh
-class exploded_clustering_prefix;
-class partition_key;
 class partition_key_view;
 class clustering_key_prefix;
 class clustering_key_prefix_view;
 using clustering_key = clustering_key_prefix;
 using clustering_key_view = clustering_key_prefix_view;
 // memtable.hh
-namespace replica {
-class memtable;
-}
-//
-//   clustering_key          - full clustering key
-//   clustering_key_prefix   - clustering key prefix
-//
-// These classes wrap only the minimum information required to store the key
-// (the key value itself). Any information which can be inferred from schema
-// is not stored. Therefore accessors need to be provided with a pointer to
-// schema, from which information about structure is extracted.
-// Abstracts a view to serialized compound.
 template <typename TopLevelView>
 class compound_view_wrapper {
 protected:
@@ -5842,12 +5698,6 @@ protected:
 public:
     
     managed_bytes_view representation() const ;
-    struct less_compare {
-        typename TopLevelView::compound _t;
-    };
-    struct tri_compare {
-        typename TopLevelView::compound _t;
-    };
     // Returns a range of managed_bytes_view
     
     
@@ -5974,12 +5824,6 @@ public:
 private:
     bytes_view _b;
     unsigned _prefix_len;
-    iterator _begin;
-    iterator _end;
-public:
-    struct less_compare_with_prefix {
-        typename PrefixTopLevel::compound prefix_type;
-    };
 };
 template <typename TopLevel>
 class prefix_view_on_prefix_compound {
@@ -6052,12 +5896,6 @@ public:
     // The result is valid as long as the schema is live.
     const legacy_compound_view<c_type> legacy_form(const schema& s) const;
     // A trichotomic comparator for ordering compatible with Origin.
-    
-    // Checks if keys are equal in a way which is compatible with Origin.
-    
-    
-    // A trichotomic comparator which orders keys according to their ordering on the ring.
-    
 };
 template <>
 struct fmt::formatter<partition_key_view> : fmt::formatter<std::string_view> {
@@ -6088,12 +5926,6 @@ public:
     
     // A trichotomic comparator for ordering compatible with Origin.
     
-    // Checks if keys are equal in a way which is compatible with Origin.
-    
-    
-};
-template <>
-struct fmt::formatter<partition_key> : fmt::formatter<std::string_view> {
     template <typename FormatContext>
     auto format(const partition_key& pk, FormatContext& ctx) const {
         return fmt::format_to(ctx.out(), "pk{{{}}}", managed_bytes_view(pk.representation()));
@@ -6244,12 +6076,6 @@ private:
     
     
 public:
-    // the point is before the interval (works only for non wrapped intervals)
-    // Comparator must define a total ordering on T.
-    // the point is after the interval (works only for non wrapped intervals)
-    // Comparator must define a total ordering on T.
-    // check if two intervals overlap.
-    // Comparator must define a total ordering on T.
     
     
     bool is_singular() const {
@@ -6280,12 +6106,6 @@ public:
     // Returns intervals which cover all values covered by this interval but not covered by the other interval.
     // Ranges are not overlapping and ordered.
     // Comparator must define a total ordering on T.
-    
-    // split interval in two around a split_point. split_point has to be inside the interval
-    // split_point will belong to first interval
-    // Comparator must define a total ordering on T.
-    
-    // Create a sub-interval including values greater than the split_point. Returns std::nullopt if
     // split_point is after the end (but not included in the interval, in case of wraparound intervals)
     // Comparator must define a total ordering on T.
     
@@ -6346,12 +6166,6 @@ public:
     bool before(const T& point, IntervalComparatorFor<T> auto&& cmp) const {
         return _interval.before(point, std::forward<decltype(cmp)>(cmp));
     }
-    // the point is after the interval.
-    // Comparator must define a total ordering on T.
-    bool after(const T& point, IntervalComparatorFor<T> auto&& cmp) const {
-        return _interval.after(point, std::forward<decltype(cmp)>(cmp));
-    }
-    // check if two intervals overlap.
     // Comparator must define a total ordering on T.
     bool overlaps(const nonwrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
         // if both this and other have an open start, the two intervals will overlap.
@@ -6370,12 +6184,6 @@ public:
     static nonwrapping_interval make_singular(T value) {
         return {std::move(value)};
     }
-    static nonwrapping_interval make_starting_with(bound b) {
-        return {{std::move(b)}, {}};
-    }
-    static nonwrapping_interval make_ending_with(bound b) {
-        return {{}, {std::move(b)}};
-    }
     bool is_singular() const {
         return _interval.is_singular();
     }
@@ -6388,18 +6196,6 @@ public:
     const optional<bound>& end() const {
         return _interval.end();
     }
-    // the point is inside the interval
-    // Comparator must define a total ordering on T.
-    bool contains(const T& point, IntervalComparatorFor<T> auto&& cmp) const {
-        return !before(point, cmp) && !after(point, cmp);
-    }
-    // Returns true iff all values contained by other are also contained by this.
-    // Comparator must define a total ordering on T.
-    bool contains(const nonwrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
-        return wrapping_interval<T>::less_than_or_equal(_interval.start_bound(), other._interval.start_bound(), cmp)
-                && wrapping_interval<T>::greater_than_or_equal(_interval.end_bound(), other._interval.end_bound(), cmp);
-    }
-    // Returns intervals which cover all values covered by this interval but not covered by the other interval.
     // Ranges are not overlapping and ordered.
     // Comparator must define a total ordering on T.
     std::vector<nonwrapping_interval> subtract(const nonwrapping_interval& other, IntervalComparatorFor<T> auto&& cmp) const {
@@ -6460,12 +6256,6 @@ public:
     }
     static IntervalVec deoverlap(IntervalVec intervals, Comparator&& cmp) {
         auto size = intervals.size();
-        if (size <= 1) {
-            return intervals;
-        }
-        std::sort(intervals.begin(), intervals.end(), [&](auto&& r1, auto&& r2) {
-            return wrapping_interval<T>::less_than(r1._interval.start_bound(), r2._interval.start_bound(), cmp);
-        });
         IntervalVec deoverlapped_intervals;
         deoverlapped_intervals.reserve(size);
         auto&& current = intervals[0];
@@ -6610,12 +6400,6 @@ concept TokenCarrier = requires (const T& v) {
 struct raw_token_less_comparator {
     bool operator()(const int64_t k1, const int64_t k2) const noexcept ;
     template <typename Key>
-    requires TokenCarrier<Key>
-    bool operator()(const Key& k1, const int64_t k2) const noexcept {
-        return dht::tri_compare_raw(k1.token().raw(), k2) < 0;
-    }
-    template <typename Key>
-    requires TokenCarrier<Key>
     bool operator()(const int64_t k1, const Key& k2) const noexcept {
         return dht::tri_compare_raw(k1, k2.token().raw()) < 0;
     }
@@ -6682,12 +6466,6 @@ class decorated_key_view;
 namespace dht {
 //
 // Origin uses a complex class hierarchy where Token is an abstract class,
-// and various subclasses use different implementations (LongToken vs.
-// BigIntegerToken vs. StringToken), plus other variants to to signify the
-// the beginning of the token space etc.
-//
-// We'll fold all of that into the token class and push all of the variations
-// into its users.
 class decorated_key;
 class ring_position;
 using partition_range = nonwrapping_range<ring_position>;
@@ -6716,12 +6494,6 @@ public:
     std::strong_ordering tri_compare(const schema& s, const ring_position& other) const;
     const dht::token& token() const noexcept ;
     const partition_key& key() const ;
-    
-    
-};
-class decorated_key_equals_comparator {
-    const schema& _schema;
-public:
     
     
 };
@@ -6766,12 +6538,6 @@ private:
     dht::token _token;
     token_bound _token_bound{}; // valid when !_key
     std::optional<partition_key> _key;
-public:
-    
-    
-    const dht::token& token() const noexcept ;
-    // Valid when !has_key()
-    // Returns -1 if smaller than keys with the same token, +1 if greater.
     int relation_to_keys() const ;
     const std::optional<partition_key>& key() const ;
     bool has_key() const ;
@@ -6784,48 +6550,24 @@ public:
 //
 // Unlike ring_position, it can express positions which are right after and right before the keys.
 // ring_position still can not because it is sent between nodes and such a position
-// would not be (yet) properly interpreted by old nodes. That's why any ring_position
-// can be converted to ring_position_view, but not the other way.
-//
-// It is possible to express a partition_range using a pair of two ring_position_views v1 and v2,
-// where v1 = ring_position_view::for_range_start(r) and v2 = ring_position_view::for_range_end(r).
-// Such range includes all keys k such that v1 <= k < v2, with order defined by ring_position_comparator.
 //
 class ring_position_view {
     friend std::strong_ordering ring_position_tri_compare(const schema& s, ring_position_view lh, ring_position_view rh);
     friend class ring_position_comparator;
     friend class ring_position_comparator_for_sstables;
     friend class ring_position_ext;
-    // Order is lexicographical on (_token, _key) tuples, where _key part may be missing, and
-    // _weight affecting order between tuples if one is a prefix of the other (including being equal).
-    // A positive weight puts the position after all strictly prefixed by it, while a non-positive
-    // weight puts it before them. If tuples are equal, the order is further determined by _weight.
-    //
-    // For example {_token=t1, _key=nullptr, _weight=1} is ordered after {_token=t1, _key=k1, _weight=0},
     // but {_token=t1, _key=nullptr, _weight=-1} is ordered before it.
     //
     const dht::token* _token; // always not nullptr
     const partition_key* _key; // Can be nullptr
     int8_t _weight;
 private:
-    
-    
-public:
-    using token_bound = ring_position::token_bound;
-    struct after_key_tag {};
-    using after_key = bool_class<after_key_tag>;
     static ring_position_view min() noexcept ;
     // Only when key() == nullptr
     // Only when key() != nullptr
     friend class optimized_optional<ring_position_view>;
 };
 using ring_position_ext_view = ring_position_view;
-using ring_position_view_opt = optimized_optional<ring_position_view>;
-//
-// Represents position in the ring of partitions, where partitions are ordered
-// according to decorated_key ordering (first by token, then by key value).
-// Intended to be used for defining partition ranges.
-//
 // Unlike ring_position, it can express positions which are right after and right before the keys.
 // ring_position still can not because it is sent between nodes and such a position
 // would not be (yet) properly interpreted by old nodes. That's why any ring_position
