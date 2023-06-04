@@ -29809,19 +29809,6 @@ public:
     // If the container is empty, returns an exceptional future
     // with the bad_exception_container_access exception.
     template<typename T = void>
-    seastar::future<T> as_exception_future() const & {
-        if (!_eptr) {
-            return seastar::make_exception_future<T>(bad_exception_container_access());
-        }
-        return std::visit([] (const auto& ex) {
-            return seastar::make_exception_future<T>(ex);
-        }, *_eptr);
-    }
-    // Transforms this exception future into an exceptional future.
-    // The exception is moved out and the container becomes empty.
-    // If the container was empty, returns an exceptional future
-    // with the bad_exception_container_access exception.
-    template<typename T = void>
     seastar::future<T> into_exception_future() && {
         if (!_eptr) {
             return seastar::make_exception_future<T>(bad_exception_container_access());
@@ -30028,45 +30015,6 @@ private:
     service::forward_service& _forwarder;
     data_dictionary::database _db;
     service::migration_notifier& _mnotifier;
-    service::migration_manager& _mm;
-    memory_config _mcfg;
-    const cql_config& _cql_config;
-    service::raft_group0_client& _group0_client;
-    struct stats {
-        uint64_t prepare_invocations = 0;
-        uint64_t queries_by_cl[size_t(db::consistency_level::MAX_VALUE) + 1] = {};
-    } _stats;
-    cql_stats _cql_stats;
-    seastar::metrics::metric_groups _metrics;
-    class internal_state;
-    std::unique_ptr<internal_state> _internal_state;
-    prepared_statements_cache _prepared_cache;
-    authorized_prepared_statements_cache _authorized_prepared_cache;
-    std::function<void(uint32_t)> _auth_prepared_cache_cfg_cb;
-    serialized_action _authorized_prepared_cache_config_action;
-    utils::observer<uint32_t> _authorized_prepared_cache_update_interval_in_ms_observer;
-    utils::observer<uint32_t> _authorized_prepared_cache_validity_in_ms_observer;
-    // A map for prepared statements used internally (which we don't want to mix with user statement, in particular we
-    // don't bother with expiration on those.
-    std::unordered_map<sstring, std::unique_ptr<statements::prepared_statement>> _internal_statements;
-    std::shared_ptr<rust::Box<wasmtime::Engine>> _wasm_engine;
-    std::optional<wasm::instance_cache> _wasm_instance_cache;
-    std::shared_ptr<wasm::alien_thread_runner> _alien_runner;
-public:
-    static const sstring CQL_VERSION;
-    static std::vector<std::unique_ptr<statements::raw::parsed_statement>> parse_statements(std::string_view queries);
-    // Like execute_prepared, but is allowed to return exceptions as result_message::exception.
-    // The result_message::exception must be explicitly handled.
-    /// Execute a client statement that was not prepared.
-    // Like execute_direct, but is allowed to return exceptions as result_message::exception.
-    // The result_message::exception must be explicitly handled.
-    class cache_internal_tag;
-    using cache_internal = bool_class<cache_internal_tag>;
-    // NOTICE: Internal queries should be used with care, as they are expected
-    // to be used for local tables (e.g. from the `system` keyspace).
-    // Data modifications will usually be performed with consistency level ONE
-    // and schema changes will not be announced to other nodes.
-    // Because of that, changing global schema state (e.g. modifying non-local tables,
 };
 }
 
@@ -30080,32 +30028,6 @@ namespace db {
 class batchlog_manager;
 }
 namespace db::view {
-class view_builder;
-class view_update_generator;
-}
-namespace auth {
-class service;
-}
-namespace cql3 {
-    class query_processor;
-}
-namespace service {
-class client_state;
-class migration_manager;
-class raft_group0_client;
-class raft_group_registry;
-}
-class not_prepared_exception : public std::runtime_error {
-public:
-    
-};
-namespace db {
-    class config;
-}
-struct scheduling_groups {
-    scheduling_group compaction_scheduling_group;
-    scheduling_group memory_compaction_scheduling_group;
-    scheduling_group streaming_scheduling_group;
     scheduling_group statement_scheduling_group;
     scheduling_group memtable_scheduling_group;
     scheduling_group memtable_to_cache_scheduling_group;
@@ -30353,19 +30275,6 @@ public:
 extern logging::logger testlog;
 class mutation_partition_assertion {
     schema_ptr _schema;
-    mutation_partition _m;
-private:
-public:
-    // If ck_ranges is passed, verifies only that information relevant for ck_ranges matches.
-    // If ck_ranges is passed, verifies only that information relevant for ck_ranges matches.
-};
-class mutation_assertion {
-    mutation _m;
-public:
-    // If ck_ranges is passed, verifies only that information relevant for ck_ranges matches.
-    // Verifies that mutation data remains unchanged when upgraded to the new schema
-};
-class mutation_opt_assertions {
     mutation_opt _mo;
 public:
 };
@@ -30418,19 +30327,6 @@ struct key_size {
     size_t min;
     size_t max;
 };
-// Generate n partition keys for the given schema.
-//
-// Returned keys are unique (their token too), ordered and never empty.
-// Parameters:
-// * n - number of keys
-// * s - schema of the keys, used also to obtain the sharder
-// * shard - only generate keys for this shard (if engaged)
-// * size - the min and max size of the key in bytes, if disengaged default
-//          limits (1-128) are used. If you want exactly sized keys, use
-//          ascii or bytes types only as the key types.
-
-
-// Overload for a single key
 
 
 // Generate n clustering keys
@@ -30457,19 +30353,6 @@ private:
     with_static _ws;
     with_collection _wc;
 private:
-public:
-public:
-    // Make a clustering_key which is n-th in some arbitrary sequence of keys
-    // Make a partition key which is n-th in some arbitrary sequence of keys.
-    // There is no particular order for the keys, they're not in ring order.
-    // Creates a sequence of keys in ring order
-    // Returns n clustering keys in their natural order
-};
-// Allows a simple_schema to be transferred to another shard.
-// Must be used in `cql_test_env`.
-class global_simple_schema {
-    global_schema_ptr _gs;
-    api::timestamp_type _timestamp;
 public:
 };
 using populate_fn = std::function<mutation_source(schema_ptr s, const std::vector<mutation>&)>;
@@ -30860,19 +30743,6 @@ int main(int argc, char** argv) {
 // multiple shards, to avoid problems due to the BOOST versions not being thread
 // safe.
 namespace tests {
-[[nodiscard]] bool do_check(bool condition, std::source_location sl, std::string_view msg);
-[[nodiscard]] inline bool check(bool condition, std::source_location sl = std::source_location::current()) {
-    return do_check(condition, sl, {});
-}
-template <typename LHS, typename RHS>
-[[nodiscard]] bool check_equal(const LHS& lhs, const RHS& rhs, std::source_location sl = std::source_location::current()) {
-    const auto condition = (lhs == rhs);
-    return do_check(condition, sl, fmt::format("{} {}= {}", lhs, condition ? "=" : "!", rhs));
-}
-void do_require(bool condition, std::source_location sl, std::string_view msg);
- 
- ;
-
  
 
 }
@@ -30990,19 +30860,6 @@ struct cxa_exception {
 } // abi
 } // utils
 /// Represents a container which can preallocate space for future insertions
-/// which can be used to reduce the number of overall memory re-allocation and item movement.
-///
-/// The number of items for which space is currently reserved is returned by capacity().
-/// This includes items currently present in the container.
-///
-/// The number of items currently present is returned by size().
-///
-/// Invariant:
-///
-///   size() <= capacity()
-///
-/// Space is reserved by calling reserve(desired_capacity).
-/// The post-condition of calling reserve() is:
 ///
 ///   capacity() >= desired_capacity
 ///
@@ -31133,19 +30990,6 @@ template<> inline size_t data_input::ssize<bytes_view>(const bytes_view& v) cons
     return sizeof(uint32_t) + v.size();
 }
 template<> inline size_t data_input::ssize(const bool &) const {
-    return sizeof(uint8_t);
-}
-template<> inline bool data_input::peek<bool>() const {
-    return peek<uint8_t>() != 0;
-}
-template<typename T>
-inline T data_input::peek() const {
-    return peek_primitive<T>();
-}
-template<typename T> inline T data_input::read() {
-    auto t = peek<T>();
-    _view.remove_prefix(ssize(t));
-    return std::move(t);
 }
 template<typename T> inline size_t data_input::ssize(const T &) const {
     return sizeof(T);
@@ -31172,32 +31016,6 @@ public:
     }
 };
 #ifndef DATE_H
-#define DATE_H
-// The MIT License (MIT)
-//
-// Copyright (c) 2015, 2016 Howard Hinnant
-// Copyright (c) 2016 Adrian Colomitchi
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-//
-// Our apologies.  When the previous paragraph was written, lowercase had not yet
-// been invented (that woud involve another several millennia of evolution).
 // We did not mean to shout.
 #if !(__cplusplus >= 201402)
 #endif
@@ -31705,19 +31523,6 @@ inline namespace literals
 // CONSTDATA date::month feb{2};
 // CONSTDATA date::month mar{3};
 // CONSTDATA date::month apr{4};
-// CONSTDATA date::month may{5};
-// CONSTDATA date::month jun{6};
-// CONSTDATA date::month jul{7};
-// CONSTDATA date::month aug{8};
-// CONSTDATA date::month sep{9};
-// CONSTDATA date::month oct{10};
-// CONSTDATA date::month nov{11};
-// CONSTDATA date::month dec{12};
-//
-// CONSTDATA date::weekday sun{0u};
-// CONSTDATA date::weekday mon{1u};
-// CONSTDATA date::weekday tue{2u};
-// CONSTDATA date::weekday wed{3u};
 // CONSTDATA date::weekday thu{4u};
 // CONSTDATA date::weekday fri{5u};
 // CONSTDATA date::weekday sat{6u};
@@ -31770,19 +31575,6 @@ struct choose_trunc_type
 #pragma GCC diagnostic pop
 #endif
 template <class T>
-CONSTCD11
-inline
-typename std::enable_if
-<
-    !std::chrono::treat_as_floating_point<T>::value,
-    T
->::type
-trunc(T t) NOEXCEPT
-{
-    return t;
-}
-template <class T>
-CONSTCD14
 inline
 typename std::enable_if
 <
@@ -31835,19 +31627,6 @@ template <class To, class Rep, class Period>
 // round up
 template <class To, class Rep, class Period>
 ;
-round(const std::chrono::time_point<Clock, FromDuration>& tp)
-{
-    using std::chrono::time_point;
-    return time_point<Clock, To>{round<To>(tp.time_since_epoch())};
-}
-// round up
-template <class To, class Clock, class FromDuration>
-CONSTCD11
-inline
-std::chrono::time_point<Clock, To>
-ceil(const std::chrono::time_point<Clock, FromDuration>& tp)
-{
-    using std::chrono::time_point;
     return time_point<Clock, To>{ceil<To>(tp.time_since_epoch())};
 }
 #else  // HAS_CHRONO_ROUNDING == 1
@@ -31913,19 +31692,6 @@ operator<=(const day& x, const day& y) NOEXCEPT
 }
 CONSTCD11
 inline
-bool
-operator>=(const day& x, const day& y) NOEXCEPT
-{
-    return !(x < y);
-}
-CONSTCD11
-inline
-days
-operator-(const day& x, const day& y) NOEXCEPT
-{
-    return days{static_cast<days::rep>(static_cast<unsigned>(x)
-                                     - static_cast<unsigned>(y))};
-}
 CONSTCD11
 inline
 day
@@ -32069,32 +31835,6 @@ operator<<(std::basic_ostream<CharT, Traits>& os, const month& m)
     case 2:
         os << "Feb";
         break;
-    case 3:
-        os << "Mar";
-        break;
-    case 4:
-        os << "Apr";
-        break;
-    case 5:
-        os << "May";
-        break;
-    case 6:
-        os << "Jun";
-        break;
-    case 7:
-        os << "Jul";
-        break;
-    case 8:
-        os << "Aug";
-        break;
-    case 9:
-        os << "Sep";
-        break;
-    case 10:
-        os << "Oct";
-        break;
-    case 11:
-        os << "Nov";
         break;
     case 12:
         os << "Dec";
@@ -32329,19 +32069,6 @@ operator<<(std::basic_ostream<CharT, Traits>& os, const weekday& wd)
     case 1:
         os << "Mon";
         break;
-    case 2:
-        os << "Tue";
-        break;
-    case 3:
-        os << "Wed";
-        break;
-    case 4:
-        os << "Thu";
-        break;
-    case 5:
-        os << "Fri";
-        break;
-    case 6:
         os << "Sat";
         break;
     default:
@@ -32394,32 +32121,6 @@ CONSTDATA date::weekday sat{6u};
 // weekday_indexed
 CONSTCD11
 inline
-weekday
-weekday_indexed::weekday() const NOEXCEPT
-{
-    return date::weekday{static_cast<unsigned>(wd_)};
-}
-CONSTCD11 inline unsigned weekday_indexed::index() const NOEXCEPT {return index_;}
-CONSTCD11
-inline
-bool
-weekday_indexed::ok() const NOEXCEPT
-{
-    return weekday().ok() && 1 <= index_ && index_ <= 5;
-}
-CONSTCD11
-inline
-weekday_indexed::weekday_indexed(const date::weekday& wd, unsigned index) NOEXCEPT
-    : wd_(static_cast<decltype(wd_)>(static_cast<unsigned>(wd)))
-    , index_(static_cast<decltype(index_)>(index))
-    {}
-template<class CharT, class Traits>
-inline
-std::basic_ostream<CharT, Traits>&
-operator<<(std::basic_ostream<CharT, Traits>& os, const weekday_indexed& wdi)
-{
-    return os << wdi.weekday() << '[' << wdi.index() << ']';
-}
 CONSTCD11
 inline
 weekday_indexed
@@ -32537,19 +32238,6 @@ operator<(const year_month& x, const year_month& y) NOEXCEPT
     return x.year() < y.year() ? true
         : (x.year() > y.year() ? false
         : (x.month() < y.month()));
-}
-CONSTCD11
-inline
-bool
-operator>(const year_month& x, const year_month& y) NOEXCEPT
-{
-    return y < x;
-}
-CONSTCD11
-inline
-bool
-operator<=(const year_month& x, const year_month& y) NOEXCEPT
-{
     return !(y < x);
 }
 CONSTCD11
@@ -32693,19 +32381,6 @@ operator<(const month_day_last& x, const month_day_last& y) NOEXCEPT
     return x.month() < y.month();
 }
 CONSTCD11
-inline
-bool
-operator>(const month_day_last& x, const month_day_last& y) NOEXCEPT
-{
-    return y < x;
-}
-CONSTCD11
-inline
-bool
-operator<=(const month_day_last& x, const month_day_last& y) NOEXCEPT
-{
-    return !(y < x);
-}
 CONSTCD11
 inline
 bool
@@ -33161,19 +32836,6 @@ operator-(const year_month_day& ymd, const months& dm) NOEXCEPT
 }
 CONSTCD11
 inline
-year_month_day
-operator+(const year_month_day& ymd, const years& dy) NOEXCEPT
-{
-    return (ymd.year() + dy) / ymd.month() / ymd.day();
-}
-CONSTCD11
-inline
-year_month_day
-operator+(const years& dy, const year_month_day& ymd) NOEXCEPT
-{
-    return ymd + dy;
-}
-CONSTCD11
 inline
 year_month_day
 operator-(const year_month_day& ymd, const years& dy) NOEXCEPT
@@ -33330,32 +32992,6 @@ operator+(const year_month_weekday& ymwd, const months& dm) NOEXCEPT
 }
 CONSTCD14
 inline
-year_month_weekday
-operator+(const months& dm, const year_month_weekday& ymwd) NOEXCEPT
-{
-    return ymwd + dm;
-}
-CONSTCD14
-inline
-year_month_weekday
-operator-(const year_month_weekday& ymwd, const months& dm) NOEXCEPT
-{
-    return ymwd + (-dm);
-}
-CONSTCD11
-inline
-year_month_weekday
-operator+(const year_month_weekday& ymwd, const years& dy) NOEXCEPT
-{
-    return {ymwd.year()+dy, ymwd.month(), ymwd.weekday_indexed()};
-}
-CONSTCD11
-inline
-year_month_weekday
-operator+(const years& dy, const year_month_weekday& ymwd) NOEXCEPT
-{
-    return ymwd + dy;
-}
 CONSTCD11
 inline
 year_month_weekday
@@ -33409,32 +33045,6 @@ CONSTCD11 inline year year_month_weekday_last::year() const NOEXCEPT {return y_;
 CONSTCD11 inline month year_month_weekday_last::month() const NOEXCEPT {return m_;}
 CONSTCD11
 inline
-weekday
-year_month_weekday_last::weekday() const NOEXCEPT
-{
-    return wdl_.weekday();
-}
-CONSTCD11
-inline
-weekday_last
-year_month_weekday_last::weekday_last() const NOEXCEPT
-{
-    return wdl_;
-}
-CONSTCD14
-inline
-year_month_weekday_last::operator sys_days() const NOEXCEPT
-{
-    return sys_days{to_days()};
-}
-CONSTCD14
-inline
-year_month_weekday_last::operator local_days() const NOEXCEPT
-{
-    return local_days{to_days()};
-}
-CONSTCD11
-inline
 bool
 year_month_weekday_last::ok() const NOEXCEPT
 {
@@ -33486,32 +33096,6 @@ operator+(const months& dm, const year_month_weekday_last& ymwdl) NOEXCEPT
 }
 CONSTCD14
 inline
-year_month_weekday_last
-operator-(const year_month_weekday_last& ymwdl, const months& dm) NOEXCEPT
-{
-    return ymwdl + (-dm);
-}
-CONSTCD11
-inline
-year_month_weekday_last
-operator+(const year_month_weekday_last& ymwdl, const years& dy) NOEXCEPT
-{
-    return {ymwdl.year()+dy, ymwdl.month(), ymwdl.weekday_last()};
-}
-CONSTCD11
-inline
-year_month_weekday_last
-operator+(const years& dy, const year_month_weekday_last& ymwdl) NOEXCEPT
-{
-    return ymwdl + dy;
-}
-CONSTCD11
-inline
-year_month_weekday_last
-operator-(const year_month_weekday_last& ymwdl, const years& dy) NOEXCEPT
-{
-    return ymwdl + (-dy);
-}
 // year_month from operator/()
 CONSTCD11
 inline
@@ -33603,19 +33187,6 @@ operator/(const weekday_indexed& wdi, const month& m) NOEXCEPT
 }
 CONSTCD11
 inline
-month_weekday
-operator/(int m, const weekday_indexed& wdi) NOEXCEPT
-{
-    return month(static_cast<unsigned>(m)) / wdi;
-}
-CONSTCD11
-inline
-month_weekday
-operator/(const weekday_indexed& wdi, int m) NOEXCEPT
-{
-    return m / wdi;
-}
-// month_weekday_last from operator/()
 CONSTCD11
 inline
 month_weekday_last
@@ -33629,19 +33200,6 @@ month_weekday_last
 operator/(const weekday_last& wdl, const month& m) NOEXCEPT
 {
     return m / wdl;
-}
-CONSTCD11
-inline
-month_weekday_last
-operator/(int m, const weekday_last& wdl) NOEXCEPT
-{
-    return month(static_cast<unsigned>(m)) / wdl;
-}
-CONSTCD11
-inline
-month_weekday_last
-operator/(const weekday_last& wdl, int m) NOEXCEPT
-{
     return m / wdl;
 }
 // year_month_day from operator/()
@@ -34097,19 +33655,6 @@ public:
     std::basic_ostream<CharT, Traits>&
     operator<<(std::basic_ostream<CharT, Traits>& os, const time_of_day_storage& t)
     {
-        using namespace std;
-        detail::save_stream<CharT, Traits> _(os);
-        if (t.neg_)
-            os << '-';
-        os.fill('0');
-        os.flags(std::ios::dec | std::ios::right);
-        if (t.mode_ != am && t.mode_ != pm)
-            os.width(2);
-        os << t.h_.count() << ':';
-        os.width(2);
-        os << t.m_.count() << ':';
-        os.width(2);
-        os << t.s_.count();
         switch (t.mode_)
         {
         case am:
@@ -34539,19 +34084,6 @@ to_stream(std::basic_ostream<CharT, Traits>& os, const CharT* fmt,
                     facet.put(os, os, os.fill(), &tm, begin(f), end(f));
                     modified = CharT{};
                 }
-            }
-            else
-                os << *fmt;
-            break;
-        case 'T':
-            if (command)
-            {
-                if (modified == CharT{})
-                {
-                    using CT = typename common_type<seconds, Duration>::type;
-                    os << time_of_day<CT>{tp - floor<days>(tp)};
-                }
-                else
                 {
                     os << CharT{'%'} << modified << *fmt;
                     modified = CharT{};
@@ -34799,19 +34331,6 @@ to_stream(std::basic_ostream<CharT, Traits>& os, const CharT* fmt,
                     command = false;
                     modified = CharT{};
                 }
-            }
-            else
-                command = true;
-            break;
-        default:
-            if (command)
-            {
-                os << CharT{'%'};
-                command = false;
-            }
-            if (modified != CharT{})
-            {
-                os << modified;
                 modified = CharT{};
             }
             os << *fmt;
@@ -34903,19 +34422,6 @@ read_unsigned(std::basic_istream<CharT, Traits>& is, unsigned m = 1, unsigned M 
     unsigned x = 0;
     unsigned count = 0;
     while (true)
-    {
-        auto ic = is.peek();
-        if (Traits::eq_int_type(ic, Traits::eof()))
-            break;
-        auto c = static_cast<char>(Traits::to_char_type(ic));
-        if (!('0' <= c && c <= '9'))
-            break;
-        (void)is.get();
-        ++count;
-        x = 10*x + (c - '0');
-        if (count == M)
-            break;
-    }
     if (count < m)
         is.setstate(std::ios::failbit);
     return x;
@@ -35046,19 +34552,6 @@ void
 read(std::basic_istream<CharT, Traits>& is, rs a0, Args&& ...args)
 {
     auto x = read_signed(is, a0.m, a0.M);
-    if (is.fail())
-        return;
-    a0.i = x;
-    read(is, std::forward<Args>(args)...);
-}
-template <class CharT, class Traits, class ...Args>
-void
-read(std::basic_istream<CharT, Traits>& is, ru a0, Args&& ...args)
-{
-    auto x = read_unsigned(is, a0.m, a0.M);
-    if (is.fail())
-        return;
-    a0.i = static_cast<int>(x);
     read(is, std::forward<Args>(args)...);
 }
 template <class CharT, class Traits, class ...Args>
@@ -35150,19 +34643,6 @@ parse(std::basic_istream<CharT, Traits>& is,
             case 'a':
             case 'A':
                 if (command)
-                {
-                    ios_base::iostate err = ios_base::goodbit;
-                    f.get(is, 0, is, err, &tm, command, fmt+1);
-                    command = nullptr;
-                    width = -1;
-                    modified = CharT{};
-                    if ((err & ios::failbit) == 0)
-                        wd = tm.tm_wday;
-                    is.setstate(err);
-                }
-                else
-                    read(is, *fmt);
-                break;
             case 'b':
             case 'B':
             case 'h':
@@ -35176,19 +34656,6 @@ parse(std::basic_istream<CharT, Traits>& is,
                     if ((err & ios::failbit) == 0)
                         m = tm.tm_mon + 1;
                     is.setstate(err);
-                }
-                else
-                    read(is, *fmt);
-                break;
-            case 'c':
-                if (command)
-                {
-                    ios_base::iostate err = ios_base::goodbit;
-                    f.get(is, 0, is, err, &tm, command, fmt+1);
-                    command = nullptr;
-                    width = -1;
-                    modified = CharT{};
-                    if ((err & ios::failbit) == 0)
                     {
                         Y = tm.tm_year + 1900;
                         m = tm.tm_mon + 1;
@@ -35306,19 +34773,6 @@ parse(std::basic_istream<CharT, Traits>& is,
                         if (!is.fail())
                             h = hours{H};
                     }
-                    else if (modified == CharT{'O'})
-                    {
-                        ios_base::iostate err = ios_base::goodbit;
-                        f.get(is, 0, is, err, &tm, command, fmt+1);
-                        if ((err & ios::failbit) == 0)
-                            h = hours{tm.tm_hour};
-                        is.setstate(err);
-                    }
-                    else
-                        read(is, CharT{'%'}, width, modified, *fmt);
-                    command = nullptr;
-                    width = -1;
-                    modified = CharT{};
                 }
                 else
                     read(is, *fmt);
