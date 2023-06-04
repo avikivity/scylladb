@@ -11164,12 +11164,6 @@ private:
     class visitor {
     protected:
         result_set_builder& _builder;
-        const schema& _schema;
-        const selection& _selection;
-        uint64_t _row_count;
-        std::vector<bytes> _partition_key;
-        std::vector<bytes> _clustering_key;
-        Filter _filter;
     public:
     };
 private:
@@ -11200,42 +11194,18 @@ public:
         struct key_less {
             partition_key::tri_compare pk_cmp;
             clustering_key::tri_compare ck_cmp;
-            // Allow mixing std::pair<partition_key, clustering_key> and
-            // std::pair<const partition_key&, const clustering_key&> during lookup
-             ;
-        };
-    public:
-        struct row {
             bool has_static;
             // indexes are determined by prefetch_data::selection
             std::vector<managed_bytes_opt> cells;
             // Return true if this row has at least one static column set.
         };
         // Use an ordered map since CAS result set must be naturally ordered
-        // when returned to the client.
-        std::map<key, row, key_less> rows;
-        schema_ptr schema;
-        shared_ptr<cql3::selection::selection> selection;
-    public:
-        // Find a row object for either static or regular subset of cells, depending
         // on whether clustering key is empty or not.
         // A particular cell within the row can then be found using a column id.
     };
     // Note: value (mutation) only required to contain the rows we are interested in
 private:
     const std::optional<gc_clock::duration> _ttl;
-    // For operations that require a read-before-write, stores prefetched cell values.
-    // For CAS statements, stores values of conditioned columns.
-    // Is a reference to an outside prefetch_data container since a CAS BATCH statement
-    // prefetches all rows at once, for all its nested modification statements.
-    const prefetch_data& _prefetched;
-public:
-    const api::timestamp_type _timestamp;
-    const gc_clock::time_point _local_deletion_time;
-    const schema_ptr _schema;
-    const query_options& _options;
-    ;
-    ;
     std::optional<std::vector<std::pair<data_value, data_value>>>
     get_prefetched_list(const partition_key& pkey, const clustering_key& ckey, const column_definition& column) const;
 };
@@ -11302,18 +11272,6 @@ template <typename T>
 concept ExpressionElement
         = std::same_as<T, conjunction>
         || std::same_as<T, binary_operator>
-        || std::same_as<T, column_value>
-        || std::same_as<T, subscript>
-        || std::same_as<T, unresolved_identifier>
-        || std::same_as<T, column_mutation_attribute>
-        || std::same_as<T, function_call>
-        || std::same_as<T, cast>
-        || std::same_as<T, field_selection>
-        || std::same_as<T, bind_variable>
-        || std::same_as<T, untyped_constant>
-        || std::same_as<T, constant>
-        || std::same_as<T, tuple_constructor>
-        || std::same_as<T, collection_constructor>
         || std::same_as<T, usertype_constructor>
         ;
 template <typename Func>
@@ -11332,12 +11290,6 @@ concept invocable_on_expression_ref
         && std::invocable<Func, function_call&>
         && std::invocable<Func, cast&>
         && std::invocable<Func, field_selection&>
-        && std::invocable<Func, bind_variable&>
-        && std::invocable<Func, untyped_constant&>
-        && std::invocable<Func, constant&>
-        && std::invocable<Func, tuple_constructor&>
-        && std::invocable<Func, collection_constructor&>
-        && std::invocable<Func, usertype_constructor&>
         ;
 /// A CQL expression -- union of all possible expression types.
 class expression final {
@@ -11350,12 +11302,6 @@ public:
      // FIXME: remove
     template <invocable_on_expression Visitor>
     friend decltype(auto) visit(Visitor&& visitor, const expression& e);
-    template <invocable_on_expression_ref Visitor>
-    friend decltype(auto) visit(Visitor&& visitor, expression& e);
-    ;
-    ;
-    ;
-    ;
     // Prints given expression using additional options
     struct printer {
         const expression& expr_to_print;
@@ -11380,12 +11326,6 @@ concept LeafExpression
 struct column_value {
     const column_definition* col;
 };
-/// A subscripted value, eg list_colum[2], val[sub]
-struct subscript {
-    expression val;
-    expression sub;
-    data_type type; // may be null before prepare
-};
 /// Gets the subscripted column_value out of the subscript.
 /// Only columns can be subscripted in CQL, so we can expect that the subscripted expression is a column_value.
 /// Gets the column_definition* out of expression that can be a column_value or subscript
@@ -11404,30 +11344,6 @@ enum class null_handling_style {
 struct binary_operator {
     expression lhs;
     oper_t op;
-    expression rhs;
-    comparison_order order;
-    null_handling_style null_handling = null_handling_style::sql;
-};
-/// A conjunction of restrictions.
-struct conjunction {
-};
-struct function_call {
-    std::variant<functions::function_name, shared_ptr<db::functions::function>> func;
-    std::vector<expression> args;
-    // 0-based index of the function call within a CQL statement.
-    // Used to populate the cache of execution results while passing to
-    // another shard (handling `bounce_to_shard` messages) in LWT statements.
-    //
-    // The id is set only for the function calls that are a part of LWT
-    // statement restrictions for the partition key. Otherwise, the id is not
-    // set and the call is not considered when using or populating the cache.
-    //
-    // For example in a query like:
-    // clears it in all possible copies.
-    // This logic was introduced back when everything was shared_ptr<term>,
-    // now a better solution might exist.
-    //
-    // This field can be nullptr, it means that there is no cache id set.
     ::shared_ptr<std::optional<uint8_t>> lwt_cache_id;
 };
 struct cast {
@@ -11482,12 +11398,6 @@ struct evaluation_inputs {
 /// A set of discrete values.
 using value_list = std::vector<managed_bytes>; // Sorted and deduped using value comparator.
 /// General set of values.  Empty set and single-element sets are always value_list.  nonwrapping_range is
-/// never singular and never has start > end.  Universal set is a nonwrapping_range with both bounds null.
-using value_set = std::variant<value_list, nonwrapping_range<managed_bytes>>;
-/// A set of all column values that would satisfy an expression. The _token_values variant finds
-/// matching values for the partition token function call instead of the column.
-///
-/// An expression restricts possible values of a column or token:
 // Expression has to consist only of single column restrictions.
 extern std::ostream& operator<<(std::ostream&, const expression::printer&);
 // Looks into the expression and finds the given expression variant
@@ -11542,12 +11452,6 @@ size_t count_if(const expression& e, const noncopyable_function<bool (const bina
 /// Check whether the expression contains a binary_operator whose LHS is a call to the token
 struct schema_pos_column_definition_comparator {
 };
-// Extracts column_defs from the expression and sorts them using schema_pos_column_definition_comparator.
-// Extracts column_defs and returns the last one according to schema_pos_column_definition_comparator.
-// A map of single column restrictions for each column
-using single_column_restrictions_map = std::map<const column_definition*, expression, schema_pos_column_definition_comparator>;
-// Extracts map of single column restrictions for each column from expression
-// Checks whether this expression is empty - doesn't restrict anything
 // Finds common columns between both expressions and prints them to a string.
 // Uses schema_pos_column_definition_comparator for comparison.
 // Finds the value of the given column in the expression
@@ -11572,12 +11476,6 @@ private:
     }
 public:
     constexpr auto parse(format_parse_context& ctx) {
-        using namespace std::string_view_literals;
-        if (try_match_and_advance(ctx, "debug"sv)) {
-            _debug = true;
-        } else if (try_match_and_advance(ctx, "user"sv)) {
-            _debug = false;
-        }
         return ctx.begin();
     }
     template <typename FormatContext>
@@ -11614,18 +11512,6 @@ class operation {
 public:
     // the column the operation applies to
     // We can hold a reference because all operations have life bound to their statements and
-    // statements pin the schema.
-    const column_definition& column;
-protected:
-    // Value involved in the operation. In theory this should not be here since some operation
-    // may require none of more than one expression, but most need 1 so it simplify things a bit.
-    std::optional<expr::expression> _e;
-    // A guard to check if the operation should be skipped due to unset operand.
-    expr::unset_bind_variable_guard _unset_guard;
-public:
-    
-    
-    
     
     
     class raw_update {
@@ -11642,12 +11528,6 @@ public:
         const expr::expression _selector;
         const expr::expression _value;
         const bool _by_uuid;
-    private:
-    public:
-    public:
-    };
-    class addition : public raw_update {
-        const expr::expression _value;
     private:
     public:
     };
@@ -11685,12 +11565,6 @@ public:
     class setter_by_index : public operation_skip_if_unset {
     public:
         using operation_skip_if_unset::operation_skip_if_unset;
-    };
-    class discarder : public operation_skip_if_unset {
-    public:
-    };
-    class discarder_by_index : public operation_skip_if_unset {
-    public:
     };
 };
 }
@@ -11800,54 +11674,24 @@ public:
     }
     // Applies src to this. The tombstones may be overlapping.
     // If the tombstone with larger timestamp has the smaller range the remainder
-    // is returned, it guaranteed not to overlap with this.
-    // The start bounds of this and src are required to be equal. The start bound
-    // of this is not changed. The start bound of the remainder (if there is any)
-    // is larger than the end bound of this.
-    
-    // Intersects the range of this tombstone with [pos, +inf) and replaces
     // the range of the tombstone if there is an overlap.
     // Returns true if there is an overlap. When returns false, the tombstone
     // is not modified.
     //
     // pos must satisfy:
     //   1) before_all_clustered_rows() <= pos
-    //   2) !pos.is_clustering_row() - because range_tombstone bounds can't represent such positions
-    
-    // Assumes !pos.is_clustering_row(), because range_tombstone bounds can't represent such positions
-    
-    // Swap bounds to reverse range-tombstone -- as if it came from a table with
-    // reverse native order. See docs/dev/reverse-reads.md.
     void reverse() ;
     
     
     size_t memory_usage(const schema& s) const noexcept ;
     
 };
-template<>
-struct appending_hash<range_tombstone>  {
-     ;
-};
-// The accumulator expects the incoming range tombstones and clustered rows to
-// follow the ordering used by the mutation readers.
 //
 // Unless the accumulator is in the reverse mode, after apply(rt) or
 // tombstone_for_row(ck) are called there are followng restrictions for
 // subsequent calls:
 //  - apply(rt1) can be invoked only if rt.start_bound() < rt1.start_bound()
 //    and ck < rt1.start_bound()
-//  - tombstone_for_row(ck1) can be invoked only if rt.start_bound() < ck1
-//    and ck < ck1
-//
-// In other words position in partition of the mutation fragments passed to the
-// accumulator must be increasing.
-//
-// If the accumulator was created with the reversed flag set it expects the
-// stream of the range tombstone to come from a reverse partitions and follow
-// the ordering that they use. In particular, the restrictions from non-reversed
-// mode change to:
-//  - apply(rt1) can be invoked only if rt.end_bound() > rt1.end_bound() and
-//    ck > rt1.end_bound()
 //  - tombstone_for_row(ck1) can be invoked only if rt.end_bound() > ck1 and
 //    ck > ck1.
 class range_tombstone_accumulator {
@@ -12022,12 +11866,6 @@ public:
     
     
     void apply(const schema& s, range_tombstone&& rt) {
-        apply(s, std::move(rt.start), rt.start_kind, std::move(rt.end), rt.end_kind, std::move(rt.tomb));
-    }
-    void apply(const schema& s, clustering_key_prefix start, bound_kind start_kind,
-               clustering_key_prefix end, bound_kind end_kind, tombstone tomb) {
-        nop_reverter rev(s, *this);
-        apply_reversibly(s, std::move(start), start_kind, std::move(end), end_kind, std::move(tomb), rev);
     }
     // Monotonic exception guarantees. In case of failure the object will contain at least as much information as before the call.
     
@@ -12304,12 +12142,6 @@ private:
     void break_inline() {
         node* n = node::create_empty_root();
         _inline.keys[0]->attach_first(n->_base);
-        do_set_root(*n);
-        do_set_left(*n);
-        do_set_right(*n);
-    }
-    const node_base* rightmost_node() const noexcept {
-        return _root == nullptr ? &_inline : &_corners.right->_base;
     }
     node_base* rightmost_node() noexcept {
         return _root == nullptr ? &_inline : &_corners.right->_base;
@@ -12328,18 +12160,6 @@ public:
             do_set_root(*other._root);
             do_set_left(*other._corners.left);
             do_set_right(*other._corners.right);
-            other._root = nullptr;
-            other._corners.left = nullptr;
-            other._corners.right = nullptr;
-        } else if (!other._inline.empty()) {
-            other._inline.keys[0]->attach_first(_inline);
-            other._inline.num_keys = 0;
-        }
-    }
-    tree(const tree& other) = delete;
-    ~tree() noexcept {
-        if (!inline_root()) {
-            assert(_root->is_leaf());
             node::destroy(*_root);
         } else {
             assert(_inline.empty());
@@ -12432,18 +12252,6 @@ public:
     }
     template <typename K>
     requires Comparable<K, Key, Compare>
-    const_iterator lower_bound(const K& k, Compare cmp) const {
-        bool match;
-        return lower_bound(k, match, cmp);
-    }
-    template <typename K>
-    requires Comparable<K, Key, Compare>
-    iterator lower_bound(const K& k, Compare cmp) {
-        bool match;
-        return lower_bound(k, match, cmp);
-    }
-    template <typename K>
-    requires Comparable<K, Key, Compare>
     const_iterator upper_bound(const K& k, Compare cmp) const {
         bool match;
         const_iterator ret = lower_bound(k, match, cmp);
@@ -12484,12 +12292,6 @@ public:
         while (from != to) {
             from = from.erase_and_dispose(disp);
         }
-        return to;
-    }
-    template <typename Disp>
-    requires Disposer<Disp, Key>
-    iterator erase_and_dispose(const_iterator from, const_iterator to, Disp&& disp) noexcept {
-        return erase_and_dispose(iterator(from), iterator(to), std::forward<Disp>(disp));
     }
     template <typename Disp>
     requires Disposer<Disp, Key>
@@ -12520,12 +12322,6 @@ public:
         if (!inline_root()) {
             _root->clear([&disp] (member_hook* h) { node::dispose_key(h, disp); });
             node::destroy(*_root);
-            _root = nullptr;
-            // Both left and right leaves pointers are not touched as this
-            // initialization of inline node overwrites them anyway
-            new (&_inline) node_base(node_base::inline_tag{});
-        } else if (!_inline.empty()) {
-            node::dispose_key(_inline.keys[0], disp);
             _inline.num_keys = 0;
         }
     }
@@ -12538,12 +12334,6 @@ public:
             node* left = nullptr;
             node* right = nullptr;
             _root = t._root->clone(left, right, cloner, deleter);
-            left->_base.flags |= node_base::NODE_LEFTMOST;
-            do_set_left(*left);
-            right->_base.flags |= node_base::NODE_RIGHTMOST;
-            do_set_right(*right);
-            _root->_base.flags |= node_base::NODE_ROOT;
-            do_set_root(*_root);
         } else if (!t._inline.empty()) {
             Key* key = cloner(t._inline.keys[0]->template to_key<Key, Hook>());
             (key->*Hook).attach_first(_inline);
@@ -12646,12 +12436,6 @@ public:
                 while (_idx == 0) {
                     node_ptr p = n->_parent.n;
                     _idx = p->index_for(n);
-                    n = p;
-                }
-                _idx--;
-            } else {
-                n = n->_kids[_idx];
-                while (!n->is_leaf()) {
                     n = n->_kids[n->_base.num_keys];
                 }
                 _idx = n->_base.num_keys - 1;
@@ -12730,12 +12514,6 @@ public:
             node_base* nb = super::revalidate();
             iterator cur;
             if (nb->is_inline()) {
-                cur._idx = super::npos;
-                cur._tree = tree::from_inline(nb);
-                nb->num_keys = 0;
-            } else {
-                cur = *this;
-                cur++;
                 node::from_base(nb)->remove(super::_idx);
                 if (cur._hook->node() == nb && cur._idx > 0) {
                     cur._idx--;
@@ -12760,12 +12538,6 @@ public:
             } else {
                 node_base* n = super::revalidate();
                 if (n->is_inline()) {
-                    tree* t = tree::from_inline(n);
-                    t->break_inline();
-                    cur.n = t->_root;
-                    cur.idx = 0;
-                } else {
-                    cur.n = node::from_base(n);
                     cur.idx = super::_idx;
                     while (!cur.n->is_leaf()) {
                         cur.descend();
