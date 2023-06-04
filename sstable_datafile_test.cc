@@ -17392,12 +17392,6 @@ template<>
 struct serializer<counter_cell_full_view> {
     template<typename Input>
     static counter_cell_full_view read(Input& v) {
-      return seastar::with_serialized_stream(v, [] (auto& v) {
-        auto v_start = v;
-        auto start_size = v.size();
-        skip(v);
-        return counter_cell_full_view{v_start.read_substream(start_size - v.size())};
-      });
     }
     template<typename Output>
     static void write(Output& out, counter_cell_full_view v) {
@@ -17410,24 +17404,12 @@ struct serializer<counter_cell_full_view> {
        ser::skip(in, boost::type<std::vector<counter_shard>>());
       });
     }
-};
-struct counter_cell_update_view {
-    utils::input_stream v;
-};
-template<>
-struct serializer<counter_cell_update_view> {
      ;
      ;
      ;
 };
 struct live_cell_view {
     utils::input_stream v;
-};
-template<>
-struct serializer<live_cell_view> {
-     ;
-     ;
-     ;
 };
 struct live_marker_view {
     utils::input_stream v;
@@ -17483,12 +17465,6 @@ struct serializer<counter_cell_view> {
 struct dead_cell_view {
     utils::input_stream v;
 };
-template<>
-struct serializer<dead_cell_view> {
-     ;
-     ;
-     ;
-};
 struct dead_marker_view {
     utils::input_stream v;
     auto tomb() const {
@@ -17506,12 +17482,6 @@ struct serializer<dead_marker_view> {
      ;
 };
 struct expiring_cell_view {
-    utils::input_stream v;
-};
-template<>
-struct serializer<expiring_cell_view> {
-     ;
-     ;
      ;
 };
 struct expiring_marker_view {
@@ -17560,24 +17530,12 @@ struct serializer<partition_start_view> {
      ;
 };
 struct range_tombstone_view {
-    utils::input_stream v;
-};
-template<>
-struct serializer<range_tombstone_view> {
-     ;
-     ;
      ;
 };
  ;
  ;
 struct collection_element_view {
     utils::input_stream v;
-};
-template<>
-struct serializer<collection_element_view> {
-     ;
-     ;
-     ;
 };
 struct collection_cell_view {
     utils::input_stream v;
@@ -17645,22 +17603,10 @@ struct serializer<column_view> {
 struct row_view {
     utils::input_stream v;
 };
-template<>
-struct serializer<row_view> {
-     ;
-     ;
-     ;
-};
  ;
  ;
 struct deletable_row_view {
     utils::input_stream v;
-};
-template<>
-struct serializer<deletable_row_view> {
-     ;
-     ;
-     ;
 };
 struct static_row_view {
     utils::input_stream v;
@@ -17674,12 +17620,6 @@ struct serializer<static_row_view> {
 struct clustering_row_view {
     utils::input_stream v;
 };
-template<>
-struct serializer<clustering_row_view> {
-     ;
-     ;
-};
-////// State holders
 template<typename Output>
 struct state_of_counter_cell_full {
     empty_frame<Output> f;
@@ -17704,12 +17644,6 @@ struct state_of_counter_cell__value__counter_cell_full {
 };
 template<typename Output>
 struct state_of_counter_cell__value__counter_cell_update {
-    empty_frame<Output> f;
-    state_of_counter_cell__value<Output> _parent;
-};
-template<typename Output>
-struct state_of_tombstone {
-    frame<Output> f;
 };
 template<typename Output>
 struct state_of_live_cell {
@@ -17740,12 +17674,6 @@ struct state_of_collection_element {
 template<typename Output>
 struct state_of_collection_element__value {
     frame<Output> f;
-    state_of_collection_element<Output> _parent;
-};
-template<typename Output>
-struct state_of_collection_element__value__live_cell {
-    frame<Output> f;
-    state_of_collection_element__value<Output> _parent;
 };
 template<typename Output>
 struct state_of_collection_element__value__expiring_cell {
@@ -17788,12 +17716,6 @@ struct state_of_column__c {
 template<typename Output>
 struct state_of_column__c__variant {
     frame<Output> f;
-    state_of_column__c<Output> _parent;
-};
-template<typename Output>
-struct state_of_column__c__variant__live_cell {
-    frame<Output> f;
-    state_of_column__c__variant<Output> _parent;
 };
 template<typename Output>
 struct state_of_column__c__variant__expiring_cell {
@@ -17842,12 +17764,6 @@ struct state_of_column__c__collection_cell {
 };
 template<typename Output>
 struct state_of_column__c__collection_cell__tomb {
-    frame<Output> f;
-    state_of_column__c__collection_cell<Output> _parent;
-};
-template<typename Output>
-struct state_of_row {
-    frame<Output> f;
 };
 template<typename Output>
 struct state_of_no_marker {
@@ -17902,12 +17818,6 @@ struct state_of_deletable_row__marker__expiring_marker__lm {
 template<typename Output>
 struct state_of_deletable_row__marker__dead_marker {
     empty_frame<Output> f;
-    state_of_deletable_row__marker<Output> _parent;
-};
-template<typename Output>
-struct state_of_deletable_row__marker__dead_marker__tomb {
-    frame<Output> f;
-    state_of_deletable_row__marker__dead_marker<Output> _parent;
 };
 template<typename Output>
 struct state_of_deletable_row__marker__no_marker {
@@ -17944,12 +17854,6 @@ struct state_of_mutation_partition {
 };
 template<typename Output>
 struct state_of_mutation_partition__tomb {
-    frame<Output> f;
-    state_of_mutation_partition<Output> _parent;
-};
-template<typename Output>
-struct state_of_mutation_partition__static_row {
-    frame<Output> f;
     state_of_mutation_partition<Output> _parent;
 };
 template<typename Output>
@@ -18022,12 +17926,6 @@ struct state_of_clustering_row__row__marker__expiring_marker__lm {
 template<typename Output>
 struct state_of_clustering_row__row__marker__dead_marker {
     empty_frame<Output> f;
-    state_of_clustering_row__row__marker<Output> _parent;
-};
-template<typename Output>
-struct state_of_clustering_row__row__marker__dead_marker__tomb {
-    frame<Output> f;
-    state_of_clustering_row__row__marker__dead_marker<Output> _parent;
 };
 template<typename Output>
 struct state_of_clustering_row__row__marker__no_marker {
@@ -18124,12 +18022,6 @@ struct state_of_mutation_fragment__fragment__clustering_row__row__marker__no_mar
 template<typename Output>
 struct state_of_mutation_fragment__fragment__clustering_row__row__deleted_at {
     frame<Output> f;
-    state_of_mutation_fragment__fragment__clustering_row__row<Output> _parent;
-};
-template<typename Output>
-struct state_of_mutation_fragment__fragment__clustering_row__row__cells {
-    frame<Output> f;
-    state_of_mutation_fragment__fragment__clustering_row__row<Output> _parent;
 };
 template<typename Output>
 struct state_of_mutation_fragment__fragment__clustering_row__row__shadowable_deleted_at {
@@ -18148,12 +18040,6 @@ struct state_of_mutation_fragment__fragment__static_row__cells {
 };
 template<typename Output>
 struct state_of_mutation_fragment__fragment__range_tombstone {
-    frame<Output> f;
-    state_of_mutation_fragment__fragment<Output> _parent;
-};
-template<typename Output>
-struct state_of_mutation_fragment__fragment__range_tombstone__tomb {
-    frame<Output> f;
     state_of_mutation_fragment__fragment__range_tombstone<Output> _parent;
 };
 template<typename Output>
@@ -18165,12 +18051,6 @@ template<typename Output>
 struct state_of_mutation_fragment__fragment__partition_start__partition_tombstone {
     frame<Output> f;
     state_of_mutation_fragment__fragment__partition_start<Output> _parent;
-};
-////// Nodes
-template<typename Output>
-struct after_counter_cell_full__shards {
-    Output& _out;
-    state_of_counter_cell_full<Output> _state;
 };
 template<typename Output>
 struct counter_cell_full__shards {
@@ -18197,24 +18077,6 @@ struct writer_of_counter_cell_update {
 template<typename Output>
 struct after_live_cell__value {
     Output& _out;
-    state_of_live_cell<Output> _state;
-};
-template<typename Output>
-struct after_live_cell__created_at {
-    Output& _out;
-    state_of_live_cell<Output> _state;
-};
-template<typename Output>
-struct after_clustering_row__row__marker {
-    Output& _out;
-    state_of_clustering_row__row<Output> _state;
-};
-template<typename Output>
-struct after_clustering_row__row__marker__live_marker__created_at {
-};
-template<typename Output>
-struct mutation__partition__static_row__columns {
-    Output& _out;
     state_of_mutation__partition__static_row<Output> _state;
         place_holder<Output> _size;
     size_type _count = 0;
@@ -18226,24 +18088,6 @@ struct mutation__partition__static_row {
 };
 template<typename Output>
 struct after_mutation__partition__tomb {
-    Output& _out;
-    state_of_mutation__partition<Output> _state;
-     ;
-};
-template<typename Output>
-struct after_mutation__partition__tomb__deletion_time {
-    Output& _out;
-    state_of_mutation__partition__tomb<Output> _state;
-};
-template<typename Output>
-struct after_mutation__partition__tomb__timestamp {
-    Output& _out;
-    state_of_mutation__partition__tomb<Output> _state;
-};
-template<typename Output>
-struct mutation__partition__tomb {
-    Output& _out;
-    state_of_mutation__partition__tomb<Output> _state;
 };
 template<typename Output>
 struct mutation__partition {
@@ -18262,18 +18106,6 @@ struct after_mutation_fragment__fragment__clustering_row__row__deleted_at__times
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__deleted_at {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__deleted_at<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__marker {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row<Output> _state;
-};
-template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__marker__live_marker__created_at {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__live_marker<Output> _state;
 };
 template<typename Output>
 struct mutation_fragment__fragment__clustering_row__row__marker__live_marker {
@@ -18286,12 +18118,6 @@ struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_
     state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
 };
 template<typename Output>
-struct after_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker__ttl {
-    Output& _out;
-    state_of_mutation_fragment__fragment__clustering_row__row__marker__expiring_marker<Output> _state;
-};
-} // ser
-namespace ser {
 class mutation_partition_view;
 }
 class partition_builder;
@@ -18394,12 +18220,6 @@ public:
     
 };
 // Immutable, compact form of mutation.
-//
-// This form is primarily destined to be sent over the network channel.
-// Regular mutation can't be deserialized because its complex data structures
-// need schema reference at the time object is constructed. We can't lookup
-// schema before we deserialize column family ID. Another problem is that even
-// if we had the ID somehow, low level RPC layer doesn't know how to lookup
 // the schema. Data can be wrapped in frozen_mutation without schema
 // information, the schema is only needed to access some of the fields.
 //
@@ -18418,24 +18238,12 @@ public:
     future<mutation> unfreeze_gently(schema_ptr s) const;
     // Automatically upgrades the stored mutation to the supplied schema with custom column mapping.
     mutation unfreeze_upgrading(schema_ptr schema, const column_mapping& cm) const;
-    // Consumes the frozen mutation's content.
-    // * To stop, return stop_iteration::yes from one of the consume() methods;
-    // * The consume will now stop and return;
-    //
-    // Note that `consume_end_of_partition()` and `consume_end_of_stream()`
-    // will be called each time the consume is stopping, regardless of whether
     // you are pausing or the consumption is ending for good.
     template<FlattenedConsumerV2 Consumer>
     auto consume_gently(schema_ptr s, Consumer& consumer) const -> future<frozen_mutation_consume_result<decltype(consumer.consume_end_of_stream())>>;
     template<FlattenedConsumerV2 Consumer>
     auto consume_gently(schema_ptr s, frozen_mutation_consumer_adaptor<Consumer>& adaptor) const -> future<frozen_mutation_consume_result<decltype(adaptor.consumer().consume_end_of_stream())>>;
     
-    struct printer {
-        const frozen_mutation& self;
-        schema_ptr schema;
-        
-    };
-    // Same requirements about the schema as unfreeze().
 };
 struct frozen_mutation_and_schema {
     frozen_mutation fm;
@@ -18484,24 +18292,12 @@ struct base_dependent_view_info {
 private:
     schema_ptr _base_schema;
     // Id of a regular base table column included in the view's PK, if any.
-    // Scylla views only allow one such column, alternator can have up to two.
-    std::vector<column_id> _base_regular_columns_in_view_pk;
-    std::vector<column_id> _base_static_columns_in_view_pk;
-    // For tracing purposes, if the view is out of sync with its base table
-    // and there exists a column which is not in base, its name is stored
-    // and added to debug messages.
     std::optional<bytes> _column_missing_in_base = {};
 public:
     const schema_ptr& base_schema() const;
     // Indicates if the view hase pk columns which are not part of the base
     // pk, it seems that !base_non_pk_columns_in_view_pk.empty() is the same,
     // but actually there are cases where we can compute this boolean without
-    // succeeding to reliably build the former.
-    const bool has_base_non_pk_columns_in_view_pk;
-    // If base_non_pk_columns_in_view_pk couldn't reliably be built, this base
-    // info can't be used for computing view updates, only for reading the materialized
-    // view.
-    const bool use_only_for_reads;
     // A constructor for a base info that can facilitate reads and writes from the materialized view.
     
     // A constructor for a base info that can facilitate only reads from the materialized view.
@@ -18550,12 +18346,6 @@ public:
     /// Resets the splitter to work with the ring range [pos, +inf).
     /// Each token t returned by next_token() means that keys in the range:
     ///
-    ///   [prev_pos, dht::ring_position_view::ending_at(t))
-    ///
-    /// share the same replica set.
-    ///
-    /// If this is the first call to next_token() after construction or reset() then prev_pos is the
-    /// beginning of the ring space. Otherwise, it is dht::ring_position_view::ending_at(prev_t)
     /// where prev_t is the token returned by the previous call to next_token().
     /// If std::nullopt is returned it means that the ring space was exhausted.
 };
@@ -18592,24 +18382,12 @@ public:
         left        // after decommissioned, removed, replaced
     };
 private:
-    const locator::topology* _topology;
-    locator::host_id _host_id;
-    inet_address _endpoint;
-    endpoint_dc_rack _dc_rack;
-    state _state;
-    // Is this node the `localhost` instance
     this_node _is_this_node;
     idx_type _idx = -1;
 public:
     
     const locator::host_id& host_id() const noexcept ;
     const inet_address& endpoint() const noexcept ;
-    const endpoint_dc_rack& dc_rack() const noexcept ;
-    // Is this "localhost"?
-    
-    // idx < 0 means "unassigned"
-    
-    
     static std::string to_string(state);
 private:
     
@@ -18628,54 +18406,24 @@ public:
 public:
     // Adds a node with given host_id, endpoint, and DC/rack.
     // Optionally updates node's current host_id, endpoint, or DC/rack.
-    // Note: the host_id may be updated from null to non-null after a new node gets a new, random host_id,
-    // or a peer node host_id may be updated when the node is replaced with another node using the same ip address.
-    
-    // Removes a node using its host_id
-    // Returns true iff the node was found and removed.
-    
-    // Looks up a node by its host_id.
-    // Returns a pointer to the node if found, or nullptr otherwise.
-    const node* find_node(host_id id) const noexcept;
-    // Looks up a node by its inet_address.
-    // Returns a pointer to the node if found, or nullptr otherwise.
-    
     // Finds a node by its index
     // Returns a pointer to the node if found, or nullptr otherwise.
     // Returns true if a node with given host_id is found
     // Legacy entry point from token_metadata::update_topology
     const std::unordered_map<sstring,
                            std::unordered_set<inet_address>>&
-    get_datacenter_endpoints() const {
-        return _dc_endpoints;
-    }
-    const std::unordered_map<sstring,
-                       std::unordered_map<sstring,
-                                          std::unordered_set<inet_address>>>&
     get_datacenter_racks() const {
     }
     // Get dc/rack location of a node identified by endpoint
     // The specified node must exist.
     const endpoint_dc_rack& get_location(const inet_address& ep) const;
     // Get datacenter of this node
-    // Get datacenter of a node identified by host_id
-    // The specified node must exist.
-    // Get datacenter of a node identified by endpoint
-    // The specified node must exist.
-    // Get rack of this node
-    // Get rack of a node identified by host_id
     // The specified node must exist.
     // Get rack of a node identified by endpoint
     // The specified node must exist.
     ;
      ;
     void sort_by_proximity(inet_address address, inet_address_vector_replica_set& addresses) const;
-    
-private:
-    unsigned _shard;
-    config _cfg;
-    const node* _this_node = nullptr;
-    std::vector<node_holder> _nodes;
     std::unordered_map<host_id, const node*> _nodes_by_host_id;
     std::unordered_map<inet_address, const node*> _nodes_by_endpoint;
     std::unordered_map<sstring, std::unordered_set<const node*>> _dc_nodes;
@@ -18796,12 +18544,6 @@ using tagged_uint64 = utils::tagged_tagged_integer<struct non_final, Tag, uint64
 } // end of namespace internal
 } // end of namespace raft
 namespace raft {
-// Raft protocol state machine clock ticks at different speeds
-// depending on the environment. A typical clock tick for
-// a production system is 100ms, while a test system can
-// tick it at the speed of the hardware clock.
-//
-// Every state machine has an own instance of logical clock,
 // this enables tests when different state machines run at
 // different clock speeds.
 class logical_clock final {
