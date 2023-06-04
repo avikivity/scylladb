@@ -15886,12 +15886,6 @@ public:
     // Fragments which have the same position() and are mergeable can be
     // merged into one fragment with apply() which represents the sum of
     // writes represented by each of the fragments.
-    // Fragments which have the same position() but are not mergeable
-    // and at least one of them is not a range_tombstone_change can be emitted one after the other in the stream.
-    //
-    // Undefined for range_tombstone_change.
-    // Merging range tombstones requires a more complicated handling
-    // because range_tombstone_change doesn't represent a write on its own, only
     // with a matching change for the end bound. It's not enough to chose one fragment over another,
     // the upper bound of the winning tombstone needs to be taken into account when merging
     // later range_tombstone_change fragments in the stream.
@@ -16060,18 +16054,6 @@ public:
     void set_clustered_cell(const clustering_key& key, const column_definition& def, atomic_cell_or_collection&& value);
     
     
-    // Upgrades this mutation to a newer schema. The new schema must
-    // be obtained using only valid schema transformation:
-    //  * primary key column count must not change
-    //  * column types may only change to those with compatible representations
-    //
-    // After upgrade, mutation's partition should only be accessed using the new schema. User must
-    // ensure proper isolation of accesses.
-    //
-    // Strong exception guarantees.
-    //
-    // Note that the conversion may lose information, it's possible that m1 != m2 after:
-    //
     //   auto m2 = m1;
     //   m2.upgrade(s2);
     //   m2.upgrade(m1.schema());
@@ -16084,18 +16066,6 @@ public:
     const schema_ptr& schema() const { return _ptr->_schema; }
     const mutation_partition& partition() const ;
     mutation_partition& partition() { return _ptr->_p; }
-    
-    // Consistent with hash<canonical_mutation>
-    
-public:
-    // Consumes the mutation's content.
-    //
-    // The mutation is in a moved-from alike state after consumption.
-    //   mutation_consume_result as the cookie parameter;
-    //
-    // Note that `consume_end_of_partition()` and `consume_end_of_stream()`
-    // will be called each time the consume is stopping, regardless of whether
-    // you are pausing or the consumption is ending for good.
     template<FlattenedConsumerV2 Consumer>
     auto consume(Consumer& consumer, consume_in_reverse reverse, mutation_consume_cookie cookie = {}) && -> mutation_consume_result<decltype(consumer.consume_end_of_stream())>;
     template<FlattenedConsumerV2 Consumer>
@@ -16125,12 +16095,6 @@ auto mutation::consume(Consumer& consumer, consume_in_reverse reverse, mutation_
     stop_iteration stop = stop_iteration::no;
     if (!cookie.static_row_consumed && !partition.static_row().empty()) {
         stop = consumer.consume(static_row(std::move(partition.static_row().get_existing())));
-    }
-    cookie.static_row_consumed = true;
-    if (reverse == consume_in_reverse::yes) {
-        stop = *consume_clustering_fragments<consume_in_reverse::yes>(_ptr->_schema, partition, consumer, cookie);
-    } else {
-        stop = *consume_clustering_fragments<consume_in_reverse::no>(_ptr->_schema, partition, consumer, cookie);
     }
     const auto stop_consuming = consumer.consume_end_of_partition();
     using consume_res_type = decltype(consumer.consume_end_of_stream());
@@ -16204,12 +16168,6 @@ public:
         using operation_skip_if_unset::operation_skip_if_unset;
     };
     struct adder final : operation_skip_if_unset {
-        using operation_skip_if_unset::operation_skip_if_unset;
-    };
-    struct subtracter final : operation_skip_if_unset {
-        using operation_skip_if_unset::operation_skip_if_unset;
-    };
-    class deleter : public operation_no_unset_support {
     public:
     };
 };
@@ -16276,18 +16234,6 @@ namespace functions { class function_call; }
 class prepare_context final {
 private:
     std::vector<shared_ptr<column_identifier>> _variable_names;
-    std::vector<lw_shared_ptr<column_specification>> _specs;
-    std::vector<lw_shared_ptr<column_specification>> _target_columns;
-    // A list of pointers to prepared `function_call` cache ids, that
-    // participate in partition key ranges computation within an LWT statement.
-    std::vector<::shared_ptr<std::optional<uint8_t>>> _pk_function_calls_cache_ids;
-    // The flag denoting whether the context is currently in partition key
-    // processing mode (inside query restrictions AST nodes). If set to true,
-    // then every `function_call` instance will be recorded in the context and
-    // will be assigned an identifier, which will then be used for caching
-    // the function call results.
-    bool _processing_pk_restrictions = false;
-public:
     // Record a new function call, which evaluates a partition key constraint.
     // Also automatically assigns an id to the AST node for caching purposes.
     // Inform the context object that it has started or ended processing the
@@ -16372,18 +16318,6 @@ concept HasMapInterface = requires(T t) {
     t.cbegin();
     t.cend();
 };
-/// A Boost program option holding an enum value.
-///
-/// The options parser will parse enum values with the help of the Mapper class, which provides a mapping
-/// between some parsable form (eg, string) and the enum value.  For example, it may map the word "January" to
-/// the enum value JANUARY.
-/// };
-/// unordered_map<string, Type::ty> Type::map() {
-///   return {{"a1", Type::ty::a1}, {"a2", Type::ty::a2}, {"b1", Type::ty::b1}};
-/// }
-/// int main(int ac, char* av[]) {
-///   namespace po = boost::program_options;
-///   po::options_description desc("Allowed options");
 ///   desc.add_options()
 ///     ("val", po::value<enum_option<Type>>(), "Single Type")
 ///     ("vec", po::value<vector<enum_option<Type>>>()->multitoken(), "Type vector");
@@ -16450,18 +16384,6 @@ namespace hints {
 // host_filter tells hints_manager towards which endpoints it is allowed to generate hints.
 class host_filter final {
 private:
-    enum class enabled_kind {
-        enabled_for_all,
-        enabled_selectively,
-        disabled_for_all,
-    };
-    enabled_kind _enabled_kind;
-    std::unordered_set<sstring> _dcs;
-public:
-    struct enabled_for_all_tag {};
-    struct disabled_for_all_tag {};
-    // Creates a filter that allows hints to all endpoints (default)
-    // Creates a filter that does not allow any hints.
     // Creates a filter that allows sending hints to specified DCs.
     // Parses hint filtering configuration from the hinted_handoff_enabled option.
     // Parses hint filtering configuration from a list of DCs.
@@ -16546,12 +16468,6 @@ public:
     using string_map = std::unordered_map<sstring, sstring>;
                     //program_options::string_map;
     using string_list = std::vector<sstring>;
-    // configuring the Seastar memory subsystem.
-    static constexpr size_t wasm_udf_reserved_memory = 50 * 1024 * 1024;
-    named_value<unsigned> minimum_keyspace_rf;
-    locator::host_id host_id;
-    utils::updateable_value<std::unordered_map<sstring, s3::endpoint_config>> object_storage_config;
-    named_value<std::vector<error_injection_at_startup>> error_injections_at_startup;
     static const sstring default_tls_priority;
 private:
     template<typename T>
@@ -16600,36 +16516,12 @@ public:
         bool _bypass_cache = false;
     public:
     };
-    template<typename T>
-    using compare_fn = std::function<bool(const T&, const T&)>;
-    using result_row_type = std::vector<managed_bytes_opt>;
-    using ordering_comparator_type = compare_fn<result_row_type>;
-private:
-    using prepared_orderings_type = std::vector<std::pair<const column_definition*, ordering>>;
-private:
-    lw_shared_ptr<const parameters> _parameters;
-    std::vector<::shared_ptr<selection::raw_selector>> _select_clause;
-    expr::expression _where_clause;
-    std::optional<expr::expression> _limit;
-    std::optional<expr::expression> _per_partition_limit;
-    std::vector<::shared_ptr<cql3::column_identifier::raw>> _group_by_columns;
-    std::unique_ptr<cql3::attributes::raw> _attrs;
-public:
-private:
-    // Checks whether it is legal to have ORDER BY in this statement
-    // Processes ORDER BY column orderings, converts column_identifiers to column_defintions
     // Checks whether this ordering reverses all results.
     // We only allow leaving select results unchanged or reversing them.
     /// Returns indices of GROUP BY cells in fetched rows.
 #if 0
     public:
         virtual sstring to_string() override {
-            return sstring("raw_statement(")
-                + "name=" + cf_name->to_string()
-                + ", selectClause=" + to_string(_select_clause)
-                + ", whereClause=" + to_string(_where_clause)
-                + ", isDistinct=" + to_string(_parameters->is_distinct())
-                + ", isJson=" + to_string(_parameters->is_json())
                 + ")";
         }
     };
@@ -16642,24 +16534,6 @@ namespace cql3 {
 namespace util {
 
 /// build a CQL "select" statement with the desired parameters.
-/// If select_all_columns==true, all columns are selected and the value of
-/// selected_columns is ignored.
-
-/// maybe_quote() takes an identifier - the name of a column, table or
-/// keyspace name - and transforms it to a string which can be used in CQL
-/// commands. Namely, if the identifier is not entirely lower-case (including
-/// digits and underscores), it needs to be quoted to be represented in CQL.
-/// Without this quoting, CQL folds uppercase letters to lower case, and
-/// forbids non-alpha-numeric characters in identifier names.
-/// Quoting involves wrapping the string in double-quotes ("). A double-quote
-/// character itself is quoted by doubling it.
-/// maybe_quote() also quotes reserved CQL keywords (e.g., "to", "where")
-/// but doesn't quote *unreserved* keywords (like ttl, int or as).
-/// Note that this means that if new reserved keywords are added to the
-/// parser, a saved output of maybe_quote() may no longer be parsable by
-/// parser. To avoid this forward-compatibility issue, use quote() instead
-/// of maybe_quote() - to unconditionally quote an identifier even if it is
-/// lowercase and not (yet) a keyword.
  sstring maybe_quote(const sstring& s) ;
 /// quote() takes an identifier - the name of a column, table or keyspace -
 /// and transforms it to a string which can be safely used in CQL commands.
@@ -16690,12 +16564,6 @@ class type_parser {
     private static final Map<String, AbstractType<?>> cache = new HashMap<String, AbstractType<?>>();
     public static final TypeParser EMPTY_PARSER = new TypeParser("", 0);
         StringBuilder sb = new StringBuilder();
-        sb.append('(').append(keysace).append(",").append(ByteBufferUtil.bytesToHex(typeName));
-        for (int i = 0; i < columnNames.size(); i++)
-        {
-            sb.append(',');
-            sb.append(ByteBufferUtil.bytesToHex(columnNames.get(i))).append(":");
-            // omit FrozenType(...) from fields because it is currently implicit
             sb.append(columnTypes.get(i).toString(true));
         }
         sb.append(')');
@@ -16858,12 +16726,6 @@ public:
 namespace data_dictionary {
 class keyspace_metadata;
 class user_types_storage;
-}
-using keyspace_metadata = data_dictionary::keyspace_metadata;
-namespace replica {
-class database;
-}
-namespace query {
 class result_set;
 }
 namespace service {
@@ -16906,18 +16768,6 @@ static constexpr auto NAME = "system_schema";
 static constexpr auto KEYSPACES = "keyspaces";
 static constexpr auto SCYLLA_KEYSPACES = "scylla_keyspaces";
 static constexpr auto TABLES = "tables";
-static constexpr auto SCYLLA_TABLES = "scylla_tables";
-static constexpr auto COLUMNS = "columns";
-static constexpr auto DROPPED_COLUMNS = "dropped_columns";
-static constexpr auto TRIGGERS = "triggers";
-static constexpr auto VIEWS = "views";
-static constexpr auto TYPES = "types";
-static constexpr auto FUNCTIONS = "functions";
-static constexpr auto AGGREGATES = "aggregates";
-static constexpr auto SCYLLA_AGGREGATES = "scylla_aggregates";
-static constexpr auto INDEXES = "indexes";
-static constexpr auto VIEW_VIRTUAL_COLUMNS = "view_virtual_columns"; // Scylla specific
-static constexpr auto COMPUTED_COLUMNS = "computed_columns"; // Scylla specific
 static constexpr auto SCYLLA_TABLE_SCHEMA_HISTORY = "scylla_table_schema_history"; // Scylla specific;
 // Belongs to the "system" keyspace
 }
@@ -16930,12 +16780,6 @@ public:
 }
 using namespace v3;
 // Change on non-backwards compatible changes of schema mutations.
-// Replication of schema between nodes with different version is inhibited.
-extern const sstring version;
-// Returns schema_ptrs for all schema tables supported by given schema_features.
-// Like all_tables(), but returns schema::cf_name() of each table.
-// saves/creates "ks" + all tables etc, while first deleting all old schema entries (will be rewritten)
-// saves/creates "system_schema" keyspace
 schema_ptr create_table_from_mutations(const schema_ctxt&, schema_mutations, std::optional<table_schema_version> version = {});
 view_ptr create_view_from_mutations(const schema_ctxt&, schema_mutations, std::optional<table_schema_version> version = {});
 future<std::vector<view_ptr>> create_views_from_schema_partition(distributed<service::storage_proxy>& proxy, const schema_result::mapped_type& result);
@@ -16978,12 +16822,6 @@ struct serializer<const utils::UUID> : public serializer<utils::UUID>
 {};
 template <>
 struct serializer<tasks::task_id> {
-  template <typename Output>
-  static void write(Output& buf, const tasks::task_id& v);
-  template <typename Input>
-  static tasks::task_id read(Input& buf);
-  template <typename Input>
-  static void skip(Input& buf);
 };
 template <>
 struct serializer<const tasks::task_id> : public serializer<tasks::task_id>
@@ -17007,12 +16845,6 @@ struct serializer<table_schema_version> {
 template <>
 struct serializer<const table_schema_version> : public serializer<table_schema_version>
 {};
-template <>
-struct serializer<query_id> {
-  ;
-  ;
-  ;
-};
 template <>
 template <>
 struct serializer<counter_id> {
@@ -17104,12 +16936,6 @@ struct serializer<const partition_end> : public serializer<partition_end>
 } // ser
 using seastar::future;
 /// \brief Represents a stream of mutation fragments.
-///
-///
-/// \section Consuming
-///
-/// The best way to consume those mutation_fragments is to call
-/// flat_mutation_reader::consume with a consumer that receives the fragments.
 class flat_mutation_reader_v2 final {
 public:
     using tracked_buffer = circular_buffer<mutation_fragment_v2, tracking_allocator<mutation_fragment_v2>>;
@@ -17194,12 +17020,6 @@ public:
                     continue;
                 }
                 if (!filter(mf)) {
-                    continue;
-                }
-                auto do_stop = futurize_invoke([&consumer, mf = std::move(mf)] () mutable {
-                    return consumer(std::move(mf));
-                });
-                if (do_stop.get0()) {
                     return;
                 }
             }
@@ -17224,12 +17044,6 @@ public:
         // Stops when consumer returns stop_iteration::yes from consume_end_of_partition or end of stream is reached.
         // Next call will receive fragments from the next partition.
         // When consumer returns stop_iteration::yes from methods other than consume_end_of_partition then the read
-        // of the current partition is ended, consume_end_of_partition is called and if it returns stop_iteration::no
-        // then the read moves to the next partition.
-        // Reference to the decorated key that is passed to consume_new_partition() remains valid until after
-        // the call to consume_end_of_partition().
-        //
-        // This method is useful because most of current consumers use this semantic.
         //
         //
         // This method returns whatever is returned from Consumer::consume_end_of_stream().S
@@ -17254,12 +17068,6 @@ public:
         virtual future<> fast_forward_to(const dht::partition_range&) = 0;
         virtual future<> fast_forward_to(position_range) = 0;
         // close should cancel any outstanding background operations,
-        // if possible, and wait on them to complete.
-        // It should also transitively close underlying resources
-        // and wait on them too.
-        //
-        // Once closed, the reader should be unusable.
-        //
         // Similar to destructors, close must never fail.
         virtual future<> close() noexcept = 0;
         size_t buffer_size() const ;
@@ -17326,12 +17134,6 @@ public:
     template<typename Consumer, typename Filter>
     requires FlattenedConsumerV2<Consumer> && FlattenedConsumerFilterV2<Filter>
     auto consume_in_thread(Consumer consumer, Filter filter) {
-        return _impl->consume_in_thread(std::move(consumer), std::move(filter));
-    }
-    template<typename Consumer>
-    requires FlattenedConsumerV2<Consumer>
-    auto consume_in_thread(Consumer consumer) {
-        return consume_in_thread(std::move(consumer), no_filter{});
     }
     // Skips to the next partition.
     //
@@ -17368,18 +17170,6 @@ public:
         return _impl->fast_forward_to(pr);
     }
     // Skips to a later range of rows.
-    // The new range must not overlap with the current range.
-    //
-    // In forwarding mode the stream does not return all fragments right away,
-    // but only those belonging to the current clustering range. Initially
-    // current range only covers the static row. The stream can be forwarded
-    // (even before end-of- stream) to a later range with fast_forward_to().
-    // Forwarding doesn't change initial restrictions of the stream, it can
-    // only be used to skip over data.
-    //
-    // Monotonicity of positions is preserved by forwarding. That is fragments
-    // In particular one must first enter a partition by fetching a `partition_start`
-    // fragment before calling `fast_forward_to`.
     future<> fast_forward_to(position_range cr) {
         _impl->set_close_required();
         return _impl->fast_forward_to(std::move(cr));
@@ -17392,12 +17182,6 @@ public:
     future<> close() noexcept {
         if (auto i = std::move(_impl)) {
             auto f = i->close();
-            // most close implementations are expexcted to return a ready future
-            // so expedite prcessing it.
-            if (f.available() && !f.failed()) {
-                return f;
-            }
-            // close must not fail
             return f.handle_exception([i = std::move(i)] (std::exception_ptr ep) mutable {
                 on_close_error(std::move(i), std::move(ep));
             });
@@ -17470,12 +17254,6 @@ future<> consume_mutation_fragments_until(
     return do_until([stop] { return stop(); }, [&r, stop, consume_mf, consume_eos] {
         while (!r.is_buffer_empty()) {
             consume_mf(r.pop_mutation_fragment());
-            if (stop() || need_preempt()) {
-                return make_ready_future<>();
-            }
-        }
-        if (r.is_end_of_stream()) {
-            return consume_eos();
         }
         return r.fill_buffer();
     });
@@ -17518,12 +17296,6 @@ flat_mutation_reader_v2 transform(flat_mutation_reader_v2 r, T t) {
             return make_ready_future<>();
         }
         virtual future<> fast_forward_to(const dht::partition_range& pr) override {
-            clear_buffer();
-            _end_of_stream = false;
-            return _reader.fast_forward_to(pr);
-        }
-        virtual future<> fast_forward_to(position_range pr) override {
-            clear_buffer();
             _end_of_stream = false;
             return _reader.fast_forward_to(std::move(pr));
         }
@@ -17572,12 +17344,6 @@ void serializer<range_tombstone>::write(Output& buf, const range_tombstone& obj)
   set_size(buf, obj);
   static_assert(is_equivalent<decltype(obj.start), clustering_key_prefix>::value, "member value has a wrong type");
   serialize(buf, obj.start);
-  static_assert(is_equivalent<decltype(obj.tomb), tombstone>::value, "member value has a wrong type");
-  serialize(buf, obj.tomb);
-  static_assert(is_equivalent<decltype(obj.start_kind), bound_kind>::value, "member value has a wrong type");
-  serialize(buf, obj.start_kind);
-  static_assert(is_equivalent<decltype(obj.end), clustering_key_prefix>::value, "member value has a wrong type");
-  serialize(buf, obj.end);
   static_assert(is_equivalent<decltype(obj.end_kind), bound_kind>::value, "member value has a wrong type");
   serialize(buf, obj.end_kind);
 }
@@ -17590,18 +17356,6 @@ range_tombstone serializer<range_tombstone>::read(Input& buf) {
   auto __local_1 = deserialize(in, boost::type<tombstone>());
   auto __local_2 = (in.size()>0) ?
     deserialize(in, boost::type<bound_kind>()) : bound_kind::incl_start;
-  auto __local_3 = (in.size()>0) ?
-    deserialize(in, boost::type<clustering_key_prefix>()) : __local_0;
-  auto __local_4 = (in.size()>0) ?
-    deserialize(in, boost::type<bound_kind>()) : bound_kind::incl_end;
-  range_tombstone res {std::move(__local_0), std::move(__local_1), std::move(__local_2), std::move(__local_3), std::move(__local_4)};
-  return res;
- });
-}
-template <typename Input>
-void serializer<column_mapping>::skip(Input& buf) {
- seastar::with_serialized_stream(buf, [] (auto& buf) {
-  size_type size = deserialize(buf, boost::type<size_type>());
   buf.skip(size - sizeof(size_type));
  });
 }
