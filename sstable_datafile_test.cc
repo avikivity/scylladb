@@ -8584,36 +8584,12 @@ struct service_level_resource_t final {};
 ///
 struct functions_resource_t final {};
 ///
-/// Resources are entities that users can be granted permissions on.
-///
-/// There are data (keyspaces and tables), role and function resources. There may be other kinds of resources in the future.
-///
-/// When they are stored as system metadata, resources have the form `root/part_0/part_1/.../part_n`. Each kind of
-/// resource has a specific root prefix, followed by a maximum of `n` parts (where `n` is distinct for each kind of
-/// resource as well). In this code, this form is called the "name".
-///
-/// Since all resources have this same structure, all the different kinds are stored in instances of the same class:
-/// \ref resource. When we wish to query a resource for kind-specific data (like the table of a "data" resource), we
-/// create a kind-specific "view" of the resource.
-///
 class resource final {
     resource_kind _kind;
     utils::small_vector<sstring, 3> _parts;
 public:
     ///
     /// A root resource of a particular kind.
-    ///
-    resource(functions_resource_t, std::string_view keyspace, std::string_view function_name,
-            std::vector<::shared_ptr<cql3::cql3_type::raw>> function_args);
-    
-    ///
-    /// A machine-friendly identifier unique to each resource.
-    ///
-    
-private:
-    friend class std::hash<resource>;
-    friend class data_resource_view;
-    friend class role_resource_view;
     friend class service_level_resource_view;
     friend class functions_resource_view;
     
@@ -8668,12 +8644,6 @@ public:
 ///
 class functions_resource_view final {
     const resource& _resource;
-public:
-    ///
-    /// \throws \ref resource_kind_mismatch if the argument is not a "function" resource.
-    ///
-    explicit functions_resource_view(const resource&);
-    std::optional<std::string_view> keyspace() const;
     std::optional<std::string_view> function_signature() const;
     std::optional<std::vector<std::string_view>> function_args() const;
 };
@@ -8686,36 +8656,18 @@ struct hash<auth::resource> {
     static size_t hash_data(const auth::data_resource_view& dv) {
         return utils::tuple_hash()(std::make_tuple(auth::resource_kind::data, dv.keyspace(), dv.table()));
     }
-    static size_t hash_role(const auth::role_resource_view& rv) {
-        return utils::tuple_hash()(std::make_tuple(auth::resource_kind::role, rv.role()));
-    }
-    static size_t hash_service_level(const auth::service_level_resource_view& rv) {
-            return utils::tuple_hash()(std::make_tuple(auth::resource_kind::service_level));
-    }
 };
 }
 namespace auth {
 using resource_set = std::unordered_set<resource>;
 //
 // A resource and all of its parents.
-//
-}
-namespace auth {
-///
-/// A type-safe wrapper for the name of a logged-in user, or a nameless (anonymous) user.
-///
 class authenticated_user final {
 public:
     ///
     /// An anonymous user has no name.
     ///
     std::optional<sstring> name{};
-    ///
-    /// An anonymous user.
-    ///
-    
-    
-    
 };
 
 }
@@ -8734,36 +8686,18 @@ public:
     using ptr_type = std::unique_ptr<authenticator>;
     ///
     /// The name of the key to be used for the user-name part of password authentication with \ref authenticate.
-    ///
-    static const sstring USERNAME_KEY;
-    ///
-    /// The name of the key to be used for the password part of password authentication with \ref authenticate.
-    ///
-    static const sstring PASSWORD_KEY;
     using credentials_map = std::unordered_map<sstring, sstring>;
     ///
     /// A fully-qualified (class with package) Java-like name for this implementation.
     ///
     ///
     /// Query for custom options (those corresponding to \ref authentication_options::options).
-    ///
-    /// If no options are set the result is an empty container.
-    ///
-    ///
-    /// System resources used internally as part of the implementation. These are made inaccessible to users.
-    ///
 };
 }
 namespace auth {
 class role_or_anonymous;
 struct permission_details {
     sstring role_name;
-    ::auth::resource resource;
-    permission_set permissions;
-};
-class unsupported_authorization_operation : public std::invalid_argument {
-public:
-    using std::invalid_argument::invalid_argument;
 };
 ///
 /// Abstract client for authorizing roles to access resources.
@@ -8776,12 +8710,6 @@ public:
     ///
     /// A fully-qualified (class with package) Java-like name for this implementation.
     ///
-    ///
-    /// Query for the permissions granted directly to a role for a particular \ref resource (and not any of its
-    /// parents).
-    ///
-    /// The optional role name is empty when an anonymous user is authorized. Some implementations may still wish to
-    /// grant default permissions in this case.
     ///
     ///
     /// System resources used internally as part of the implementation. These are made inaccessible to users.
@@ -8842,18 +8770,6 @@ private:
         std::optional<value_type> _val;
         shared_promise<> _loaded;
     public:
-        const key_type& key() const noexcept {
-            return _key;
-        }
-        const value_type& value() const noexcept {
-            return *_val;
-        }
-        bool orphaned() const {
-            return !is_linked();
-        }
-        shared_promise<>& loaded() {
-            return _loaded;
-        }
         bool ready() const noexcept {
             return bool(_val);
         }
@@ -8896,12 +8812,6 @@ public:
         explicit entry_ptr(lw_shared_ptr<entry> e) : _e(std::move(e)) {}
         entry_ptr& operator=(std::nullptr_t) noexcept {
             _e = nullptr;
-            return *this;
-        }
-        explicit operator bool() const noexcept { return bool(_e); }
-        bool operator==(const entry_ptr&) const = default;
-        const key_type& key() const {
-            return _e->key();
         }
         // Returns true iff the entry is not linked in the set.
         // Call only when bool(*this).
@@ -8932,18 +8842,6 @@ public:
         static_assert(InitialBucketsCount && ((InitialBucketsCount & (InitialBucketsCount - 1)) == 0), "Initial buckets count should be a power of two");
     }
     loading_shared_values(loading_shared_values&&) = default;
-    loading_shared_values(const loading_shared_values&) = delete;
-    ~loading_shared_values() {
-         assert(!_set.size());
-    }
-    /// \brief
-    /// Returns a future which resolves with a shared pointer to the entry for the given key.
-    /// Always returns a valid pointer if succeeds.
-    ///
-    /// If entry is missing, the loader is invoked. If entry is already loading, this invocation
-    /// will wait for prior loading to complete and use its result when it's done.
-    ///
-    /// The loader object does not survive deferring, so the caller must deal with its liveness.
     template<typename Loader>
     future<entry_ptr> get_or_load(const key_type& key, Loader&& loader) noexcept {
         static_assert(std::is_same<future<value_type>, typename futurize<std::result_of_t<Loader(const key_type&)>>::type>::value, "Bad Loader signature");
@@ -9125,12 +9023,6 @@ class loading_cache {
         loading_cache_clock_type::time_point last_read() const noexcept {
             return _last_read;
         }
-        loading_cache_clock_type::time_point loaded() const noexcept {
-            return _loaded;
-        }
-        size_t size() const noexcept {
-            return _size;
-        }
         bool ready() const noexcept {
             return _lru_entry_ptr;
         }
@@ -9172,24 +9064,6 @@ public:
         : loading_cache(std::move(cfg), logger)
     {
         static_assert(ReloadEnabled == loading_cache_reload_enabled::yes, "This constructor should only be invoked when ReloadEnabled == loading_cache_reload_enabled::yes");
-        _load = std::forward<Func>(load);
-        // If expiration period is zero - caching is disabled
-        if (!caching_enabled()) {
-            return;
-        }
-        _timer_period = std::min(_cfg.expiry, _cfg.refresh);
-        _timer.arm(_timer_period);
-    }
-    loading_cache(size_t max_size, lowres_clock::duration expiry, logging::logger& logger)
-        : loading_cache({max_size, expiry, loading_cache_clock_type::time_point::max().time_since_epoch()}, logger)
-    {
-        static_assert(ReloadEnabled == loading_cache_reload_enabled::no, "This constructor should only be invoked when ReloadEnabled == loading_cache_reload_enabled::no");
-        // If expiration period is zero - caching is disabled
-        if (!caching_enabled()) {
-            return;
-        }
-        _timer_period = _cfg.expiry;
-        _timer.arm(_timer_period);
     }
     ~loading_cache() {
         auto value_destroyer = [] (ts_value_lru_entry* ptr) { loading_cache::destroy_ts_value(ptr); };
@@ -9208,12 +9082,6 @@ public:
             _logger.debug("loading_cache: caching is enabled but refresh period and/or max_size are zero");
             return false;
         }
-        _updated_cfg.emplace(std::move(cfg));
-        // * If the timer is already armed we need to rearm it so that the changes on config can take place.
-        // * If timer is not armed and caching is enabled, it means that on_timer was executed but its continuation hasn't finished yet,
-        //   so we don't need to rearm it here, since on_timer's continuation will take care of that
-        // * If caching is disabled and it's being enabled here on update_config, we also need to arm the timer, so that the changes on config
-        //   can take place
         if (_timer.armed() ||
             (!caching_enabled() && _updated_cfg->expiry != loading_cache_clock_type::duration(0))) {
             _timer.rearm(loading_cache_clock_type::now() + loading_cache_clock_type::duration(std::chrono::milliseconds(1)));
@@ -9370,12 +9238,6 @@ private:
     }
     /// This is the core method in the 2 sections LRU implementation.
     /// Set the given item as the most recently used item at the corresponding cache section.
-    /// The MRU item is going to be at the front of the list, the LRU item - at the back.
-    /// The entry is initially entering the "unprivileged" section (represented by a _unprivileged_lru_list).
-    /// After an entry is touched more than SectionHitThreshold times it moves to a "privileged" section
-    /// (represented by an _lru_list).
-    ///
-    /// \param lru_entry Cache item that has been "touched"
     void touch_lru_entry_2_sections(ts_value_lru_entry& lru_entry) {
         if (lru_entry.is_linked()) {
             lru_list_type& lru_list = container_list(lru_entry);
@@ -9436,12 +9298,6 @@ private:
             // An entry should be discarded if it hasn't been reloaded for too long or nobody cares about it anymore
             const timestamped_val& v = lru_entry.timestamped_value();
             auto since_last_read = now - v.last_read();
-            auto since_loaded = now - v.loaded();
-            if (_cfg.expiry < since_last_read || (ReloadEnabled == loading_cache_reload_enabled::yes && _cfg.expiry < since_loaded)) {
-                _logger.trace("drop_expired(): {}: dropping the entry: expiry {},  ms passed since: loaded {} last_read {}", lru_entry.key(), _cfg.expiry.count(), duration_cast<milliseconds>(since_loaded).count(), duration_cast<milliseconds>(since_last_read).count());
-                return true;
-            }
-            return false;
         };
         auto value_destroyer = [] (ts_value_lru_entry* p) {
             loading_cache::destroy_ts_value(p);
@@ -9466,12 +9322,6 @@ private:
             LoadingCacheStats::inc_unprivileged_on_cache_size_eviction();
         };
         // When cache entries need to be evicted due to a size restriction,
-        // unprivileged section entries are evicted first.
-        //
-        // However, we make sure that the unprivileged section does not get
-        // too small, because this could lead to starving the unprivileged section.
-        // For example if the cache could store at most 50 entries and there are 49 entries in
-        // privileged section, after adding 5 entries (that would go to unprivileged
         // going below minimum_unprivileged_section_size.
         while (memory_footprint() >= _cfg.max_size) {
             drop_unprivileged_entry();
@@ -9490,18 +9340,6 @@ private:
         if (_updated_cfg) {
             _cfg = *_updated_cfg;
             _updated_cfg.reset();
-            _timer_period = std::min(_cfg.expiry, _cfg.refresh);
-        }
-        // Caching might have been disabled during a config update
-        if (!caching_enabled()) {
-            reset();
-            return;
-        }
-        // Clean up items that were not touched for the whole expiry period.
-        drop_expired();
-        // check if rehashing is needed and do it if it is.
-        periodic_rehash();
-        if constexpr (ReloadEnabled == loading_cache_reload_enabled::no) {
             _logger.trace("on_timer(): rearming");
             _timer.arm(loading_cache_clock_type::now() + _timer_period);
             return;
@@ -9550,12 +9388,6 @@ class loading_cache<Key, Tp, SectionHitThreshold, ReloadEnabled, EntrySize, Hash
 private:
     using loading_values_type = typename timestamped_val::loading_values_type;
 public:
-    using timestamped_val_ptr = typename loading_values_type::entry_ptr;
-    using value_type = Tp;
-private:
-    timestamped_val_ptr _ts_val_ptr;
-public:
-    value_ptr(std::nullptr_t) noexcept : _ts_val_ptr() {}
     bool operator==(const value_ptr&) const = default;
 };
 /// \brief This is and LRU list entry which is also an anchor for a loading_cache value.
@@ -9568,12 +9400,6 @@ public:
     using timestamped_val_ptr = typename loading_values_type::entry_ptr;
 private:
     timestamped_val_ptr _ts_val_ptr;
-    loading_cache& _parent;
-    int _touch_count;
-public:
-    
-    
-    
     
     
     
@@ -9598,18 +9424,6 @@ class permissions_cache final {
             utils::tuple_hash>;
     using key_type = typename cache_type::key_type;
     cache_type _cache;
-public:
-};
-}
-namespace auth {
-struct role_config final {
-    bool is_superuser{false};
-    bool can_login{false};
-};
-///
-/// Differential update for altering existing roles.
-///
-struct role_config_update final {
     std::optional<bool> is_superuser{};
     std::optional<bool> can_login{};
 };
@@ -9623,23 +9437,11 @@ public:
 class role_already_exists : public roles_argument_exception {
 public:
 };
-class nonexistant_role : public roles_argument_exception {
-public:
-};
-class role_already_included : public roles_argument_exception {
-public:
-};
 class revoke_ungranted_role : public roles_argument_exception {
 public:
 };
 using role_set = std::unordered_set<sstring>;
 enum class recursive_role_query { yes, no };
-///
-/// Abstract client for managing roles.
-///
-/// All state necessary for managing roles is stored externally to the client instance.
-///
-/// All implementations should throw role-related exceptions as documented. Authorization is not addressed here, and
 /// access-control should never be enforced in implementations.
 ///
 class role_manager {
@@ -9652,12 +9454,6 @@ public:
 public:
     ///
     /// \returns an exceptional future with \ref role_already_exists for a role that has previously been created.
-    ///
-    ///
-    /// Removes `attribute_name` for `role_name`.
-    /// \returns an exceptional future with nonexistant_role if the role does not exist.
-    /// \note: This is a no-op if the role does not have the named attribute set.
-    ///
 };
 }
 namespace cql3 {
@@ -9670,72 +9466,24 @@ class migration_listener;
 }
 namespace auth {
 class role_or_anonymous;
-struct service_config final {
-    sstring authorizer_java_name;
-    sstring authenticator_java_name;
-    sstring role_manager_java_name;
-};
-///
-/// Due to poor (in this author's opinion) decisions of Apache Cassandra, certain choices of one role-manager,
-/// authenticator, or authorizer imply restrictions on the rest.
-///
-/// This exception is thrown when an invalid combination of modules is selected, with a message explaining the
-/// All state associated with access-control is stored externally to any particular instance of this class.
-///
 /// peering_sharded_service inheritance is needed to be able to access shard local authentication service
 /// given an object from another shard. Used for bouncing lwt requests to correct shard.
 class service final : public seastar::peering_sharded_service<service> {
     utils::loading_cache_config _loading_cache_config;
     std::unique_ptr<permissions_cache> _permissions_cache;
     cql3::query_processor& _qp;
-    ::service::migration_notifier& _mnotifier;
-    authorizer::ptr_type _authorizer;
-    authenticator::ptr_type _authenticator;
-    role_manager::ptr_type _role_manager;
-    // Only one of these should be registered, so we end up with some unused instances. Not the end of the world.
-    /// Return the set of all roles granted to the given role, including itself and roles granted through other roles.
     ///
     /// \returns an exceptional future with \ref nonexistent_role if the role does not exist.
 private:
 };
 ///
 /// Access-control is "enforcing" when either the authenticator or the authorizer are not their "allow-all" variants.
-///
-/// Put differently, when access control is not enforcing, all operations on resources will be allowed and users do not
-/// need to authenticate themselves.
-///
-/// A description of a CQL command from which auth::service can tell whether or not this command could endanger
-/// internal data on which auth::service depends.
-/// supported.
-///
-///
-/// \returns an exceptional future with \ref nonexistent_role if the named role does not exist.
-///
-/// \returns an exceptional future with \ref unsupported_authorization_operation if revoking permissions is not
 /// supported.
 ///
 using recursive_permissions = bool_class<struct recursive_permissions_tag>;
 ///
 /// Query for all granted permissions according to filtering criteria.
 ///
-/// Only permissions included in the provided set are included.
-///
-/// If a role name is provided, only permissions granted (directly or recursively) to the role are included.
-///
-/// If a resource filter is provided, only permissions granted on the resource are included. When \ref
-/// recursive_permissions is `true`, permissions on a parent resource are included.
-///
-/// \returns an exceptional future with \ref nonexistent_role if a role name is included which refers to a role that
-/// does not exist.
-///
-/// \returns an exceptional future with \ref unsupported_authorization_operation if listing permissions is not
-/// supported.
-///
-future<std::vector<permission_details>> list_filtered_permissions(
-        const service&,
-        permission_set,
-        std::optional<std::string_view> role_name,
-        const std::optional<std::pair<resource, recursive_permissions>>& resource_filter);
 }
 namespace unimplemented {
 enum class cause {
@@ -9748,12 +9496,6 @@ enum class cause {
     TRIGGERS,
     COUNTERS,
     METRICS,
-    MIGRATIONS,
-    GOSSIP,
-    TOKEN_RESTRICTION,
-    LEGACY_COMPOSITE_KEYS,
-    COLLECTION_RANGE_TOMBSTONES,
-    RANGE_DELETES,
     THRIFT,
     VALIDATION,
     REVERSED,
