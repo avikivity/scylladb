@@ -18586,12 +18586,6 @@ using group_id = raft::internal::tagged_id<struct group_id_tag>;
 using term_t = raft::internal::tagged_uint64<struct term_tag>;
 // This type represensts the index into the raft log
 using index_t = raft::internal::tagged_uint64<struct index_tag>;
-// Identifier for a read barrier request
-using read_id = raft::internal::tagged_uint64<struct read_id_tag>;
-// Opaque connection properties. May contain ip:port pair for instance.
-// This value is disseminated between cluster member
-// through regular log replication as part of a configuration
-// log entry. Upon receiving it a server passes it down to
 // RPC module through on_configuration_change() call where it is deserialized
 // and used to obtain connection info for the node `id`. After a server
 // is added to the RPC module RPC's send functions can be used to communicate
@@ -18622,18 +18616,6 @@ struct configuration {
     // Contains the current configuration. When configuration
     // change is in progress, contains the new configuration.
     config_member_set current;
-    // Used during the transitioning period of configuration
-    // changes.
-    config_member_set previous;
-    // Return true if the previous configuration is still
-    // in use
-    // Count the number of voters in a configuration
-    // Check if transitioning to a proposed configuration is safe.
-    // Compute a diff between a proposed configuration and the current one.
-    // True if the current or previous configuration contains
-    // this server.
-    // Same as contains() but true only if the member can vote.
-    // Enter a joint configuration given a new set of servers.
     // Transition from C_old + C_new to C_new.
 };
 struct log_entry {
@@ -18706,30 +18688,12 @@ private:
     friend class token_metadata_ring_splitter;
     class tokens_iterator {
     public:
-        using iterator_category = std::input_iterator_tag;
-        using value_type = token;
-        using difference_type = std::ptrdiff_t;
-        using pointer = token*;
-        using reference = token&;
-    public:
-        tokens_iterator(const token& start, const token_metadata_impl* token_metadata);
-    private:
-        std::vector<token>::const_iterator _cur_it;
-        size_t _remaining = 0;
-        const token_metadata_impl* _token_metadata = nullptr;
-        friend class token_metadata_impl;
     };
 public:
     token_metadata(token_metadata&&) noexcept; // Can't use "= default;" - hits some static_assert in unique_ptr
     token_metadata& operator=(token_metadata&&) noexcept;
     ~token_metadata();
     
-    
-    void set_tablets(tablet_metadata);
-    // Update token->endpoint mappings for a given \c endpoint.
-    // \c tokens are all the tokens that are now owned by \c endpoint.
-    //
-    // Note: the function is not exception safe!
     // It must be called only on a temporary copy of the token_metadata
     future<> update_normal_tokens(std::unordered_set<token> tokens, inet_address endpoint);
     
@@ -18742,24 +18706,12 @@ public:
     const topology& get_topology() const;
     
     /// Return the unique host ID for an end-point or nullopt if not found.
-    /// Parses the \c host_id_string either as a host uuid or as an ip address and returns the mapping.
-    /// Throws std::invalid_argument on parse error or std::runtime_error if the host_id wasn't found.
-    /// Returns host_id of the local node.
-    // Checks if the node is part of the token ring. If yes, the node is one of
-    // the nodes that owns the tokens and inside the set _normal_token_owners.
-    // Is this node being replaced by another node
     // Is any node being replaced by another node
     future<token_metadata> clone_only_token_map() const noexcept;
     
     future<> clear_gently() noexcept;
     static boost::icl::interval<token>::interval_type range_to_interval(range<dht::token> r);
     // returns empty vector if keyspace_name not found.
-    // This function returns a list of nodes to which a read request should be directed.
-    // Returns not null only during topology changes, if _topology_change_stage == read_new and
-    // new set of replicas differs from the old one.
-    // updates the current topology_transition_state of this instance,
-    // this value is preserved in all clone functions,
-    // by default it's not set
     friend class token_metadata_impl;
 };
 using token_metadata_ptr = lw_shared_ptr<const token_metadata>;
@@ -18772,12 +18724,6 @@ class shared_token_metadata {
     token_metadata_lock_func _lock_func;
 public:
     // used to construct the shared object as a sharded<> instance
-    // mutate_token_metadata_on_all_shards acquires the shared_token_metadata lock,
-    // clones the token_metadata (using clone_async)
-    // and calls an asynchronous functor on
-    // the cloned copy of the token_metadata to mutate it.
-    //
-    // If the functor is successful, the mutated clone
     // is set back to to the shared_token_metadata on all shards,
     // otherwise, the clone is destroyed.
     //
@@ -18802,12 +18748,6 @@ struct fmt::formatter<streaming::stream_reason> : fmt::formatter<std::string_vie
         using enum streaming::stream_reason;
         switch (r) {
         case unspecified:
-            return formatter<std::string_view>::format("unspecified", ctx);
-        case bootstrap:
-            return formatter<std::string_view>::format("bootstrap", ctx);
-        case decommission:
-            return formatter<std::string_view>::format("decommission", ctx);
-        case removenode:
             return formatter<std::string_view>::format("removenode", ctx);
         case rebuild:
             return formatter<std::string_view>::format("rebuild", ctx);
@@ -18838,30 +18778,12 @@ class boot_strapper {
     const token_metadata_ptr _token_metadata_ptr;
 public:
 #if 0
-    public static class StringSerializer implements IVersionedSerializer<String>
-    {
-        public static final StringSerializer instance = new StringSerializer();
-        public void serialize(String s, DataOutputPlus out, int version) throws IOException
-        {
-            out.writeUTF(s);
-        }
-        public String deserialize(DataInput in, int version) throws IOException
-        {
-            return in.readUTF();
-        }
-        public long serializedSize(String s, int version)
         {
             return TypeSizes.NATIVE.sizeof(s);
         }
     }
 #endif
 private:
-};
-} // namespace dht
-namespace dht {
-class incremental_owned_ranges_checker {
-    const dht::token_range_vector& _sorted_owned_ranges;
-    mutable dht::token_range_vector::const_iterator _it;
 public:
     // Must be called with increasing token values.
 };
@@ -18880,12 +18802,6 @@ public:
     using listener_registration = std::any;
     class listener {
         friend class feature;
-        bs2::scoped_connection _conn;
-        signal_type::slot_type _slot;
-    protected:
-        bool _started = false;
-    public:
-        
         // Has to run inside seastar::async context
         
     };
@@ -18911,18 +18827,6 @@ class feature_service final {
     std::unordered_map<sstring, std::reference_wrapper<feature>> _registered_features;
     feature_config _config;
 public:
-    // Key in the 'system.scylla_local' table, that is used to
-    // persist enabled features
-    static constexpr const char* ENABLED_FEATURES_KEY = "enabled_features";
-public:
-    gms::feature schema_commitlog { *this, "SCHEMA_COMMITLOG"sv };
-    gms::feature uda_native_parallelized_aggregation { *this, "UDA_NATIVE_PARALLELIZED_AGGREGATION"sv };
-    gms::feature aggregate_storage_options { *this, "AGGREGATE_STORAGE_OPTIONS"sv };
-    gms::feature collection_indexing { *this, "COLLECTION_INDEXING"sv };
-    gms::feature large_collection_detection { *this, "LARGE_COLLECTION_DETECTION"sv };
-    gms::feature secondary_indexes_on_static_columns { *this, "SECONDARY_INDEXES_ON_STATIC_COLUMNS"sv };
-    gms::feature tablets { *this, "TABLETS"sv };
-public:
     const std::unordered_map<sstring, std::reference_wrapper<feature>>& registered_features() const;
     // Persist enabled feature in the `system.scylla_local` table under the "enabled_features" key.
     // The key itself is maintained as an `unordered_set<string>` and serialized via `to_string`
@@ -18934,36 +18838,12 @@ using version_type = utils::tagged_integer<struct version_type_tag, int32_t>;
 namespace version_generator
 {
 }
-} // namespace gms
-namespace version {
-class version {
-    std::tuple<uint16_t, uint16_t, uint16_t> _version;
-public:
-};
 }
 namespace gms {
 class versioned_value {
     version_type _version;
     sstring _value;
 public:
-    // this must be a char that cannot be present in any token
-    static constexpr char DELIMITER = ',';
-    static constexpr const char DELIMITER_STR[] = { DELIMITER, 0 };
-    // values for ApplicationState.STATUS
-    static constexpr const char* STATUS_UNKNOWN = "UNKNOWN";
-    static constexpr const char* STATUS_BOOTSTRAPPING = "BOOT";
-    static constexpr const char* STATUS_NORMAL = "NORMAL";
-    static constexpr const char* STATUS_LEAVING = "LEAVING";
-    static constexpr const char* STATUS_LEFT = "LEFT";
-    static constexpr const char* STATUS_MOVING = "MOVING";
-    static constexpr const char* REMOVING_TOKEN = "removing";
-    static constexpr const char* REMOVED_TOKEN = "removed";
-    static constexpr const char* HIBERNATE = "hibernate";
-    static constexpr const char* SHUTDOWN = "shutdown";
-    // values for ApplicationState.REMOVAL_COORDINATOR
-    static constexpr const char* REMOVAL_COORDINATOR = "REMOVER";
-    ;
-    ;
 public:
 public:
     // Reverse of `make_full_token_string`.
@@ -19120,18 +19000,6 @@ public:
     virtual std::list<std::pair<gms::application_state, gms::versioned_value>> get_app_states() const = 0;
     ;
     // noop by default
-    // noop by default
-    ;
-    // noop by default
-    ;
-    // noop by default
-    // noop by default
-    ;
-    ;
-    ;
-    // should be called for production snitches before calling start()
-    // tells wheter the INTERNAL_IP address should be preferred over endpoint address
-protected:
 protected:
     enum class snitch_state {
         initializing,
@@ -19150,12 +19018,6 @@ private:
 class snitch_base : public i_endpoint_snitch {
 public:
     //
-    // Sons have to implement:
-    // virtual sstring get_rack()        = 0;
-    // virtual sstring get_datacenter()  = 0;
-    //
-    virtual std::list<std::pair<gms::application_state, gms::versioned_value>> get_app_states() const override;
-protected:
     sstring _my_dc;
     sstring _my_rack;
 };
@@ -19210,36 +19072,18 @@ class abstract_replication_strategy : public seastar::enable_shared_from_this<ab
     friend class tablet_aware_replication_strategy;
 protected:
     replication_strategy_config_options _config_options;
-    replication_strategy_type _my_type;
-    bool _per_table = false;
-    bool _uses_tablets = false;
-     ;
-     ;
-     ;
 public:
     using ptr_type = seastar::shared_ptr<abstract_replication_strategy>;
     // Evaluates to true iff calculate_natural_endpoints
     // returns different results for different tokens.
     // The returned vector has size O(number of normal token owners), which is O(number of nodes in the cluster).
     // Note: it is not guaranteed that the function will actually yield. If the complexity of a particular implementation
-    // is small, that implementation may not yield since by itself it won't cause a reactor stall (assuming practical
-    // cluster sizes and number of tokens per node). The caller is responsible for yielding if they call this function
-    // in a loop.
-    // Returns the last stop_iteration result of the called func
-    virtual std::optional<std::unordered_set<sstring>> recognized_options(const topology&) const = 0;
-    // Use the token_metadata provided by the caller instead of _token_metadata
     // Note: must be called with initialized, non-empty token_metadata.
     // Caller must ensure that token_metadata will not change throughout the call.
     future<std::unordered_map<dht::token_range, inet_address_vector_replica_set>> get_range_addresses(const token_metadata& tm) const;
     
 };
 using replication_strategy_ptr = seastar::shared_ptr<const abstract_replication_strategy>;
-using mutable_replication_strategy_ptr = seastar::shared_ptr<abstract_replication_strategy>;
-/// \brief Represents effective replication (assignment of replicas to keys).
-///
-/// It's a result of application of a given replication strategy instance
-/// over a particular token metadata version, for a given table.
-/// Can be shared by multiple tables if they have the same replication.
 ///
 /// Immutable, users can assume that it doesn't change.
 ///
@@ -19258,18 +19102,6 @@ public:
     
     
     size_t get_replication_factor() const noexcept ;
-    /// Returns addresses of replicas for a given token.
-    /// Does not include pending replicas except for a pending replica which
-    /// has the same address as one of the old replicas. This can be the case during "nodetool replace"
-    /// operation which adds a replica which has the same address as the replaced replica.
-    /// Use get_natural_endpoints_without_node_being_replaced() to get replicas without any pending replicas.
-    /// This won't be necessary after we implement https://github.com/scylladb/scylladb/issues/6403.
-    /// Returns addresses of replicas for a given token.
-    /// Does not include pending replicas.
-    /// Returns the set of pending replicas for a given token.
-    /// Pending replica is a replica which gains ownership of data.
-    /// Non-empty only during topology change.
-    /// Returns a token_range_splitter which is line with the replica assignment of this replication map.
     /// The splitter can live longer than this instance.
 };
 using effective_replication_map_ptr = seastar::shared_ptr<const effective_replication_map>;
@@ -19360,12 +19192,6 @@ class effective_replication_map_factory : public peering_sharded_service<effecti
     std::unordered_map<vnode_effective_replication_map::factory_key, vnode_effective_replication_map*> _effective_replication_maps;
     future<> _background_work = make_ready_future<>();
     bool _stopped = false;
-public:
-    // looks up the vnode_effective_replication_map on the local shard.
-    // If not found, tries to look one up for reference on shard 0
-    // so its replication map can be cloned.  Otherwise, calculates the
-    // vnode_effective_replication_map for the local shard.
-    //
     // Therefore create should be called first on shard 0, then on all other shards.
 private:
     friend class vnode_effective_replication_map;
@@ -19396,12 +19222,6 @@ enum class application_state {
     LOAD,
     SCHEMA,
     DC,
-    RPC_READY,
-    VIEW_BACKLOG,
-    SHARD_COUNT,
-    IGNORE_MSB_BITS,
-    CDC_GENERATION_ID,
-    SNITCH_NAME,
 };
 }
 namespace gms {
@@ -19447,12 +19267,6 @@ public:
     table_id cf_id;
 public:
     
-    
-};
-} // namespace streaming
-namespace streaming {
-struct stream_detail {
-    table_id cf_id;
     
 };
 } // namespace streaming
@@ -19588,66 +19402,30 @@ class session_info {
 public:
     using inet_address = gms::inet_address;
     inet_address peer;
-    std::vector<stream_summary> receiving_summaries;
-    std::vector<stream_summary> sending_summaries;
-    stream_session_state state;
-    std::map<sstring, progress_info> receiving_files;
-    std::map<sstring, progress_info> sending_files;
-private:
 };
 } // namespace streaming
 namespace db {
 class system_distributed_keyspace;
 }
 namespace service {
-class migration_manager;
-}
-namespace db::view {
-class view_update_generator;
-}
-namespace streaming {
 class stream_result_future;
 class stream_session : public enable_shared_from_this<stream_session> {
 private:
     using messaging_verb = netw::messaging_verb;
     using messaging_service = netw::messaging_service;
     using msg_addr = netw::msg_addr;
-    using inet_address = gms::inet_address;
-    using token = dht::token;
-    using ring_position = dht::ring_position;
-public:
-    inet_address peer;
-private:
 };
 } // namespace streaming
 namespace streaming {
 class stream_coordinator {
 public:
     using inet_address = gms::inet_address;
-private:
-    class host_streaming_data;
-    std::map<inet_address, shared_ptr<stream_session>> _peer_sessions;
-    bool _is_receiving;
-public:
-public:
 public:
 };
 } // namespace streaming
 namespace streaming {
 class stream_plan {
 private:
-    using inet_address = gms::inet_address;
-    using token = dht::token;
-    stream_manager& _mgr;
-    plan_id _plan_id;
-    sstring _description;
-    stream_reason _reason;
-    std::vector<stream_event_handler*> _handlers;
-    shared_ptr<stream_coordinator> _coordinator;
-    bool _range_added = false;
-    bool _aborted = false;
-public:
-    
     
     
 public:
@@ -19672,12 +19450,6 @@ public:
         virtual bool should_include(const locator::topology&, inet_address endpoint) = 0;
     };
     class failure_detector_source_filter : public i_source_filter {
-    private:
-        std::set<gms::inet_address> _down_nodes;
-    public:
-    };
-    class single_datacenter_filter : public i_source_filter {
-    private:
         sstring _source_dc;
     public:
         
@@ -19696,24 +19468,12 @@ private:
     }
 #endif
     const token_metadata& get_token_metadata() ;
-public:
-    
-    
-private:
-    distributed<replica::database>& _db;
-    sharded<streaming::stream_manager>& _stream_manager;
     const token_metadata_ptr _token_metadata_ptr;
     abort_source& _abort_source;
     std::unordered_set<token> _tokens;
     inet_address _address;
     locator::endpoint_dc_rack _dr;
     sstring _description;
-    streaming::stream_reason _reason;
-    std::unordered_multimap<sstring, std::unordered_map<inet_address, dht::token_range_vector>> _to_stream;
-    std::unordered_set<std::unique_ptr<i_source_filter>> _source_filters;
-    // Number of tx and rx ranges added
-    unsigned _nr_tx_added = 0;
-    unsigned _nr_rx_added = 0;
     // Limit the number of nodes to stream in parallel to reduce memory pressure with large cluster.
     seastar::semaphore _limiter{16};
     size_t _nr_total_ranges = 0;
@@ -19726,24 +19486,12 @@ namespace utils {
     public:
         
         
-        file_lock(file_lock&&) noexcept;
-        
-        
-        static future<file_lock> acquire(fs::path);
-        
-        
     private:
         class impl;
         file_lock(fs::path);
         std::unique_ptr<impl> _impl;
     };
     
-}
-using namespace seastar;
-namespace db {
-class config;
-}
-namespace utils {
 class directories {
 public:
     class set {
