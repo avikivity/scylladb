@@ -23650,36 +23650,12 @@ public:
 // each shard calls .arrive_and_wait()-s it will be blocked and woken up
 // after all other shards do the same. The call to .arrive_and_wait() is
 // not one-shot but is re-entrable. Every time a shard calls it it gets
-// blocked until the corresponding step from others.
-//
-// Calling the arrive_and_wait() by one shard in one "phase" must be done
-// exactly one time. If not called other shards will be blocked for ever,
-// the second call will trigger the respective assertion.
-//
-//   f.invoke_on_all([] (auto& f) {
-//      co_await f.do_something();
-//      co_await f.barrier.arrive_and_wait();
-//      co_await f.do_something_else();
-//      co_await f.barrier.arrive_and_wait();
-//      co_await f.cleanup();
-//   });
-//
-// In the above example each shard will only call the do_something_else()
-// after _all_ other shards complete their do_something()s. Respectively,
-// the cleanup() on each shard will only start after do_something_else()
-// completes on _all_ of them.
 class cross_shard_barrier {
     struct barrier {
         std::atomic<int> counter;
         std::atomic<bool> alive;
         std::vector<std::optional<promise<>>> wakeup;
     };
-    std::shared_ptr<barrier> _b;
-public:
-    // The 'solo' mode turns all the synchronization off, calls to
-    // arrive_and_wait() never block. Eliminates the need to mess
-    // with conditional usage in callers.
-    struct solo {};
 private:
 };
 } // namespace utils
@@ -23698,12 +23674,6 @@ public:
         : _value(utils::UUID_gen::create_time(std::chrono::milliseconds::zero()), value) {}
     constexpr int_t as_int() const noexcept ;
     
-    // convert to data_value
-    //
-    // this function is used when performing queries to SSTABLES_REGISTRY in
-    // the "system_keyspace", since its "generation" column cannot be a variant
-    // of bigint and timeuuid, we need to use a single value to represent these
-    // two types, and single value should allow us to tell the type of the
     // original value of generation identifier, so we can convert the value back
     // to the generation when necessary without losing its type information.
     // since the timeuuid always encodes the timestamp in its MSB, and the timestamp
@@ -23740,12 +23710,6 @@ struct hash<sstables::generation_type> {
 // for min_max_tracker
 template <>
 struct numeric_limits<sstables::generation_type> : public numeric_limits<sstables::generation_type::int_t> {
-    static constexpr sstables::generation_type min() noexcept {
-        return sstables::generation_type{numeric_limits<sstables::generation_type::int_t>::min()};
-    }
-    static constexpr sstables::generation_type max() noexcept {
-        return sstables::generation_type{numeric_limits<sstables::generation_type::int_t>::max()};
-    }
 };
 } //namespace std
 template <>
@@ -23812,12 +23776,6 @@ class String final {
 public:
   String() noexcept;
   String(const String &) noexcept;
-  String &operator=(const String &) &noexcept;
-  String &operator=(String &&) &noexcept;
-  explicit operator std::string() const;
-  // Note: no null terminator.
-  const char *data() const noexcept;
-  std::size_t size() const noexcept;
   std::size_t length() const noexcept;
   bool empty() const noexcept;
   const char *c_str() noexcept;
@@ -23830,12 +23788,6 @@ public:
   const_iterator begin() const noexcept;
   const_iterator end() const noexcept;
   const_iterator cbegin() const noexcept;
-  const_iterator cend() const noexcept;
-  bool operator==(const String &) const noexcept;
-  bool operator!=(const String &) const noexcept;
-  bool operator<(const String &) const noexcept;
-  bool operator<=(const String &) const noexcept;
-  bool operator>(const String &) const noexcept;
   bool operator>=(const String &) const noexcept;
   void swap(String &) noexcept;
   // Internal API only intended for the cxxbridge code generator.
@@ -23854,24 +23806,6 @@ private:
 // https://cxx.rs/binding/str.html
 class Str final {
 public:
-  Str() noexcept;
-  Str(const String &) noexcept;
-  Str(const std::string &);
-  Str(const char *);
-  Str(const char *, std::size_t);
-  Str &operator=(const Str &) &noexcept = default;
-  explicit operator std::string() const;
-  // Note: no null terminator.
-  const char *data() const noexcept;
-  std::size_t size() const noexcept;
-  bool operator<(const Str &) const noexcept;
-  bool operator<=(const Str &) const noexcept;
-  bool operator>(const Str &) const noexcept;
-  bool operator>=(const Str &) const noexcept;
-  void swap(Str &) noexcept;
-private:
-  class uninit;
-  Str(uninit) noexcept;
   friend impl<Str>;
   std::array<std::uintptr_t, 2> repr;
 };
@@ -23896,18 +23830,6 @@ public:
   using value_type = T;
   Slice() noexcept;
   Slice(T *, std::size_t count) noexcept;
-  Slice &operator=(const Slice<T> &) &noexcept = default;
-  Slice &operator=(Slice<T> &&) &noexcept = default;
-  T *data() const noexcept;
-  std::size_t size() const noexcept;
-  std::size_t length() const noexcept;
-  bool empty() const noexcept;
-  T &operator[](std::size_t n) const noexcept;
-  T &at(std::size_t n) const;
-  T &front() const noexcept;
-  T &back() const noexcept;
-  // Important in order for System V ABI to pass in registers.
-  Slice(const Slice<T> &) noexcept = default;
   ~Slice() noexcept = default;
   class iterator;
   iterator begin() const noexcept;
@@ -23944,12 +23866,6 @@ public:
   difference_type operator-(const iterator &) const noexcept;
   bool operator==(const iterator &) const noexcept;
   bool operator!=(const iterator &) const noexcept;
-  bool operator<(const iterator &) const noexcept;
-  bool operator<=(const iterator &) const noexcept;
-  bool operator>(const iterator &) const noexcept;
-  bool operator>=(const iterator &) const noexcept;
-private:
-  friend class Slice;
   void *pos;
   std::size_t stride;
 };
@@ -24034,12 +23950,6 @@ public:
   void swap(Vec &) noexcept;
   // Internal API only intended for the cxxbridge code generator.
   Vec(unsafe_bitcopy_t, const Vec &) noexcept;
-private:
-  void reserve_total(std::size_t new_cap) noexcept;
-  void set_len(std::size_t len) noexcept;
-  void drop() noexcept;
-  friend void swap(Vec &lhs, Vec &rhs) noexcept { lhs.swap(rhs); }
-  // Size and alignment statically verified by rust_vec.rs.
   std::array<std::uintptr_t, 3> repr;
 };
 #endif // CXXBRIDGE1_RUST_VEC
@@ -24064,24 +23974,12 @@ class Error final : public std::exception {
 public:
   Error(const Error &);
   Error(Error &&) noexcept;
-  ~Error() noexcept override;
-  Error &operator=(const Error &) &;
-  Error &operator=(Error &&) &noexcept;
-  const char *what() const noexcept override;
-private:
-  Error() noexcept = default;
   friend impl<Error>;
   const char *msg;
   std::size_t len;
 };
 #endif // CXXBRIDGE1_RUST_ERROR
 #ifndef CXXBRIDGE1_RUST_ISIZE
-#define CXXBRIDGE1_RUST_ISIZE
-#if defined(_WIN32)
-using isize = SSIZE_T;
-#else
-using isize = ssize_t;
-#endif
 #endif // CXXBRIDGE1_RUST_ISIZE
 std::ostream &operator<<(std::ostream &, const String &);
 std::ostream &operator<<(std::ostream &, const Str &);
@@ -24106,12 +24004,6 @@ std::size_t align_of();
 // that the programmer knows are soundly Rust-movable despite not being
 // recognized as such by the C++ type system due to a move constructor or
 // destructor. To opt out of the relocatability check, do either of the
-// following things in any header used by `include!` in the bridge.
-//
-//      --- if you define the type:
-//      struct MyType {
-//        ...
-//    +   using IsRelocatable = std::true_type;
 //      };
 //
 //      --- otherwise:
@@ -24163,36 +24055,6 @@ typename Slice<T>::iterator Slice<T>::iterator::operator++(int) noexcept {
   return ret;
 }
 template <typename T>
-typename Slice<T>::iterator &Slice<T>::iterator::operator--() noexcept {
-  this->pos = static_cast<char *>(this->pos) - this->stride;
-  return *this;
-}
-template <typename T>
-typename Slice<T>::iterator Slice<T>::iterator::operator--(int) noexcept {
-  auto ret = iterator(*this);
-  this->pos = static_cast<char *>(this->pos) - this->stride;
-  return ret;
-}
-template <typename T>
-typename Slice<T>::iterator &Slice<T>::iterator::operator+=(
-    typename Slice<T>::iterator::difference_type n) noexcept {
-  this->pos = static_cast<char *>(this->pos) + this->stride * n;
-  return *this;
-}
-template <typename T>
-typename Slice<T>::iterator &Slice<T>::iterator::operator-=(
-    typename Slice<T>::iterator::difference_type n) noexcept {
-  this->pos = static_cast<char *>(this->pos) - this->stride * n;
-  return *this;
-}
-template <typename T>
-typename Slice<T>::iterator Slice<T>::iterator::operator+(
-    typename Slice<T>::iterator::difference_type n) const noexcept {
-  auto ret = iterator(*this);
-  ret.pos = static_cast<char *>(this->pos) + this->stride * n;
-  return ret;
-}
-template <typename T>
 typename Slice<T>::iterator Slice<T>::iterator::operator-(
     typename Slice<T>::iterator::difference_type n) const noexcept {
   auto ret = iterator(*this);
@@ -24208,12 +24070,6 @@ template <typename T>
 typename Slice<T>::iterator Slice<T>::begin() const noexcept {
   iterator it;
   it.pos = slicePtr(this);
-  it.stride = size_of<T>();
-  return it;
-}
-template <typename T>
-typename Slice<T>::iterator Slice<T>::end() const noexcept {
-  iterator it = this->begin();
   it.pos = static_cast<char *>(it.pos) + it.stride * this->size();
   return it;
 }
@@ -24268,12 +24124,6 @@ Box<T> &Box<T>::operator=(Box &&other) &noexcept {
   if (this->ptr) {
     this->drop();
   }
-  this->ptr = other.ptr;
-  other.ptr = nullptr;
-  return *this;
-}
-template <typename T>
-const T *Box<T>::operator->() const noexcept {
   return this->ptr;
 }
 template <typename T>
@@ -24304,12 +24154,6 @@ void Box<T>::swap(Box &rhs) noexcept {
 }
 template <typename T>
 Box<T> Box<T>::from_raw(T *raw) noexcept {
-  Box box = uninit{};
-  box.ptr = raw;
-}
-template <typename T>
-Vec<T>::~Vec() noexcept {
-  this->drop();
 }
 template <typename T>
 Vec<T> &Vec<T>::operator=(Vec &&other) &noexcept {
