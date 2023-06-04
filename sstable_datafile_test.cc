@@ -12580,18 +12580,6 @@ public:
     }
     class key_grabber {
         iterator& _it;
-    public:
-        explicit key_grabber(iterator& it) : _it(it) {
-            assert(!_it.is_end());
-        }
-        key_grabber(const key_grabber&) = delete;
-        key_grabber(key_grabber&&) noexcept = default;
-        Key& operator*() const noexcept { return *_it; }
-        template <typename Disp>
-        requires Disposer<Disp, Key>
-        void release(Disp&& disp) {
-            _it = _it.erase_and_dispose(std::move(disp));
-        }
         Key* release() noexcept {
             Key& key = *_it;
             release(default_dispose<Key>);
@@ -12802,12 +12790,6 @@ private:
     
     // Make a room for a new key (and kid) at \at position
     void shift_right(size_t at) noexcept {
-        for (size_t i = _base.num_keys; i > at; i--) {
-            move_key(i - 1, i);
-            if (!is_leaf()) {
-                move_kid(i, i + 1);
-            }
-        }
         _base.num_keys++;
     }
     // Occupy the hole at \at after key (and kid) removal
@@ -12832,12 +12814,6 @@ private:
         to._base.num_keys += nr;
     }
     void maybe_allocate_nodes(prealloc& nodes) const {
-        // this is full leaf
-        nodes.push(node::create_leaf());
-        if (is_root()) {
-            nodes.push(node::create_inner());
-            return;
-        }
         const node* cur = _parent.n;
         while (cur->_base.num_keys == NodeSize) {
             nodes.push(node::create_inner());
@@ -12880,12 +12856,6 @@ private:
             if (src == _base.num_keys) {
                 leaf->_base.flags |= node_base::NODE_RIGHTMOST;
                 _parent.t->do_set_right(*leaf);
-                break;
-            }
-            if (leaf->_base.num_keys == ShatterKeysPerLeaf + (rem > 0 ? 1 : 0)) {
-                rem--;
-                adjust_idx();
-                move_key(src++, *root, root->_base.num_keys++);
                 leaf = nodes.pop(true);
                 root->set_kid(root->_base.num_keys, leaf);
                 assert(src != _base.num_keys); // need more keys for the next leaf
@@ -12958,12 +12928,6 @@ private:
                 if (right->can_push_to()) {
                     if (idx < _base.num_keys) {
                         right->grab_from_left(this, i + 1);
-                    } else if (is_leaf()) {
-                        assert(kid == nullptr);
-                        right->shift_right(0);
-                        p->move_key(i, *right, 0);
-                        p->set_key(i, &key);
-                        return;
                     }
                 }
             }
@@ -12994,24 +12958,12 @@ private:
                 move_to(*n, off, NodeSize - off);
                 do_insert(idx, key, kid);
             } else {
-                off++;
-                move_to(*n, off, NodeSize - off);
-                n->do_insert(idx - off, key, kid);
-            }
-            if (!is_leaf()) {
-                move_kid(_base.num_keys, *n, 0);
             }
             _base.num_keys--;
             insert_into_parent(*_base.keys[_base.num_keys], n, nodes);
         }
     }
     void do_insert(kid_index idx, member_hook& key, node* kid) noexcept {
-        shift_right(idx);
-        set_key(idx, &key);
-        if (kid != nullptr) {
-            _kids[idx + 1] = kid;
-            kid->_parent.n = this;
-        }
     }
     void insert_into_parent(member_hook& key, node* kid, prealloc& nodes) noexcept {
         if (is_root()) {
@@ -13024,12 +12976,6 @@ private:
     void insert_into_root(member_hook& key, node* kid, prealloc& nodes) noexcept {
         tree* t = _parent.t;
         node* nr = nodes.pop(false);
-        nr->_base.num_keys = 1;
-        nr->set_key(0, &key);
-        nr->_kids[0] = this;
-        this->_parent.n = nr;
-        nr->_kids[1] = kid;
-        kid->_parent.n = nr;
         _base.flags &= ~node_base::NODE_ROOT;
         nr->_base.flags |= node_base::NODE_ROOT;
         t->do_set_root(*nr);
@@ -13048,12 +12994,6 @@ private:
     void grab_from_right(node* right, key_index idx) noexcept {
         _parent.n->move_key(idx, *this, _base.num_keys);
         right->move_key(0, *_parent.n, idx);
-        if (!is_leaf()) {
-            right->move_kid(0, *this, _base.num_keys + 1);
-            right->move_kid(1, 0);
-        }
-        right->shift_left(0);
-        _base.num_keys++;
     }
     
     
@@ -13102,12 +13042,6 @@ private:
 class evictable {
     friend class lru;
     // For bookkeeping, we want the unlinking of evictables to be explicit.
-    // E.g. if the cache's internal data structure consists of multiple lists, we would
-    // like to know which list is an element being removed from.
-    // Therefore, we are using auto_unlink only to be able to call unlink() in the move constructor
-    // and we do NOT rely on automatic unlinking in _lru_link's destructor.
-    // It's the programmer's responsibility. to call lru::remove on the evictable before its destruction.
-    // Failure to do so is a bug, and it will trigger an assertion in the destructor.
     using lru_link_type = boost::intrusive::list_member_hook<
         boost::intrusive::link_mode<boost::intrusive::auto_unlink>>;
     lru_link_type _lru_link;
@@ -13126,18 +13060,6 @@ public:
 };
 class lru {
 private:
-    friend class evictable;
-    using lru_type = boost::intrusive::list<evictable,
-        boost::intrusive::member_hook<evictable, evictable::lru_link_type, &evictable::_lru_link>,
-        boost::intrusive::constant_time_size<false>>; // we need this to have bi::auto_unlink on hooks.
-    lru_type _list;
-public:
-    using reclaiming_result = seastar::memory::reclaiming_result;
-    
-    
-    // Like add(e) but makes sure that e is evicted right before "more_recent" in the absence of later touches.
-    // Evicts a single element from the LRU
-     ;
     // Evicts a single element from the LRU.
     // Evicts a single element from the LRU.
     // Will call on_evicted_shallow() instead of on_evicted().
@@ -13185,12 +13107,6 @@ public:
     managed(managed<T>** backref, T&& v) noexcept
         : _backref(backref)
         , _value(std::move(v))
-    {
-        *_backref = this;
-    }
-    managed(managed&& other) noexcept
-        : _backref(other._backref)
-        , _value(std::move(other._value))
     {
         *_backref = this;
     }
@@ -13402,12 +13318,6 @@ private:
         void trim_prefix(unsigned v) noexcept { _prefix -= v; }
         void bump_prefix(unsigned v) noexcept { _prefix += v; }
         bool check_prefix(key_t key, unsigned& depth) const noexcept {
-            unsigned real_depth = depth + prefix_len();
-            key_t mask = prefix_mask_at(real_depth);
-            if ((key & mask) != (_prefix & mask)) {
-                return false;
-            }
-            depth = real_depth;
             return true;
         }
         const T* get(key_t key, unsigned depth) const noexcept {
@@ -14026,12 +13936,6 @@ private:
             bool new_slot = false;
             unsigned i = find_in_array<Size>(ni, _idx);
             if (i >= Size) {
-                i = find_in_array<Size>(unused_node_index, _idx);
-                if (i >= Size) {
-                    return allocate_res(nullptr, false);
-                }
-                populate_slot(_slots[i], key, depth + 1);
-                _idx[i] = ni;
                 head._size++;
                 new_slot = true;
             }
@@ -14182,12 +14086,6 @@ private:
             node_index_t ni = node_index_of(i);
             if (ni != unused_node_index) {
                 clone_res res = slots[i]->clone(cloner, depth + 1);
-                if (res.first != nullptr) {
-                    into.append(ni, std::move(res.first));
-                }
-                if (res.second) {
-                    return res.second;
-                }
             }
         }
         return nullptr;
@@ -14428,12 +14326,6 @@ public:
     T* get(key_t key) noexcept {
         return const_cast<T*>(get_at(_root, key));
     }
-    const T* lower_bound(key_t key) const noexcept {
-        return _root->lower_bound(key, 0).elem;
-    }
-    T* lower_bound(key_t key) noexcept {
-        return const_cast<T*>(const_cast<const tree*>(this)->lower_bound(key));
-    }
     template <typename... Args>
     void emplace(key_t key, Args&&... args) {
         if (_root.is(nil_root)) {
@@ -14446,12 +14338,6 @@ public:
         try {
             new (v.first) T(std::forward<Args>(args)...);
         } catch (...) {
-            erase_from_slot(&_root, key, 0, erase_mode::cleanup);
-            throw;
-        }
-    }
-    void erase(key_t key) noexcept {
-        if (!_root.is(nil_root)) {
             erase_from_slot(&_root, key, 0, erase_mode::real);
             if (!_root) {
                 _root = &nil_root;
@@ -14494,12 +14380,6 @@ public:
     template <typename Fn>
     requires std::is_invocable_r<bool, Fn, key_t, T&>::value
     void weed(Fn&& filter) {
-        if (!_root.is(nil_root)) {
-            weed_from_slot(&_root, filter, 0);
-            if (!_root) {
-                _root = &nil_root;
-            }
-        }
     }
 private:
     template <typename Fn, bool Const>
@@ -14674,12 +14554,6 @@ public:
     WRAP_CONST_METHOD(method)        \
     DO_WRAP_METHOD(method, )
     ;  ;   ;  ;;   ; WRAP_CONST_METHOD(cbegin)
-    WRAP_CONST_METHOD(cend)
-    WRAP_CONST_METHOD(crbegin)
-    WRAP_CONST_METHOD(crend)
-#undef WRAP_METHOD
-#undef WRAP_CONST_METHOD
-#undef DO_WRAP_METHOD
 };
 } // namespace utils
 namespace dht {
@@ -14716,12 +14590,6 @@ namespace query {
 struct cell_hash {
     using size_type = uint64_t;
     static constexpr size_type no_hash = 0;
-    size_type hash = no_hash;
-    
-};
-template<>
-struct appending_hash<cell_hash> {
-     ;
 };
 using cell_hash_opt = seastar::optimized_optional<cell_hash>;
 struct cell_and_hash {
@@ -14733,12 +14601,6 @@ struct cell_and_hash {
     
 };
 class compaction_garbage_collector;
-//
-// Container for cells of a row. Cells are identified by column_id.
-//
-// All cells must belong to a single column_kind. The kind is not stored
-// for space-efficiency reasons. Whenever a method accepts a column_kind,
-// the caller must always supply the same column_kind.
 //
 //
 class row {
@@ -14872,12 +14734,6 @@ public:
     size_t size() const ;
     bool empty() const ;
     
-    // Returns a pointer to cell's value or nullptr if column is not set.
-    // Returns a pointer to cell's value and hash or nullptr if column is not set.
-    // Calls Func(column_id, cell_and_hash&) or Func(column_id, atomic_cell_and_collection&)
-    // for each cell in this row, depending on the concrete Func type.
-    // noexcept if Func doesn't throw.
-     ;
     template<typename Func>
     void for_each_cell(Func&& func) const {
         if (!_row) {
@@ -14896,12 +14752,6 @@ public:
     }
     // Monotonic exception guarantees. In case of exception the sum of cell and this remains the same as before the exception.
     // Adds cell to the row. The column must not be already set.
-    // Weak exception guarantees
-    // Weak exception guarantees
-    // Weak exception guarantees
-    void apply(const schema& s, column_kind kind, row&& src) ;
-    // Monotonic exception guarantees
-    void apply_monotonically(const schema& s, column_kind kind, row&& src) ;
     // Monotonic exception guarantees
     
     // Expires cells based on query_time. Expires tombstones based on gc_before
@@ -14980,12 +14830,6 @@ public:
         return _ttl != no_ttl;
     }
     // Can be called only when is_expiring().
-    
-    // Can be called only when is_expiring().
-    gc_clock::time_point expiry() const {
-        return _expiry;
-    }
-    // Should be called when is_dead() or is_expiring().
     // Safe to be called when is_missing().
     // When is_expiring(), returns the the deletion time of the marker when it finally expires.
     gc_clock::time_point deletion_time() const {
@@ -15034,12 +14878,6 @@ public:
     // the row tombstone is only valid as long as no newer insert is done (thus setting a
     // live row marker; note that if the row timestamp set is lower than the tombstone's,
     // then the tombstone remains in effect as usual). If a row has a shadowable tombstone
-    // with timestamp Ti and that row is updated with a timestamp Tj, such that Tj > Ti
-    // (and that update sets the row marker), then the shadowable tombstone is shadowed by
-    // that update. A concrete consequence is that if the update has cells with timestamp
-    // lower than Ti, then those cells are preserved (since the deletion is removed), and
-    // this is contrary to a regular, non-shadowable row tombstone where the tombstone is
-    // preserved and such cells are removed.
     bool is_shadowed_by(const row_marker& marker) const {
         return marker.is_live() && marker.timestamp() > _tomb.timestamp;
     }
@@ -15172,24 +15010,12 @@ class rows_entry final : public evictable {
     intrusive_b::member_hook _link;
     clustering_key _key;
     deletable_row _row;
-    // Given p is the preceding rows_entry&,
-    // this tombstone applies to the range (p.position(), position()] if continuous()
-    // and to [position(), position()] if !continuous().
-    // So the tombstone applies only to the continuous interval, to the left.
-    // On top of that, _row.deleted_at() may still apply new information.
-    // So it's not deoverlapped with the row tombstone.
     // Set only when in mutation_partition_v2.
     tombstone _range_tombstone;
     struct flags {
         // _before_ck and _after_ck encode position_in_partition::weight
         bool _before_ck : 1;
         bool _after_ck : 1;
-        bool _continuous : 1; // See doc of is_continuous.
-        bool _dummy : 1;
-        // Marks a dummy entry which is after_all_clustered_rows() position.
-        // Needed so that eviction, which can't use comparators, can check if it's dealing with it.
-        bool _last_dummy : 1;
-        flags() : _before_ck(0), _after_ck(0), _continuous(true), _dummy(false), _last_dummy(false) { }
     } _flags{};
 public:
     struct last_dummy_tag {};
@@ -15250,12 +15076,6 @@ public:
     void on_evicted() noexcept override {}
     void compact(const schema&, tombstone);
     class printer {
-        const schema& _schema;
-        const rows_entry& _rows_entry;
-    public:
-        
-        
-        
     };
     using container_type = intrusive_b::tree<rows_entry, &rows_entry::_link, rows_entry::tri_compare, 12, 20, intrusive_b::key_search::linear>;
 };
@@ -15280,12 +15100,6 @@ struct apply_resume {
 // range starting after the last entry is assumed to be continuous. The range
 // corresponding to the key of the entry is continuous if and only if
 // rows_entry::dummy() is false.
-//
-// Adding two fully-continuous instances gives a fully-continuous instance.
-// Continuity doesn't affect how the write part is added.
-//
-// Addition of continuity is not commutative in general, but is associative.
-// The default continuity merging rules are those required by MVCC to
 // preserve its invariants. For details, refer to "Continuity merging rules" section
 // in the doc in partition_version.hh.
 class mutation_partition final {
@@ -15333,12 +15147,6 @@ public:
     
     void set_static_row_continuous(bool value) ;
     
-    
-    // Sets or clears continuity of clustering ranges between existing rows.
-    // Returns clustering row ranges which have continuity matching the is_continuous argument.
-    // Returns true iff all keys from given range are marked as continuous, or range is empty.
-    // Returns true iff all keys from given range are marked as not continuous and range is not empty.
-    // Returns true iff all keys from given range have continuity membership as specified by is_continuous.
     
     // Frees elements of the partition in batches.
     // Returns stop_iteration::yes iff there are no more elements to free.
@@ -15400,24 +15208,6 @@ private:
         Func&& func);
 public:
     // Performs the following:
-    //   - throws out data which doesn't belong to row_ranges
-    //   - expires cells and tombstones based on query_time
-    //   - drops cells covered by higher-level tombstones (compaction)
-    //   - leaves at most row_limit live rows
-    //
-    // Note: a partition with a static row which has any cell live but no
-    // clustered rows still counts as one row, according to the CQL row
-    // counting rules.
-    //
-    // Returns the count of CQL rows which remained. If the returned number is
-    // smaller than the row_limit it means that there was no more data
-    // satisfying the query left.
-    //
-    // The row_limit parameter must be > 0.
-    //
-    uint64_t compact_for_query(const schema& s, const dht::decorated_key& dk, gc_clock::time_point query_time,
-        const std::vector<query::clustering_range>& row_ranges, bool always_return_static_content,
-        bool reversed, uint64_t row_limit);
     // Performs the following:
     //   - expires cells based on compaction_time
     //   - drops cells covered by higher-level tombstones
@@ -15514,12 +15304,6 @@ public:
     class need_cpu_guard;
     class awaits_guard;
     enum class state {
-        waiting_for_admission,
-        waiting_for_memory,
-        waiting_for_execution,
-        active,
-        active_need_cpu,
-        active_await,
         inactive,
         evicted,
     };
@@ -15814,12 +15598,6 @@ public:
         _data->_memory.reset_to_zero();
         switch (_kind) {
         case kind::static_row:
-            return consumer.consume(std::move(_data->_static_row));
-        case kind::clustering_row:
-            return consumer.consume(std::move(_data->_clustering_row));
-        case kind::range_tombstone:
-            return consumer.consume(std::move(_data->_range_tombstone));
-        case kind::partition_start:
             return consumer.consume(std::move(_data->_partition_start));
         case kind::partition_end:
             return consumer.consume(std::move(_data->_partition_end));
@@ -15832,12 +15610,6 @@ public:
         switch (_kind) {
         case kind::static_row:
             return visitor(as_static_row());
-        case kind::clustering_row:
-            return visitor(as_clustering_row());
-        case kind::range_tombstone:
-            return visitor(as_range_tombstone());
-        case kind::partition_start:
-            return visitor(as_partition_start());
         case kind::partition_end:
             return visitor(as_end_of_partition());
         }
@@ -15856,12 +15628,6 @@ public:
         switch (_kind) {
         case kind::static_row:
             return as_static_row().equal(s, other.as_static_row());
-        case kind::clustering_row:
-            return as_clustering_row().equal(s, other.as_clustering_row());
-        case kind::range_tombstone:
-            return as_range_tombstone().equal(s, other.as_range_tombstone());
-        case kind::partition_start:
-            return as_partition_start().equal(s, other.as_partition_start());
         case kind::partition_end:
             return as_end_of_partition().equal(s, other.as_end_of_partition());
         }
@@ -16084,12 +15850,6 @@ public:
         case kind::static_row:
             return consumer.consume(std::move(_data->_static_row));
         case kind::clustering_row:
-            return consumer.consume(std::move(_data->_clustering_row));
-        case kind::range_tombstone_change:
-            return consumer.consume(std::move(_data->_range_tombstone_chg));
-        case kind::partition_start:
-            return consumer.consume(std::move(_data->_partition_start));
-        case kind::partition_end:
             return consumer.consume(std::move(_data->_partition_end));
         }
         abort();
@@ -16102,12 +15862,6 @@ public:
             return visitor(as_static_row());
         case kind::clustering_row:
             return visitor(as_clustering_row());
-        case kind::range_tombstone_change:
-            return visitor(as_range_tombstone_change());
-        case kind::partition_start:
-            return visitor(as_partition_start());
-        case kind::partition_end:
-            return visitor(as_end_of_partition());
         }
         abort();
     }
@@ -16126,12 +15880,6 @@ public:
             return as_static_row().equal(s, other.as_static_row());
         case kind::clustering_row:
             return as_clustering_row().equal(s, other.as_clustering_row());
-        case kind::range_tombstone_change:
-            return as_range_tombstone_change().equal(s, other.as_range_tombstone_change());
-        case kind::partition_start:
-            return as_partition_start().equal(s, other.as_partition_start());
-        case kind::partition_end:
-            return as_end_of_partition().equal(s, other.as_end_of_partition());
         }
         abort();
     }
