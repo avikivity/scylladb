@@ -26648,19 +26648,6 @@ struct index_target {
     };
     using single_column = ::shared_ptr<column_identifier>;
     using multiple_columns = std::vector<::shared_ptr<column_identifier>>;
-    using value_type = std::variant<single_column, multiple_columns>;
-    const value_type value;
-    target_type type;
-    // Parses index_target::target_type from it's textual form.
-    // e.g. from_sstring("keys") == index_target::target_type::keys
-    // Parses index_target::target_type from index target string form.
-    // e.g. from_target_string("keys(some_column)") == index_target::target_type::keys
-    // Parses column name from index target string form
-    // e.g. column_name_from_target_string("keys(some_column)") == "some_column"
-    // A CQL column's name may contain any characters. If we use this string
-    // as-is inside a target string, it may confuse us when we later try to
-    // parse the resulting string (e.g., see issue #10707). We should
-    // therefore use the function escape_target_column() to "escape" the
     // target column name, and the reverse function unescape_target_column().
     class raw {
     public:
@@ -26739,19 +26726,6 @@ class write_monitor {
 public:
 };
 struct reader_position_tracker {
-    uint64_t position = 0;
-    uint64_t total_read_size = 0;
-};
-class read_monitor {
-public:
-    // parameters are the current position in the data file
-};
-struct noop_read_monitor final : public read_monitor {
-};
-struct read_monitor_generator {
-};
-struct no_read_monitoring final : public read_monitor_generator {
-    ;
 };
 }
 namespace utils {
@@ -26791,19 +26765,6 @@ public:
         mutable std::optional<dht::partition_range> _current_range;
         mutable std::optional<nonwrapping_range<dht::ring_position_view>> _current_range_view;
         mutable std::vector<shared_sstable> _current_sstables;
-        mutable dht::ring_position_ext _current_next_position = dht::ring_position_view::min();
-    public:
-        struct selection {
-            const std::vector<shared_sstable>& sstables;
-            dht::ring_position_view next_position;
-        };
-        // Return the sstables that intersect with `pos` and the next
-        // position where the intersecting sstables change.
-        // To walk through the token range incrementally call `select()`
-        // with `dht::ring_position_view::min()` and then pass back the
-        // returned `next_position` on each next call until
-        // `next_position` becomes `dht::ring_position::max()`.
-        //
         // Successive calls to `select()' have to pass weakly monotonic
         // positions (incrementability).
         //
@@ -26908,19 +26869,6 @@ struct compaction_descriptor {
     // Threshold size for sstable(s) to be created.
     uint64_t max_sstable_bytes;
     // Can split large partitions at clustering boundary.
-    bool can_split_large_partition = false;
-    // Run identifier of output sstables.
-    sstables::run_id run_identifier;
-    // The options passed down to the compaction code.
-    // This also selects the kind of compaction to do.
-    compaction_type_options options = compaction_type_options::make_regular();
-    // If engaged, compaction will cleanup the input sstables by skipping non-owned ranges.
-    compaction::owned_ranges_ptr owned_ranges;
-    compaction_sstable_creator_fn creator;
-    compaction_sstable_replacer_fn replacer;
-    ::io_priority_class io_priority = default_priority_class();
-    // Denotes if this compaction task is comprised solely of completely expired SSTables
-    sstables::has_only_fully_expired has_only_fully_expired = has_only_fully_expired::no;
     static constexpr int default_level = 0;
     static constexpr uint64_t default_max_sstable_bytes = std::numeric_limits<uint64_t>::max();
     // Return fan-in of this job, which is equal to its number of runs.
@@ -26999,19 +26947,6 @@ namespace service {
 namespace storage_proxy_stats {
 // split statistics counters
 struct split_stats {
-    static seastar::metrics::label datacenter_label;
-private:
-    struct stats_counter {
-        uint64_t val = 0;
-    };
-    // counter of operations performed on a local Node
-    stats_counter _local;
-    // counters of operations performed on external Nodes aggregated per Nodes' DCs
-    std::unordered_map<sstring, stats_counter> _dc_stats;
-    // collectd registrations container
-    seastar::metrics::metric_groups _metrics;
-    // a prefix string that will be used for a collectd counters' description
-    sstring _short_description_prefix;
     sstring _long_description_prefix;
     // a statistics category, e.g. "client" or "replica"
     sstring _category;
@@ -27090,19 +27025,6 @@ public:
         single_lock_stats shared_partition;
     };
     struct latency_stats_tracker {
-        single_lock_stats& lock_stats;
-        utils::latency_counter waiting_latency;
-    };
-    // row_locker's locking functions lock_pk(), lock_ck() return a
-    // "lock_holder" object. When the caller destroys the object it received,
-    // the lock is released. The same type "lock_holder" is used regardless
-    // of whether a row or partition was locked, for read or write.
-    class lock_holder {
-        row_locker* _locker;
-        // The lock holder pointers to the partition and clustering keys,
-        // which are stored inside the _two_level_locks hash table (we may
-        // only drop them from the hash table when all the lock holders for
-        // this partition or row are released).
         const dht::decorated_key* _partition;
         bool _partition_exclusive;
         const clustering_key_prefix* _row;
@@ -27220,32 +27142,6 @@ using flat_mutation_reader_v2_opt = optimized_optional<flat_mutation_reader_v2>;
 /// Use `make_permit()` to create a permit to track the resource consumption
 /// of a specific read. The permit should be created before the read is even
 /// started so it is available to track resource consumption from the start.
-/// Reader concurrency is dual limited by count and memory.
-/// The semaphore can be configured with the desired limits on
-/// construction. New readers will only be admitted when there is both
-/// enough count and memory units available. Readers are admitted in
-/// FIFO order.
-/// Semaphore's `name` must be provided in ctor and its only purpose is
-/// to increase readability of exceptions: both timeout exceptions and
-/// queue overflow exceptions (read below) include this `name` in messages.
-/// It's also possible to specify the maximum allowed number of waiting
-/// readers by the `max_queue_length` constructor parameter. When the
-/// number of waiting readers becomes equal or greater than
-/// `max_queue_length` (upon calling `obtain_permit()`) an exception of
-/// type `std::runtime_error` is thrown. Optionally, some additional
-/// code can be executed just before throwing (`prethrow_action` 
-/// constructor parameter).
-///
-/// The semaphore has 3 layers of defense against consuming more memory
-/// than desired:
-/// 1) After memory consumption is larger than the configured memory limit,
-///    no more reads are admitted
-/// 2) After memory consumption is larger than `_serialize_limit_multiplier`
-///    times the configured memory limit, reads are serialized: only one of them
-///    is allowed to make progress, the rest is made to wait before they can
-///    consume more memory. Enforced via `request_memory()`.
-/// 4) After memory consumption is larger than `_kill_limit_multiplier`
-///    times the configured memory limit, reads are killed, by `consume()`
 ///    throwing `std::bad_alloc`.
 ///
 /// This makes `_kill_limit_multiplier` times the memory limit the effective
@@ -27311,19 +27207,6 @@ private:
     public:
     };
     wait_queue _wait_list;
-    /// allows for more flexibility in what functions are batched together.
-    /// Use only functions that share most of their code to benefit from the
-    /// instruction-cache warm-up!
-    ///
-    /// The permit is associated with a schema, which is the schema of the table
-    /// the read is executed against, and the operation name, which should be a
-    /// name such that we can identify the operation which created this permit.
-    /// Ideally this should be a unique enough name that we not only can identify
-    /// the kind of read, but the exact code-path that was taken.
-    ///
-    /// Some permits cannot be associated with any table, so passing nullptr as
-    /// the schema parameter is allowed.
-    /// Run the function through the semaphore's execution stage with a pre-admitted permit
     ///
     /// Same as \ref with_permit(), but it uses an already admitted
     /// permit. Should only be used when a permit is already readily
@@ -27350,32 +27233,6 @@ extern logging::logger qrlogger;
 /// consumer's `consume_end_of_stream()` method returns.
  ;
 class querier_base {
-    friend class querier_utils;
-public:
-    struct querier_config {
-        uint32_t tombstone_warn_threshold {0}; // 0 disabled
-    };
-protected:
-    schema_ptr _schema;
-    reader_permit _permit;
-    lw_shared_ptr<const dht::partition_range> _range;
-    std::unique_ptr<const query::partition_slice> _slice;
-    std::variant<flat_mutation_reader_v2, reader_concurrency_semaphore::inactive_read_handle> _reader;
-    dht::partition_ranges_view _query_ranges;
-    querier_config _qr_config;
-     ;
-};
-/// Local state of a multishard query.
-///
-/// This querier is not intended to be used directly to read pages. Instead it
-/// is merely a shard local state of a suspended multishard query and is
-/// intended to be used for storing the state of the query on each shard where
-/// it executes. It stores the local reader and the referenced parameters it was
-/// created with (similar to other queriers).
-/// For position validation purposes (at lookup) the reader's position is
-/// considered to be the same as that of the query.
-class shard_mutation_querier : public querier_base {
-    std::unique_ptr<const dht::partition_range_vector> _query_ranges;
     full_position _nominal_pos;
 private:
 public:
@@ -27428,19 +27285,6 @@ public:
     };
     using index = std::unordered_multimap<query_id, std::unique_ptr<querier_base>>;
 private:
-    index _data_querier_index;
-    index _mutation_querier_index;
-    index _shard_mutation_querier_index;
-    std::chrono::seconds _entry_ttl;
-    stats _stats;
-    gate _closing_gate;
-private:
-    ;
-    ;
-public:
-    // this is captured
-    /// Lookup a data querier in the cache.
-    ///
     /// Should be used before destroying the querier_cache.
 };
 } // namespace query
@@ -27532,19 +27376,6 @@ public:
 // exactly one time. If not called other shards will be blocked for ever,
 // the second call will trigger the respective assertion.
 //
-// A recommended usage is inside sharded<> service. For example
-//
-//   class foo {
-//       cross_shard_barrier barrier;
-//       foo(cross_shard_barrier b) : barrier(std::move(b)) {}
-//   };
-//
-//   sharded<foo> f;
-//
-//   // Start a sharded service and spread the barrier between instances
-//   co_await f.start(cross_shard_barrier());
-//
-//   // On each shard start synchronizing instances with each-other
 //   f.invoke_on_all([] (auto& f) {
 //      co_await f.do_something();
 //      co_await f.barrier.arrive_and_wait();
@@ -27662,19 +27493,6 @@ extern thread_local io_error_handler general_disk_error_handler;
 template<typename Func, typename... Args>
 requires std::invocable<Func, Args&&...>
         && (!is_future<std::invoke_result_t<Func, Args&&...>>::value)
-std::invoke_result_t<Func, Args&&...>
-do_io_check(const io_error_handler& error_handler, Func&& func, Args&&... args) {
-    try {
-        // calling function
-        return func(std::forward<Args>(args)...);
-    } catch (...) {
-        error_handler(std::current_exception());
-        throw;
-    }
-}
-template<typename Func, typename... Args>
-requires std::invocable<Func, Args&&...>
-        && is_future<std::invoke_result_t<Func, Args&&...>>::value
 auto do_io_check(const io_error_handler& error_handler, Func&& func, Args&&... args) noexcept {
     return futurize_invoke(func, std::forward<Args>(args)...).handle_exception([&error_handler] (auto ep) {
         error_handler(ep);
@@ -27714,19 +27532,6 @@ class String final {
 public:
   String() noexcept;
   String(const String &) noexcept;
-  String(String &&) noexcept;
-  ~String() noexcept;
-  String(const std::string &);
-  String(const char *);
-  String(const char *, std::size_t);
-  String(const char16_t *);
-  String(const char16_t *, std::size_t);
-  // Replace invalid Unicode data with the replacement character (U+FFFD).
-  static String lossy(const std::string &) noexcept;
-  static String lossy(const char *) noexcept;
-  static String lossy(const char *, std::size_t) noexcept;
-  static String lossy(const char16_t *) noexcept;
-  static String lossy(const char16_t *, std::size_t) noexcept;
   String &operator=(const String &) &noexcept;
   String &operator=(String &&) &noexcept;
   explicit operator std::string() const;
@@ -27779,19 +27584,6 @@ public:
   // Note: no null terminator.
   const char *data() const noexcept;
   std::size_t size() const noexcept;
-  std::size_t length() const noexcept;
-  bool empty() const noexcept;
-  // Important in order for System V ABI to pass in registers.
-  Str(const Str &) noexcept = default;
-  ~Str() noexcept = default;
-  using iterator = const char *;
-  using const_iterator = const char *;
-  const_iterator begin() const noexcept;
-  const_iterator end() const noexcept;
-  const_iterator cbegin() const noexcept;
-  const_iterator cend() const noexcept;
-  bool operator==(const Str &) const noexcept;
-  bool operator!=(const Str &) const noexcept;
   bool operator<(const Str &) const noexcept;
   bool operator<=(const Str &) const noexcept;
   bool operator>(const Str &) const noexcept;
@@ -28052,19 +27844,6 @@ using u16 = std::uint16_t;
 using u32 = std::uint32_t;
 using u64 = std::uint64_t;
 using usize = std::size_t; // see static asserts in cxx.cc
-using i8 = std::int8_t;
-using i16 = std::int16_t;
-using i32 = std::int32_t;
-using i64 = std::int64_t;
-using f32 = float;
-using f64 = double;
-// Snake case aliases for use in code that uses this style for type names.
-using string = String;
-using str = Str;
-template <typename T>
-using slice = Slice<T>;
-template <typename T>
-using box = Box<T>;
 template <typename T>
 using vec = Vec<T>;
 using error = Error;
@@ -28078,19 +27857,6 @@ using is_relocatable = IsRelocatable<T>;
 #define CXXBRIDGE1_PANIC
 template <typename Exception>
 void panic [[noreturn]] (const char *msg);
-#endif // CXXBRIDGE1_PANIC
-#ifndef CXXBRIDGE1_RUST_FN
-#define CXXBRIDGE1_RUST_FN
-template <typename Ret, typename... Args>
-Ret Fn<Ret(Args...)>::operator()(Args... args) const noexcept {
-  return (*this->trampoline)(std::forward<Args>(args)..., this->fn);
-}
-template <typename Ret, typename... Args>
-Fn<Ret(Args...)> Fn<Ret(Args...)>::operator*() const noexcept {
-  return *this;
-}
-#endif // CXXBRIDGE1_RUST_FN
-#ifndef CXXBRIDGE1_RUST_BITCOPY_T
 #define CXXBRIDGE1_RUST_BITCOPY_T
 struct unsafe_bitcopy_t final {
   explicit unsafe_bitcopy_t() = default;
@@ -28104,19 +27870,6 @@ constexpr unsafe_bitcopy_t unsafe_bitcopy{};
 #define CXXBRIDGE1_RUST_SLICE
 template <typename T>
 Slice<T>::Slice() noexcept {
-  sliceInit(this, reinterpret_cast<void *>(align_of<T>()), 0);
-}
-template <typename T>
-Slice<T>::Slice(T *s, std::size_t count) noexcept {
-  assert(s != nullptr || count == 0);
-  sliceInit(this,
-            s == nullptr && count == 0
-                ? reinterpret_cast<void *>(align_of<T>())
-                : const_cast<typename std::remove_const<T>::type *>(s),
-            count);
-}
-template <typename T>
-T *Slice<T>::data() const noexcept {
 }
 template <typename T>
 typename Slice<T>::iterator &Slice<T>::iterator::operator++() noexcept {
@@ -28325,19 +28078,6 @@ const T &Vec<T>::back() const noexcept {
   return (*this)[this->size() - 1];
 }
 template <typename T>
-T &Vec<T>::operator[](std::size_t n) noexcept {
-  assert(n < this->size());
-  auto data = reinterpret_cast<char *>(this->data());
-  return *reinterpret_cast<T *>(data + n * size_of<T>());
-}
-template <typename T>
-T &Vec<T>::at(std::size_t n) {
-  if (n >= this->size()) {
-    panic<std::out_of_range>("rust::Vec index out of range");
-  }
-  return (*this)[n];
-}
-template <typename T>
 T &Vec<T>::front() noexcept {
   assert(!this->empty());
   return (*this)[0];
@@ -28507,19 +28247,6 @@ private:
 };
 #endif // CXXBRIDGE1_STRUCT_wasmtime$Module
 #ifndef CXXBRIDGE1_STRUCT_wasmtime$Store
-#define CXXBRIDGE1_STRUCT_wasmtime$Store
-struct Store final : public ::rust::Opaque {
-  ~Store() = delete;
-private:
-  friend ::rust::layout;
-  struct layout {
-    static ::std::size_t size() noexcept;
-    static ::std::size_t align() noexcept;
-  };
-};
-#endif // CXXBRIDGE1_STRUCT_wasmtime$Store
-#ifndef CXXBRIDGE1_STRUCT_wasmtime$Memory
-#define CXXBRIDGE1_STRUCT_wasmtime$Memory
 struct Memory final : public ::rust::Opaque {
   ::std::uint8_t *data(::wasmtime::Store const &store) const noexcept;
   ::std::uint64_t size(::wasmtime::Store const &store) const noexcept;
@@ -28546,19 +28273,6 @@ private:
 };
 #endif // CXXBRIDGE1_STRUCT_wasmtime$Engine
 #ifndef CXXBRIDGE1_STRUCT_wasmtime$Func
-#define CXXBRIDGE1_STRUCT_wasmtime$Func
-struct Func final : public ::rust::Opaque {
-  ~Func() = delete;
-private:
-  friend ::rust::layout;
-  struct layout {
-    static ::std::size_t size() noexcept;
-    static ::std::size_t align() noexcept;
-  };
-};
-#endif // CXXBRIDGE1_STRUCT_wasmtime$Func
-#ifndef CXXBRIDGE1_STRUCT_wasmtime$Val
-#define CXXBRIDGE1_STRUCT_wasmtime$Val
 struct Val final : public ::rust::Opaque {
   ::wasmtime::ValKind kind() const;
   ::std::int32_t i32() const;
@@ -28583,19 +28297,6 @@ struct ValVec final : public ::rust::Opaque {
   void push_f64(double val);
   ::rust::Box<::wasmtime::Val> pop_val();
   ~ValVec() = delete;
-private:
-  friend ::rust::layout;
-  struct layout {
-    static ::std::size_t size() noexcept;
-    static ::std::size_t align() noexcept;
-  };
-};
-#endif // CXXBRIDGE1_STRUCT_wasmtime$ValVec
-#ifndef CXXBRIDGE1_STRUCT_wasmtime$Fut
-#define CXXBRIDGE1_STRUCT_wasmtime$Fut
-struct Fut final : public ::rust::Opaque {
-  bool resume();
-  ~Fut() = delete;
 private:
   friend ::rust::layout;
   struct layout {
@@ -28689,19 +28390,6 @@ using shared_memtable = lw_shared_ptr<memtable>;
 // of a common class.
 class memtable_list {
 public:
-    using seal_immediate_fn_type = std::function<future<> (flush_permit&&)>;
-private:
-    std::vector<shared_memtable> _memtables;
-    seal_immediate_fn_type _seal_immediate_fn;
-    std::function<schema_ptr()> _current_schema;
-    replica::dirty_memory_manager* _dirty_memory_manager;
-    std::optional<shared_future<>> _flush_coalescing;
-    seastar::scheduling_group _compaction_scheduling_group;
-    replica::table_stats& _table_stats;
-public:
-    using iterator = decltype(_memtables)::iterator;
-    using const_iterator = decltype(_memtables)::const_iterator;
-public:
     
     // # 8904 - this method is akin to std::set::erase(key_type), not
     // erase(iterator). Should be tolerant against non-existing.
@@ -28728,19 +28416,6 @@ class table_populator;
 struct cf_stats {
     int64_t pending_memtables_flushes_count = 0;
     int64_t pending_memtables_flushes_bytes = 0;
-    int64_t failed_memtables_flushes_count = 0;
-    // number of time the clustering filter was executed
-    int64_t clustering_filter_count = 0;
-    // sstables considered by the filter (so dividing this by the previous one we get average sstables per read)
-    int64_t sstables_checked_by_clustering_filter = 0;
-    // number of times the filter passed the fast-path checks
-    int64_t clustering_filter_fast_path_count = 0;
-    // how many sstables survived the clustering key checks
-    int64_t surviving_sstables_after_clustering_filter = 0;
-    // How many view updates were dropped due to overload.
-    int64_t dropped_view_updates = 0;
-    // How many times view building was paused (e.g. due to node unavailability)
-    int64_t view_building_paused = 0;
     // How many view updates were processed for all tables
     uint64_t total_view_updates_pushed_local = 0;
     uint64_t total_view_updates_pushed_remote = 0;
@@ -28793,32 +28468,6 @@ public:
         replica::dirty_memory_manager* dirty_memory_manager = &default_dirty_memory_manager;
         reader_concurrency_semaphore* streaming_read_concurrency_semaphore;
         reader_concurrency_semaphore* compaction_concurrency_semaphore;
-        replica::cf_stats* cf_stats = nullptr;
-        seastar::scheduling_group memtable_scheduling_group;
-        seastar::scheduling_group memtable_to_cache_scheduling_group;
-        seastar::scheduling_group compaction_scheduling_group;
-        seastar::scheduling_group memory_compaction_scheduling_group;
-        seastar::scheduling_group statement_scheduling_group;
-        seastar::scheduling_group streaming_scheduling_group;
-        bool enable_metrics_reporting = false;
-        db::timeout_semaphore* view_update_concurrency_semaphore;
-        size_t view_update_concurrency_semaphore_limit;
-        db::data_listeners* data_listeners = nullptr;
-        // Not really table-specific (it's a global configuration parameter), but stored here
-        // for easy access from `table` member functions:
-        utils::updateable_value<bool> reversed_reads_auto_bypass_cache{false};
-        utils::updateable_value<bool> enable_optimized_reversed_reads{true};
-        uint32_t tombstone_warn_threshold{0};
-        unsigned x_log2_compaction_groups{0};
-    };
-    struct no_commitlog {};
-    struct snapshot_details {
-        int64_t total;
-        int64_t live;
-    };
-    struct cache_hit_rate {
-        cache_temperature rate;
-        lowres_clock::time_point last_updated;
     };
 private:
     schema_ptr _schema;
@@ -28845,19 +28494,6 @@ private:
     // easily result in failure.
     seastar::named_semaphore _sstable_deletion_sem = {1, named_semaphore_exception_factory{"sstable deletion"}};
     // Ensures that concurrent updates to sstable set will work correctly
-    // Creates a mutation reader which covers all data sources for this column family.
-    // Caller needs to ensure that column_family remains live (FIXME: relax this).
-    // Note: for data queries use query() instead.
-    // The 'range' parameter must be live as long as the reader is used.
-    // Mutations returned by the reader will all have given schema.
-    // If I/O needs to be issued to read anything in the specified range, the operations
-    // will be scheduled under the priority class given by pc.
-    // The streaming mutation reader differs from the regular mutation reader in that:
-    //  - Reflects all writes accepted by replica prior to creation of the
-    //    reader and a _bounded_ amount of writes which arrive later.
-    //  - Does not populate the cache
-    // Requires ranges to be sorted and disjoint.
-    // Single range overload.
     // Stream reader from the given sstables
     // Queries can be satisfied from multiple data sources, so they are returned
     // as temporaries.
@@ -28884,32 +28520,6 @@ public:
     // Performs a query on given data source returning data in reconcilable form.
     //
     // Reads at most row_limit rows. If less rows are returned, the data source
-    // didn't have more live data satisfying the query.
-    //
-    // Any cells which have expired according to query_time are returned as
-    // deleted cells and do not count towards live data. The mutations are
-    // compact, meaning that any cell which is covered by higher-level tombstone
-    // is absent in the results.
-    //
-    // 'source' doesn't have to survive deferring.
-    //
-    // The saved_querier parameter is an input-output parameter which contains
-    // the saved querier from the previous page (if there was one) and after
-    // completion it contains the to-be saved querier for the next page (if
-    // there is one). Pass nullptr when queriers are not saved.
-    // The function never fails.
-    // It either succeeds eventually after retrying or aborts.
-public:
-    // Iterate over all partitions.  Protocol is the same as std::all_of(),
-    // so that iteration can be stopped by returning false.
-    // Testing purposes.
-    // to let test classes access calculate_generation_for_new_table
-    friend class ::column_family_test;
-    friend class ::table_for_tests;
-    friend class distributed_loader;
-    friend class table_populator;
-private:
-    timer<> _off_strategy_trigger;
 public:
     // FIXME: get rid of it once no users.
     // Safely iterate through table states, while performing async operations on them.
@@ -28962,19 +28572,6 @@ using no_such_keyspace = data_dictionary::no_such_keyspace;
 using no_such_column_family = data_dictionary::no_such_column_family;
 struct database_config {
     seastar::scheduling_group memtable_scheduling_group;
-    seastar::scheduling_group memtable_to_cache_scheduling_group; // FIXME: merge with memtable_scheduling_group
-    seastar::scheduling_group compaction_scheduling_group;
-    seastar::scheduling_group memory_compaction_scheduling_group;
-    seastar::scheduling_group statement_scheduling_group;
-    seastar::scheduling_group streaming_scheduling_group;
-    seastar::scheduling_group gossip_scheduling_group;
-    size_t available_memory;
-    std::optional<sstables::sstable_version_types> sstables_format;
-};
-struct string_pair_eq {
-    using is_transparent = void;
-    using spair = std::pair<std::string_view, std::string_view>;
-    bool operator()(spair lhs, spair rhs) const;
 };
 class db_user_types_storage;
 // Policy for distributed<database>:
@@ -29092,32 +28689,6 @@ public:
     // Convenience method to obtain an admitted permit. See reader_concurrency_semaphore::obtain_permit().
 };
 } // namespace replica
-// Creates a streaming reader that reads from all shards.
-//
-// Shard readers are created via `table::make_streaming_reader()`.
-// Range generator must generate disjoint, monotonically increasing ranges.
-//
-// ~~ Definitions ~~
-//
-// Mergeable type is a type which has an associated "apply" binary operation (T x T -> T)
-// which forms a commutative semigroup with instances of that type.
-//
-// ReversiblyMergeable type is a Mergeable type which has two binary operations associated,
-// "apply_reversibly" and "revert", both working on objects of that type (T x T -> T x T)
-// with the following properties:
-//
-//   apply_reversibly(x, y) = (x', y')
-//   revert(x', y') = (x'', y'')
-//
-//   x'  = apply(x, y)
-//   x'' = x
-//   apply(x'', y'') = apply(x, y)
-//
-// Note that it is not guaranteed that y'' = y and the state of y' is unspecified.
-//
-// ~~ API ~~
-//
-// "apply_reversibly" and "revert" are usually implemented as instance methods or functions
 // mutating both arguments to store the result of the operation in them.
 //
 // "revert" is not allowed to throw. If "apply_reversibly" throws the objects on which it operates
@@ -29222,32 +28793,6 @@ rjson::value parse(std::string_view str, size_t max_nested_level = default_max_n
 using chunked_content = std::vector<temporary_buffer<char>>;
 // Additional variants of parse() and parse_yieldable() that work on non-
 // contiguous chunked_content. The chunked_content is moved into the parsing
-// function so that we can start freeing chunks as soon as we parse them.
-// Creates a JSON value (of JSON string type) out of internal string representations.
-// The string value is copied, so str's liveness does not need to be persisted.
-
-// Returns a pointer to JSON member if it exists, nullptr otherwise
-// Returns a reference to JSON member if it exists, throws otherwise
- ;
- ;
-// The various add*() functions below *add* a new member to a JSON object.
-// They all assume that a member with the same key (name) doesn't already
-// exist in that object, so they are meant to be used just to build a new
-// object from scratch. If a member with the same name *may* exist, and
-// might need to be replaced, use the replace*() functions instead.
-// The benefit of the add*() functions is that they are faster (O(1),
-// compared to O(n) for the replace* function that need to inspect the
-// existing members).
-// Adds a member to a given JSON object by moving the member - allocates the name.
-// Throws if base is not a JSON object.
-// Assumes a member with the same name does not yet exist in base.
-
-// Adds a string member to a given JSON object by assigning its reference - allocates the name.
-// NOTICE: member string liveness must be ensured to be at least as long as base's.
-// Throws if base is not a JSON object.
-// Assumes a member with the same name does not yet exist in base.
-// Adds a member to a given JSON object by moving the member.
-// NOTICE: name liveness must be ensured to be at least as long as base's.
 // Throws if base is not a JSON object.
 // Assumes a member with the same name does not yet exist in base.
 // Adds a string member to a given JSON object by assigning its reference.
@@ -29339,19 +28884,6 @@ class cdc_service final : public async_sharded_service<cdc::cdc_service> {
 public:
     
     
-    // If any of the mutations are cdc enabled, optionally selects preimage, and adds the
-    // appropriate augments to set the log entries.
-    // Iff post-image is enabled for any of these, a non-empty callback is also
-    // returned to be invoked post the mutation query.
-    future<std::tuple<std::vector<mutation>, lw_shared_ptr<operation_result_tracker>>> augment_mutation_call(
-        lowres_clock::time_point timeout,
-        std::vector<mutation>&& mutations,
-        tracing::trace_state_ptr tr_state,
-        db::consistency_level write_cl
-        );
-};
-struct db_context final {
-    service::storage_proxy& _proxy;
     service::migration_notifier& _migration_notifier;
     cdc::metadata& _cdc_metadata;
 };
@@ -29625,19 +29157,6 @@ public:
 // The classes that return ring_position_range_and_shard_and_element make `ring_range` as large as
 // possible (maximizing the number of tokens), so the total number of such ranges is minimized.
 // Successive ranges therefore always have a different `shard` than the previous return.
-// (classes that return ring_position_range_and_shard_and_element can have the same `shard`
-// in successive returns, if `element` is different).
-struct ring_position_range_and_shard_and_element : ring_position_range_and_shard {
-    unsigned element;
-};
-// Incrementally divides several non-overlapping `partition_range`:s into sub-ranges wholly owned by
-// a single shard.
-//
-// Similar to ring_position_range_sharder, but instead of stopping when the input range is exhauseted,
-// moves on to the next input range (input ranges are supplied in a vector).
-//
-// This has two use cases:
-// 1. vnodes. A vnode cannot be described by a single range, since
 //    one vnode wraps around from the largest token back to the smallest token. Hence it must be
 //    described as a vector of two ranges, (largest_token, +inf) and (-inf, smallest_token].
 // 2. sstable shard mappings. An sstable has metadata describing which ranges it owns, and this is
@@ -29898,19 +29417,6 @@ class instance_cache;
 struct exception : public std::exception {
     std::string _msg;
 public:
-};
-struct instance_corrupting_exception : public exception {
-};
-struct startup_context {
-    std::shared_ptr<alien_thread_runner> alien_runner;
-    std::shared_ptr<rust::Box<wasmtime::Engine>> engine;
-    size_t cache_size;
-    size_t instance_size;
-    seastar::lowres_clock::duration timer_period;
-};
-struct context {
-    wasmtime::Engine& engine_ptr;
-    std::optional<rust::Box<wasmtime::Module>> module;
     std::string function_name;
     instance_cache& cache;
     uint64_t yield_fuel;
@@ -29989,32 +29495,6 @@ private:
     size_t _compiled_size = 0;
     // The reserved size for compiled code (which is not allocated by the seastar allocator)
     // is 50MB. We always leave some of this space free for the compilation of new instances
-    // - we only find out the real compiled size after the compilation finishes. (During
-    // the verification of the compiled code, we also allocate a new stack using this memory)
-    size_t _max_compiled_size = 40 * 1024 * 1024;
-public:
-private:
-public:
-private:
-    friend class module_handle;
-    // Wasmtime instances hold references to modules, so the module can only be dropped
-    // when all instances are dropped. For a given module, we can have at most one
-    // instance for each scheduling group.
-    // This function is called each time a new instance is created for a given module.
-    // If there were no instances for the module before, i.e. this module was not
-    // compiled, the module is compiled and the size of the compiled code is added
-    // to the total size of compiled code. If the total size of compiled code exceeds
-    // the maximum size as a result of this, the function will evict modules until
-    // there is enough space for the new module. If it is not possible, the function
-    // will throw an exception. If this function succeeds, the counter of instances
-    // for the module is increased by one.
-    // This function is called each time an instance for a given module is dropped.
-    // If the counter of instances for the module reaches zero, the module is dropped
-    // and the size of the compiled code is subtracted from the total size of compiled code.
-    // When a WASM UDF is executed, a separate stack is first allocated for it.
-    // This stack is used by the WASM code and it is not tracked by the seastar allocator.
-    // This function will evict cached modules until the stack can be allocated. If enough
-    // memory can't be freed, the function will throw an exception.
     // This function should be called after a WASM UDF finishes execution. Its stack is then
     // destroyed and this function accounts for the freed memory.
     // Evicts instances using lru until a module is no longer referenced by any of them.
@@ -30041,19 +29521,6 @@ namespace service {
 class migration_listener {
 public:
     // The callback runs inside seastar thread
-    // The callback runs inside seastar thread
-    // The callback runs inside seastar thread
-    // The callback runs inside seastar thread
-    // called before adding/updating/dropping column family. 
-    // listener can add additional type altering mutations if he knows what he is doing. 
-    class only_view_notifications;
-    class empty_listener;
-};
-class migration_listener::only_view_notifications : public migration_listener {
-public:
-};
-class migration_listener::empty_listener : public only_view_notifications {
-public:
     ;
     ;
     ;
@@ -30288,19 +29755,6 @@ public:
     
 };
 // A variant-like type capable of holding one of the allowed exception types.
-// This allows inspecting the exception in the error handling code without
-// having to resort to costly rethrowing of std::exception_ptr, as is
-// in the case of the usual exception handling.
-//
-// It's not as ergonomic as using exceptions with seastar, but allows for
-// fast inspection and manipulation.
-//
-// The exception is held behind a std::shared_ptr. In order to minimize use
-// of atomic operations, the copy constructor is deleted and copying is only
-// possible by using the `clone()` method.
-//
-// This means that the moved-out exception container becomes "empty" and
-// does not contain a valid exception.
 template<typename... Exs>
 struct exception_container {
 private:
