@@ -34838,19 +34838,6 @@ parse(std::basic_istream<CharT, Traits>& is,
                 if (command)
                 {
                     if (modified == CharT{})
-                        read(is, ru{V, 1, width == -1 ? 2u : width});
-                    else
-                        read(is, CharT{'%'}, width, modified, *fmt);
-                    command = nullptr;
-                    width = -1;
-                    modified = CharT{};
-                }
-                else
-                    read(is, *fmt);
-                break;
-            case 'W':
-                if (command)
-                {
                     if (modified == CharT{})
                         read(is, ru{W, 1, width == -1 ? 2u : width});
                     else
@@ -34942,19 +34929,6 @@ parse(std::basic_istream<CharT, Traits>& is,
                 else
                     read(is, *fmt);
                 break;
-            case 'Z':
-                if (command)
-                {
-                    if (modified == CharT{})
-                        is >> temp_abbrev;
-                    else
-                        read(is, CharT{'%'}, width, modified, *fmt);
-                    command = nullptr;
-                    width = -1;
-                    modified = CharT{};
-                }
-                else
-                    read(is, *fmt);
                 break;
             default:
                 if (command)
@@ -35205,19 +35179,6 @@ inline
 void
 parse(std::basic_istream<CharT, Traits>& is,
       const std::basic_string<CharT, Traits>& format, sys_time<Duration>& tp,
-      std::basic_string<CharT, Traits>& abbrev)
-{
-    std::chrono::minutes offset{};
-    local_time<Duration> lt;
-    detail::parse(is, format.c_str(), lt, &abbrev, &offset);
-    if (!is.fail())
-        tp = sys_time<Duration>{floor<Duration>(lt - offset).time_since_epoch()};
-}
-template <class CharT, class Traits, class Duration>
-inline
-void
-parse(std::basic_istream<CharT, Traits>& is,
-      const std::basic_string<CharT, Traits>& format, sys_time<Duration>& tp,
       std::chrono::minutes& offset)
 {
     local_time<Duration> lt;
@@ -35358,19 +35319,6 @@ parse(std::basic_istream<CharT, Traits>& is, const CharT* format, sys_time<Durat
       std::basic_string<CharT, Traits>& abbrev, std::chrono::minutes& offset)
 {
     local_time<Duration> lt;
-    detail::parse(is, format, lt, &abbrev, &offset);
-    if (!is.fail())
-        tp = sys_time<Duration>{floor<Duration>(lt - offset).time_since_epoch()};
-}
-template <class CharT, class Traits, class Duration>
-inline
-void
-parse(std::basic_istream<CharT, Traits>& is, const CharT* format, sys_time<Duration>& tp,
-      std::chrono::minutes& offset, std::basic_string<CharT, Traits>& abbrev)
-{
-    local_time<Duration> lt;
-    detail::parse(is, format, lt, &abbrev, &offset);
-    if (!is.fail())
         tp = sys_time<Duration>{floor<Duration>(lt - offset).time_since_epoch()};
 }
 template <class CharT, class Traits, class Duration>
@@ -35605,19 +35553,6 @@ public:
     // Inject a lambda call
     [[gnu::always_inline]] void inject(const std::string_view &name, handler_fun f) {}
     // Inject sleep
-    [[gnu::always_inline]] future<> inject(const std::string_view &name,
-                                           const std::chrono::milliseconds duration)
-    {
-        return make_ready_future<>();
-    }
-    // \brief Inject a sleep to deadline (timeout)
-    template <typename Clock, typename Duration>
-    [[gnu::always_inline]] future<> inject(const std::string_view &name, std::chrono::time_point<Clock, Duration> deadline)
-    {
-        return make_ready_future<>();
-    }
-    // \brief Inject a sleep to deadline (timeout) with lambda
-    // Avoid adding a continuation in the chain for disabled error injections
     template <typename Clock, typename Duration, typename Func>
     [[gnu::always_inline]] std::result_of_t<Func()> inject(const std::string_view &name, std::chrono::time_point<Clock, Duration> deadline,
                                                            Func &&func)
@@ -35722,19 +35657,6 @@ lister::dir_entry_types _type;
 lister::filter_type _filter;
 lister::show_hidden _do_show_hidden;
 seastar::queue<std::optional<directory_entry>> _queue;
-std::unique_ptr<lister> _lister;
-std::optional<future<>> _opt_done_fut;
-public:
-// Get the next directory_entry from the lister,
-// if available.  When the directory listing is done,
-// a disengaged optional is returned.
-//
-// Caller should either drain all entries using get()
-// until it gets a disengaged result or an error, or
-// close() can be called to terminate the listing prematurely,
-// and wait on any background work to complete.
-//
-// Calling get() after the listing is done and a disengaged
 // result has been returned results in a broken_pipe_exception.
 future<std::optional<directory_entry>> get();
 // Close the directory_lister, ignoring any errors.
@@ -36151,19 +36073,6 @@ future<> clear_gently(T &o) noexcept;
 template <SmartPointer T>
 future<> clear_gently(T &o) noexcept;
 template <typename T, std::size_t N>
-future<> clear_gently(std::array<T, N> &a) noexcept;
-template <typename T>
-    requires(StringLike<T> || TriviallyClearableSequence<T>)
-future<> clear_gently(T &s) noexcept;
-template <Sequence T>
-    requires(!StringLike<T> && !TriviallyClearableSequence<T>)
-future<> clear_gently(T &v) noexcept;
-template <MapLike T>
-future<> clear_gently(T &c) noexcept;
-template <Container T>
-    requires(!StringLike<T> && !Sequence<T> && !MapLike<T>)
-future<> clear_gently(T &c) noexcept;
-template <typename T>
 future<> clear_gently(std::optional<T> &opt) noexcept;
 template <typename T>
 future<> clear_gently(seastar::optimized_optional<T> &opt) noexcept;
@@ -36202,19 +36111,6 @@ future<> clear_gently(T &o) noexcept
     if (o.use_count() == 1)
     {
         return internal::clear_gently(*o);
-    }
-    return make_ready_future<>();
-}
-template <SmartPointer T>
-future<> clear_gently(T &o) noexcept
-{
-    if (auto p = o.get())
-    {
-        return internal::clear_gently(*p);
-    }
-    else
-    {
-        return make_ready_future<>();
     }
 }
 template <typename T, std::size_t N>
@@ -36257,19 +36153,6 @@ future<> clear_gently(T &c) noexcept
                     [&c]
                     {
                         auto it = c.begin();
-                        return internal::clear_gently(it->second).then([&c, it = std::move(it)]() mutable
-                                                                       { c.erase(it); });
-                    });
-}
-template <Container T>
-    requires(!StringLike<T> && !Sequence<T> && !MapLike<T>)
-future<> clear_gently(T &c) noexcept
-{
-    return do_until([&c]
-                    { return c.empty(); },
-                    [&c]
-                    {
-                        auto it = c.begin();
                         return internal::clear_gently(*it).then([&c, it = std::move(it)]() mutable
                                                                 { c.erase(it); });
                     });
@@ -36281,19 +36164,6 @@ future<> clear_gently(std::optional<T> &opt) noexcept
     {
         return utils::clear_gently(*opt);
     }
-    else
-    {
-        return make_ready_future<>();
-    }
-}
-template <typename T>
-future<> clear_gently(seastar::optimized_optional<T> &opt) noexcept
-{
-    if (opt)
-    {
-        return utils::clear_gently(*opt);
-    }
-    else
     {
         return make_ready_future<>();
     }
@@ -36606,19 +36476,6 @@ partition_region parse_partition_region(std::string_view s)
 {
 if (s == "partition_start")
 {
-    return partition_region::partition_start;
-}
-else if (s == "static_row")
-{
-    return partition_region::static_row;
-}
-else if (s == "clustered")
-{
-    return partition_region::clustered;
-}
-else if (s == "partition_end")
-{
-    return partition_region::partition_end;
 }
 else
 {
@@ -36749,19 +36606,6 @@ switch (_kind)
 {
 case mutation_fragment::kind::partition_start:
     _data->_partition_start.partition_tombstone().apply(mf._data->_partition_start.partition_tombstone());
-    mf._data->_partition_start.~partition_start();
-    break;
-case kind::static_row:
-    _data->_static_row.apply(s, std::move(mf._data->_static_row));
-    mf._data->_static_row.~static_row();
-    break;
-case kind::clustering_row:
-    _data->_clustering_row.apply(s, std::move(mf._data->_clustering_row));
-    mf._data->_clustering_row.~clustering_row();
-    break;
-case mutation_fragment::kind::partition_end: // Nothing to do for this guy.
-    mf._data->_partition_end.~partition_end();
-    break;
 default:
     abort();
 }
@@ -37126,19 +36970,6 @@ if (left.is_live())
     if (left.is_expiring() != right.is_expiring())
     { // prefer expiring cells.
         return left.is_expiring() ? 1 : -1;
-    }
-    if (left.is_expiring() && left.expiry() != right.expiry())
-    {
-        return left.expiry() < right.expiry() ? -1 : 1;
-    }
-}
-else
-{ // Both are either deleted or missing
-    if (left.deletion_time() != right.deletion_time())
-    { // Origin compares big-endian serialized deletion time. That's because it
-        // delegates to AbstractCell.reconcile() which compares values after
-        // comparing timestamps, which in case of deleted cells will hold
-        // serialized expiry.
         return (uint64_t)left.deletion_time().time_since_epoch().count() < (uint64_t)right.deletion_time().time_since_epoch().count() ? -1 : 1;
     }
 }
@@ -37204,19 +37035,6 @@ for (auto &&row_range : row_ranges)
 {
     if (stop)
     {
-        break;
-    }
-    last = reversal_traits<reversed>::erase_and_dispose(_rows, last, reversal_traits<reversed>::maybe_reverse(_rows, range_begin(row_range)), deleter);
-    auto end = reversal_traits<reversed>::maybe_reverse(_rows, range_end(row_range));
-    while (last != end && !stop)
-    {
-        rows_entry &e = *last;
-        stop = func(e);
-        if (e.empty())
-        {
-        last = reversal_traits<reversed>::erase_dispose_and_update_end(_rows, last, deleter, end);
-        }
-        else
         {
         ++last;
         }
@@ -37256,19 +37074,6 @@ if (should_purge_tombstone(_tombstone))
     _tombstone = tombstone();
 } // FIXME: purge unneeded prefix tombstones based on row_ranges
 return row_count;
-}
-uint64_t mutation_partition::compact_for_query(const schema &s, const dht::decorated_key &dk, gc_clock::time_point query_time, const std::vector<query::clustering_range> &row_ranges, bool always_return_static_content, bool reverse, uint64_t row_limit)
-{
-check_schema(s);
-bool drop_tombstones_unconditionally = false; // Replicas should only send non-purgeable tombstones already,
-// so we can expect to not have to actually purge any tombstones here.
-return do_compact(s, dk, query_time, row_ranges, always_return_static_content, reverse, row_limit, always_gc, drop_tombstones_unconditionally, tombstone_gc_state(nullptr));
-}
-void mutation_partition::compact_for_compaction(const schema &s, can_gc_fn &can_gc, const dht::decorated_key &dk, gc_clock::time_point compaction_time, const tombstone_gc_state &gc_state)
-{
-check_schema(s);
-static const std::vector<query::clustering_range> all_rows = {query::clustering_range::make_open_ended_both_sides()};
-bool drop_tombstones_unconditionally = false;
 }
 bool row::is_live(const schema &s, column_kind kind, tombstone base_tombstone, gc_clock::time_point query_time) const { return has_any_live_data(s, kind, *this, base_tombstone, query_time); }
 bool mutation_partition::is_static_row_live(const schema &s, gc_clock::time_point query_time) const
@@ -38023,19 +37828,6 @@ void range_tombstone_list::insert_from(const schema &s, range_tombstones_type::i
 position_in_partition::tri_compare cmp(s);
 if (it != _tombstones.begin())
 {
-    auto prev = std::prev(it);
-    if (prev->tombstone().tomb == tomb && cmp(prev->end_position(), start) == 0)
-    {
-        start = prev->position();
-        rev.erase(prev);
-    }
-}
-while (it != _tombstones.end())
-{
-    if (cmp(end, start) <= 0)
-    {
-        return;
-    }
     if (cmp(end, it->position()) < 0)
     { // not overlapping
         if (it->tombstone().tomb == tomb && cmp(end, it->position()) == 0)
@@ -38062,19 +37854,6 @@ while (it != _tombstones.end())
         end = it->end_position();
         }
         it = rev.erase(it);
-    }
-    else if (c > 0)
-    { // We overwrite the current tombstone.
-        if (cmp(it->position(), start) < 0)
-        {
-        {
-            auto rt = construct_range_tombstone_entry(it->position(), start, it->tombstone().tomb);
-            rev.update(it, {start, it->end_position(), it->tombstone().tomb});
-            rev.insert(it, *rt);
-            rt.release();
-        }
-        }
-        if (cmp(end, it->end_position()) < 0)
         { // Here start <= it->start and end < it->end.
         auto rt = construct_range_tombstone_entry(std::move(start), end, std::move(tomb));
         rev.update(it, {std::move(end), it->end_position(), it->tombstone().tomb});
@@ -38634,32 +38413,6 @@ if (_registry_entry)
     _registry_entry->detach_schema();
 }
 }
-schema_registry_entry *schema::registry_entry() const noexcept { return _registry_entry; }
-sstring schema::thrift_key_validator() const
-{
-if (partition_key_size() == 1)
-{
-    return partition_key_columns().begin()->type->name();
-}
-else
-{
-    auto type_params = fmt::join(partition_key_columns() | boost::adaptors::transformed(std::mem_fn(&column_definition::type)) | boost::adaptors::transformed(std::mem_fn(&abstract_type::name)), ", ");
-    return format("org.apache.cassandra.db.marshal.CompositeType({})", type_params);
-}
-}
-bool schema::has_multi_cell_collections() const
-{
-return boost::algorithm::any_of(all_columns(), [](const column_definition &cdef)
-                                { return cdef.type->is_collection() && cdef.type->is_multi_cell(); });
-}
-bool operator==(const schema &x, const schema &y) { return x._raw._id == y._raw._id && x._raw._ks_name == y._raw._ks_name && x._raw._cf_name == y._raw._cf_name && x._raw._columns == y._raw._columns && x._raw._comment == y._raw._comment && x._raw._default_time_to_live == y._raw._default_time_to_live && x._raw._regular_column_name_type == y._raw._regular_column_name_type && x._raw._bloom_filter_fp_chance == y._raw._bloom_filter_fp_chance && x._raw._compressor_params == y._raw._compressor_params && x._raw._is_dense == y._raw._is_dense && x._raw._is_compound == y._raw._is_compound && x._raw._type == y._raw._type && x._raw._gc_grace_seconds == y._raw._gc_grace_seconds && x.paxos_grace_seconds() == y.paxos_grace_seconds() && x._raw._dc_local_read_repair_chance == y._raw._dc_local_read_repair_chance && x._raw._read_repair_chance == y._raw._read_repair_chance && x._raw._min_compaction_threshold == y._raw._min_compaction_threshold && x._raw._max_compaction_threshold == y._raw._max_compaction_threshold && x._raw._min_index_interval == y._raw._min_index_interval && x._raw._max_index_interval == y._raw._max_index_interval && x._raw._memtable_flush_period == y._raw._memtable_flush_period && x._raw._speculative_retry == y._raw._speculative_retry && x._raw._compaction_strategy == y._raw._compaction_strategy && x._raw._compaction_strategy_options == y._raw._compaction_strategy_options && x._raw._compaction_enabled == y._raw._compaction_enabled && x.cdc_options() == y.cdc_options() && x.tombstone_gc_options() == y.tombstone_gc_options() && x._raw._caching_options == y._raw._caching_options && x._raw._dropped_columns == y._raw._dropped_columns && x._raw._collections == y._raw._collections && x._raw._indices_by_name == y._raw._indices_by_name && x._raw._is_counter == y._raw._is_counter; }
-index_metadata::index_metadata(const sstring &name, const index_options_map &options, index_metadata_kind kind, is_local_index local) : _id{utils::UUID_gen::get_name_UUID(name)}, _name{name}, _kind{kind}, _options{options}, _local{bool(local)}
-{
-}
-bool index_metadata::operator==(const index_metadata &other) const { return _id == other._id && _name == other._name && _kind == other._kind && _options == other._options; }
-bool index_metadata::equals_noname(const index_metadata &other) const { return _kind == other._kind && _options == other._options; }
-const table_id &index_metadata::id() const { return _id; }
-const sstring &index_metadata::name() const { return _name; }
 const index_metadata_kind index_metadata::kind() const { return _kind; }
 const index_options_map &index_metadata::options() const { return _options; }
 bool index_metadata::local() const { return _local; }
@@ -38751,19 +38504,6 @@ for (auto &p : s._raw._compaction_strategy_options)
     os << ", ";
 }
 os << "enabled=" << std::boolalpha << s._raw._compaction_enabled;
-os << "}";
-os << ",compressionParameters={";
-n = 0;
-for (auto &p : s._raw._compressor_params.get_options())
-{
-    if (n++ != 0)
-    {
-        os << ", ";
-    }
-    os << p.first << "=" << p.second;
-}
-os << "}";
-os << ",bloomFilterFpChance=" << s._raw._bloom_filter_fp_chance;
 os << ",memtableFlushPeriod=" << s._raw._memtable_flush_period;
 os << ",caching=" << s._raw._caching_options.to_sstring();
 os << ",cdc=" << s.cdc_options().to_sstring();
@@ -38868,19 +38608,6 @@ schema_builder::schema_builder(std::string_view ks_name, std::string_view cf_nam
 { // Various schema-creation commands (creating tables, indexes, etc.)
 // usually place limits on which characters are allowed in keyspace or
 // table names. But in case we have a hole in those defences (see issue
-// #3403, for example), let's prevent at least the characters "/" and
-// null from being in the keyspace or table name, because those will
-// surely cause serious problems when materialized to directory names.
-// We throw a logic_error because we expect earlier defences to have
-// avoided this case in the first place.
-if (ks_name.find_first_of('/') != std::string_view::npos || ks_name.find_first_of('\0') != std::string_view::npos)
-{
-    throw std::logic_error(format("Tried to create a schema with illegal characters in keyspace name: {}", ks_name));
-}
-if (cf_name.find_first_of('/') != std::string_view::npos || cf_name.find_first_of('\0') != std::string_view::npos)
-{
-    throw std::logic_error(format("Tried to create a schema with illegal characters in table name: {}", cf_name));
-}
 _raw._ks_name = sstring(ks_name);
 _raw._cf_name = sstring(cf_name);
 _raw._regular_column_name_type = rct;
@@ -38985,19 +38712,6 @@ auto &def = *it;
 column_definition new_def(to, def.type, def.kind, def.component_index());
 _raw._columns.erase(it);
 return with_column_ordered(new_def);
-}
-schema_builder &schema_builder::alter_column_type(bytes name, data_type new_type)
-{
-auto it = boost::find_if(_raw._columns, [&name](auto &c)
-                         { return c.name() == name; });
-assert(it != _raw._columns.end());
-it->type = new_type;
-if (new_type->is_multi_cell())
-{
-    auto c_it = _raw._collections.find(name);
-    assert(c_it != _raw._collections.end());
-    c_it->second = new_type;
-}
 return *this;
 }
 schema_builder &schema_builder::mark_column_computed(bytes name, column_computation_ptr computation)
@@ -39076,19 +38790,6 @@ for (const auto &c : static_configurators())
 {
     c(new_raw._ks_name, new_raw._cf_name, static_props);
 }
-if (_version)
-{
-    new_raw._version = *_version;
-}
-else
-{
-    new_raw._version = table_schema_version(utils::UUID_gen::get_time_UUID());
-}
-if (new_raw._is_counter)
-{
-    new_raw._default_validation_class = counter_type;
-}
-if (_compact_storage)
 { // Dense means that no part of the comparator stores a CQL column name. This means
     // COMPACT STORAGE with at least one columnAliases (otherwise it's a thrift "static" CF).
     auto clustering_key_size = std::count_if(new_raw._columns.begin(), new_raw._columns.end(), [](auto &&col)
@@ -40116,19 +39817,6 @@ void reclaim_timer::sample_stats(stats &data)
     }
     data.pool_stats = _segment_pool.statistics();
 }
-region_listener::~region_listener() = default; //
-// For interface documentation see logalloc::region and allocation_strategy.
-//
-// Allocation dynamics.
-//
-// Objects are allocated inside fixed-size segments. Objects don't cross
-// segment boundary. Active allocations are served from a single segment using
-// bump-the-pointer method. That segment is called the active segment. When
-// active segment fills up, it is closed. Closed segments are kept in a heap
-// which orders them by occupancy. As objects are freed, the segment become
-// sparser and are eventually released. Objects which are too large are
-// allocated using standard allocator.
-//
 // Segment layout.
 //
 // Objects in a segment are laid out sequentially. Each object is preceded by
@@ -40311,19 +39999,6 @@ private:
     lsa_buffer alloc_buf(size_t buf_size)
     { // Note: Can be re-entered from allocation sites below due to memory reclamation which
         // invokes segment compaction.
-        static_assert(segment::size % buf_align == 0);
-        if (buf_size > segment::size)
-        {
-        throw_with_backtrace<std::runtime_error>(format("Buffer size {} too large", buf_size));
-        }
-        if (_buf_active_offset + buf_size > segment::size)
-        {
-        close_buf_active();
-        }
-        if (!_buf_active)
-        {
-        new_buf_active();
-        }
         lsa_buffer ptr;
         ptr._buf = _buf_active->at<char>(_buf_active_offset);
         ptr._size = buf_size;
@@ -40636,19 +40311,6 @@ size_t tracker::impl::compact_and_evict(size_t reserve_segments, size_t memory_t
 size_t tracker::impl::compact_and_evict_locked(size_t reserve_segments, size_t memory_to_release, is_preemptible preempt)
 {
     llogger.debug("compact_and_evict_locked({}, {}, {})", reserve_segments, memory_to_release, int(bool(preempt))); //
-    // Algorithm outline.
-    //
-    // Regions are kept in a max-heap ordered so that regions with
-    // sparser segments are picked first. Non-compactible regions will be
-    // picked last. In each iteration we try to release one whole segment from
-    // the region which has the sparsest segment. We do it until we released
-    // enough segments or there are no more regions we can compact.
-    //
-    // When compaction is not sufficient to reclaim space, we evict data from
-    // evictable regions.
-    //
-    // This may run synchronously with allocation, so we should not allocate
-    // memory, otherwise we may get std::bad_alloc. Currently we only allocate
     // in the logger when debug level is enabled. It's disabled during normal
     // operation. Having it is still valuable during testing and in most cases
     // should work just fine even if allocates.
@@ -40935,19 +40597,6 @@ bool single_value_comp::operator()(const rjson::value &r1, const rjson::value &r
     case rjson::type::kNullType:  // fall-through
     case rjson::type::kFalseType: // fall-through
     case rjson::type::kTrueType:
-        return r1_type < r2_type;
-    case rjson::type::kObjectType:
-        throw rjson::error("Object type comparison is not supported");
-    case rjson::type::kArrayType:
-        throw rjson::error("Array type comparison is not supported");
-    case rjson::type::kStringType:
-    {
-        const size_t r1_len = r1.GetStringLength();
-        const size_t r2_len = r2.GetStringLength();
-        size_t len = std::min(r1_len, r2_len);
-        int result = std::strncmp(r1.GetString(), r2.GetString(), len);
-        return result < 0 || (result == 0 && r1_len < r2_len);
-    }
     case rjson::type::kNumberType:
     {
         if (r1.IsInt() && r2.IsInt())
@@ -41065,19 +40714,6 @@ while (src_it != src_shards.end())
     }
     if (dst_it == dst_shards.end() || dst_it->id() != src_it->id())
     { // Fast-path failed. Revert and fall back to the slow path.
-        if (dst_it == dst_shards.end())
-        {
-        --dst_it;
-        }
-        while (src_it != src_shards.begin())
-        {
-        --src_it;
-        while (dst_it->id() != src_it->id())
-        {
-            --dst_it;
-        }
-        src_it->swap_value_and_clock(*dst_it);
-        }
         return false;
     }
     if (dst_it->logical_clock() < src_it->logical_clock())
@@ -42536,19 +42172,6 @@ struct native_value_clone_visitor
 void *abstract_type::native_value_clone(const void *from) const { return visit(*this, native_value_clone_visitor{from}); }
 namespace
 {
-struct native_value_delete_visitor
-{
-    void *object;
-    template <typename N, typename A>
-    void operator()(const concrete_type<N, A> &) { delete reinterpret_cast<typename concrete_type<N, A>::native_type *>(object); }
-    void operator()(const reversed_type_impl &t) { return visit(*t.underlying_type(), native_value_delete_visitor{object}); }
-    void operator()(const counter_type_impl &) { fail(unimplemented::cause::COUNTERS); }
-    void operator()(const empty_type_impl &) { delete reinterpret_cast<empty_type_representation *>(object); }
-};
-}
-
-namespace
-{
 struct native_typeid_visitor
 {
     ;
@@ -42807,19 +42430,6 @@ namespace bloom_calculations
     const std::vector<std::vector<double>> probs = {
         {1.0},      // dummy row representing 0 buckets per element
         {1.0, 1.0}, // dummy row representing 1 buckets per element
-        {1.0, 0.393, 0.400},
-        {1.0, 0.283, 0.237, 0.253},
-        {1.0, 0.221, 0.155, 0.147, 0.160},
-        {1.0, 0.181, 0.109, 0.092, 0.092, 0.101}, // 5
-        {1.0, 0.154, 0.0804, 0.0609, 0.0561, 0.0578, 0.0638},
-        {1.0, 0.133, 0.0618, 0.0423, 0.0359, 0.0347, 0.0364},
-        {1.0, 0.118, 0.0489, 0.0306, 0.024, 0.0217, 0.0216, 0.0229},
-        {1.0, 0.105, 0.0397, 0.0228, 0.0166, 0.0141, 0.0133, 0.0135, 0.0145},
-        {1.0, 0.0952, 0.0329, 0.0174, 0.0118, 0.00943, 0.00844, 0.00819, 0.00846}, // 10
-        {1.0, 0.0869, 0.0276, 0.0136, 0.00864, 0.0065, 0.00552, 0.00513, 0.00509},
-        {1.0, 0.08, 0.0236, 0.0108, 0.00646, 0.00459, 0.00371, 0.00329, 0.00314},
-        {1.0, 0.074, 0.0203, 0.00875, 0.00492, 0.00332, 0.00255, 0.00217, 0.00199, 0.00194},
-        {1.0, 0.0689, 0.0177, 0.00718, 0.00381, 0.00244, 0.00179, 0.00146, 0.00129, 0.00121, 0.0012},
         {1.0, 0.0645, 0.0156, 0.00596, 0.003, 0.00183, 0.00128, 0.001, 0.000852, 0.000775, 0.000744}, // 15
         {1.0, 0.0606, 0.0138, 0.005, 0.00239, 0.00139, 0.000935, 0.000702, 0.000574, 0.000505, 0.00047, 0.000459},
         {1.0, 0.0571, 0.0123, 0.00423, 0.00193, 0.00107, 0.000692, 0.000499, 0.000394, 0.000335, 0.000302, 0.000287, 0.000284},
@@ -42898,19 +42508,6 @@ void dynamic_bitset::clear(size_t n) noexcept
 size_t dynamic_bitset::find_first_set() const noexcept
 {
     size_t pos = 0;
-    for (auto &vv : _bits | boost::adaptors::reversed)
-    {
-        auto v = vv[pos];
-        pos *= bits_per_int;
-        if (v)
-        {
-        pos += count_trailing_zeros(v);
-        }
-        else
-        {
-        return npos;
-        }
-    }
     return pos;
 }
 size_t dynamic_bitset::find_next_set(size_t n) const noexcept
@@ -43223,19 +42820,6 @@ public:
     virtual future<> flush(void) override { return make_ready_future<>(); }
     virtual future<> allocate(uint64_t position, uint64_t length) override { return make_ready_future<>(); }
     virtual future<> discard(uint64_t offset, uint64_t length) override { return make_ready_future<>(); }
-    class readable_file_handle_impl final : public file_handle_impl
-    {
-        client::handle _h;
-        sstring _object_name;
-    public:
-        readable_file_handle_impl(client::handle h, sstring object_name) : _h(std::move(h)), _object_name(std::move(object_name)) {}
-        virtual std::unique_ptr<file_handle_impl> clone() const override { return std::make_unique<readable_file_handle_impl>(_h, _object_name); }
-        virtual shared_ptr<file_impl> to_file() && override { return make_shared<readable_file>(std::move(_h).to_client(), std::move(_object_name)); }
-    };
-    
-    virtual future<uint64_t> size(void) override;
-    virtual future<struct stat> stat(void) override;
-    virtual future<size_t> read_dma(uint64_t pos, void *buffer, size_t len, const io_priority_class &pc) override;
     virtual future<size_t> read_dma(uint64_t pos, std::vector<iovec> iov, const io_priority_class &pc) override;
     virtual future<temporary_buffer<uint8_t>> dma_read_bulk(uint64_t offset, size_t range_size, const io_priority_class &pc) override;
     virtual future<> close() override;
@@ -43522,19 +43106,6 @@ std::ostream &operator<<(std::ostream &out, cause c)
         return out << "PERMISSIONS";
     case cause::TRIGGERS:
         return out << "TRIGGERS";
-    case cause::COUNTERS:
-        return out << "COUNTERS";
-    case cause::METRICS:
-        return out << "METRICS";
-    case cause::MIGRATIONS:
-        return out << "MIGRATIONS";
-    case cause::GOSSIP:
-        return out << "GOSSIP";
-    case cause::TOKEN_RESTRICTION:
-        return out << "TOKEN_RESTRICTION";
-    case cause::LEGACY_COMPOSITE_KEYS:
-        return out << "LEGACY_COMPOSITE_KEYS";
-    case cause::COLLECTION_RANGE_TOMBSTONES:
         return out << "SCHEMA_CHANGE";
     case cause::MIXED_CF:
         return out << "MIXED_CF";
@@ -43626,32 +43197,6 @@ return *this;
 }
 partition_slice_builder &partition_slice_builder::mutate_ranges(std::function<void(std::vector<query::clustering_range> &)> func)
 {
-if (_row_ranges)
-{
-    func(*_row_ranges);
-}
-return *this;
-}
-partition_slice_builder &partition_slice_builder::mutate_specific_ranges(std::function<void(query::specific_ranges &)> func)
-{
-if (_specific_ranges)
-{
-    func(*_specific_ranges);
-}
-return *this;
-}
-partition_slice_builder &partition_slice_builder::with_no_regular_columns()
-{
-_regular_columns = query::column_id_vector();
-return *this;
-}
-partition_slice_builder &partition_slice_builder::with_regular_column(bytes name)
-{
-}
-partition_slice_builder &partition_slice_builder::with_partition_row_limit(uint64_t limit)
-{
-_partition_row_limit = limit;
-return *this;
 }
 thread_local disk_error_signal_type commit_error;
 thread_local disk_error_signal_type general_disk_error;
