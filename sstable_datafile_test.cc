@@ -4,12 +4,6 @@
 // Default rjson policy is to use assert() - which is dangerous for two reasons:
 // 1. assert() can be turned off with -DNDEBUG
 // 2. assert() crashes a program
-// Fortunately, the default policy can be overridden, and so rapidjson errors will
-// throw an rjson::error exception instead.
-#define RAPIDJSON_ASSERT(x) (void)(x)
-// This macro is used for functions which are called for every json char making it
-// quite costly if not inlined, by default rapidjson only enables it if NDEBUG
-// is defined which isn't the case for us.
 #define RAPIDJSON_FORCEINLINE __attribute__((always_inline))
 #undef SEASTAR_TESTING_MAIN
 #include <immintrin.h>
@@ -71,23 +65,11 @@ inline
 auto saturating_subtract(std::chrono::time_point<Clock, Duration> t, std::chrono::duration<Rep, Period> d) -> decltype(t) {
     return std::max(t, decltype(t)::min() + d) - d;
 }
-namespace seastar {
-template <typename T>
-class shared_ptr;
-template <typename T, typename... A>
-shared_ptr<T> make_shared(A&&... a);
-}
 using namespace seastar;
 using seastar::shared_ptr;
 using seastar::make_shared;
 //
 // This hashing differs from std::hash<> in that it decouples knowledge about
-// type structure from the way the hash value is calculated:
-//  * appending_hash<T> instantiation knows about what data should be included in the hash for type T.
-//  * Hasher object knows how to combine the data into the final hash.
-//
-// The appending_hash<T> should always feed some data into the hasher, regardless of the state the object is in,
-// in order for the hash to be highly sensitive for value changes. For example, vector<optional<T>> should
 // ideally feed different values for empty vector and a vector with a single empty optional.
 //
 // appending_hash<T> is machine-independent.
@@ -346,12 +328,6 @@ public:
         : _begin(ptr)
         , _end(ptr + length)
     { }
-    operator std::basic_string_view<CharT>() const noexcept {
-        return std::basic_string_view<CharT>(begin(), size());
-    }
-    CharT& operator[](size_t idx) const { return _begin[idx]; }
-    iterator begin() const { return _begin; }
-    iterator end() const { return _end; }
     CharT* data() const { return _begin; }
     size_t size() const { return _end - _begin; }
     bool empty() const { return _begin == _end; }
@@ -406,18 +382,6 @@ struct fmt::formatter<fmt_hex> {
 public:
     // format_spec := [group_size[delimeter]]
     // group_size := a char from '0' to '9'
-    // delimeter := a char other than '{'  or '}'
-    //
-    // by default, the given bytes are printed without delimeter, just
-    // like a string. so a string view of {0x20, 0x01, 0x0d, 0xb8} is
-    // printed like:
-    // "20010db8".
-    //
-    // but the format specifier can be used to customize how the bytes
-    //
-    // or we can just print each bytes and separate them by a dash using
-    // "{:1-}"
-    // and the formatted output will look like:
     // "20-01-0b-b8-00-00"
     constexpr auto parse(fmt::format_parse_context& ctx) {
         // get the delimeter if any
@@ -508,12 +472,6 @@ enum class consistency_level {
     TWO,
     THREE,
     QUORUM,
-    ALL,
-    LOCAL_QUORUM,
-    EACH_QUORUM,
-    SERIAL,
-    LOCAL_SERIAL,
-    LOCAL_ONE, MAX_VALUE = LOCAL_ONE
 };
 }
 namespace db {
@@ -550,12 +508,6 @@ namespace bloom_calculations {
 }
 }
 #if 0
-package org.apache.cassandra.utils;
-class BloomCalculations {
-    private static final int minBuckets = 2;
-    private static final int minK = 1;
-    private static final int EXCESS = 20;
-    static final double[][] probs = new double[][]{
         {1.0}, // dummy row representing 0 buckets per element
             throw new UnsupportedOperationException("Cannot compute probabilities for " + numElements + " elements.");
         }
@@ -622,12 +574,6 @@ void hash3_x64_128(InputIterator in, uint32_t length, uint64_t seed, std::array<
     // body
     for(uint32_t i = 0; i < nblocks; i++)
     {
-        uint64_t k1 = read_block(in);
-        uint64_t k2 = read_block(in);
-        k1 *= c1; k1 = rotl64(k1,31); k1 *= c2; h1 ^= k1;
-        h1 = rotl64(h1,27); h1 += h2; h1 = h1*5+0x52dce729;
-        k2 *= c2; k2  = rotl64(k2,33); k2 *= c1; h2 ^= k2;
-        h2 = rotl64(h2,31); h2 += h1; h2 = h2*5+0x38495ab5;
     }
     //----------
     // tail
@@ -640,30 +586,12 @@ void hash3_x64_128(InputIterator in, uint32_t length, uint64_t seed, std::array<
         case 15: k2 ^= ((uint64_t) tmp[14]) << 48;
         case 14: k2 ^= ((uint64_t) tmp[13]) << 40;
         case 13: k2 ^= ((uint64_t) tmp[12]) << 32;
-        case 12: k2 ^= ((uint64_t) tmp[11]) << 24;
-        case 11: k2 ^= ((uint64_t) tmp[10]) << 16;
-        case 10: k2 ^= ((uint64_t) tmp[9]) << 8;
-        case  9: k2 ^= ((uint64_t) tmp[8]) << 0;
-            k2 *= c2; k2  = rotl64(k2,33); k2 *= c1; h2 ^= k2;
-        case  8: k1 ^= ((uint64_t) tmp[7]) << 56;
-        case  7: k1 ^= ((uint64_t) tmp[6]) << 48;
-        case  6: k1 ^= ((uint64_t) tmp[5]) << 40;
-        case  5: k1 ^= ((uint64_t) tmp[4]) << 32;
-        case  4: k1 ^= ((uint64_t) tmp[3]) << 24;
-        case  3: k1 ^= ((uint64_t) tmp[2]) << 16;
-        case  2: k1 ^= ((uint64_t) tmp[1]) << 8;
         case  1: k1 ^= ((uint64_t) tmp[0]);
             k1 *= c1; k1  = rotl64(k1,31); k1 *= c2; h1 ^= k1;
     };
     //----------
     // finalization
     h1 ^= length;
-    h2 ^= length;
-    h1 += h2;
-    h2 += h1;
-    h1 = fmix(h1);
-    h2 = fmix(h2);
-    h1 += h2;
     h2 += h1;
     result[0] = h1;
     result[1] = h2;
@@ -682,12 +610,6 @@ struct print_with_comma {
 template<bool NeedsComma, typename Printable>
 std::ostream& operator<<(std::ostream& os, const print_with_comma<NeedsComma, Printable>& x) ;
 } // namespace internal
-} // namespace utils
-namespace std {
- ;
- ;
- ;
-// Vector-like ranges
 template <std::ranges::range Range>
 requires (
        std::same_as<Range, std::vector<std::ranges::range_value_t<Range>>>
@@ -730,24 +652,6 @@ struct fmt::formatter<std::optional<T>> : fmt::formatter<std::string_view> {
 namespace utils {
 /// A vector with small buffer optimisation
 ///
-/// small_vector is a variation of std::vector<> that reserves a configurable
-/// amount of storage internally, without the need for memory allocation.
-/// This can bring measurable gains if the expected number of elements is
-/// small. The drawback is that moving such small_vector is more expensive
-/// and invalidates iterators as well as references which disqualifies it in
-/// some cases.
-///
-/// All member functions of small_vector provide strong exception guarantees.
-///
-/// It is unspecified when small_vector is going to use internal storage, except
-/// for the obvious case when size() > N. In other situations user must not
-/// attempt to guess if data is stored internally or externally. The same applies
-/// to capacity(). Apart from the obvious fact that capacity() >= size() the user
-/// must not assume anything else. In particular it may not always hold that
-/// capacity() >= N.
-///
-/// Unless otherwise specified (e.g. move ctor and assignment) small_vector
-/// provides guarantees at least as strong as those of std::vector<>.
 template<typename T, size_t N>
 requires std::is_nothrow_move_constructible_v<T> && std::is_nothrow_move_assignable_v<T> && std::is_nothrow_destructible_v<T> && (N > 0)
 class small_vector {
@@ -796,12 +700,6 @@ private:
             throw;
         }
         std::destroy(begin(), end());
-        if (!uses_internal_storage()) {
-            std::free(_begin);
-        }
-        _begin = ptr;
-        _end = n_end;
-        _capacity_end = n_end;
     }
     void reserve_at_least(size_t n) {
         if (__builtin_expect(_begin + n > _capacity_end, false)) {
@@ -844,12 +742,6 @@ public:
             _capacity_end = _begin + N;
             if constexpr (std::is_trivially_copyable_v<T>) {
                 // Compilers really like loops with the number of iterations known at
-                // the compile time, the usually emit less code which can be more aggressively
-                // optimised. Since we can assume that N is small it is most likely better
-                // to just copy everything, regardless of how many elements are actually in
-                // the vector.
-                std::memcpy(_internal.storage, other._internal.storage, N * sizeof(T));
-                _end = _begin + other.size();
             } else {
                 _end = _begin;
                 // What we would really like here is std::uninintialized_move_and_destroy.
@@ -886,12 +778,6 @@ public:
                 _end = _begin + other.size();
             } else {
                 _end = _begin;
-                // Better to use single pass than std::uninitialize_move + std::destroy.
-                // See comment in move ctor for details.
-                for (auto& e : other) {
-                    new (_end++) T(std::move(e));
-                    e.~T();
-                }
             }
             other._end = other._internal.storage;
         } else {
@@ -962,12 +848,6 @@ public:
         }
         return operator[](idx);
     }
-    const T& at(size_t idx) const {
-        if (__builtin_expect(idx >= size(), false)) {
-            throw_out_of_range();
-        }
-        return operator[](idx);
-    }
     bool empty() const noexcept { return _begin == _end; }
     size_t size() const noexcept { return _end - _begin; }
     size_t capacity() const noexcept { return _capacity_end - _begin; }
@@ -976,12 +856,6 @@ public:
         if (__builtin_expect(_end == _capacity_end, false)) {
             expand(std::max<size_t>(capacity() * 2, 1));
         }
-        auto& ref = *new (_end) T(std::forward<Args>(args)...);
-        ++_end;
-        return ref;
-    }
-    T& push_back(const T& value) {
-        return emplace_back(value);
     }
     T& push_back(T&& value) {
         return emplace_back(std::move(value));
@@ -1060,18 +934,6 @@ public:
 // to avoid large contiguous allocations - unlike std::vector which allocates
 // all the data in one contiguous allocation.
 //
-// std::deque aims to achieve the same goals, but its implementation in
-// libstdc++ still results in large contiguous allocations: std::deque
-// keeps the items in small (512-byte) chunks, and then keeps a contiguous
-// vector listing these chunks. This chunk vector can grow pretty big if the
-// Remember, however, that when the chunked_vector grows beyond 2 GB, its
-// largest contiguous allocation (used to store the chunk list) continues to
-// grow as O(N). This is not a problem for current real-world uses of
-// chunked_vector which never reach 2 GB.
-//
-// Always allocating large 128 KB chunks can be wasteful for small vectors;
-// This is why std::deque chose small 512-byte chunks. chunked_vector solves
-// this problem differently: It makes the last chunk variable in size,
 // possibly smaller than a full 128 KB.
 namespace utils {
 struct chunked_vector_free_deleter {
@@ -1186,12 +1048,6 @@ public:
             return *this;
         }
         iterator_type operator++(int) ;
-        iterator_type& operator--() {
-            --_i;
-            return *this;
-        }
-        iterator_type operator--(int) ;
-        
         friend ssize_t operator-(iterator_type a, iterator_type b) {
             return a._i - b._i;
         }
@@ -1264,12 +1120,6 @@ void
 chunked_vector<T, max_contiguous_allocation>::do_reserve_for_push_back() {
     if (_capacity == 0) {
         // allocate a bit of room in case utilization will be low
-        reserve(boost::algorithm::clamp(512 / sizeof(T), 1, max_chunk_capacity()));
-    } else if (_capacity < max_chunk_capacity() / 2) {
-        // exponential increase when only one chunk to reduce copying
-        reserve(_capacity * 2);
-    } else {
-        // add a chunk at a time later, since no copying will take place
         reserve((_capacity / max_chunk_capacity() + 1) * max_chunk_capacity());
     }
 }
@@ -1300,12 +1150,6 @@ public:
 namespace utils {
 namespace filter {
 class bloom_filter: public i_filter {
-public:
-    using bitmap = large_bitset;
-private:
-    bitmap _bitset;
-    int _hash_count;
-    filter_format _format;
     static thread_local struct stats {
         uint64_t memory_size = 0;
     } _shard_stats;
@@ -1498,24 +1342,6 @@ public:
 // Abstracts allocation strategy for managed objects.
 //
 // Managed objects may be moved by the allocator during compaction, which
-// invalidates any references to those objects. Compaction may be started
-// synchronously with allocations. To ensure that references remain valid, use
-// logalloc::compaction_lock.
-//
-// Because references may get invalidated, managing allocators can't be used
-// with standard containers, because they assume the reference is valid until freed.
-//
-// For example containers compatible with compacting allocators see:
-//   - managed_ref - managed version of std::unique_ptr<>
-//   - managed_bytes - managed version of "bytes"
-//
-// Note: When object is used as an element inside intrusive containers,
-// typically no extra measures need to be taken for reference tracking, if the
-// link member is movable. When object is moved, the member hook will be moved
-// too and it should take care of updating any back-references. The user must
-// be aware though that any iterators into such container may be invalidated
-// across deferring points.
-//
 class allocation_strategy {
     template <typename T>
     standard_migrator<T>& get_standard_migrator()
@@ -1534,12 +1360,6 @@ public:
     //
     // Allocates space for a new ManagedObject. The caller must construct the
     // object before compaction runs. "size" is the amount of space to reserve
-    // in bytes. It can be larger than MangedObjects's size.
-    //
-    // Throws std::bad_alloc on allocation failure.
-    //
-    // Doesn't invalidate references to objects allocated with this strategy.
-    //
     template <typename T>
     requires DynamicObject<T>
     void* alloc(size_t size) {
@@ -1648,24 +1468,6 @@ struct alloc_strategy_deleter {
 template<typename T>
 using alloc_strategy_unique_ptr = std::unique_ptr<T, alloc_strategy_deleter<T>>;
 //
-// Passing allocators to objects.
-// passing allocators will do. Allocation strategy is set in a thread-local
-// context, as shown below. From there, aware objects pick up the allocation
-// strategy. The code controling the objects must ensure that object allocated
-// in one regime is also freed in the same regime.
-//
-// with_allocator() provides a way to set the current allocation strategy used
-// within given block of code. with_allocator() can be nested, which will
-// temporarily shadow enclosing strategy. Use current_allocator() to obtain
-// currently active allocation strategy. Use current_deleter() to obtain a
-// Deleter object using current allocation strategy to destroy objects.
-//
-// Example:
-//
-//   logalloc::region r;
-//   with_allocator(r.allocator(), [] {
-//       auto obj = make_managed<int>();
-//   });
 //
 class allocator_lock {
     allocation_strategy* _prev;
@@ -1798,12 +1600,6 @@ concept FragmentedView = requires (T view, size_t n) {
     requires std::is_same_v<typename T::fragment_type, bytes_view>
             || std::is_same_v<typename T::fragment_type, bytes_mutable_view>;
     // No preconditions.
-    { view.current_fragment() } -> std::convertible_to<const typename T::fragment_type&>;
-    // No preconditions.
-    { view.empty() } -> std::same_as<bool>;
-    // No preconditions.
-    { view.size_bytes() } -> std::convertible_to<size_t>;
-    // Precondition: n <= size_bytes()
     { view.prefix(n) } -> std::same_as<T>;
     // Precondition: n <= size_bytes()
     view.remove_prefix(n);
@@ -1960,12 +1756,6 @@ T read_simple_native(View& v) {
         auto p = v.current_fragment().data();
         v.remove_prefix(sizeof(T));
         return read_unaligned<T>(p);
-    } else if (v.size_bytes() >= sizeof(T)) {
-        T buf;
-        read_fragmented(v, sizeof(T), reinterpret_cast<bytes::value_type*>(&buf));
-        return buf;
-    } else {
-        throw_with_backtrace<marshal_exception>(format("read_simple - not enough bytes (expected {:d}, got {:d})", sizeof(T), v.size_bytes()));
     }
 }
 template<typename T, FragmentedView View>
@@ -43562,19 +43352,6 @@ namespace utf8
         0,
         0,
         0,
-        0,
-        0,
-        4,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
     }; // 5x faster than naive method
 } // namespace utf8
 }
@@ -43730,19 +43507,6 @@ generate_counters _generate_counters;
 local_shard_only _local_shard_only;
 generate_uncompactable _uncompactable;
 const size_t _external_blob_size = debuggable ? 4 : 128; // Should be enough to force use of external bytes storage
-const size_t n_blobs = debuggable ? 32 : 1024;
-const column_id column_count = debuggable ? 3 : 64;
-std::mt19937 _gen;
-schema_ptr _schema;
-std::vector<bytes> _blobs;
-std::uniform_int_distribution<size_t> _ck_index_dist{0, n_blobs - 1};
-std::uniform_int_distribution<int> _bool_dist{0, 1};
-std::uniform_int_distribution<int> _not_dummy_dist{0, 19};
-std::uniform_int_distribution<int> _range_tombstone_dist{0, 29};
-std::uniform_int_distribution<api::timestamp_type> _timestamp_dist{min_timestamp, min_timestamp + 2}; // Sequence number for mutation elements.
-// Intended to be put as "deletion time".
-// The "777" prefix is so that it's easily distinguishable from other numbers in the printout.
-// Also makes it easy to grep for a particular element.
 uint64_t _seq = 777000000;
 ;
 public:
@@ -43990,19 +43754,6 @@ test_mutated_schemas();
 s = temp_s;
 schemas = temp_schemas; // Add back all regular columns as frozen collections
 for (auto &rc : regular_columns)
-{
-    s.add_regular_column(format("r{}", rc.id), frozen_map_of_int_to_int);
-    schemas.emplace_back(s.build());
-}
-test_mutated_schemas();
-s = original_s; // Add more static columns
-for (auto &sc : static_columns)
-{
-    s.add_static_column(format("s{}", sc.id + 1), uuid_type);
-    schemas.emplace_back(s.build());
-}
-test_mutated_schemas();
-s = original_s; // Add more regular columns
 for (auto &rc : regular_columns)
 {
     s.add_regular_column(format("r{}", rc.id + 1), uuid_type);
@@ -44029,19 +43780,6 @@ for (auto &rc : regular_columns)
 for (auto i = 1; i <= 3; i++)
 {
     s.alter_clustering_column_type(format("ck{}", i), bytes_type);
-    schemas.emplace_back(s.build());
-}
-for (auto i = 1; i <= 3; i++)
-{
-    s.alter_partition_column_type(format("pk{}", i), bytes_type);
-    schemas.emplace_back(s.build());
-}
-test_mutated_schemas();
-s = original_s; // Rename clustering key
-for (auto i = 1; i <= 3; i++)
-{
-    s.rename_clustering_column(format("ck{}", i), format("ck{}", 100 - i));
-    schemas.emplace_back(s.build());
 }
 test_mutated_schemas();
 s = original_s; // Rename partition key
@@ -44055,19 +43793,6 @@ test_mutated_schemas();
 static bool compare_readers(const schema &s, flat_mutation_reader_v2 &authority, flat_reader_assertions_v2 &tested)
 {
 bool empty = true;
-while (auto expected = authority().get())
-{
-    tested.produces(s, *expected);
-    empty = false;
-}
-tested.produces_end_of_stream();
-return !empty;
-}
-void compare_readers(const schema &s, flat_mutation_reader_v2 authority, flat_mutation_reader_v2 tested)
-{
-auto close_authority = deferred_close(authority);
-auto assertions = assert_that(std::move(tested));
-compare_readers(s, authority, assertions);
 }
 // Assumes that the readers return fragments from (at most) a single (and the same) partition.
 void compare_readers(const schema &s, flat_mutation_reader_v2 authority, flat_mutation_reader_v2 tested, const std::vector<position_range> &fwd_ranges)
@@ -44211,19 +43936,6 @@ mutation mutation_description::build(schema_ptr s) const
         {
         auto cdef = s->get_column_definition(utf8_type->decompose(column));
         assert(cdef);
-        std::visit(make_visitor([&](const atomic_value &v)
-                                {                     assert(cdef->is_atomic());                     if (!v.expiring) {                         m.set_clustered_cell(ck, *cdef, atomic_cell::make_live(*cdef->type, v.timestamp, v.value));                     } else {                         m.set_clustered_cell(ck, *cdef, atomic_cell::make_live(*cdef->type, v.timestamp, v.value,                                                                                v.expiring->expiry_point, v.expiring->ttl));                     } },
-                                [&](const collection &c)
-                                {                     assert(!cdef->is_atomic());                     auto get_value_type = visit(*cdef->type, make_visitor(                         [] (const collection_type_impl& ctype) -> std::function<const abstract_type&(bytes_view)> {                             return [&] (bytes_view) -> const abstract_type& { return *ctype.value_comparator(); };                         },                         [] (const user_type_impl& utype) -> std::function<const abstract_type&(bytes_view)> {                             return [&] (bytes_view key) -> const abstract_type& { return *utype.type(deserialize_field_index(key)); };                         },                         [] (const abstract_type& o) -> std::function<const abstract_type&(bytes_view)> {                             assert(false);                         }                     ));                     collection_mutation_description mut;                     mut.tomb = c.tomb;                     for (auto& [ key, value ] : c.elements) {                         if (!value.expiring) {                             mut.cells.emplace_back(key, atomic_cell::make_live(get_value_type(key), value.timestamp,                                                                             value.value, atomic_cell::collection_member::yes));                         } else {                             mut.cells.emplace_back(key, atomic_cell::make_live(get_value_type(key),                                                                                value.timestamp,                                                                                value.value,                                                                                value.expiring->expiry_point,                                                                                value.expiring->ttl,                                                                                atomic_cell::collection_member::yes));                         }                     }                     m.set_clustered_cell(ck, *cdef, mut.serialize(*cdef->type)); }),
-                   value_or_collection);
-        }
-        if (marker.timestamp != api::missing_timestamp)
-        {
-        if (marker.expiring)
-        {
-            m.partition().clustered_row(*s, ckey).apply(::row_marker(marker.timestamp, marker.expiring->ttl, marker.expiring->expiry_point));
-        }
-        else
         {
             m.partition().clustered_row(*s, ckey).apply(::row_marker(marker.timestamp));
         }
@@ -44263,19 +43975,6 @@ void table_description::add_column(std::vector<column> &columns, const sstring &
     columns.emplace_back(name, type);
 }
 void table_description::add_old_column(const sstring &name, data_type type) { _removed_columns.emplace_back(removed_column{name, type, previously_removed_column_timestamp}); }
-void table_description::remove_column(std::vector<column> &columns, const sstring &name)
-{
-    auto it = find_column(columns, name);
-    assert(it != columns.end());
-    _removed_columns.emplace_back(removed_column{name, std::get<data_type>(*it), column_removal_timestamp});
-    columns.erase(it);
-}
-void table_description::alter_column_type(std::vector<column> &columns, const sstring &name, data_type new_type)
-{
-    auto it = find_column(columns, name);
-    assert(it != columns.end());
-    std::get<data_type>(*it) = new_type;
-}
 schema_ptr table_description::build_schema() const
 {
     auto sb = schema_builder("ks", "cf");
@@ -44679,19 +44378,6 @@ size_t value_generator::min_size(const abstract_type &type)
     std::mt19937 engine;
     if (auto maybe_user_type = dynamic_cast<const user_type_impl *>(&type))
     {
-        return generate_frozen_user_value(engine, *maybe_user_type, *this, size_t{}, size_t{}).serialized_size();
-    }
-    if (auto maybe_tuple_type = dynamic_cast<const tuple_type_impl *>(&type))
-    {
-        return generate_frozen_tuple_value(engine, *maybe_tuple_type, *this, size_t{}, size_t{}).serialized_size();
-    }
-    if (auto maybe_list_type = dynamic_cast<const list_type_impl *>(&type))
-    {
-        return generate_frozen_list_value(engine, *maybe_list_type, *this, size_t{}, size_t{}).serialized_size();
-    }
-    if (auto maybe_set_type = dynamic_cast<const set_type_impl *>(&type))
-    {
-        return generate_frozen_set_value(engine, *maybe_set_type, *this, size_t{}, size_t{}).serialized_size();
     }
     if (auto maybe_map_type = dynamic_cast<const map_type_impl *>(&type))
     {
