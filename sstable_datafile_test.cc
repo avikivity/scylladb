@@ -6568,24 +6568,12 @@ private:
     friend class optimized_optional<ring_position_view>;
 };
 using ring_position_ext_view = ring_position_view;
-// Unlike ring_position, it can express positions which are right after and right before the keys.
-// ring_position still can not because it is sent between nodes and such a position
-// would not be (yet) properly interpreted by old nodes. That's why any ring_position
-// can be converted to ring_position_ext, but not the other way.
-//
-// It is possible to express a partition_range using a pair of two ring_position_exts v1 and v2,
 // where v1 = ring_position_ext::for_range_start(r) and v2 = ring_position_ext::for_range_end(r).
 // Such range includes all keys k such that v1 <= k < v2, with order defined by ring_position_comparator.
 //
 class ring_position_ext {
     // Order is lexicographical on (_token, _key) tuples, where _key part may be missing, and
     // _weight affecting order between tuples if one is a prefix of the other (including being equal).
-    // A positive weight puts the position after all strictly prefixed by it, while a non-positive
-    // weight puts it before them. If tuples are equal, the order is further determined by _weight.
-    //
-    // For example {_token=t1, _key=nullptr, _weight=1} is ordered after {_token=t1, _key=k1, _weight=0},
-    // but {_token=t1, _key=nullptr, _weight=-1} is ordered before it.
-    //
     dht::token _token;
     std::optional<partition_key> _key;
     int8_t _weight;
@@ -6646,24 +6634,12 @@ struct token_comparator {
 };
 std::ostream& operator<<(std::ostream& out, const decorated_key& t);
 
-class partition_ranges_view {
-    const dht::partition_range* _data = nullptr;
-    size_t _size = 0;
-public:
-};
-
 unsigned shard_of(const schema&, const token&);
  decorated_key decorate_key(const schema& s, const partition_key& key) ;
 inline decorated_key decorate_key(const schema& s, partition_key&& key) {
     return s.get_partitioner().decorate_key(s, std::move(key));
 }
  
-
-
-// Each shard gets a sorted, disjoint vector of ranges
-
-// Intersect a partition_range with a shard and return the the resulting sub-ranges, in sorted order
-
 std::unique_ptr<dht::i_partitioner> make_partitioner(sstring name);
 // Returns a sorted and deoverlapped list of ranges that are
 // the result of subtracting all ranges from ranges_to_subtract.
@@ -6802,18 +6778,6 @@ struct event_record {
     i_tracing_backend_helper::wall_clock::time_point event_time_point;
 };
 struct session_record {
-    gms::inet_address client;
-    // Keep the containers below sorted since some backends require that and
-    // it's very cheap to always do that because the amount of elements in a
-    // container is very small.
-    std::map<sstring, sstring> parameters;
-    std::set<sstring> tables;
-    sstring username;
-    sstring request;
-    size_t request_size = 0;
-    size_t response_size = 0;
-    std::chrono::system_clock::time_point started_at;
-    trace_type command = trace_type::NONE;
     elapsed_clock::duration elapsed;
     std::chrono::seconds slow_query_record_ttl;
 private:
@@ -6826,12 +6790,6 @@ private:
 public:
     utils::UUID session_id;
     sstring _thread_name;
-    sstring _tracing_backend_helper_class_name;
-    seastar::metrics::metric_groups _metrics;
-    double _trace_probability = 0.0; // keep this one for querying purposes
-    uint64_t _normalized_trace_probability = 0;
-    std::ranlux48_base _gen;
-    std::chrono::microseconds _slow_query_duration_threshold;
     std::chrono::seconds _slow_query_record_ttl;
 public:
     // Initialize a tracing backend (e.g. tracing_keyspace or logstash)
@@ -6922,30 +6880,12 @@ using clustering_range = nonwrapping_range<clustering_key_prefix>;
 // `reverse(range)` is supposed to be used with a reversed comparator `c`.
 // For instance, if it does make sense to do
 //   range.contains(point, cmp);
-// then it also makes sense to do
-//   reversed(range).contains(point, [](auto x, auto y) { return cmp(y, x); });
-// but it doesn't make sense to do
-//   reversed(range).contains(point, cmp);
-
-extern const dht::partition_range full_partition_range;
 extern const clustering_range full_clustering_range;
 
 
 typedef std::vector<clustering_range> clustering_row_ranges;
 /// Trim the clustering ranges.
 ///
-/// Equivalent of intersecting each clustering range with [pos, +inf) position
-/// in partition range, or (-inf, pos] position in partition range if
-/// reversed == true. Ranges that do not intersect are dropped. Ranges that
-/// partially overlap are trimmed.
-/// Result: each range will overlap fully with [pos, +inf), or (-int, pos] if
-/// reversed is true.
-/// Trim the clustering ranges.
-///
-/// Equivalent of intersecting each clustering range with (key, +inf) clustering
-/// range, or (-inf, key) clustering range if reversed == true. Ranges that do
-/// not intersect are dropped. Ranges that partially overlap are trimmed.
-/// Result: each range will overlap fully with (key, +inf), or (-int, key) if
 /// reversed is true.
 class specific_ranges {
 public:
@@ -6958,12 +6898,6 @@ private:
 constexpr auto max_rows = std::numeric_limits<uint64_t>::max();
 constexpr auto partition_max_rows = std::numeric_limits<uint64_t>::max();
 constexpr auto max_rows_if_set = std::numeric_limits<uint32_t>::max();
-// Specifies subset of rows, columns and cell attributes to be returned in a query.
-// Can be accessed across cores.
-// Schema-dependent.
-//
-// COMPATIBILITY NOTE: the partition-slice for reverse queries has two different
-// format:
 // * legacy format
 // * native format
 // The wire format uses the legacy format. See docs/dev/reverse-reads.md
@@ -6994,12 +6928,6 @@ public:
     };
     using option_set = enum_set<super_enum<option,
         option::send_clustering_key,
-        option::send_partition_key,
-        option::send_timestamp,
-        option::send_expiry,
-        option::reversed,
-        option::distinct,
-        option::collections_as_maps,
         option::send_ttl,
         option::allow_short_read,
         option::with_digest,
@@ -7066,30 +6994,6 @@ public:
     table_schema_version schema_version; // TODO: This should be enough, drop cf_id
     partition_slice slice;
     uint32_t row_limit_low_bits;
-    gc_clock::time_point timestamp;
-    std::optional<tracing::trace_info> trace_info;
-    uint32_t partition_limit; // The maximum number of live partitions to return.
-    // The "query_uuid" field is useful in pages queries: It tells the replica
-    // that when it finishes the read request prematurely, i.e., reached the
-    // desired number of rows per page, it should not destroy the reader object,
-    // rather it should keep it alive - at its current position - and save it
-    // under the unique key "query_uuid". Later, when we want to resume
-    // the read at exactly the same position (i.e., to request the next page)
-    // we can pass this same unique id in that query's "query_uuid" field.
-    query_id query_uuid;
-    // Signal to the replica that this is the first page of a (maybe) paged
-    // read request as far the replica is concerned. Can be used by the replica
-    // to avoid doing work normally done on paged requests, e.g. attempting to
-    // reused suspended readers.
-    query::is_first_page is_first_page;
-    // The maximum size of the query result, for all queries.
-    // We use the entire value range, so we need an optional for the case when
-    // the remote doesn't send it.
-    std::optional<query::max_result_size> max_result_size;
-    uint32_t row_limit_high_bits;
-    // Cut the page after processing this many tombstones (even if the page is empty).
-    uint64_t tombstone_limit;
-    api::timestamp_type read_timestamp; // not serialized
     db::allow_per_partition_rate_limit allow_limit; // not serialized
 public:
     // IDL constructor
@@ -7108,12 +7012,6 @@ struct forward_request {
         std::vector<reduction_type> types;
         std::vector<aggregation_info> infos;
     };
-    std::vector<reduction_type> reduction_types;
-    query::read_command cmd;
-    dht::partition_range_vector pr;
-    db::consistency_level cl;
-    lowres_system_clock::time_point timeout;
-    std::optional<std::vector<aggregation_info>> aggregation_infos;
 };
 struct forward_result {
     // vector storing query result for each selected column
@@ -7126,18 +7024,6 @@ struct forward_result {
 }
 namespace query {
 class clustering_key_filter_ranges {
-    clustering_row_ranges _storage;
-    std::reference_wrapper<const clustering_row_ranges> _ref;
-public:
-    struct reversed { };
-    // Returns all clustering ranges determined by `slice` inside partition determined by `key`.
-    // If the slice contains the `reversed` option, we assume that it is given in 'half-reversed' format
-    // (i.e. the ranges within are given in reverse order, but the ranges themselves are not reversed)
-    // with respect to the table order.
-    // The ranges will be returned in forward (increasing) order even if the slice is reversed.
-    
-    // Returns all clustering ranges determined by `slice` inside partition determined by `key`.
-    // The ranges will be returned in the same order as stored in the slice.
     
 };
 }
@@ -7570,12 +7456,6 @@ public:
         
     };
 };
-// A serialized mutation of a collection of cells.
-// Used to represent mutations of collections (lists, maps, sets) or non-frozen user defined types.
-// It contains a sequence of cells, each representing a mutation of a single entry (element or field) of the collection.
-// Each cell has an associated 'key' (or 'path'). The meaning of each (key, cell) pair is:
-//  for sets: the key is the serialized set element, the cell contains no data (except liveness information),
-//  for maps: the key is the serialized map element's key, the cell contains the serialized map element's value,
 //  for lists: the key is a timeuuid identifying the list entry, the cell contains the serialized value,
 //  for user types: the key is an index identifying the field, the cell contains the value of the field.
 //  The mutation may also contain a collection-wide tombstone.
@@ -7744,12 +7624,6 @@ bytes map_type_impl::serialize_to_bytes(const Range& map_range) {
             throw exceptions::invalid_request_exception(
                 fmt::format("Map key size too large: {} bytes > {}", map_size, std::numeric_limits<int32_t>::max()));
         }
-        if (elem.second.size() > std::numeric_limits<int32_t>::max()) {
-            throw exceptions::invalid_request_exception(
-                fmt::format("Map value size too large: {} bytes > {}", map_size, std::numeric_limits<int32_t>::max()));
-        }
-        write_collection_value(out, elem.first);
-        write_collection_value(out, elem.second);
     }
     return result;
 }
@@ -7774,12 +7648,6 @@ managed_bytes map_type_impl::serialize_to_managed_bytes(const Range& map_range) 
             throw exceptions::invalid_request_exception(
                 fmt::format("Map key size too large: {} bytes > {}", map_size, std::numeric_limits<int32_t>::max()));
         }
-        if (elem.second.size() > std::numeric_limits<int32_t>::max()) {
-            throw exceptions::invalid_request_exception(
-                fmt::format("Map value size too large: {} bytes > {}", map_size, std::numeric_limits<int32_t>::max()));
-        }
-        write_collection_value(out, elem.first);
-        write_collection_value(out, elem.second);
     }
     return result;
 }
@@ -7900,12 +7768,6 @@ public:
         auto ret = managed_bytes(managed_bytes::initialized_later(), size);
         auto out = managed_bytes_mutable_view(ret);
         for (auto&& v : range) {
-            if (v) {
-                write<int32_t>(out, v->size());
-                write_fragmented(out, managed_bytes_view(*v));
-            } else {
-                write<int32_t>(out, -1);
-            }
         }
         return ret;
     }
@@ -7942,12 +7804,6 @@ public:
 private:
     
 };
-
-constexpr size_t max_udt_fields = std::numeric_limits<int16_t>::max();
-// The following two functions are used to translate field indices (used to identify fields inside non-frozen UDTs)
-// from/to a serialized bytes representation to be stored in mutations and sstables.
-// Refer to collection_mutation.hh for a detailed description on how the serialized indices are used inside mutations.
-
 size_t deserialize_field_index(const bytes_view&);
 
 namespace utils {
@@ -8044,24 +7900,6 @@ template <typename Func> concept CanHandleAllTypes = requires(Func f) {
     { f(*static_cast<const ascii_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const boolean_type_impl*>(nullptr)) }     -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const byte_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const bytes_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const counter_type_impl*>(nullptr)) }     -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const date_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const double_type_impl*>(nullptr)) }      -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const duration_type_impl*>(nullptr)) }    -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const empty_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const float_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const inet_addr_type_impl*>(nullptr)) }   -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const int32_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const list_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const long_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const map_type_impl*>(nullptr)) }         -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const reversed_type_impl*>(nullptr)) }    -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const set_type_impl*>(nullptr)) }         -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const short_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const simple_date_type_impl*>(nullptr)) } -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const time_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
-    { f(*static_cast<const timestamp_type_impl*>(nullptr)) }   -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const timeuuid_type_impl*>(nullptr)) }    -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const tuple_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const user_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
@@ -8440,12 +8278,6 @@ struct convert<std::unordered_map<K, V, Rest...>> {
 namespace std {
 ;
 
-template<typename V, typename... Args>
-std::istream& operator>>(std::istream&, std::vector<V, Args...>&);
-
-extern template
-std::istream& operator>>(std::istream&, std::vector<seastar::sstring>&);
- ;
  ;
  ;
 }
@@ -8458,12 +8290,6 @@ class row_marker;
 class row_tombstone;
 class range_tombstone;
 class tombstone;
-class position_in_partition_view;
-// When used on an entry, marks the range between this entry and the previous
-// one as continuous or discontinuous, excluding the keys of both entries.
-// This information doesn't apply to continuity of the entries themselves,
-// that is specified by is_dummy flag.
-// See class doc of mutation_partition.
 using is_continuous = seastar::bool_class<class continuous_tag>;
 // Dummy entry is an entry which is incomplete.
 // Typically used for marking bounds of continuity range.
@@ -8475,12 +8301,6 @@ using is_dummy = seastar::bool_class<dummy_tag>;
 // - any tombstones which affect cell's liveness are visited before that cell
 //
 // - rows are visited in ascending order with respect to their keys
-//
-// - row header (accept_row) is visited before that row's cells
-//
-// - row tombstones are visited in ascending order with respect to their key prefixes
-//
-// - cells in given row are visited in ascending order with respect to their column IDs
 //
 // - static row is visited before any clustered row
 //
@@ -8554,12 +8374,6 @@ public:
     const bytes& name() const;
     
     
-#if 0
-    public ColumnIdentifier clone(AbstractAllocator allocator)
-    {
-        return new ColumnIdentifier(allocator.clone(bytes), text);
-    }
-#endif
     using raw = column_identifier_raw;
 };
 class column_identifier_raw final {
@@ -8579,35 +8393,17 @@ struct hash<cql3::column_identifier> {
         return std::hash<bytes>()(i.bytes_);
     }
 };
-template<>
-struct hash<cql3::column_identifier_raw> {
-    size_t operator()(const cql3::column_identifier::raw& r) const {
-        return std::hash<sstring>()(r._text);
-    }
-};
 }
 namespace cql3 {
 class column_specification;
 class prepare_context;
 }
-namespace replica {
-class database; // For transition; remove
-}
-class schema;
-using schema_ptr = lw_shared_ptr<const schema>;
-class view_ptr;
 namespace db {
 class config;
 class extensions;
 }
 namespace secondary_index {
 class secondary_index_manager;
-}
-namespace gms {
-class feature_service;
-}
-namespace locator {
-class abstract_replication_strategy;
 }
 // Classes representing the overall schema, but without access to data.
 // Useful on the coordinator side (where access to data is via storage_proxy).
@@ -8632,12 +8428,6 @@ class table {
 private:
     friend class impl;
 public:
-};
-class keyspace {
-    const impl* _ops;
-    const void* _keyspace;
-private:
-    friend class impl;
 public:
 };
 class database {
@@ -8680,24 +8470,6 @@ public:
     };
 private:
     class raw_type;
-    class raw_collection;
-    class raw_ut;
-    class raw_tuple;
-public:
-    static thread_local cql3_type blob;
-    static thread_local cql3_type boolean;
-    static thread_local cql3_type double_;
-    static thread_local cql3_type empty;
-    static thread_local cql3_type float_;
-    static thread_local cql3_type int_;
-    static thread_local cql3_type smallint;
-    static thread_local cql3_type text;
-    static thread_local cql3_type timestamp;
-    static thread_local cql3_type tinyint;
-    static thread_local cql3_type uuid;
-    static thread_local cql3_type timeuuid;
-    static thread_local cql3_type date;
-    static thread_local cql3_type time;
     static thread_local cql3_type inet;
     static thread_local cql3_type counter;
     static thread_local cql3_type duration;
@@ -8710,12 +8482,6 @@ public:
         private final AbstractType<?> type;
         public Custom(AbstractType<?> type)
         {
-                if (i > 0)
-                    sb.append(", ");
-                sb.append(type.type(i).asCQL3Type());
-            }
-            sb.append(">");
-            return sb.toString();
         }
     }
 #endif
@@ -8740,12 +8506,6 @@ struct fmt::formatter<auth::authentication_option> : fmt::formatter<std::string_
     template <typename FormatContext>
     auto format(const auth::authentication_option a, FormatContext& ctx) const {
         using enum auth::authentication_option;
-        switch (a) {
-        case password:
-            return formatter<std::string_view>::format("PASSWORD", ctx);
-        case options:
-            return formatter<std::string_view>::format("OPTIONS", ctx);
-        }
         std::abort();
     }
 };
@@ -8794,12 +8554,6 @@ struct tuple_hash {
 private:
     // CMH. Add specializations here to handle recursive tuples
      ;
-    template<size_t index, typename...Types>
-    struct hash_impl {
-    };
-    template<class...Types>
-    struct hash_impl<0, Types...> {
-    };
 public:
     // All the operator() implementations are templates, so this is transparent.
     using is_transparent = void;
@@ -8823,12 +8577,6 @@ enum class resource_kind {
 /// Type tag for constructing data resources.
 ///
 struct data_resource_t final {};
-///
-/// Type tag for constructing role resources.
-///
-struct role_resource_t final {};
-///
-/// Type tag for constructing service_level resources.
 ///
 struct service_level_resource_t final {};
 ///
