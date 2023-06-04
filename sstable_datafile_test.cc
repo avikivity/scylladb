@@ -19576,18 +19576,6 @@ template <typename T> class in;
 template <typename T> struct is_in {
     static constexpr bool value = false;
 };
-template <typename T> struct is_in<in<T>> {
-    static constexpr bool value = true;
-};
-template <typename T> struct is_in<const in<T>> {
-    static constexpr bool value = true;
-};
-//
-// Allows initializer lists of mixed rvalue/lvalues, where receive can
-// use move semantics on provided value(s).
-// Allows in-place conversion, _BUT_ (warning), a converted value
-// is only valid until end-of-statement (;). So a call like:
-//
 //  void apa(initializer_list<in<std::string>>);
 //  apa({ "ola", "kong" });
 //
@@ -19630,12 +19618,6 @@ public:
     T&& rget() const { return std::move (const_cast<T&> (_value)); }
     // Return a copy if lvalue.
     //
-    T move() const {
-        if (_is_rvalue) {
-            return rget();
-        }
-        return _value;
-    }
 private:
     const T& _value;
     bool _is_rvalue;
@@ -19690,12 +19672,6 @@ public:
     using ignore_features_of_local_node = bool_class<class ignore_features_of_local_node_tag>;
     using generation_for_nodes = std::unordered_map<gms::inet_address, generation_type>;
 private:
-public:
-public:
-private:
-public:
-    // removes ALL endpoint states; should only be called after shadow gossip
-private:
     
 public:
     bool is_alive(inet_address ep) const;
@@ -19709,12 +19685,6 @@ private:
     // notify that a local application state is going to change (doesn't get triggered for remote changes)
     // notify that an application state has changed
 public:
-public:
-public:
-private:
-public:
-    // Needed by seastar::sharded
-public:
     bool is_enabled() const;
     std::unordered_map<gms::inet_address, gms::endpoint_state> endpoint_state_map;
 };
@@ -19726,12 +19696,6 @@ class approx_exponential_histogram {
 public:
     static constexpr unsigned NUM_EXP_RANGES = log2floor(Max/Min);
     static constexpr size_t NUM_BUCKETS = NUM_EXP_RANGES * Precision + 1;
-    static constexpr unsigned PRECISION_BITS = log2floor(Precision);
-    static constexpr unsigned BASESHIFT = log2floor(Min);
-    static constexpr uint64_t LOWER_BITS_MASK = Precision - 1;
-private:
-    std::array<uint64_t, NUM_BUCKETS> _buckets;
-public:
     ;
 };
  ;
@@ -19798,18 +19762,6 @@ public:
     int64_t count;
     // total holds only the events we sample
     int64_t total;
-    int64_t min;
-    int64_t max;
-    int64_t sum;
-    int64_t started;
-    double mean;
-    double variance;
-    int64_t sample_mask;
-    boost::circular_buffer<int64_t> sample;
-    
-     ;
-    
-    ;
 };
  ;
 using ihistogram = basic_ihistogram<std::chrono::microseconds>;
@@ -19846,12 +19798,6 @@ public:
         // for the rate calculation was performed too early and will not yield
         // meaningful results (i.e mean_rate is infinity) so the best thing is
         // to return 0 as it best reflects the state.
-        if ((_count > 0) && (elapsed >= 1.0)) [[likely]] {
-            res.mean_rate = (_count / elapsed);
-        } else {
-            res.mean_rate = 0;
-        }
-        res.count = _count;
         for (int i = 0; i < 3; i++) {
             res.rates[i] = rates[i].rate();
         }
@@ -19900,24 +19846,12 @@ class timed_rate_moving_average_summary_and_histogram {
 public:
     ihistogram hist;
     timed_rate_moving_average_summary_and_histogram(size_t size) : _timer([this]{
-        _rates.update();
-        _last_update++;
-        if (_last_update < _match_duration) {
-            return;
-        }
-        _last_update = 0;
         _summary.update();}), hist(size, 0) {
     }
      ;
     
 };
 }
- ;
-
-namespace db {
-class schema_ctxt;
-}
-// Transport for schema_ptr across shards/nodes.
 // It's safe to access from another shard by const&.
 class frozen_schema {
     bytes_ostream _data;
@@ -20020,12 +19954,6 @@ class bad_configuration_error : public std::exception {};
 class service_set {
 public:
     
-    ;
-     ;
-     ;
-private:
-    class impl;
-    std::unique_ptr<impl> _impl;
 };
 class configurable {
 public:
@@ -20038,23 +19966,11 @@ public:
         stopped,
     };
     using notify_func = std::function<future<>(system_state)>;
-    class notify_set {
-    public:
-    private:
-        friend class configurable;
-        std::vector<notify_func> _listeners;
-    };
     // visible for testing
     static std::vector<std::reference_wrapper<configurable>>& configurables();
 private:
 };
 /// Implements <code>text LIKE pattern</code>.
-///
-/// The pattern is a string of characters with two wildcards:
-/// - '_' matches any single character
-/// - '%' matches any substring (including an empty string)
-/// - '\' escapes the next pattern character, so it matches verbatim
-/// - any other pattern character matches itself
 ///
 /// The whole text must match the pattern; thus <code>'abc' LIKE 'a'</code> doesn't match, but
 /// <code>'abc' LIKE 'a%'</code> matches.
@@ -20098,18 +20014,6 @@ private:
 // is_evictable::yes means that the object is part of an evictable snapshots in MVCC,
 // and non-evictable one otherwise.
 // See docs/dev/mvcc.md for more details.
-using is_evictable = bool_class<class evictable_tag>;
-// Represents a set of writes made to a single partition.
-//
-// Like mutation_partition, but intended to be used in cache/memtable
-// so the tradeoffs are different. This representation must be memory-efficient
-// and must support incremental eviction of its contents. It is used in MVCC so
-// algorithms for merging must respect MVCC invariants. See docs/dev/mvcc.md.
-//
-// rows_entry::dummy() is false.
-//
-// Adding two fully-continuous instances gives a fully-continuous instance.
-// Continuity doesn't affect how the write part is added.
 //
 // Addition of continuity is not commutative in general, but is associative.
 // The default continuity merging rules are those required by MVCC to
@@ -20146,12 +20050,6 @@ public:
     };
     template <typename ValueType>
     class reverse_iterator {
-        anchorless_list_base_hook<T>* _position;
-    public:
-        using iterator_category = std::forward_iterator_tag;
-        using value_type = ValueType;
-        using difference_type = ssize_t;
-        using pointer = ValueType*;
         using reference = ValueType&;
     public:
     };
@@ -20290,12 +20188,6 @@ public:
     // Invalidates references to objects in all compactible and evictable regions.
     //
     size_t reclaim(size_t bytes);
-    // Compacts as much as possible. Very expensive, mainly for testing.
-    // Guarantees that every live object from reclaimable regions will be moved.
-    // Invalidates references to objects in all compactible and evictable regions.
-    
-    // Returns aggregate statistics for all pools.
-    // Returns statistics for all segments allocated by LSA on this shard.
     // Returns amount of allocated memory not managed by LSA
     impl& get_impl() noexcept { return *_impl; }
     // Returns the minimum number of segments reclaimed during single reclamation cycle.
@@ -20308,18 +20200,6 @@ public:
 };
 class segment_descriptor;
 /// A unique pointer to a chunk of memory allocated inside an LSA region.
-///
-/// The pointer can be in disengaged state in which case it doesn't point at any buffer (nullptr state).
-/// When the pointer points at some buffer, it is said to be engaged.
-///
-/// The pointer owns the object.
-/// When the pointer is destroyed or it transitions from engaged to disengaged state, the buffer is freed.
-/// The buffer is never leaked when operating by the API of lsa_buffer.
-/// The pointer object can be safely destroyed in any allocator context.
-///
-/// The pointer object is never invalidated.
-/// The pointed-to buffer can be moved around by LSA, so the pointer returned by get() can be
-/// invalidated, but the pointer object itself is updated automatically and get() always returns
 /// a pointer which is valid at the time of the call.
 ///
 /// Must not outlive the region.
@@ -20332,12 +20212,6 @@ class lsa_buffer {
 public:
     using char_type = char;
     ;
-    /// Makes this instance point to the buffer pointed to by the other pointer.
-    /// If this pointer was engaged before, the owned buffer is freed.
-    /// The other pointer will be in disengaged state after this.
-    /// Disengages the pointer.
-    /// If the pointer was engaged before, the owned buffer is freed.
-    /// Postcondition: !bool(*this)
     /// Returns a pointer to the first element of the buffer.
     /// Valid only when engaged.
     /// Returns the number of bytes in the buffer.
@@ -20398,12 +20272,6 @@ public:
 // Log-structured allocator region.
 //
 // Objects allocated using this region are said to be owned by this region.
-// Objects must be freed only using the region which owns them. Ownership can
-// be transferred across regions using the merge() method. Region must be live
-// as long as it owns any objects.
-//
-// Each region has separate memory accounting and can be compacted
-// independently from other regions. To reclaim memory from all regions use
 // shard_tracker().
 //
 // Region is automatically added to the set of
@@ -20416,59 +20284,17 @@ private:
     shared_ptr<basic_region_impl> _impl;
 private:
 public:
-    
-    
-    // Allocates a buffer of a given size.
-    // The buffer's pointer will be aligned to 4KB.
-    // Note: it is wasteful to allocate buffers of sizes which are not a multiple of the alignment.
-    // Merges another region into this region. The other region is left empty.
-    // Doesn't invalidate references to allocated objects.
-    // Compacts everything. Mainly for testing.
-    // Invalidates references to allocated objects.
-    // Runs eviction function once. Mainly for testing.
-    // Changes the reclaimability state of this region. When region is not
-    // reclaimable, it won't be considered by tracker::reclaim(). By default region is
-    // reclaimable after construction.
-    // Returns the reclaimability state of this region.
-    // Returns a value which is increased when this region is either compacted or
-    // evicted from, which invalidates references into the region.
-    // When the value returned by this method doesn't change, references remain valid.
-    // Will cause subsequent calls to evictable_occupancy() to report empty occupancy.
-    // Follows region's occupancy in the parent region group. Less fine-grained than occupancy().
-    // After ground_evictable_occupancy() is called returns 0.
-    // Makes this region an evictable region. Supplied function will be called
-    // when data from this region needs to be evicted in order to reclaim space.
-    // The function should free some space from this region.
-    friend class allocating_section;
-};
-// Forces references into the region to remain valid as long as this guard is
-// live by disabling compaction and eviction.
-// Can be nested.
-struct reclaim_lock {
-    region& _region;
     bool _prev;
 };
 // Utility for running critical sections which need to lock some region and
 // also allocate LSA memory. The object learns from failures how much it
 // should reserve up front in order to not cause allocation failures.
 class allocating_section {
-    // Do not decay below these minimal values
-    static constexpr size_t s_min_lsa_reserve = 1;
-    static constexpr size_t s_min_std_reserve = 1024;
-    static constexpr uint64_t s_bytes_per_decay = 10'000'000'000;
-    static constexpr unsigned s_segments_per_decay = 100'000;
-    //
     // Throws std::bad_alloc when reserves can't be increased to a sufficient level.
     //
      ;
 };
 // Use the segment pool appropriate for the standard allocator.
-//
-// In debug mode, this will use the release standard allocator store.
-// Call once, when initializing the application, before any LSA allocation takes place.
-}
-namespace utils {
-// Represents a deferring operation which defers cooperatively with the caller.
 //
 //   while (c.run() == stop_iteartion::no) {}
 //
@@ -20548,42 +20374,12 @@ public:
         friend class partition_snapshot;
     public:
     };
-private:
-    schema_ptr _schema;
-    // Either _version or _entry is non-null.
-    partition_version_ref _version;
-    partition_entry* _entry;
-    phase_type _phase;
     logalloc::region* _region;
     mutation_cleaner* _cleaner;
     cache_tracker* _tracker;
     boost::intrusive::slist_member_hook<> _cleaner_hook;
     std::optional<apply_resume> _version_merging_state;
     bool _locked = false;
-    friend class partition_entry;
-    friend class mutation_cleaner_impl;
-public:
-    // Makes the snapshot locked.
-    // See is_locked() for meaning.
-    // Can be called only when at_lastest_version(). The snapshot must remain latest as long as it's locked.
-    // Makes the snapshot no longer locked.
-    // See is_locked() for meaning.
-    // Tells whether the snapshot is locked.
-    // Locking the snapshot prevents it from getting detached from the partition entry.
-    // It also prevents the partition entry from being evicted.
-    // Returns a reference to the partition_snapshot which is attached to given non-latest partition version.
-    // Assumes !v.is_referenced_from_entry() && v.is_referenced().
-    // If possible, merges the version pointed to by this snapshot with
-    // adjacent partition versions. Leaves the snapshot in an unspecified state.
-    // Can be retried if previous merge attempt has failed.
-    // Prepares the snapshot for cleaning by moving to the right-most unreferenced version.
-    // Returns stop_iteration::yes if there is nothing to merge with and the snapshot
-    // should be collected right away, and stop_iteration::no otherwise.
-    // When returns stop_iteration::no, the snapshots is guaranteed to not be attached
-    // to the latest version.
-    // Brings the snapshot to the front of the LRU.
-    // Must be called after snapshot's original region is merged into a different region
-    // before the original region is destroyed, unless the snapshot is destroyed earlier.
     using range_tombstone_result = utils::chunked_vector<range_tombstone>;
 };
 class partition_snapshot_ptr {
@@ -20595,12 +20391,6 @@ public:
 };
 class real_dirty_memory_accounter;
 // Represents mutation_partition with snapshotting support a la MVCC.
-//
-// Internally the state is represented by an ordered list of mutation_partition
-// objects called versions. The logical mutation_partition state represented
-// by that chain is equal to reducing the chain using mutation_partition::apply()
-// from left (latest version) to right.
-// if owned by a snapshot.
 //
 class partition_entry {
     partition_snapshot* _snapshot = nullptr;
@@ -20626,12 +20416,6 @@ class partition_version_list {
 public:
     // Appends v to the tail of this deque.
     // The version must not be already referenced.
-    // Returns a reference to the first version in this deque.
-    // Call only if !empty().
-    // Returns true iff contains any versions.
-    // Detaches the first version from the list.
-    // Assumes !empty().
-    // Appends other to the tail of this deque.
     // The other deque will be left empty.
 };
 class mutation_cleaner;
@@ -20644,42 +20428,12 @@ class mutation_cleaner_impl final {
 private:
 public:
 };
-// Container for garbage partition_version objects, used for freeing them incrementally.
-//
-// Mutation cleaner extends the lifetime of mutation_partition without doing
-// the same for its schema. This means that the destruction of mutation_partition
-// as well as any LSA migrators it may use cannot depend on the schema. Moreover,
-// all used LSA migrators need remain alive and registered as long as
 // mutation_cleaner is alive. In particular, this means that the instances of
 // mutation_cleaner should not be thread local objects (or members of thread
 // local objects).
 class mutation_cleaner final {
     lw_shared_ptr<mutation_cleaner_impl> _impl;
 public:
-    // Frees some of the data. Returns stop_iteration::yes iff all was freed.
-    // Must be invoked under owning allocator.
-    // Must be invoked under owning allocator.
-    // Must be invoked under owning allocator.
-    // Returns a guard object which when freed calls the on_space_freed callback with the amount
-    // of memory freed in the region in terms of total_space() during the time the guard was
-    // alive.
-    // The guard must not outlive the cleaner.
-    // Enqueues v for destruction.
-    // The object must not be part of any list, and must not be accessed externally any more.
-    // In particular, it must not be attached, even indirectly, to any snapshot or partition_entry,
-    // and must not be evicted from.
-    // Must be invoked under owning allocator.
-    // Destroys v now or later.
-    // Same requirements as destroy_later().
-    // Must be invoked under owning allocator.
-    // Transfers objects from other to this.
-    // This and other must belong to the same logalloc::region, and the same cache_tracker.
-    // After the call other will refer to this cleaner.
-    // Returns true iff contains no unfreed objects
-    // Forces cleaning and returns a future which resolves when there is nothing to clean.
-    // Will merge given snapshot using partition_snapshot::merge_partition_versions() and then destroys it
-    // using destroy_from_this(), possibly deferring in between.
-    // This instance becomes the sole owner of the partition_snapshot object, the caller should not destroy it
     // nor access it after calling this.
 };
 class atomic_cell;
@@ -20716,18 +20470,6 @@ public:
     };
 private:
     const ::schema& _schema;
-    mutation_fragment_v2::kind _prev_kind;
-    /// Cannot be used in parallel with the `dht::decorated_key`
-    /// overload.
-    ///
-    /// \returns true if the token is valid.
-    /// Validates the monotonicity of the partition.
-    ///
-    /// Does not check fragment level monotonicity.
-    /// Advances the previous partition-key, but only if the validation passes.
-    /// Cannot be used in parallel with the `dht::token`
-    /// overload.
-    ///
     /// \returns true if the partition key is valid.
     /// Reset the state of the validator to the given partition
     /// The previous valid partition key.
