@@ -1876,12 +1876,6 @@ private:
         return alctr.preferred_max_contiguous_allocation() - sizeof(blob_storage);
     }
     void free_chain(blob_storage* p) noexcept {
-        auto& alctr = current_allocator();
-        while (p) {
-            auto n = p->next;
-            alctr.destroy(p);
-            p = n;
-        }
     }
     bytes_view::value_type& value_at_index(blob_storage::size_type index) {
         if (!external()) {
@@ -1948,12 +1942,6 @@ public:
             p += b->frag_size;
             s -= b->frag_size;
             b = b->next;
-        }
-        assert(!b);
-    }
-    managed_bytes(std::initializer_list<bytes::value_type> b) : managed_bytes(b.begin(), b.size()) {}
-    ~managed_bytes() noexcept {
-        if (external()) {
             free_chain(_u.ptr);
         }
     }
@@ -1972,18 +1960,6 @@ public:
         size_type size_dst = 0;
         size_type offs_dst = 0;
         while (s) {
-            if (!size_src) {
-                blob_src = *next_src;
-                next_src = &blob_src->next;
-                size_src = blob_src->frag_size;
-                offs_src = 0;
-            }
-            if (!size_dst) {
-                blob_dst = *next_dst;
-                next_dst = &blob_dst->next;
-                size_dst = blob_dst->frag_size;
-                offs_dst = 0;
-            }
             auto now = std::min(size_src, size_dst);
             memcpy(blob_dst->data + offs_dst, blob_src->data + offs_src, now);
             s -= now;
@@ -2158,12 +2134,6 @@ struct hash<managed_bytes_view> {
         return h.finalize();
     }
 };
-template <>
-struct hash<managed_bytes> {
-    size_t operator()(const managed_bytes& v) const {
-        return hash<managed_bytes_view>{}(v);
-    }
-};
 } // namespace std
 // The operators below are used only by tests.
 inline bool operator==(const managed_bytes_view& a, const managed_bytes_view& b) {
@@ -2302,12 +2272,6 @@ public:
         if (this != &o) {
             auto x = bytes_ostream(o);
             *this = std::move(x);
-        }
-        return *this;
-    }
-    bytes_ostream& operator=(bytes_ostream&& o) noexcept {
-        if (this != &o) {
-            this->~bytes_ostream();
             new (this) bytes_ostream(std::move(o));
         }
         return *this;
@@ -2368,18 +2332,6 @@ public:
         chunk* _chunk;
         size_type _offset;
     };
-    // Returns the amount of bytes written since given position.
-    // "pos" must be valid.
-    // Rollbacks all data written after "pos".
-    // Invalidates all placeholders and positions created after "pos".
-    // Makes this instance empty.
-    //
-    // The first buffer is not deallocated, so callers may rely on the
-    // fact that if they write less than the initial chunk size between
-    // the clear() calls then writes will not involve any memory allocations,
-    // except for the first write made on this instance.
-    // Makes this instance empty using async continuations, while allowing yielding.
-    //
     // The first buffer is not deallocated, so callers may rely on the
     // fact that if they write less than the initial chunk size between
     // the clear() calls then writes will not involve any memory allocations,
@@ -2464,12 +2416,6 @@ struct integral_serializer {
      ;
      ;
 };
-template<> struct serializer<bool> {
-     ;
-     ;
-     ;
-};
-template<> struct serializer<int8_t> : public integral_serializer<int8_t> {};
 template<> struct serializer<uint8_t> : public integral_serializer<uint8_t> {};
 template<> struct serializer<int16_t> : public integral_serializer<int16_t> {};
 template<> struct serializer<uint16_t> : public integral_serializer<uint16_t> {};
@@ -2524,12 +2470,6 @@ template <typename T, typename U>
 struct is_equivalent : std::is_same<typename normalize<std::remove_const_t<std::remove_reference_t<T>>>::type, typename normalize<std::remove_const_t <std::remove_reference_t<U>>>::type> {
 };
 template <typename T, typename U>
-struct is_equivalent<std::reference_wrapper<T>, U> : is_equivalent<T, U> {
-};
-template <typename T, typename U>
-struct is_equivalent<T, std::reference_wrapper<U>> : is_equivalent<T, U> {
-};
-template <typename T, typename U>
 struct is_equivalent<std::optional<T>, std::optional<U>> : is_equivalent<T, U> {
 };
 template <typename T, typename U, bool>
@@ -2548,24 +2488,12 @@ template <typename ...T, typename ...U>
 struct is_equivalent<std::variant<T...>, std::variant<U...>> : is_equivalent<std::tuple<T...>, std::tuple<U...>> {
 };
 // gc_clock duration values were serialized as 32-bit prior to 3.1, and
-// are serialized as 64-bit in 3.1.0.
-//
-// TTL values are capped to 20 years, which fits into 32 bits, so
-// truncation is not a concern.
-inline bool gc_clock_using_3_1_0_serialization = false;
- ;
  ;
 }
 // The following is a redesigned subset of Java's DataOutput,
 // DataOutput.writeChars(string) - because the latter does not include
 // the length, which is necessary for reading the string back.
 class UTFDataFormatException { };
-class EOFException { };
-static constexpr size_t serialize_int8_size = 1;
-static constexpr size_t serialize_bool_size = 1;
-static constexpr size_t serialize_int16_size = 2;
-static constexpr size_t serialize_int32_size = 4;
-static constexpr size_t serialize_int64_size = 8;
 namespace internal_impl {
 template <typename ExplicitIntegerType, typename CharOutputIterator, typename IntegerType>
 requires std::is_integral<ExplicitIntegerType>::value && std::is_integral<IntegerType>::value && requires (CharOutputIterator it) {
@@ -2590,12 +2518,6 @@ void serialize_int64(CharOutputIterator& out, uint64_t val) {
     internal_impl::serialize_int<uint64_t>(out, val);
 }
  ;
-// The following serializer is compatible with Java's writeUTF().
-// In our C++ implementation, we assume the string is already UTF-8
-// encoded. Unfortunately, Java's implementation is a bit different from
-// UTF-8 for encoding characters above 16 bits in unicode (see
-// http://docs.oracle.com/javase/7/docs/api/java/io/DataInput.html#modified-utf-8)
-// For now we'll just assume those aren't in the string...
 // TODO: fix the compatibility with Java even in this case.
  ;
  ;
@@ -2656,12 +2578,6 @@ UUID make_random_uuid() noexcept;
 inline uint64_t timeuuid_read_msb(const int8_t *b) noexcept {
     // cast to unsigned to avoid sign-compliment during shift.
     auto u64 = [](uint8_t i) -> uint64_t { return i; };
-    // Scylla and Cassandra use a standard UUID memory layout for MSB:
-    // 4 bytes    2 bytes    2 bytes
-    // time_low - time_mid - time_hi_and_version
-    //
-    // The storage format uses network byte order.
-    // Reorder bytes to allow for an integer compare.
     return u64(b[6] & 0xf) << 56 | u64(b[7]) << 48 |
            u64(b[4]) << 40 | u64(b[5]) << 32 |
            u64(b[0]) << 24 | u64(b[1]) << 16 |
@@ -2674,12 +2590,6 @@ inline uint64_t uuid_read_lsb(const int8_t *b) noexcept {
            u64(b[12]) << 24 | u64(b[13]) << 16 |
            u64(b[14]) << 8  | u64(b[15]);
 }
-// Compare two values of timeuuid type.
-// Cassandra legacy requires:
-// - using signed compare for least significant bits.
-// - masking off UUID version during compare, to
-// treat possible non-version-1 UUID the same way as UUID.
-//
 // To avoid breaking ordering in existing sstables, Scylla preserves
 // Cassandra compare order.
 //
@@ -2770,12 +2680,6 @@ struct fmt::formatter<utils::tagged_uuid<Tag>> : fmt::formatter<std::string_view
 namespace utils {
 // Scylla uses specialized timeuuids for list keys. They use
 // limited space of timeuuid clockseq component to store
-// sub-microsecond time. This exception is thrown when an attempt
-// is made to construct such a UUID with a sub-microsecond argument
-// which is outside the available bit range.
-struct timeuuid_submicro_out_of_range: public std::out_of_range {
-    using out_of_range::out_of_range;
-};
 class UUID_gen
 {
 public:
@@ -2830,12 +2734,6 @@ public:
     // Generate a time-based (Version 1) UUID using
     // a microsecond-precision Unix time and a unique number in
     // range [0, 131072).
-    // Used to generate many unique, monotonic UUIDs
-    // sharing the same microsecond part. In lightweight
-    // transactions we must ensure monotonicity between all UUIDs
-    // which belong to one lightweight transaction and UUIDs of
-    // another transaction, but still need multiple distinct and
-    // monotonic UUIDs within the same transaction.
     // \throws timeuuid_submicro_out_of_range
     //
     static UUID get_name_UUID(sstring_view str);
@@ -2866,12 +2764,6 @@ public:
     // Produce an UUID which is derived from this UUID in a reversible manner
     //
     // Such that:
-    //
-    //      auto original_uuid = UUID_gen::get_time_UUID();
-    //      auto negated_uuid = UUID_gen::negate(original_uuid);
-    //      assert(original_uuid != negated_uuid);
-    //      assert(original_uuid == UUID_gen::negate(negated_uuid));
-    
 };
 // for the curious, here is how I generated START_EPOCH
 //        Calendar c = Calendar.getInstance(TimeZone.getTimeZone("GMT-0"));
@@ -2896,12 +2788,6 @@ using table_id = utils::tagged_uuid<struct table_id_tag>;
 // The version changes the value not only on structural changes but also
 // temporal. For example, schemas with the same set of columns but created at
 // different times should have different versions. This allows nodes to detect
-// if the version they see was already synchronized with or not even if it has
-// the same structure as the past versions.
-//
-// Schema changes merged in any order should result in the same final version.
-//
-// When table_schema_version changes, schema_tables::calculate_schema_digest() should
 // also change when schema mutations are applied.
 using table_schema_version = utils::tagged_uuid<struct table_schema_version_tag>;
 namespace sstables {
@@ -2968,12 +2854,6 @@ public:
 //
 // A duration of time.
 //
-// Three counters represent the time: the number of months, of days, and of nanoseconds. This is necessary because
-// the number hours in a day can vary during daylight savings and because the number of days in a month vary.
-//
-// As a consequence of this representation, there can exist no total ordering relation on durations. To see why,
-// consider a duration `1mo5s` (1 month and 5 seconds). In a month with 30 days, this represents a smaller duration of
-// time than in a month with 31 days.
 //
 // The primary use of this type is to manipulate absolute time-stamps with relative offsets. For example,
 // `"Jan. 31 2005 at 23:15" + 3mo5d`.
@@ -2986,24 +2866,6 @@ public:
             (sizeof(common_counter_type) >= sizeof(days_counter::value_type)) &&
             (sizeof(common_counter_type) >= sizeof(nanoseconds_counter::value_type)),
             "The common counter type is smaller than one of the component counter types.");
-    // A zero-valued duration.
-    // Construct a duration with explicit values for its three counters.
-    //
-    // Parse a duration string.
-    //
-    // Three formats for durations are supported:
-    //
-    // 1. "Standard" format. This consists of one or more pairs of a count and a unit specifier. Examples are "23d1mo"
-    //    and "5h23m10s". Components of the total duration must be written in decreasing order. That is, "5h2y" is
-    //    an invalid duration string.
-    //
-    //    The allowed units are:
-    //      - "y": years
-    //    "P23Y1M" or "P10W".
-    //
-    // 3. ISO-8601 alternate format. "P[YYYY]-[MM]-[DD]T[hh]:[mm]:[ss]". All specifiers are mandatory. An example is
-    //    "P2000-10-14T07:22:30".
-    //
     // For all formats, a negative duration is indicated by beginning the string with the '-' symbol. For example,
     // "-2y10ns".
     //
@@ -3118,12 +2980,6 @@ private:
         while (left) {
             auto this_length = std::min<size_t>(left, _current_end - _current_position);
             std::copy_n(_current_position, this_length, reinterpret_cast<char*>(&obj) + sizeof(T) - left);
-            left -= this_length;
-            if (left) {
-                next_fragment();
-            } else {
-                _current_position += this_length;
-            }
         }
         return obj;
     }
@@ -3226,30 +3082,12 @@ namespace exceptions {
 enum class exception_code : int32_t {
     SERVER_ERROR    = 0x0000,
     PROTOCOL_ERROR  = 0x000A,
-    BAD_CREDENTIALS = 0x0100,
-    // 1xx: problem during request execution
-    UNAVAILABLE     = 0x1000,
-    OVERLOADED      = 0x1001,
-    IS_BOOTSTRAPPING= 0x1002,
-    TRUNCATE_ERROR  = 0x1003,
-    WRITE_TIMEOUT   = 0x1100,
-    READ_TIMEOUT    = 0x1200,
-    READ_FAILURE    = 0x1300,
-    FUNCTION_FAILURE= 0x1400,
-    WRITE_FAILURE   = 0x1500,
-    CDC_WRITE_FAILURE = 0x1600,
     // 2xx: problem validating the request
     SYNTAX_ERROR    = 0x2000,
     UNAUTHORIZED    = 0x2100,
     INVALID         = 0x2200,
     CONFIG_ERROR    = 0x2300,
     ALREADY_EXISTS  = 0x2400,
-    UNPREPARED      = 0x2500,
-    // Scylla-specific error codes
-    // The error codes below are advertised to the drivers during connection
-    // handshake using the protocol extension negotiation, and are only
-    // enabled if the drivers explicitly enable them. Therefore it's perfectly
-    // fine to change them in case some new error codes are introduced
     // in Cassandra.
     // NOTE TO DRIVER DEVELOPERS: These constants must not be relied upon,
     // they must be learned from protocol extensions instead.
@@ -3322,12 +3160,6 @@ class request_validation_exception : public cassandra_exception {
 public:
     using cassandra_exception::cassandra_exception;
 };
-class invalidated_prepared_usage_attempt_exception : public exceptions::request_validation_exception {
-public:
-};
-class unauthorized_exception: public request_validation_exception {
-public:
-};
 class authentication_exception: public request_validation_exception {
 public:
 };
@@ -3340,12 +3172,6 @@ public:
 class keyspace_not_defined_exception : public invalid_request_exception {
 public:
     
-};
-class overflow_error_exception : public invalid_request_exception {
-public:
-};
-class prepared_query_not_found_exception : public request_validation_exception {
-public:
     bytes id;
 };
 class syntax_exception : public request_validation_exception {
@@ -3370,12 +3196,6 @@ private:
 // relative to some value.
 //
 // For example, if used with a value "bc" with lexicographical ordering on strings,
-// each enum value represents the following positions in an example sequence:
-//
-//   aa
-//   aaa
-//   b
-//   ba
 // --> before_all_prefixed
 //   bc
 // --> before_all_strictly_prefixed
@@ -3574,12 +3394,6 @@ public:
     
     data_value(const sstring&);
     // Do not allow construction of a data_value from nullptr. The reason is
-    // that this is error prone, for example: it conflicts with `const char*` overload
-    // which tries to allocate a value from it and will cause UB.
-    //
-    // We want the null value semantics here instead. So the user will be forced
-    // to explicitly call `make_null()` instead.
-    data_value(std::nullptr_t) = delete;
     data_value(ascii_native_type);
     data_value(bool);
     data_value(int8_t);
@@ -3760,12 +3574,6 @@ public:
     // Checks whether there can be a set or map somewhere inside a value of this type.
     bool contains_set_or_map() const;
     // Checks whether there can be a collection somewhere inside a value of this type.
-    bool contains_collection() const;
-    // Checks whether a bound value of this type has to be reserialized.
-    // This can be for example because there is a set inside that needs to be sorted.
-    
-    friend class list_type_impl;
-private:
     mutable sstring _cql3_type_name;
 protected:
     bool _contains_set_or_map = false;
@@ -3796,12 +3604,6 @@ data_value::make_new(data_type type, T&& v) {
     return data_value(type->native_value_clone(&value), type);
 }
  ;
- ;
-/// Special case: sometimes we cast uuid to timeuuid so we can correctly compare timestamps.  See #7729.
-// CRTP: implements translation between a native_type (C++ type) to abstract_type
-// AbstractType is parametrized because we want a
-//    abstract_type -> collection_type_impl -> map_type
-// type hierarchy, and native_type is only known at the last step.
 template <typename NativeType, typename AbstractType = abstract_type>
 class concrete_type : public AbstractType {
 public:
@@ -3946,18 +3748,6 @@ extern thread_local const shared_ptr<const abstract_type> duration_type;
 extern thread_local const data_type empty_type;
 template <> inline thread_local const data_type& data_type_for_v<int8_t> = byte_type;
 template <> inline thread_local const data_type& data_type_for_v<int16_t> = short_type;
-template <> inline thread_local const data_type& data_type_for_v<int32_t> = int32_type;
-template <> inline thread_local const data_type& data_type_for_v<int64_t> = long_type;
-template <> inline thread_local const data_type& data_type_for_v<sstring> = utf8_type;
-template <> inline thread_local const data_type& data_type_for_v<bytes> = bytes_type;
-template <> inline thread_local const data_type& data_type_for_v<utils::UUID> = uuid_type;
-template <> inline thread_local const data_type& data_type_for_v<date_type_native_type> = date_type;
-template <> inline thread_local const data_type& data_type_for_v<simple_date_native_type> = simple_date_type;
-template <> inline thread_local const data_type& data_type_for_v<db_clock::time_point> = timestamp_type;
-template <> inline thread_local const data_type& data_type_for_v<ascii_native_type> = ascii_type;
-template <> inline thread_local const data_type& data_type_for_v<time_native_type> = time_type;
-template <> inline thread_local const data_type& data_type_for_v<timeuuid_native_type> = timeuuid_type;
-template <> inline thread_local const data_type& data_type_for_v<net::inet_address> = inet_addr_type;
 template <> inline thread_local const data_type& data_type_for_v<bool> = boolean_type;
 template <> inline thread_local const data_type& data_type_for_v<float> = float_type;
 template <> inline thread_local const data_type& data_type_for_v<double> = double_type;
@@ -4174,18 +3964,6 @@ public:
     static constexpr double DEFAULT_CRC_CHECK_CHANCE = 1.0;
     static const sstring SSTABLE_COMPRESSION;
     static const sstring CHUNK_LENGTH_KB;
-    static const sstring CHUNK_LENGTH_KB_ERR;
-    static const sstring CRC_CHECK_CHANCE;
-private:
-    compressor_ptr _compressor;
-    std::optional<int> _chunk_length;
-    std::optional<double> _crc_check_chance;
-public:
-    std::map<sstring, sstring> get_options() const ;
-    bool operator==(const compression_parameters& other) const;
-    
-private:
-    
 };
 namespace sstables {
 enum class compaction_strategy_type {
@@ -4265,12 +4043,6 @@ public:
     
     
     
-    
-    
-    
-    virtual column_computation_ptr clone() const override ;
-    
-    
 };
 namespace api {
 using timestamp_type = int64_t;
@@ -4282,12 +4054,6 @@ timestamp_type constexpr max_timestamp = std::numeric_limits<timestamp_type>::ma
 // Satisfies requirements of Clock.
 class timestamp_clock final {
     using base = std::chrono::system_clock;
-public:
-    using rep = timestamp_type;
-    using duration = std::chrono::microseconds;
-    using period = typename duration::period;
-    using time_point = std::chrono::time_point<timestamp_clock, duration>;
-    static constexpr bool is_steady = base::is_steady;
     
 };
 static
@@ -4312,18 +4078,6 @@ public:
 using namespace seastar;
 namespace db {
 class per_partition_rate_limit_options final {
-private:
-    static const char* max_writes_per_second_key;
-    static const char* max_reads_per_second_key;
-private:
-    std::optional<uint32_t> _max_writes_per_second;
-    std::optional<uint32_t> _max_reads_per_second;
-public:
-    per_partition_rate_limit_options() = default;
-    
-    
-     
-     
      
      
      
@@ -4361,12 +4115,6 @@ namespace dht {
 class i_partitioner;
 class sharder;
 }
-namespace cdc {
-class options;
-}
-namespace replica {
-class database;
-}
 using column_count_type = uint32_t;
 // Column ID, unique within column_kind
 using column_id = column_count_type;
@@ -4384,12 +4132,6 @@ public:
     // column_count_type is more narrow than size_type, but truncating a size_type max value does
     // give column_count_type max value. This is used to avoid extra branching in
     // find_first()/find_next().
-    static_assert(static_cast<column_count_type>(boost::dynamic_bitset<uint64_t>::npos) == ~static_cast<column_count_type>(0));
-    static constexpr ordinal_column_id npos = static_cast<ordinal_column_id>(bitset::npos);
-    // Set the appropriate bit for column id.
-    // Test the mask for use of a given column id.
-    // @sa boost::dynamic_bistet docs
-    // Logical or
     
 private:
     bitset _mask;
