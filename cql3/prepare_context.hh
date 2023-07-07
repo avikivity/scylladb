@@ -39,14 +39,6 @@ private:
     // A list of pointers to prepared `function_call` cache ids, that
     // participate in partition key ranges computation within an LWT statement.
     std::vector<::shared_ptr<std::optional<uint8_t>>> _pk_function_calls_cache_ids;
-
-    // The flag denoting whether the context is currently in partition key
-    // processing mode (inside query restrictions AST nodes). If set to true,
-    // then every `function_call` instance will be recorded in the context and
-    // will be assigned an identifier, which will then be used for caching
-    // the function call results.
-    bool _processing_pk_restrictions = false;
-
 public:
 
     prepare_context() = default;
@@ -68,16 +60,6 @@ public:
     // Record a new function call, which evaluates a partition key constraint.
     // Also automatically assigns an id to the AST node for caching purposes.
     void add_pk_function_call(cql3::expr::function_call& fn);
-
-    // Inform the context object that it has started or ended processing the
-    // partition key part of statement restrictions.
-    void set_processing_pk_restrictions(bool flag) noexcept {
-        _processing_pk_restrictions = flag;
-    }
-
-    bool is_processing_pk_restrictions() const noexcept {
-        return _processing_pk_restrictions;
-    }
 };
 
 }

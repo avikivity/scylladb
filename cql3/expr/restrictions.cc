@@ -12,6 +12,7 @@
 #include <seastar/util/defer.hh>
 #include "cql3/prepare_context.hh"
 #include "cql3/expr/expr-utils.hh"
+#include "cql3/functions/function.hh"
 #include "types/list.hh"
 #include <iterator>
 #include <ranges>
@@ -176,6 +177,25 @@ void preliminary_binop_vaidation_checks(const binary_operator& binop) {
 }
 } // anonymous namespace
 
+static
+expression
+add_pk_function_calls(const expression& e, prepare_context& ctx) {
+    return search_and_replace(e, [&] (const expression& e) -> std::optional<expression> {
+        if (auto fc = as_if<function_call>(&e)) {
+            auto& func = std::get<shared_ptr<db::functions::function>>(fc->func);
+            if (!func->is_pure()) {
+                auto fc_copy = *fc;
+                ctx.add_pk_function_call(fc_copy);
+                for (auto& arg : fc_copy.args) {
+                    arg = add_pk_function_calls(arg, ctx);
+                }
+                return fc_copy;
+            }
+        }
+        return std::nullopt;
+    });
+}
+
 binary_operator validate_and_prepare_new_restriction(const binary_operator& restriction,
                                                      data_dictionary::database db,
                                                      schema_ptr schema,
@@ -193,10 +213,6 @@ binary_operator validate_and_prepare_new_restriction(const binary_operator& rest
             return col.col->is_partition_key();
         }
     );
-    auto reset_processing_pk_column = defer([&ctx] () noexcept { ctx.set_processing_pk_restrictions(false); });
-    if (lhs_pk_col_search_res != nullptr) {
-        ctx.set_processing_pk_restrictions(true);
-    }
     fill_prepare_context(prepared_binop.lhs, ctx);
     fill_prepare_context(prepared_binop.rhs, ctx);
 
@@ -250,6 +266,10 @@ binary_operator validate_and_prepare_new_restriction(const binary_operator& rest
                                               rhs_list_type->get_elements_type());
             }
         }
+    }
+
+    if (lhs_pk_col_search_res) {
+        prepared_binop = as<binary_operator>(add_pk_function_calls(prepared_binop, ctx));
     }
 
     return prepared_binop;

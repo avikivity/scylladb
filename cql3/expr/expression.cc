@@ -2325,9 +2325,6 @@ void fill_prepare_context(expression& e, prepare_context& ctx) {
         },
         [&](function_call& f) {
             const shared_ptr<functions::function>& func = std::get<shared_ptr<functions::function>>(f.func);
-            if (ctx.is_processing_pk_restrictions() && !func->is_pure()) {
-                ctx.add_pk_function_call(f);
-            }
 
             for (expr::expression& argument : f.args) {
                 fill_prepare_context(argument, ctx);
