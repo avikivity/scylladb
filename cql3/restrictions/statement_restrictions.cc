@@ -365,14 +365,18 @@ statement_restrictions::statement_restrictions(data_dictionary::database db,
         bool allow_filtering)
     : statement_restrictions(schema, allow_filtering)
 {
-    for (auto&& relation_expr : boolean_factors(where_clause)) {
+    auto prepared_where_clause = expr::prepare_expression(where_clause, db, schema->ks_name(), schema.get(),
+            make_lw_shared<column_specification>(schema->ks_name(), schema->cf_name(),
+                    ::make_shared<column_identifier>("WHERE", false),
+                    boolean_type));
+    for (auto&& relation_expr : boolean_factors(prepared_where_clause)) {
         const expr::binary_operator* relation_binop = expr::as_if<expr::binary_operator>(&relation_expr);
 
         if (relation_binop == nullptr) {
             on_internal_error(rlogger, format("statement_restrictions: where clause has non-binop element: {}", relation_expr));
         }
 
-        expr::binary_operator prepared_restriction = expr::validate_and_prepare_new_restriction(*relation_binop, db, schema, ctx);
+        expr::binary_operator prepared_restriction = expr::validate_new_restriction(*relation_binop, db, schema, ctx);
         add_restriction(prepared_restriction, schema, allow_filtering, for_view);
 
         if (prepared_restriction.op != expr::oper_t::IS_NOT) {

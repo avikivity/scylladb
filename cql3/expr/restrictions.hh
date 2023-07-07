@@ -33,9 +33,9 @@ struct schema_pos_column_definition_comparator {
 using single_column_restrictions_map = std::map<const column_definition*, expression, schema_pos_column_definition_comparator>;
 
 
-// Given a restriction from the WHERE clause prepares it and performs some validation checks.
+// Given a restriction from the WHERE clause performs some validation checks.
 // It will also fill the prepare context automatically, there's no need to do that later.
-binary_operator validate_and_prepare_new_restriction(const binary_operator& restriction,
+binary_operator validate_new_restriction(const binary_operator& restriction,
                                                      data_dictionary::database db,
                                                      schema_ptr schema,
                                                      prepare_context& ctx);

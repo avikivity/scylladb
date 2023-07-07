@@ -196,15 +196,14 @@ add_pk_function_calls(const expression& e, prepare_context& ctx) {
     });
 }
 
-binary_operator validate_and_prepare_new_restriction(const binary_operator& restriction,
+binary_operator validate_new_restriction(const binary_operator& restriction,
                                                      data_dictionary::database db,
                                                      schema_ptr schema,
                                                      prepare_context& ctx) {
     // Perform basic initial checks
     preliminary_binop_vaidation_checks(restriction);
 
-    // Prepare the restriction
-    binary_operator prepared_binop = prepare_binary_operator(restriction, db, *schema);
+    auto prepared_binop = restriction;
     expr::verify_no_aggregate_functions(prepared_binop, "WHERE clause");
 
     // Fill prepare context
