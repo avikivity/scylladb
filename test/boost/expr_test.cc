@@ -348,7 +348,7 @@ BOOST_AUTO_TEST_CASE(expr_printer_parse_and_print_test) {
 }
 
 BOOST_AUTO_TEST_CASE(boolean_factors_test) {
-    BOOST_REQUIRE_EQUAL(boolean_factors(make_bool_const(true)), std::vector<expression>({make_bool_const(true)}));
+    BOOST_REQUIRE_EQUAL(boolean_factors(make_bool_const(true)), std::vector<expression>());
 
     BOOST_REQUIRE_EQUAL(boolean_factors(constant::make_null(boolean_type)), std::vector<expression>({constant::make_null(boolean_type)}));
 

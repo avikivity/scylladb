@@ -639,11 +639,18 @@ boolean_factors(expression e) {
 }
 
 void for_each_boolean_factor(const expression& e, const noncopyable_function<void (const expression&)>& for_each_func) {
+    auto is_true_constant = [] (const expression& e) {
+        if (auto c = as_if<constant>(&e)) {
+            // must be a boolean constant, since this is a boolean expression
+            return *c == constant::make_bool(true);
+        }
+        return false;
+    };
     if (auto conj = as_if<conjunction>(&e)) {
         for (const expression& child : conj->children) {
             for_each_boolean_factor(child, for_each_func);
         }
-    } else {
+    } else if (!is_true_constant(e)) {
         for_each_func(e);
     }
 }
