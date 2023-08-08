@@ -46,10 +46,11 @@ query_pager::query_pager(service::storage_proxy& p, schema_ptr s,
                 const cql3::query_options& options,
                 lw_shared_ptr<query::read_command> cmd,
                 dht::partition_range_vector ranges,
+                uint64_t per_partition_limit,
                 query_function query_function_override)
                 : _has_clustering_keys(has_clustering_keys(*s, *cmd))
                 , _max(cmd->get_row_limit())
-                , _per_partition_limit(cmd->slice.partition_row_limit())
+                , _per_partition_limit(per_partition_limit)
                 , _last_pos(position_in_partition::for_partition_start())
                 , _proxy(p.shared_from_this())
                 , _schema(std::move(s))
@@ -262,8 +263,9 @@ public:
                 lw_shared_ptr<query::read_command> cmd,
                 dht::partition_range_vector ranges,
                 ::shared_ptr<const cql3::restrictions::statement_restrictions> filtering_restrictions,
+                uint64_t per_partition_limit,
                 query_function query_function_override)
-        : query_pager(p, s, selection, state, options, std::move(cmd), std::move(ranges), std::move(query_function_override))
+        : query_pager(p, s, selection, state, options, std::move(cmd), std::move(ranges), per_partition_limit, std::move(query_function_override))
         , _filtering_restrictions(std::move(filtering_restrictions))
         {}
     virtual ~filtering_query_pager() {}
@@ -311,7 +313,7 @@ public:
                 cql3::cql_stats& stats,
                 service::storage_proxy& proxy,
                 db::timeout_clock::duration timeout_duration)
-        : query_pager(proxy, s, selection, state, options, std::move(cmd), std::move(ranges))
+        : query_pager(proxy, s, selection, state, options, std::move(cmd), std::move(ranges), /* per_partition_limit */std::numeric_limits<uint64_t>::max())
         , _proxy(proxy)
         , _timeout_duration(timeout_duration)
     {}
@@ -487,6 +489,7 @@ std::unique_ptr<service::pager::query_pager> service::pager::query_pagers::pager
         service::query_state& state, const cql3::query_options& options,
         lw_shared_ptr<query::read_command> cmd,
         dht::partition_range_vector ranges,
+        uint64_t per_partition_limit,
         ::shared_ptr<const cql3::restrictions::statement_restrictions> filtering_restrictions,
         query_function query_function_override) {
     // If partition row limit is applied to paging, we still need to fall back
@@ -496,10 +499,10 @@ std::unique_ptr<service::pager::query_pager> service::pager::query_pagers::pager
     }
     if (filtering_restrictions) {
         return std::make_unique<filtering_query_pager>(proxy, std::move(s), std::move(selection), state,
-                    options, std::move(cmd), std::move(ranges), std::move(filtering_restrictions), std::move(query_function_override));
+                    options, std::move(cmd), std::move(ranges), std::move(filtering_restrictions), per_partition_limit, std::move(query_function_override));
     }
     return std::make_unique<query_pager>(proxy, std::move(s), std::move(selection), state,
-            options, std::move(cmd), std::move(ranges), std::move(query_function_override));
+            options, std::move(cmd), std::move(ranges), per_partition_limit, std::move(query_function_override));
 }
 
 ::shared_ptr<service::pager::query_pager> service::pager::query_pagers::ghost_row_deleting_pager(

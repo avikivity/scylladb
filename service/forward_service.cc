@@ -482,6 +482,7 @@ future<query::forward_result> forward_service::execute_on_this_shard(
             *query_options,
             make_lw_shared<query::read_command>(req.cmd),
             std::move(ranges_owned_by_this_shard),
+            /* per_partition_limit */ std::numeric_limits<uint64_t>::max(),
             nullptr // No filtering restrictions
         );
 

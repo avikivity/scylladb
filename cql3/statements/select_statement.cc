@@ -282,15 +282,19 @@ select_statement::make_partition_slice(const query_options& options) const
         std::reverse(bounds.begin(), bounds.end());
         ++_stats.reverse_queries;
     }
+    auto per_partition_limit =
+        _restrictions_need_filtering
+                ? std::numeric_limits<uint64_t>::max() // will be handled by the coordinator
+                : get_per_partition_limit(options);
     return query::partition_slice(std::move(bounds),
-        std::move(static_columns), std::move(regular_columns), _opts, nullptr, get_per_partition_limit(options));
+        std::move(static_columns), std::move(regular_columns), _opts, nullptr, per_partition_limit);
 }
 
 uint64_t select_statement::do_get_limit(const query_options& options,
                                         const std::optional<expr::expression>& limit,
                                         const expr::unset_bind_variable_guard& limit_unset_guard,
                                         uint64_t default_limit) const {
-    if (!limit.has_value() || limit_unset_guard.is_unset(options) || _selection->is_aggregate()) {
+    if (!limit.has_value() || limit_unset_guard.is_unset(options)) {
         return default_limit;
     }
 
@@ -434,7 +438,9 @@ select_statement::execute_without_checking_exception_message_aggregate_or_paged(
     auto timeout_duration = get_timeout(state.get_client_state(), options);
     auto timeout = db::timeout_clock::now() + timeout_duration;
     auto p = service::pager::query_pagers::pager(qp.proxy(), _schema, _selection,
-            state, options, command, std::move(key_ranges), _restrictions_need_filtering ? _restrictions : nullptr);
+            state, options, command, std::move(key_ranges),
+            get_per_partition_limit(options),
+            _restrictions_need_filtering ? _restrictions : nullptr);
 
     if (aggregate || nonpaged_filtering) {
         auto builder = cql3::selection::result_set_builder(*_selection, now, *_group_by_cell_indices);
@@ -856,9 +862,10 @@ select_statement::process_results_complex(foreign_ptr<lw_shared_ptr<query::resul
         if (_restrictions_need_filtering) {
             results->ensure_counts();
             _stats.filtered_rows_read_total += *results->row_count();
+            seastar_logger.info("filtering results with per partition limit {}", get_per_partition_limit(options));
             query::result_view::consume(*results, cmd->slice,
                     cql3::selection::result_set_builder::visitor(builder, *_schema,
-                            *_selection, cql3::selection::result_set_builder::restrictions_filter(_restrictions, options, cmd->get_row_limit(), _schema, cmd->slice.partition_row_limit())));
+                            *_selection, cql3::selection::result_set_builder::restrictions_filter(_restrictions, options, cmd->get_row_limit(), _schema, get_per_partition_limit(options))));
         } else {
             query::result_view::consume(*results, cmd->slice,
                     cql3::selection::result_set_builder::visitor(builder, *_schema,
@@ -1329,7 +1336,9 @@ indexed_table_select_statement::read_posting_list(query_processor& qp,
     }
 
     auto p = service::pager::query_pagers::pager(qp.proxy(), _view_schema, selection,
-            state, options, cmd, std::move(partition_ranges), nullptr);
+            state, options, cmd, std::move(partition_ranges),
+            /* per_partition_limit */ std::numeric_limits<uint64_t>::max(),
+            nullptr);
     return p->fetch_page_result(options.get_page_size(), now, timeout).then(utils::result_wrap([p = std::move(p)] (std::unique_ptr<cql3::result_set> rs)
             -> coordinator_result<::shared_ptr<cql_transport::messages::result_message::rows>> {
         rs->get_metadata().set_paging_state(p->state());
@@ -1773,6 +1782,7 @@ mutation_fragments_select_statement::do_execute(query_processor& qp, service::qu
             options,
             command,
             std::move(key_ranges),
+            get_per_partition_limit(options),
             _restrictions_need_filtering ? _restrictions : nullptr,
             std::bind_front(&mutation_fragments_select_statement::do_query, this, this_node));
 

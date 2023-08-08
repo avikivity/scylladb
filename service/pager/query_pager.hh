@@ -94,6 +94,7 @@ public:
                 const cql3::query_options& options,
                 lw_shared_ptr<query::read_command> cmd,
                 dht::partition_range_vector ranges,
+                uint64_t per_partition_limit,
                 query_function query_function_override = {});
     virtual ~query_pager() {}
 

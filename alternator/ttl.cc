@@ -547,7 +547,9 @@ static future<> scan_table_ranges(
     const schema_ptr& s = scan_ctx.s;
     assert (partition_ranges.size() == 1); // otherwise issue #9167 will cause incorrect results.
     auto p = service::pager::query_pagers::pager(proxy, s, scan_ctx.selection, *scan_ctx.query_state_ptr,
-            *scan_ctx.query_options, scan_ctx.command, std::move(partition_ranges), nullptr);
+            *scan_ctx.query_options, scan_ctx.command, std::move(partition_ranges), 
+            /* per_partition_limit */ std::numeric_limits<uint64_t>::max(),
+            nullptr);
     while (!p->is_exhausted()) {
         if (abort_source.abort_requested()) {
             co_return;

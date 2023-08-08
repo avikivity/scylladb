@@ -4804,6 +4804,7 @@ public:
                          , _effective_replication_map_ptr(std::move(ermp))
                          , _cmd(std::move(cmd)), _partition_range(std::move(pr)), _cl(cl), _block_for(block_for), _targets(std::move(targets)), _trace_state(std::move(trace_state)),
                            _cf(std::move(cf)), _permit(std::move(permit)), _rate_limit_info(rate_limit_info) {
+        slogger.info("read_command: {}", *_cmd);
         _proxy->get_stats().reads++;
         _proxy->get_stats().foreground_reads++;
     }
