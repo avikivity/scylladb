@@ -495,14 +495,17 @@ selection::collect_metadata(const schema& schema, const std::vector<prepared_sel
 }
 
 result_set_builder::result_set_builder(const selection& s, gc_clock::time_point now,
+                                       uint64_t row_limit,
                                        std::vector<size_t> group_by_cell_indices)
     : _result_set(std::make_unique<result_set>(::make_shared<metadata>(*(s.get_result_metadata()))))
     , _selectors(s.new_selectors())
     , _group_by_cell_indices(std::move(group_by_cell_indices))
     , _last_group(_group_by_cell_indices.size())
     , _group_began(false)
+    , _result_rows_remaining(row_limit)
     , _now(now)
 {
+    cql_logger.info("result_set_builder created with limit {}", _result_rows_remaining);
     if (s._collect_timestamps) {
         _timestamps.resize(s._columns.size(), 0);
     }
@@ -569,14 +572,14 @@ void result_set_builder::flush_selectors() {
         // handled by process_current_row
         return;
     }
-    _result_set->add_row(_selectors->get_output_row());
+    add_row_respecting_row_limit(_selectors->get_output_row());
     _selectors->reset();
 }
 
 void result_set_builder::complete_row() {
     if (!_selectors->is_aggregate()) {
         // Fast path when not aggregating
-        _result_set->add_row(_selectors->transform_input_row(*this));
+        add_row_respecting_row_limit(_selectors->transform_input_row(*this));
         return;
     }
     if (last_group_ended()) {
@@ -590,12 +593,23 @@ void result_set_builder::start_new_row() {
     current.clear();
 }
 
+void result_set_builder::add_row_respecting_row_limit(std::vector<managed_bytes_opt>&& row) {
+    if (!_result_rows_remaining) {
+        cql_logger.info("result_set_builder: not adding row due to limit", _result_rows_remaining);
+    }
+    if (_result_rows_remaining) {
+        --_result_rows_remaining;
+        _result_set->add_row(std::move(row));       
+        cql_logger.info("result_set_builder: adding row, remaining {}", _result_rows_remaining);
+    }
+}
+
 std::unique_ptr<result_set> result_set_builder::build() {
     if (_group_began && _selectors->is_aggregate()) {
         flush_selectors();
     }
     if (_result_set->empty() && _selectors->is_aggregate() && _group_by_cell_indices.empty()) {
-        _result_set->add_row(_selectors->get_output_row());
+        add_row_respecting_row_limit(_selectors->get_output_row());
     }
     return std::move(_result_set);
 }

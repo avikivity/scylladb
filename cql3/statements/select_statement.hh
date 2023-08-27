@@ -91,7 +91,7 @@ protected:
     std::unique_ptr<cql3::attributes> _attrs;
 private:
     future<shared_ptr<cql_transport::messages::result_message>> process_results_complex(foreign_ptr<lw_shared_ptr<query::result>> results,
-        lw_shared_ptr<query::read_command> cmd, const query_options& options, gc_clock::time_point now) const;
+        lw_shared_ptr<query::read_command> cmd, const query_options& options, gc_clock::time_point now, uint64_t row_limit) const;
 protected :
     virtual future<::shared_ptr<cql_transport::messages::result_message>> do_execute(query_processor& qp,
         service::query_state& state, const query_options& options) const;
@@ -123,15 +123,15 @@ public:
 
     future<::shared_ptr<cql_transport::messages::result_message>> execute_non_aggregate_unpaged(query_processor& qp,
         lw_shared_ptr<query::read_command> cmd, dht::partition_range_vector&& partition_ranges, service::query_state& state,
-         const query_options& options, gc_clock::time_point now) const;
+         const query_options& options, gc_clock::time_point now, uint64_t row_limit) const;
 
     future<::shared_ptr<cql_transport::messages::result_message>> execute_without_checking_exception_message_non_aggregate_unpaged(query_processor& qp,
         lw_shared_ptr<query::read_command> cmd, dht::partition_range_vector&& partition_ranges, service::query_state& state,
-         const query_options& options, gc_clock::time_point now) const;
+         const query_options& options, gc_clock::time_point now, uint64_t row_limit) const;
 
     future<::shared_ptr<cql_transport::messages::result_message>> execute_without_checking_exception_message_aggregate_or_paged(query_processor& qp,
         lw_shared_ptr<query::read_command> cmd, dht::partition_range_vector&& partition_ranges, service::query_state& state,
-         const query_options& options, gc_clock::time_point now, int32_t page_size, bool aggregate, bool nonpaged_filtering) const;
+         const query_options& options, gc_clock::time_point now, int32_t page_size, bool aggregate, bool nonpaged_filtering, uint64_t row_limit) const;
 
 
     struct primary_key {
@@ -140,7 +140,7 @@ public:
     };
 
     future<shared_ptr<cql_transport::messages::result_message>> process_results(foreign_ptr<lw_shared_ptr<query::result>> results,
-        lw_shared_ptr<query::read_command> cmd, const query_options& options, gc_clock::time_point now) const;
+        lw_shared_ptr<query::read_command> cmd, const query_options& options, gc_clock::time_point now, uint64_t row_limit) const;
 
     const sstring& keyspace() const;
 
@@ -157,6 +157,9 @@ public:
 protected:
     uint64_t do_get_limit(const query_options& options, const std::optional<expr::expression>& limit, const expr::unset_bind_variable_guard& unset_guard, uint64_t default_limit) const;
     uint64_t get_limit(const query_options& options) const {
+        if (auto paging_state = options.get_paging_state()) {
+            return paging_state->get_remaining();
+        }
         return do_get_limit(options, _limit, _limit_unset_guard, query::max_rows);
     }
     uint64_t get_per_partition_limit(const query_options& options) const {
@@ -245,7 +248,8 @@ private:
             service::query_state& state,
             const query_options& options,
             gc_clock::time_point now,
-            lw_shared_ptr<const service::pager::paging_state> paging_state) const;
+            lw_shared_ptr<const service::pager::paging_state> paging_state,
+            uint64_t row_limit) const;
 
     lw_shared_ptr<query::read_command>
     prepare_command_for_base_query(query_processor& qp, const query_options& options, service::query_state& state, gc_clock::time_point now,
@@ -266,7 +270,8 @@ private:
             service::query_state& state,
             const query_options& options,
             gc_clock::time_point now,
-            lw_shared_ptr<const service::pager::paging_state> paging_state) const;
+            lw_shared_ptr<const service::pager::paging_state> paging_state,
+            uint64_t row_limit) const;
 
     // Function for fetching the selected columns from a list of clustering rows.
     // It is currently used only in our Secondary Index implementation - ordinary
@@ -292,7 +297,8 @@ private:
             service::query_state& state,
             const query_options& options,
             gc_clock::time_point now,
-            lw_shared_ptr<const service::pager::paging_state> paging_state) const;
+            lw_shared_ptr<const service::pager::paging_state> paging_state,
+            uint64_t row_limit) const;
 
     virtual void update_stats_rows_read(int64_t rows_read) const override {
         _stats.rows_read += rows_read;

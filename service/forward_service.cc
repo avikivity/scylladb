@@ -452,6 +452,7 @@ future<query::forward_result> forward_service::execute_on_this_shard(
     auto rs_builder = cql3::selection::result_set_builder(
         *selection,
         now,
+        std::numeric_limits<uint64_t>::max(),  // LIMIT; aggregation only builds one row anyway, but if it doesn't, better to catch it
         std::vector<size_t>() // Represents empty GROUP BY indices.
     );
 

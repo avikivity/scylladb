@@ -2409,7 +2409,7 @@ std::optional<rjson::value> executor::describe_single_item(schema_ptr schema,
         const std::optional<attrs_to_get>& attrs_to_get) {
     rjson::value item = rjson::empty_object();
 
-    cql3::selection::result_set_builder builder(selection, gc_clock::now());
+    cql3::selection::result_set_builder builder(selection, gc_clock::now(), /* row_limit */ std::numeric_limits<uint64_t>::max());
     query::result_view::consume(query_result, slice, cql3::selection::result_set_builder::visitor(builder, *schema, selection));
 
     auto result_set = builder.build();
@@ -2432,7 +2432,7 @@ future<std::vector<rjson::value>> executor::describe_multi_item(schema_ptr schem
         shared_ptr<cql3::selection::selection> selection,
         foreign_ptr<lw_shared_ptr<query::result>> query_result,
         shared_ptr<const std::optional<attrs_to_get>> attrs_to_get) {
-    cql3::selection::result_set_builder builder(*selection, gc_clock::now());
+    cql3::selection::result_set_builder builder(*selection, gc_clock::now(), /* row_limit */ std::numeric_limits<uint64_t>::max());
     query::result_view::consume(*query_result, slice, cql3::selection::result_set_builder::visitor(builder, *schema, *selection));
     auto result_set = builder.build();
     std::vector<rjson::value> ret;

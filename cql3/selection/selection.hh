@@ -166,13 +166,25 @@ public:
 
 shared_ptr<selection> selection_from_partition_slice(schema_ptr schema, const query::partition_slice& slice);
 
+// Limit configuration for result_set_builder. Not needed if we were able
+// to push the limits to the replica, but needed if we do coordinator-side
+// filtering.
+struct result_set_builder_limits {
+    uint64_t remaining_rows = std::numeric_limits<uint64_t>::max();
+    uint64_t per_partition_limit = std::numeric_limits<uint64_t>::max();
+    uint64_t per_partition_remaining_rows = std::numeric_limits<uint64_t>::max();
+};
+
 class result_set_builder {
+public:
+    using limits = result_set_builder_limits;
 private:
     std::unique_ptr<result_set> _result_set;
     std::unique_ptr<selectors> _selectors;
     const std::vector<size_t> _group_by_cell_indices; ///< Indices in \c current of cells holding GROUP BY values.
     std::vector<managed_bytes_opt> _last_group; ///< Previous row's group: all of GROUP BY column values.
     bool _group_began; ///< Whether a group began being formed.
+    limits _limits;
 public:
     std::vector<managed_bytes_opt> current;
     std::vector<bytes> current_partition_key;
@@ -182,6 +194,10 @@ public:
 private:
     const gc_clock::time_point _now;
 public:
+    bool row_limit_reached() const {
+        return _limits.remaining_rows == 0;
+    }
+
     template<typename Func>
     auto with_thread_if_needed(Func&& func) {
         if (_selectors->requires_thread()) {
@@ -234,7 +250,7 @@ public:
         bool do_filter(const selection& selection, const std::vector<bytes>& pk, const std::vector<bytes>& ck, const query::result_row_view& static_row, const query::result_row_view* row) const;
     };
 
-    result_set_builder(const selection& s, gc_clock::time_point now,
+    result_set_builder(const selection& s, gc_clock::time_point now, uint64_t row_limit,
                        std::vector<size_t> group_by_cell_indices = {});
     void add_empty();
     void add(bytes_opt value);
@@ -307,7 +323,7 @@ public:
         void accept_new_row(const query::result_row_view& static_row, const query::result_row_view& row) {
             auto static_row_iterator = static_row.iterator();
             auto row_iterator = row.iterator();
-            if (!_filter(_selection, _partition_key, _clustering_key, static_row, &row)) {
+            if (!_builder._result_rows_remaining || !_filter(_selection, _partition_key, _clustering_key, static_row, &row)) {
                 return;
             }
             _builder.start_new_row();
@@ -370,6 +386,10 @@ private:
 
     /// Updates _last_group from the \c current row.
     void update_last_group();
+
+    /// Adds a row to the result set, if the row limit agrees
+    void add_row_respecting_row_limit(std::vector<managed_bytes_opt>&& row);
+
 };
 
 }
