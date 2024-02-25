@@ -317,6 +317,8 @@ void schema::rebuild() {
         _columns_by_name[def.name()] = &def;
     }
 
+    assert(!_columns_by_name.empty());
+
     static_assert(row_column_ids_are_ordered_by_name::value, "row columns don't need to be ordered by name");
     if (!std::is_sorted(regular_columns().begin(), regular_columns().end(), column_definition::name_comparator(regular_column_name_type()))) {
         throw std::runtime_error("Regular columns should be sorted by name");
@@ -1403,6 +1405,8 @@ schema_ptr schema_builder::build() {
     if (static_props.use_null_sharder) {
         new_raw._sharder = get_sharder(1, 0);
     }
+
+    assert(!new_raw._columns.empty());
 
     return make_lw_shared<schema>(schema::private_tag{}, new_raw, _view_info, static_props);
 }
