@@ -1278,7 +1278,7 @@ table_selector get_affected_tables(const sstring& keyspace_name, const mutation&
 
 static future<> do_merge_schema(distributed<service::storage_proxy>& proxy, sharded<db::system_keyspace>& sys_ks, std::vector<mutation> mutations, bool do_flush, bool reload)
 {
-    slogger.trace("do_merge_schema: {}", mutations);
+    slogger.info("do_merge_schema: {}", mutations);
     schema_ptr s = keyspaces();
     // compare before/after schemas of the affected keyspaces only
     std::set<sstring> keyspaces;
