@@ -123,6 +123,7 @@ private:
     schema_ptr _view_schema;
     std::optional<secondary_index::index> _idx_opt;
     expr::expression _idx_restrictions = expr::conjunction({});
+    std::function<dht::partition_range_vector (const query_options&)> _get_partition_key_ranges_fn;
 public:
     /**
      * Creates a new empty <code>StatementRestrictions</code>.
@@ -317,6 +318,7 @@ private:
 
     unsigned int num_clustering_prefix_columns_that_need_not_be_filtered() const;
     void calculate_column_defs_for_filtering_and_erase_restrictions_used_for_index(data_dictionary::database db);
+    std::function<dht::partition_range_vector (const query_options&)> build_partition_key_ranges_fn() const;
 public:
     /**
      * Returns the specified range of the partition key.
