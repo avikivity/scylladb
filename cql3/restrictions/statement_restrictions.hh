@@ -132,7 +132,7 @@ public:
      */
     statement_restrictions(schema_ptr schema, bool allow_filtering);
 
-    friend statement_restrictions analyze_statement_restrictions(
+    friend shared_ptr<const statement_restrictions> analyze_statement_restrictions(
         data_dictionary::database db,
         schema_ptr schema,
         statements::statement_type type,
@@ -144,6 +144,8 @@ public:
         check_indexes do_check_indexes);
 
 private:
+    statement_restrictions(const statement_restrictions&) = delete;
+    statement_restrictions& operator=(const statement_restrictions&) = delete;
     statement_restrictions(data_dictionary::database db,
         schema_ptr schema,
         statements::statement_type type,
@@ -153,6 +155,9 @@ private:
         bool for_view,
         bool allow_filtering,
         check_indexes do_check_indexes);
+    template <typename... Args> static shared_ptr<statement_restrictions> do_make_shared(Args&&... args) {
+        return seastar::make_shared<statement_restrictions>(std::forward<Args>(args)...);
+    }
 public:
 
     const std::vector<expr::expression>& index_restrictions() const;
@@ -410,7 +415,7 @@ public:
     void validate_primary_key(const query_options& options) const;
 };
 
-statement_restrictions analyze_statement_restrictions(
+shared_ptr<const statement_restrictions> analyze_statement_restrictions(
         data_dictionary::database db,
         schema_ptr schema,
         statements::statement_type type,

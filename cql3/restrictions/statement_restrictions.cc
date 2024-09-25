@@ -2920,7 +2920,7 @@ const std::unordered_set<const column_definition*> statement_restrictions::get_n
     return _not_null_columns;
 }
 
-statement_restrictions
+shared_ptr<const statement_restrictions>
 analyze_statement_restrictions(
         data_dictionary::database db,
         schema_ptr schema,
@@ -2931,7 +2931,7 @@ analyze_statement_restrictions(
         bool for_view,
         bool allow_filtering,
         check_indexes do_check_indexes) {
-    return statement_restrictions(db, std::move(schema), type, where_clause, ctx, selects_only_static_columns, for_view, allow_filtering, do_check_indexes);
+    return statement_restrictions::do_make_shared(db, std::move(schema), type, where_clause, ctx, selects_only_static_columns, for_view, allow_filtering, do_check_indexes);
 }
 
 } // namespace restrictions
