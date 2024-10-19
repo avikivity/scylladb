@@ -62,14 +62,6 @@ using boost::adaptors::filtered;
 using boost::adaptors::transformed;
 using statements::request_validations::invalid_request;
 
-
-/// A set of discrete values.
-using value_list = std::vector<managed_bytes>; // Sorted and deduped using value comparator.
-
-/// General set of values.  Empty set and single-element sets are always value_list.  interval is
-/// never singular and never has start > end.  Universal set is a interval with both bounds null.
-using value_set = std::variant<value_list, interval<managed_bytes>>;
-
 /// A set of all column values that would satisfy an expression. The _token_values variant finds
 /// matching values for the partition token function call instead of the column.
 ///
