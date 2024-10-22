@@ -30,6 +30,22 @@ using value_list = std::vector<managed_bytes>; // Sorted and deduped using value
 /// never singular and never has start > end.  Universal set is a interval with both bounds null.
 using value_set = std::variant<value_list, interval<managed_bytes>>;
 
+// For some boolean expression (say (X = 3) = TRUE, this represents a function that solves for X.
+// (here, it would return 3). The expression is obtained by equating some factors of the WHERE
+// clause to TRUE.
+using solve_for_column_t = std::function<value_set (const query_options&)>;
+
+struct analyzed_column {
+    // The original filter for this column.
+    expr::expression filter;
+    // A function that returns the set of values that satisfy the filter. Can be unset,
+    // in which case the filter must be interpreted.
+    solve_for_column_t solve_for_column;
+    // Type of value_set returned by solve_for_column.
+    const column_definition* col = nullptr;
+    // Whether the returned value_set will resolve to a single value.
+    bool is_singleton = false;
+};
 
 ///In some cases checking if columns have indexes is undesired of even
 ///impossible, because e.g. the query runs on a pseudo-table, which does not
@@ -48,7 +64,7 @@ struct token_range_restrictions {
 };
 
 struct single_column_partition_range_restrictions {
-    std::vector<expr::expression> per_column_restrictions;
+    std::vector<analyzed_column> per_column_restrictions;
 };
 
 using partition_range_restrictions = std::variant<
