@@ -60,7 +60,7 @@ struct no_partition_range_restrictions {
 };
 
 struct token_range_restrictions {
-    expr::expression token_restrictions = expr::conjunction({});
+    analyzed_column token_restrictions;
 };
 
 struct single_column_partition_range_restrictions {
