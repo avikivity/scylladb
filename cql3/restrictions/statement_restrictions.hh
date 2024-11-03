@@ -148,7 +148,7 @@ private:
     ///   4.4 elements other than the last have only EQ or IN atoms
     ///   4.5 the last element has only EQ, IN, or is_slice() atoms
     /// 5. if multi-column, then each element is a binary_operator
-    std::vector<expr::expression> _clustering_prefix_restrictions;
+    std::vector<analyzed_column> _clustering_prefix_restrictions;
 
     /// Like _clustering_prefix_restrictions, but for the indexing table (if this is an index-reading statement).
     /// Recall that the index-table CK is (token, PK, CK) of the base table for a global index and (indexed column,
@@ -157,7 +157,7 @@ private:
     /// Elements are conjunctions of single-column binary operators with the same LHS.
     /// Element order follows the indexing-table clustering key.
     /// In case of a global index the first element's (token restriction) RHS is a dummy value, it is filled later.
-    std::optional<std::vector<expr::expression>> _idx_tbl_ck_prefix;
+    std::optional<std::vector<analyzed_column>> _idx_tbl_ck_prefix;
 
     /// Parts of _where defining the partition range.
     ///
