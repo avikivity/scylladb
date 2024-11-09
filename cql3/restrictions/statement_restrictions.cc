@@ -1192,6 +1192,7 @@ static std::vector<analyzed_column> extract_clustering_prefix_restrictions(
             break;
         }
     }
+    rlogger.trace("extract_clustering_prefix_restrictions: {}", prefix | std::views::transform(&analyzed_column::filter));
     return prefix;
 }
 
@@ -1389,6 +1390,10 @@ statement_restrictions::statement_restrictions(private_tag,
         }
     }
 
+    if (_idx_tbl_ck_prefix) {
+        rlogger.trace("constructor: _idx_tbl_ck_prefix {}", *_idx_tbl_ck_prefix | std::views::transform(&analyzed_column::filter));
+    }
+
     _get_partition_key_ranges_fn = build_partition_key_ranges_fn();
 
     _get_clustering_bounds_fn = build_get_clustering_bounds_fn();
@@ -1503,7 +1508,12 @@ std::pair<std::optional<secondary_index::index>, expr::expression> statement_res
             expr::expression col_restrictions = expr::conjunction {
                 .children = extract_single_column_restrictions_for_column(restriction, *cdef)
             };
+            rlogger.trace("do_find_idx: examining {}", col_restrictions);
             for (const auto& index : sim.list_indexes()) {
+                rlogger.trace("do_find_idx:   idx {} supported {} score {}",
+                        index.target_column(),
+                        (cdef->name_as_text() == index.target_column()) ? is_supported_by(col_restrictions, index) : false,
+                        (cdef->name_as_text() == index.target_column() && is_supported_by(col_restrictions, index)) ? score(index) : -1);
                 if (cdef->name_as_text() == index.target_column() &&
                         is_supported_by(col_restrictions, index) &&
                         score(index) > chosen_index_score) {
@@ -1513,6 +1523,11 @@ std::pair<std::optional<secondary_index::index>, expr::expression> statement_res
                 }
             }
         });
+    }
+    if (chosen_index) {
+        rlogger.trace("do_find_idx: chosen_index {} restrictions {}", chosen_index->target_column(), chosen_index_restrictions);
+    } else {
+        rlogger.trace("do_find_idx: no index found");
     }
     return {chosen_index, chosen_index_restrictions};
 }
@@ -2400,6 +2415,7 @@ std::vector<query::clustering_range> get_single_column_clustering_bounds(
         const query_options& options,
         const schema& schema,
         const std::vector<analyzed_column>& single_column_restrictions) {
+    rlogger.trace("single_column_restrictions: keys {}", single_column_restrictions | std::views::transform(&analyzed_column::filter));
     const size_t size_limit =
             options.get_cql_config().restrictions.clustering_key_restrictions_max_cartesian_product_size;
     size_t product_size = 1;
@@ -2408,14 +2424,18 @@ std::vector<query::clustering_range> get_single_column_clustering_bounds(
         auto values = solve(
                 single_column_restrictions[i],
                 options);
+        rlogger.trace("single_column_restrictions: key {} solved as {}", i, values);
         if (auto list = std::get_if<value_list>(&values)) {
+            rlogger.trace("single_column_restrictions: key {} is a list {}", i, *list);
             if (list->empty()) { // Impossible condition -- no rows can possibly match.
+                rlogger.trace("single_column_restrictions: key {} is empty", i);
                 return {};
             }
             product_size *= list->size();
             prior_column_values.push_back(std::move(*list));
             error_if_exceeds_clustering_key_limit(product_size, size_limit);
         } else if (auto last_range = std::get_if<interval<managed_bytes>>(&values)) {
+            rlogger.trace("single_column_restrictions: key {} is an interval {}", i, *last_range);
             // Must be the last column in the prefix, since it's neither EQ nor IN.
             std::vector<query::clustering_range> ck_ranges;
             if (prior_column_values.empty()) {
@@ -2458,6 +2478,7 @@ std::vector<query::clustering_range> get_single_column_clustering_bounds(
     cartesian_product cp(prior_column_values);
     std::transform(cp.begin(), cp.end(), ck_ranges.begin(), std::bind_front(query::clustering_range::make_singular));
     sort(ck_ranges.begin(), ck_ranges.end(), range_less{schema});
+    rlogger.trace("single_column_restrictions: keys result {}", ck_ranges);
     return ck_ranges;
 }
 
@@ -2928,8 +2949,11 @@ void statement_restrictions::prepare_indexed_global(const schema& idx_tbl_schema
             | std::views::transform([&] (auto&& solver) { return solver(options); })
             | std::views::transform(value_set_to_singleton)
             | std::ranges::to<utils::small_vector<managed_bytes, 4>>();
+        rlogger.trace("token_solver: pk_values {}", pk_values);
         auto pk = partition_key::from_exploded(pk_values);
+        rlogger.trace("token_solver: pk {}", pk);
         auto tok = dht::get_token(*_schema, pk);
+        rlogger.trace("token_solver: tok {}", tok);
         return value_list{managed_bytes(serialized(dht::token::to_int64(tok)))};
     };
 
@@ -2939,6 +2963,8 @@ void statement_restrictions::prepare_indexed_global(const schema& idx_tbl_schema
         .col = token_column,
         .is_singleton = is_singleton,
     };
+
+    rlogger.trace("prepare_indexed_global: _idx_tbl_ck_prefix {}", *_idx_tbl_ck_prefix | std::views::transform(&analyzed_column::filter));
 }
 
 void statement_restrictions::prepare_indexed_local(const schema& idx_tbl_schema) {
@@ -2972,6 +2998,7 @@ void statement_restrictions::prepare_indexed_local(const schema& idx_tbl_schema)
 }
 
 void statement_restrictions::add_clustering_restrictions_to_idx_ck_prefix(const schema& idx_tbl_schema) {
+    rlogger.trace("add_cluster_restrictions_to_idx_ck_prefix: _idx_tbl_ck_prefix {}", *_idx_tbl_ck_prefix | std::views::transform(&analyzed_column::filter));
     for (const auto& e : _clustering_prefix_restrictions) {
         if (find_binop(_clustering_prefix_restrictions[0].filter, is_multi_column)) {
             // TODO: We could handle single-element tuples, eg. `(c)>=(123)`.
@@ -2990,6 +3017,7 @@ void statement_restrictions::add_clustering_restrictions_to_idx_ck_prefix(const 
             .col = col_in_index,
             .is_singleton = false, // FIXME: could be a singleton token. Not very important.
         };
+        rlogger.trace("add_cluster_restrictions_to_idx_ck_prefix: adding {}", a.filter);
         _idx_tbl_ck_prefix->push_back(std::move(a));
     }
 }
