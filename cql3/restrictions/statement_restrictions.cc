@@ -15,6 +15,8 @@
 #include <ranges>
 #include <stdexcept>
 
+#include <fmt/std.h>
+
 #include "cql3/expr/expression.hh"
 #include "cql3/expr/evaluate.hh"
 #include "cql3/expr/expr-utils.hh"
@@ -295,7 +297,8 @@ static value_set possible_lhs_values(const column_definition* cdef,
                                         const query_options& options,
                                         const schema* table_schema_opt) {
     const auto type = cdef ? &cdef->type->without_reversed() : long_type.get();
-    return expr::visit(overloaded_functor{
+    rlogger.trace("possible_lhs_values: entry cdef {} expr {}", cdef ? cdef->name_as_text() : "<none>", expr);
+    auto ret = expr::visit(overloaded_functor{
             [] (const constant& constant_val) {
                 std::optional<bool> bool_val = get_bool_value(constant_val);
                 if (bool_val.has_value()) {
@@ -315,7 +318,12 @@ static value_set possible_lhs_values(const column_definition* cdef,
             [&] (const binary_operator& oper) -> value_set {
                 return expr::visit(overloaded_functor{
                         [&] (const column_value& col) -> value_set {
+                            rlogger.trace("possible_lhs_values: cdef {} col.col {} {}", fmt::ptr(cdef), fmt::ptr(col.col), col.col->name_as_text());
+                            if (cdef) {
+                                rlogger.trace("possible_lhs_values: cdef->name_as_text() {}", cdef->name_as_text());
+                            }
                             if (!cdef || cdef != col.col) {
+                                rlogger.trace("possible_lhs_values: unbounded");
                                 return unbounded_value_set;
                             }
                             if (is_compare(oper.op)) {
@@ -498,6 +506,8 @@ static value_set possible_lhs_values(const column_definition* cdef,
                 on_internal_error(expr_logger, "possible_lhs_values: a temporary cannot serve as a restriction by itself");
             },
         }, expr);
+        rlogger.trace("possible_lhs_values: exit {}", ret);
+        return ret;
 }
 
 value_set possible_column_values(const column_definition* col, const expression& e, const query_options& options) {
