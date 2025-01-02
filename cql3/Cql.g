@@ -1827,7 +1827,30 @@ relationType returns [oper_t op = oper_t{}]
 
 relation returns [uexpression e]
     @init{ oper_t rt; }
-    : lhs=relationLeftHandSide type=relationType t=term { $e = binary_operator(std::move(lhs), type, std::move(t)); }
+    : lhs=relationLeftHandSide 
+        ( type=relationType t=term { $e = binary_operator(std::move(lhs), type, std::move(t)); }
+        | K_IS K_NOT K_NULL {
+                    $e = binary_operator(std::move(lhs), oper_t::IS_NOT, make_untyped_null()); }
+        | K_IN marker1=marker
+            { $e = binary_operator(std::move(lhs), oper_t::IN, std::move(marker1)); }
+        | K_IN in_values=singleColumnInValues
+            { $e = binary_operator(std::move(lhs), oper_t::IN,
+            collection_constructor {
+                .style = collection_constructor::style_type::list,
+                .elements = std::move(in_values)
+            }); }
+        | K_NOT K_IN marker1=marker
+            { $e = binary_operator(std::move(lhs), oper_t::NOT_IN, std::move(marker1)); }
+        | K_NOT K_IN in_values=singleColumnInValues
+            { $e = binary_operator(std::move(lhs), oper_t::NOT_IN,
+            collection_constructor {
+                .style = collection_constructor::style_type::list,
+                .elements = std::move(in_values)
+            }); }
+        | K_CONTAINS { rt = oper_t::CONTAINS; } (K_KEY { rt = oper_t::CONTAINS_KEY; })?
+            t=term { $e = binary_operator(std::move(lhs), rt, std::move(t)); }
+        | '[' key=term ']' type=relationType t=term { $e = binary_operator(subscript{.val = std::move(lhs), .sub = std::move(key)}, type, std::move(t)); }
+        )
 
     | K_TOKEN l=tupleOfIdentifiers type=relationType t=term
         {
@@ -1836,27 +1859,6 @@ relation returns [uexpression e]
             type,
             std::move(t));
         }
-    | lhs=relationLeftHandSide K_IS K_NOT K_NULL {
-          $e = binary_operator(std::move(lhs), oper_t::IS_NOT, make_untyped_null()); }
-    | lhs=relationLeftHandSide K_IN marker1=marker
-        { $e = binary_operator(std::move(lhs), oper_t::IN, std::move(marker1)); }
-    | lhs=relationLeftHandSide K_IN in_values=singleColumnInValues
-        { $e = binary_operator(std::move(lhs), oper_t::IN,
-        collection_constructor {
-            .style = collection_constructor::style_type::list,
-            .elements = std::move(in_values)
-        }); }
-    | lhs=relationLeftHandSide K_NOT K_IN marker1=marker
-        { $e = binary_operator(std::move(lhs), oper_t::NOT_IN, std::move(marker1)); }
-    | lhs=relationLeftHandSide K_NOT K_IN in_values=singleColumnInValues
-        { $e = binary_operator(std::move(lhs), oper_t::NOT_IN,
-        collection_constructor {
-            .style = collection_constructor::style_type::list,
-            .elements = std::move(in_values)
-        }); }
-    | lhs=relationLeftHandSide K_CONTAINS { rt = oper_t::CONTAINS; } (K_KEY { rt = oper_t::CONTAINS_KEY; })?
-        t=term { $e = binary_operator(std::move(lhs), rt, std::move(t)); }
-    | lhs=relationLeftHandSide '[' key=term ']' type=relationType t=term { $e = binary_operator(subscript{.val = std::move(lhs), .sub = std::move(key)}, type, std::move(t)); }
     | ids=tupleOfIdentifiers
       ( K_IN
           ( '(' ')'
