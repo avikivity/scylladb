@@ -1851,14 +1851,6 @@ relation returns [uexpression e]
             t=term { $e = binary_operator(std::move(lhs), rt, std::move(t)); }
         | '[' key=term ']' type=relationType t=term { $e = binary_operator(subscript{.val = std::move(lhs), .sub = std::move(key)}, type, std::move(t)); }
         )
-
-    | K_TOKEN l=tupleOfIdentifiers type=relationType t=term
-        {
-          $e = binary_operator(
-            function_call{functions::function_name::native_function("token"), std::move(l.elements)},
-            type,
-            std::move(t));
-        }
     | ids=tupleOfIdentifiers
       ( K_IN
           ( '(' ')'
@@ -1921,6 +1913,17 @@ relation returns [uexpression e]
 
 relationLeftHandSide returns [uexpression e]
     : name=cident { $e = unresolved_identifier{std::move(name)}; }
+    | fname=functionName '(' args=specialFunctionArgs ')' { $e = function_call{.func = std::move(fname), .args = std::move(args)}; }
+    ;
+
+specialFunctionArgs returns [std::vector<expression> args]
+    : a1=specialFunctionArg          { args.push_back(std::move(a1)); }
+         ( ',' an=specialFunctionArg { args.push_back(std::move(an)); } )*
+    ;
+
+specialFunctionArg returns [uexpression arg]
+    : t=term { arg = std::move(t); }
+    | i=cident { arg = unresolved_identifier{.ident = std::move(i)}; }
     ;
 
 tupleOfIdentifiers returns [tuple_constructor tup]
