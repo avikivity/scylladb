@@ -35,6 +35,9 @@
 #include "replica/database.hh" // new_reader_base_cost is there :(
 #include "db/config.hh"
 
+#include <boost/range/adaptor/transformed.hpp>
+#include <boost/range/numeric.hpp>
+
 BOOST_AUTO_TEST_SUITE(reader_concurrency_semaphore_test)
 
 SEASTAR_THREAD_TEST_CASE(test_reader_concurrency_semaphore_clear_inactive_reads) {
