@@ -156,4 +156,18 @@ dynamic_bitset::resize(size_t new_size) {
     _bits_count = new_size;
 }
 
+dynamic_bitset&
+dynamic_bitset::operator|=(const dynamic_bitset& x) {
+    // precondition: same size
+    for (size_t level = 0; level < _bits.size(); ++level) {
+        auto& v1 = _bits[level];
+        auto& v2 = x._bits[level];
+        auto size = v1.size();
+        for (size_t i = 0; i < size; ++i) {
+            v1[i] |= v2[i];
+        }
+    }
+    return *this;
+}
+
 }

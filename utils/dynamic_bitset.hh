@@ -69,6 +69,8 @@ public:
     // undefined if n >= size
     void clear(size_t n) noexcept;
 
+    dynamic_bitset& operator|=(const dynamic_bitset& other);
+
     size_t size() const noexcept { return _bits_count; }
 
     size_t find_first_set() const noexcept;
