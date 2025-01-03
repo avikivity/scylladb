@@ -10,6 +10,7 @@
 
 #include <unordered_map>
 #include <optional>
+#include <ranges>
 #include "reader_concurrency_semaphore.hh"
 
 // The reader_concurrency_semaphore_group is a group of semaphores that shares a common pool of memory,
