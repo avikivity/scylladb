@@ -13,6 +13,7 @@ target_sources(test-lib
     test_services.cc
     key_utils.cc
     mutation_source_test.cc
+    mutation_assertions.cc
     random_schema.cc
     result_set_assertions.cc
     sstable_run_based_compaction_strategy_for_tests.cc
