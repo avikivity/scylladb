@@ -18,6 +18,8 @@
 #include "utils/to_string.hh"
 #include "utils/value_or_reference.hh"
 
+#include <boost/dynamic_bitset.hpp>
+
 namespace sstables {
 namespace mx {
 

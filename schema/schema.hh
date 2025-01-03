@@ -14,7 +14,6 @@
 #include <optional>
 #include <unordered_map>
 #include <ranges>
-#include <boost/dynamic_bitset.hpp>
 
 #include "cql3/column_specification.hh"
 #include <seastar/core/shared_ptr.hh>
@@ -31,6 +30,7 @@
 #include "tombstone_gc_options.hh"
 #include "db/per_partition_rate_limit_options.hh"
 #include "db/tablet_options.hh"
+#include "utils/dynamic_bitset.hh"
 #include "schema_fwd.hh"
 
 namespace dht {
@@ -64,13 +64,13 @@ enum class ordinal_column_id: column_count_type {};
 // @sa column_definition::ordinal_id.
 class column_set {
 public:
-    using bitset = boost::dynamic_bitset<uint64_t>;
-    using size_type = bitset::size_type;
+    using bitset = utils::dynamic_bitset;
+    using size_type = size_t;
 
     // column_count_type is more narrow than size_type, but truncating a size_type max value does
     // give column_count_type max value. This is used to avoid extra branching in
     // find_first()/find_next().
-    static_assert(static_cast<column_count_type>(boost::dynamic_bitset<uint64_t>::npos) == ~static_cast<column_count_type>(0));
+    static_assert(static_cast<column_count_type>(bitset::npos) == ~static_cast<column_count_type>(0));
     static constexpr ordinal_column_id npos = static_cast<ordinal_column_id>(bitset::npos);
 
     explicit column_set(column_count_type num_bits = 0)
@@ -95,10 +95,10 @@ public:
     // @sa boost::dynamic_bistet docs
     size_type count() const { return _mask.count(); }
     ordinal_column_id find_first() const {
-        return static_cast<ordinal_column_id>(_mask.find_first());
+        return static_cast<ordinal_column_id>(_mask.find_first_set());
     }
     ordinal_column_id find_next(ordinal_column_id pos) const {
-        return static_cast<ordinal_column_id>(_mask.find_next(static_cast<column_count_type>(pos)));
+        return static_cast<ordinal_column_id>(_mask.find_next_set(static_cast<column_count_type>(pos)));
     }
     // Logical or
     void union_with(const column_set& with) {
