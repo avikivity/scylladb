@@ -11,6 +11,8 @@
 #include <cstdint>
 #include <limits>
 #include <vector>
+#include <ranges>
+#include <bit>
 
 #include <seastar/core/bitops.hh>
 
@@ -54,6 +56,14 @@ public:
         auto idx = n / bits_per_int;
         return _bits[0][idx] & (int_type(1u) << (n % bits_per_int));
     }
+
+    size_t count() const {
+        return std::ranges::fold_left(
+            _bits[0] | std::views::transform(std::popcount<int_type>),
+            int_type(0),
+            std::plus<>());
+    }
+
     // undefined if n >= size
     void set(size_t n) noexcept;
     // undefined if n >= size
