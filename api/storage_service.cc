@@ -56,6 +56,8 @@
 #include "utils/rjson.hh"
 #include "utils/user_provided_param.hh"
 
+#include <boost/lexical_cast.hpp>
+
 using namespace seastar::httpd;
 using namespace std::chrono_literals;
 

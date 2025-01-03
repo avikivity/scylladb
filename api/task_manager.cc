@@ -20,6 +20,8 @@
 
 #include <utility>
 
+#include <boost/lexical_cast.hpp>
+
 namespace api {
 
 namespace tm = httpd::task_manager_json;

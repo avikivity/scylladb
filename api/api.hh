@@ -10,7 +10,7 @@
 
 #include <seastar/json/json_elements.hh>
 #include <type_traits>
-#include <boost/lexical_cast.hpp>
+#include <charconv>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/units/detail/utility.hpp>
@@ -215,6 +215,9 @@ std::vector<T> concat(std::vector<T> a, std::vector<T>&& b) {
     return a;
 }
 
+class api_conversion_error : public std::exception {
+};
+
 template <class T, class Base = T>
 class req_param {
 public:
@@ -228,8 +231,6 @@ public:
             return;
         }
         try {
-            // boost::lexical_cast does not use boolalpha. Converting a
-            // true/false throws exceptions. We don't want that.
             if constexpr (std::is_same_v<Base, bool>) {
                 // Cannot use boolalpha because we (probably) want to
                 // accept 1 and 0 as well as true and false. And True. And fAlse.
@@ -239,12 +240,19 @@ public:
                 } else if (param == "false" || param == "0") {
                     value = T(false);
                 } else {
-                    throw boost::bad_lexical_cast{};
+                    throw api_conversion_error();
                 }
+            } else if constexpr (std::is_same_v<Base, sstring>) {
+                value = T(param);
             } else {
-                value = T{boost::lexical_cast<Base>(param)};
+                Base value_base;
+                auto conv_result = std::from_chars(param.data(), param.data() + param.size(), value_base);
+                if (conv_result.ptr != param.data() + param.size() || conv_result.ec != std::errc()) {
+                    throw api_conversion_error();
+                }
+                value = T{value_base};
             }
-        } catch (boost::bad_lexical_cast&) {
+        } catch (api_conversion_error&) {
             throw httpd::bad_param_exception(fmt::format("{} ({}): type error - should be {}", name, param, boost::units::detail::demangle(typeid(Base).name())));
         }
     }
@@ -309,7 +317,7 @@ public:
         if (value == "false" || value == "no" || value == "0") {
             return false;
         }
-        throw boost::bad_lexical_cast{};
+        throw api_conversion_error{};
     }
 };
 

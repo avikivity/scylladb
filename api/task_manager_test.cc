@@ -17,6 +17,8 @@
 #include "tasks/virtual_task_hint.hh"
 #include "utils/overloaded_functor.hh"
 
+#include <boost/lexical_cast.hpp>
+
 namespace api {
 
 namespace tmt = httpd::task_manager_test_json;
