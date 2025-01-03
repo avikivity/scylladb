@@ -108,6 +108,15 @@ size_t dynamic_bitset::find_last_set() const noexcept
 dynamic_bitset::dynamic_bitset(size_t nr_bits)
     : _bits_count(nr_bits)
 {
+    do_resize(nr_bits);
+}
+
+void
+dynamic_bitset::do_resize(size_t nr_bits) {
+    // Exception safety: when increasing the size, we may leave a few outsized vectors,
+    // but that doesn't affect correctness.
+    //
+    // When downsizing, we don't expect exceptions.
     auto div_ceil = [] (size_t num, size_t den) {
         return (num + den - 1) / den;
     };
@@ -123,6 +132,28 @@ dynamic_bitset::dynamic_bitset(size_t nr_bits)
         _bits[level].resize(level_words);
         level_bits = level_words; // for next iteration
     }
+}
+
+void
+dynamic_bitset::resize(size_t new_size) {
+    do_resize(new_size);
+
+    if (new_size > _bits_count) {
+        // Recalculate summaries. Don't try to optimize for now, this is O(n) anyway.
+        auto nr_levels = _bits.size();
+        for (size_t level = 1; level < nr_levels; ++level) {
+            auto& lower_level = _bits[level-1];
+            auto lower_level_size = lower_level.size();
+            auto& upper_level = _bits[level-1];
+            for (size_t idx = 0; idx < lower_level_size; ++idx) {
+                auto bit = int_type(lower_level[idx] != 0);
+                upper_level[idx / bits_per_int] |= bit << (idx % bits_per_int);
+            }
+        }
+    }
+
+    // Commit after reallocations succeed.
+    _bits_count = new_size;
 }
 
 }

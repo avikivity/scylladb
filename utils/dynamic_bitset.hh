@@ -41,6 +41,7 @@ private:
     static unsigned level_remainder(unsigned level, size_t n) noexcept {
         return (n >> (level * level_shift)) & (bits_per_int - 1);
     }
+    void do_resize(size_t new_size);
 public:
     enum : size_t {
         npos = std::numeric_limits<size_t>::max()
@@ -63,6 +64,8 @@ public:
     size_t find_first_set() const noexcept;
     size_t find_next_set(size_t n) const noexcept;
     size_t find_last_set() const noexcept;
+
+    void resize(size_t new_size);
 };
 
 }
