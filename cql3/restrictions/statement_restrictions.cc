@@ -1505,6 +1505,10 @@ void statement_restrictions::calculate_column_defs_for_filtering_and_erase_restr
 
 bool statement_restrictions::add_restriction(const expr::binary_operator& restr, schema_ptr schema, bool allow_filtering, bool for_view) {
     bool do_add = true;
+    if (!expr::is<expr::column_value>(restr.lhs) && !expr::is<expr::subscript>(restr.lhs)) {
+        _pure_filters.push_back(restr);
+        return false;
+    }
     if (restr.op == expr::oper_t::IS_NOT) {
         // Handle IS NOT NULL restrictions separately
         add_is_not_restriction(restr, schema, for_view);
