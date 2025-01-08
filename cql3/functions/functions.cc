@@ -341,7 +341,8 @@ get_set_intersection_function(data_dictionary::database db,
     auto unique = std::ranges::unique(known_set_types);
 
     if (unique.size() != 1) {
-        throw exceptions::invalid_request_exception("set_intersection() can only be called if all arguments are of the same set type");
+        throw exceptions::invalid_request_exception(fmt::format("set_intersection() can only be called if all arguments are of the same set type: {}",
+                unique | std::views::transform(&abstract_type::name)));
     }
 
     auto set_type = unique.front();
