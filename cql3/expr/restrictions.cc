@@ -117,10 +117,6 @@ void validate_token_relation(const std::vector<const column_definition*> column_
 }
 
 void preliminary_binop_vaidation_checks(const binary_operator& binop) {
-    if (binop.op == oper_t::NEQ) {
-        throw exceptions::invalid_request_exception(format("Unsupported \"!=\" relation: {:user}", binop));
-    }
-
     if (binop.op == oper_t::IS_NOT) {
         bool rhs_is_null = (is<untyped_constant>(binop.rhs) && as<untyped_constant>(binop.rhs).partial_type == untyped_constant::type_class::null)
                            || (is<constant>(binop.rhs) && as<constant>(binop.rhs).is_null());
