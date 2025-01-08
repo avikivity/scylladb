@@ -1114,9 +1114,9 @@ statement_restrictions::statement_restrictions(data_dictionary::database db,
         }
 
         expr::binary_operator prepared_restriction = expr::validate_and_prepare_new_restriction(*relation_binop, db, schema, ctx);
-        add_restriction(prepared_restriction, schema, allow_filtering, for_view);
+        auto do_add = add_restriction(prepared_restriction, schema, allow_filtering, for_view);
 
-        if (prepared_restriction.op != expr::oper_t::IS_NOT) {
+        if (prepared_restriction.op != expr::oper_t::IS_NOT && do_add) {
             _where = _where.has_value() ? make_conjunction(std::move(*_where), prepared_restriction) : prepared_restriction;
         }
     }
@@ -1286,6 +1286,29 @@ statement_restrictions::statement_restrictions(data_dictionary::database db,
             prepare_indexed_global(*view_schema);
         }
     }
+
+    auto touches_clustering_column_or_regular_column = [&] (const expr::expression& filter) {
+        return expr::find_in_expression<expr::column_value>(filter, [&] (const expr::column_value& cv) {
+            return cv.col->kind == column_kind::clustering_key || cv.col->kind == column_kind::regular_column;
+        });
+    };
+
+    auto filter_split = std::ranges::stable_partition(_pure_filters, touches_clustering_column_or_regular_column).begin();
+    _clustering_row_level_filter = expr::make_conjunction(
+        std::move(_clustering_row_level_filter),
+        expr::conjunction{
+                .children = std::vector<expr::expression>(_pure_filters.begin(), filter_split)
+        }
+    );
+    _partition_level_filter = expr::make_conjunction(
+        std::move(_partition_level_filter),
+        expr::conjunction{
+                .children = std::vector<expr::expression>(filter_split, _pure_filters.end())
+        }
+    );
+
+    rlogger.debug("clustering row level filter: {}", _clustering_row_level_filter);
+    rlogger.debug("partition level filter: {}", _partition_level_filter);
 }
 
 bool
@@ -1480,7 +1503,8 @@ void statement_restrictions::calculate_column_defs_for_filtering_and_erase_restr
     _column_defs_for_filtering = std::move(column_defs_for_filtering);
 }
 
-void statement_restrictions::add_restriction(const expr::binary_operator& restr, schema_ptr schema, bool allow_filtering, bool for_view) {
+bool statement_restrictions::add_restriction(const expr::binary_operator& restr, schema_ptr schema, bool allow_filtering, bool for_view) {
+    bool do_add = true;
     if (restr.op == expr::oper_t::IS_NOT) {
         // Handle IS NOT NULL restrictions separately
         add_is_not_restriction(restr, schema, for_view);
@@ -1500,8 +1524,10 @@ void statement_restrictions::add_restriction(const expr::binary_operator& restr,
             add_single_column_nonprimary_key_restriction(restr);
         }
     } else {
-        throw exceptions::invalid_request_exception(format("Unhandled restriction: {}", restr));
+        do_add = false;
+        _pure_filters.push_back(restr);
     }
+    return do_add;
 }
 
 void statement_restrictions::add_is_not_restriction(const expr::binary_operator& restr, schema_ptr schema, bool for_view) {
@@ -2636,6 +2662,11 @@ bool token_known(const statement_restrictions& r) {
 
 bool statement_restrictions::need_filtering() const {
     using namespace expr;
+
+    if (!expr::boolean_factors(_partition_level_filter).empty()
+            || !expr::boolean_factors(_clustering_row_level_filter).empty()) {
+        return true;
+    }
 
     if (_uses_secondary_indexing && has_token_restrictions()) {
         // If there is a token(p1, p2) restriction, no p1, p2 restrictions are allowed in the query.

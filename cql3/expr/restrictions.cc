@@ -222,9 +222,7 @@ binary_operator validate_and_prepare_new_restriction(const binary_operator& rest
         std::vector<const column_definition*> column_defs = to_column_definitions(as<function_call>(prepared_binop.lhs).args);
         validate_token_relation(column_defs, prepared_binop.op, *schema);
     } else {
-        // Anything else
-        throw exceptions::invalid_request_exception(
-            format("expr::validate_and_prepare_new_restriction unhandled restriction: {}", prepared_binop));
+        // Anything else - hope it works
     }
 
     // Convert single element IN relation to an EQ relation

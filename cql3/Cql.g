@@ -1908,22 +1908,18 @@ relation returns [uexpression e]
               $e = binary_operator(ids, type, std::move(tupleMarker));
           }
       )
-    | '(' e1=relation ')' { $e = std::move(e1); }
+    '(' e1=relation ')' { $e = std::move(e1); }
     ;
 
 relationLeftHandSide returns [uexpression e]
     : name=cident { $e = unresolved_identifier{std::move(name)}; }
+    | v=value     { $e = std::move(v); }
     | fname=functionName '(' args=specialFunctionArgs ')' { $e = function_call{.func = std::move(fname), .args = std::move(args)}; }
     ;
 
 specialFunctionArgs returns [std::vector<expression> args]
-    : a1=specialFunctionArg          { args.push_back(std::move(a1)); }
-         ( ',' an=specialFunctionArg { args.push_back(std::move(an)); } )*
-    ;
-
-specialFunctionArg returns [uexpression arg]
-    : t=term { arg = std::move(t); }
-    | i=cident { arg = unresolved_identifier{.ident = std::move(i)}; }
+    : a1=relationLeftHandSide          { args.push_back(std::move(a1)); }
+         ( ',' an=relationLeftHandSide { args.push_back(std::move(an)); } )*
     ;
 
 tupleOfIdentifiers returns [tuple_constructor tup]
