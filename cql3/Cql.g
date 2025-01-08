@@ -6,6 +6,7 @@ grammar Cql;
 
 options {
     language = Cpp;
+    backtrack = true;
 }
 
 @parser::namespace{cql3_parser}
@@ -1908,7 +1909,7 @@ relation returns [uexpression e]
               $e = binary_operator(ids, type, std::move(tupleMarker));
           }
       )
-    '(' e1=relation ')' { $e = std::move(e1); }
+    | '(' e1=relation ')' { $e = std::move(e1); }
     ;
 
 relationLeftHandSide returns [uexpression e]
