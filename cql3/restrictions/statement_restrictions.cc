@@ -2663,8 +2663,7 @@ bool token_known(const statement_restrictions& r) {
 bool statement_restrictions::need_filtering() const {
     using namespace expr;
 
-    if (!expr::boolean_factors(_partition_level_filter).empty()
-            || !expr::boolean_factors(_clustering_row_level_filter).empty()) {
+    if (!_pure_filters.empty()) {
         return true;
     }
 
