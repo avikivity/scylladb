@@ -338,14 +338,15 @@ get_set_intersection_function(data_dictionary::database db,
         set_type = dynamic_pointer_cast<const set_type_impl>(set_type->freeze());
     }
 
-    auto unique = std::ranges::unique(known_set_types);
+    auto unique_remove = std::ranges::unique(known_set_types);
+    known_set_types.erase(unique_remove.end(), known_set_types.end());
 
-    if (unique.size() != 1) {
+    if (known_set_types.size() != 1) {
         throw exceptions::invalid_request_exception(fmt::format("set_intersection() can only be called if all arguments are of the same set type: {}",
-                unique | std::views::transform(&abstract_type::name)));
+                known_set_types | std::views::transform(&abstract_type::name)));
     }
 
-    auto set_type = unique.front();
+    auto set_type = known_set_types.front();
     auto element_type = set_type->get_elements_type();
 
     return make_native_scalar_function<true>("set_intersection", set_type, {set_type, set_type},
