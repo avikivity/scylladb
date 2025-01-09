@@ -15,6 +15,7 @@ import re
 from .util import new_test_table, new_type, user_type
 from cassandra.protocol import InvalidRequest
 from cassandra.query import UNSET_VALUE
+from cassandra.util import SortedSet
 
 # When filtering for "x > 0" or "x < 0", rows with an unset value for x
 # should not match the filter.
@@ -486,3 +487,17 @@ def test_selecting_a_regular_column_does_not_poison_filtering_of_a_static_row(cq
         cql.execute(f"INSERT INTO {table} (a, s) VALUES (1, 2)")
         res = cql.execute(f"SELECT a, b, c, s FROM {table} WHERE s = 2 ALLOW FILTERING")
         assert list(res) == [(1, None, None, 2)]
+
+def test_set_intersection(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, 'id int, s1 set<int>, s2 set<int>, primary key (id)') as table:
+        cql.execute(f"INSERT INTO {table} (id, s1, s2) VALUES (1, {{1, 2, 3}}, {{2, 3, 4}})")
+        cql.execute(f"INSERT INTO {table} (id, s1, s2) VALUES (2, {{1, 2, 3}}, {{4, 5, 6}})")
+        res = cql.execute(f"SELECT id, set_intersection(s1, s2) FROM {table}")
+        assert sorted(res, key=lambda row: row[0]) == [(1, SortedSet({2, 3})), (2, SortedSet({}))]
+        res = cql.execute(f"SELECT id FROM {table} WHERE set_intersection(s2, {{2, 7}}) = {{}} ALLOW FILTERING")
+        assert set(res) == {(2,)}
+        res = cql.execute(f"SELECT id FROM {table} WHERE set_intersection(s2, {{2, 7}}) != {{}} ALLOW FILTERING")
+        assert set(res) == {(1,)}
+        stmt = cql.prepare(f"SELECT id FROM {table} WHERE set_intersection(s2, ?) != {{}} ALLOW FILTERING")
+        res = cql.execute(stmt, [(2, 7)])
+        assert set(res) == {(1,)}
