@@ -339,7 +339,7 @@ get_set_intersection_function(data_dictionary::database db,
     }
 
     auto unique_remove = std::ranges::unique(known_set_types);
-    known_set_types.erase(unique_remove.end(), known_set_types.end());
+    known_set_types.erase(unique_remove.begin(), unique_remove.end());
 
     if (known_set_types.size() != 1) {
         throw exceptions::invalid_request_exception(fmt::format("set_intersection() can only be called if all arguments are of the same set type: {}",
