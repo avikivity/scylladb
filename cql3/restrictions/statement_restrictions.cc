@@ -1499,6 +1499,11 @@ void statement_restrictions::calculate_column_defs_for_filtering_and_erase_restr
                 it = _single_column_nonprimary_key_restrictions.erase(it);
             }
         }
+        for (auto col : expr::get_sorted_column_defs(expr::conjunction{_pure_filters})) {
+            if (std::ranges::find(column_defs_for_filtering, col) == column_defs_for_filtering.end()) {
+                column_defs_for_filtering.emplace_back(col);
+            }
+        }
     }
     _column_defs_for_filtering = std::move(column_defs_for_filtering);
 }
