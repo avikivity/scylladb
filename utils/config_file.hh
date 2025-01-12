@@ -53,20 +53,20 @@ public:
 template <typename T>
 extern const config_type config_type_for;
 
-template<>
-extern const config_type config_type_for<uint32_t>;
+extern template
+const config_type config_type_for<uint32_t>;
 
-template<>
-extern const config_type config_type_for<sstring>;
+extern template
+const config_type config_type_for<sstring>;
 
-template<>
-extern const config_type config_type_for<bool>;
+extern template
+const config_type config_type_for<bool>;
 
-template<>
-extern const config_type config_type_for<std::unordered_map<sstring, sstring>>;
+extern template
+const config_type config_type_for<std::unordered_map<sstring, sstring>>;
 
-template<>
-extern const config_type config_type_for<std::unordered_map<sstring, std::unordered_map<sstring, sstring>>>;
+extern template
+const config_type config_type_for<std::unordered_map<sstring, std::unordered_map<sstring, sstring>>>;
 
 class config_file {
     static thread_local unsigned s_shard_id;
