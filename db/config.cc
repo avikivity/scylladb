@@ -115,79 +115,79 @@ config_from_string(std::string_view value) {
 }
 
 template <>
-const config_type config_type_for<bool> = config_type("bool", value_to_json<bool>);
+const config_type config_type_for<bool>::ct = config_type("bool", value_to_json<bool>);
 
 template <>
-const config_type config_type_for<uint16_t> = config_type("integer", value_to_json<uint16_t>);
+const config_type config_type_for<uint16_t>::ct = config_type("integer", value_to_json<uint16_t>);
 
 template <>
-const config_type config_type_for<uint32_t> = config_type("integer", value_to_json<uint32_t>);
+const config_type config_type_for<uint32_t>::ct = config_type("integer", value_to_json<uint32_t>);
 
 template <>
-const config_type config_type_for<uint64_t> = config_type("integer", value_to_json<uint64_t>);
+const config_type config_type_for<uint64_t>::ct = config_type("integer", value_to_json<uint64_t>);
 
 template <>
-const config_type config_type_for<float> = config_type("float", value_to_json<float>);
+const config_type config_type_for<float>::ct = config_type("float", value_to_json<float>);
 
 template <>
-const config_type config_type_for<double> = config_type("double", value_to_json<double>);
+const config_type config_type_for<double>::ct = config_type("double", value_to_json<double>);
 
 template <>
-const config_type config_type_for<log_level> = config_type("string", log_level_to_json);
+const config_type config_type_for<log_level>::ct = config_type("string", log_level_to_json);
 
 template <>
-const config_type config_type_for<sstring> = config_type("string", value_to_json<sstring>);
+const config_type config_type_for<sstring>::ct = config_type("string", value_to_json<sstring>);
 
 template <>
-const config_type config_type_for<std::string> = config_type("string", value_to_json<std::string>);
+const config_type config_type_for<std::string>::ct = config_type("string", value_to_json<std::string>);
 
 template <>
-const config_type config_type_for<std::vector<sstring>> = config_type("string list", value_to_json<std::vector<sstring>>);
+const config_type config_type_for<std::vector<sstring>>::ct = config_type("string list", value_to_json<std::vector<sstring>>);
 
 template <>
-const config_type config_type_for<std::unordered_map<sstring, std::unordered_map<sstring, sstring>>> = config_type("string map map", value_to_json<std::unordered_map<sstring, std::unordered_map<sstring, sstring>>>);
+const config_type config_type_for<std::unordered_map<sstring, std::unordered_map<sstring, sstring>>>::ct = config_type("string map map", value_to_json<std::unordered_map<sstring, std::unordered_map<sstring, sstring>>>);
 
 template <>
-const config_type config_type_for<std::unordered_map<sstring, sstring>> = config_type("string map", value_to_json<std::unordered_map<sstring, sstring>>);
+const config_type config_type_for<std::unordered_map<sstring, sstring>>::ct = config_type("string map", value_to_json<std::unordered_map<sstring, sstring>>);
 
 template <>
-const config_type config_type_for<std::vector<std::unordered_map<sstring, sstring>>> = config_type("string map list", value_to_json<std::vector<std::unordered_map<sstring, sstring>>>);
+const config_type config_type_for<std::vector<std::unordered_map<sstring, sstring>>>::ct = config_type("string map list", value_to_json<std::vector<std::unordered_map<sstring, sstring>>>);
 
 template <>
-const config_type config_type_for<std::unordered_map<sstring, log_level>> = config_type("string map", log_level_map_to_json);
+const config_type config_type_for<std::unordered_map<sstring, log_level>>::ct = config_type("string map", log_level_map_to_json);
 
 template <>
-const config_type config_type_for<int64_t> = config_type("integer", value_to_json<int64_t>);
+const config_type config_type_for<int64_t>::ct = config_type("integer", value_to_json<int64_t>);
 
 template <>
-const config_type config_type_for<int32_t> = config_type("integer", value_to_json<int32_t>);
+const config_type config_type_for<int32_t>::ct = config_type("integer", value_to_json<int32_t>);
 
 template <>
-const config_type config_type_for<db::seed_provider_type> = config_type("seed provider", seed_provider_to_json);
+const config_type config_type_for<db::seed_provider_type>::ct = config_type("seed provider", seed_provider_to_json);
 
 template <>
-const config_type config_type_for<std::vector<enum_option<db::experimental_features_t>>> = config_type(
+const config_type config_type_for<std::vector<enum_option<db::experimental_features_t>>>::ct = config_type(
         "experimental features", printable_vector_to_json<enum_option<db::experimental_features_t>>);
 template <>
-const config_type config_type_for<std::vector<enum_option<db::replication_strategy_restriction_t>>> = config_type(
+const config_type config_type_for<std::vector<enum_option<db::replication_strategy_restriction_t>>>::ct = config_type(
         "replication strategy list", printable_vector_to_json<enum_option<db::replication_strategy_restriction_t>>);
 
 template <>
-const config_type config_type_for<enum_option<db::tri_mode_restriction_t>> = config_type(
+const config_type config_type_for<enum_option<db::tri_mode_restriction_t>>::ct = config_type(
         "restriction mode", printable_to_json<enum_option<db::tri_mode_restriction_t>>);
 
 template <>
-const config_type config_type_for<db::config::hinted_handoff_enabled_type> = config_type("hinted handoff enabled", hinted_handoff_enabled_to_json);
+const config_type config_type_for<db::config::hinted_handoff_enabled_type>::ct = config_type("hinted handoff enabled", hinted_handoff_enabled_to_json);
 
 template <>
-const config_type config_type_for<std::vector<db::config::error_injection_at_startup>> = config_type("error injection list", error_injection_list_to_json);
+const config_type config_type_for<std::vector<db::config::error_injection_at_startup>>::ct = config_type("error injection list", error_injection_list_to_json);
 
 template <>
-const config_type config_type_for<enum_option<utils::dict_training_loop::when>> = config_type(
+const config_type config_type_for<enum_option<utils::dict_training_loop::when>>::ct = config_type(
         "dictionary training conditions", printable_to_json<enum_option<utils::dict_training_loop::when>>);
 
 template <>
-const config_type config_type_for<utils::advanced_rpc_compressor::tracker::algo_config> = config_type(
+const config_type config_type_for<utils::advanced_rpc_compressor::tracker::algo_config>::ct = config_type(
         "advanced rpc compressor config", printable_vector_to_json<enum_option<compression_algorithm>>);
 }
 
