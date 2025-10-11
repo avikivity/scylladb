@@ -15,6 +15,7 @@ class mutation_fragment_v1_stream final {
     std::optional<clustering_row> _row;
 
     friend class mutation_fragment_v2; // so it sees our consumer methods
+public:
     mutation_fragment_opt consume(static_row mf) {
         return wrap(std::move(mf));
     }

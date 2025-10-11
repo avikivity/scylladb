@@ -1424,7 +1424,7 @@ private:
     // Compacted stream
     bool _has_compacted_partition_start = false;
 
-private:
+public:
     void maybe_push_partition_start() {
         if (_has_compacted_partition_start) {
             push_mutation_fragment(mutation_fragment_v2(*_schema, _permit, std::move(_last_uncompacted_partition_start)));
