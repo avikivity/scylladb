@@ -200,10 +200,13 @@ class ManagerClient:
             if server not in ignore_cores:
                 critical_error_pattern += "|Aborting on shard"
             if found_critical := await log_file.grep(critical_error_pattern):
-                errors[server]["critical"] = [e[0] for e in found_critical]
-                # Find the backtraces for the critical errors
-                if found_backtraces := await log_file.find_backtraces():
-                    errors[server]["backtraces"] = found_backtraces
+                # Filter out critical errors that match expected error patterns
+                critical_errors = await self.filter_errors([e[0] for e in found_critical])
+                if critical_errors:
+                    errors[server]["critical"] = critical_errors
+                    # Find the backtraces for the critical errors
+                    if found_backtraces := await log_file.find_backtraces():
+                        errors[server]["backtraces"] = found_backtraces
             if check_all_errors:
                 if found_errors := await log_file.grep_for_errors(distinct_errors=True):
                     if filtered_errors := await self.filter_errors(found_errors):
