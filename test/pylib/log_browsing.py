@@ -8,6 +8,7 @@ from test.pylib.util import universalasync_typed_wrap
 import asyncio
 import logging
 import re
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -76,24 +77,28 @@ class ScyllaLogFile:
             if from_mark is not None:
                 await self._run_in_executor(log_file.seek, from_mark, loop=loop)
 
-            async with asyncio.timeout(timeout):
-                line = ""
-                while exprs:
-                    # Because it may take time for the log message to be flushed, and sometimes we may want to look
-                    # for messages about various delayed events, this function doesn't give up when it reaches
-                    # the end of file, and rather retries until a given timeout.
-                    new_data = await self._run_in_executor(log_file.readline, loop=loop)
-                    if new_data:
-                        line += new_data
-                        for pattern in exprs.copy():
-                            if match := pattern.search(line):
-                                logger.debug("Found log message: %s", line)
-                                matches.append((line, match))
-                                exprs.remove(pattern)
-                        if line[-1] == "\n":
-                            line = ""
-                    else:
-                        await asyncio.sleep(0.01)
+            # Don't use asyncio.timeout() here because it doesn't work when
+            # run via universalasync (which uses run_until_complete without a Task).
+            deadline = time.monotonic() + timeout
+            line = ""
+            while exprs:
+                # Because it may take time for the log message to be flushed, and sometimes we may want to look
+                # for messages about various delayed events, this function doesn't give up when it reaches
+                # the end of file, and rather retries until a given timeout.
+                new_data = await self._run_in_executor(log_file.readline, loop=loop)
+                if new_data:
+                    line += new_data
+                    for pattern in exprs.copy():
+                        if match := pattern.search(line):
+                            logger.debug("Found log message: %s", line)
+                            matches.append((line, match))
+                            exprs.remove(pattern)
+                    if line[-1] == "\n":
+                        line = ""
+                else:
+                    if time.monotonic() > deadline:
+                        raise TimeoutError(f"Timed out waiting for log message(s): {exprs}")
+                    await asyncio.sleep(0.01)
 
             return await self._run_in_executor(log_file.tell, loop=loop), matches
 
