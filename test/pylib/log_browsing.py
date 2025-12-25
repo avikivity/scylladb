@@ -186,6 +186,8 @@ class ScyllaLogFile:
 
         backtraces = []
 
+        logger.info(f"Searching for backtraces in log file {self.file}")
+        iteration = 0
         with self.file.open(encoding="utf-8") as log_file:
             if from_mark:
                 await self._run_in_executor(log_file.seek, from_mark, loop=loop)
@@ -196,6 +198,9 @@ class ScyllaLogFile:
                     # Found a backtrace, collect all lines that start with exactly 2 spaces
                     backtrace_lines = [line]
                     while True:
+                        iteration += 1
+                        if iteration % 10000 == 0:
+                            logger.info(f"Backtrace search iteration {iteration} ({self.file})")
                         next_line = await self._run_in_executor(log_file.readline, loop=loop)
                         if not next_line:
                             # End of file
@@ -218,4 +223,5 @@ class ScyllaLogFile:
                 
                 line = await self._run_in_executor(log_file.readline, loop=loop)
 
+        logger.info("Finished searching for backtraces in log file %s", self.file)
         return backtraces
