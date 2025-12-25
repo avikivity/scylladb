@@ -224,4 +224,9 @@ class ScyllaLogFile:
                 line = await self._run_in_executor(log_file.readline, loop=loop)
 
         logger.info("Finished searching for backtraces in log file %s", self.file)
+        if backtraces:
+            import traceback
+            logger.info(f"Found {len(backtraces)} backtrace(s) in {self.file}. Call stack:")
+            for line in traceback.format_stack():
+                logger.info(line.rstrip())
         return backtraces

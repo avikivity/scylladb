@@ -205,6 +205,7 @@ class ManagerClient:
                 if critical_errors:
                     errors[server]["critical"] = critical_errors
                     # Find the backtraces for the critical errors
+                    # Only look for backtraces if we have unfiltered critical errors
                     if found_backtraces := await log_file.find_backtraces():
                         errors[server]["backtraces"] = found_backtraces
             if check_all_errors:
