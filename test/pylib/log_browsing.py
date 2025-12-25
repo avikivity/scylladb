@@ -82,8 +82,9 @@ class ScyllaLogFile:
                     # Because it may take time for the log message to be flushed, and sometimes we may want to look
                     # for messages about various delayed events, this function doesn't give up when it reaches
                     # the end of file, and rather retries until a given timeout.
-                    line += await self._run_in_executor(log_file.readline, loop=loop)
-                    if line:
+                    new_data = await self._run_in_executor(log_file.readline, loop=loop)
+                    if new_data:
+                        line += new_data
                         for pattern in exprs.copy():
                             if match := pattern.search(line):
                                 logger.debug("Found log message: %s", line)
