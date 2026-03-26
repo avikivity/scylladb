@@ -2835,12 +2835,54 @@ def write_build_file(f,
         fmt_pcm = f'$builddir/{mode}/fmt/CMakeFiles/fmt-module.dir/fmt.pcm'
         fmt_obj = f'$builddir/{mode}/fmt/CMakeFiles/fmt-module.dir/src/fmt.cc.o'
 
+        # boost module — partitioned module wrapping Boost libraries
+        # (excluding Boost.Test, which is macro-based and stays textual).
+        # Each partition compiles to a .o + .pcm; the primary interface
+        # re-exports all partitions.
+        boost_partitions = [
+            'algorithm', 'container', 'intrusive', 'range',
+            'multiprecision', 'regex', 'icl', 'program_options',
+            'outcome', 'signals2', 'misc',
+        ]
+
+        boost_partition_pcms = []
+        boost_partition_objs = []
+
+        for part in boost_partitions:
+            part_src = f'modules/boost-{part}.cppm'
+            part_pcm = f'$builddir/{mode}/modules/boost-{part}.pcm'
+            part_obj = f'$builddir/{mode}/modules/boost-{part}.o'
+            boost_partition_pcms.append(part_pcm)
+            boost_partition_objs.append(part_obj)
+            f.write(f'build {part_obj} | {part_pcm}: cxx_build_module.{mode} {part_src}\n')
+            f.write(f'  pcm = {part_pcm}\n')
+            f.write(f'  module_flags =\n')
+
+        # Primary module interface — depends on all partition PCMs
+        boost_module_src = 'modules/boost.cppm'
+        boost_pcm = f'$builddir/{mode}/modules/boost.pcm'
+        boost_obj = f'$builddir/{mode}/modules/boost.o'
+        all_partition_pcm_deps = ' '.join(boost_partition_pcms)
+        partition_module_flags = ' '.join(
+            f'-fmodule-file=boost:{part}={pcm}'
+            for part, pcm in zip(boost_partitions, boost_partition_pcms)
+        )
+        f.write(f'build {boost_obj} | {boost_pcm}: cxx_build_module.{mode} {boost_module_src} | {all_partition_pcm_deps}\n')
+        f.write(f'  pcm = {boost_pcm}\n')
+        f.write(f'  module_flags = {partition_module_flags}\n')
+
+        boost_all_objs = boost_partition_objs + [boost_obj]
+
         # Consumer TU module flags — all library module PCMs EXCEPT std.
         # The std module is not referenced until `import std;` is added.
-        module_flags = f'-fmodule-file=abseil={abseil_pcm} -fmodule-file=fmt={fmt_pcm}'
+        boost_consumer_flags = f'-fmodule-file=boost={boost_pcm} ' + ' '.join(
+            f'-fmodule-file=boost:{part}={pcm}'
+            for part, pcm in zip(boost_partitions, boost_partition_pcms)
+        )
+        module_flags = f'-fmodule-file=abseil={abseil_pcm} -fmodule-file=fmt={fmt_pcm} {boost_consumer_flags}'
         f.write(f'module_flags_{mode} = {module_flags}\n')
 
-        all_module_pcms = f'{abseil_pcm} {fmt_pcm}'
+        all_module_pcms = f'{abseil_pcm} {fmt_pcm} {boost_pcm} {all_partition_pcm_deps}'
 
         compiles = {}
         swaggers = set()
@@ -2887,6 +2929,7 @@ def write_build_file(f,
             objs.append(std_obj)
             objs.append(abseil_obj)
             objs.append(fmt_obj)
+            objs.extend(boost_all_objs)
             if binary in cpp_apps:
                 # binary only needs the C++ standard library, no additional
                 # libraries.

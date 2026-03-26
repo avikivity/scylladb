@@ -299,6 +299,28 @@ set_target_properties(scylla-abseilmodule PROPERTIES CXX_SCAN_FOR_MODULES ON)
 # force it back on for this target (its FILE_SET CXX_MODULES needs it).
 set_target_properties(fmt-module PROPERTIES CXX_SCAN_FOR_MODULES ON)
 
+# C++20 modules: Boost libraries module (partitioned).
+# Wraps Boost headers used by ScyllaDB, excluding Boost.Test
+# (which is macro-based and stays textual).
+add_library(scylla-boostmodule STATIC)
+target_sources(scylla-boostmodule
+  PUBLIC
+    FILE_SET CXX_MODULES FILES
+      modules/boost.cppm
+      modules/boost-algorithm.cppm
+      modules/boost-container.cppm
+      modules/boost-intrusive.cppm
+      modules/boost-range.cppm
+      modules/boost-multiprecision.cppm
+      modules/boost-regex.cppm
+      modules/boost-icl.cppm
+      modules/boost-program_options.cppm
+      modules/boost-outcome.cppm
+      modules/boost-signals2.cppm
+      modules/boost-misc.cppm)
+target_link_libraries(scylla-boostmodule PUBLIC scylla-stdmodule Boost::boost Boost::regex)
+set_target_properties(scylla-boostmodule PROPERTIES CXX_SCAN_FOR_MODULES ON)
+
 add_library(scylla-main STATIC)
 if (Scylla_USE_PRECOMPILED_HEADER_USE)
   target_precompile_headers(scylla-main REUSE_FROM scylla-precompiled-header)
@@ -352,6 +374,7 @@ target_link_libraries(scylla-main
     scylla-stdmodule
     scylla-abseilmodule
     fmt::fmt-module
+    scylla-boostmodule
 )
 
 option(Scylla_CHECK_HEADERS
