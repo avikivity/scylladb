@@ -9,7 +9,7 @@
 #include "audit/audit_syslog_storage_helper.hh"
 
 #include <sys/socket.h>
-#include <string.h>
+#include <cstring>
 #include <fcntl.h>
 #include <unistd.h>
 #include <syslog.h>

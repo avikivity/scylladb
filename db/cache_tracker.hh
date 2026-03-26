@@ -18,7 +18,7 @@
 
 #include <seastar/core/metrics_registration.hh>
 
-#include <stdint.h>
+#include <cstdint>
 
 class cache_entry;
 

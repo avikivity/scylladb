@@ -10,7 +10,7 @@
 #include <boost/test/unit_test.hpp>
 #include <fmt/ranges.h>
 #include <iterator>
-#include <stdint.h>
+#include <cstdint>
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>

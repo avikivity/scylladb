@@ -6,7 +6,7 @@
 
 #include <boost/test/unit_test.hpp>
 #include <boost/lexical_cast.hpp>
-#include <stdint.h>
+#include <cstdint>
 #include <random>
 
 #include <seastar/core/future-util.hh>

@@ -11,7 +11,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <iostream>
-#include <assert.h>
+#include <cassert>
 #include <sstream>
 #include <initializer_list>
 

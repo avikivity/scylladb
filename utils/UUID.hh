@@ -10,7 +10,7 @@
 
 // This class is the parts of java.util.UUID that we need
 
-#include <stdint.h>
+#include <cstdint>
 #include <cassert>
 #include <array>
 #include <iosfwd>
