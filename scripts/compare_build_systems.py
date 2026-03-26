@@ -330,6 +330,12 @@ def categorize_compile_flags(command_str):
                     or tok.startswith("-fprofile-use=")
                     or tok.startswith("-fprofile-generate")):
                 continue
+            # C++20 module BMIs live in different directories by design
+            # (configure.py: $builddir/<mode>/modules/; CMake: each module
+            # target's CMakeFiles/<target>.dir/), so compare only which
+            # modules are mapped, not where their BMIs are.
+            if tok.startswith("-fmodule-file=") and tok.count("=") >= 2:
+                tok = "=".join(tok.split("=", 2)[:2])
             flags["f_flags"].add(tok)
         elif tok.startswith("-O"):
             flags["opt_flags"].add(tok)

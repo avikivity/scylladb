@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.27)
+cmake_minimum_required(VERSION 3.28)
 
 project(scylla)
 
@@ -275,6 +275,63 @@ file(MAKE_DIRECTORY "${scylla_gen_build_dir}")
 include(add_version_library)
 generate_scylla_version()
 
+# C++20 modules: find the libstdc++ std module source (bits/std.cc).
+# Query the compiler for its C++ include search paths and look for
+# bits/std.cc under each one.
+execute_process(
+  COMMAND ${CMAKE_CXX_COMPILER} -x c++ -E -v /dev/null
+  OUTPUT_QUIET
+  ERROR_VARIABLE _cxx_verbose_output)
+string(REGEX MATCHALL "[^\n]+" _cxx_verbose_lines "${_cxx_verbose_output}")
+set(_std_module_src "")
+set(_in_search_list FALSE)
+foreach(_line IN LISTS _cxx_verbose_lines)
+  if(_line MATCHES "#include <\\.\\.\\.> search starts here:")
+    set(_in_search_list TRUE)
+    continue()
+  endif()
+  if(_line MATCHES "End of search list\\.")
+    break()
+  endif()
+  if(NOT _in_search_list)
+    continue()
+  endif()
+  string(STRIP "${_line}" _inc_dir)
+  set(_candidate "${_inc_dir}/bits/std.cc")
+  if(EXISTS "${_candidate}")
+    get_filename_component(_std_module_src "${_candidate}" REALPATH)
+    break()
+  endif()
+endforeach()
+if(_std_module_src STREQUAL "")
+  message(FATAL_ERROR
+    "Could not find libstdc++ std module source (bits/std.cc). "
+    "Make sure libstdc++ >= 15 development headers are installed.")
+endif()
+message(STATUS "Found std module source: ${_std_module_src}")
+
+# C++20 modules: build the std module from libstdc++'s source.
+# All targets that consume 'import std;' link against this.
+# The std.compat module (re-exporting the C library names into the global
+# namespace) lives beside std.cc as std.compat.cc and imports std. A module
+# file set's files must lie under one of its base directories, hence
+# BASE_DIRS.
+get_filename_component(_std_module_dir "${_std_module_src}" DIRECTORY)
+add_library(scylla-stdmodule STATIC)
+target_sources(scylla-stdmodule
+  PUBLIC
+    FILE_SET CXX_MODULES
+    BASE_DIRS ${_std_module_dir}
+    FILES
+      ${_std_module_src}
+      ${_std_module_dir}/std.compat.cc)
+target_compile_options(scylla-stdmodule PRIVATE -Wno-reserved-module-identifier)
+set_target_properties(scylla-stdmodule PROPERTIES CXX_SCAN_FOR_MODULES ON)
+list(APPEND scylla_cxx_module_targets scylla-stdmodule)
+list(APPEND scylla_cxx_module_flags
+  -fmodule-file=std=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/scylla-stdmodule.dir/std.pcm
+  -fmodule-file=std.compat=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/scylla-stdmodule.dir/std.compat.pcm)
+
 add_library(scylla-main STATIC)
 
 target_sources(scylla-main
@@ -322,6 +379,7 @@ target_link_libraries(scylla-main
     ZLIB::ZLIB
     lz4::lz4_static
     zstd::zstd_static
+    scylla-stdmodule
 )
 
 option(Scylla_CHECK_HEADERS
@@ -469,3 +527,55 @@ endif()
 
 add_executable(patchelf
   tools/patchelf.cc)
+
+# C++20 modules: point every Scylla target at every module BMI, as
+# configure.py does, rather than letting CMake scan Scylla's sources for
+# imports. Scanning would hand each importer a BMI rebuilt by a synthetic
+# BMI-only target with --precompile, i.e. a full BMI rather than the reduced
+# BMI that the module's own one-phase compile emits, and the two do not
+# behave the same (with clang 22, std::ranges::sort() over a vector<sstring>
+# in service/storage_service.cc picks the deleted std::ranges::swap poison
+# pill with the full BMIs). So:
+# - scylla_cxx_module_targets lists the module libraries, whose objects every
+#   Scylla target links (as configure.py links them into every binary);
+# - scylla_cxx_module_flags holds the -fmodule-file=<name>=<BMI> flags of the
+#   BMIs that those targets' own compiles emit;
+# - scylla_cxx_module_dependencies lists further targets whose builds emit
+#   BMIs named in scylla_cxx_module_flags.
+# Every Scylla compile waits for all of them: sccache hashes each
+# -fmodule-file= input, so the BMIs must exist even for a translation unit
+# that imports nothing. The bundled seastar, abseil, fmt and c-ares keep
+# building as before.
+add_custom_target(scylla-cxx-modules)
+add_dependencies(scylla-cxx-modules ${scylla_cxx_module_targets} ${scylla_cxx_module_dependencies})
+function(scylla_use_cxx_modules dir)
+  get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+  foreach(target IN LISTS targets)
+    get_target_property(type ${target} TYPE)
+    if(NOT type MATCHES "^(STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY|EXECUTABLE)$")
+      continue()
+    endif()
+    if(target IN_LIST scylla_cxx_module_targets)
+      continue()
+    endif()
+    set_property(TARGET ${target} APPEND PROPERTY LINK_LIBRARIES ${scylla_cxx_module_targets})
+    target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${scylla_cxx_module_flags}>")
+    add_dependencies(${target} scylla-cxx-modules)
+  endforeach()
+  get_property(subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+  foreach(subdir IN LISTS subdirs)
+    file(RELATIVE_PATH relative_subdir "${PROJECT_SOURCE_DIR}" "${subdir}")
+    if(relative_subdir MATCHES "^(seastar|abseil|fmt|c-ares)(/|$)")
+      continue()
+    endif()
+    scylla_use_cxx_modules("${subdir}")
+  endforeach()
+endfunction()
+scylla_use_cxx_modules("${PROJECT_SOURCE_DIR}")
+# Linking a module library makes CMake build a synthetic BMI-only variant of
+# its modules anyway, and that compile passes clang both --precompile and -c;
+# -c then goes unused, which -Werror would turn into an error. See
+# https://gitlab.kitware.com/cmake/cmake/-/work_items/27794
+foreach(target IN LISTS scylla_cxx_module_targets)
+  target_compile_options(${target} PRIVATE -Wno-error=unused-command-line-argument)
+endforeach()

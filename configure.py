@@ -140,6 +140,35 @@ def try_compile_and_link(compiler, source='', flags=[], verbose=False):
                 os.unlink(ofile)
 
 
+def find_std_module_source(compiler):
+    """Find the libstdc++ C++20 std module source (bits/std.cc).
+
+    Queries the compiler for its C++ include search paths and looks for
+    bits/std.cc under each one.  Works with both GCC and Clang (which
+    discovers the libstdc++ include directory from the GCC installation).
+    """
+    result = subprocess.run(
+        [compiler, '-x', 'c++', '-E', '-v', '/dev/null'],
+        capture_output=True, text=True)
+    # The include paths are listed between '#include <...> search starts here:'
+    # and 'End of search list.' in stderr.
+    in_search_list = False
+    for line in result.stderr.splitlines():
+        if '#include <...> search starts here:' in line:
+            in_search_list = True
+            continue
+        if 'End of search list.' in line:
+            break
+        if not in_search_list:
+            continue
+        candidate = os.path.join(line.strip(), 'bits', 'std.cc')
+        if os.path.isfile(candidate):
+            return os.path.realpath(candidate)
+    print('Could not find libstdc++ std module source (bits/std.cc).')
+    print('Make sure libstdc++ >= 15 development headers are installed.')
+    sys.exit(1)
+
+
 def flag_supported(flag, compiler):
     # gcc ignores -Wno-x even if it is not supported
     adjusted = re.sub('^-Wno-', '-W', flag)
@@ -2926,8 +2955,12 @@ def write_build_file(f,
             seastar_libs_{mode} = {seastar_libs}
             seastar_testing_libs_{mode} = {seastar_testing_libs}
             rule cxx.{mode}
-              command = $cxx_launcher $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags_{mode} $cxxflags $obj_cxxflags -c -o $out $in
+              command = $cxx_launcher $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags_{mode} $cxxflags $obj_cxxflags $module_flags_{mode} -c -o $out $in
               description = CXX $out
+              depfile = $out.d
+            rule cxx_build_module.{mode}
+              command = $cxx_launcher $cxx -MD -MT $out -MF $out.d $cxxflags_{mode} $cxxflags $obj_cxxflags $module_flags -Wno-reserved-module-identifier -x c++-module -fmodule-output=$pcm -c -o $out $in
+              description = CXX-MODULE $out
               depfile = $out.d
             rule link.{mode}
               command = $cxx  $ld_flags_{mode} $ldflags -o $out $in $libs $libs_{mode}
@@ -2962,7 +2995,7 @@ def write_build_file(f,
                         $builddir/{mode}/gen/${{stem}}Parser.cpp
                 description = ANTLR3 $in
             rule checkhh.{mode}
-              command = $cxx_launcher $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags $cxxflags_{mode} $obj_cxxflags -include $in -c -o $out $builddir/{mode}/gen/empty.cc
+              command = $cxx_launcher $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags $cxxflags_{mode} $obj_cxxflags $module_flags_{mode} -include $in -c -o $out $builddir/{mode}/gen/empty.cc
               description = CHECKHH $in
               depfile = $out.d
             rule test.{mode}
@@ -2987,6 +3020,43 @@ def write_build_file(f,
         include_cxx_target = f'{mode}-build' if not args.dist_only else ''
         include_dist_target = f'dist-{mode}' if args.enable_dist is None or args.enable_dist else ''
         f.write(f'build {mode}: phony {include_cxx_target} {include_dist_target}\n')
+
+        # C++20 modules: build the std module BMI and object file in a
+        # single step using -fmodule-output.  The primary output is the
+        # .o (which sccache understands), and the .pcm is emitted as a
+        # side-effect, avoiding sccache's inability to cache --precompile
+        # output.
+        std_module_src = find_std_module_source(args.cxx)
+        std_pcm = f'$builddir/{mode}/modules/std.pcm'
+        std_obj = f'$builddir/{mode}/modules/std.o'
+        f.write(f'build {std_obj} | {std_pcm}: cxx_build_module.{mode} {std_module_src}\n')
+        f.write(f'  pcm = {std_pcm}\n')
+        f.write(f'  module_flags =\n')
+        f.write(f'  obj_cxxflags = -Wno-reserved-module-identifier\n')
+
+        # std.compat module — re-exports the C library names into the global
+        # namespace (::uint8_t, ::memcpy, ...).  Consumers `import std.compat;`
+        # so that code relying on unqualified C names (previously supplied by
+        # textual <cstdint>/<cstring> includes) keeps compiling.  It lives
+        # beside std.cc as std.compat.cc and imports the std module.
+        std_compat_src = os.path.join(os.path.dirname(std_module_src), 'std.compat.cc')
+        std_compat_pcm = f'$builddir/{mode}/modules/std.compat.pcm'
+        std_compat_obj = f'$builddir/{mode}/modules/std.compat.o'
+        f.write(f'build {std_compat_obj} | {std_compat_pcm}: cxx_build_module.{mode} {std_compat_src} | {std_pcm}\n')
+        f.write(f'  pcm = {std_compat_pcm}\n')
+        f.write(f'  module_flags = -fmodule-file=std={std_pcm}\n')
+        f.write(f'  obj_cxxflags = -Wno-reserved-module-identifier\n')
+
+        # Consumer TU module flags — all library module PCMs, including std.
+        # Library modules keep textual #includes in their GMFs and are built
+        # with their own (empty) module_flags. Every compile depends on the
+        # BMIs, even one that imports nothing: sccache hashes each
+        # -fmodule-file= input.
+        module_flags = f'-fmodule-file=std={std_pcm} -fmodule-file=std.compat={std_compat_pcm}'
+        f.write(f'module_flags_{mode} = {module_flags}\n')
+
+        all_module_pcms = f'{std_pcm} {std_compat_pcm}'
+
         compiles = {}
         swaggers = set()
         serializers = {}
@@ -3029,6 +3099,8 @@ def write_build_file(f,
             if has_rust:
                 parent_mode = modes[mode].get('parent_mode', mode)
                 objs.append(f'$builddir/{parent_mode}/rust-{parent_mode}/librust_combined.a')
+            objs.append(std_obj)
+            objs.append(std_compat_obj)
             if binary in cpp_apps:
                 # binary only needs the C++ standard library, no additional
                 # libraries.
@@ -3164,7 +3236,7 @@ def write_build_file(f,
             src = compiles[obj]
             seastar_dep = f'$builddir/{mode}/seastar/libseastar.{seastar_lib_ext}'
             abseil_dep = ' '.join(f'$builddir/{mode}/abseil/{lib}' for lib in abseil_libs)
-            f.write(f'build {obj}: cxx.{mode} {src} | {profile_dep} {seastar_dep} {abseil_dep} {gen_headers_dep}\n')
+            f.write(f'build {obj}: cxx.{mode} {src} | {profile_dep} {seastar_dep} {abseil_dep} {gen_headers_dep} {all_module_pcms}\n')
             if src in modeval['per_src_extra_cxxflags']:
                 f.write('    cxxflags = {seastar_cflags} $cxxflags $cxxflags_{mode} {extra_cxxflags}\n'.format(mode=mode, extra_cxxflags=modeval["per_src_extra_cxxflags"][src], **modeval))
         for swagger in swaggers:
@@ -3173,7 +3245,7 @@ def write_build_file(f,
             obj = swagger.objects(gen_dir)[0]
             src = swagger.source
             f.write('build {} | {} : swagger {} | {}/scripts/seastar-json2code.py\n'.format(hh, cc, src, args.seastar_path))
-            f.write(f'build {obj}: cxx.{mode} {cc} | {profile_dep}\n')
+            f.write(f'build {obj}: cxx.{mode} {cc} | {profile_dep} {all_module_pcms}\n')
         for hh in serializers:
             src = serializers[hh]
             f.write('build {}: serializer {} | idl-compiler.py\n'.format(hh, src))
@@ -3190,7 +3262,7 @@ def write_build_file(f,
                                                                    grammar.source.rsplit('.', 1)[0]))
             for cc in grammar.sources('$builddir/{}/gen'.format(mode)):
                 obj = cc.replace('.cpp', '.o')
-                f.write(f'build {obj}: cxx.{mode} {cc} | {profile_dep} || {" ".join(serializers)}\n')
+                f.write(f'build {obj}: cxx.{mode} {cc} | {profile_dep} {all_module_pcms} || {" ".join(serializers)}\n')
                 flags = '-Wno-parentheses-equality'
                 if cc.endswith('Parser.cpp'):
                     # Unoptimized parsers end up using huge amounts of stack space and overflowing their stack
@@ -3201,8 +3273,8 @@ def write_build_file(f,
                 f.write('  obj_cxxflags = %s\n' % flags)
         f.write(f'build $builddir/{mode}/gen/empty.cc: gen\n')
         for hh in headers:
-            f.write('build $builddir/{mode}/{hh}.o: checkhh.{mode} {hh} | $builddir/{mode}/gen/empty.cc {profile_dep} || {gen_headers_dep}\n'.format(
-                    mode=mode, hh=hh, gen_headers_dep=gen_headers_dep, profile_dep=profile_dep))
+            f.write('build $builddir/{mode}/{hh}.o: checkhh.{mode} {hh} | $builddir/{mode}/gen/empty.cc {profile_dep} || {gen_headers_dep} {all_module_pcms}\n'.format(
+                    mode=mode, hh=hh, gen_headers_dep=gen_headers_dep, profile_dep=profile_dep, all_module_pcms=all_module_pcms))
 
         seastar_dep = f'$builddir/{mode}/seastar/libseastar.{seastar_lib_ext}'
         seastar_testing_dep = f'$builddir/{mode}/seastar/libseastar_testing.{seastar_lib_ext}'
