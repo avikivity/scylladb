@@ -313,8 +313,6 @@ def categorize_compile_flags(command_str):
                 tok = "-DSCYLLA_VERSION=<version>"
             flags["defines"].add(tok)
         elif tok.startswith("-W"):
-            if tok == "-Winvalid-pch":
-                continue
             # -Wno-backend-plugin is added by configure.py when a PGO
             # profile is available.  CMake handles PGO separately.
             if tok == "-Wno-backend-plugin":
@@ -330,8 +328,7 @@ def categorize_compile_flags(command_str):
                     or tok == "-ffat-lto-objects"
                     or tok == "-fno-lto"
                     or tok.startswith("-fprofile-use=")
-                    or tok.startswith("-fprofile-generate")
-                    or tok == "-fpch-validate-input-files-content"):
+                    or tok.startswith("-fprofile-generate")):
                 continue
             flags["f_flags"].add(tok)
         elif tok.startswith("-O"):
@@ -342,7 +339,7 @@ def categorize_compile_flags(command_str):
             flags["std_flags"].add(tok)
         elif tok in ("-o", "-MT", "-MF", "-Xclang"):
             skip_next = True
-        elif tok in ("-include-pch", "-include"):
+        elif tok == "-include":
             skip_next = True
         elif tok.startswith(("-I", "-iquote", "-isystem")):
             if tok in ("-I", "-iquote", "-isystem"):
@@ -425,7 +422,6 @@ def _is_scylla_source(rel_path):
             and not rel_path.startswith("..")
             and not os.path.isabs(rel_path)
             and rel_path != "tools/patchelf.cc"
-            and rel_path != "exported_templates.cc"
             and (rel_path.endswith(".cc") or rel_path.endswith(".cpp")))
 
 
@@ -441,8 +437,7 @@ def extract_configure_compile_entries(variables, rules, builds,
     # Find compile rules for this mode
     compile_rules = {}
     for name, rvars in rules.items():
-        if (name.startswith(f"cxx.{mode}")
-                or name.startswith(f"cxx_with_pch.{mode}")):
+        if name.startswith(f"cxx.{mode}"):
             compile_rules[name] = rvars
 
     if not compile_rules:
