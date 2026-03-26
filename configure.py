@@ -865,7 +865,6 @@ arg_parser.add_argument('--use-cmake', action=argparse.BooleanOptionalAction, de
 arg_parser.add_argument('--coverage', action = 'store_true', help = 'Compile scylla with coverage instrumentation')
 arg_parser.add_argument('--build-dir', action='store', default='build',
                         help='Build directory path')
-arg_parser.add_argument('--disable-precompiled-header', action='store_true', default=False, help='Disable precompiled header for scylla binary')
 arg_parser.add_argument('--time-trace', action='store_true', default=False,
                         help='Enable Clang -ftime-trace for build profiling. '
                              'Each .o produces a .json file analyzable with '
@@ -2736,15 +2735,7 @@ cpp_jwt_encryption_sources = [
 ]
 
 def get_extra_cxxflags(mode, mode_config, cxx, debuginfo):
-    cxxflags = [
-        # we need this flag for correct precompiled header handling in connection with ccache (or similar)
-        # `git` tools don't preserve timestamps, so when using ccache it might be possible to add pch to ccache
-        # and then later (after for example rebase) get `stdafx.hh` with different timestamp, but the same content.
-        # this will tell ccache to bring pch from its cache. Later on clang will check if timestamps match and complain.
-        # Adding `-fpch-validate-input-files-content` tells clang to check content of stdafx.hh if timestamps don't match.
-        # The flag seems to be present in gcc as well.
-        "" if args.disable_precompiled_header else '-fpch-validate-input-files-content'
-    ]
+    cxxflags = []
 
     optimization_level = mode_config['optimization-level']
     cxxflags.append(f'-O{optimization_level}')
@@ -2801,7 +2792,6 @@ def write_build_file(f,
                      scylla_release,
                      compiler_cache,
                      args):
-    use_precompiled_header = not args.disable_precompiled_header
     warnings = get_warning_options(args.cxx)
     rustc_target = pick_rustc_target('wasm32-wasi', 'wasm32-wasip1')
     # If a compiler cache is available, compilations are run through it as a
@@ -2939,14 +2929,6 @@ def write_build_file(f,
               command = $cxx_launcher $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags_{mode} $cxxflags $obj_cxxflags -c -o $out $in
               description = CXX $out
               depfile = $out.d
-            rule cxx_build_precompiled_header.{mode}
-              command = $cxx_launcher $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags_{mode} $cxxflags $obj_cxxflags -c -o $out $in -Winvalid-pch -fpch-instantiate-templates -Xclang -emit-pch -DSCYLLA_USE_PRECOMPILED_HEADER
-              description = CXX-PRECOMPILED-HEADER $out
-              depfile = $out.d
-            rule cxx_with_pch.{mode}
-              command = $cxx_launcher $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags_{mode} $cxxflags $obj_cxxflags -c -o $out $in -Winvalid-pch -Xclang -include-pch -Xclang $builddir/{mode}/stdafx.hh.pch
-              description = CXX $out
-              depfile = $out.d
             rule link.{mode}
               command = $cxx  $ld_flags_{mode} $ldflags -o $out $in $libs $libs_{mode}
               description = LINK $out
@@ -2980,7 +2962,7 @@ def write_build_file(f,
                         $builddir/{mode}/gen/${{stem}}Parser.cpp
                 description = ANTLR3 $in
             rule checkhh.{mode}
-              command = $cxx_launcher $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags $cxxflags_{mode} $obj_cxxflags -include $in -c -o $out $builddir/{mode}/gen/empty.cc -USCYLLA_USE_PRECOMPILED_HEADER
+              command = $cxx_launcher $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags $cxxflags_{mode} $obj_cxxflags -include $in -c -o $out $builddir/{mode}/gen/empty.cc
               description = CHECKHH $in
               depfile = $out.d
             rule test.{mode}
@@ -3006,7 +2988,6 @@ def write_build_file(f,
         include_dist_target = f'dist-{mode}' if args.enable_dist is None or args.enable_dist else ''
         f.write(f'build {mode}: phony {include_cxx_target} {include_dist_target}\n')
         compiles = {}
-        compiles_with_pch = set()
         swaggers = set()
         serializers = {}
         ragels = {}
@@ -3077,7 +3058,6 @@ def write_build_file(f,
                 local_libs += ' -flto=thin -ffat-lto-objects'
             else:
                 local_libs += ' -fno-lto'
-            use_pch = use_precompiled_header and binary == 'scylla'
             if binary in tests:
                 if binary in pure_boost_tests:
                     local_libs += ' ' + maybe_static(args.staticboost, '-lboost_unit_test_framework')
@@ -3106,8 +3086,6 @@ def write_build_file(f,
                 if src.endswith('.cc'):
                     obj = '$builddir/' + mode + '/' + src.replace('.cc', '.o')
                     compiles[obj] = src
-                    if use_pch:
-                        compiles_with_pch.add(obj)
                 elif src.endswith('.idl.hh'):
                     hh = '$builddir/' + mode + '/gen/' + src.replace('.idl.hh', '.dist.hh')
                     serializers[hh] = src
@@ -3186,9 +3164,7 @@ def write_build_file(f,
             src = compiles[obj]
             seastar_dep = f'$builddir/{mode}/seastar/libseastar.{seastar_lib_ext}'
             abseil_dep = ' '.join(f'$builddir/{mode}/abseil/{lib}' for lib in abseil_libs)
-            pch_dep = f'$builddir/{mode}/stdafx.hh.pch' if obj in compiles_with_pch else ''
-            cxx_cmd = 'cxx_with_pch' if obj in compiles_with_pch else 'cxx'
-            f.write(f'build {obj}: {cxx_cmd}.{mode} {src} | {profile_dep} {seastar_dep} {abseil_dep} {gen_headers_dep} {pch_dep}\n')
+            f.write(f'build {obj}: cxx.{mode} {src} | {profile_dep} {seastar_dep} {abseil_dep} {gen_headers_dep}\n')
             if src in modeval['per_src_extra_cxxflags']:
                 f.write('    cxxflags = {seastar_cflags} $cxxflags $cxxflags_{mode} {extra_cxxflags}\n'.format(mode=mode, extra_cxxflags=modeval["per_src_extra_cxxflags"][src], **modeval))
         for swagger in swaggers:
@@ -3260,8 +3236,6 @@ def write_build_file(f,
             f.write(f'  subdir = $builddir/{mode}/abseil\n')
             f.write(f'  target = {lib}\n')
             f.write(f'  profile_dep = {profile_dep}\n')
-
-        f.write(f'build $builddir/{mode}/stdafx.hh.pch: cxx_build_precompiled_header.{mode} stdafx.hh | {profile_dep} {seastar_dep} {abseil_dep} {gen_headers_dep} {pch_dep}\n')
 
         f.write(f'build $builddir/{mode}/seastar/apps/iotune/iotune: ninja $builddir/{mode}/seastar/build.ninja | $builddir/{mode}/seastar/libseastar.{seastar_lib_ext}\n')
         f.write('  pool = submodule_pool\n')
@@ -3594,7 +3568,7 @@ def configure_using_cmake(args):
         'CMAKE_DEFAULT_CONFIGS': selected_configs,
         'CMAKE_C_COMPILER': args.cc,
         'CMAKE_CXX_COMPILER': args.cxx,
-        'CMAKE_CXX_FLAGS': args.user_cflags + ("" if args.disable_precompiled_header else " -fpch-validate-input-files-content"),
+        'CMAKE_CXX_FLAGS': args.user_cflags,
         'CMAKE_EXE_LINKER_FLAGS': args.user_ldflags,
         'CMAKE_EXPORT_COMPILE_COMMANDS': 'ON',
         'Scylla_CHECK_HEADERS': 'ON',
@@ -3603,7 +3577,6 @@ def configure_using_cmake(args):
         'Scylla_TEST_REPEAT': args.test_repeat,
         'Scylla_ENABLE_LTO': 'ON' if args.lto else 'OFF',
         'Scylla_WITH_DEBUG_INFO' : 'ON' if args.debuginfo else 'OFF',
-        'Scylla_USE_PRECOMPILED_HEADER': 'OFF' if args.disable_precompiled_header else 'ON',
     }
 
     if compiler_cache:

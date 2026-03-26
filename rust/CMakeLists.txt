@@ -86,15 +86,6 @@ target_include_directories(wasmtime_bindings
     ${scylla_gen_build_dir})
 target_link_libraries(wasmtime_bindings
   INTERFACE Rust::rust_combined)
-if (Scylla_USE_PRECOMPILED_HEADER_USE)
-  # The PCH from scylla-precompiled-header is compiled with Seastar's compile
-  # flags, including sanitizer flags in Debug/Sanitize modes. Any target reusing
-  # this PCH must have matching compile options, otherwise the compiler rejects
-  # the PCH due to flag mismatch (e.g., -fsanitize=address).
-  target_link_libraries(wasmtime_bindings PRIVATE Seastar::seastar)
-  target_precompile_headers(wasmtime_bindings REUSE_FROM scylla-precompiled-header)
-endif()
-
 # only for testing
 generate_cxxbridge(inc
   INPUT inc/src/lib.rs
@@ -112,7 +103,3 @@ target_include_directories(inc
     ${scylla_gen_build_dir})
 target_link_libraries(inc
   INTERFACE Rust::rust_combined)
-if (Scylla_USE_PRECOMPILED_HEADER_USE)
-  target_link_libraries(inc PRIVATE Seastar::seastar)
-  target_precompile_headers(inc REUSE_FROM scylla-precompiled-header)
-endif()
