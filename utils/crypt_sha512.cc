@@ -12,11 +12,11 @@
  * in the salt and rounds= setting must contain a valid iteration count,
  * on error "*" is returned.
  */
-#include <ctype.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdint.h>
+#include <cctype>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+#include <cstdint>
 
 #include "crypt_sha512.hh"
 #include <seastar/core/coroutine.hh>

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <stddef.h>
+#include <cstddef>
 #include "utils/intrusive_btree.hh"
 
 namespace intrusive_b {

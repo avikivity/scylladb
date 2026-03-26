@@ -43,7 +43,7 @@
 #include "partition_slice_builder.hh"
 #include "replica/memtable-sstable.hh"
 
-#include <stdio.h>
+#include <cstdio>
 #include <ftw.h>
 #include <unistd.h>
 #include <boost/algorithm/cxx11/is_sorted.hpp>

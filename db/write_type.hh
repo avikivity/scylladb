@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <assert.h>
+#include <cassert>
 #include <cstdint>
 #include <fmt/core.h>
 

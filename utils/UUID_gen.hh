@@ -10,8 +10,8 @@
  */
 
 #include "utils/assert.hh"
-#include <stdint.h>
-#include <assert.h>
+#include <cstdint>
+#include <cassert>
 
 #include <chrono>
 #include <random>

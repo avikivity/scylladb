@@ -9,7 +9,7 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <stdlib.h>
+#include <cstdlib>
 #include <iostream>
 
 #include <seastar/testing/test_case.hh>

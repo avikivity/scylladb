@@ -13,7 +13,7 @@
 #include <map>
 #include <functional>
 #include <utility>
-#include <assert.h>
+#include <cassert>
 #include <algorithm>
 
 #include <boost/range/join.hpp>

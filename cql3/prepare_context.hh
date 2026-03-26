@@ -15,7 +15,7 @@
 
 #include <optional>
 #include <vector>
-#include <stddef.h>
+#include <cstddef>
 #include "cql3/expr/expression.hh"
 #include "cql3/dialect.hh"
 

@@ -53,7 +53,7 @@
 #include "mutation/mutation_source_metadata.hh"
 #include "mutation/mutation_partition.hh"
 
-#include <stdio.h>
+#include <cstdio>
 #include <ftw.h>
 #include <unistd.h>
 #include <boost/icl/interval_map.hpp>

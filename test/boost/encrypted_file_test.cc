@@ -5,7 +5,7 @@
 
 
 #include <boost/test/unit_test.hpp>
-#include <stdint.h>
+#include <cstdint>
 #include <random>
 
 #include <seastar/core/align.hh>

@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 #include "schema/schema_fwd.hh"
 #include "utils/hash.hh"
 #include "sstables/version.hh"

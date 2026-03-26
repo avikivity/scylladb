@@ -48,7 +48,7 @@
 #include <optional>
 #include <unordered_map>
 #include <tuple>
-#include <assert.h>
+#include <cassert>
 
 #include <seastar/core/shared_ptr.hh>
 #include "utils/assert.hh"

@@ -12,7 +12,7 @@
 #include <any>
 #include <arpa/inet.h>
 #include <array>
-#include <assert.h>
+#include <cassert>
 #include <atomic>
 #include <bit>
 #include <bitset>
@@ -347,13 +347,13 @@
 #include <spawn.h>
 #include <sstream>
 #include <stack>
-#include <stddef.h>
+#include <cstddef>
 #include <stdexcept>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <string>
-#include <string.h>
+#include <cstring>
 #include <strings.h>
 #include <string_view>
 #include <sys/epoll.h>
