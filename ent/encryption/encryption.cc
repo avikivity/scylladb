@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <ios>
 
-#include <string.h>
+#include <cstring>
 
 #include <openssl/evp.h>
 #include <openssl/rand.h>

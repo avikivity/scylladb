@@ -31,7 +31,7 @@
 #include <set>
 #include <boost/functional/hash.hpp>
 #include <optional>
-#include <string.h>
+#include <cstring>
 #include "types/types.hh"
 #include <seastar/core/future.hh>
 #include <seastar/core/gate.hh>

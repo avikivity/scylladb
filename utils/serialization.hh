@@ -25,7 +25,7 @@
 // DataOutput.writeChars(string) - because the latter does not include
 // the length, which is necessary for reading the string back.
 
-#include <stdint.h>
+#include <cstdint>
 
 #include <seastar/core/sstring.hh>
 #include <seastar/net/byteorder.hh>

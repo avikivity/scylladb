@@ -11,7 +11,7 @@
 
 #include "cql3/statements/cf_prop_defs.hh"
 #include "utils/assert.hh"
-#include <inttypes.h>
+#include <cinttypes>
 #include <boost/regex.hpp>
 
 #include <seastar/core/coroutine.hh>

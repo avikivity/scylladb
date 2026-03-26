@@ -7,7 +7,7 @@
  */
 
 
-#include <stdint.h>
+#include <cstdint>
 #include <fmt/ranges.h>
 
 #include <seastar/core/future.hh>

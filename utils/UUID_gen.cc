@@ -16,7 +16,7 @@
 #endif // __linux__
 
 #include <atomic>
-#include <stdlib.h>
+#include <cstdlib>
 #include "utils/hashers.hh"
 
 namespace utils {
