@@ -140,6 +140,35 @@ def try_compile_and_link(compiler, source='', flags=[], verbose=False):
                 os.unlink(ofile)
 
 
+def find_std_module_source(compiler):
+    """Find the libstdc++ C++20 std module source (bits/std.cc).
+
+    Queries the compiler for its C++ include search paths and looks for
+    bits/std.cc under each one.  Works with both GCC and Clang (which
+    discovers the libstdc++ include directory from the GCC installation).
+    """
+    result = subprocess.run(
+        [compiler, '-x', 'c++', '-E', '-v', '/dev/null'],
+        capture_output=True, text=True)
+    # The include paths are listed between '#include <...> search starts here:'
+    # and 'End of search list.' in stderr.
+    in_search_list = False
+    for line in result.stderr.splitlines():
+        if '#include <...> search starts here:' in line:
+            in_search_list = True
+            continue
+        if 'End of search list.' in line:
+            break
+        if not in_search_list:
+            continue
+        candidate = os.path.join(line.strip(), 'bits', 'std.cc')
+        if os.path.isfile(candidate):
+            return os.path.realpath(candidate)
+    print('Could not find libstdc++ std module source (bits/std.cc).')
+    print('Make sure libstdc++ >= 15 development headers are installed.')
+    sys.exit(1)
+
+
 def flag_supported(flag, compiler):
     # gcc ignores -Wno-x even if it is not supported
     adjusted = re.sub('^-Wno-', '-W', flag)
@@ -2712,8 +2741,12 @@ def write_build_file(f,
             seastar_libs_{mode} = {seastar_libs}
             seastar_testing_libs_{mode} = {seastar_testing_libs}
             rule cxx.{mode}
-              command = $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags_{mode} $cxxflags $obj_cxxflags -c -o $out $in
+              command = $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags_{mode} $cxxflags $obj_cxxflags $module_flags_{mode} -c -o $out $in
               description = CXX $out
+              depfile = $out.d
+            rule cxx_build_module.{mode}
+              command = $cxx -MD -MT $out -MF $out.d $cxxflags_{mode} $cxxflags $obj_cxxflags $module_flags -Wno-reserved-module-identifier -x c++-module -fmodule-output=$pcm -c -o $out $in
+              description = CXX-MODULE $out
               depfile = $out.d
             rule link.{mode}
               command = $cxx  $ld_flags_{mode} $ldflags -o $out $in $libs $libs_{mode}
@@ -2748,7 +2781,7 @@ def write_build_file(f,
                         $builddir/{mode}/gen/${{stem}}Parser.cpp
                 description = ANTLR3 $in
             rule checkhh.{mode}
-              command = $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags $cxxflags_{mode} $obj_cxxflags -include $in -c -o $out $builddir/{mode}/gen/empty.cc
+              command = $cxx -MD -MT $out -MF $out.d {seastar_cflags} $cxxflags $cxxflags_{mode} $obj_cxxflags $module_flags_{mode} -include $in -c -o $out $builddir/{mode}/gen/empty.cc
               description = CHECKHH $in
               depfile = $out.d
             rule test.{mode}
@@ -2773,6 +2806,28 @@ def write_build_file(f,
         include_cxx_target = f'{mode}-build' if not args.dist_only else ''
         include_dist_target = f'dist-{mode}' if args.enable_dist is None or args.enable_dist else ''
         f.write(f'build {mode}: phony {include_cxx_target} {include_dist_target}\n')
+
+        # C++20 modules: build the std module BMI and object file in a
+        # single step using -fmodule-output.  The primary output is the
+        # .o (which sccache understands), and the .pcm is emitted as a
+        # side-effect, avoiding sccache's inability to cache --precompile
+        # output.
+        std_module_src = find_std_module_source(args.cxx)
+        std_pcm = f'$builddir/{mode}/modules/std.pcm'
+        std_obj = f'$builddir/{mode}/modules/std.o'
+        f.write(f'build {std_obj} | {std_pcm}: cxx_build_module.{mode} {std_module_src}\n')
+        f.write(f'  pcm = {std_pcm}\n')
+        f.write(f'  module_flags =\n')
+        f.write(f'  obj_cxxflags = -Wno-reserved-module-identifier\n')
+
+        # Consumer TU module flags — empty for now.  Library modules
+        # use textual #include in their GMFs and must NOT be compiled
+        # with -fmodule-file=std=... — otherwise Clang assigns module
+        # ownership to standard library entities, causing conflicts
+        # when consumer TUs textually #include the same headers.
+        # The std module will be wired in when `import std;` is added.
+        f.write(f'module_flags_{mode} =\n')
+
         compiles = {}
         swaggers = set()
         serializers = {}
@@ -2815,6 +2870,7 @@ def write_build_file(f,
             if has_rust:
                 parent_mode = modes[mode].get('parent_mode', mode)
                 objs.append(f'$builddir/{parent_mode}/rust-{parent_mode}/librust_combined.a')
+            objs.append(std_obj)
             if binary in cpp_apps:
                 # binary only needs the C++ standard library, no additional
                 # libraries.

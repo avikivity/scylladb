@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.27)
+cmake_minimum_required(VERSION 3.28)
 
 project(scylla)
 
@@ -239,6 +239,50 @@ file(MAKE_DIRECTORY "${scylla_gen_build_dir}")
 include(add_version_library)
 generate_scylla_version()
 
+# C++20 modules: find the libstdc++ std module source (bits/std.cc).
+# Query the compiler for its C++ include search paths and look for
+# bits/std.cc under each one.
+execute_process(
+  COMMAND ${CMAKE_CXX_COMPILER} -x c++ -E -v /dev/null
+  OUTPUT_QUIET
+  ERROR_VARIABLE _cxx_verbose_output)
+string(REGEX MATCHALL "[^\n]+" _cxx_verbose_lines "${_cxx_verbose_output}")
+set(_std_module_src "")
+set(_in_search_list FALSE)
+foreach(_line IN LISTS _cxx_verbose_lines)
+  if(_line MATCHES "#include <\\.\\.\\.> search starts here:")
+    set(_in_search_list TRUE)
+    continue()
+  endif()
+  if(_line MATCHES "End of search list\\.")
+    break()
+  endif()
+  if(NOT _in_search_list)
+    continue()
+  endif()
+  string(STRIP "${_line}" _inc_dir)
+  set(_candidate "${_inc_dir}/bits/std.cc")
+  if(EXISTS "${_candidate}")
+    get_filename_component(_std_module_src "${_candidate}" REALPATH)
+    break()
+  endif()
+endforeach()
+if(_std_module_src STREQUAL "")
+  message(FATAL_ERROR
+    "Could not find libstdc++ std module source (bits/std.cc). "
+    "Make sure libstdc++ >= 15 development headers are installed.")
+endif()
+message(STATUS "Found std module source: ${_std_module_src}")
+
+# C++20 modules: build the std module from libstdc++'s source.
+# All targets that consume 'import std;' link against this.
+add_library(scylla-stdmodule STATIC)
+target_sources(scylla-stdmodule
+  PUBLIC
+    FILE_SET CXX_MODULES FILES
+      ${_std_module_src})
+set_target_properties(scylla-stdmodule PROPERTIES CXX_SCAN_FOR_MODULES ON)
+
 add_library(scylla-main STATIC)
 if (Scylla_USE_PRECOMPILED_HEADER_USE)
   target_precompile_headers(scylla-main REUSE_FROM scylla-precompiled-header)
@@ -289,6 +333,7 @@ target_link_libraries(scylla-main
     ZLIB::ZLIB
     lz4::lz4_static
     zstd::zstd_static
+    scylla-stdmodule
 )
 
 option(Scylla_CHECK_HEADERS
