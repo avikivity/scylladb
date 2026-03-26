@@ -35,6 +35,8 @@ import fmt;
 #include <seastar/util/lazy.hh>
 #include <seastar/http/request.hh>
 #include <seastar/http/exception.hh>
+
+namespace seastar::http::internal { sstring url_encode(std::string_view in); }
 #include "default_aws_retry_strategy.hh"
 #include "db/config.hh"
 #include "utils/assert.hh"

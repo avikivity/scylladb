@@ -25,6 +25,8 @@
 #include <seastar/http/client.hh>
 #include <seastar/util/short_streams.hh>
 
+namespace seastar::http::internal { sstring url_encode(std::string_view in); }
+
 #include "utils/rest/client.hh"
 #include "utils/exponential_backoff_retry.hh"
 #include "utils/error_injection.hh"
