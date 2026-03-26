@@ -385,6 +385,39 @@ list(APPEND scylla_cxx_module_targets fmt-module)
 list(APPEND scylla_cxx_module_flags
   -fmodule-file=fmt=${CMAKE_CURRENT_BINARY_DIR}/fmt/CMakeFiles/fmt-module.dir/fmt.pcm)
 
+# C++20 modules: Boost libraries module (partitioned).
+# Wraps Boost headers used by ScyllaDB, excluding Boost.Test
+# (which is macro-based and stays textual).
+add_library(scylla-boostmodule STATIC)
+target_sources(scylla-boostmodule
+  PUBLIC
+    FILE_SET CXX_MODULES FILES
+      modules/boost.cppm
+      modules/boost-algorithm.cppm
+      modules/boost-container.cppm
+      modules/boost-intrusive.cppm
+      modules/boost-range.cppm
+      modules/boost-multiprecision.cppm
+      modules/boost-regex.cppm
+      modules/boost-icl.cppm
+      modules/boost-program_options.cppm
+      modules/boost-outcome.cppm
+      modules/boost-signals2.cppm
+      modules/boost-misc.cppm)
+# Boost::regex only for compiling: every Scylla target links the module
+# libraries, and linking libboost_regex (and ICU) is left to the targets that
+# use Boost.Regex, as in configure.py, which links patchelf with the module
+# objects but without libboost_regex.
+target_link_libraries(scylla-boostmodule PUBLIC scylla-stdmodule Boost::boost $<COMPILE_ONLY:Boost::regex>)
+set_target_properties(scylla-boostmodule PROPERTIES CXX_SCAN_FOR_MODULES ON)
+list(APPEND scylla_cxx_module_targets scylla-boostmodule)
+list(APPEND scylla_cxx_module_flags
+  -fmodule-file=boost=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/scylla-boostmodule.dir/boost.pcm)
+foreach(part algorithm container intrusive range multiprecision regex icl program_options outcome signals2 misc)
+  list(APPEND scylla_cxx_module_flags
+    -fmodule-file=boost:${part}=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/scylla-boostmodule.dir/boost-${part}.pcm)
+endforeach()
+
 add_library(scylla-main STATIC)
 
 target_sources(scylla-main
@@ -435,6 +468,7 @@ target_link_libraries(scylla-main
     scylla-stdmodule
     scylla-abseilmodule
     fmt::fmt-module
+    scylla-boostmodule
 )
 
 option(Scylla_CHECK_HEADERS
