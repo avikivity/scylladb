@@ -239,51 +239,6 @@ file(MAKE_DIRECTORY "${scylla_gen_build_dir}")
 include(add_version_library)
 generate_scylla_version()
 
-option(Scylla_USE_PRECOMPILED_HEADER "Use precompiled header for Scylla" ON)
-add_library(scylla-precompiled-header STATIC exported_templates.cc)
-target_link_libraries(scylla-precompiled-header PRIVATE
-    absl::headers
-    absl::btree
-    absl::hash
-    absl::raw_hash_set
-    Seastar::seastar
-    Snappy::snappy
-    systemd
-    ZLIB::ZLIB
-    lz4::lz4_static
-    zstd::zstd_static)
-if (Scylla_USE_PRECOMPILED_HEADER)
-  set(Scylla_USE_PRECOMPILED_HEADER_USE ON)
-  find_program(DISTCC_EXEC NAMES distcc OPTIONAL)
-  if (DISTCC_EXEC)
-    if(DEFINED ENV{DISTCC_HOSTS})
-      set(Scylla_USE_PRECOMPILED_HEADER_USE OFF)
-      message(STATUS "Disabling precompiled header usage because distcc exists and DISTCC_HOSTS is set, assuming you're using distributed compilation.")
-    else()
-      file(REAL_PATH "~/.distcc/hosts" DIST_CC_HOSTS_PATH EXPAND_TILDE)
-      if (EXISTS ${DIST_CC_HOSTS_PATH})
-        set(Scylla_USE_PRECOMPILED_HEADER_USE OFF)
-        message(STATUS "Disabling precompiled header usage because distcc and ~/.distcc/hosts exists, assuming you're using distributed compilation.")
-      endif()
-    endif()
-  endif()
-  if (Scylla_USE_PRECOMPILED_HEADER_USE)
-    message(STATUS "Using precompiled header for Scylla - remember to add `sloppiness = pch_defines,time_macros` to ccache.conf, if you're using ccache.")
-    target_precompile_headers(scylla-precompiled-header PRIVATE "stdafx.hh")
-    target_compile_definitions(scylla-precompiled-header PRIVATE SCYLLA_USE_PRECOMPILED_HEADER)
-    # Match configure.py: -fpch-validate-input-files-content tells the compiler
-    # to check content of stdafx.hh if timestamps don't match (important for
-    # ccache/git workflows where timestamps may not be preserved).
-    # scylla-precompiled-header needs the flag on its own: the content hashes
-    # are recorded when the PCH is written, and add_compile_options() below only
-    # applies to targets created after it.
-    target_compile_options(scylla-precompiled-header PRIVATE -fpch-validate-input-files-content)
-    add_compile_options(-fpch-validate-input-files-content)
-  endif()
-else()
-  set(Scylla_USE_PRECOMPILED_HEADER_USE OFF)
-endif()
-
 add_library(scylla-main STATIC)
 if (Scylla_USE_PRECOMPILED_HEADER_USE)
   target_precompile_headers(scylla-main REUSE_FROM scylla-precompiled-header)
@@ -334,7 +289,6 @@ target_link_libraries(scylla-main
     ZLIB::ZLIB
     lz4::lz4_static
     zstd::zstd_static
-    scylla-precompiled-header
 )
 
 option(Scylla_CHECK_HEADERS

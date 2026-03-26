@@ -19,7 +19,4 @@ target_link_libraries(scylla_audit
   PRIVATE
     cql3)
 
-if (Scylla_USE_PRECOMPILED_HEADER_USE)
-  target_precompile_headers(scylla_audit REUSE_FROM scylla-precompiled-header)
-endif()
 add_whole_archive(audit scylla_audit)
