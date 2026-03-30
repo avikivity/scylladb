@@ -91,3 +91,70 @@ def test_json_select_null_column(cql, test_keyspace, scylla_only):
         p = unique_key_int()
         cql.execute(f"INSERT INTO {table}(p) VALUES ({p})")
         assert list(cql.execute(f"SELECT (?int)doc.x FROM {table} WHERE p={p}")) == [(None,)]
+
+
+# --- IF condition (LWT) tests: (?type)doc.field in UPDATE ... IF ---
+
+# IF (?int)doc.field = value — condition matches, update applied.
+def test_json_if_field_int_match(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json, v int") as table:
+        p = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc, v) VALUES ({p}, {{'age': 42}}, 0)")
+        cql.execute(f"UPDATE {table} SET v = 1 WHERE p = {p} IF (?int)doc.age = 42")
+        assert list(cql.execute(f"SELECT v FROM {table} WHERE p={p}")) == [(1,)]
+
+# IF (?int)doc.field = value — condition does not match, update not applied.
+def test_json_if_field_int_no_match(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json, v int") as table:
+        p = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc, v) VALUES ({p}, {{'age': 42}}, 0)")
+        cql.execute(f"UPDATE {table} SET v = 1 WHERE p = {p} IF (?int)doc.age = 99")
+        assert list(cql.execute(f"SELECT v FROM {table} WHERE p={p}")) == [(0,)]
+
+# IF (?text)doc.name = 'Alice' — text field comparison.
+def test_json_if_field_text(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json, v int") as table:
+        p = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc, v) VALUES ({p}, {{'name': 'Alice'}}, 0)")
+        cql.execute(f"UPDATE {table} SET v = 1 WHERE p = {p} IF (?text)doc.name = 'Alice'")
+        assert list(cql.execute(f"SELECT v FROM {table} WHERE p={p}")) == [(1,)]
+
+# IF (?int)doc.nested.val = 7 — nested field access.
+def test_json_if_field_nested(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json, v int") as table:
+        p = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc, v) VALUES ({p}, {{'nested': {{'val': 7}}}}, 0)")
+        cql.execute(f"UPDATE {table} SET v = 1 WHERE p = {p} IF (?int)doc.nested.val = 7")
+        assert list(cql.execute(f"SELECT v FROM {table} WHERE p={p}")) == [(1,)]
+
+# IF (?int)doc.arr[1] = 20 — array subscript in condition.
+def test_json_if_field_array(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json, v int") as table:
+        p = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc, v) VALUES ({p}, {{'arr': [10, 20, 30]}}, 0)")
+        cql.execute(f"UPDATE {table} SET v = 1 WHERE p = {p} IF (?int)doc.arr[1] = 20")
+        assert list(cql.execute(f"SELECT v FROM {table} WHERE p={p}")) == [(1,)]
+
+# IF (?int)doc.missing = null — missing field yields NULL, NULL = NULL is true in LWT.
+def test_json_if_field_missing_null(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json, v int") as table:
+        p = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc, v) VALUES ({p}, {{'a': 1}}, 0)")
+        cql.execute(f"UPDATE {table} SET v = 1 WHERE p = {p} IF (?int)doc.missing = null")
+        assert list(cql.execute(f"SELECT v FROM {table} WHERE p={p}")) == [(1,)]
+
+# IF (?int)doc.field != value — not-equal operator.
+def test_json_if_field_neq(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json, v int") as table:
+        p = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc, v) VALUES ({p}, {{'x': 5}}, 0)")
+        cql.execute(f"UPDATE {table} SET v = 1 WHERE p = {p} IF (?int)doc.x != 99")
+        assert list(cql.execute(f"SELECT v FROM {table} WHERE p={p}")) == [(1,)]
+
+# IF (?text)doc[0] = 'zero' — plain subscript on BSON column.
+def test_json_if_subscript_only(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json, v int") as table:
+        p = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc, v) VALUES ({p}, {{'0': 'zero', '1': 'one'}}, 0)")
+        cql.execute(f"UPDATE {table} SET v = 1 WHERE p = {p} IF (?text)doc[0] = 'zero'")
+        assert list(cql.execute(f"SELECT v FROM {table} WHERE p={p}")) == [(1,)]

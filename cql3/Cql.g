@@ -1859,7 +1859,8 @@ subscriptExpr returns [uexpression e]
     : col=columnRefExpr { e = std::move(col); }
         ( '[' sub=term ']'  { e = subscript{std::move(e), std::move(sub)}; }
         | '.' fi=cident     { e = field_selection{std::move(e), std::move(fi)}; }
-        )?
+        )*
+        { if (t) { e = cast{.style = cast::cast_style::c, .arg = std::move(e), .type = std::move(t)}; } }
     ;
 
 singleColumnInValuesOrMarkerExpr returns [uexpression e]

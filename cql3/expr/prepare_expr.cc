@@ -2380,7 +2380,20 @@ static lw_shared_ptr<column_specification> get_lhs_receiver(const expression& pr
         [](const column_value& col_val) -> lw_shared_ptr<column_specification> {
             return col_val.col->column_specification;
         },
-        [](const subscript& col_val) -> lw_shared_ptr<column_specification> {
+        [&](const field_selection& fs) -> lw_shared_ptr<column_specification> {
+            return make_lw_shared<column_specification>(
+                schema.ks_name(), schema.cf_name(),
+                ::make_shared<column_identifier>(format("{:user}", fs), true),
+                fs.type);
+        },
+        [&](const subscript& col_val) -> lw_shared_ptr<column_specification> {
+            // BSON subscript: the type was resolved during preparation.
+            if (col_val.type && &type_of(col_val.val)->without_reversed() == bson_type.get()) {
+                return make_lw_shared<column_specification>(
+                    schema.ks_name(), schema.cf_name(),
+                    ::make_shared<column_identifier>(format("{:user}", col_val), true),
+                    col_val.type);
+            }
             const column_value& sub_col = get_subscripted_column(col_val);
             if (sub_col.col->type->is_map()) {
                 return map_value_spec_of(*sub_col.col->column_specification);

@@ -19,10 +19,11 @@ Updating a row is done using an ``UPDATE`` statement:
    assignment: `simple_selection` '=' `term`
              : | `column_name` '=' `column_name` ( '+' | '-' ) `term`
              : | `column_name` '=' `list_literal` '+' `column_name`
-   simple_selection: `column_name`
-                   : | `column_name` '[' `term` ']'
-                   : | `column_name` '.' `field_name`
-   condition: `simple_selection` `operator` `term`
+    simple_selection: `column_name`
+                    : | `column_name` '[' `term` ']'
+                    : | `column_name` '.' `field_name`
+                    : | '(' '?' `native_type` ')' `simple_selection`
+    condition: `simple_selection` `operator` `term`
 
 For instance:
 
@@ -80,6 +81,23 @@ It is, however, possible to use the conditions on some columns through ``IF``, i
 unless the conditions are met. Each such ``UPDATE`` gets a globally unique timestamp.
 But, please note that using ``IF`` conditions will incur a non-negligible performance
 cost (internally, Paxos will be used), so this should be used sparingly.
+
+JSON field selection in IF conditions
+'''''''''''''''''''''''''''''''''''''
+
+Columns of the ``json`` type (see :ref:`native types <native-types>`) can be used in ``IF`` conditions with the
+``(?type)`` field selection syntax. This allows lightweight transactions to compare individual fields within a BSON
+document against expected values.
+
+The syntax mirrors the ``(?type)`` selector used in ``SELECT`` (see :ref:`selection clause <selection-clause>`), but
+applied within an ``IF`` condition::
+
+    UPDATE t SET v = 1 WHERE pk = 1 IF (?int)doc.age = 42
+    UPDATE t SET v = 1 WHERE pk = 1 IF (?text)doc.address.city = 'London'
+    UPDATE t SET v = 1 WHERE pk = 1 IF (?int)doc.scores[0] = 100
+
+If the field path does not exist or the value is not compatible with the requested type, the result is ``NULL``.
+You can test for missing fields using ``IF (?int)doc.field = null``.
 
 
 :doc:`Apache Cassandra Query Language (CQL) Reference </cql/index>`

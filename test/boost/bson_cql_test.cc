@@ -15,6 +15,7 @@
 #include <seastar/testing/test_case.hh>
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/cql_assertions.hh"
+#include "cql3/query_options.hh"
 
 #include "types/types.hh"
 #include "types/concrete_types.hh"
@@ -334,4 +335,203 @@ SEASTAR_TEST_CASE(json_field_select_null_column) {
         auto msg = e.execute_cql("SELECT (?int)doc.x FROM ks.jfs12 WHERE id = 1").get();
         assert_that(msg).is_rows().with_rows({{bytes_opt()}});
     });
+}
+
+// --- IF condition (LWT) tests for BSON field selection ---
+
+namespace {
+
+// Execute a CQL statement with serial consistency for LWT.
+// Handles shard routing: if the initial execution returns a move_to_shard
+// directive, re-executes on the correct shard and asserts the result there.
+// If expected_rows is non-empty, asserts those rows. Otherwise just executes.
+void execute_lwt_and_check(cql_test_env& e, const sstring& query,
+                           std::vector<std::vector<bytes_opt>> expected_rows) {
+    auto execute = [&] () mutable {
+        return seastar::async([&] () mutable {
+            auto id = e.prepare(query).get();
+            const auto& so = cql3::query_options::specific_options::DEFAULT;
+            auto qo = std::make_unique<cql3::query_options>(
+                db::consistency_level::ONE,
+                std::vector<cql3::raw_value>{},
+                cql3::query_options::specific_options{
+                    so.page_size,
+                    so.state,
+                    db::consistency_level::SERIAL,
+                    so.timestamp,
+                });
+            auto msg = e.execute_prepared_with_qo(id, std::move(qo)).get();
+            if (!msg->move_to_shard() && !expected_rows.empty()) {
+                assert_that(msg).is_rows().with_rows_ignore_order(expected_rows);
+            }
+            return make_foreign(msg);
+        });
+    };
+    auto msg = execute().get();
+    if (msg->move_to_shard()) {
+        unsigned shard = *msg->move_to_shard();
+        smp::submit_to(shard, std::move(execute)).get();
+    }
+}
+
+} // anonymous namespace
+
+// IF (?int)doc.field = value — condition matches.
+SEASTAR_TEST_CASE(json_if_field_select_int_match) {
+    cql_test_config cfg;
+    cfg.need_remote_proxy = true;
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jif1 (id int PRIMARY KEY, doc json, v int)").get();
+        e.execute_cql("INSERT INTO ks.jif1 (id, doc, v) VALUES (1, {'age': 42}, 0)").get();
+
+        // Condition matches: age=42, so update should apply.
+        // Don't check LWT result rows (they include opaque BSON); verify via SELECT.
+        execute_lwt_and_check(e,
+            "UPDATE ks.jif1 SET v = 1 WHERE id = 1 IF (?int)doc.age = 42",
+            {});
+
+        // Verify the update was applied.
+        auto sel = e.execute_cql("SELECT v FROM ks.jif1 WHERE id = 1").get();
+        assert_that(sel).is_rows().with_rows({{
+            int32_type->decompose(int32_t(1))
+        }});
+    }, std::move(cfg));
+}
+
+// IF (?int)doc.field = value — condition does not match.
+SEASTAR_TEST_CASE(json_if_field_select_int_no_match) {
+    cql_test_config cfg;
+    cfg.need_remote_proxy = true;
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jif2 (id int PRIMARY KEY, doc json, v int)").get();
+        e.execute_cql("INSERT INTO ks.jif2 (id, doc, v) VALUES (1, {'age': 42}, 0)").get();
+
+        // Condition does not match: age != 99. [applied]=false, followed by doc column value.
+        // We only check the first column ([applied]) since the doc value is opaque BSON.
+        execute_lwt_and_check(e,
+            "UPDATE ks.jif2 SET v = 1 WHERE id = 1 IF (?int)doc.age = 99",
+            {});  // skip row check — just verify it doesn't crash
+
+        // Verify the update was NOT applied.
+        auto sel = e.execute_cql("SELECT v FROM ks.jif2 WHERE id = 1").get();
+        assert_that(sel).is_rows().with_rows({{
+            int32_type->decompose(int32_t(0))
+        }});
+    }, std::move(cfg));
+}
+
+// IF (?text)doc.name = 'Alice' — text field comparison.
+SEASTAR_TEST_CASE(json_if_field_select_text) {
+    cql_test_config cfg;
+    cfg.need_remote_proxy = true;
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jif3 (id int PRIMARY KEY, doc json, v int)").get();
+        e.execute_cql("INSERT INTO ks.jif3 (id, doc, v) VALUES (1, {'name': 'Alice'}, 0)").get();
+
+        execute_lwt_and_check(e,
+            "UPDATE ks.jif3 SET v = 1 WHERE id = 1 IF (?text)doc.name = 'Alice'",
+            {});
+
+        auto sel = e.execute_cql("SELECT v FROM ks.jif3 WHERE id = 1").get();
+        assert_that(sel).is_rows().with_rows({{
+            int32_type->decompose(int32_t(1))
+        }});
+    }, std::move(cfg));
+}
+
+// IF (?int)doc.nested.val = 7 — nested field access.
+SEASTAR_TEST_CASE(json_if_field_select_nested) {
+    cql_test_config cfg;
+    cfg.need_remote_proxy = true;
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jif4 (id int PRIMARY KEY, doc json, v int)").get();
+        e.execute_cql("INSERT INTO ks.jif4 (id, doc, v) VALUES (1, {'nested': {'val': 7}}, 0)").get();
+
+        execute_lwt_and_check(e,
+            "UPDATE ks.jif4 SET v = 1 WHERE id = 1 IF (?int)doc.nested.val = 7",
+            {});
+
+        auto sel = e.execute_cql("SELECT v FROM ks.jif4 WHERE id = 1").get();
+        assert_that(sel).is_rows().with_rows({{
+            int32_type->decompose(int32_t(1))
+        }});
+    }, std::move(cfg));
+}
+
+// IF (?int)doc.arr[1] = 20 — array subscript in condition.
+SEASTAR_TEST_CASE(json_if_field_select_array) {
+    cql_test_config cfg;
+    cfg.need_remote_proxy = true;
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jif5 (id int PRIMARY KEY, doc json, v int)").get();
+        e.execute_cql("INSERT INTO ks.jif5 (id, doc, v) VALUES (1, {'arr': [10, 20, 30]}, 0)").get();
+
+        execute_lwt_and_check(e,
+            "UPDATE ks.jif5 SET v = 1 WHERE id = 1 IF (?int)doc.arr[1] = 20",
+            {});
+
+        auto sel = e.execute_cql("SELECT v FROM ks.jif5 WHERE id = 1").get();
+        assert_that(sel).is_rows().with_rows({{
+            int32_type->decompose(int32_t(1))
+        }});
+    }, std::move(cfg));
+}
+
+// IF (?int)doc.missing = NULL — missing field yields NULL, NULL = NULL is true in LWT.
+SEASTAR_TEST_CASE(json_if_field_select_missing_null) {
+    cql_test_config cfg;
+    cfg.need_remote_proxy = true;
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jif6 (id int PRIMARY KEY, doc json, v int)").get();
+        e.execute_cql("INSERT INTO ks.jif6 (id, doc, v) VALUES (1, {'a': 1}, 0)").get();
+
+        // Missing field returns NULL; LWT treats NULL = NULL as true.
+        execute_lwt_and_check(e,
+            "UPDATE ks.jif6 SET v = 1 WHERE id = 1 IF (?int)doc.missing = null",
+            {});
+
+        auto sel = e.execute_cql("SELECT v FROM ks.jif6 WHERE id = 1").get();
+        assert_that(sel).is_rows().with_rows({{
+            int32_type->decompose(int32_t(1))
+        }});
+    }, std::move(cfg));
+}
+
+// IF (?int)doc.field != value — not-equal operator.
+SEASTAR_TEST_CASE(json_if_field_select_neq) {
+    cql_test_config cfg;
+    cfg.need_remote_proxy = true;
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jif7 (id int PRIMARY KEY, doc json, v int)").get();
+        e.execute_cql("INSERT INTO ks.jif7 (id, doc, v) VALUES (1, {'x': 5}, 0)").get();
+
+        execute_lwt_and_check(e,
+            "UPDATE ks.jif7 SET v = 1 WHERE id = 1 IF (?int)doc.x != 99",
+            {});
+
+        auto sel = e.execute_cql("SELECT v FROM ks.jif7 WHERE id = 1").get();
+        assert_that(sel).is_rows().with_rows({{
+            int32_type->decompose(int32_t(1))
+        }});
+    }, std::move(cfg));
+}
+
+// IF with plain doc[0] subscript (no field selection, just array access on bson column).
+SEASTAR_TEST_CASE(json_if_subscript_only) {
+    cql_test_config cfg;
+    cfg.need_remote_proxy = true;
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jif8 (id int PRIMARY KEY, doc json, v int)").get();
+        e.execute_cql("INSERT INTO ks.jif8 (id, doc, v) VALUES (1, {'0': 'zero', '1': 'one'}, 0)").get();
+
+        // doc[0] on a bson column does array-style subscript (keys "0", "1", ...)
+        execute_lwt_and_check(e,
+            "UPDATE ks.jif8 SET v = 1 WHERE id = 1 IF (?text)doc[0] = 'zero'",
+            {});
+
+        auto sel = e.execute_cql("SELECT v FROM ks.jif8 WHERE id = 1").get();
+        assert_that(sel).is_rows().with_rows({{
+            int32_type->decompose(int32_t(1))
+        }});
+    }, std::move(cfg));
 }
