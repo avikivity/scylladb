@@ -541,8 +541,9 @@ scylla_tests = set([
     'test/boost/bloom_filter_test',
     'test/boost/bptree_test',
     'test/boost/broken_sstable_test',
-    'test/boost/btree_test',
-    'test/boost/bytes_ostream_test',
+     'test/boost/bson_test',
+     'test/boost/btree_test',
+     'test/boost/bytes_ostream_test',
     'test/boost/cache_mutation_reader_test',
     'test/boost/cached_file_test',
     'test/boost/caching_options_test',
@@ -1793,6 +1794,15 @@ deps['test/boost/combined_tests'] += [
     'test/lib/dummy_sharder.cc',
 ]
 
+deps['test/boost/bson_test'] = [
+    "test/boost/bson_test.cc",
+    "bytes.cc",
+    "utils/managed_bytes.cc",
+    "utils/logalloc.cc",
+    "utils/labels.cc",
+    "utils/dynamic_bitset.cc",
+    "test/lib/log.cc",
+]
 deps['test/boost/bytes_ostream_test'] = [
     "test/boost/bytes_ostream_test.cc",
     "bytes.cc",
