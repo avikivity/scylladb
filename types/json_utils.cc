@@ -8,6 +8,7 @@
 
 #include "types/json_utils.hh"
 #include "types/concrete_types.hh"
+#include "utils/bson.hh"
 #include "mutation/counters.hh"
 #include "types/vector.hh"
 #include "utils/rjson.hh"
@@ -552,6 +553,153 @@ static sstring to_json_string_aux(const user_type_impl& t, bytes_view bv) {
     return std::move(out).str();
 }
 
+// Convert a BSON value to a JSON string representation, using the BSON reader.
+// Handles documents (as JSON objects), arrays, and all scalar types.
+template <FragmentedView View>
+static void bson_value_to_json(std::ostringstream& out, bson::type t, const bson::element<View>& elem);
+
+template <FragmentedView View>
+static void bson_doc_to_json(std::ostringstream& out, View view, bool is_array) {
+    bson::reader rdr(view);
+    out << (is_array ? '[' : '{');
+    bool first = true;
+    for (auto&& e : rdr) {
+        if (!first) {
+            out << ", ";
+        }
+        first = false;
+        if (!is_array) {
+            out << quote_json_string(e.key) << ": ";
+        }
+        bson_value_to_json(out, e.type, e);
+    }
+    out << (is_array ? ']' : '}');
+}
+
+template <FragmentedView View>
+static void bson_value_to_json(std::ostringstream& out, bson::type t, const bson::element<View>& elem) {
+    switch (t) {
+    case bson::type::double_value: {
+        double d = elem.as_double();
+        if (std::isnan(d) || std::isinf(d)) {
+            out << "null";
+        } else {
+            out << d;
+        }
+        break;
+    }
+    case bson::type::string:
+    case bson::type::javascript:
+        out << quote_json_string(elem.as_string());
+        break;
+    case bson::type::document:
+        bson_doc_to_json(out, elem.as_document(), false);
+        break;
+    case bson::type::array:
+        bson_doc_to_json(out, elem.as_document(), true);
+        break;
+    case bson::type::binary: {
+        // Encode as {"$binary": {"base64": "...", "subType": "XX"}}
+        auto bin = elem.as_binary();
+        auto subtype = elem.binary_subtype();
+        out << "{\"$binary\": {\"base64\": \"";
+        // Read binary data and base64-encode it
+        std::vector<uint8_t> buf(bin.size_bytes());
+        if (!buf.empty()) {
+            auto tmp = bin;
+            read_fragmented(tmp, buf.size(),
+                reinterpret_cast<bytes::value_type*>(buf.data()));
+        }
+        static constexpr char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        size_t i = 0;
+        for (; i + 2 < buf.size(); i += 3) {
+            out << b64[(buf[i] >> 2) & 0x3f]
+                << b64[((buf[i] & 0x03) << 4) | ((buf[i+1] >> 4) & 0x0f)]
+                << b64[((buf[i+1] & 0x0f) << 2) | ((buf[i+2] >> 6) & 0x03)]
+                << b64[buf[i+2] & 0x3f];
+        }
+        if (i < buf.size()) {
+            out << b64[(buf[i] >> 2) & 0x3f];
+            if (i + 1 < buf.size()) {
+                out << b64[((buf[i] & 0x03) << 4) | ((buf[i+1] >> 4) & 0x0f)]
+                    << b64[((buf[i+1] & 0x0f) << 2)]
+                    << '=';
+            } else {
+                out << b64[((buf[i] & 0x03) << 4)]
+                    << "==";
+            }
+        }
+        out << "\", \"subType\": \"" << fmt::format("{:02x}", subtype) << "\"}}";
+        break;
+    }
+    case bson::type::object_id: {
+        auto oid = elem.as_object_id();
+        uint8_t buf[12];
+        auto tmp = oid;
+        read_fragmented(tmp, 12, reinterpret_cast<bytes::value_type*>(buf));
+        out << "{\"$oid\": \"";
+        for (int i = 0; i < 12; ++i) {
+            out << fmt::format("{:02x}", buf[i]);
+        }
+        out << "\"}";
+        break;
+    }
+    case bson::type::boolean:
+        out << (elem.as_bool() ? "true" : "false");
+        break;
+    case bson::type::datetime:
+        out << "{\"$date\": {\"$numberLong\": \"" << elem.as_datetime() << "\"}}";
+        break;
+    case bson::type::null:
+        out << "null";
+        break;
+    case bson::type::regex:
+        out << "{\"$regularExpression\": {\"pattern\": "
+            << quote_json_string(elem.as_regex_pattern())
+            << ", \"options\": "
+            << quote_json_string(elem.as_regex_options())
+            << "}}";
+        break;
+    case bson::type::int32:
+        out << elem.as_int32();
+        break;
+    case bson::type::timestamp: {
+        uint64_t ts = elem.as_timestamp();
+        uint32_t t_val = static_cast<uint32_t>(ts >> 32);
+        uint32_t i_val = static_cast<uint32_t>(ts & 0xFFFFFFFF);
+        out << "{\"$timestamp\": {\"t\": " << t_val << ", \"i\": " << i_val << "}}";
+        break;
+    }
+    case bson::type::int64:
+        out << elem.as_int64();
+        break;
+    case bson::type::decimal128: {
+        auto d = elem.as_decimal128();
+        uint8_t buf[16];
+        auto tmp = d;
+        read_fragmented(tmp, 16, reinterpret_cast<bytes::value_type*>(buf));
+        out << "{\"$numberDecimal\": \"";
+        for (int i = 0; i < 16; ++i) {
+            out << fmt::format("{:02x}", buf[i]);
+        }
+        out << "\"}";
+        break;
+    }
+    case bson::type::max_key:
+        out << "{\"$maxKey\": 1}";
+        break;
+    case bson::type::min_key:
+        out << "{\"$minKey\": 1}";
+        break;
+    }
+}
+
+static sstring bson_to_json_string(bytes_view bv) {
+    std::ostringstream out;
+    bson_doc_to_json(out, single_fragmented_view(bv), false);
+    return std::move(out).str();
+}
+
 namespace {
 struct to_json_string_visitor {
     bytes_view bv;
@@ -572,7 +720,7 @@ struct to_json_string_visitor {
     sstring operator()(const inet_addr_type_impl& t) { return quote_json_string(t.to_string(bv)); }
     sstring operator()(const string_type_impl& t) { return quote_json_string(t.to_string(bv)); }
     sstring operator()(const bytes_type_impl& t) { return quote_json_string("0x" + t.to_string(bv)); }
-    sstring operator()(const bson_type_impl& t) { return quote_json_string("0x" + t.to_string(bv)); }
+    sstring operator()(const bson_type_impl& t) { return bson_to_json_string(bv); }
     sstring operator()(const boolean_type_impl& t) { return t.to_string(bv); }
     sstring operator()(const timestamp_date_base_class& t) { return quote_json_string(timestamp_to_json_string(t, bv)); }
     sstring operator()(const timeuuid_type_impl& t) { return quote_json_string(t.to_string(bv)); }
@@ -641,7 +789,7 @@ struct to_json_type_visitor {
     rjson::type operator()(const inet_addr_type_impl& t) { return rjson::type::kStringType; }
     rjson::type operator()(const string_type_impl& t) { return rjson::type::kStringType; }
     rjson::type operator()(const bytes_type_impl& t) { return rjson::type::kStringType; }
-    rjson::type operator()(const bson_type_impl& t) { return rjson::type::kStringType; }
+    rjson::type operator()(const bson_type_impl& t) { return rjson::type::kObjectType; }
     rjson::type operator()(const boolean_type_impl& t) {
         const auto val = t.to_string(linearized(bv));
         return val == "true" ? rjson::type::kTrueType : rjson::type::kFalseType;

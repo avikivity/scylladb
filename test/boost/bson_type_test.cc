@@ -164,14 +164,95 @@ SEASTAR_THREAD_TEST_CASE(bson_compare_empty) {
     BOOST_REQUIRE(!bson_type->less(raw, empty));
 }
 
-// JSON: to_json_string produces "0x" + hex.
-SEASTAR_THREAD_TEST_CASE(bson_to_json) {
+// JSON: to_json_string produces a human-readable JSON object.
+SEASTAR_THREAD_TEST_CASE(bson_to_json_hello_world) {
     auto raw = hello_world_bson();
     auto json = to_json_string(*bson_type, raw);
+    BOOST_REQUIRE_EQUAL(json, "{\"hello\": \"world\"}");
+}
 
-    auto hex = to_hex(raw);
-    auto expected = "\"0x" + hex + "\"";
-    BOOST_REQUIRE_EQUAL(json, expected);
+// JSON: to_json_string with multiple element types.
+SEASTAR_THREAD_TEST_CASE(bson_to_json_mixed_types) {
+    bson::writer w;
+    w.add_int32("i", 42);
+    w.add_string("s", "test");
+    w.add_bool("b", true);
+    w.add_null("n");
+    w.add_double("d", 3.14);
+    auto doc = std::move(w).finish();
+    auto raw = to_bytes(managed_bytes_view(doc.as_managed_bytes()));
+    auto json = to_json_string(*bson_type, raw);
+    // Verify it starts and ends correctly and contains all keys
+    BOOST_REQUIRE(json.find("\"i\": 42") != sstring::npos);
+    BOOST_REQUIRE(json.find("\"s\": \"test\"") != sstring::npos);
+    BOOST_REQUIRE(json.find("\"b\": true") != sstring::npos);
+    BOOST_REQUIRE(json.find("\"n\": null") != sstring::npos);
+    BOOST_REQUIRE(json.find("\"d\": 3.14") != sstring::npos);
+}
+
+// JSON: to_json_string with nested document.
+SEASTAR_THREAD_TEST_CASE(bson_to_json_nested) {
+    bson::writer inner;
+    inner.add_int32("x", 1);
+    auto inner_doc = std::move(inner).finish();
+    bson::writer outer;
+    outer.add_document("nested", inner_doc);
+    auto doc = std::move(outer).finish();
+    auto raw = to_bytes(managed_bytes_view(doc.as_managed_bytes()));
+    auto json = to_json_string(*bson_type, raw);
+    BOOST_REQUIRE_EQUAL(json, "{\"nested\": {\"x\": 1}}");
+}
+
+// JSON: to_json_string with array.
+SEASTAR_THREAD_TEST_CASE(bson_to_json_array) {
+    bson::writer arr;
+    arr.add_int32("0", 10);
+    arr.add_int32("1", 20);
+    arr.add_int32("2", 30);
+    auto arr_doc = std::move(arr).finish();
+    bson::writer outer;
+    outer.add_array("nums", arr_doc);
+    auto doc = std::move(outer).finish();
+    auto raw = to_bytes(managed_bytes_view(doc.as_managed_bytes()));
+    auto json = to_json_string(*bson_type, raw);
+    BOOST_REQUIRE_EQUAL(json, "{\"nums\": [10, 20, 30]}");
+}
+
+// JSON: to_json_string with empty document.
+SEASTAR_THREAD_TEST_CASE(bson_to_json_empty_doc) {
+    auto raw = empty_bson();
+    auto json = to_json_string(*bson_type, raw);
+    BOOST_REQUIRE_EQUAL(json, "{}");
+}
+
+// JSON: to_json_string with int64.
+SEASTAR_THREAD_TEST_CASE(bson_to_json_int64) {
+    bson::writer w;
+    w.add_int64("big", int64_t(1) << 40);
+    auto doc = std::move(w).finish();
+    auto raw = to_bytes(managed_bytes_view(doc.as_managed_bytes()));
+    auto json = to_json_string(*bson_type, raw);
+    BOOST_REQUIRE_EQUAL(json, "{\"big\": 1099511627776}");
+}
+
+// JSON: to_json_string with boolean false.
+SEASTAR_THREAD_TEST_CASE(bson_to_json_bool_false) {
+    bson::writer w;
+    w.add_bool("f", false);
+    auto doc = std::move(w).finish();
+    auto raw = to_bytes(managed_bytes_view(doc.as_managed_bytes()));
+    auto json = to_json_string(*bson_type, raw);
+    BOOST_REQUIRE_EQUAL(json, "{\"f\": false}");
+}
+
+// JSON: to_json_string with string needing escaping.
+SEASTAR_THREAD_TEST_CASE(bson_to_json_escape) {
+    bson::writer w;
+    w.add_string("s", "hello\"world\n");
+    auto doc = std::move(w).finish();
+    auto raw = to_bytes(managed_bytes_view(doc.as_managed_bytes()));
+    auto json = to_json_string(*bson_type, raw);
+    BOOST_REQUIRE_EQUAL(json, "{\"s\": \"hello\\\"world\\n\"}");
 }
 
 // JSON: from_json_object parses "0x"-prefixed hex back to bytes.
@@ -186,13 +267,14 @@ SEASTAR_THREAD_TEST_CASE(bson_from_json) {
     BOOST_REQUIRE(bson_type->equal(parsed, raw));
 }
 
-// JSON round-trip: to_json_string → parse → from_json_object.
-SEASTAR_THREAD_TEST_CASE(bson_json_round_trip) {
+// JSON: from_json_object still accepts "0x"-prefixed hex.
+SEASTAR_THREAD_TEST_CASE(bson_from_json_hex) {
     auto raw = hello_world_bson();
-    auto json = to_json_string(*bson_type, raw);
-    auto json_val = rjson::parse(json);
-    auto recovered = from_json_object(*bson_type, json_val);
-    BOOST_REQUIRE(bson_type->equal(recovered, raw));
+    auto hex = to_hex(raw);
+    auto json_str = "\"0x" + hex + "\"";
+    auto json_val = rjson::parse(json_str);
+    auto parsed = from_json_object(*bson_type, json_val);
+    BOOST_REQUIRE(bson_type->equal(parsed, raw));
 }
 
 // from_json_object rejects strings without the "0x" prefix.
