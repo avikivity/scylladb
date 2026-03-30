@@ -1,0 +1,13 @@
+CompileFlags:
+  CompilationDatabase: build/dev/
+  Remove:
+    - -Xclang
+    - -include-pch
+    - build/dev/stdafx.hh.pch
+    - -Winvalid-pch
+    - -fpch-validate-input-files-content
+  Add:
+    - -DSCYLLA_USE_PRECOMPILED_HEADER
+    - -include
+    - stdafx.hh
+    - -Wno-error
