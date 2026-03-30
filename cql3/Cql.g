@@ -1856,7 +1856,8 @@ columnRefExpr returns [uexpression e]
     ;
 
 subscriptExpr returns [uexpression e]
-    : col=columnRefExpr { e = std::move(col); }
+    : ( '(' '?' t=native_type ')' )?
+      col=columnRefExpr { e = std::move(col); }
         ( '[' sub=term ']'  { e = subscript{std::move(e), std::move(sub)}; }
         | '.' fi=cident     { e = field_selection{std::move(e), std::move(fi)}; }
         )*
@@ -1928,6 +1929,7 @@ relation returns [uexpression e]
     @init{
         oper_t rt;
         nesting_guard guard(*this);
+        uexpression lhs;
     }
     : K_TOKEN l=tupleOfIdentifiers type=relationType t=term
         {
@@ -1936,7 +1938,8 @@ relation returns [uexpression e]
             type,
             std::move(t));
         }
-    | name=cident
+    | ( '(' '?' ct=native_type ')' )?
+      name=cident { lhs = unresolved_identifier{name}; }
       ( ('.' fn=allowedFunctionName)? fn_args=selectionFunctionArgs type=relationType t=term
         {
           sstring ks = fn.empty() ? "" : name->text();
@@ -1946,28 +1949,32 @@ relation returns [uexpression e]
             type,
             std::move(t));
         }
-      | type=relationType t=term { $e = binary_operator(unresolved_identifier{std::move(name)}, type, std::move(t)); }
-      | K_IS K_NOT K_NULL {
-            $e = binary_operator(unresolved_identifier{std::move(name)}, oper_t::IS_NOT, make_untyped_null()); }
-      | K_IN marker1=marker
-          { $e = binary_operator(unresolved_identifier{std::move(name)}, oper_t::IN, std::move(marker1)); }
-      | K_IN in_values=singleColumnInValues
-          { $e = binary_operator(unresolved_identifier{std::move(name)}, oper_t::IN,
-          collection_constructor {
-              .style = collection_constructor::style_type::list_or_vector,
-              .elements = std::move(in_values)
-          }); }
-      | K_NOT K_IN marker1=marker
-          { $e = binary_operator(unresolved_identifier{std::move(name)}, oper_t::NOT_IN, std::move(marker1)); }
-      | K_NOT K_IN in_values=singleColumnInValues
-          { $e = binary_operator(unresolved_identifier{std::move(name)}, oper_t::NOT_IN,
-          collection_constructor {
-              .style = collection_constructor::style_type::list_or_vector,
-              .elements = std::move(in_values)
-          }); }
-      | K_CONTAINS { rt = oper_t::CONTAINS; } (K_KEY { rt = oper_t::CONTAINS_KEY; })?
-          t=term { $e = binary_operator(unresolved_identifier{std::move(name)}, rt, std::move(t)); }
-      | '[' key=term ']' type=relationType t=term { $e = binary_operator(subscript{.val = unresolved_identifier{std::move(name)}, .sub = std::move(key)}, type, std::move(t)); }
+      | ( '.' fi=cident { lhs = field_selection{std::move(lhs), std::move(fi)}; }
+        | '[' sub=term ']' { lhs = subscript{std::move(lhs), std::move(sub)}; }
+        )*
+        { if (ct) { lhs = cast{.style = cast::cast_style::c, .arg = std::move(lhs), .type = std::move(ct)}; } }
+        ( type=relationType t=term { $e = binary_operator(std::move(lhs), type, std::move(t)); }
+        | K_IS K_NOT K_NULL {
+              $e = binary_operator(std::move(lhs), oper_t::IS_NOT, make_untyped_null()); }
+        | K_IN marker1=marker
+            { $e = binary_operator(std::move(lhs), oper_t::IN, std::move(marker1)); }
+        | K_IN in_values=singleColumnInValues
+            { $e = binary_operator(std::move(lhs), oper_t::IN,
+            collection_constructor {
+                .style = collection_constructor::style_type::list_or_vector,
+                .elements = std::move(in_values)
+            }); }
+        | K_NOT K_IN marker1=marker
+            { $e = binary_operator(std::move(lhs), oper_t::NOT_IN, std::move(marker1)); }
+        | K_NOT K_IN in_values=singleColumnInValues
+            { $e = binary_operator(std::move(lhs), oper_t::NOT_IN,
+            collection_constructor {
+                .style = collection_constructor::style_type::list_or_vector,
+                .elements = std::move(in_values)
+            }); }
+        | K_CONTAINS { rt = oper_t::CONTAINS; } (K_KEY { rt = oper_t::CONTAINS_KEY; })?
+            t=term { $e = binary_operator(std::move(lhs), rt, std::move(t)); }
+        )
       )
     | ids=tupleOfIdentifiers
       ( K_IN

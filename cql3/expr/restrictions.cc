@@ -237,8 +237,16 @@ binary_operator validate_and_prepare_new_restriction(const binary_operator& rest
         validate_single_column_relation(*col_val, prepared_binop.op, *schema, false);
     } else if (auto sub = as_if<subscript>(&prepared_binop.lhs)) {
         // Subscripted single column restriction
-        const column_value& sub_col = get_subscripted_column(*sub);
-        validate_single_column_relation(sub_col, prepared_binop.op, *schema, true);
+        if (is<column_value>(sub->val)) {
+            const column_value& sub_col = get_subscripted_column(*sub);
+            // BSON subscript (e.g. (?text)doc[0]) — no collection validation needed.
+            if (&sub_col.col->type->without_reversed() != bson_type.get()) {
+                validate_single_column_relation(sub_col, prepared_binop.op, *schema, true);
+            }
+        }
+        // else: BSON subscript on field_selection (e.g. doc.arr[0]) — no additional validation needed.
+    } else if (as_if<field_selection>(&prepared_binop.lhs)) {
+        // BSON field selection (e.g. (?int)doc.age = 42) — no additional validation needed.
     } else if (auto multi_col_tuple = as_if<tuple_constructor>(&prepared_binop.lhs)) {
         // Multi column restriction
         std::vector<const column_definition*> lhs_cols = to_column_definitions(multi_col_tuple->elements);

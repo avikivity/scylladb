@@ -435,6 +435,10 @@ to_predicates(
                             });
                         },
                         [&] (const subscript& s) -> std::vector<predicate> {
+                            if (!expr::is<column_value>(s.val)) {
+                                // BSON subscripts can't narrow the search space.
+                                return cannot_solve(oper);
+                            }
                             const column_value& col = get_subscripted_column(s);
 
                             if (oper.op == oper_t::EQ) {
@@ -533,8 +537,17 @@ to_predicates(
                         [&] (const column_mutation_attribute&) -> std::vector<predicate> {
                             return cannot_solve(oper);
                         },
+<<<<<<< HEAD
                         [&] (const cast&) -> std::vector<predicate> {
                             return cannot_solve(oper);
+||||||| parent of caa43734a62 (cql3: support BSON field selection and array access in WHERE clauses)
+                        [] (const field_selection&) -> value_set {
+                            on_internal_error(expr_logger, "possible_lhs_values: field selections are not supported as the LHS of a binary expression");
+=======
+                        [] (const field_selection&) -> value_set {
+                            // BSON field selections can't narrow the search space.
+                            return unbounded_value_set;
+>>>>>>> caa43734a62 (cql3: support BSON field selection and array access in WHERE clauses)
                         },
                         [&] (const field_selection&) -> std::vector<predicate> {
                             return cannot_solve(oper);
@@ -577,8 +590,17 @@ to_predicates(
             [] (const cast& c) -> std::vector<predicate> {
                 return cannot_solve(c);
             },
+<<<<<<< HEAD
             [] (const field_selection& fs) -> std::vector<predicate> {
                 return cannot_solve(fs);
+||||||| parent of caa43734a62 (cql3: support BSON field selection and array access in WHERE clauses)
+            [] (const field_selection&) -> value_set {
+                on_internal_error(expr_logger, "possible_lhs_values: a field selection cannot serve as a restriction by itself");
+=======
+            [] (const field_selection&) -> value_set {
+                // BSON field selections can't narrow the search space.
+                return unbounded_value_set;
+>>>>>>> caa43734a62 (cql3: support BSON field selection and array access in WHERE clauses)
             },
             [] (const bind_variable& bv) -> std::vector<predicate> {
                 return cannot_solve(bv);
@@ -715,6 +737,7 @@ static bool index_supports_some_column(
         allow_local_index allow_local,
         const std::optional<sstring>& pinned_index_name) {
     using namespace secondary_index;
+<<<<<<< HEAD
     for (auto& [col, preds] : per_column_predicates) {
         for (const auto& idx : index_manager.list_indexes()) {
             if (!allow_local && idx.metadata().local()) {
@@ -737,6 +760,214 @@ static bool index_supports_some_column(
             if (result) {
                 return true;
             }
+||||||| parent of caa43734a62 (cql3: support BSON field selection and array access in WHERE clauses)
+    return expr::visit(overloaded_functor{
+            [&] (const conjunction& conj) -> ret_t {
+                if (conj.children.empty()) {
+                    return index::supports_expression_v::from_bool(true);
+                }
+                auto init = is_supported_by_helper(conj.children[0], idx);
+                return std::accumulate(std::begin(conj.children) + 1, std::end(conj.children), init, 
+                        [&] (ret_t acc, const expression& child) -> ret_t {
+                            return acc && is_supported_by_helper(child, idx);
+                });
+            },
+            [&] (const binary_operator& oper) {
+                return expr::visit(overloaded_functor{
+                        [&] (const column_value& col) {
+                            return idx.supports_expression(*col.col, oper.op);
+                        },
+                        [&] (const tuple_constructor& tuple) {
+                            if (tuple.elements.size() == 1) {
+                                if (auto column = expr::as_if<column_value>(&tuple.elements[0])) {
+                                    return idx.supports_expression(*column->col, oper.op);
+                                }
+                            }
+                            // We don't use index table for multi-column restrictions, as it cannot avoid filtering.
+                            return index::supports_expression_v::from_bool(false);
+                        },
+                        [&] (const function_call&) { return index::supports_expression_v::from_bool(false); },
+                        [&] (const subscript& s) -> ret_t {
+                            const column_value& col = get_subscripted_column(s);
+                            return idx.supports_subscript_expression(*col.col, oper.op);
+                        },
+                        [&] (const binary_operator&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: nested binary operators are not supported");
+                        },
+                        [&] (const conjunction&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: conjunctions are not supported as the LHS of a binary expression");
+                        },
+                        [] (const constant&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: constants are not supported as the LHS of a binary expression");
+                        },
+                        [] (const unresolved_identifier&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: an unresolved identifier is not supported as the LHS of a binary expression");
+                        },
+                        [&] (const column_mutation_attribute&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: writetime/ttl are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const cast&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: typecasts are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const field_selection&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: field selections are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const bind_variable&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: bind variables are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const untyped_constant&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: untyped constants are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const collection_constructor&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: collection constructors are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const usertype_constructor&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: user type constructors are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const temporary&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: temporaries are not supported as the LHS of a binary expression");
+                        },
+                    }, oper.lhs);
+            },
+            [] (const auto& default_case) { return index::supports_expression_v::from_bool(false); }
+        }, expr);
+}
+}
+
+bool is_supported_by(const expression& expr, const secondary_index::index& idx) {
+    auto s = is_supported_by_helper(expr, idx);
+    return s != secondary_index::index::supports_expression_v::from_bool(false);
+}
+
+
+bool has_supporting_index(
+        const expression& expr,
+        const secondary_index::secondary_index_manager& index_manager,
+        allow_local_index allow_local) {
+    const auto indexes = index_manager.list_indexes();
+    const auto support = std::bind(is_supported_by, std::ref(expr), std::placeholders::_1);
+    return allow_local ? std::ranges::any_of(indexes, support)
+            : std::ranges::any_of(
+                    indexes | std::views::filter([] (const secondary_index::index& i) { return !i.metadata().local(); }),
+                    support);
+}
+
+bool index_supports_some_column(
+        const expression& e,
+        const secondary_index::secondary_index_manager& index_manager,
+        allow_local_index allow_local) {
+    single_column_restrictions_map single_col_restrictions = get_single_column_restrictions_map(e);
+
+    for (auto&& [col, col_restrictions] : single_col_restrictions) {
+        if (has_supporting_index(col_restrictions, index_manager, allow_local)) {
+            return true;
+=======
+    return expr::visit(overloaded_functor{
+            [&] (const conjunction& conj) -> ret_t {
+                if (conj.children.empty()) {
+                    return index::supports_expression_v::from_bool(true);
+                }
+                auto init = is_supported_by_helper(conj.children[0], idx);
+                return std::accumulate(std::begin(conj.children) + 1, std::end(conj.children), init, 
+                        [&] (ret_t acc, const expression& child) -> ret_t {
+                            return acc && is_supported_by_helper(child, idx);
+                });
+            },
+            [&] (const binary_operator& oper) {
+                return expr::visit(overloaded_functor{
+                        [&] (const column_value& col) {
+                            return idx.supports_expression(*col.col, oper.op);
+                        },
+                        [&] (const tuple_constructor& tuple) {
+                            if (tuple.elements.size() == 1) {
+                                if (auto column = expr::as_if<column_value>(&tuple.elements[0])) {
+                                    return idx.supports_expression(*column->col, oper.op);
+                                }
+                            }
+                            // We don't use index table for multi-column restrictions, as it cannot avoid filtering.
+                            return index::supports_expression_v::from_bool(false);
+                        },
+                        [&] (const function_call&) { return index::supports_expression_v::from_bool(false); },
+                        [&] (const subscript& s) -> ret_t {
+                            if (!expr::is<column_value>(s.val)) {
+                                // BSON subscripts are not supported by secondary indexes.
+                                return index::supports_expression_v::from_bool(false);
+                            }
+                            const column_value& col = get_subscripted_column(s);
+                            return idx.supports_subscript_expression(*col.col, oper.op);
+                        },
+                        [&] (const binary_operator&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: nested binary operators are not supported");
+                        },
+                        [&] (const conjunction&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: conjunctions are not supported as the LHS of a binary expression");
+                        },
+                        [] (const constant&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: constants are not supported as the LHS of a binary expression");
+                        },
+                        [] (const unresolved_identifier&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: an unresolved identifier is not supported as the LHS of a binary expression");
+                        },
+                        [&] (const column_mutation_attribute&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: writetime/ttl are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const cast&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: typecasts are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const field_selection&) -> ret_t {
+                            // BSON field selections are not supported by secondary indexes.
+                            return index::supports_expression_v::from_bool(false);
+                        },
+                        [&] (const bind_variable&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: bind variables are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const untyped_constant&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: untyped constants are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const collection_constructor&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: collection constructors are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const usertype_constructor&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: user type constructors are not supported as the LHS of a binary expression");
+                        },
+                        [&] (const temporary&) -> ret_t {
+                            on_internal_error(expr_logger, "is_supported_by: temporaries are not supported as the LHS of a binary expression");
+                        },
+                    }, oper.lhs);
+            },
+            [] (const auto& default_case) { return index::supports_expression_v::from_bool(false); }
+        }, expr);
+}
+}
+
+bool is_supported_by(const expression& expr, const secondary_index::index& idx) {
+    auto s = is_supported_by_helper(expr, idx);
+    return s != secondary_index::index::supports_expression_v::from_bool(false);
+}
+
+
+bool has_supporting_index(
+        const expression& expr,
+        const secondary_index::secondary_index_manager& index_manager,
+        allow_local_index allow_local) {
+    const auto indexes = index_manager.list_indexes();
+    const auto support = std::bind(is_supported_by, std::ref(expr), std::placeholders::_1);
+    return allow_local ? std::ranges::any_of(indexes, support)
+            : std::ranges::any_of(
+                    indexes | std::views::filter([] (const secondary_index::index& i) { return !i.metadata().local(); }),
+                    support);
+}
+
+bool index_supports_some_column(
+        const expression& e,
+        const secondary_index::secondary_index_manager& index_manager,
+        allow_local_index allow_local) {
+    single_column_restrictions_map single_col_restrictions = get_single_column_restrictions_map(e);
+
+    for (auto&& [col, col_restrictions] : single_col_restrictions) {
+        if (has_supporting_index(col_restrictions, index_manager, allow_local)) {
+            return true;
+>>>>>>> caa43734a62 (cql3: support BSON field selection and array access in WHERE clauses)
         }
     }
     return false;
@@ -771,6 +1002,124 @@ static bool multi_column_predicates_have_supporting_index(
                 }
             }
         }
+<<<<<<< HEAD
+||||||| parent of caa43734a62 (cql3: support BSON field selection and array access in WHERE clauses)
+
+        void operator()(const binary_operator& oper) {
+            if (current_binary_operator != nullptr) {
+                on_internal_error(expr_logger,
+                    "extract_single_column_restrictions_for_column: nested binary operators are not supported");
+            }
+
+            current_binary_operator = &oper;
+            expr::visit(*this, oper.lhs);
+            current_binary_operator = nullptr;
+        }
+
+        void operator()(const column_value& cv) {
+            if (*cv.col == column && current_binary_operator != nullptr) {
+                restrictions.emplace_back(*current_binary_operator);
+            }
+        }
+
+        void operator()(const subscript& s) {
+            const column_value& cv = get_subscripted_column(s);
+            if (*cv.col == column && current_binary_operator != nullptr) {
+                restrictions.emplace_back(*current_binary_operator);
+            }
+        }
+
+        void operator()(const unresolved_identifier&) {}
+        void operator()(const column_mutation_attribute&) {}
+        void operator()(const function_call&) {}
+        void operator()(const cast&) {}
+        void operator()(const field_selection&) {}
+        void operator()(const bind_variable&) {}
+        void operator()(const untyped_constant&) {}
+        void operator()(const tuple_constructor&) {}
+        void operator()(const collection_constructor&) {}
+        void operator()(const usertype_constructor&) {}
+        void operator()(const temporary&) {}
+    };
+
+    visitor v {
+        .restrictions = std::vector<expression>(),
+        .column = column,
+        .current_binary_operator = nullptr,
+    };
+
+    expr::visit(v, expr);
+
+    return std::move(v.restrictions);
+}
+
+static std::optional<std::reference_wrapper<const column_value>> get_single_column_restriction_column(const expression& e) {
+    if (find_in_expression<unresolved_identifier>(e, [](const auto&) {return true;})) {
+        on_internal_error(expr_logger,
+            seastar::format("get_single_column_restriction_column expects a prepared expression, but it's not: {}", e));
+=======
+
+        void operator()(const binary_operator& oper) {
+            if (current_binary_operator != nullptr) {
+                on_internal_error(expr_logger,
+                    "extract_single_column_restrictions_for_column: nested binary operators are not supported");
+            }
+
+            current_binary_operator = &oper;
+            expr::visit(*this, oper.lhs);
+            current_binary_operator = nullptr;
+        }
+
+        void operator()(const column_value& cv) {
+            if (*cv.col == column && current_binary_operator != nullptr) {
+                restrictions.emplace_back(*current_binary_operator);
+            }
+        }
+
+        void operator()(const subscript& s) {
+            if (!expr::is<column_value>(s.val)) {
+                // BSON subscript — recurse into val to find the underlying column.
+                expr::visit(*this, s.val);
+                return;
+            }
+            const column_value& cv = get_subscripted_column(s);
+            if (*cv.col == column && current_binary_operator != nullptr) {
+                restrictions.emplace_back(*current_binary_operator);
+            }
+        }
+
+        void operator()(const unresolved_identifier&) {}
+        void operator()(const column_mutation_attribute&) {}
+        void operator()(const function_call&) {}
+        void operator()(const cast&) {}
+        void operator()(const field_selection& fs) {
+            // For BSON field selection, recurse into the structure to find the underlying column.
+            expr::visit(*this, fs.structure);
+        }
+        void operator()(const bind_variable&) {}
+        void operator()(const untyped_constant&) {}
+        void operator()(const tuple_constructor&) {}
+        void operator()(const collection_constructor&) {}
+        void operator()(const usertype_constructor&) {}
+        void operator()(const temporary&) {}
+    };
+
+    visitor v {
+        .restrictions = std::vector<expression>(),
+        .column = column,
+        .current_binary_operator = nullptr,
+    };
+
+    expr::visit(v, expr);
+
+    return std::move(v.restrictions);
+}
+
+static std::optional<std::reference_wrapper<const column_value>> get_single_column_restriction_column(const expression& e) {
+    if (find_in_expression<unresolved_identifier>(e, [](const auto&) {return true;})) {
+        on_internal_error(expr_logger,
+            seastar::format("get_single_column_restriction_column expects a prepared expression, but it's not: {}", e));
+>>>>>>> caa43734a62 (cql3: support BSON field selection and array access in WHERE clauses)
     }
     return false;
 }
@@ -855,8 +1204,570 @@ statement_restrictions::statement_restrictions(private_tag, schema_ptr schema, b
     , _partition_range_is_simple(true)
 { }
 
+<<<<<<< HEAD
 statement_restrictions::statement_restrictions(private_tag,
         data_dictionary::database db,
+||||||| parent of caa43734a62 (cql3: support BSON field selection and array access in WHERE clauses)
+template <typename Visitor>
+concept visitor_with_binary_operator_context = requires (Visitor v) {
+    { v.current_binary_operator } -> std::convertible_to<const expr::binary_operator*>;
+};
+
+void with_current_binary_operator(
+        visitor_with_binary_operator_context auto& visitor,
+        std::invocable<const expr::binary_operator&> auto func) {
+    if (!visitor.current_binary_operator) {
+        throw std::logic_error("Evaluation expected within binary operator");
+    }
+    func(*visitor.current_binary_operator);
+}
+
+/// Every token, or if no tokens, an EQ/IN of every single PK column.
+static std::vector<expr::expression> extract_partition_range(
+        const expr::expression& where_clause, schema_ptr schema) {
+    using namespace expr;
+    struct extract_partition_range_visitor {
+        schema_ptr table_schema;
+        std::optional<expression> tokens;
+        std::unordered_map<const column_definition*, expression> single_column;
+        const binary_operator* current_binary_operator = nullptr;
+
+        void operator()(const conjunction& c) {
+            std::ranges::for_each(c.children, [this] (const expression& child) { expr::visit(*this, child); });
+        }
+
+        void operator()(const binary_operator& b) {
+            if (current_binary_operator) {
+                throw std::logic_error("Nested binary operators are not supported");
+            }
+            current_binary_operator = &b;
+            expr::visit(*this, b.lhs);
+            current_binary_operator = nullptr;
+        }
+
+        void operator()(const function_call& token_fun_call) {
+            if (!is_partition_token_for_schema(token_fun_call, *table_schema)) {
+                on_internal_error(rlogger, "extract_partition_range(function_call)");
+            }
+
+            with_current_binary_operator(*this, [&] (const binary_operator& b) {
+                if (tokens) {
+                    tokens = make_conjunction(std::move(*tokens), b);
+                } else {
+                    tokens = b;
+                }
+            });
+        }
+
+        void operator()(const column_value& cv) {
+            auto s = &cv;
+            with_current_binary_operator(*this, [&] (const binary_operator& b) {
+                if (s->col->is_partition_key() && (b.op == oper_t::EQ || b.op == oper_t::IN)) {
+                    const auto [it, inserted] = single_column.try_emplace(s->col, b);
+                    if (!inserted) {
+                        it->second = make_conjunction(std::move(it->second), b);
+                    }
+                }
+            });
+        }
+
+        void operator()(const tuple_constructor& s) {
+            // Partition key columns are not legal in tuples, so ignore tuples.
+        }
+
+        void operator()(const subscript& sub) {
+            const column_value& cval = get_subscripted_column(sub.val);
+
+            with_current_binary_operator(*this, [&] (const binary_operator& b) {
+                if (cval.col->is_partition_key() && (b.op == oper_t::EQ || b.op == oper_t::IN)) {
+                    const auto [it, inserted] = single_column.try_emplace(cval.col, b);
+                    if (!inserted) {
+                        it->second = make_conjunction(std::move(it->second), b);
+                    }
+                }
+            });
+        }
+
+        void operator()(const constant&) {}
+
+        void operator()(const unresolved_identifier&) {
+            on_internal_error(rlogger, "extract_partition_range(unresolved_identifier)");
+        }
+
+        void operator()(const column_mutation_attribute&) {
+            on_internal_error(rlogger, "extract_partition_range(column_mutation_attribute)");
+        }
+
+        void operator()(const cast&) {
+            on_internal_error(rlogger, "extract_partition_range(cast)");
+        }
+
+        void operator()(const field_selection&) {
+            on_internal_error(rlogger, "extract_partition_range(field_selection)");
+        }
+
+        void operator()(const bind_variable&) {
+            on_internal_error(rlogger, "extract_partition_range(bind_variable)");
+        }
+
+        void operator()(const untyped_constant&) {
+            on_internal_error(rlogger, "extract_partition_range(untyped_constant)");
+        }
+
+        void operator()(const collection_constructor&) {
+            on_internal_error(rlogger, "extract_partition_range(collection_constructor)");
+        }
+
+        void operator()(const usertype_constructor&) {
+            on_internal_error(rlogger, "extract_partition_range(usertype_constructor)");
+        }
+
+        void operator()(const temporary&) {
+            on_internal_error(rlogger, "extract_partition_range(temporary)");
+        }
+    };
+
+    extract_partition_range_visitor v {
+        .table_schema = schema
+    };
+
+    expr::visit(v, where_clause);
+    if (v.tokens) {
+        return {std::move(*v.tokens)};
+    }
+    if (v.single_column.size() == schema->partition_key_size()) {
+        return v.single_column | std::views::values | std::ranges::to<std::vector>();
+    }
+    return {};
+}
+
+/// Extracts where_clause atoms with clustering-column LHS and copies them to a vector.  These elements define the
+/// boundaries of any clustering slice that can possibly meet where_clause.  This vector can be calculated before
+/// binding expression markers, since LHS and operator are always known.
+static std::vector<expr::expression> extract_clustering_prefix_restrictions(
+        const expr::expression& where_clause, schema_ptr schema) {
+    using namespace expr;
+
+    /// Collects all clustering-column restrictions from an expression.  Presumes the expression only uses
+    /// conjunction to combine subexpressions.
+    struct visitor {
+        schema_ptr table_schema;
+        std::vector<expression> multi; ///< All multi-column restrictions.
+        /// All single-clustering-column restrictions, grouped by column.  Each value is either an atom or a
+        /// conjunction of atoms.
+        std::unordered_map<const column_definition*, expression> single;
+        const binary_operator* current_binary_operator = nullptr;
+
+        void operator()(const conjunction& c) {
+            std::ranges::for_each(c.children, [this] (const expression& child) { expr::visit(*this, child); });
+        }
+
+        void operator()(const binary_operator& b) {
+            if (current_binary_operator) {
+                throw std::logic_error("Nested binary operators are not supported");
+            }
+            current_binary_operator = &b;
+            expr::visit(*this, b.lhs);
+            current_binary_operator = nullptr;
+        }
+
+        void operator()(const tuple_constructor& tc) {
+            for (auto& e : tc.elements) {
+                if (!expr::is<column_value>(e)) {
+                    on_internal_error(rlogger, fmt::format("extract_clustering_prefix_restrictions: tuple of non-column_value: {}", tc));
+                }
+            }
+            with_current_binary_operator(*this, [&] (const binary_operator& b) {
+                multi.push_back(b);
+            });
+        }
+
+        void operator()(const column_value& cv) {
+            auto s = &cv;
+            with_current_binary_operator(*this, [&] (const binary_operator& b) {
+                if (s->col->is_clustering_key()) {
+                    const auto [it, inserted] = single.try_emplace(s->col, b);
+                    if (!inserted) {
+                        it->second = make_conjunction(std::move(it->second), b);
+                    }
+                }
+            });
+        }
+
+        void operator()(const subscript& sub) {
+            const column_value& cval = get_subscripted_column(sub.val);
+
+            with_current_binary_operator(*this, [&] (const binary_operator& b) {
+                if (cval.col->is_clustering_key()) {
+                    const auto [it, inserted] = single.try_emplace(cval.col, b);
+                    if (!inserted) {
+                        it->second = make_conjunction(std::move(it->second), b);
+                    }
+                }
+            });
+        }
+
+        void operator()(const function_call& fun_call) {
+            if (is_partition_token_for_schema(fun_call, *table_schema)) {
+                // A token cannot be a clustering prefix restriction
+                return;
+            }
+
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(function_call)");
+        }
+
+        void operator()(const constant&) {}
+
+        void operator()(const unresolved_identifier&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(unresolved_identifier)");
+        }
+
+        void operator()(const column_mutation_attribute&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(column_mutation_attribute)");
+        }
+
+        void operator()(const cast&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(cast)");
+        }
+
+        void operator()(const field_selection&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(field_selection)");
+        }
+
+        void operator()(const bind_variable&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(bind_variable)");
+        }
+
+        void operator()(const untyped_constant&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(untyped_constant)");
+        }
+
+        void operator()(const collection_constructor&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(collection_constructor)");
+        }
+
+        void operator()(const usertype_constructor&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(usertype_constructor)");
+        }
+
+        void operator()(const temporary&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(temporary)");
+        }
+    };
+    visitor v {
+        .table_schema = schema
+    };
+
+    expr::visit(v, where_clause);
+
+    if (!v.multi.empty()) {
+        return std::move(v.multi);
+    }
+
+    std::vector<expression> prefix;
+    for (const auto& col : schema->clustering_key_columns()) {
+        const auto found = v.single.find(&col);
+        if (found == v.single.end()) { // Any further restrictions are skipping the CK order.
+            break;
+        }
+        if (find_needs_filtering(found->second)) { // This column's restriction doesn't define a clear bound.
+            // TODO: if this is a conjunction of filtering and non-filtering atoms, we could split them and add the
+            // latter to the prefix.
+            break;
+        }
+        prefix.push_back(found->second);
+        if (has_slice(found->second)) {
+            break;
+        }
+    }
+    return prefix;
+}
+
+statement_restrictions::statement_restrictions(data_dictionary::database db,
+=======
+template <typename Visitor>
+concept visitor_with_binary_operator_context = requires (Visitor v) {
+    { v.current_binary_operator } -> std::convertible_to<const expr::binary_operator*>;
+};
+
+void with_current_binary_operator(
+        visitor_with_binary_operator_context auto& visitor,
+        std::invocable<const expr::binary_operator&> auto func) {
+    if (!visitor.current_binary_operator) {
+        throw std::logic_error("Evaluation expected within binary operator");
+    }
+    func(*visitor.current_binary_operator);
+}
+
+/// Every token, or if no tokens, an EQ/IN of every single PK column.
+static std::vector<expr::expression> extract_partition_range(
+        const expr::expression& where_clause, schema_ptr schema) {
+    using namespace expr;
+    struct extract_partition_range_visitor {
+        schema_ptr table_schema;
+        std::optional<expression> tokens;
+        std::unordered_map<const column_definition*, expression> single_column;
+        const binary_operator* current_binary_operator = nullptr;
+
+        void operator()(const conjunction& c) {
+            std::ranges::for_each(c.children, [this] (const expression& child) { expr::visit(*this, child); });
+        }
+
+        void operator()(const binary_operator& b) {
+            if (current_binary_operator) {
+                throw std::logic_error("Nested binary operators are not supported");
+            }
+            current_binary_operator = &b;
+            expr::visit(*this, b.lhs);
+            current_binary_operator = nullptr;
+        }
+
+        void operator()(const function_call& token_fun_call) {
+            if (!is_partition_token_for_schema(token_fun_call, *table_schema)) {
+                on_internal_error(rlogger, "extract_partition_range(function_call)");
+            }
+
+            with_current_binary_operator(*this, [&] (const binary_operator& b) {
+                if (tokens) {
+                    tokens = make_conjunction(std::move(*tokens), b);
+                } else {
+                    tokens = b;
+                }
+            });
+        }
+
+        void operator()(const column_value& cv) {
+            auto s = &cv;
+            with_current_binary_operator(*this, [&] (const binary_operator& b) {
+                if (s->col->is_partition_key() && (b.op == oper_t::EQ || b.op == oper_t::IN)) {
+                    const auto [it, inserted] = single_column.try_emplace(s->col, b);
+                    if (!inserted) {
+                        it->second = make_conjunction(std::move(it->second), b);
+                    }
+                }
+            });
+        }
+
+        void operator()(const tuple_constructor& s) {
+            // Partition key columns are not legal in tuples, so ignore tuples.
+        }
+
+        void operator()(const subscript& sub) {
+            if (!expr::is<column_value>(sub.val)) {
+                return; // BSON subscripts (e.g. doc.arr[0]) are never partition key restrictions.
+            }
+            const column_value& cval = get_subscripted_column(sub.val);
+
+            with_current_binary_operator(*this, [&] (const binary_operator& b) {
+                if (cval.col->is_partition_key() && (b.op == oper_t::EQ || b.op == oper_t::IN)) {
+                    const auto [it, inserted] = single_column.try_emplace(cval.col, b);
+                    if (!inserted) {
+                        it->second = make_conjunction(std::move(it->second), b);
+                    }
+                }
+            });
+        }
+
+        void operator()(const constant&) {}
+
+        void operator()(const unresolved_identifier&) {
+            on_internal_error(rlogger, "extract_partition_range(unresolved_identifier)");
+        }
+
+        void operator()(const column_mutation_attribute&) {
+            on_internal_error(rlogger, "extract_partition_range(column_mutation_attribute)");
+        }
+
+        void operator()(const cast&) {
+            on_internal_error(rlogger, "extract_partition_range(cast)");
+        }
+
+        void operator()(const field_selection&) {
+            // BSON field selections are never partition key restrictions; ignore.
+        }
+
+        void operator()(const bind_variable&) {
+            on_internal_error(rlogger, "extract_partition_range(bind_variable)");
+        }
+
+        void operator()(const untyped_constant&) {
+            on_internal_error(rlogger, "extract_partition_range(untyped_constant)");
+        }
+
+        void operator()(const collection_constructor&) {
+            on_internal_error(rlogger, "extract_partition_range(collection_constructor)");
+        }
+
+        void operator()(const usertype_constructor&) {
+            on_internal_error(rlogger, "extract_partition_range(usertype_constructor)");
+        }
+
+        void operator()(const temporary&) {
+            on_internal_error(rlogger, "extract_partition_range(temporary)");
+        }
+    };
+
+    extract_partition_range_visitor v {
+        .table_schema = schema
+    };
+
+    expr::visit(v, where_clause);
+    if (v.tokens) {
+        return {std::move(*v.tokens)};
+    }
+    if (v.single_column.size() == schema->partition_key_size()) {
+        return v.single_column | std::views::values | std::ranges::to<std::vector>();
+    }
+    return {};
+}
+
+/// Extracts where_clause atoms with clustering-column LHS and copies them to a vector.  These elements define the
+/// boundaries of any clustering slice that can possibly meet where_clause.  This vector can be calculated before
+/// binding expression markers, since LHS and operator are always known.
+static std::vector<expr::expression> extract_clustering_prefix_restrictions(
+        const expr::expression& where_clause, schema_ptr schema) {
+    using namespace expr;
+
+    /// Collects all clustering-column restrictions from an expression.  Presumes the expression only uses
+    /// conjunction to combine subexpressions.
+    struct visitor {
+        schema_ptr table_schema;
+        std::vector<expression> multi; ///< All multi-column restrictions.
+        /// All single-clustering-column restrictions, grouped by column.  Each value is either an atom or a
+        /// conjunction of atoms.
+        std::unordered_map<const column_definition*, expression> single;
+        const binary_operator* current_binary_operator = nullptr;
+
+        void operator()(const conjunction& c) {
+            std::ranges::for_each(c.children, [this] (const expression& child) { expr::visit(*this, child); });
+        }
+
+        void operator()(const binary_operator& b) {
+            if (current_binary_operator) {
+                throw std::logic_error("Nested binary operators are not supported");
+            }
+            current_binary_operator = &b;
+            expr::visit(*this, b.lhs);
+            current_binary_operator = nullptr;
+        }
+
+        void operator()(const tuple_constructor& tc) {
+            for (auto& e : tc.elements) {
+                if (!expr::is<column_value>(e)) {
+                    on_internal_error(rlogger, fmt::format("extract_clustering_prefix_restrictions: tuple of non-column_value: {}", tc));
+                }
+            }
+            with_current_binary_operator(*this, [&] (const binary_operator& b) {
+                multi.push_back(b);
+            });
+        }
+
+        void operator()(const column_value& cv) {
+            auto s = &cv;
+            with_current_binary_operator(*this, [&] (const binary_operator& b) {
+                if (s->col->is_clustering_key()) {
+                    const auto [it, inserted] = single.try_emplace(s->col, b);
+                    if (!inserted) {
+                        it->second = make_conjunction(std::move(it->second), b);
+                    }
+                }
+            });
+        }
+
+        void operator()(const subscript& sub) {
+            if (!expr::is<column_value>(sub.val)) {
+                return; // BSON subscripts (e.g. doc.arr[0]) are never clustering key restrictions.
+            }
+            const column_value& cval = get_subscripted_column(sub.val);
+
+            with_current_binary_operator(*this, [&] (const binary_operator& b) {
+                if (cval.col->is_clustering_key()) {
+                    const auto [it, inserted] = single.try_emplace(cval.col, b);
+                    if (!inserted) {
+                        it->second = make_conjunction(std::move(it->second), b);
+                    }
+                }
+            });
+        }
+
+        void operator()(const function_call& fun_call) {
+            if (is_partition_token_for_schema(fun_call, *table_schema)) {
+                // A token cannot be a clustering prefix restriction
+                return;
+            }
+
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(function_call)");
+        }
+
+        void operator()(const constant&) {}
+
+        void operator()(const unresolved_identifier&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(unresolved_identifier)");
+        }
+
+        void operator()(const column_mutation_attribute&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(column_mutation_attribute)");
+        }
+
+        void operator()(const cast&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(cast)");
+        }
+
+        void operator()(const field_selection&) {
+            // BSON field selections are never clustering key restrictions; ignore.
+        }
+
+        void operator()(const bind_variable&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(bind_variable)");
+        }
+
+        void operator()(const untyped_constant&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(untyped_constant)");
+        }
+
+        void operator()(const collection_constructor&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(collection_constructor)");
+        }
+
+        void operator()(const usertype_constructor&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(usertype_constructor)");
+        }
+
+        void operator()(const temporary&) {
+            on_internal_error(rlogger, "extract_clustering_prefix_restrictions(temporary)");
+        }
+    };
+    visitor v {
+        .table_schema = schema
+    };
+
+    expr::visit(v, where_clause);
+
+    if (!v.multi.empty()) {
+        return std::move(v.multi);
+    }
+
+    std::vector<expression> prefix;
+    for (const auto& col : schema->clustering_key_columns()) {
+        const auto found = v.single.find(&col);
+        if (found == v.single.end()) { // Any further restrictions are skipping the CK order.
+            break;
+        }
+        if (find_needs_filtering(found->second)) { // This column's restriction doesn't define a clear bound.
+            // TODO: if this is a conjunction of filtering and non-filtering atoms, we could split them and add the
+            // latter to the prefix.
+            break;
+        }
+        prefix.push_back(found->second);
+        if (has_slice(found->second)) {
+            break;
+        }
+    }
+    return prefix;
+}
+
+statement_restrictions::statement_restrictions(data_dictionary::database db,
+>>>>>>> caa43734a62 (cql3: support BSON field selection and array access in WHERE clauses)
         schema_ptr schema,
         statements::statement_type type,
         const expr::expression& where_clause,

@@ -535,3 +535,111 @@ SEASTAR_TEST_CASE(json_if_subscript_only) {
         }});
     }, std::move(cfg));
 }
+
+// =====================================================================
+// WHERE clause tests — BSON field selection in WHERE (ALLOW FILTERING)
+// =====================================================================
+
+// WHERE (?int)doc.field = value — match returns the row.
+SEASTAR_TEST_CASE(json_where_field_select_int_match) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jw1 (id int PRIMARY KEY, doc json, v int)").get();
+        e.execute_cql("INSERT INTO ks.jw1 (id, doc, v) VALUES (1, {'age': 42}, 10)").get();
+        e.execute_cql("INSERT INTO ks.jw1 (id, doc, v) VALUES (2, {'age': 99}, 20)").get();
+
+        auto msg = e.execute_cql("SELECT v FROM ks.jw1 WHERE (?int)doc.age = 42 ALLOW FILTERING").get();
+        // Internal result row may include doc as a non-serialized filtering
+        // column, so we verify the row count rather than exact column layout.
+        assert_that(msg).is_rows().with_size(1);
+    });
+}
+
+// WHERE (?int)doc.field = value — no match returns no rows.
+SEASTAR_TEST_CASE(json_where_field_select_int_no_match) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jw2 (id int PRIMARY KEY, doc json, v int)").get();
+        e.execute_cql("INSERT INTO ks.jw2 (id, doc, v) VALUES (1, {'age': 42}, 10)").get();
+
+        auto msg = e.execute_cql("SELECT v FROM ks.jw2 WHERE (?int)doc.age = 99 ALLOW FILTERING").get();
+        assert_that(msg).is_rows().with_size(0);
+    });
+}
+
+// WHERE (?text)doc.name = 'Alice' — text field.
+SEASTAR_TEST_CASE(json_where_field_select_text) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jw3 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jw3 (id, doc) VALUES (1, {'name': 'Alice'})").get();
+        e.execute_cql("INSERT INTO ks.jw3 (id, doc) VALUES (2, {'name': 'Bob'})").get();
+
+        auto msg = e.execute_cql("SELECT id FROM ks.jw3 WHERE (?text)doc.name = 'Alice' ALLOW FILTERING").get();
+        assert_that(msg).is_rows().with_size(1);
+    });
+}
+
+// WHERE (?int)doc.nested.val = 7 — nested field access.
+SEASTAR_TEST_CASE(json_where_field_select_nested) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jw4 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jw4 (id, doc) VALUES (1, {'nested': {'val': 7}})").get();
+        e.execute_cql("INSERT INTO ks.jw4 (id, doc) VALUES (2, {'nested': {'val': 8}})").get();
+
+        auto msg = e.execute_cql("SELECT id FROM ks.jw4 WHERE (?int)doc.nested.val = 7 ALLOW FILTERING").get();
+        assert_that(msg).is_rows().with_size(1);
+    });
+}
+
+// WHERE (?int)doc.arr[1] = 20 — array subscript in WHERE.
+SEASTAR_TEST_CASE(json_where_field_select_array) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jw5 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jw5 (id, doc) VALUES (1, {'arr': [10, 20, 30]})").get();
+        e.execute_cql("INSERT INTO ks.jw5 (id, doc) VALUES (2, {'arr': [40, 50, 60]})").get();
+
+        auto msg = e.execute_cql("SELECT id FROM ks.jw5 WHERE (?int)doc.arr[1] = 20 ALLOW FILTERING").get();
+        assert_that(msg).is_rows().with_size(1);
+    });
+}
+
+// WHERE (?int)doc.missing = 42 — missing field yields NULL, no match.
+SEASTAR_TEST_CASE(json_where_field_select_missing) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jw6 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jw6 (id, doc) VALUES (1, {'a': 1})").get();
+
+        // Missing field returns NULL; NULL != 42, so no rows returned.
+        auto msg = e.execute_cql("SELECT id FROM ks.jw6 WHERE (?int)doc.missing = 42 ALLOW FILTERING").get();
+        assert_that(msg).is_rows().with_size(0);
+    });
+}
+
+// WHERE (?text)doc[0] = 'zero' — plain subscript on BSON column.
+SEASTAR_TEST_CASE(json_where_subscript_only) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jw7 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jw7 (id, doc) VALUES (1, {'0': 'zero', '1': 'one'})").get();
+        e.execute_cql("INSERT INTO ks.jw7 (id, doc) VALUES (2, {'0': 'nope'})").get();
+
+        auto msg = e.execute_cql("SELECT id FROM ks.jw7 WHERE (?text)doc[0] = 'zero' ALLOW FILTERING").get();
+        assert_that(msg).is_rows().with_size(1);
+    });
+}
+
+// WHERE with combined PK restriction and BSON field filter.
+SEASTAR_TEST_CASE(json_where_with_pk_restriction) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jw8 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jw8 (id, doc) VALUES (1, {'x': 10})").get();
+        e.execute_cql("INSERT INTO ks.jw8 (id, doc) VALUES (2, {'x': 20})").get();
+
+        // PK restriction + BSON field filter.
+        // SELECT id only, but doc is added internally as a non-serialized
+        // column for filtering, so the internal result row has two columns.
+        auto msg = e.execute_cql("SELECT id FROM ks.jw8 WHERE id = 1 AND (?int)doc.x = 10 ALLOW FILTERING").get();
+        assert_that(msg).is_rows().with_size(1);
+
+        // PK matches but BSON field doesn't.
+        auto msg2 = e.execute_cql("SELECT id FROM ks.jw8 WHERE id = 1 AND (?int)doc.x = 99 ALLOW FILTERING").get();
+        assert_that(msg2).is_rows().with_size(0);
+    });
+}

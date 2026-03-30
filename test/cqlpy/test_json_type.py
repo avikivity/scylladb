@@ -158,3 +158,86 @@ def test_json_if_subscript_only(cql, test_keyspace, scylla_only):
         cql.execute(f"INSERT INTO {table}(p, doc, v) VALUES ({p}, {{'0': 'zero', '1': 'one'}}, 0)")
         cql.execute(f"UPDATE {table} SET v = 1 WHERE p = {p} IF (?text)doc[0] = 'zero'")
         assert list(cql.execute(f"SELECT v FROM {table} WHERE p={p}")) == [(1,)]
+
+
+# --- WHERE clause tests: (?type)doc.field in WHERE ... ALLOW FILTERING ---
+
+# WHERE (?int)doc.field = value — match returns the row.
+def test_json_where_field_int_match(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json, v int") as table:
+        p1 = unique_key_int()
+        p2 = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc, v) VALUES ({p1}, {{'age': 42}}, 10)")
+        cql.execute(f"INSERT INTO {table}(p, doc, v) VALUES ({p2}, {{'age': 99}}, 20)")
+        rows = list(cql.execute(f"SELECT v FROM {table} WHERE p IN ({p1},{p2}) AND (?int)doc.age = 42 ALLOW FILTERING"))
+        assert len(rows) == 1 and rows[0].v == 10
+
+# WHERE (?int)doc.field = value — no match returns no rows.
+def test_json_where_field_int_no_match(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json") as table:
+        p = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc) VALUES ({p}, {{'age': 42}})")
+        rows = list(cql.execute(f"SELECT p FROM {table} WHERE p = {p} AND (?int)doc.age = 99 ALLOW FILTERING"))
+        assert len(rows) == 0
+
+# WHERE (?text)doc.name = 'Alice' — text field filtering.
+def test_json_where_field_text(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json") as table:
+        p1 = unique_key_int()
+        p2 = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc) VALUES ({p1}, {{'name': 'Alice'}})")
+        cql.execute(f"INSERT INTO {table}(p, doc) VALUES ({p2}, {{'name': 'Bob'}})")
+        rows = list(cql.execute(f"SELECT p FROM {table} WHERE p IN ({p1},{p2}) AND (?text)doc.name = 'Alice' ALLOW FILTERING"))
+        assert len(rows) == 1
+
+# WHERE (?int)doc.nested.val = 7 — nested field access.
+def test_json_where_field_nested(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json") as table:
+        p1 = unique_key_int()
+        p2 = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc) VALUES ({p1}, {{'nested': {{'val': 7}}}})")
+        cql.execute(f"INSERT INTO {table}(p, doc) VALUES ({p2}, {{'nested': {{'val': 8}}}})")
+        rows = list(cql.execute(f"SELECT p FROM {table} WHERE p IN ({p1},{p2}) AND (?int)doc.nested.val = 7 ALLOW FILTERING"))
+        assert len(rows) == 1
+
+# WHERE (?int)doc.arr[1] = 20 — array subscript in WHERE.
+def test_json_where_field_array(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json") as table:
+        p1 = unique_key_int()
+        p2 = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc) VALUES ({p1}, {{'arr': [10, 20, 30]}})")
+        cql.execute(f"INSERT INTO {table}(p, doc) VALUES ({p2}, {{'arr': [40, 50, 60]}})")
+        rows = list(cql.execute(f"SELECT p FROM {table} WHERE p IN ({p1},{p2}) AND (?int)doc.arr[1] = 20 ALLOW FILTERING"))
+        assert len(rows) == 1
+
+# WHERE (?int)doc.missing = 42 — missing field yields NULL, no match.
+def test_json_where_field_missing(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json") as table:
+        p = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc) VALUES ({p}, {{'a': 1}})")
+        rows = list(cql.execute(f"SELECT p FROM {table} WHERE p = {p} AND (?int)doc.missing = 42 ALLOW FILTERING"))
+        assert len(rows) == 0
+
+# WHERE (?text)doc[0] = 'zero' — plain subscript on BSON column.
+def test_json_where_subscript_only(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json") as table:
+        p1 = unique_key_int()
+        p2 = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc) VALUES ({p1}, {{'0': 'zero', '1': 'one'}})")
+        cql.execute(f"INSERT INTO {table}(p, doc) VALUES ({p2}, {{'0': 'nope'}})")
+        rows = list(cql.execute(f"SELECT p FROM {table} WHERE p IN ({p1},{p2}) AND (?text)doc[0] = 'zero' ALLOW FILTERING"))
+        assert len(rows) == 1
+
+# WHERE with combined PK restriction and BSON field filter.
+def test_json_where_with_pk_restriction(cql, test_keyspace, scylla_only):
+    with new_test_table(cql, test_keyspace, "p int PRIMARY KEY, doc json") as table:
+        p1 = unique_key_int()
+        p2 = unique_key_int()
+        cql.execute(f"INSERT INTO {table}(p, doc) VALUES ({p1}, {{'x': 10}})")
+        cql.execute(f"INSERT INTO {table}(p, doc) VALUES ({p2}, {{'x': 20}})")
+        # PK restriction + BSON field filter — match
+        rows = list(cql.execute(f"SELECT p FROM {table} WHERE p = {p1} AND (?int)doc.x = 10 ALLOW FILTERING"))
+        assert len(rows) == 1
+        # PK matches but BSON field doesn't
+        rows = list(cql.execute(f"SELECT p FROM {table} WHERE p = {p1} AND (?int)doc.x = 99 ALLOW FILTERING"))
+        assert len(rows) == 0

@@ -33,9 +33,10 @@ Querying data from data is done using a ``SELECT`` statement:
             : ( '.' `field_name` | '[' `term` ']' )*
    where_clause: `relation` ( AND `relation` )*
    group_by_clause: `column_name` (',' `column_name` )*
-   relation: `column_name` `operator` `term`
-           : '(' `column_name` ( ',' `column_name` )* ')' `operator` `tuple_literal`
-           : TOKEN '(' `column_name` ( ',' `column_name` )* ')' `operator` `term`
+    relation: `column_name` `operator` `term`
+            : | '(' `column_name` ( ',' `column_name` )* ')' `operator` `tuple_literal`
+            : | TOKEN '(' `column_name` ( ',' `column_name` )* ')' `operator` `term`
+            : | '(' '?' `native_type` ')' `simple_selection` `operator` `term`
    operator: '=' | '<' | '>' | '<=' | '>=' | IN | NOT IN | CONTAINS | CONTAINS KEY
    ordering_clause: `column_name` [ ASC | DESC ] ( ',' `column_name` [ ASC | DESC ] )*
    timeout: `duration`
@@ -353,6 +354,22 @@ the results client-side.
 The ``CONTAINS`` operator may only be used on collection columns (lists, sets, and maps). In the case of maps,
 ``CONTAINS`` applies to the map values. The ``CONTAINS KEY`` operator may only be used on map columns and applies to the
 map keys.
+
+JSON field selection in WHERE
+`````````````````````````````
+
+Columns of the ``json`` type can be filtered in ``WHERE`` clauses using the ``(?type)`` field selection syntax. This
+requires ``ALLOW FILTERING`` since the database must examine each row's BSON document to evaluate the condition.
+
+The syntax uses the same ``(?type)`` prefix as in ``SELECT`` selectors (see :ref:`JSON field selection <selection-clause>`),
+but applied as a relation::
+
+    SELECT * FROM t WHERE (?int)doc.age = 42 ALLOW FILTERING
+    SELECT * FROM t WHERE (?text)doc.address.city = 'London' ALLOW FILTERING
+    SELECT * FROM t WHERE pk = 1 AND (?int)doc.scores[0] = 100 ALLOW FILTERING
+
+If the field path does not exist or the value is not compatible with the requested type, the extracted value is ``NULL``
+and the row will not match equality comparisons against non-null values.
 
 .. _group-by-clause:
 
