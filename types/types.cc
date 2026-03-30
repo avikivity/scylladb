@@ -1088,7 +1088,7 @@ static sstring cql3_type_name_impl(const abstract_type& t) {
         sstring operator()(const boolean_type_impl&) { return "boolean"; }
         sstring operator()(const byte_type_impl&) { return "tinyint"; }
         sstring operator()(const bytes_type_impl&) { return "blob"; }
-        sstring operator()(const bson_type_impl&) { return "bson"; }
+        sstring operator()(const bson_type_impl&) { return "json"; }
         sstring operator()(const counter_type_impl&) { return "counter"; }
         sstring operator()(const timestamp_date_base_class&) { return "timestamp"; }
         sstring operator()(const decimal_type_impl&) { return "decimal"; }

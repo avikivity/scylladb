@@ -2123,6 +2123,7 @@ native_type returns [data_type t]
     | K_TIMEUUID  { $t = timeuuid_type; }
     | K_DATE      { $t = simple_date_type; }
     | K_TIME      { $t = time_type; }
+    | K_JSON      { $t = bson_type; }
     ;
 
 collection_type [bool internal] returns [shared_ptr<cql3::cql3_type::raw> pt]
@@ -2248,7 +2249,6 @@ basic_unreserved_keyword returns [sstring str]
         | K_LANGUAGE
         | K_CALLED
         | K_INPUT
-        | K_JSON
         | K_CACHE
         | K_BYPASS
         | K_LARGE_DATA_GUARDRAILS
@@ -2300,6 +2300,7 @@ type_unreserved_keyword returns [sstring str]
         | K_DATE
         | K_TIME
         | K_EMPTY
+        | K_JSON
         ) { $str = $k.text; }
     ;
 

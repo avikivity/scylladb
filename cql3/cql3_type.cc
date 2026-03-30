@@ -51,7 +51,7 @@ static cql3_type::kind get_cql3_kind(const abstract_type& t) {
         cql3_type::kind operator()(const reversed_type_impl& r) { return get_cql3_kind(*r.underlying_type()); }
         cql3_type::kind operator()(const tuple_type_impl&) { throwing_assert(0 && "no kind for this type"); }
         cql3_type::kind operator()(const vector_type_impl&) { throwing_assert(0 && "no kind for this type"); }
-        cql3_type::kind operator()(const bson_type_impl&) { throwing_assert(0 && "no kind for this type"); }
+        cql3_type::kind operator()(const bson_type_impl&) { return cql3_type::kind::JSON; }
         cql3_type::kind operator()(const collection_type_impl&) { throwing_assert(0 && "no kind for this type"); }
     };
     return visit(t, visitor{});
@@ -442,6 +442,7 @@ thread_local cql3_type cql3_type::timeuuid{timeuuid_type};
 thread_local cql3_type cql3_type::date{simple_date_type};
 thread_local cql3_type cql3_type::time{time_type};
 thread_local cql3_type cql3_type::inet{inet_addr_type};
+thread_local cql3_type cql3_type::json{bson_type};
 thread_local cql3_type cql3_type::varint{varint_type};
 thread_local cql3_type cql3_type::decimal{decimal_type};
 thread_local cql3_type cql3_type::counter{counter_type};
@@ -461,6 +462,7 @@ cql3_type::values() {
         cql3_type::float_,
         cql3_type::inet,
         cql3_type::int_,
+        cql3_type::json,
         cql3_type::smallint,
         cql3_type::text,
         cql3_type::timestamp,

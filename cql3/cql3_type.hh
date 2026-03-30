@@ -87,7 +87,7 @@ private:
 
 public:
     enum class kind : int8_t {
-        ASCII, BIGINT, BLOB, BOOLEAN, COUNTER, DECIMAL, DOUBLE, EMPTY, FLOAT, INT, SMALLINT, TINYINT, INET, TEXT, TIMESTAMP, UUID, VARINT, TIMEUUID, DATE, TIME, DURATION
+        ASCII, BIGINT, BLOB, BOOLEAN, COUNTER, DECIMAL, DOUBLE, EMPTY, FLOAT, INT, JSON, SMALLINT, TINYINT, INET, TEXT, TIMESTAMP, UUID, VARINT, TIMEUUID, DATE, TIME, DURATION
     };
     using kind_enum = super_enum<kind,
         kind::ASCII,
@@ -101,6 +101,7 @@ public:
         kind::FLOAT,
         kind::INET,
         kind::INT,
+        kind::JSON,
         kind::SMALLINT,
         kind::TINYINT,
         kind::TEXT,
@@ -130,6 +131,7 @@ public:
     static thread_local cql3_type date;
     static thread_local cql3_type time;
     static thread_local cql3_type inet;
+    static thread_local cql3_type json;
     static thread_local cql3_type varint;
     static thread_local cql3_type decimal;
     static thread_local cql3_type counter;
