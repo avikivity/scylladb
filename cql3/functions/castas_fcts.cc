@@ -9,6 +9,8 @@
 #include "castas_fcts.hh"
 #include "utils/big_decimal.hh"
 #include "utils/UUID_gen.hh"
+#include "utils/bson.hh"
+#include "types/concrete_types.hh"
 #include "cql3/functions/native_scalar_function.hh"
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <chrono>
@@ -163,6 +165,27 @@ static data_value castas_fctn_from_timeuuid_to_date(data_value from) {
 
 static data_value castas_fctn_from_dv_to_string(data_value from) {
     return from.type()->to_string_impl(from);
+}
+
+static data_value castas_fctn_from_string_to_bson(data_value from) {
+    const auto& s = value_cast<sstring>(from);
+    auto b = from_hex(s);
+    auto doc = bson::from_managed_bytes(managed_bytes(b));
+    return static_cast<const bson_type_impl&>(*bson_type).make_value(std::move(doc));
+}
+
+static data_value castas_fctn_from_blob_to_bson(data_value from) {
+    const auto& b = value_cast<bytes>(from);
+    auto doc = bson::from_managed_bytes(managed_bytes(b));
+    return static_cast<const bson_type_impl&>(*bson_type).make_value(std::move(doc));
+}
+
+static data_value castas_fctn_from_bson_to_blob(data_value from) {
+    const auto& doc = value_cast<bson::document>(from);
+    if (doc.empty()) {
+        return data_value(bytes{});
+    }
+    return data_value(to_bytes(managed_bytes_view(doc.as_managed_bytes())));
 }
 
 static constexpr unsigned next_power_of_2(unsigned val) {
@@ -368,6 +391,17 @@ castas_fctn get_castas_fctn(data_type to_type, data_type from_type) {
         return castas_fctn_from_dv_to_string;
     case cast_switch_case_val(kind::utf8, kind::ascii):
         return castas_fctn_simple<sstring, sstring>;
+
+    case cast_switch_case_val(kind::ascii, kind::bson):
+    case cast_switch_case_val(kind::utf8, kind::bson):
+        return castas_fctn_from_dv_to_string;
+    case cast_switch_case_val(kind::bson, kind::ascii):
+    case cast_switch_case_val(kind::bson, kind::utf8):
+        return castas_fctn_from_string_to_bson;
+    case cast_switch_case_val(kind::bytes, kind::bson):
+        return castas_fctn_from_bson_to_blob;
+    case cast_switch_case_val(kind::bson, kind::bytes):
+        return castas_fctn_from_blob_to_bson;
 
     case cast_switch_case_val(kind::byte, kind::counter):
         return castas_fctn_simple<int8_t, int64_t>;

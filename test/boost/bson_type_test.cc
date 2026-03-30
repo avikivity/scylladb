@@ -16,6 +16,7 @@
 #include "types/json_utils.hh"
 #include "utils/bson.hh"
 #include "db/marshal/type_parser.hh"
+#include "cql3/functions/castas_fcts.hh"
 
 namespace {
 
@@ -198,4 +199,135 @@ SEASTAR_THREAD_TEST_CASE(bson_json_round_trip) {
 SEASTAR_THREAD_TEST_CASE(bson_from_json_rejects_no_prefix) {
     auto json_val = rjson::parse("\"deadbeef\"");
     BOOST_REQUIRE_THROW(from_json_object(*bson_type, json_val), marshal_exception);
+}
+
+// --- CAST function tests ---
+
+// CAST(bson AS text) produces hex string.
+SEASTAR_THREAD_TEST_CASE(bson_cast_to_text) {
+    auto raw = hello_world_bson();
+    auto doc = bson::document::from_managed_bytes_unsafe(managed_bytes(raw));
+    auto dv = make_bson_dv(std::move(doc));
+
+    auto fn = cql3::functions::get_castas_fctn(utf8_type, bson_type);
+    auto result = fn(std::move(dv));
+    auto& s = value_cast<sstring>(result);
+    BOOST_REQUIRE_EQUAL(s, to_hex(raw));
+}
+
+// CAST(bson AS ascii) also produces hex string.
+SEASTAR_THREAD_TEST_CASE(bson_cast_to_ascii) {
+    auto raw = hello_world_bson();
+    auto doc = bson::document::from_managed_bytes_unsafe(managed_bytes(raw));
+    auto dv = make_bson_dv(std::move(doc));
+
+    auto fn = cql3::functions::get_castas_fctn(ascii_type, bson_type);
+    auto result = fn(std::move(dv));
+    auto& s = value_cast<sstring>(result);
+    BOOST_REQUIRE_EQUAL(s, to_hex(raw));
+}
+
+// CAST(text AS bson) parses hex string to bson::document.
+SEASTAR_THREAD_TEST_CASE(bson_cast_from_text) {
+    auto raw = hello_world_bson();
+    auto hex = to_hex(raw);
+    auto text_dv = data_value(sstring(hex));
+
+    auto fn = cql3::functions::get_castas_fctn(bson_type, utf8_type);
+    auto result = fn(std::move(text_dv));
+    auto& doc = value_cast<bson::document>(result);
+    auto result_bytes = to_bytes(managed_bytes_view(doc.as_managed_bytes()));
+    BOOST_REQUIRE_EQUAL(result_bytes, raw);
+}
+
+// CAST(text AS bson) round-trips with CAST(bson AS text).
+SEASTAR_THREAD_TEST_CASE(bson_cast_text_round_trip) {
+    auto raw = hello_world_bson();
+    auto doc = bson::document::from_managed_bytes_unsafe(managed_bytes(raw));
+    auto dv = make_bson_dv(std::move(doc));
+
+    auto to_text = cql3::functions::get_castas_fctn(utf8_type, bson_type);
+    auto from_text = cql3::functions::get_castas_fctn(bson_type, utf8_type);
+
+    auto text_result = to_text(std::move(dv));
+    auto bson_result = from_text(std::move(text_result));
+    auto& recovered = value_cast<bson::document>(bson_result);
+    auto recovered_bytes = to_bytes(managed_bytes_view(recovered.as_managed_bytes()));
+    BOOST_REQUIRE_EQUAL(recovered_bytes, raw);
+}
+
+// CAST(bson AS blob) extracts raw bytes.
+SEASTAR_THREAD_TEST_CASE(bson_cast_to_blob) {
+    auto raw = hello_world_bson();
+    auto doc = bson::document::from_managed_bytes_unsafe(managed_bytes(raw));
+    auto dv = make_bson_dv(std::move(doc));
+
+    auto fn = cql3::functions::get_castas_fctn(bytes_type, bson_type);
+    auto result = fn(std::move(dv));
+    auto& b = value_cast<bytes>(result);
+    BOOST_REQUIRE_EQUAL(b, raw);
+}
+
+// CAST(blob AS bson) wraps raw bytes as bson::document.
+SEASTAR_THREAD_TEST_CASE(bson_cast_from_blob) {
+    auto raw = hello_world_bson();
+    auto blob_dv = data_value(bytes(raw));
+
+    auto fn = cql3::functions::get_castas_fctn(bson_type, bytes_type);
+    auto result = fn(std::move(blob_dv));
+    auto& doc = value_cast<bson::document>(result);
+    auto result_bytes = to_bytes(managed_bytes_view(doc.as_managed_bytes()));
+    BOOST_REQUIRE_EQUAL(result_bytes, raw);
+}
+
+// CAST(bson AS blob) round-trips with CAST(blob AS bson).
+SEASTAR_THREAD_TEST_CASE(bson_cast_blob_round_trip) {
+    auto raw = hello_world_bson();
+    auto doc = bson::document::from_managed_bytes_unsafe(managed_bytes(raw));
+    auto dv = make_bson_dv(std::move(doc));
+
+    auto to_blob = cql3::functions::get_castas_fctn(bytes_type, bson_type);
+    auto from_blob = cql3::functions::get_castas_fctn(bson_type, bytes_type);
+
+    auto blob_result = to_blob(std::move(dv));
+    auto bson_result = from_blob(std::move(blob_result));
+    auto& recovered = value_cast<bson::document>(bson_result);
+    auto recovered_bytes = to_bytes(managed_bytes_view(recovered.as_managed_bytes()));
+    BOOST_REQUIRE_EQUAL(recovered_bytes, raw);
+}
+
+// CAST(empty_bson AS blob) produces empty bytes.
+SEASTAR_THREAD_TEST_CASE(bson_cast_empty_to_blob) {
+    bson::document doc; // default-constructed, empty
+    auto dv = make_bson_dv(std::move(doc));
+
+    auto fn = cql3::functions::get_castas_fctn(bytes_type, bson_type);
+    auto result = fn(std::move(dv));
+    auto& b = value_cast<bytes>(result);
+    BOOST_REQUIRE(b.empty());
+}
+
+// Unsupported casts throw invalid_request_exception.
+SEASTAR_THREAD_TEST_CASE(bson_cast_unsupported) {
+    BOOST_REQUIRE_THROW(
+        cql3::functions::get_castas_fctn(int32_type, bson_type),
+        exceptions::invalid_request_exception);
+    BOOST_REQUIRE_THROW(
+        cql3::functions::get_castas_fctn(bson_type, int32_type),
+        exceptions::invalid_request_exception);
+}
+
+// CAST(garbage_text AS bson) rejects invalid BSON.
+SEASTAR_THREAD_TEST_CASE(bson_cast_from_text_rejects_invalid) {
+    // "010203" is only 3 bytes — too short for any BSON document.
+    auto text_dv = data_value(sstring("010203"));
+    auto fn = cql3::functions::get_castas_fctn(bson_type, utf8_type);
+    BOOST_REQUIRE_THROW(fn(std::move(text_dv)), marshal_exception);
+}
+
+// CAST(garbage_blob AS bson) rejects invalid BSON.
+SEASTAR_THREAD_TEST_CASE(bson_cast_from_blob_rejects_invalid) {
+    auto blob_dv = data_value(bytes{0x01, 0x02, 0x03});
+    auto fn = cql3::functions::get_castas_fctn(bson_type, bytes_type);
+    BOOST_REQUIRE_THROW(fn(std::move(blob_dv)), marshal_exception);
 }
