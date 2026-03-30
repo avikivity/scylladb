@@ -353,6 +353,7 @@ add_scylla_test(combined_tests
     auth_test.cc
     client_state_test.cc
     batchlog_manager_test.cc
+    bson_cql_test.cc
     table_helper_test.cc
     cache_algorithm_test.cc
     castas_fcts_test.cc

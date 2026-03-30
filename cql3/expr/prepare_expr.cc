@@ -27,6 +27,7 @@
 #include "utils/like_matcher.hh"
 #include "utils/chunked_string.hh"
 #include "utils/hash.hh"
+#include "utils/bson.hh"
 
 #include <ranges>
 
@@ -892,6 +893,182 @@ template <> struct fmt::formatter<cql3::expr::untyped_constant::type_class> : fm
 };
 
 namespace cql3::expr {
+
+// --- JSON literal support for bson_type columns ---
+//
+// When a collection literal (map or list) targets a json (bson_type) column,
+// we convert the expression tree directly to BSON bytes at preparation time.
+// This supports syntax like:
+//   INSERT INTO t (id, doc) VALUES (1, {'name': 'Alice', 'age': 30, 'tags': [1, 2]});
+
+static bson::document json_map_to_bson(const collection_constructor& c);
+static bson::document json_list_to_bson(const collection_constructor& c);
+
+// Recursively add a JSON value to a BSON writer.
+static void json_add_value(bson::writer& w, std::string_view key, const expression& expr) {
+    expr::visit(overloaded_functor{
+        [&] (const untyped_constant& uc) {
+            switch (uc.partial_type) {
+            case untyped_constant::type_class::string:
+                w.add_string(key, uc.raw_text);
+                break;
+            case untyped_constant::type_class::integer: {
+                try {
+                    auto val = std::stoll(uc.raw_text);
+                    if (val >= std::numeric_limits<int32_t>::min()
+                            && val <= std::numeric_limits<int32_t>::max()) {
+                        w.add_int32(key, static_cast<int32_t>(val));
+                    } else {
+                        w.add_int64(key, val);
+                    }
+                } catch (const std::exception&) {
+                    throw exceptions::invalid_request_exception(
+                        format("invalid integer in JSON literal: {}", uc.raw_text));
+                }
+                break;
+            }
+            case untyped_constant::type_class::floating_point:
+                try {
+                    w.add_double(key, std::stod(uc.raw_text));
+                } catch (const std::exception&) {
+                    throw exceptions::invalid_request_exception(
+                        format("invalid float in JSON literal: {}", uc.raw_text));
+                }
+                break;
+            case untyped_constant::type_class::boolean:
+                w.add_bool(key, uc.raw_text == "true");
+                break;
+            case untyped_constant::type_class::null:
+                w.add_null(key);
+                break;
+            case untyped_constant::type_class::uuid:
+                w.add_string(key, uc.raw_text);
+                break;
+            default:
+                throw exceptions::invalid_request_exception(
+                    format("unsupported constant type in JSON literal: {}", uc.raw_text));
+            }
+        },
+        [&] (const collection_constructor& cc) {
+            switch (cc.style) {
+            case collection_constructor::style_type::map: {
+                auto doc = json_map_to_bson(cc);
+                w.add_document(key, doc);
+                break;
+            }
+            case collection_constructor::style_type::list_or_vector: {
+                auto doc = json_list_to_bson(cc);
+                w.add_array(key, doc);
+                break;
+            }
+            case collection_constructor::style_type::set:
+                if (cc.elements.empty()) {
+                    // {} is parsed as an empty set; treat as empty nested document.
+                    bson::writer sub;
+                    auto doc = std::move(sub).finish();
+                    w.add_document(key, doc);
+                } else {
+                    throw exceptions::invalid_request_exception(
+                        "set literals are not supported in JSON literals; use a list [...]");
+                }
+                break;
+            default:
+                throw exceptions::invalid_request_exception(
+                    "unsupported collection type in JSON literal");
+            }
+        },
+        [&] (const ExpressionElement auto&) {
+            throw exceptions::invalid_request_exception(
+                "only constant values are supported in JSON literals; "
+                "bind markers and function calls are not yet supported");
+        },
+    }, expr);
+}
+
+static bson::document json_map_to_bson(const collection_constructor& c) {
+    bson::writer w;
+    for (auto& entry : c.elements) {
+        auto& entry_tuple = expr::as<tuple_constructor>(entry);
+        if (entry_tuple.elements.size() != 2) {
+            on_internal_error(expr_logger, "map element is not a tuple of arity 2");
+        }
+        auto& key_expr = entry_tuple.elements[0];
+        auto& value_expr = entry_tuple.elements[1];
+
+        if (!expr::is<untyped_constant>(key_expr)) {
+            throw exceptions::invalid_request_exception(
+                "JSON document keys must be string constants");
+        }
+        auto& key = expr::as<untyped_constant>(key_expr);
+        if (key.partial_type != untyped_constant::type_class::string) {
+            throw exceptions::invalid_request_exception(
+                format("JSON document keys must be strings, got: {}", key.raw_text));
+        }
+
+        json_add_value(w, key.raw_text, value_expr);
+    }
+    return std::move(w).finish();
+}
+
+static bson::document json_list_to_bson(const collection_constructor& c) {
+    bson::writer w;
+    for (size_t i = 0; i < c.elements.size(); ++i) {
+        json_add_value(w, std::to_string(i), c.elements[i]);
+    }
+    return std::move(w).finish();
+}
+
+static
+assignment_testable::test_result
+json_test_assignment(const collection_constructor& c) {
+    switch (c.style) {
+    case collection_constructor::style_type::map:
+    case collection_constructor::style_type::list_or_vector:
+        return assignment_testable::test_result::WEAKLY_ASSIGNABLE;
+    case collection_constructor::style_type::set:
+        // {} is parsed as an empty set; allow it for json columns.
+        if (c.elements.empty()) {
+            return assignment_testable::test_result::WEAKLY_ASSIGNABLE;
+        }
+        return assignment_testable::test_result::NOT_ASSIGNABLE;
+    default:
+        return assignment_testable::test_result::NOT_ASSIGNABLE;
+    }
+}
+
+static
+std::optional<expression>
+json_prepare_expression(const collection_constructor& c, lw_shared_ptr<column_specification> receiver) {
+    if (!receiver) {
+        return std::nullopt;
+    }
+
+    bson::document doc;
+    switch (c.style) {
+    case collection_constructor::style_type::map:
+        doc = json_map_to_bson(c);
+        break;
+    case collection_constructor::style_type::list_or_vector:
+        doc = json_list_to_bson(c);
+        break;
+    case collection_constructor::style_type::set:
+        if (c.elements.empty()) {
+            bson::writer w;
+            doc = std::move(w).finish();
+        } else {
+            throw exceptions::invalid_request_exception(
+                "set literals are not supported for json columns");
+        }
+        break;
+    default:
+        throw exceptions::invalid_request_exception(
+            "unsupported literal type for json column");
+    }
+
+    return constant(cql3::raw_value::make_value(std::move(doc).as_managed_bytes()), bson_type);
+}
+
+// --- End of JSON literal support ---
 
 static
 managed_bytes
@@ -1829,6 +2006,9 @@ try_prepare_expression(const expression& expr, data_dictionary::database db, con
             return tuple_constructor_prepare_nontuple(tc, db, keyspace, schema_opt, receiver, infer_default, memo);
         },
         [&] (const collection_constructor& c) -> std::optional<expression> {
+            if (receiver && &receiver->type->without_reversed() == bson_type.get()) {
+                return json_prepare_expression(c, receiver);
+            }
             switch (c.style) {
             case collection_constructor::style_type::list_or_vector: return list_or_vector_prepare_expression(c, db, keyspace, schema_opt, receiver, infer_default, memo);
             case collection_constructor::style_type::set: return set_prepare_expression(c, db, keyspace, schema_opt, receiver, infer_default, memo);
@@ -1915,6 +2095,9 @@ test_assignment(const expression& expr, data_dictionary::database db, const sstr
             return tuple_constructor_test_assignment(tc, db, keyspace, schema_opt, receiver, memo);
         },
         [&] (const collection_constructor& c) -> test_result {
+            if (&receiver.type->without_reversed() == bson_type.get()) {
+                return json_test_assignment(c);
+            }
             switch (c.style) {
             case collection_constructor::style_type::list_or_vector: return list_or_vector_test_assignment(c, db, keyspace, schema_opt, receiver, memo);
             case collection_constructor::style_type::set: return set_test_assignment(c, db, keyspace, schema_opt, receiver, memo);

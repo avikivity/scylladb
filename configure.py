@@ -1713,6 +1713,7 @@ deps['test/boost/combined_tests'] += [
     'test/boost/auth_test.cc',
     'test/boost/client_state_test.cc',
     'test/boost/batchlog_manager_test.cc',
+    'test/boost/bson_cql_test.cc',
     'test/boost/table_helper_test.cc',
     'test/boost/cache_algorithm_test.cc',
     'test/boost/castas_fcts_test.cc',
