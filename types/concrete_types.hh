@@ -18,6 +18,7 @@
 #include "types/vector.hh"
 #include "types/user.hh"
 #include "utils/big_decimal.hh"
+#include "utils/bson.hh"
 
 struct empty_type_impl final : public abstract_type {
     using native_type = empty_type_representation;
@@ -110,6 +111,10 @@ struct bytes_type_impl final : public concrete_type<bytes> {
     bytes_type_impl();
 };
 
+struct bson_type_impl final : public concrete_type<bson::document> {
+    bson_type_impl();
+};
+
 // This is the old version of timestamp_type_impl, but has been replaced as it
 // wasn't comparing pre-epoch timestamps correctly. This is kept for backward
 // compatibility but shouldn't be used in new code.
@@ -147,6 +152,7 @@ template <typename Func> concept CanHandleAllTypes = requires(Func f) {
     { f(*static_cast<const boolean_type_impl*>(nullptr)) }     -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const byte_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const bytes_type_impl*>(nullptr)) }       -> std::same_as<visit_ret_type<Func>>;
+    { f(*static_cast<const bson_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const counter_type_impl*>(nullptr)) }     -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const date_type_impl*>(nullptr)) }        -> std::same_as<visit_ret_type<Func>>;
     { f(*static_cast<const decimal_type_impl*>(nullptr)) }     -> std::same_as<visit_ret_type<Func>>;
@@ -186,6 +192,8 @@ inline visit_ret_type<Func> visit(const abstract_type& t, Func&& f) {
         return f(*static_cast<const byte_type_impl*>(&t));
     case abstract_type::kind::bytes:
         return f(*static_cast<const bytes_type_impl*>(&t));
+    case abstract_type::kind::bson:
+        return f(*static_cast<const bson_type_impl*>(&t));
     case abstract_type::kind::counter:
         return f(*static_cast<const counter_type_impl*>(&t));
     case abstract_type::kind::date:

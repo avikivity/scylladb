@@ -310,6 +310,14 @@ struct from_json_object_visitor {
         string_v.remove_prefix(2);
         return to_bytes(bytes_type->from_string(string_v));
     }
+    bytes operator()(const bson_type_impl& t) {
+        std::string_view string_v = validated_to_string_view(value, "bson_type");
+        if (string_v.size() < 2 || string_v[0] != '0' || string_v[1] != 'x') {
+            throw marshal_exception("BSON JSON strings must start with 0x");
+        }
+        string_v.remove_prefix(2);
+        return bson_type->from_string(string_v);
+    }
     bytes operator()(const boolean_type_impl& t) {
         if (!value.IsBool()) {
             if (value.IsString()) {
@@ -564,6 +572,7 @@ struct to_json_string_visitor {
     sstring operator()(const inet_addr_type_impl& t) { return quote_json_string(t.to_string(bv)); }
     sstring operator()(const string_type_impl& t) { return quote_json_string(t.to_string(bv)); }
     sstring operator()(const bytes_type_impl& t) { return quote_json_string("0x" + t.to_string(bv)); }
+    sstring operator()(const bson_type_impl& t) { return quote_json_string("0x" + t.to_string(bv)); }
     sstring operator()(const boolean_type_impl& t) { return t.to_string(bv); }
     sstring operator()(const timestamp_date_base_class& t) { return quote_json_string(timestamp_to_json_string(t, bv)); }
     sstring operator()(const timeuuid_type_impl& t) { return quote_json_string(t.to_string(bv)); }
@@ -632,6 +641,7 @@ struct to_json_type_visitor {
     rjson::type operator()(const inet_addr_type_impl& t) { return rjson::type::kStringType; }
     rjson::type operator()(const string_type_impl& t) { return rjson::type::kStringType; }
     rjson::type operator()(const bytes_type_impl& t) { return rjson::type::kStringType; }
+    rjson::type operator()(const bson_type_impl& t) { return rjson::type::kStringType; }
     rjson::type operator()(const boolean_type_impl& t) {
         const auto val = t.to_string(linearized(bv));
         return val == "true" ? rjson::type::kTrueType : rjson::type::kFalseType;

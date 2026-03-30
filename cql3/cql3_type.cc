@@ -51,6 +51,7 @@ static cql3_type::kind get_cql3_kind(const abstract_type& t) {
         cql3_type::kind operator()(const reversed_type_impl& r) { return get_cql3_kind(*r.underlying_type()); }
         cql3_type::kind operator()(const tuple_type_impl&) { throwing_assert(0 && "no kind for this type"); }
         cql3_type::kind operator()(const vector_type_impl&) { throwing_assert(0 && "no kind for this type"); }
+        cql3_type::kind operator()(const bson_type_impl&) { throwing_assert(0 && "no kind for this type"); }
         cql3_type::kind operator()(const collection_type_impl&) { throwing_assert(0 && "no kind for this type"); }
     };
     return visit(t, visitor{});

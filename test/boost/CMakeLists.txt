@@ -35,6 +35,8 @@ add_scylla_test(broken_sstable_test
   KIND SEASTAR)
 add_scylla_test(bson_test
   KIND BOOST)
+add_scylla_test(bson_type_test
+  KIND SEASTAR)
 add_scylla_test(btree_test
   KIND SEASTAR)
 add_scylla_test(bytes_ostream_test

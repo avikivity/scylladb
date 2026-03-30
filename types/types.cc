@@ -123,6 +123,7 @@ static const char* long_type_name      = "org.apache.cassandra.db.marshal.LongTy
 static const char* ascii_type_name     = "org.apache.cassandra.db.marshal.AsciiType";
 static const char* utf8_type_name      = "org.apache.cassandra.db.marshal.UTF8Type";
 static const char* bytes_type_name     = "org.apache.cassandra.db.marshal.BytesType";
+static const char* bson_type_name      = "com.scylladb.db.marshal.BsonType";
 static const char* boolean_type_name   = "org.apache.cassandra.db.marshal.BooleanType";
 static const char* timeuuid_type_name  = "org.apache.cassandra.db.marshal.TimeUUIDType";
 static const char* timestamp_type_name = "org.apache.cassandra.db.marshal.TimestampType";
@@ -211,6 +212,9 @@ utf8_type_impl::utf8_type_impl() : string_type_impl(kind::utf8, utf8_type_name) 
 
 bytes_type_impl::bytes_type_impl()
     : concrete_type(kind::bytes, bytes_type_name, {}) {}
+
+bson_type_impl::bson_type_impl()
+    : concrete_type(kind::bson, bson_type_name, {}) {}
 
 boolean_type_impl::boolean_type_impl() : simple_type_impl<bool>(kind::boolean, boolean_type_name, 1) {}
 
@@ -952,6 +956,7 @@ struct is_byte_order_equal_visitor {
     bool operator()(const reversed_type_impl& t) { return t.underlying_type()->is_byte_order_equal(); }
     bool operator()(const string_type_impl&) { return true; }
     bool operator()(const bytes_type_impl&) { return true; }
+    bool operator()(const bson_type_impl&) { return true; }
     bool operator()(const timestamp_date_base_class&) { return true; }
     bool operator()(const inet_addr_type_impl&) { return true; }
     bool operator()(const duration_type_impl&) { return true; }
@@ -980,6 +985,7 @@ is_fixed_size_int_type(const abstract_type& t) {
         return true;
     case k::ascii:
     case k::boolean:
+    case k::bson:
     case k::bytes:
     case k::counter:
     case k::date:
@@ -1082,6 +1088,7 @@ static sstring cql3_type_name_impl(const abstract_type& t) {
         sstring operator()(const boolean_type_impl&) { return "boolean"; }
         sstring operator()(const byte_type_impl&) { return "tinyint"; }
         sstring operator()(const bytes_type_impl&) { return "blob"; }
+        sstring operator()(const bson_type_impl&) { return "bson"; }
         sstring operator()(const counter_type_impl&) { return "counter"; }
         sstring operator()(const timestamp_date_base_class&) { return "timestamp"; }
         sstring operator()(const decimal_type_impl&) { return "decimal"; }
@@ -1761,6 +1768,13 @@ struct deserialize_vector_visitor {
         });
     }
 
+    data_value operator()(const bson_type_impl& element_type) {
+        return deserialize_loop([&] (View elem) {
+            return element_type.make_value(
+                bson::document::from_managed_bytes_unsafe(managed_bytes(elem)));
+        });
+    }
+
     data_value operator()(const empty_type_impl&) {
         return deserialize_loop([] (View) {
             return data_value(empty_type_representation());
@@ -2190,6 +2204,17 @@ struct serialize_visitor {
     void operator()(const bytes_type_impl& t, const bytes* v) {
         out = std::copy(v->begin(), v->end(), out);
     }
+    void operator()(const bson_type_impl& t, const bson::document* v) {
+        if (v->empty()) {
+            return;
+        }
+        auto view = managed_bytes_view(v->as_managed_bytes());
+        while (view.size_bytes()) {
+            auto frag = view.current_fragment();
+            out = std::copy_n(frag.data(), frag.size(), out);
+            view.remove_prefix(frag.size());
+        }
+    }
     void operator()(const boolean_type_impl& t, const boolean_type_impl::native_type* v) {
         if (!v->empty()) {
             *out++ = char(*v);
@@ -2555,6 +2580,9 @@ struct deserialize_visitor {
     data_value operator()(const bytes_type_impl& t) {
         return t.make_value(std::make_unique<bytes_type_impl::native_type>(linearized(v)));
     }
+    data_value operator()(const bson_type_impl& t) {
+        return t.make_value(bson::document::from_managed_bytes_unsafe(managed_bytes(v)));
+    }
     data_value operator()(const counter_type_impl& t) {
         return static_cast<const long_type_impl&>(*long_type).make_value(read_simple_exactly<int64_t>(v));
     }
@@ -2664,6 +2692,7 @@ struct compare_visitor {
     }
     std::strong_ordering operator()(const string_type_impl&) { return compare_unsigned(v1, v2); }
     std::strong_ordering operator()(const bytes_type_impl&) { return compare_unsigned(v1, v2); }
+    std::strong_ordering operator()(const bson_type_impl&) { return compare_unsigned(v1, v2); }
     std::strong_ordering operator()(const duration_type_impl&) { return compare_unsigned(v1, v2); }
     std::strong_ordering operator()(const inet_addr_type_impl&) { return compare_unsigned(v1, v2); }
     std::strong_ordering operator()(const date_type_impl&) {
@@ -2935,6 +2964,7 @@ static size_t concrete_serialized_size(const timeuuid_type_impl::native_type&) {
 static size_t concrete_serialized_size(const simple_date_type_impl::native_type&) { return 4; }
 static size_t concrete_serialized_size(const string_type_impl::native_type& v) { return v.size(); }
 static size_t concrete_serialized_size(const bytes_type_impl::native_type& v) { return v.size(); }
+static size_t concrete_serialized_size(const bson_type_impl::native_type& v) { return v.size(); }
 static size_t concrete_serialized_size(const inet_addr_type_impl::native_type& v) { return v.get().size(); }
 
 static size_t concrete_serialized_size_aux(const boost::multiprecision::cpp_int& num) {
@@ -3065,6 +3095,9 @@ struct from_string_visitor {
     }
     managed_bytes operator()(const bytes_type_impl&) {
         return utils::from_hex(s);
+    }
+    managed_bytes operator()(const bson_type_impl&) {
+        return from_hex(s);
     }
     managed_bytes operator()(const boolean_type_impl& t) {
         return s.with_linearized([&](std::string_view sv) {
@@ -3264,6 +3297,11 @@ struct to_string_impl_visitor {
     }
     sstring operator()(const bytes_type_impl& b, const bytes* v) {
         return format_if_not_empty(b, v, [] (const bytes& v) { return to_hex(v); });
+    }
+    sstring operator()(const bson_type_impl& b, const bson::document* v) {
+        return format_if_not_empty(b, v, [] (const bson::document& v) {
+            return to_hex(linearized(managed_bytes_view(v.as_managed_bytes())));
+        });
     }
     sstring operator()(const boolean_type_impl& b, const boolean_type_impl::native_type* v) {
         return format_if_not_empty(b, v, [] (const bool b) { return fmt::to_string(b); });
@@ -3859,6 +3897,7 @@ thread_local const shared_ptr<const abstract_type> int32_type(make_shared<int32_
 thread_local const shared_ptr<const abstract_type> long_type(make_shared<long_type_impl>());
 thread_local const shared_ptr<const abstract_type> ascii_type(make_shared<ascii_type_impl>());
 thread_local const shared_ptr<const abstract_type> bytes_type(make_shared<bytes_type_impl>());
+thread_local const shared_ptr<const abstract_type> bson_type(make_shared<bson_type_impl>());
 thread_local const shared_ptr<const abstract_type> utf8_type(make_shared<utf8_type_impl>());
 thread_local const shared_ptr<const abstract_type> boolean_type(make_shared<boolean_type_impl>());
 thread_local const shared_ptr<const abstract_type> date_type(make_shared<date_type_impl>());
@@ -3885,6 +3924,7 @@ data_type abstract_type::parse_type(const sstring& name)
         { long_type_name,      long_type      },
         { ascii_type_name,     ascii_type     },
         { bytes_type_name,     bytes_type     },
+        { bson_type_name,      bson_type      },
         { utf8_type_name,      utf8_type      },
         { boolean_type_name,   boolean_type   },
         { date_type_name,      date_type      },

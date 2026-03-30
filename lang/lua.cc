@@ -829,6 +829,10 @@ struct from_lua_visitor {
         return data_value(bytes(reinterpret_cast<const int8_t*>(v.data()), v.size()));
     }
 
+    data_value operator()(const bson_type_impl& t) {
+        throw exceptions::invalid_request_exception("BSON type is not yet supported in Lua UDFs");
+    }
+
     data_value operator()(const utf8_type_impl& t) {
         sstring s = get_string(l, -1);
         auto error_pos = utils::utf8::validate_with_error_position(reinterpret_cast<uint8_t*>(s.data()), s.size());
@@ -1033,6 +1037,10 @@ struct to_lua_visitor {
     void operator()(const bytes_type_impl& t, const bytes* v) {
         // lua strings can hold arbitrary blobs
         lua_pushlstring(l, reinterpret_cast<const char*>(v->c_str()), v->size());
+    }
+
+    void operator()(const bson_type_impl& t, const bson::document* v) {
+        throw exceptions::invalid_request_exception("BSON type is not yet supported in Lua UDFs");
     }
 
     void operator()(const string_type_impl& t, const sstring* v) {

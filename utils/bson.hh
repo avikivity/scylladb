@@ -57,6 +57,13 @@ class document {
 
     explicit document(managed_bytes data) : _data(std::move(data)) {}
 public:
+    // Default constructor creates an empty (zero-length) document.
+    // This is NOT a valid BSON document — it represents the CQL "empty"
+    // state (a zero-length cell value, distinct from NULL).
+    document() = default;
+
+    document(const document&) = default;
+    document& operator=(const document&) = default;
     document(document&&) noexcept = default;
     document& operator=(document&&) noexcept = default;
 

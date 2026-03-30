@@ -1263,6 +1263,10 @@ struct to_comparable_bytes_visitor {
         escape_zeros(serialized_bytes_view, out);
     }
 
+    void operator()(const bson_type_impl&) {
+        escape_zeros(serialized_bytes_view, out);
+    }
+
     // Encode text and ascii types
     void operator()(const string_type_impl&) {
         escape_zeros(serialized_bytes_view, out);
@@ -1385,6 +1389,10 @@ struct from_comparable_bytes_visitor {
     }
 
     void operator()(const bytes_type_impl&) {
+        unescape_zeros(comparable_bytes_view, out);
+    }
+
+    void operator()(const bson_type_impl&) {
         unescape_zeros(comparable_bytes_view, out);
     }
 

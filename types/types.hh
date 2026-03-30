@@ -46,6 +46,10 @@ class tuple_type_impl;
 class vector_type_impl;
 class big_decimal;
 
+namespace bson {
+class document;
+}
+
 namespace utils {
 
 class multiprecision_int;
@@ -397,6 +401,7 @@ public:
         boolean,
         byte,
         bytes,
+        bson,
         counter,
         date,
         decimal,
@@ -867,6 +872,7 @@ extern thread_local const shared_ptr<const abstract_type> int32_type;
 extern thread_local const shared_ptr<const abstract_type> long_type;
 extern thread_local const shared_ptr<const abstract_type> ascii_type;
 extern thread_local const shared_ptr<const abstract_type> bytes_type;
+extern thread_local const shared_ptr<const abstract_type> bson_type;
 extern thread_local const shared_ptr<const abstract_type> utf8_type;
 extern thread_local const shared_ptr<const abstract_type> boolean_type;
 extern thread_local const shared_ptr<const abstract_type> date_type;
@@ -890,6 +896,7 @@ template <> inline thread_local const data_type& data_type_for_v<int32_t> = int3
 template <> inline thread_local const data_type& data_type_for_v<int64_t> = long_type;
 template <> inline thread_local const data_type& data_type_for_v<sstring> = utf8_type;
 template <> inline thread_local const data_type& data_type_for_v<bytes> = bytes_type;
+template <> inline thread_local const data_type& data_type_for_v<bson::document> = bson_type;
 template <> inline thread_local const data_type& data_type_for_v<utils::UUID> = uuid_type;
 template <> inline thread_local const data_type& data_type_for_v<date_type_native_type> = date_type;
 template <> inline thread_local const data_type& data_type_for_v<simple_date_native_type> = simple_date_type;
