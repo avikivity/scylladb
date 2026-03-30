@@ -13,6 +13,7 @@
 #include "lang/lua_scylla_types.hh"
 #include "exceptions/exceptions.hh"
 #include "types/concrete_types.hh"
+#include "utils/bson.hh"
 #include "utils/assert.hh"
 #include "utils/utf8.hh"
 #include "utils/ascii.hh"
@@ -568,6 +569,124 @@ struct timestamp_return_visitor {
     db_clock::time_point operator()(const lua_table&);
 };
 
+// --- Lua table → BSON conversion ---
+
+// Forward declaration
+static void lua_value_to_bson_element(lua_State* l, bson::writer& w, std::string_view key, int value_index);
+
+// Check if a Lua table at the given stack index is a sequence (array).
+// A table is a sequence if all its keys are consecutive integers 1..N
+// where N == lua_rawlen(l, index).
+static bool lua_table_is_array(lua_State* l, int index) {
+    // Normalize to absolute index since we push onto the stack
+    if (index < 0) {
+        index = lua_gettop(l) + index + 1;
+    }
+    size_t len = lua_rawlen(l, index);
+    size_t count = 0;
+    lua_pushnil(l);
+    while (lua_next(l, index) != 0) {
+        ++count;
+        lua_pop(l, 1); // pop value, keep key for next iteration
+    }
+    // A table is an array if the number of entries equals the raw length,
+    // and there are entries (empty tables default to documents).
+    return count > 0 && count == len;
+}
+
+// Convert the Lua table at the given stack index to a bson::document.
+static bson::document lua_table_to_bson(lua_State* l, int index) {
+    // Normalize index to absolute
+    if (index < 0) {
+        index = lua_gettop(l) + index + 1;
+    }
+
+    bson::writer w;
+    if (lua_table_is_array(l, index)) {
+        // Array: keys are "0", "1", "2", etc. per BSON convention
+        size_t len = lua_rawlen(l, index);
+        for (size_t i = 1; i <= len; ++i) {
+            lua_rawgeti(l, index, i);
+            auto key = std::to_string(i - 1); // BSON arrays use 0-based string keys
+            lua_value_to_bson_element(l, w, key, -1);
+            lua_pop(l, 1);
+        }
+    } else {
+        // Document: iterate all key-value pairs
+        lua_pushnil(l);
+        while (lua_next(l, index) != 0) {
+            // key is at index -2, value at -1
+            sstring key;
+            if (lua_type(l, -2) == LUA_TSTRING) {
+                size_t len;
+                const char* s = lua_tolstring(l, -2, &len);
+                key = sstring(s, len);
+            } else if (lua_type(l, -2) == LUA_TNUMBER) {
+                if (lua_isinteger(l, -2)) {
+                    key = std::to_string(lua_tointeger(l, -2));
+                } else {
+                    key = std::to_string(lua_tonumber(l, -2));
+                }
+            } else {
+                lua_pop(l, 2);
+                throw exceptions::invalid_request_exception("BSON document keys must be strings or numbers");
+            }
+            lua_value_to_bson_element(l, w, key, -1);
+            lua_pop(l, 1); // pop value, keep key for next iteration
+        }
+    }
+    return std::move(w).finish();
+}
+
+// Add a Lua value at the given stack index as a BSON element with the given key.
+static void lua_value_to_bson_element(lua_State* l, bson::writer& w, std::string_view key, int value_index) {
+    switch (lua_type(l, value_index)) {
+    case LUA_TNUMBER:
+        if (lua_isinteger(l, value_index)) {
+            int64_t v = lua_tointeger(l, value_index);
+            if (v >= INT32_MIN && v <= INT32_MAX) {
+                w.add_int32(key, static_cast<int32_t>(v));
+            } else {
+                w.add_int64(key, v);
+            }
+        } else {
+            w.add_double(key, lua_tonumber(l, value_index));
+        }
+        break;
+    case LUA_TSTRING: {
+        size_t len;
+        const char* s = lua_tolstring(l, value_index, &len);
+        w.add_string(key, std::string_view(s, len));
+        break;
+    }
+    case LUA_TBOOLEAN:
+        w.add_bool(key, lua_toboolean(l, value_index));
+        break;
+    case LUA_TNIL:
+        w.add_null(key);
+        break;
+    case LUA_TTABLE: {
+        // Normalize to absolute index for recursive call
+        int abs_idx = value_index;
+        if (abs_idx < 0) {
+            abs_idx = lua_gettop(l) + abs_idx + 1;
+        }
+        if (lua_table_is_array(l, abs_idx)) {
+            auto arr = lua_table_to_bson(l, abs_idx);
+            w.add_array(key, arr);
+        } else {
+            auto doc = lua_table_to_bson(l, abs_idx);
+            w.add_document(key, doc);
+        }
+        break;
+    }
+    default:
+        throw exceptions::invalid_request_exception(
+            fmt::format("Cannot convert Lua {} to BSON element",
+                lua_typename(l, lua_type(l, value_index))));
+    }
+}
+
 struct from_lua_visitor {
     lua_State* l;
 
@@ -830,7 +949,11 @@ struct from_lua_visitor {
     }
 
     data_value operator()(const bson_type_impl& t) {
-        throw exceptions::invalid_request_exception("BSON type is not yet supported in Lua UDFs");
+        if (!lua_istable(l, -1)) {
+            throw exceptions::invalid_request_exception("BSON value must be a Lua table");
+        }
+        auto doc = lua_table_to_bson(l, -1);
+        return static_cast<const bson_type_impl&>(*bson_type).make_value(std::move(doc));
     }
 
     data_value operator()(const utf8_type_impl& t) {
@@ -946,6 +1069,118 @@ void lua::push_sstring(lua_State* l, const sstring& v) {
     lua_pushlstring(l, v.c_str(), v.size());
 }
 
+// Push a single BSON element value onto the Lua stack.
+template <FragmentedView View>
+static void push_bson_value(lua_State* l, const bson::element<View>& elem);
+
+// Push a BSON document/array view onto the Lua stack as a Lua table.
+template <FragmentedView View>
+static void push_bson_table(lua_State* l, View view, bool is_array) {
+    bson::reader rdr(view);
+    if (is_array) {
+        lua_createtable(l, 0, 0);
+        int i = 0;
+        for (auto&& e : rdr) {
+            push_bson_value(l, e);
+            lua_rawseti(l, -2, ++i);
+        }
+    } else {
+        lua_createtable(l, 0, 0);
+        for (auto&& e : rdr) {
+            push_sstring(l, e.key);
+            push_bson_value(l, e);
+            lua_rawset(l, -3);
+        }
+    }
+}
+
+template <FragmentedView View>
+static void push_bson_value(lua_State* l, const bson::element<View>& elem) {
+    switch (elem.type) {
+    case bson::type::double_value:
+        lua_pushnumber(l, elem.as_double());
+        break;
+    case bson::type::string:
+    case bson::type::javascript: {
+        auto s = elem.as_string();
+        lua_pushlstring(l, s.c_str(), s.size());
+        break;
+    }
+    case bson::type::document:
+        push_bson_table(l, elem.as_document(), false);
+        break;
+    case bson::type::array:
+        push_bson_table(l, elem.as_document(), true);
+        break;
+    case bson::type::boolean:
+        lua_pushboolean(l, elem.as_bool());
+        break;
+    case bson::type::null:
+        lua_pushnil(l);
+        break;
+    case bson::type::int32:
+        lua_pushinteger(l, elem.as_int32());
+        break;
+    case bson::type::int64:
+        lua_pushinteger(l, elem.as_int64());
+        break;
+    case bson::type::datetime:
+        // Milliseconds since epoch as integer, like timestamp_date_base_class
+        lua_pushinteger(l, elem.as_datetime());
+        break;
+    case bson::type::timestamp:
+        // BSON timestamp as uint64 — push as integer
+        lua_pushinteger(l, static_cast<int64_t>(elem.as_timestamp()));
+        break;
+    case bson::type::binary: {
+        // Push raw binary data as a Lua string (Lua strings can hold arbitrary bytes)
+        auto bin = elem.as_binary();
+        std::vector<char> buf(bin.size_bytes());
+        if (!buf.empty()) {
+            auto tmp = bin;
+            read_fragmented(tmp, buf.size(),
+                reinterpret_cast<bytes::value_type*>(buf.data()));
+        }
+        lua_pushlstring(l, buf.data(), buf.size());
+        break;
+    }
+    case bson::type::object_id: {
+        // Push ObjectId as a 12-byte Lua string
+        auto oid = elem.as_object_id();
+        char buf[12];
+        auto tmp = oid;
+        read_fragmented(tmp, 12, reinterpret_cast<bytes::value_type*>(buf));
+        lua_pushlstring(l, buf, 12);
+        break;
+    }
+    case bson::type::regex: {
+        // Push regex as a table {pattern="...", options="..."}
+        lua_createtable(l, 0, 2);
+        auto pattern = elem.as_regex_pattern();
+        push_sstring(l, pattern);
+        lua_setfield(l, -2, "pattern");
+        auto options = elem.as_regex_options();
+        push_sstring(l, options);
+        lua_setfield(l, -2, "options");
+        break;
+    }
+    case bson::type::decimal128: {
+        // Push decimal128 as a 16-byte Lua string
+        auto d = elem.as_decimal128();
+        char buf[16];
+        auto tmp = d;
+        read_fragmented(tmp, 16, reinterpret_cast<bytes::value_type*>(buf));
+        lua_pushlstring(l, buf, 16);
+        break;
+    }
+    case bson::type::min_key:
+    case bson::type::max_key:
+        // No natural Lua representation; push nil
+        lua_pushnil(l);
+        break;
+    }
+}
+
 static void push_argument(lua_State* l, const data_value& arg);
 
 namespace {
@@ -1040,7 +1275,10 @@ struct to_lua_visitor {
     }
 
     void operator()(const bson_type_impl& t, const bson::document* v) {
-        throw exceptions::invalid_request_exception("BSON type is not yet supported in Lua UDFs");
+        with_simplified(managed_bytes_view(v->as_managed_bytes()),
+            [&](auto view) {
+                push_bson_table(l, view, false);
+            });
     }
 
     void operator()(const string_type_impl& t, const sstring* v) {

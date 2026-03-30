@@ -17,6 +17,8 @@
 #include "utils/bson.hh"
 #include "db/marshal/type_parser.hh"
 #include "cql3/functions/castas_fcts.hh"
+#include "lang/lua_scylla_types.hh"
+#include <lua.hpp>
 
 namespace {
 
@@ -412,4 +414,256 @@ SEASTAR_THREAD_TEST_CASE(bson_cast_from_blob_rejects_invalid) {
     auto blob_dv = data_value(bytes{0x01, 0x02, 0x03});
     auto fn = cql3::functions::get_castas_fctn(bson_type, bytes_type);
     BOOST_REQUIRE_THROW(fn(std::move(blob_dv)), marshal_exception);
+}
+
+// --- Lua UDF integration tests ---
+
+namespace {
+
+// RAII wrapper for a Lua state used in tests.
+struct lua_state_guard {
+    lua_State* l;
+    lua_state_guard() : l(luaL_newstate()) {
+        BOOST_REQUIRE(l != nullptr);
+        lua::register_metatables(l);
+    }
+    ~lua_state_guard() { lua_close(l); }
+    operator lua_State*() const { return l; }
+};
+
+} // anonymous namespace
+
+// Lua: push a simple BSON document and read it back.
+SEASTAR_THREAD_TEST_CASE(bson_lua_round_trip_simple) {
+    lua_state_guard L;
+    bson::writer w;
+    w.add_string("name", "alice");
+    w.add_int32("age", 30);
+    auto doc = std::move(w).finish();
+    auto dv = make_bson_dv(std::move(doc));
+
+    lua::push_data_value(L, dv);
+
+    // The value on the stack should be a table
+    BOOST_REQUIRE_EQUAL(lua_type(L, -1), LUA_TTABLE);
+
+    // Check the "name" field
+    lua_getfield(L, -1, "name");
+    BOOST_REQUIRE_EQUAL(lua_type(L, -1), LUA_TSTRING);
+    size_t len;
+    const char* s = lua_tolstring(L, -1, &len);
+    BOOST_REQUIRE_EQUAL(std::string_view(s, len), "alice");
+    lua_pop(L, 1);
+
+    // Check the "age" field
+    lua_getfield(L, -1, "age");
+    BOOST_REQUIRE_EQUAL(lua_type(L, -1), LUA_TNUMBER);
+    BOOST_REQUIRE_EQUAL(lua_tointeger(L, -1), 30);
+    lua_pop(L, 1);
+
+    // Now read it back as a BSON document
+    auto result = lua::pop_data_value(L, bson_type);
+    auto& result_doc = value_cast<bson::document>(result);
+    BOOST_REQUIRE(!result_doc.empty());
+}
+
+// Lua: push a BSON document with nested document.
+SEASTAR_THREAD_TEST_CASE(bson_lua_nested_document) {
+    lua_state_guard L;
+    bson::writer inner;
+    inner.add_int32("x", 42);
+    auto inner_doc = std::move(inner).finish();
+    bson::writer outer;
+    outer.add_document("nested", inner_doc);
+    auto doc = std::move(outer).finish();
+    auto dv = make_bson_dv(std::move(doc));
+
+    lua::push_data_value(L, dv);
+
+    // Check nested.x
+    lua_getfield(L, -1, "nested");
+    BOOST_REQUIRE_EQUAL(lua_type(L, -1), LUA_TTABLE);
+    lua_getfield(L, -1, "x");
+    BOOST_REQUIRE_EQUAL(lua_tointeger(L, -1), 42);
+    lua_pop(L, 3);
+}
+
+// Lua: push a BSON array → sequential Lua table.
+SEASTAR_THREAD_TEST_CASE(bson_lua_array) {
+    lua_state_guard L;
+    bson::writer arr;
+    arr.add_int32("0", 10);
+    arr.add_int32("1", 20);
+    arr.add_int32("2", 30);
+    auto arr_doc = std::move(arr).finish();
+    bson::writer outer;
+    outer.add_array("nums", arr_doc);
+    auto doc = std::move(outer).finish();
+    auto dv = make_bson_dv(std::move(doc));
+
+    lua::push_data_value(L, dv);
+
+    lua_getfield(L, -1, "nums");
+    BOOST_REQUIRE_EQUAL(lua_type(L, -1), LUA_TTABLE);
+    // Lua arrays are 1-indexed
+    lua_rawgeti(L, -1, 1);
+    BOOST_REQUIRE_EQUAL(lua_tointeger(L, -1), 10);
+    lua_pop(L, 1);
+    lua_rawgeti(L, -1, 2);
+    BOOST_REQUIRE_EQUAL(lua_tointeger(L, -1), 20);
+    lua_pop(L, 1);
+    lua_rawgeti(L, -1, 3);
+    BOOST_REQUIRE_EQUAL(lua_tointeger(L, -1), 30);
+    lua_pop(L, 2);
+    lua_pop(L, 1);
+}
+
+// Lua: push BSON with various scalar types.
+SEASTAR_THREAD_TEST_CASE(bson_lua_scalar_types) {
+    lua_state_guard L;
+    bson::writer w;
+    w.add_double("d", 3.14);
+    w.add_bool("b", true);
+    w.add_null("n");
+    w.add_int64("big", int64_t(1) << 40);
+    auto doc = std::move(w).finish();
+    auto dv = make_bson_dv(std::move(doc));
+
+    lua::push_data_value(L, dv);
+
+    lua_getfield(L, -1, "d");
+    BOOST_REQUIRE_CLOSE(lua_tonumber(L, -1), 3.14, 0.001);
+    lua_pop(L, 1);
+
+    lua_getfield(L, -1, "b");
+    BOOST_REQUIRE_EQUAL(lua_toboolean(L, -1), 1);
+    lua_pop(L, 1);
+
+    lua_getfield(L, -1, "n");
+    BOOST_REQUIRE_EQUAL(lua_type(L, -1), LUA_TNIL);
+    lua_pop(L, 1);
+
+    lua_getfield(L, -1, "big");
+    BOOST_REQUIRE_EQUAL(lua_tointeger(L, -1), int64_t(1) << 40);
+    lua_pop(L, 2);
+}
+
+// Lua: round-trip a Lua table → BSON document → verify contents.
+SEASTAR_THREAD_TEST_CASE(bson_lua_from_table) {
+    lua_state_guard L;
+
+    // Build a Lua table {name="bob", score=100}
+    lua_createtable(L, 0, 2);
+    lua_pushstring(L, "bob");
+    lua_setfield(L, -2, "name");
+    lua_pushinteger(L, 100);
+    lua_setfield(L, -2, "score");
+
+    auto result = lua::pop_data_value(L, bson_type);
+    auto& doc = value_cast<bson::document>(result);
+
+    // Verify using the reader
+    auto raw = to_bytes(managed_bytes_view(doc.as_managed_bytes()));
+    auto json = to_json_string(*bson_type, raw);
+    // Key order in Lua tables is unspecified, so check both fields exist
+    BOOST_REQUIRE(json.find("\"name\": \"bob\"") != sstring::npos);
+    BOOST_REQUIRE(json.find("\"score\": 100") != sstring::npos);
+}
+
+// Lua: round-trip a Lua array table → BSON array → verify.
+SEASTAR_THREAD_TEST_CASE(bson_lua_from_array_table) {
+    lua_state_guard L;
+
+    // Build a Lua array {10, 20, 30}
+    lua_createtable(L, 3, 0);
+    lua_pushinteger(L, 10);
+    lua_rawseti(L, -2, 1);
+    lua_pushinteger(L, 20);
+    lua_rawseti(L, -2, 2);
+    lua_pushinteger(L, 30);
+    lua_rawseti(L, -2, 3);
+
+    auto result = lua::pop_data_value(L, bson_type);
+    auto& doc = value_cast<bson::document>(result);
+
+    // This should be an array with 0-based string keys
+    auto mbv = managed_bytes_view(doc.as_managed_bytes());
+    with_simplified(mbv, [](auto view) {
+        bson::reader rdr(view);
+        auto e0 = rdr.next();
+        BOOST_REQUIRE_EQUAL(e0.key, "0");
+        BOOST_REQUIRE_EQUAL(e0.as_int32(), 10);
+        auto e1 = rdr.next();
+        BOOST_REQUIRE_EQUAL(e1.key, "1");
+        BOOST_REQUIRE_EQUAL(e1.as_int32(), 20);
+        auto e2 = rdr.next();
+        BOOST_REQUIRE_EQUAL(e2.key, "2");
+        BOOST_REQUIRE_EQUAL(e2.as_int32(), 30);
+        BOOST_REQUIRE(!rdr.has_next());
+    });
+}
+
+// Lua: full push/pop round-trip preserves structure.
+SEASTAR_THREAD_TEST_CASE(bson_lua_full_round_trip) {
+    lua_state_guard L;
+    bson::writer w;
+    w.add_string("key", "value");
+    w.add_int32("num", 42);
+    auto original_doc = std::move(w).finish();
+    auto original_bytes = to_bytes(managed_bytes_view(original_doc.as_managed_bytes()));
+    auto dv = make_bson_dv(bson::document(original_doc));
+
+    // Push to Lua, then pop back
+    lua::push_data_value(L, dv);
+    auto result = lua::pop_data_value(L, bson_type);
+    auto& result_doc = value_cast<bson::document>(result);
+
+    // Verify contents via JSON (key order may differ)
+    auto result_bytes = to_bytes(managed_bytes_view(result_doc.as_managed_bytes()));
+    auto result_json = to_json_string(*bson_type, result_bytes);
+    BOOST_REQUIRE(result_json.find("\"key\": \"value\"") != sstring::npos);
+    BOOST_REQUIRE(result_json.find("\"num\": 42") != sstring::npos);
+}
+
+// Lua: empty BSON document → empty Lua table → empty BSON document.
+SEASTAR_THREAD_TEST_CASE(bson_lua_empty_document) {
+    lua_state_guard L;
+    bson::writer w;
+    auto doc = std::move(w).finish();
+    auto dv = make_bson_dv(std::move(doc));
+
+    lua::push_data_value(L, dv);
+    BOOST_REQUIRE_EQUAL(lua_type(L, -1), LUA_TTABLE);
+
+    // Empty table should produce a document (not array)
+    auto result = lua::pop_data_value(L, bson_type);
+    auto& result_doc = value_cast<bson::document>(result);
+    auto result_bytes = to_bytes(managed_bytes_view(result_doc.as_managed_bytes()));
+    auto result_json = to_json_string(*bson_type, result_bytes);
+    BOOST_REQUIRE_EQUAL(result_json, "{}");
+}
+
+// Lua: nested table round-trip.
+SEASTAR_THREAD_TEST_CASE(bson_lua_nested_table_round_trip) {
+    lua_state_guard L;
+
+    // Build {outer: {inner: 99}}
+    lua_createtable(L, 0, 1);
+    lua_createtable(L, 0, 1);
+    lua_pushinteger(L, 99);
+    lua_setfield(L, -2, "inner");
+    lua_setfield(L, -2, "outer");
+
+    auto result = lua::pop_data_value(L, bson_type);
+    auto& doc = value_cast<bson::document>(result);
+    auto raw = to_bytes(managed_bytes_view(doc.as_managed_bytes()));
+    auto json = to_json_string(*bson_type, raw);
+    BOOST_REQUIRE_EQUAL(json, "{\"outer\": {\"inner\": 99}}");
+}
+
+// Lua: BSON from non-table is rejected.
+SEASTAR_THREAD_TEST_CASE(bson_lua_rejects_non_table) {
+    lua_state_guard L;
+    lua_pushstring(L, "not a table");
+    BOOST_REQUIRE_THROW(lua::pop_data_value(L, bson_type), exceptions::invalid_request_exception);
 }
