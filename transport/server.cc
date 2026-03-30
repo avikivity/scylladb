@@ -2781,6 +2781,11 @@ public:
             r.write_string(type->name());
             return;
         }
+        if (type->get_kind() == abstract_type::kind::bson) {
+            r.write_short(uint16_t(type_id::CUSTOM));
+            r.write_string(type->name());
+            return;
+        }
         if (type->is_collection()) {
             auto&& ctype = static_cast<const collection_type_impl*>(type.get());
             if (ctype->get_kind() == abstract_type::kind::map) {
