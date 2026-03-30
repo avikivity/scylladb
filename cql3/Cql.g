@@ -472,6 +472,7 @@ unaliasedSelector returns [uexpression tmp]
                                                                                               std::move(a)}; }
        | f=functionName args=selectionFunctionArgs { tmp = function_call{std::move(f), std::move(args)}; }
        | K_CAST      '(' arg=unaliasedSelector K_AS t=native_type ')'  { tmp = cast{.style = cast::cast_style::sql, .arg = std::move(arg), .type = std::move(t)}; }
+       | '(' '?' t=native_type ')' inner=unaliasedSelector { tmp = cast{.style = cast::cast_style::c, .arg = std::move(inner), .type = std::move(t)}; }
        )
        ( '.' fi=cident { tmp = field_selection{std::move(tmp), std::move(fi)}; }
        | '[' sub=term ']' { tmp = subscript{std::move(tmp), std::move(sub)}; }

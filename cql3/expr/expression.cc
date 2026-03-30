@@ -34,11 +34,16 @@
 #include "cql3/functions/scalar_function.hh"
 #include "cql3/functions/first_function.hh"
 #include "cql3/prepare_context.hh"
+#include "utils/bson.hh"
 
 namespace cql3 {
 namespace expr {
 
 logging::logger expr_logger("cql_expression");
+
+// Forward declarations for BSON evaluation helpers (defined further below).
+static cql3::raw_value bson_field_select(const cql3::raw_value& bson_val, const sstring& field_name, const data_type& result_type);
+static cql3::raw_value bson_array_subscript(const cql3::raw_value& bson_val, int32_t index, const data_type& result_type);
 
 bool operator==(const expression& e1, const expression& e2) {
     if (e1._v->v.index() != e2._v->v.index()) {
@@ -143,7 +148,24 @@ get_value(const subscript& s, const evaluation_inputs& inputs) {
         // For null[i] we return null.
         return std::nullopt;
     }
-    auto col_type = static_pointer_cast<const collection_type_impl>(type_of(s.val));
+
+    auto val_type = type_of(s.val);
+
+    // BSON array subscript: navigate into a BSON array by integer index.
+    if (&val_type->without_reversed() == bson_type.get()) {
+        const auto key = evaluate(s.sub, inputs);
+        if (key.is_null()) {
+            return std::nullopt;
+        }
+        auto key_int = key.view().with_linearized([](bytes_view bv) {
+            return value_cast<int32_t>(int32_type->deserialize(bv));
+        });
+        auto bson_val = raw_value::make_value(std::move(*serialized));
+        auto result = bson_array_subscript(bson_val, key_int, s.type);
+        return std::move(result).to_managed_bytes_opt();
+    }
+
+    auto col_type = static_pointer_cast<const collection_type_impl>(val_type);
     const auto deserialized = type_of(s.val)->deserialize(managed_bytes_view(*serialized));
     const auto key = evaluate(s.sub, inputs);
     auto&& key_type = col_type->is_list() ? int32_type : col_type->name_comparator();
@@ -1320,8 +1342,145 @@ cql3::raw_value do_evaluate(const conjunction& conj, const evaluation_inputs& in
     return raw_value::make_value(boolean_type->decompose(true));
 }
 
+// Convert a BSON element value to a CQL managed_bytes for the given target type.
+// Returns std::nullopt (CQL NULL) if the BSON type is incompatible with the target.
+template <FragmentedView View>
+static managed_bytes_opt bson_element_to_cql(const bson::element<View>& elem, const data_type& target) {
+    const auto& t = target->without_reversed();
+    // Sub-document / sub-array → bson_type (pass-through)
+    if (&t == bson_type.get()) {
+        if (elem.type == bson::type::document || elem.type == bson::type::array) {
+            return managed_bytes(elem.as_document());
+        }
+        return std::nullopt;
+    }
+    // Helper: decompose returns bytes, wrap in managed_bytes for managed_bytes_opt.
+    auto mb = [](bytes b) -> managed_bytes_opt { return managed_bytes(std::move(b)); };
+    // Numeric conversions — widen or narrow as needed, return NULL on type mismatch.
+    if (&t == int32_type.get()) {
+        switch (elem.type) {
+        case bson::type::int32:  return mb(int32_type->decompose(elem.as_int32()));
+        case bson::type::int64:  return mb(int32_type->decompose(static_cast<int32_t>(elem.as_int64())));
+        case bson::type::double_value: return mb(int32_type->decompose(static_cast<int32_t>(elem.as_double())));
+        case bson::type::boolean: return mb(int32_type->decompose(static_cast<int32_t>(elem.as_bool())));
+        default: return std::nullopt;
+        }
+    }
+    if (&t == long_type.get()) {
+        switch (elem.type) {
+        case bson::type::int64:  return mb(long_type->decompose(elem.as_int64()));
+        case bson::type::int32:  return mb(long_type->decompose(static_cast<int64_t>(elem.as_int32())));
+        case bson::type::double_value: return mb(long_type->decompose(static_cast<int64_t>(elem.as_double())));
+        case bson::type::datetime: return mb(long_type->decompose(elem.as_datetime()));
+        case bson::type::boolean: return mb(long_type->decompose(static_cast<int64_t>(elem.as_bool())));
+        default: return std::nullopt;
+        }
+    }
+    if (&t == double_type.get()) {
+        switch (elem.type) {
+        case bson::type::double_value: return mb(double_type->decompose(elem.as_double()));
+        case bson::type::int32:  return mb(double_type->decompose(static_cast<double>(elem.as_int32())));
+        case bson::type::int64:  return mb(double_type->decompose(static_cast<double>(elem.as_int64())));
+        default: return std::nullopt;
+        }
+    }
+    if (&t == float_type.get()) {
+        switch (elem.type) {
+        case bson::type::double_value: return mb(float_type->decompose(static_cast<float>(elem.as_double())));
+        case bson::type::int32:  return mb(float_type->decompose(static_cast<float>(elem.as_int32())));
+        default: return std::nullopt;
+        }
+    }
+    // String types
+    if (&t == utf8_type.get() || &t == ascii_type.get()) {
+        switch (elem.type) {
+        case bson::type::string:
+        case bson::type::javascript: {
+            auto s = elem.as_string();
+            return managed_bytes(bytes_view(reinterpret_cast<const int8_t*>(s.data()), s.size()));
+        }
+        default: return std::nullopt;
+        }
+    }
+    // Boolean
+    if (&t == boolean_type.get()) {
+        switch (elem.type) {
+        case bson::type::boolean: return mb(boolean_type->decompose(elem.as_bool()));
+        case bson::type::int32:  return mb(boolean_type->decompose(elem.as_int32() != 0));
+        case bson::type::int64:  return mb(boolean_type->decompose(elem.as_int64() != 0));
+        default: return std::nullopt;
+        }
+    }
+    // Blob — return raw BSON value bytes
+    if (&t == bytes_type.get()) {
+        if (elem.type == bson::type::binary) {
+            auto bin = elem.as_binary();
+            return managed_bytes(bin);
+        }
+        return std::nullopt;
+    }
+    // Timestamp (CQL) ← BSON datetime (millis since epoch)
+    if (&t == timestamp_type.get()) {
+        if (elem.type == bson::type::datetime) {
+            return mb(timestamp_type->decompose(db_clock::time_point(db_clock::duration(std::chrono::milliseconds(elem.as_datetime())))));
+        }
+        return std::nullopt;
+    }
+    // Unsupported target type — return NULL
+    return std::nullopt;
+}
+
+// Find a BSON element by key name in a document represented as fragmented bytes.
+// Returns the element value converted to CQL, or NULL if the key is not found.
+static cql3::raw_value bson_field_select(const cql3::raw_value& bson_val, const sstring& field_name, const data_type& result_type) {
+    if (bson_val.is_null()) {
+        return cql3::raw_value::make_null();
+    }
+    return bson_val.view().with_value(
+        [&](const FragmentedView auto& bson_bytes) -> cql3::raw_value {
+            return with_simplified(bson_bytes, [&](auto v) -> cql3::raw_value {
+                for (auto&& elem : bson::reader(v)) {
+                    if (elem.key == field_name) {
+                        return cql3::raw_value::make_value(bson_element_to_cql(elem, result_type));
+                    }
+                }
+                // Field not found → NULL
+                return cql3::raw_value::make_null();
+            });
+        });
+}
+
+// Access a BSON array element by integer index.
+// Returns the element value converted to CQL, or NULL if the index is out of range.
+static cql3::raw_value bson_array_subscript(const cql3::raw_value& bson_val, int32_t index, const data_type& result_type) {
+    if (bson_val.is_null() || index < 0) {
+        return cql3::raw_value::make_null();
+    }
+    auto key = fmt::to_string(index);
+    return bson_val.view().with_value(
+        [&](const FragmentedView auto& bson_bytes) -> cql3::raw_value {
+            return with_simplified(bson_bytes, [&](auto v) -> cql3::raw_value {
+                for (auto&& elem : bson::reader(v)) {
+                    if (elem.key == key) {
+                        return cql3::raw_value::make_value(bson_element_to_cql(elem, result_type));
+                    }
+                }
+                return cql3::raw_value::make_null();
+            });
+        });
+}
+
 static
 cql3::raw_value do_evaluate(const field_selection& field_select, const evaluation_inputs& inputs) {
+    auto structure_type = type_of(field_select.structure);
+
+    // BSON field selection: navigate into a sub-document by field name.
+    if (&structure_type->without_reversed() == bson_type.get()) {
+        cql3::raw_value bson_val = evaluate(field_select.structure, inputs);
+        return bson_field_select(bson_val, field_select.field->to_string(), field_select.type);
+    }
+
+    // UDT field selection (original path)
     cql3::raw_value udt_value = evaluate(field_select.structure, inputs);
     if (udt_value.is_null()) {
         // `<null>.field` should evaluate to NULL.

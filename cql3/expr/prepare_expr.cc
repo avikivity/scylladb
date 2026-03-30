@@ -1287,6 +1287,34 @@ std::optional<expression>
 c_cast_prepare_expression(const cast& c, data_dictionary::database db, const sstring& keyspace, const schema* schema_opt, lw_shared_ptr<column_specification> receiver, prepare_memo& memo) {
     data_type cast_type = cast_get_prepared_type(c, db, keyspace);
 
+    // BSON nullable extraction: (?type)doc.field[idx].field2
+    // The inner expression is a chain of field_selection/subscript on a bson column.
+    // Prepare the inner chain (which sets intermediate types to bson_type), then
+    // override the outermost field_selection/subscript type to the target CQL type.
+    // This causes the final evaluation step to extract the BSON value and convert it.
+    {
+        auto prepared_arg = try_prepare_expression(c.arg, db, keyspace, schema_opt, nullptr);
+        if (prepared_arg && &type_of(*prepared_arg)->without_reversed() == bson_type.get()) {
+            auto set_result_type = [&](auto& node) {
+                node.type = cast_type;
+                return expression(std::move(node));
+            };
+            if (auto* fs = as_if<field_selection>(&*prepared_arg)) {
+                return set_result_type(*fs);
+            }
+            if (auto* sub = as_if<subscript>(&*prepared_arg)) {
+                return set_result_type(*sub);
+            }
+            // Bare column cast: (?type)doc — extract the entire document as the target type.
+            // Only bson_type→bson_type (identity) makes sense here; other conversions are errors.
+            if (cast_type == bson_type) {
+                return *prepared_arg;
+            }
+            throw exceptions::invalid_request_exception(
+                format("Cannot extract a non-document CQL type from a bare json column; use field selection: (?{})col.field", cast_type->as_cql3_type()));
+        }
+    }
+
     if (!receiver) {
         sstring receiver_name = format("cast({}){:user}", cast_type->cql3_type_name(), c.arg);
         receiver = make_lw_shared<column_specification>(
@@ -1371,9 +1399,21 @@ field_selection_prepare_expression(const field_selection& fs, data_dictionary::d
         throw exceptions::invalid_request_exception(fmt::format("Cannot infer type of {}", fs.structure));
     }
     auto type = type_of(*prepared_structure);
+
+    // BSON field selection: navigate into a sub-document by field name.
+    // The result type is bson_type (sub-document extraction).  The outermost
+    // (?type) cast (if any) overrides the type to perform BSON→CQL conversion.
+    if (&type->without_reversed() == bson_type.get()) {
+        return field_selection{
+            .structure = std::move(*prepared_structure),
+            .field = fs.field,
+            .type = bson_type,
+        };
+    }
+
     if (!type->underlying_type()->is_user_type()) {
         throw exceptions::invalid_request_exception(
-                format("Invalid field selection: {} of type {} is not a user type", fs.structure, type->as_cql3_type()));
+                format("Invalid field selection: {} of type {} is not a user type or json", fs.structure, type->as_cql3_type()));
     }
 
     auto ut = static_pointer_cast<const user_type_impl>(type->underlying_type());
@@ -1955,6 +1995,19 @@ try_prepare_expression(const expression& expr, data_dictionary::database db, con
             }
             auto& sub_col = *sub_col_opt;
             const abstract_type& sub_col_type = type_of(sub_col)->without_reversed();
+
+            // BSON array subscript: navigate into a BSON array by integer index.
+            // The subscript must be an integer constant.  Result type is bson_type.
+            if (&sub_col_type == bson_type.get()) {
+                auto int_spec = make_lw_shared<column_specification>(
+                    schema.ks_name(), schema.cf_name(),
+                    ::make_shared<column_identifier>("bson_array_index", true), int32_type);
+                return subscript {
+                    .val = sub_col,
+                    .sub = prepare_expression(sub.sub, db, schema.ks_name(), &schema, std::move(int_spec)),
+                    .type = bson_type,
+                };
+            }
 
             auto col_spec = column_specification_of(sub_col);
             lw_shared_ptr<column_specification> subscript_column_spec;

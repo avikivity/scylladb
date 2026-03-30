@@ -22,14 +22,15 @@ Querying data from data is done using a ``SELECT`` statement:
                    : [ BYPASS CACHE ]
                    : [ USING TIMEOUT `timeout` ]
    select_clause: `selector` [ AS `identifier` ] ( ',' `selector` [ AS `identifier` ] )*
-   selector: ( `column_name`
-           : | CAST '(' `selector` AS `cql_type` ')'
-           : | `function_name` '(' [ `selector` ( ',' `selector` )* ] ')'
-           : | COUNT '(' '*' ')'
-           : | literal
-           : | bind_marker
-           : )
-           : ( '.' `field_name` | '[' `term` ']' )*
+    selector: ( `column_name`
+            : | CAST '(' `selector` AS `cql_type` ')'
+            : | '(' '?' `native_type` ')' `selector`
+            : | `function_name` '(' [ `selector` ( ',' `selector` )* ] ')'
+            : | COUNT '(' '*' ')'
+            : | literal
+            : | bind_marker
+            : )
+            : ( '.' `field_name` | '[' `term` ']' )*
    where_clause: `relation` ( AND `relation` )*
    group_by_clause: `column_name` (',' `column_name` )*
    relation: `column_name` `operator` `term`
@@ -128,6 +129,45 @@ Examples::
     SELECT {'a': 1, 'b': 2} FROM t;            -- frozen<map<text, int>>
     SELECT [1, 10000000000] FROM t;            -- frozen<list<bigint>>, widened from int + bigint
     SELECT CAST(1 AS bigint) FROM t;           -- bigint via explicit cast
+
+JSON field selection
+````````````````````
+
+Columns of the ``json`` type (see :ref:`native types <native-types>`) store BSON documents that can contain nested
+fields and arrays. The ``(?type)`` prefix combined with dot notation and bracket subscripts lets you extract individual
+values from a ``json`` column and convert them to a CQL native type.
+
+The syntax is::
+
+    (?target_type)column.field1.field2[index].field3
+
+Where:
+
+- ``(?target_type)`` specifies the CQL type to convert the final value to (e.g., ``(?int)``, ``(?text)``,
+  ``(?double)``, ``(?boolean)``, ``(?bigint)``). Use ``(?json)`` to extract a sub-document without conversion.
+- Dot-separated field names (e.g., ``.field1.field2``) navigate into nested BSON documents.
+- Bracket subscripts (e.g., ``[0]``, ``[1]``) access BSON array elements by position (zero-based).
+- These can be freely mixed and chained to navigate arbitrarily deep structures.
+
+If the field path does not exist, or if the BSON value is not compatible with the requested type, the result is
+``NULL``. If the ``json`` column itself is ``NULL``, the result is also ``NULL``.
+
+For example, given a table ``t`` with a ``json`` column ``doc`` containing
+``{'users': [{'name': 'Alice', 'age': 30}, {'name': 'Bob', 'age': 25}]}``:
+
+.. code-block:: cql
+
+    -- Extract a top-level integer field
+    SELECT (?int)doc.age FROM t WHERE ...;
+
+    -- Extract a nested text field
+    SELECT (?text)doc.address.city FROM t WHERE ...;
+
+    -- Extract from an array element
+    SELECT (?text)doc.users[0].name FROM t WHERE ...;
+
+    -- Extract a sub-document as json
+    SELECT (?json)doc.users[1] FROM t WHERE ...;
 
 Aliases
 ```````

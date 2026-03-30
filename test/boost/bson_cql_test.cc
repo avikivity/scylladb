@@ -181,3 +181,157 @@ SEASTAR_TEST_CASE(json_literal_negative_int) {
         assert_that(msg).is_rows().with_rows({{exp}});
     });
 }
+
+// --- BSON field selection tests ---
+
+// Simple field extraction: (?int)doc.field
+SEASTAR_TEST_CASE(json_field_select_int) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jfs1 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jfs1 (id, doc) VALUES (1, {'x': 42, 'y': 'hello'})").get();
+
+        auto msg = e.execute_cql("SELECT (?int)doc.x FROM ks.jfs1 WHERE id = 1").get();
+        assert_that(msg).is_rows().with_rows({{
+            int32_type->decompose(int32_t(42))
+        }});
+    });
+}
+
+// String field extraction: (?text)doc.field
+SEASTAR_TEST_CASE(json_field_select_text) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jfs2 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jfs2 (id, doc) VALUES (1, {'name': 'Alice'})").get();
+
+        auto msg = e.execute_cql("SELECT (?text)doc.name FROM ks.jfs2 WHERE id = 1").get();
+        assert_that(msg).is_rows().with_rows({{
+            utf8_type->decompose(sstring("Alice"))
+        }});
+    });
+}
+
+// Missing field returns NULL.
+SEASTAR_TEST_CASE(json_field_select_missing) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jfs3 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jfs3 (id, doc) VALUES (1, {'a': 1})").get();
+
+        auto msg = e.execute_cql("SELECT (?int)doc.nonexistent FROM ks.jfs3 WHERE id = 1").get();
+        assert_that(msg).is_rows().with_rows({{bytes_opt()}});
+    });
+}
+
+// Nested field access: (?text)doc.outer.inner
+SEASTAR_TEST_CASE(json_field_select_nested) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jfs4 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jfs4 (id, doc) VALUES (1, {'outer': {'inner': 'deep'}})").get();
+
+        auto msg = e.execute_cql("SELECT (?text)doc.outer.inner FROM ks.jfs4 WHERE id = 1").get();
+        assert_that(msg).is_rows().with_rows({{
+            utf8_type->decompose(sstring("deep"))
+        }});
+    });
+}
+
+// Array subscript: (?int)doc.arr[1]
+SEASTAR_TEST_CASE(json_field_select_array) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jfs5 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jfs5 (id, doc) VALUES (1, {'arr': [10, 20, 30]})").get();
+
+        auto msg = e.execute_cql("SELECT (?int)doc.arr[1] FROM ks.jfs5 WHERE id = 1").get();
+        assert_that(msg).is_rows().with_rows({{
+            int32_type->decompose(int32_t(20))
+        }});
+    });
+}
+
+// Array subscript out of range returns NULL.
+SEASTAR_TEST_CASE(json_field_select_array_oob) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jfs6 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jfs6 (id, doc) VALUES (1, {'arr': [10]})").get();
+
+        auto msg = e.execute_cql("SELECT (?int)doc.arr[99] FROM ks.jfs6 WHERE id = 1").get();
+        assert_that(msg).is_rows().with_rows({{bytes_opt()}});
+    });
+}
+
+// Mixed path: (?bigint)doc.users[0].age
+SEASTAR_TEST_CASE(json_field_select_mixed_path) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jfs7 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jfs7 (id, doc) VALUES (1, "
+                      "{'users': [{'name': 'Bob', 'age': 25}, {'name': 'Eve', 'age': 30}]})").get();
+
+        auto msg = e.execute_cql("SELECT (?bigint)doc.users[1].age FROM ks.jfs7 WHERE id = 1").get();
+        assert_that(msg).is_rows().with_rows({{
+            long_type->decompose(int64_t(30))
+        }});
+    });
+}
+
+// Type mismatch returns NULL: asking for int but field is a string.
+SEASTAR_TEST_CASE(json_field_select_type_mismatch) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jfs8 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jfs8 (id, doc) VALUES (1, {'name': 'Alice'})").get();
+
+        auto msg = e.execute_cql("SELECT (?int)doc.name FROM ks.jfs8 WHERE id = 1").get();
+        assert_that(msg).is_rows().with_rows({{bytes_opt()}});
+    });
+}
+
+// Boolean extraction: (?boolean)doc.flag
+SEASTAR_TEST_CASE(json_field_select_boolean) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jfs9 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jfs9 (id, doc) VALUES (1, {'flag': true})").get();
+
+        auto msg = e.execute_cql("SELECT (?boolean)doc.flag FROM ks.jfs9 WHERE id = 1").get();
+        assert_that(msg).is_rows().with_rows({{
+            boolean_type->decompose(true)
+        }});
+    });
+}
+
+// Sub-document extraction as json: (?json)doc.sub
+SEASTAR_TEST_CASE(json_field_select_subdoc) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jfs10 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jfs10 (id, doc) VALUES (1, {'sub': {'a': 1}})").get();
+
+        bson::writer inner;
+        inner.add_int32("a", 1);
+        auto inner_doc = std::move(inner).finish();
+        auto exp = bytes_opt(to_bytes(managed_bytes_view(inner_doc.as_managed_bytes())));
+
+        auto msg = e.execute_cql("SELECT (?json)doc.sub FROM ks.jfs10 WHERE id = 1").get();
+        assert_that(msg).is_rows().with_rows({{exp}});
+    });
+}
+
+// Double extraction: (?double)doc.val
+SEASTAR_TEST_CASE(json_field_select_double) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jfs11 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jfs11 (id, doc) VALUES (1, {'val': 3.14})").get();
+
+        auto msg = e.execute_cql("SELECT (?double)doc.val FROM ks.jfs11 WHERE id = 1").get();
+        assert_that(msg).is_rows().with_rows({{
+            double_type->decompose(3.14)
+        }});
+    });
+}
+
+// NULL column: (?int)doc.x on a NULL doc returns NULL.
+SEASTAR_TEST_CASE(json_field_select_null_column) {
+    return do_with_cql_env_thread([] (cql_test_env& e) {
+        e.execute_cql("CREATE TABLE ks.jfs12 (id int PRIMARY KEY, doc json)").get();
+        e.execute_cql("INSERT INTO ks.jfs12 (id, doc) VALUES (1, null)").get();
+
+        auto msg = e.execute_cql("SELECT (?int)doc.x FROM ks.jfs12 WHERE id = 1").get();
+        assert_that(msg).is_rows().with_rows({{bytes_opt()}});
+    });
+}
