@@ -579,7 +579,13 @@ static future<> test_random_data_source(std::vector<size_t> sizes) {
             auto v2 = std::string_view(unified_buff.get() + pos, size_to_compare);
             BOOST_REQUIRE_EQUAL(v1, v2);
             auto skip = unified_buff.size() - pos > 4113 ? 4097 : (unified_buff.size() - pos)/2;
-            co_await encrypted_source.skip(skip);
+            try {
+                co_await encrypted_source.skip(skip);
+            } catch (const std::runtime_error& e) {
+                // skip() may go past EOF, handle it as normal end-of-stream.
+                BOOST_REQUIRE_EQUAL(std::string_view(e.what()), "premature end of stream");
+                break;
+            }
             pos += size_to_compare + skip;
         }
         co_await encrypted_source.close();
