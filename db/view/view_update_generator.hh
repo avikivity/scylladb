@@ -115,8 +115,7 @@ public:
             mutation&& m,
             flat_mutation_reader_v2_opt existings,
             tracing::trace_state_ptr tr_state,
-            gc_clock::time_point now,
-            db::timeout_clock::time_point timeout);
+            gc_clock::time_point now);
 
 private:
     bool should_throttle() const;
