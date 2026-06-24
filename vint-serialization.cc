@@ -10,7 +10,12 @@
 
 #include "vint-serialization.hh"
 
+#include <bit>
 #include <seastar/core/bitops.hh>
+
+#ifdef __x86_64__
+#include <x86intrin.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -51,6 +56,9 @@ static vint_size_type count_extra_bytes(int8_t first_byte) {
     return std::countl_zero(static_cast<uint8_t>(~first_byte));
 }
 
+#ifdef __x86_64__
+[[gnu::target("default")]]
+#endif
 static void encode(uint64_t value, vint_size_type size, bytes::iterator out) {
     // `size` is always in the range [1, 9].
     const auto extra_bytes_size = size - 1;
@@ -66,6 +74,23 @@ static void encode(uint64_t value, vint_size_type size, bytes::iterator out) {
     }
 
 }
+
+#ifdef __x86_64__
+[[gnu::target("avx512f,avx512bw,avx512vl")]]
+static void encode(uint64_t value, vint_size_type size, bytes::iterator out) {
+    // `size` is always in the range [1, 9].
+    const auto extra_bytes_size = size - 1;
+    __builtin_assume(extra_bytes_size <= 8);
+
+    const auto value_mask = first_byte_value_mask(extra_bytes_size);
+    const auto first_byte = uint8_t(((value >> ((extra_bytes_size * 8) & 63)) & value_mask) | ~value_mask);
+    const auto tail_shift = ((8 - extra_bytes_size) * 8) & 63;
+    const auto tail = std::byteswap(value << tail_shift);
+    const auto encoded = _mm_set_epi64x(tail >> 56, (tail << 8) | first_byte);
+    const auto store_mask = __mmask16((uint16_t(1) << size) - 1);
+    _mm_mask_storeu_epi8(out, store_mask, encoded);
+}
+#endif
 
 vint_size_type unsigned_vint::serialize(uint64_t value, bytes::iterator out) {
     const auto size = serialized_size(value);
