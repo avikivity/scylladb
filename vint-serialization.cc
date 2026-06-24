@@ -15,6 +15,8 @@
 
 #ifdef __x86_64__
 #include <x86intrin.h>
+#elif defined(__aarch64__)
+#include <arm_sve.h>
 #endif
 
 #include <algorithm>
@@ -58,6 +60,8 @@ static vint_size_type count_extra_bytes(int8_t first_byte) {
 
 #ifdef __x86_64__
 [[gnu::target("default")]]
+#elif defined(__aarch64__)
+[[gnu::target_version("default")]]
 #endif
 static void encode(uint64_t value, vint_size_type size, bytes::iterator out) {
     // `size` is always in the range [1, 9].
@@ -89,6 +93,23 @@ static void encode(uint64_t value, vint_size_type size, bytes::iterator out) {
     const auto encoded = _mm_set_epi64x(tail >> 56, (tail << 8) | first_byte);
     const auto store_mask = __mmask16((uint16_t(1) << size) - 1);
     _mm_mask_storeu_epi8(out, store_mask, encoded);
+}
+#endif
+
+#ifdef __aarch64__
+[[gnu::target_version("sve")]]
+static void encode(uint64_t value, vint_size_type size, bytes::iterator out) {
+    // `size` is always in the range [1, 9].
+    const auto extra_bytes_size = size - 1;
+    __builtin_assume(extra_bytes_size <= 8);
+
+    const auto value_mask = first_byte_value_mask(extra_bytes_size);
+    const auto first_byte = uint8_t(((value >> ((extra_bytes_size * 8) & 63)) & value_mask) | ~value_mask);
+    const auto tail_shift = ((8 - extra_bytes_size) * 8) & 63;
+    const auto tail = std::byteswap(value << tail_shift);
+    const std::array<uint64_t, 2> encoded_words = { (tail << 8) | first_byte, tail >> 56 };
+    auto encoded = svld1_s8(svwhilelt_b8(uint64_t(0), uint64_t(sizeof(encoded_words))), reinterpret_cast<const int8_t*>(encoded_words.data()));
+    svst1_s8(svwhilelt_b8(uint64_t(0), uint64_t(size)), out, encoded);
 }
 #endif
 
