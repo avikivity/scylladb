@@ -580,22 +580,39 @@ future<> db::commitlog::segment_manager::named_file::rename(std::string_view to)
  * which the compiler really should be able to coalesque, but...
  */
 template<typename Func, typename... Args>
-struct db::commitlog::segment_manager::named_file::myawait : public seastar::internal::awaiter<true, Args...> {
-    using mybase = seastar::internal::awaiter<true, Args...>;
-    using resume_type = decltype(std::declval<mybase>().await_resume());
+struct db::commitlog::segment_manager::named_file::myawait {
+    using future_type = future<Args...>;
 
+    future_type _future;
     Func _func;
 
-    myawait(future<Args...> f, Func func)
-        : mybase(std::move(f))
+    myawait(future_type f, Func func)
+        : _future(std::move(f))
         , _func(std::move(func))
     {}
-    resume_type await_resume() {
-        if constexpr (std::is_same_v<resume_type, void>) {
-            mybase::await_resume();
-            _func();
+
+    myawait(const myawait&) = delete;
+    myawait(myawait&&) = delete;
+
+    bool await_ready() const noexcept {
+        return _future.available() && !need_preempt();
+    }
+
+    template<typename U>
+    void await_suspend(std::coroutine_handle<U> hndl) noexcept {
+        if (!_future.available()) {
+            _future.set_coroutine(hndl.promise());
         } else {
-            return _func(mybase::await_resume());
+            schedule(&hndl.promise());
+        }
+    }
+
+    decltype(auto) await_resume() {
+        if constexpr (std::is_same_v<future_type, future<>>) {
+            _future.get();
+            return _func();
+        } else {
+            return _func(_future.get());
         }
     }
 };
