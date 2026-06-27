@@ -35,8 +35,8 @@
 #include <vector>
 #include <optional>
 #include <array>
-#include <absl/container/btree_set.h>
 #include <seastar/net/tls.hh>
+import abseil;
 
 // forward declarations
 namespace streaming {
