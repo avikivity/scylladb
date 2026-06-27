@@ -78,9 +78,9 @@ set(FMT_INSTALL OFF CACHE BOOL "" FORCE)
 set(FMT_TEST OFF CACHE BOOL "" FORCE)
 set(FMT_DOC OFF CACHE BOOL "" FORCE)
 set(FMT_FUZZ OFF CACHE BOOL "" FORCE)
-# We don't consume fmt's C++20 module; building it drags in module dependency
-# scanning, which Scylla otherwise disables.
-set(FMT_MODULE OFF CACHE BOOL "" FORCE)
+# Build fmt's own C++20 module (the fmt-module target) instead of a
+# hand-written wrapper; consumers just link fmt::fmt-module and `import fmt;`.
+set(FMT_MODULE ON CACHE BOOL "" FORCE)
 add_subdirectory(fmt)
 # SEASTAR_TESTING_MAIN is added later (after add_subdirectory(seastar) and
 # add_subdirectory(abseil)) to avoid leaking into the seastar subdirectory.
@@ -293,6 +293,12 @@ target_sources(scylla-abseilmodule
 target_link_libraries(scylla-abseilmodule PUBLIC scylla-stdmodule absl::headers)
 set_target_properties(scylla-abseilmodule PROPERTIES CXX_SCAN_FOR_MODULES ON)
 
+# C++20 modules: fmt formatting library module.
+# Built by fmt's own CMake (FMT_MODULE=ON above) as the fmt::fmt-module
+# target; we just consume it. Scylla disables module scanning globally, so
+# force it back on for this target (its FILE_SET CXX_MODULES needs it).
+set_target_properties(fmt-module PROPERTIES CXX_SCAN_FOR_MODULES ON)
+
 add_library(scylla-main STATIC)
 if (Scylla_USE_PRECOMPILED_HEADER_USE)
   target_precompile_headers(scylla-main REUSE_FROM scylla-precompiled-header)
@@ -345,6 +351,7 @@ target_link_libraries(scylla-main
     zstd::zstd_static
     scylla-stdmodule
     scylla-abseilmodule
+    fmt::fmt-module
 )
 
 option(Scylla_CHECK_HEADERS

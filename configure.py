@@ -2375,9 +2375,11 @@ def configure_fmt(build_dir, mode, mode_config, compiler_cache=None):
         '-DFMT_TEST=OFF',
         '-DFMT_DOC=OFF',
         '-DFMT_FUZZ=OFF',
-        # We don't consume fmt's C++20 module; building it drags in module
-        # dependency scanning, which Scylla otherwise disables.
-        '-DFMT_MODULE=OFF',
+        # Build fmt's own C++20 module (the fmt-module target). We consume the
+        # BMI and object it produces rather than maintaining a hand-written
+        # wrapper. fmt's standalone CMake enables module scanning for that
+        # target on its own; Scylla's global scanning setting doesn't apply here.
+        '-DFMT_MODULE=ON',
     ]
 
     if compiler_cache:
@@ -2745,7 +2747,7 @@ def write_build_file(f,
               description = CXX $out
               depfile = $out.d
             rule cxx_build_module.{mode}
-              command = $cxx -MD -MT $out -MF $out.d $cxxflags_{mode} $cxxflags $obj_cxxflags $module_flags -Wno-reserved-module-identifier -x c++-module -fmodule-output=$pcm -c -o $out $in
+              command = $cxx -MD -MT $out -MF $out.d $cxxflags_{mode} $cxxflags $obj_cxxflags $module_flags -x c++-module -fmodule-output=$pcm -c -o $out $in
               description = CXX-MODULE $out
               depfile = $out.d
             rule link.{mode}
@@ -2828,12 +2830,17 @@ def write_build_file(f,
         f.write(f'  pcm = {abseil_pcm}\n')
         f.write(f'  module_flags =\n')
 
+        # fmt module — built by fmt's own CMake (FMT_MODULE=ON in
+        # configure_fmt()); we just consume the BMI and object it emits.
+        fmt_pcm = f'$builddir/{mode}/fmt/CMakeFiles/fmt-module.dir/fmt.pcm'
+        fmt_obj = f'$builddir/{mode}/fmt/CMakeFiles/fmt-module.dir/src/fmt.cc.o'
+
         # Consumer TU module flags — all library module PCMs EXCEPT std.
         # The std module is not referenced until `import std;` is added.
-        module_flags = f'-fmodule-file=abseil={abseil_pcm}'
+        module_flags = f'-fmodule-file=abseil={abseil_pcm} -fmodule-file=fmt={fmt_pcm}'
         f.write(f'module_flags_{mode} = {module_flags}\n')
 
-        all_module_pcms = f'{abseil_pcm}'
+        all_module_pcms = f'{abseil_pcm} {fmt_pcm}'
 
         compiles = {}
         swaggers = set()
@@ -2879,6 +2886,7 @@ def write_build_file(f,
                 objs.append(f'$builddir/{parent_mode}/rust-{parent_mode}/librust_combined.a')
             objs.append(std_obj)
             objs.append(abseil_obj)
+            objs.append(fmt_obj)
             if binary in cpp_apps:
                 # binary only needs the C++ standard library, no additional
                 # libraries.
@@ -3070,6 +3078,15 @@ def write_build_file(f,
         f.write(f'  pool = submodule_pool\n')
         f.write(f'  subdir = $builddir/{mode}/fmt\n')
         f.write(f'  target = fmt\n')
+        f.write(f'  profile_dep = {profile_dep}\n')
+
+        # fmt's C++20 module (FMT_MODULE=ON in configure_fmt()). The BMI and
+        # object come out of the same fmt sub-build as libfmt, but from the
+        # fmt-module target, which nothing else pulls in.
+        f.write(f'build {fmt_pcm} {fmt_obj}: ninja $builddir/{mode}/fmt/build.ninja | always {profile_dep}\n')
+        f.write(f'  pool = submodule_pool\n')
+        f.write(f'  subdir = $builddir/{mode}/fmt\n')
+        f.write(f'  target = fmt-module\n')
         f.write(f'  profile_dep = {profile_dep}\n')
 
         for lib in abseil_libs:
