@@ -35,7 +35,7 @@
 #include <seastar/core/on_internal_error.hh>
 #include <seastar/coroutine/maybe_yield.hh>
 #include <seastar/coroutine/switch_to.hh>
-#include <absl/container/flat_hash_map.h>
+import abseil;
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 

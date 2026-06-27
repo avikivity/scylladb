@@ -23,7 +23,8 @@
 #include <seastar/core/pipe.hh>
 #include <seastar/core/metrics.hh>
 #include <seastar/rpc/rpc_types.hh>
-#include <absl/container/flat_hash_map.h>
+import abseil;
+#include <list>
 #include <seastar/core/gate.hh>
 
 #include "fsm.hh"

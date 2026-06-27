@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include <absl/container/flat_hash_map.h>
 #include <seastar/core/sstring.hh>
 #include <cstddef>
 #include <string_view>
 #include "seastarx.hh"
+import abseil;
 
 using seastar::sstring;
 

@@ -15,8 +15,6 @@
 #include <cstdint>
 #include <vector>
 
-#include <absl/container/flat_hash_map.h>
-
 #include <seastar/core/abort_source.hh>
 #include <seastar/core/condition-variable.hh>
 #include <seastar/core/future.hh>
@@ -28,6 +26,7 @@
 #include "utils/UUID.hh"
 #include "utils/config_file.hh"
 #include "utils/hash.hh"
+import abseil;
 
 namespace cql3 {
 class query_processor;

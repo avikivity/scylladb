@@ -15,7 +15,7 @@
 #include "replica/logstor/logstor.hh"
 #include "replica/logstor/types.hh"
 #include "replica/logstor/compaction.hh"
-#include <absl/container/flat_hash_map.h>
+import abseil;
 #include <algorithm>
 #include <array>
 #include <chrono>
