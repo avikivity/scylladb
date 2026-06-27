@@ -2820,13 +2820,20 @@ def write_build_file(f,
         f.write(f'  module_flags =\n')
         f.write(f'  obj_cxxflags = -Wno-reserved-module-identifier\n')
 
-        # Consumer TU module flags — empty for now.  Library modules
-        # use textual #include in their GMFs and must NOT be compiled
-        # with -fmodule-file=std=... — otherwise Clang assigns module
-        # ownership to standard library entities, causing conflicts
-        # when consumer TUs textually #include the same headers.
-        # The std module will be wired in when `import std;` is added.
-        f.write(f'module_flags_{mode} =\n')
+        # abseil module — uses textual standard library includes in GMF.
+        abseil_module_src = 'modules/abseil.cppm'
+        abseil_pcm = f'$builddir/{mode}/modules/abseil.pcm'
+        abseil_obj = f'$builddir/{mode}/modules/abseil.o'
+        f.write(f'build {abseil_obj} | {abseil_pcm}: cxx_build_module.{mode} {abseil_module_src}\n')
+        f.write(f'  pcm = {abseil_pcm}\n')
+        f.write(f'  module_flags =\n')
+
+        # Consumer TU module flags — all library module PCMs EXCEPT std.
+        # The std module is not referenced until `import std;` is added.
+        module_flags = f'-fmodule-file=abseil={abseil_pcm}'
+        f.write(f'module_flags_{mode} = {module_flags}\n')
+
+        all_module_pcms = f'{abseil_pcm}'
 
         compiles = {}
         swaggers = set()
@@ -2871,6 +2878,7 @@ def write_build_file(f,
                 parent_mode = modes[mode].get('parent_mode', mode)
                 objs.append(f'$builddir/{parent_mode}/rust-{parent_mode}/librust_combined.a')
             objs.append(std_obj)
+            objs.append(abseil_obj)
             if binary in cpp_apps:
                 # binary only needs the C++ standard library, no additional
                 # libraries.
@@ -3006,7 +3014,7 @@ def write_build_file(f,
             src = compiles[obj]
             seastar_dep = f'$builddir/{mode}/seastar/libseastar.{seastar_lib_ext}'
             abseil_dep = ' '.join(f'$builddir/{mode}/abseil/{lib}' for lib in abseil_libs)
-            f.write(f'build {obj}: cxx.{mode} {src} | {profile_dep} {seastar_dep} {abseil_dep} {gen_headers_dep}\n')
+            f.write(f'build {obj}: cxx.{mode} {src} | {profile_dep} {seastar_dep} {abseil_dep} {gen_headers_dep} {all_module_pcms}\n')
             if src in modeval['per_src_extra_cxxflags']:
                 f.write('    cxxflags = {seastar_cflags} $cxxflags $cxxflags_{mode} {extra_cxxflags}\n'.format(mode=mode, extra_cxxflags=modeval["per_src_extra_cxxflags"][src], **modeval))
         for swagger in swaggers:
@@ -3043,8 +3051,8 @@ def write_build_file(f,
                 f.write('  obj_cxxflags = %s\n' % flags)
         f.write(f'build $builddir/{mode}/gen/empty.cc: gen\n')
         for hh in headers:
-            f.write('build $builddir/{mode}/{hh}.o: checkhh.{mode} {hh} | $builddir/{mode}/gen/empty.cc {profile_dep} || {gen_headers_dep}\n'.format(
-                    mode=mode, hh=hh, gen_headers_dep=gen_headers_dep, profile_dep=profile_dep))
+            f.write('build $builddir/{mode}/{hh}.o: checkhh.{mode} {hh} | $builddir/{mode}/gen/empty.cc {profile_dep} || {gen_headers_dep} {all_module_pcms}\n'.format(
+                    mode=mode, hh=hh, gen_headers_dep=gen_headers_dep, profile_dep=profile_dep, all_module_pcms=all_module_pcms))
 
         seastar_dep = f'$builddir/{mode}/seastar/libseastar.{seastar_lib_ext}'
         seastar_testing_dep = f'$builddir/{mode}/seastar/libseastar_testing.{seastar_lib_ext}'

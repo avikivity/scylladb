@@ -283,6 +283,16 @@ target_sources(scylla-stdmodule
       ${_std_module_src})
 set_target_properties(scylla-stdmodule PROPERTIES CXX_SCAN_FOR_MODULES ON)
 
+# C++20 modules: abseil containers module.
+# Wraps the three absl/container headers used by ScyllaDB.
+add_library(scylla-abseilmodule STATIC)
+target_sources(scylla-abseilmodule
+  PUBLIC
+    FILE_SET CXX_MODULES FILES
+      modules/abseil.cppm)
+target_link_libraries(scylla-abseilmodule PUBLIC scylla-stdmodule absl::headers)
+set_target_properties(scylla-abseilmodule PROPERTIES CXX_SCAN_FOR_MODULES ON)
+
 add_library(scylla-main STATIC)
 if (Scylla_USE_PRECOMPILED_HEADER_USE)
   target_precompile_headers(scylla-main REUSE_FROM scylla-precompiled-header)
@@ -334,6 +344,7 @@ target_link_libraries(scylla-main
     lz4::lz4_static
     zstd::zstd_static
     scylla-stdmodule
+    scylla-abseilmodule
 )
 
 option(Scylla_CHECK_HEADERS
