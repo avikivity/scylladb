@@ -3047,15 +3047,23 @@ def write_build_file(f,
         f.write(f'  module_flags = -fmodule-file=std={std_pcm}\n')
         f.write(f'  obj_cxxflags = -Wno-reserved-module-identifier\n')
 
+        # abseil module — uses textual standard library includes in GMF.
+        abseil_module_src = 'modules/abseil.cppm'
+        abseil_pcm = f'$builddir/{mode}/modules/abseil.pcm'
+        abseil_obj = f'$builddir/{mode}/modules/abseil.o'
+        f.write(f'build {abseil_obj} | {abseil_pcm}: cxx_build_module.{mode} {abseil_module_src}\n')
+        f.write(f'  pcm = {abseil_pcm}\n')
+        f.write(f'  module_flags =\n')
+
         # Consumer TU module flags — all library module PCMs, including std.
         # Library modules keep textual #includes in their GMFs and are built
         # with their own (empty) module_flags. Every compile depends on the
         # BMIs, even one that imports nothing: sccache hashes each
         # -fmodule-file= input.
-        module_flags = f'-fmodule-file=std={std_pcm} -fmodule-file=std.compat={std_compat_pcm}'
+        module_flags = f'-fmodule-file=std={std_pcm} -fmodule-file=std.compat={std_compat_pcm} -fmodule-file=abseil={abseil_pcm}'
         f.write(f'module_flags_{mode} = {module_flags}\n')
 
-        all_module_pcms = f'{std_pcm} {std_compat_pcm}'
+        all_module_pcms = f'{std_pcm} {std_compat_pcm} {abseil_pcm}'
 
         compiles = {}
         swaggers = set()
@@ -3101,6 +3109,7 @@ def write_build_file(f,
                 objs.append(f'$builddir/{parent_mode}/rust-{parent_mode}/librust_combined.a')
             objs.append(std_obj)
             objs.append(std_compat_obj)
+            objs.append(abseil_obj)
             if binary in cpp_apps:
                 # binary only needs the C++ standard library, no additional
                 # libraries.

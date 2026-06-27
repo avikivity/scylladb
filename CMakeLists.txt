@@ -332,6 +332,19 @@ list(APPEND scylla_cxx_module_flags
   -fmodule-file=std=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/scylla-stdmodule.dir/std.pcm
   -fmodule-file=std.compat=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/scylla-stdmodule.dir/std.compat.pcm)
 
+# C++20 modules: abseil containers module.
+# Wraps the three absl/container headers used by ScyllaDB.
+add_library(scylla-abseilmodule STATIC)
+target_sources(scylla-abseilmodule
+  PUBLIC
+    FILE_SET CXX_MODULES FILES
+      modules/abseil.cppm)
+target_link_libraries(scylla-abseilmodule PUBLIC scylla-stdmodule absl::headers)
+set_target_properties(scylla-abseilmodule PROPERTIES CXX_SCAN_FOR_MODULES ON)
+list(APPEND scylla_cxx_module_targets scylla-abseilmodule)
+list(APPEND scylla_cxx_module_flags
+  -fmodule-file=abseil=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/scylla-abseilmodule.dir/abseil.pcm)
+
 add_library(scylla-main STATIC)
 
 target_sources(scylla-main
@@ -380,6 +393,7 @@ target_link_libraries(scylla-main
     lz4::lz4_static
     zstd::zstd_static
     scylla-stdmodule
+    scylla-abseilmodule
 )
 
 option(Scylla_CHECK_HEADERS
