@@ -17,11 +17,12 @@
 #include "utils/div_ceil.hh"
 #include "utils/pretty_printers.hh"
 
-#include <absl/container/btree_set.h>
 #include <seastar/util/defer.hh>
 
 #include <optional>
 #include <vector>
+
+import abseil;
 
 namespace locator {
 

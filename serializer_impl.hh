@@ -18,11 +18,12 @@
 #include "utils/input_stream.hh"
 #include <seastar/util/bool_class.hh>
 #include "utils/small_vector.hh"
-#include <absl/container/btree_set.h>
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/temporary_buffer.hh>
 #include <seastar/core/on_internal_error.hh>
 #include "utils/log.hh"
+
+import abseil;
 
 namespace seastar {
 extern logger seastar_logger;

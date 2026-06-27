@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include <absl/container/flat_hash_map.h>
 #include <seastar/core/sstring.hh>
+
+import abseil;
 
 using namespace seastar;
 

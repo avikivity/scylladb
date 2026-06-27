@@ -20,7 +20,7 @@
 #include "locator/network_topology_strategy.hh"
 #include "locator/load_sketch.hh"
 
-#include <absl/container/flat_hash_map.h>
+import abseil;
 #include <boost/algorithm/string.hpp>
 #include "exceptions/exceptions.hh"
 #include "utils/assert.hh"

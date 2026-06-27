@@ -22,9 +22,10 @@
 #include "sstables/sstable_set.hh"
 #include "utils/chunked_vector.hh"
 #include "db/commitlog/replay_position.hh"
-#include <absl/container/flat_hash_map.h>
 
 #pragma once
+
+import abseil;
 
 namespace compaction {
 class compaction_manager;
