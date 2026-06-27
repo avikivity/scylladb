@@ -11,10 +11,10 @@
 #include <ostream>
 #include <random>
 #include <ranges>
-#include <boost/lexical_cast.hpp>
 
 #include "dht/token.hh"
 #include "dht/token-sharding.hh"
+import boost;
 
 namespace dht {
 

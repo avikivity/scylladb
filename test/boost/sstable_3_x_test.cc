@@ -12,7 +12,6 @@ import fmt;
 #include <iterator>
 #include <algorithm>
 
-#include <boost/range/irange.hpp>
 #include <boost/test/unit_test.hpp>
 
 #include <seastar/core/thread.hh>
@@ -46,6 +45,7 @@ import fmt;
 #include "readers/combined.hh"
 #include "sstables/exceptions.hh"
 #include "utils/chunked_string.hh"
+import boost;
 
 using namespace sstables;
 

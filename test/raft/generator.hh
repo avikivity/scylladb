@@ -11,8 +11,6 @@
 #include <unordered_set>
 #include <random>
 
-#include <boost/mp11/algorithm.hpp>
-#include <boost/implicit_cast.hpp>
 
 
 #include <seastar/coroutine/parallel_for_each.hh>
@@ -22,6 +20,7 @@
 
 #include "test/raft/future_set.hh"
 import fmt;
+import boost;
 
 namespace operation {
 

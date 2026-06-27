@@ -13,9 +13,6 @@ import fmt;
 #include <unordered_map>
 #include <sstream>
 
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/trim_all.hpp>
-#include <boost/program_options.hpp>
 #include <yaml-cpp/yaml.h>
 
 #include <seastar/core/coroutine.hh>
@@ -45,6 +42,7 @@ import fmt;
 #include "exceptions/exceptions.hh"
 #include <seastar/core/metrics_api.hh>
 #include <seastar/core/relabel_config.hh>
+import boost;
 
 static logging::logger cfglogger("config");
 #include <seastar/util/file.hh>

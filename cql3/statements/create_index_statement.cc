@@ -8,7 +8,6 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <boost/algorithm/string.hpp>
 #include <seastar/core/coroutine.hh>
 #include "create_index_statement.hh"
 #include "db/config.hh"
@@ -42,6 +41,7 @@
 #include "index/secondary_index.hh"
 
 #include <stdexcept>
+import boost;
 
 namespace cql3 {
 

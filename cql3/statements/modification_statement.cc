@@ -31,8 +31,8 @@
 #include "db/large_data_handler.hh"
 #include "cql3/statements/strong_consistency/modification_statement.hh"
 #include "cql3/statements/strong_consistency/statement_helpers.hh"
+import boost;
 
-#include <boost/lexical_cast.hpp>
 
 template<typename T = void>
 using coordinator_result = exceptions::coordinator_result<T>;

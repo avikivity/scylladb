@@ -18,9 +18,8 @@ import fmt;
 #include "replica/database.hh"
 #include "utils/stall_free.hh"
 
-#include <boost/icl/interval.hpp>
-#include <boost/icl/interval_map.hpp>
 #include <variant>
+import boost;
 
 namespace locator {
 

@@ -25,7 +25,6 @@ import fmt;
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 
-#include <boost/regex.hpp>
 
 #include "utils/to_string.hh"
 
@@ -44,6 +43,7 @@ import fmt;
 #include "utils/http.hh"
 #include "marshal_exception.hh"
 #include "db/config.hh"
+import boost;
 
 using namespace std::chrono_literals;
 using namespace std::string_literals;

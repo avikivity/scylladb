@@ -10,8 +10,8 @@
 #include "utils/big_decimal.hh"
 #include "utils/UUID_gen.hh"
 #include "cql3/functions/native_scalar_function.hh"
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <chrono>
+import boost;
 
 namespace cql3 {
 namespace functions {

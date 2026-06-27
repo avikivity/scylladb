@@ -13,7 +13,8 @@
 #include <seastar/core/shared_ptr.hh>
 #include "cql3/column_identifier.hh"
 #include <variant>
-#include <boost/regex_fwd.hpp>
+
+import boost;
 
 namespace cql3 {
 

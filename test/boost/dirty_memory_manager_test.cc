@@ -8,7 +8,6 @@
 
 
 #include <boost/test/unit_test.hpp>
-#include <boost/intrusive/parent_from_member.hpp>
 #include <algorithm>
 #include <chrono>
 
@@ -25,6 +24,8 @@
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/util/defer.hh>
+import boost;
+
 #ifndef SEASTAR_DEFAULT_ALLOCATOR
 #include "utils/phased_barrier.hh"
 #endif

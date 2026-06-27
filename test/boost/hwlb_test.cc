@@ -14,7 +14,8 @@
 #include <boost/test/unit_test_log.hpp>
 #include <boost/test/unit_test.hpp>
 
-#include <boost/range/adaptors.hpp>
+
+import boost;
 
 #include <random>
 #include <algorithm>
@@ -152,7 +153,7 @@ static void test_hit_rates(std::vector<float> hr, unsigned CL,
         sum += count[i];
     }
     BOOST_TEST_MESSAGE(fmt::format("fraction of work sent to nodes: {}",
-        fmt::join(count | boost::adaptors::transformed([sum] (float c) { return c/sum; }), " ")));
+        fmt::join(count | boost::adaptors::transformed_v([sum] (float c) { return c/sum; }), " ")));
 
     // Check that the miss rate is similar on all nodes (that's the primary
     // goal of HWLB!)

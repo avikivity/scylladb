@@ -23,7 +23,6 @@
 #include "test/lib/test_utils.hh"
 #include "test/lib/gcs_fixture.hh"
 
-#include <boost/lexical_cast.hpp>
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/test_fixture.hh>
 #include <seastar/testing/thread_test_case.hh>
@@ -37,6 +36,7 @@
 #include <sstream>
 #include <cryptopp/sha.h>
 #include "utils/io-wrappers.hh"
+import boost;
 
 future<sstring> generate_file_hash(sstring filename) {
     auto f = co_await seastar::open_file_dma(filename, seastar::open_flags::ro);

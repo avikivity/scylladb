@@ -29,7 +29,6 @@
 #include <functional>
 #include <unordered_map>
 #include <set>
-#include <boost/functional/hash.hpp>
 #include <optional>
 #include <cstring>
 #include "types/types.hh"
@@ -79,6 +78,7 @@
 #include "service/topology_guard.hh"
 #include "utils/disk_space_monitor.hh"
 #include "db/large_data_handler.hh"
+import boost;
 
 class cell_locker;
 class cell_locker_stats;

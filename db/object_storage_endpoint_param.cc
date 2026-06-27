@@ -11,11 +11,11 @@
 #include <variant>
 #include <yaml-cpp/yaml.h>
 
-#include <boost/lexical_cast.hpp>
 
 #include "utils/s3/creds.hh"
 #include "utils/http.hh"
 #include "object_storage_endpoint_param.hh"
+import boost;
 
 using namespace std::string_literals;
 

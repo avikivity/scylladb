@@ -17,11 +17,6 @@ import fmt;
 #include <iterator>
 #include <numeric>
 #include <fstream>
-#include <boost/algorithm/string/case_conv.hpp>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/make_shared.hpp>
 #include <seastar/core/sleep.hh>
 #include <seastar/core/thread.hh>
 #include <seastar/core/when_all.hh>
@@ -54,6 +49,7 @@ import fmt;
 #include "utils/rjson.hh"
 #include "utils/UUID.hh"
 #include "locator/token_metadata.hh"
+import boost;
 
 namespace bpo = boost::program_options;
 

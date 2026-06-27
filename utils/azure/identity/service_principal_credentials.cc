@@ -6,10 +6,10 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
+import boost;
 
 #define CPP_JWT_USE_VENDORED_NLOHMANN_JSON
 #include <jwt/jwt.hpp>
-#include <boost/regex.hpp>
 
 #include <seastar/core/on_internal_error.hh>
 #include <seastar/util/file.hh>

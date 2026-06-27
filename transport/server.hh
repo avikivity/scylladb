@@ -21,9 +21,6 @@
 #include <seastar/core/semaphore.hh>
 #include <memory>
 #include <type_traits>
-#include <boost/intrusive/list.hpp>
-#include <seastar/net/tls.hh>
-#include <seastar/core/metrics_registration.hh>
 #include "utils/fragmented_temporary_buffer.hh"
 #include "utils/result.hh"
 #include "service_permit.hh"
@@ -44,6 +41,7 @@
 #include "service/client_routes.hh"
 #include "utils/estimated_histogram.hh"
 #include "transport/forward.hh"
+import boost;
 
 namespace cql3 {
 

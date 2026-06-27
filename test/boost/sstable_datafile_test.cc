@@ -46,9 +46,6 @@ import fmt;
 #include <cstdio>
 #include <ftw.h>
 #include <unistd.h>
-#include <boost/algorithm/cxx11/is_sorted.hpp>
-#include <boost/range/algorithm.hpp>
-#include <boost/icl/interval_map.hpp>
 #include "test/lib/sstable_utils.hh"
 #include "test/lib/random_utils.hh"
 #include "test/lib/test_utils.hh"
@@ -61,6 +58,7 @@ import fmt;
 #include "test/lib/cql_assertions.hh"
 #include "test/lib/gcs_fixture.hh"
 #include "sstables/exceptions.hh"
+import boost;
 
 namespace fs = std::filesystem;
 

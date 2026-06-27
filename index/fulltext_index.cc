@@ -14,7 +14,7 @@
 #include "index/index_option_utils.hh"
 #include "index/secondary_index_manager.hh"
 #include <seastar/core/sstring.hh>
-#include <boost/algorithm/string.hpp>
+import boost;
 
 namespace secondary_index {
 

@@ -21,6 +21,8 @@ import fmt;
 #include "utils/sequenced_set.hh"
 #include "utils/to_string.hh"
 #include "locator/network_topology_strategy.hh"
+import boost;
+
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
@@ -37,7 +39,6 @@ import fmt;
 #include <sstream>
 #include <compare>
 #include <ranges>
-#include <boost/algorithm/cxx11/iota.hpp>
 #include "test/lib/log.hh"
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/key_utils.hh"

@@ -9,9 +9,6 @@
  */
 
 import fmt;
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/erase.hpp>
-#include <boost/algorithm/string/classification.hpp>
 
 #include <seastar/core/coroutine.hh>
 
@@ -22,6 +19,7 @@ import fmt;
 #include "db/config.hh"
 #include "streaming/stream_reason.hh"
 #include "locator/abstract_replication_strategy.hh"
+import boost;
 
 static logging::logger blogger("boot_strapper");
 

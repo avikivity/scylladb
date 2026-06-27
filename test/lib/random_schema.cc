@@ -8,7 +8,6 @@
 
 #include <algorithm>
 
-#include <boost/range/algorithm/unique.hpp>
 
 #include <seastar/coroutine/maybe_yield.hh>
 
@@ -30,6 +29,7 @@
 #include "utils/big_decimal.hh"
 #include "utils/UUID_gen.hh"
 #include "replica/schema_describe_helper.hh"
+import boost;
 
 namespace tests {
 

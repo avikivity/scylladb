@@ -77,9 +77,9 @@ import fmt;
 
 #include "service/topology_coordinator.hh"
 
-#include <boost/range/join.hpp>
 #include <seastar/core/metrics_registration.hh>
 #include "utils/labels.hh"
+import boost;
 
 using token = dht::token;
 using inet_address = gms::inet_address;

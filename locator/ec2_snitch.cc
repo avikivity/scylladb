@@ -5,11 +5,10 @@
 #include <seastar/core/do_with.hh>
 #include <seastar/http/reply.hh>
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 
 #include "utils/assert.hh"
 #include "utils/class_registrator.hh"
+import boost;
 
 namespace locator {
 

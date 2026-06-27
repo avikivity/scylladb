@@ -44,9 +44,9 @@
 #include <seastar/core/abort_on_expiry.hh>
 #include <seastar/core/coroutine.hh>
 #include <seastar/coroutine/maybe_yield.hh>
-#include <boost/range/algorithm/find_end.hpp>
 #include <charconv>
 #include <stdexcept>
+import boost;
 
 using namespace std::chrono_literals;
 

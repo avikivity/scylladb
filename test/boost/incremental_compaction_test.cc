@@ -5,7 +5,6 @@
  */
 
 #include <boost/test/unit_test.hpp>
-#include <boost/range/iterator_range_core.hpp>
 #include <memory>
 #include <utility>
 
@@ -37,6 +36,7 @@
 #include "test/lib/sstable_utils.hh"
 #include "test/lib/test_services.hh"
 #include "test/lib/log.hh"
+import boost;
 
 using namespace sstables;
 

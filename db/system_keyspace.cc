@@ -8,9 +8,6 @@
  */
 
 import fmt;
-#include <boost/range/algorithm.hpp>
-#include <boost/functional/hash.hpp>
-#include <boost/icl/interval_map.hpp>
 #include <ranges>
 
 #include <seastar/core/coroutine.hh>
@@ -61,6 +58,7 @@ import fmt;
 #include "utils/chunked_string.hh"
 
 #include <unordered_map>
+import boost;
 
 using days = std::chrono::duration<int, std::ratio<24 * 3600>>;
 

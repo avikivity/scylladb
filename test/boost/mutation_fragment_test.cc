@@ -34,8 +34,8 @@ import fmt;
 #include "dht/i_partitioner.hh"
 
 #include "readers/from_mutations.hh"
+import boost;
 
-#include <boost/range/join.hpp>
 
 SEASTAR_TEST_CASE(test_mutation_merger_conforms_to_mutation_source) {
     return seastar::async([] {

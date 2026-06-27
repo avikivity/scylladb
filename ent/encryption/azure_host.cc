@@ -9,8 +9,6 @@
 
 #include <stdexcept>
 
-#include <boost/regex.hpp>
-#include <boost/algorithm/string.hpp>
 
 #include "db/config.hh"
 #include "utils/log.hh"
@@ -26,6 +24,7 @@
 #include "azure_host.hh"
 #include "encryption.hh"
 #include "encryption_exceptions.hh"
+import boost;
 
 using namespace std::chrono_literals;
 

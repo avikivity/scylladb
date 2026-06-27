@@ -9,9 +9,12 @@
 #pragma once
 
 #include <limits>
-#include <boost/multiprecision/cpp_int.hpp>
 #include <compare>
 #include <iosfwd>
+#include <string>
+#include <utility>
+
+import boost;
 
 namespace utils {
 

@@ -6,16 +6,18 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/thread.hh>
 
+#include <deque>
+#include <iostream>
+
+#include <deque>
+#include <iostream>
 #include "utils/managed_bytes.hh"
 #include "utils/logalloc.hh"
 #include "utils/log.hh"
 
 #include <random>
+import boost;
 
 int main(int argc, char** argv) {
     namespace bpo = boost::program_options;

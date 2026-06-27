@@ -75,8 +75,6 @@ import fmt;
 #include "streaming/stream_blob.hh"
 #include "service/paxos/paxos_state.hh"
 #include "dht/range_streamer.hh"
-#include <boost/range/algorithm.hpp>
-#include <boost/range/join.hpp>
 #include "transport/server.hh"
 #include <seastar/core/rwlock.hh>
 #include "db/batchlog_manager.hh"
@@ -126,12 +124,11 @@ import fmt;
 #include "view_info.hh"
 #include "debug.hh"
 
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
 #include <stdexcept>
 #include <unistd.h>
 #include <variant>
 #include <utility>
+import boost;
 
 using token = dht::token;
 using UUID = utils::UUID;

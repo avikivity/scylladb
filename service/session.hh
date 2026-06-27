@@ -15,8 +15,8 @@
 #include <seastar/core/shared_future.hh>
 #include <seastar/core/semaphore.hh>
 
-#include <boost/intrusive/list.hpp>
 #include <unordered_set>
+import boost;
 
 namespace service {
 

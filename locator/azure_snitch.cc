@@ -18,10 +18,9 @@ import fmt;
 #include <seastar/net/dns.hh>
 #include <seastar/util/closeable.hh>
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 
 #include "utils/class_registrator.hh"
+import boost;
 
 namespace locator {
 

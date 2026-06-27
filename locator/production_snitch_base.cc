@@ -12,10 +12,8 @@
 #include "message/messaging_service.hh"
 #include "db/config.hh"
 
-#include <boost/algorithm/string/trim.hpp>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <seastar/core/file.hh>
+import boost;
 
 namespace locator {
 

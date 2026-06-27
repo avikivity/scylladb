@@ -11,10 +11,9 @@
 
 #include <optional>
 
-#include <boost/signals2/dummy_mutex.hpp>
-#include <boost/signals2/signal_type.hpp>
 
 #include "sstables/generation_type.hh"
+import boost;
 
 namespace bs2 = boost::signals2;
 

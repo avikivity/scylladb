@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include <boost/program_options.hpp>
-#include <seastar/core/app-template.hh>
 #include "seastarx.hh"
+import boost;
 
 namespace db {
     class extensions;

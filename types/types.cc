@@ -7,7 +7,7 @@
  */
 
 import fmt;
-#include <boost/lexical_cast.hpp>
+import boost;
 #include <algorithm>
 #include "cql3/cql3_type.hh"
 #include "cql3/description.hh"
@@ -28,14 +28,9 @@ import fmt;
 #include <chrono>
 #include <sstream>
 #include <string>
-#include <boost/regex.hpp>
 #include <concepts>
 #include <ctime>
 #include <cstdlib>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/date_time/c_local_time_adjustor.hpp>
-#include <boost/locale/encoding_utf.hpp>
-#include <boost/multiprecision/cpp_int.hpp>
 #include <seastar/net/inet_address.hh>
 #include <type_traits>
 #include <unordered_set>

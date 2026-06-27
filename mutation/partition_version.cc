@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <boost/range/algorithm/heap_algorithm.hpp>
 
 #include "partition_version.hh"
 #include "db/row_cache.hh"
@@ -15,6 +14,7 @@
 #include "utils/coroutine.hh"
 #include "real_dirty_memory_accounter.hh"
 #include "keys/clustering_interval_set.hh"
+import boost;
 
 static void remove_or_mark_as_unique_owner(partition_version* current, mutation_cleaner* cleaner)
 {

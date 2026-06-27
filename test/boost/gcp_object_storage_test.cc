@@ -13,8 +13,6 @@
 #include <unordered_set>
 #include <filesystem>
 #include <boost/test/unit_test.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
 
 #include <seastar/coroutine/parallel_for_each.hh>
 #include <seastar/core/thread.hh>
@@ -41,6 +39,7 @@
 
 #include <seastar/core/metrics_api.hh>
 #include <seastar/testing/test_fixture.hh>
+import boost;
 
 using namespace std::string_view_literals;
 using namespace std::chrono_literals;

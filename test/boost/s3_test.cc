@@ -10,8 +10,6 @@
 #include <unordered_set>
 #include <regex>
 #include <boost/test/unit_test.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
 #include <seastar/core/thread.hh>
 #include <seastar/core/reactor.hh>
 #include <seastar/core/file.hh>
@@ -38,6 +36,7 @@
 #include "utils/s3/credentials_providers/sts_assume_role_credentials_provider.hh"
 #include "sstables/checksum_utils.hh"
 #include "gc_clock.hh"
+import boost;
 
 using namespace std::string_view_literals;
 using namespace std::chrono_literals;

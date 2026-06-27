@@ -12,7 +12,6 @@ import fmt;
 #include <seastar/coroutine/parallel_for_each.hh>
 #include <seastar/util/file.hh>
 #include <seastar/util/lazy.hh>
-#include <boost/algorithm/string.hpp>
 #include "sstables/sstable_directory.hh"
 #include "sstables/sstables.hh"
 #include "sstables/sstables_manager.hh"
@@ -27,6 +26,7 @@ import fmt;
 #include "utils/s3/client.hh"
 #include "replica/database.hh"
 #include "dht/auto_refreshing_sharder.hh"
+import boost;
 
 static logging::logger dirlog("sstable_directory");
 

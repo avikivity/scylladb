@@ -16,10 +16,10 @@
 #include <seastar/core/sharded.hh>
 #include <seastar/util/log.hh>
 
-#include <boost/intrusive/list.hpp>
 
 #include <chrono>
 #include "locator/host_id.hh"
+import boost;
 
 namespace bi = boost::intrusive;
 

@@ -8,7 +8,6 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <boost/program_options.hpp>
 
 #include <seastar/core/sstring.hh>
 #include <seastar/json/json_elements.hh>
@@ -18,6 +17,7 @@
 #include "audit/audit_rule.hh"
 #include "audit/preprocessed_audit_rules.hh"
 #include "db/config.hh"
+import boost;
 
 using namespace seastar;
 

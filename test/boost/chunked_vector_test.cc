@@ -7,6 +7,8 @@
  */
 
 import fmt;
+import boost;
+
 #define BOOST_TEST_MODULE core
 
 #include <ranges>
@@ -21,7 +23,6 @@ import fmt;
 #include "utils/chunked_vector.hh"
 #include "utils/amortized_reserve.hh"
 
-#include <boost/range/algorithm/reverse.hpp>
 
 using disk_array = utils::chunked_vector<uint64_t, 1024>;
 

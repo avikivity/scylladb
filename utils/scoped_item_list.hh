@@ -68,7 +68,6 @@
 
 #include <list>
 
-#include <boost/intrusive/list.hpp>
 
 #include <seastar/core/future.hh>
 #include <seastar/core/loop.hh>
@@ -76,6 +75,7 @@
 
 #include "seastarx.hh"
 #include "utils/on_internal_error.hh"
+import boost;
 
 namespace utils {
 

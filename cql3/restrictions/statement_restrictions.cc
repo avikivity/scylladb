@@ -8,7 +8,6 @@
  */
 
 #include <algorithm>
-#include <boost/range/algorithm/set_algorithm.hpp>
 #include <functional>
 #include <ranges>
 #include <stdexcept>
@@ -30,6 +29,7 @@
 #include "db/schema_tables.hh"
 #include "types/tuple.hh"
 #include "utils/overloaded_functor.hh"
+import boost;
 
 namespace {
 struct maybe_column_definition {

@@ -11,11 +11,11 @@ import fmt;
 #include "UUID.hh"
 #include <seastar/net/byteorder.hh>
 #include <random>
-#include <boost/algorithm/string/erase.hpp>
 #include <string>
 #include <seastar/core/format.hh>
 #include <seastar/core/sstring.hh>
 #include "marshal_exception.hh"
+import boost;
 
 namespace utils {
 

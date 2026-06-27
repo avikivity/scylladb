@@ -10,8 +10,8 @@
 
 #include "mutation_query.hh"
 #include "schema/schema_registry.hh"
+import boost;
 
-#include <boost/range/algorithm/equal.hpp>
 
 reconcilable_result::~reconcilable_result() {}
 

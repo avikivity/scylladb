@@ -12,7 +12,6 @@ import fmt;
 #include <string>
 #include <sys/stat.h>
 #include <malloc.h>
-#include <boost/regex.hpp>
 #include <filesystem>
 #include <unordered_map>
 #include <unordered_set>
@@ -56,6 +55,7 @@ import fmt;
 #include "utils/checked-file-impl.hh"
 #include "utils/disk-error-handler.hh"
 #include "utils/labels.hh"
+import boost;
 
 static logging::logger clogger("commitlog");
 

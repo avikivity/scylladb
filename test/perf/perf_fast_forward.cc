@@ -9,12 +9,8 @@
 import fmt;
 #include <algorithm>
 
+
 #include "utils/assert.hh"
-#include <boost/algorithm/string/replace.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/range/irange.hpp>
-#include <boost/range/algorithm_ext.hpp>
 #include <json/json.h>
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/reader_concurrency_semaphore.hh"
@@ -35,6 +31,7 @@ import fmt;
 #include "transport/messages/result_message.hh"
 #include "sstables/partition_index_cache.hh"
 #include <fstream>
+import boost;
 
 using namespace std::chrono_literals;
 using namespace seastar;

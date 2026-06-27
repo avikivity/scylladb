@@ -8,11 +8,12 @@
 
 
 #include <boost/test/unit_test.hpp>
-#include <boost/multiprecision/cpp_int.hpp>
 
 #include <seastar/net/inet_address.hh>
 
 #include "test/lib/eventually.hh"
+import boost;
+
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include "test/lib/cql_test_env.hh"

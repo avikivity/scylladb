@@ -12,8 +12,8 @@
 #include "utils/assert.hh"
 #include "gms/i_endpoint_state_change_subscriber.hh"
 #include <seastar/core/on_internal_error.hh>
-#include <boost/lexical_cast.hpp>
 #include "utils/log.hh"
+import boost;
 
 namespace gms {
 

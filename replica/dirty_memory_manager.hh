@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include <boost/intrusive/parent_from_member.hpp>
-#include <boost/heap/binomial_heap.hpp>
+#include <optional>
+#include <utility>
+
 #include <seastar/core/condition-variable.hh>
 #include <seastar/core/expiring_fifo.hh>
 #include <seastar/core/future.hh>
@@ -19,6 +20,7 @@
 #include "replica/database_fwd.hh"
 #include "utils/assert.hh"
 #include "utils/logalloc.hh"
+import boost;
 
 class test_region_group;
 

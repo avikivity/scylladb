@@ -12,8 +12,8 @@
 #include "types/concrete_types.hh"
 #include "utils/fragment_range.hh"
 #include "utils/to_string.hh"
+import boost;
 
-#include <boost/intrusive/list.hpp>
 
 namespace sstables {
 

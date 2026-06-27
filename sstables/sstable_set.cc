@@ -11,7 +11,6 @@
 #include "utils/assert.hh"
 #include <seastar/util/defer.hh>
 
-#include <boost/icl/interval_map.hpp>
 
 #include "sstables.hh"
 
@@ -23,6 +22,7 @@
 #include "readers/from_mutations.hh"
 #include "readers/empty.hh"
 #include "readers/combined.hh"
+import boost;
 
 namespace sstables {
 

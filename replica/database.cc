@@ -43,7 +43,6 @@ import fmt;
 #include <seastar/core/metrics.hh>
 #include "sstables/sstables.hh"
 #include "sstables/sstables_manager.hh"
-#include <boost/container/static_vector.hpp>
 #include "mutation/frozen_mutation.hh"
 #include "mutation/async_utils.hh"
 #include <seastar/core/do_with.hh>
@@ -92,6 +91,7 @@ import fmt;
 
 #include <algorithm>
 #include <flat_set>
+import boost;
 
 using namespace std::chrono_literals;
 using namespace db;

@@ -22,6 +22,10 @@
 #include "types/concrete_types.hh"
 #include "types/user.hh"
 
+
+import boost;
+
+
 using namespace db;
 
 static_assert(MutationViewVisitor<mutation_partition_view_virtual_visitor>);

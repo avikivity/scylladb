@@ -10,7 +10,6 @@ import fmt;
 #include <seastar/testing/random.hh>
 #include <seastar/core/thread.hh>
 #include <seastar/core/app-template.hh>
-#include <boost/program_options.hpp>
 #include <xxhash.h>
 #include "readers/from_mutations.hh"
 #include "schema/schema_builder.hh"
@@ -20,6 +19,7 @@ import fmt;
 #include "test/lib/sstable_test_env.hh"
 #include "test/lib/sstable_utils.hh"
 #include "readers/compacting.hh"
+import boost;
 
 namespace bpo = boost::program_options;
 

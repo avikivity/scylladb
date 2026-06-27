@@ -139,6 +139,8 @@ public:
 
 #include "utils/compact-radix-tree.hh"
 
+import fmt;
+import boost;
 class radix_tester : public collection_tester {
 public:
     using test_tree = compact_radix_tree::tree<unsigned long>;

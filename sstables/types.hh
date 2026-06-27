@@ -17,7 +17,6 @@
 #include "mutation/tombstone.hh"
 #include "utils/streaming_histogram.hh"
 #include "utils/estimated_histogram.hh"
-#include <boost/intrusive/set.hpp>
 #include "sstables/key.hh"
 #include "sstables/file_writer.hh"
 #include "db/commitlog/replay_position.hh"
@@ -29,6 +28,7 @@
 #include "encoding_stats.hh"
 #include "types_fwd.hh"
 #include "schema/schema_fwd.hh"
+import boost;
 
 // While the sstable code works with char, bytes_view works with int8_t
 // (signed char). Rather than change all the code, let's do a cast.

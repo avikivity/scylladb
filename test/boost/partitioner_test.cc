@@ -9,7 +9,6 @@
 import fmt;
 #include <limits>
 
-#include <boost/range/combine.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include "test/lib/scylla_test_case.hh"
 
@@ -28,6 +27,8 @@ import fmt;
 #include "test/lib/random_utils.hh"
 #include "test/lib/test_utils.hh"
 #include "test/boost/total_order_check.hh"
+
+import boost;
 
 static dht::token token_from_long(uint64_t value) {
     return dht::token(value);

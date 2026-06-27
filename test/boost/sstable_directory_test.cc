@@ -14,6 +14,8 @@ import fmt;
 #include <seastar/util/file.hh>
 #include "dht/token.hh"
 #include "sstables/generation_type.hh"
+import boost;
+
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
@@ -30,7 +32,6 @@ import fmt;
 #include "utils/lister.hh"
 #include "db/config.hh"
 #include "sstables/exceptions.hh"
-#include <boost/algorithm/string/erase.hpp>
 
 class distributed_loader_for_tests {
 public:

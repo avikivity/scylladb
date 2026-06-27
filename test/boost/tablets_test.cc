@@ -14,6 +14,8 @@ import fmt;
 #include <seastar/core/shard_id.hh>
 #include <seastar/coroutine/as_future.hh>
 #include <source_location>
+import boost;
+
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include "test/lib/random_utils.hh"
@@ -50,7 +52,6 @@ import fmt;
 #include "service/topology_state_machine.hh"
 #include "service/migration_manager.hh"
 
-#include <boost/regex.hpp>
 #include <atomic>
 
 BOOST_AUTO_TEST_SUITE(tablets_test)

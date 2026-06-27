@@ -26,15 +26,13 @@ import fmt;
 #include "utils/interval.hh"
 #include "dht/i_partitioner.hh"
 #include "dht/sharder.hh"
-#include <boost/icl/interval.hpp>
-#include <boost/icl/interval_set.hpp>
 #include "sstables/sstables.hh"
 #include "replica/database.hh"
 #include "streaming/table_check.hh"
 #include "gms/feature_service.hh"
 #include "utils/error_injection.hh"
 #include "idl/streaming.dist.hh"
-#include <seastar/coroutine/maybe_yield.hh>
+import boost;
 
 namespace streaming {
 

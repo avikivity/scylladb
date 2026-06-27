@@ -8,7 +8,6 @@
 
 
 #include <boost/test/unit_test.hpp>
-#include <boost/intrusive/parent_from_member.hpp>
 #include <algorithm>
 #include <deque>
 
@@ -31,6 +30,8 @@
 #include "utils/managed_ref.hh"
 #include "utils/managed_bytes.hh"
 #include "test/lib/log.hh"
+import boost;
+
 #ifndef SEASTAR_DEFAULT_ALLOCATOR
 #include "utils/chunked_vector.hh"
 #include "utils/logalloc.hh"

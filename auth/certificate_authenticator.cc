@@ -12,12 +12,12 @@ import fmt;
 #include "auth/cache.hh"
 #include "auth/config.hh"
 
-#include <boost/regex.hpp>
 
 #include "utils/to_string.hh"
 #include "utils/error_injection.hh"
 #include "data_dictionary/data_dictionary.hh"
 #include "cql3/query_processor.hh"
+import boost;
 
 
 static logging::logger clogger("certificate_authenticator");

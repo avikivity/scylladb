@@ -11,7 +11,6 @@
 #include <vector>
 #include <unordered_set>
 #include <functional>
-#include <boost/container/deque.hpp>
 #include <seastar/core/future.hh>
 #include <seastar/util/log.hh>
 #include <seastar/core/abort_source.hh>
@@ -19,6 +18,9 @@
 #include "internal.hh"
 #include "logical_clock.hh"
 #include "bounded_clock.hh"
+
+import boost;
+import fmt;
 
 namespace raft {
 // Keeps user defined command. A user is responsible to serialize

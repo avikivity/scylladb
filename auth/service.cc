@@ -16,7 +16,6 @@
 #include <algorithm>
 #include <chrono>
 
-#include <boost/algorithm/string.hpp>
 
 #include <seastar/core/future-util.hh>
 #include <seastar/core/shard_id.hh>
@@ -61,6 +60,7 @@
 #include "service/storage_service.hh"
 #include "service_permit.hh"
 #include "utils/managed_string.hh"
+import boost;
 
 using namespace std::chrono_literals;
 

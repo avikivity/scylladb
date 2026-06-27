@@ -9,10 +9,10 @@
 
 #include "tombstone_gc_options.hh"
 #include "exceptions/exceptions.hh"
-#include <boost/lexical_cast.hpp>
 #include <seastar/core/sstring.hh>
 #include <map>
 #include "utils/rjson.hh"
+import boost;
 
 tombstone_gc_options::tombstone_gc_options(const std::map<seastar::sstring, seastar::sstring>& map) {
     for (const auto& x : map) {

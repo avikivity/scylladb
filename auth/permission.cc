@@ -10,9 +10,9 @@
 
 #include "auth/permission.hh"
 
-#include <boost/algorithm/string.hpp>
 
 #include <unordered_map>
+import boost;
 
 const auth::permission_set auth::permissions::ALL = auth::permission_set::of<
         auth::permission::CREATE,

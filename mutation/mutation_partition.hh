@@ -9,7 +9,6 @@
 #pragma once
 
 #include <iosfwd>
-#include <boost/intrusive/parent_from_member.hpp>
 
 #include <seastar/util/optimized_optional.hh>
 
@@ -33,6 +32,7 @@
 
 #ifdef SEASTAR_DEBUG
 #include "utils/assert.hh"
+import boost;
 #endif
 
 class mutation_fragment;

@@ -14,8 +14,8 @@
 #include "schema/schema.hh"
 #include "utils/logalloc.hh"
 #include "release.hh"
-#include <boost/algorithm/string.hpp>
 #include <fstream>
+import boost;
 
 
 uint64_t perf_mallocs() {

@@ -10,7 +10,7 @@
 #include "types/duration.hh"
 #include "types/concrete_types.hh"
 #include "utils/chunked_string.hh"
-#include <boost/algorithm/string/predicate.hpp>
+import boost;
 
 namespace cql3 {
 

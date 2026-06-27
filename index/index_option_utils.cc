@@ -8,9 +8,9 @@
 
 #include "index/index_option_utils.hh"
 #include "exceptions/exceptions.hh"
-#include <boost/algorithm/string.hpp>
 #include <seastar/core/format.hh>
 import fmt;
+import boost;
 
 namespace secondary_index::util {
 

@@ -13,7 +13,6 @@
 #include "sstables/sstables_manager.hh"
 
 #include <rapidjson/document.h>
-#include <boost/lexical_cast.hpp>
 #include <seastar/core/reactor.hh>
 #include <seastar/core/metrics_api.hh>
 #include <seastar/core/relabel_config.hh>
@@ -22,6 +21,7 @@
 #include <seastar/util/short_streams.hh>
 
 #include "utils/log.hh"
+import boost;
 
 extern logging::logger apilog;
 

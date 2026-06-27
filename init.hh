@@ -8,6 +8,7 @@
 #pragma once
 
 #include <any>
+#include <functional>
 
 #include <seastar/core/sstring.hh>
 #include <seastar/core/future.hh>
@@ -16,8 +17,8 @@
 #include "utils/log.hh"
 #include "utils/s3/creds.hh"
 #include "seastarx.hh"
-#include <boost/program_options.hpp>
 #include <yaml-cpp/yaml.h>
+import boost;
 
 namespace db {
 class extensions;

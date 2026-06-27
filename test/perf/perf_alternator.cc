@@ -22,11 +22,11 @@
 #include <seastar/util/short_streams.hh>
 #include <seastar/core/smp.hh>
 #include <tuple>
-#include <boost/program_options.hpp>
 
 #include "db/config.hh"
 #include "test/perf/perf.hh"
 #include "test/lib/random_utils.hh"
+import boost;
 
 
 namespace perf {

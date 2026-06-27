@@ -12,11 +12,11 @@
 #include "index/target_parser.hh"
 #include "cql3/statements/index_target.hh"
 
-#include <boost/regex.hpp>
 #include <seastar/util/log.hh>
 
 #include "exceptions/exceptions.hh"
 #include "utils/rjson.hh"
+import boost;
 
 const sstring db::index::secondary_index::custom_class_option_name = "class_name";
 const sstring db::index::secondary_index::index_version_option_name = "index_version";

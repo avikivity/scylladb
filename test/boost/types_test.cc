@@ -11,7 +11,6 @@
 #include <seastar/net/inet_address.hh>
 #include "utils/UUID_gen.hh"
 #include <seastar/net/ip.hh>
-#include <boost/multiprecision/cpp_int.hpp>
 #include "types/types.hh"
 #include "types/tuple.hh"
 #include "keys/compound.hh"
@@ -27,6 +26,7 @@
 #include "types/vector.hh"
 #include "test/lib/exception_utils.hh"
 #include "test/lib/test_utils.hh"
+import boost;
 
 using namespace std::literals::chrono_literals;
 using namespace std::literals::string_view_literals;

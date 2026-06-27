@@ -9,8 +9,8 @@
 import fmt;
 #include "test/lib/exception_utils.hh"
 
-#include <boost/regex.hpp>
 #include <boost/test/unit_test.hpp>
+import boost;
 
 std::function<bool(const std::exception&)> exception_predicate::make(
         std::function<bool(const std::exception&)> check,

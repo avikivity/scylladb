@@ -20,6 +20,8 @@ import fmt;
 #include "sstables/generation_type.hh"
 #include "sstables/sstables.hh"
 #include "compaction/compaction.hh"
+import boost;
+
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
@@ -56,9 +58,7 @@ import fmt;
 #include <cstdio>
 #include <ftw.h>
 #include <unistd.h>
-#include <boost/icl/interval_map.hpp>
 #include <limits>
-#include <boost/lexical_cast.hpp>
 #include "test/lib/test_services.hh"
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/reader_concurrency_semaphore.hh"

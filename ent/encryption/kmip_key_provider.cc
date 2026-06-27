@@ -7,7 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <boost/lexical_cast.hpp>
 #include <regex>
 
 #include "utils/UUID.hh"
@@ -15,6 +14,7 @@
 
 #include "kmip_key_provider.hh"
 #include "kmip_host.hh"
+import boost;
 
 namespace encryption {
 

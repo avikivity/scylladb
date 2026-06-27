@@ -16,7 +16,6 @@
 #include <cassert>
 #include <algorithm>
 
-#include <boost/range/join.hpp>
 
 #include <seastar/core/future-util.hh>
 #include <seastar/core/scheduling.hh>
@@ -56,6 +55,7 @@
 #include "tombstone_gc.hh"
 #include "replica/database.hh"
 #include "mutation/timestamp.hh"
+import boost;
 
 
 can_gc_fn always_gc = [] (tombstone, is_shadowable) { return true; };

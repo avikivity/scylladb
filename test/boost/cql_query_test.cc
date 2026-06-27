@@ -13,9 +13,9 @@ import fmt;
 #include "locator/tablets.hh"
 #include "replica/tablets.hh"
 #include <boost/test/unit_test.hpp>
-#include <boost/multiprecision/cpp_int.hpp>
 
 #include <seastar/net/inet_address.hh>
+import boost;
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
@@ -45,7 +45,6 @@ import fmt;
 #include "utils/rjson.hh"
 #include "schema/schema_builder.hh"
 #include "service/migration_manager.hh"
-#include <boost/regex.hpp>
 #include "service/qos/qos_common.hh"
 #include "utils/UUID_gen.hh"
 #include "tombstone_gc_extension.hh"

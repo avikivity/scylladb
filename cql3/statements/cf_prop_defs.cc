@@ -26,8 +26,8 @@
 #include "utils/bloom_calculations.hh"
 #include "utils/overloaded_functor.hh"
 #include "db/config.hh"
+import boost;
 
-#include <boost/algorithm/string/predicate.hpp>
 
 namespace cql3 {
 

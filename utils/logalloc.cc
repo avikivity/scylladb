@@ -6,9 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <boost/intrusive/list.hpp>
-#include <boost/intrusive/set.hpp>
-#include <boost/intrusive/slist.hpp>
 #include <stack>
 #include <ranges>
 
@@ -38,6 +35,7 @@
 
 #include <random>
 #include <chrono>
+import boost;
 
 using namespace std::chrono_literals;
 

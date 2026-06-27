@@ -16,14 +16,14 @@
 #include "partition_range_compat.hh"
 #include <unordered_map>
 #include <algorithm>
-#include <boost/icl/interval.hpp>
-#include <boost/icl/interval_map.hpp>
 #include <seastar/core/coroutine.hh>
 #include <seastar/coroutine/maybe_yield.hh>
 #include <seastar/core/smp.hh>
 #include "utils/assert.hh"
 #include "utils/stall_free.hh"
 #include "gms/gossiper.hh"
+import boost;
+
 namespace locator {
 
 static logging::logger tlogger("token_metadata");

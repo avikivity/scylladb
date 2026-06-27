@@ -11,7 +11,6 @@
 
 #include <yaml-cpp/yaml.h>
 
-#include <boost/program_options.hpp>
 
 #include <seastar/core/file.hh>
 #include <seastar/core/seastar.hh>
@@ -29,6 +28,7 @@
 
 #include "config_file.hh"
 #include "config_file_impl.hh"
+import boost;
 
 namespace bpo = boost::program_options;
 

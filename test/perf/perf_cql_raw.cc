@@ -31,9 +31,6 @@ import fmt;
 #include <seastar/util/log.hh>
 #include <signal.h>
 
-#include <boost/program_options.hpp>
-#include <boost/algorithm/string.hpp>
-
 #include "db/config.hh"
 #include "test/perf/perf.hh"
 #include "test/lib/random_utils.hh"
@@ -42,6 +39,7 @@ import fmt;
 #include <cstring>
 #include <unordered_map>
 #include <stack>
+import boost;
 
 namespace perf {
 using namespace seastar;

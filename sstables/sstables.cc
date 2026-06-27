@@ -9,6 +9,8 @@
 import fmt;
 #include "utils/log.hh"
 #include <atomic>
+#include <cmath>
+#include <complex>
 #include <concepts>
 #include <cstdlib>
 #include <vector>
@@ -56,8 +58,6 @@ import fmt;
 #include "digest_checked_data_source.hh"
 #include "index_reader.hh"
 #include "downsampling.hh"
-#include <boost/algorithm/string.hpp>
-#include <boost/regex.hpp>
 #include <seastar/core/align.hh>
 #include "mutation/range_tombstone_list.hh"
 #include "binary_search.hh"
@@ -92,8 +92,8 @@ import fmt;
 #include "utils/build_id.hh"
 #include "utils/labels.hh"
 #include "utils/io-wrappers.hh"
+import boost;
 
-#include <boost/lexical_cast.hpp>
 
 thread_local disk_error_signal_type sstable_read_error;
 thread_local disk_error_signal_type sstable_write_error;

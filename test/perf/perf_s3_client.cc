@@ -7,15 +7,11 @@
  */
 
 #include <chrono>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/memory.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/core/fstream.hh>
 #include "test/lib/test_utils.hh"
 #include "test/lib/random_utils.hh"
 #include "utils/s3/client.hh"
 #include "utils/estimated_histogram.hh"
+import boost;
 
 seastar::logger plog("perf");
 

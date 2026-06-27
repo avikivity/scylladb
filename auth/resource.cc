@@ -15,14 +15,13 @@ import fmt;
 #include <iterator>
 #include <unordered_map>
 
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
 
 #include "cql3/functions/aggregate_function.hh"
 #include "cql3/functions/user_function.hh"
 #include "cql3/util.hh"
 #include "db/marshal/type_parser.hh"
 #include "utils/log.hh"
+import boost;
 
 namespace auth {
 

@@ -14,8 +14,9 @@
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/future.hh>
 #include <seastar/core/bitops.hh>
-#include <boost/intrusive/unordered_set.hpp>
 #include "seastarx.hh"
+
+import boost;
 
 namespace bi = boost::intrusive;
 

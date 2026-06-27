@@ -8,14 +8,13 @@
 
 #pragma once
 
-#include <seastar/util/defer.hh>
-#include <boost/intrusive/set.hpp>
 #include "range_tombstone.hh"
 #include "query/query-request.hh"
 #include "utils/assert.hh"
 #include "utils/preempt.hh"
 #include "utils/chunked_vector.hh"
 #include <variant>
+import boost;
 
 class position_in_partition_view;
 

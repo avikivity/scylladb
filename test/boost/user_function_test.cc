@@ -7,6 +7,8 @@
  */
 
 import fmt;
+import boost;
+
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
@@ -24,7 +26,6 @@ import fmt;
 #include "test/lib/tmpdir.hh"
 #include "test/lib/exception_utils.hh"
 #include "test/lib/test_utils.hh"
-#include <boost/date_time/gregorian/gregorian_types.hpp>
 
 BOOST_AUTO_TEST_SUITE(user_function_test)
 

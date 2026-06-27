@@ -21,10 +21,8 @@
 #include "test/lib/sstable_utils.hh"
 #include "test/lib/test_services.hh"
 #include "test/lib/random_utils.hh"
-#include <boost/accumulators/framework/accumulator_set.hpp>
-#include <boost/accumulators/framework/features.hpp>
-#include <boost/accumulators/statistics/mean.hpp>
-#include <boost/accumulators/statistics/error_of_mean.hpp>
+
+import boost;
 
 using namespace sstables;
 
@@ -370,6 +368,6 @@ future<> time_runs(unsigned iterations, unsigned parallelism, sharded<perf_sstab
             });
         });
     }).then([acc, iterations, parallelism] {
-        std::cout << format("{:.2f}", mean(*acc)) << " +- " << format("{:.2f}", error_of<tag::mean>(*acc)) << " partitions / sec (" << iterations << " runs, " << parallelism << " concurrent ops)\n";
+        std::cout << format("{:.2f}", mean_v(*acc)) << " +- " << format("{:.2f}", error_of_v<tag::mean>(*acc)) << " partitions / sec (" << iterations << " runs, " << parallelism << " concurrent ops)\n";
     });
 }

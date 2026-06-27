@@ -32,8 +32,8 @@
 #include "service/storage_proxy.hh"
 #include "transport/messages/result_message.hh"
 #include "service/raft/raft_group0_client.hh"
+import boost;
 
-#include <boost/algorithm/string.hpp>
 
 namespace cql3 {
 

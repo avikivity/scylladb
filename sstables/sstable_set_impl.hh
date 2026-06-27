@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include <boost/icl/interval_map.hpp>
 
 #include "dht/ring_position.hh"
 #include "sstable_set.hh"
 #include "readers/clustering_combined.hh"
 #include "sstables/types_fwd.hh"
+import boost;
 
 namespace sstables {
 

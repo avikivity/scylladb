@@ -9,7 +9,6 @@
 #pragma once
 
 #include "multiprecision_int.hh"
-#include <boost/multiprecision/fwd.hpp>
 #include <seastar/core/sstring.hh>
 #include <compare>
 #include <concepts>

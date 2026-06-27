@@ -27,10 +27,6 @@ import fmt;
 #include "utils/assert.hh"
 #include "utils/error_injection.hh"
 
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/range/algorithm_ext.hpp>
 
 #include <limits>
 
@@ -53,6 +49,7 @@ import fmt;
 #include "idl/node_ops.dist.hh"
 #include "utils/user_provided_param.hh"
 #include "utils/labels.hh"
+import boost;
 
 using namespace std::chrono_literals;
 

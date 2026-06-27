@@ -11,11 +11,7 @@ import abseil;
 #include "utils/assert.hh"
 #include "utils/error_injection.hh"
 #include "utils/exceptions.hh"
-#include <boost/range/adaptor/transformed.hpp>
-#include <boost/range/adaptor/map.hpp>
-#include <boost/range/algorithm/copy.hpp>
-#include <boost/range/join.hpp>
-#include <boost/lexical_cast.hpp>
+#include <map>
 #include <seastar/core/sleep.hh>
 #include <seastar/core/future-util.hh>
 #include <seastar/core/shared_future.hh>
@@ -33,6 +29,7 @@ import abseil;
 #include "raft.hh"
 
 #include "utils/exceptions.hh"
+import boost;
 
 using namespace std::chrono_literals;
 
@@ -1790,7 +1787,7 @@ future<> server_impl::abort(sstring reason) {
 
     abort_snapshot_transfers();
 
-    auto append_futures = _append_request_status | boost::adaptors::map_values |  boost::adaptors::transformed([] (append_request_queue& a) -> future<>& { return a.f; });
+    auto append_futures = _append_request_status | boost::adaptors::map_values_v |  boost::adaptors::transformed_v([] (append_request_queue& a) -> future<>& { return a.f; });
 
     std::array<future<>, 2> gates{_snapshot_gate.close(), _do_on_leader_gate.close()};
 

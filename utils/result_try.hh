@@ -9,6 +9,7 @@
 #pragma once
 
 #include <concepts>
+#include <functional>
 #include <type_traits>
 #include "utils/result.hh"
 

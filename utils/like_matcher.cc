@@ -10,9 +10,8 @@
 
 #include "like_matcher.hh"
 
-#include <boost/regex/icu.hpp>
-#include <boost/locale/encoding.hpp>
 #include <string>
+import boost;
 
 namespace {
 
