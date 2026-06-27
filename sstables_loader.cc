@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <fmt/ranges.h>
+import fmt;
 #include <seastar/core/coroutine.hh>
 #include <seastar/core/map_reduce.hh>
 #include <seastar/core/shared_ptr.hh>

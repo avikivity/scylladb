@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <fmt/core.h>
 #include <ostream>
 #include <seastar/core/shared_ptr.hh>
 #include <variant>
@@ -20,6 +19,7 @@
 #include "seastarx.hh"
 #include "cql3/values.hh"
 #include "utils/chunked_string.hh"
+import fmt;
 
 class row;
 

@@ -8,14 +8,7 @@
 
 #pragma once
 
-#include <seastar/core/file.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/queue.hh>
-#include <seastar/core/units.hh>
-#include <seastar/http/client.hh>
+
 #include <filesystem>
 #include <unordered_map>
 #include "utils/lister.hh"
@@ -24,7 +17,8 @@
 #include "credentials_providers/aws_credentials_provider_chain.hh"
 #include "utils/s3/client_fwd.hh"
 
-using namespace seastar;
+#include "seastarx.hh"
+import fmt;
 class memory_data_sink_buffers;
 
 namespace s3 {

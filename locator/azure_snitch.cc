@@ -7,6 +7,7 @@
  * Copyright (C) 2021-present ScyllaDB
  */
 
+import fmt;
 #include "locator/azure_snitch.hh"
 
 #include <seastar/core/coroutine.hh>
@@ -19,7 +20,6 @@
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <fmt/format.h>
 
 #include "utils/class_registrator.hh"
 

@@ -7,7 +7,7 @@
  */
 
 
-#include <fmt/format.h>
+import fmt;
 #include <functional>
 #include <seastar/core/smp.hh>
 #include <seastar/core/sstring.hh>
@@ -30,7 +30,6 @@
 #include "utils/lister.hh"
 #include "db/config.hh"
 #include "sstables/exceptions.hh"
-#include <fmt/ranges.h>
 #include <boost/algorithm/string/erase.hpp>
 
 class distributed_loader_for_tests {

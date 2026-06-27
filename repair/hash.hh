@@ -1,10 +1,10 @@
 #pragma once
 #include <cstdint>
 #include <ostream>
-#include <fmt/core.h>
 #include "schema/schema.hh"
 
 import abseil;
+import fmt;
 
 class decorated_key_with_hash;
 class mutation_fragment;

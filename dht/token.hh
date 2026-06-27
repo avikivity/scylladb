@@ -14,11 +14,11 @@
 
 #include <limits>
 #include <seastar/net/byteorder.hh>
-#include <fmt/format.h>
 #include <functional>
 #include <utility>
 #include <compare>
 #include <byteswap.h>
+import fmt;
 
 namespace dht {
 

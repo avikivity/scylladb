@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "audit/audit_syslog_storage_helper.hh"
 
 #include <sys/socket.h>
@@ -17,8 +18,6 @@
 #include <seastar/core/coroutine.hh>
 #include <seastar/core/seastar.hh>
 #include <seastar/net/api.hh>
-
-#include <fmt/chrono.h>
 
 #include "cql3/query_processor.hh"
 

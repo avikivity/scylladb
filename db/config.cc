@@ -7,6 +7,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
+
 #include <optional>
 #include <unordered_map>
 #include <sstream>
@@ -15,8 +17,6 @@
 #include <boost/algorithm/string/trim_all.hpp>
 #include <boost/program_options.hpp>
 #include <yaml-cpp/yaml.h>
-
-#include <fmt/ranges.h>
 
 #include <seastar/core/coroutine.hh>
 #include <seastar/core/format.hh>

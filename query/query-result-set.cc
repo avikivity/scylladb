@@ -6,14 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "query-result-set.hh"
 #include "query-result-reader.hh"
 #include "partition_slice_builder.hh"
 #include "mutation/mutation.hh"
 #include "types/map.hh"
 #include "mutation_query.hh"
-
-#include <fmt/format.h>
 
 namespace query {
 

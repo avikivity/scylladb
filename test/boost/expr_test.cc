@@ -1,6 +1,7 @@
 // Copyright (C) 2023-present ScyllaDB
 // SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
 
+import fmt;
 #include "cql3/column_identifier.hh"
 #include "cql3/util.hh"
 #include <seastar/core/shared_ptr.hh>
@@ -13,7 +14,6 @@
 
 #include <boost/test/unit_test.hpp>
 #include <utility>
-#include <fmt/ranges.h>
 #include "cql3/expr/expression.hh"
 #include "utils/overloaded_functor.hh"
 #include "utils/to_string.hh"

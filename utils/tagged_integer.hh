@@ -9,8 +9,8 @@
 #pragma once
 
 #include <iostream>
+import fmt;
 
-#include <fmt/core.h>
 
 namespace utils {
 

@@ -7,11 +7,8 @@
  */
 
 
+import fmt;
 #include "gcp_credentials.hh"
-
-#include <fmt/chrono.h>
-#include <fmt/ranges.h>
-#include <fmt/std.h>
 
 #include <seastar/core/reactor.hh>
 #include <seastar/core/fstream.hh>

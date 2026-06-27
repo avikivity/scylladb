@@ -6,12 +6,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <seastar/core/app-template.hh>
 #include <seastar/core/thread.hh>
 #include <algorithm>
 #include <vector>
 #include <random>
-#include <fmt/core.h>
 #include "perf.hh"
 
 using per_key_t = int64_t;

@@ -8,7 +8,7 @@
 #pragma once
 
 #include <chrono>
-#include <fmt/core.h>
+import fmt;
 
 namespace raft {
 

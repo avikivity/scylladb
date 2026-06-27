@@ -14,6 +14,7 @@
 #include <seastar/core/lowres_clock.hh>
 
 #include <chrono>
+import fmt;
 #include <optional>
 
 class gc_clock final {

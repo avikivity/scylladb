@@ -7,6 +7,7 @@
  */
 
 
+import fmt;
 #include <random>
 #include <boost/range/algorithm_ext/push_back.hpp>
 #include <boost/range/combine.hpp>
@@ -16,8 +17,6 @@
 #include "utils/hashers.hh"
 #include "utils/preempt.hh"
 #include "utils/xx_hasher.hh"
-
-#include <fmt/ranges.h>
 
 #include <seastar/core/sstring.hh>
 #include <seastar/core/do_with.hh>

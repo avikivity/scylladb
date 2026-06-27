@@ -7,12 +7,12 @@
  */
 
 
+import fmt;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/core/abort_source.hh>
 #include <seastar/core/loop.hh>
 
-#include <fmt/ranges.h>
 #include "db/config.hh"
 #include "locator/tablets.hh"
 #include "replica/tablets.hh"

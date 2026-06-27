@@ -10,7 +10,7 @@
 //
 // Using slower but precise clock
 
-#include <fmt/std.h>
+import fmt;
 #include "replication.hh"
 
 #ifdef SEASTAR_DEBUG

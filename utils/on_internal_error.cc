@@ -11,6 +11,8 @@
 #include <seastar/core/format.hh>
 
 #include "on_internal_error.hh"
+#include "seastarx.hh"
+import fmt;
 
 static seastar::logger on_internal_error_logger("on_internal_error");
 

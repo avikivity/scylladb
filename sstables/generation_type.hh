@@ -10,7 +10,6 @@
 
 #include <charconv>
 #include <chrono>
-#include <fmt/core.h>
 #include <cstdint>
 #include <compare>
 #include <limits>
@@ -23,6 +22,7 @@
 #include "utils/assert.hh"
 #include "utils/UUID_gen.hh"
 #include "utils/log.hh"
+import fmt;
 
 namespace sstables {
 

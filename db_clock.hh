@@ -15,9 +15,9 @@
 #include <cstdint>
 #include <ratio>
 #include <type_traits>
-#include <fmt/chrono.h>
 
 // the database clock follows Java - 1ms granularity, 64-bit counter, 1970 epoch
+import fmt;
 
 class db_clock final {
 public:

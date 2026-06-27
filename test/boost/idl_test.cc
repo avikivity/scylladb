@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #define BOOST_TEST_MODULE core
 
 #include "utils/assert.hh"
@@ -13,11 +14,8 @@
 
 #include <seastar/util/variant_utils.hh>
 
-#include <fmt/ranges.h>
-
 #include <vector>
 #include <optional>
-#include <fmt/ranges.h>
 
 #include "test/lib/test_utils.hh"
 #include "bytes.hh"

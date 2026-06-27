@@ -9,6 +9,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include "storage_service.hh"
 #include "db/view/view_building_worker.hh"
 #include "utils/chunked_vector.hh"
@@ -30,7 +31,6 @@
 #include <chrono>
 #include <exception>
 #include <optional>
-#include <fmt/ranges.h>
 #include <seastar/core/sharded.hh>
 #include <seastar/util/defer.hh>
 #include <seastar/coroutine/as_future.hh>

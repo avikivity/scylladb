@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <boost/test/unit_test.hpp>
-#include <fmt/ranges.h>
 #include "db/tablet_options.hh"
 #include "gms/inet_address.hh"
 #include "gms/feature_service.hh"

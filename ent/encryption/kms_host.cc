@@ -6,6 +6,7 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
+import fmt;
 #include <deque>
 #include <unordered_map>
 #include <regex>
@@ -22,9 +23,6 @@
 
 #include <rapidxml.h>
 
-#include <fmt/chrono.h>
-#include <fmt/ranges.h>
-#include <fmt/std.h>
 #include "utils/to_string.hh"
 
 #include "kms_host.hh"

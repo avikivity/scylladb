@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <iterator>
-#include <fmt/ranges.h>
 #include <seastar/core/sstring.hh>
 #include <seastar/core/future-util.hh>
 #include <seastar/core/align.hh>
@@ -57,6 +57,7 @@
 #include <ftw.h>
 #include <unistd.h>
 #include <boost/icl/interval_map.hpp>
+#include <limits>
 #include <boost/lexical_cast.hpp>
 #include "test/lib/test_services.hh"
 #include "test/lib/cql_test_env.hh"

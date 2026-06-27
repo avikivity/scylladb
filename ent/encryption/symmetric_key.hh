@@ -12,12 +12,12 @@
 #include <memory>
 #include <tuple>
 #include <iosfwd>
-#include <fmt/core.h>
-#include <fmt/ostream.h>
 
 #include "../../bytes.hh"
 
 // forward declare openssl evp.
+import fmt;
+
 extern "C" {
 struct evp_cipher_ctx_st;
 }

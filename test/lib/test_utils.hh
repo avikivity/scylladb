@@ -13,8 +13,7 @@
 #include <seastar/core/future.hh>
 #include <string>
 #include <boost/test/unit_test.hpp>
-#include <fmt/core.h>
-#include <fmt/format.h>
+import fmt;
 
 using namespace seastar;
 

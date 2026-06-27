@@ -14,7 +14,6 @@
 #include <boost/mp11/algorithm.hpp>
 #include <boost/implicit_cast.hpp>
 
-#include <fmt/std.h>
 
 #include <seastar/coroutine/parallel_for_each.hh>
 #include <seastar/util/variant_utils.hh>
@@ -22,6 +21,7 @@
 #include "utils/chunked_vector.hh"
 
 #include "test/raft/future_set.hh"
+import fmt;
 
 namespace operation {
 

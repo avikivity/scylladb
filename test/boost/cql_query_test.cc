@@ -7,14 +7,13 @@
  */
 
 
+import fmt;
+
 #include "locator/abstract_replication_strategy.hh"
 #include "locator/tablets.hh"
 #include "replica/tablets.hh"
 #include <boost/test/unit_test.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
-
-#include <fmt/ranges.h>
-#include <fmt/std.h>
 
 #include <seastar/net/inet_address.hh>
 

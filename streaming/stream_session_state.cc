@@ -9,6 +9,7 @@
 
 #include "streaming/stream_session_state.hh"
 #include <map>
+#include <string_view>
 #include "seastarx.hh"
 
 namespace streaming {

@@ -1,4 +1,4 @@
-#include <fmt/std.h>
+import fmt;
 #include "raft/raft.hh"
 #include "replication.hh"
 #include "utils/error_injection.hh"

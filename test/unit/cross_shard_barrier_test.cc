@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <random>
 #include <seastar/core/app-template.hh>
 #include <seastar/core/thread.hh>
@@ -13,7 +14,6 @@
 #include <seastar/core/sleep.hh>
 #include <seastar/core/coroutine.hh>
 #include <seastar/util/defer.hh>
-#include <fmt/core.h>
 #include "utils/cross-shard-barrier.hh"
 
 static constexpr unsigned phases_scale = 11;

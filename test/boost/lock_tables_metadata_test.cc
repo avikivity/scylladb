@@ -6,10 +6,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <fmt/format.h>
 #include <seastar/core/with_timeout.hh>
 #include <seastar/testing/test_case.hh>
 #include "test/lib/cql_test_env.hh"
+import fmt;
 
 using namespace std::chrono_literals;
 

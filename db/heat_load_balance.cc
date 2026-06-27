@@ -5,11 +5,11 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
+import fmt;
 #include <vector>
 #include <list>
 #include <random>
 #include <ranges>
-#include <fmt/ranges.h>
 #include "heat_load_balance.hh"
 
 logging::logger hr_logger("heat_load_balance");

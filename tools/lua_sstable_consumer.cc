@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "utils/assert.hh"
-#include <fmt/chrono.h>
 #include <lua.hpp>
 #include <random>
 #include <seastar/core/fstream.hh>

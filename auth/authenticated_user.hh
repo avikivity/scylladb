@@ -10,6 +10,7 @@
 
 #pragma once
 
+
 #include <string_view>
 #include <functional>
 #include <optional>
@@ -17,6 +18,7 @@
 #include <seastar/core/sstring.hh>
 
 #include "seastarx.hh"
+import fmt;
 
 namespace auth {
 

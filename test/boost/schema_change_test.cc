@@ -7,9 +7,9 @@
  */
 
 
+import fmt;
 #include "bytes.hh"
 #include <iostream>
-#include <fmt/ranges.h>
 #include <seastar/core/thread.hh>
 #include <utility>
 #undef SEASTAR_TESTING_MAIN

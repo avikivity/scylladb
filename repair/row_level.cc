@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <exception>
-#include <fmt/ranges.h>
 #include <seastar/util/defer.hh>
 #include "dht/auto_refreshing_sharder.hh"
 #include "db/view/view_building_worker.hh"

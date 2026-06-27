@@ -6,13 +6,14 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <algorithm>
 #include <exception>
 #include <functional>
 #include <string_view>
 #include <vector>
 #include <ranges>
-#include <fmt/ranges.h>
+#include <limits>
 
 #include <gnutls/pkcs11.h>
 

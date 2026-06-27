@@ -6,13 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #define LDAP_DEPRECATED 1
 
 #include "ldap_connection.hh"
 
 #include <cerrno>
 #include <cstring>
-#include <fmt/format.h>
 #include <stdexcept>
 #include <string>
 

@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
@@ -19,8 +20,6 @@
 #include "test/lib/exception_utils.hh"
 #include "db/config.hh"
 #include "types/vector.hh"
-
-#include <fmt/ranges.h>
 
 BOOST_AUTO_TEST_SUITE(user_types_test)
 

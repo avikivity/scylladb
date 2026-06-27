@@ -7,9 +7,8 @@
  */
 
 
+import fmt;
 #include <boost/test/unit_test.hpp>
-#include <fmt/ostream.h>
-#include <fmt/ranges.h>
 #include "replica/database.hh"
 #include "types/user.hh"
 #include "db/view/node_view_update_backlog.hh"

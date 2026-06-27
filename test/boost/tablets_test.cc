@@ -8,6 +8,7 @@
 
 
 
+import fmt;
 #include "utils/UUID.hh"
 #include <boost/test/tools/old/interface.hpp>
 #include <seastar/core/shard_id.hh>
@@ -18,7 +19,6 @@
 #include "test/lib/random_utils.hh"
 #include "service/topology_mutation.hh"
 #include "service/storage_service.hh"
-#include <fmt/ranges.h>
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/testing/on_internal_error.hh>
 #include "test/lib/cql_test_env.hh"

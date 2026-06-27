@@ -6,6 +6,7 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
+import fmt;
 #include <unordered_map>
 #include <stdexcept>
 #include <regex>
@@ -20,8 +21,6 @@
 #include <seastar/core/reactor.hh>
 #include <seastar/core/coroutine.hh>
 
-#include <fmt/ranges.h>
-#include <fmt/std.h>
 #include "utils/to_string.hh"
 
 #include "replicated_key_provider.hh"

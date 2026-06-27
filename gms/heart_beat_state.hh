@@ -12,8 +12,8 @@
 
 #include "gms/generation-number.hh"
 #include "gms/version_generator.hh"
-#include <fmt/core.h>
 #include <limits>
+import fmt;
 
 namespace gms {
 /**

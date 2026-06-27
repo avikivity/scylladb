@@ -16,10 +16,9 @@
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/sharded.hh>
 
-#include <fmt/core.h>
-#include <fmt/ostream.h>
 
 #include "../../bytes.hh"
+import fmt;
 
 class service_set;
 

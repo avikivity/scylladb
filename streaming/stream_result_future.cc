@@ -7,12 +7,12 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include "streaming/stream_result_future.hh"
 #include "streaming/stream_manager.hh"
 #include "streaming/stream_exception.hh"
 #include "utils/log.hh"
 #include <cfloat>
-#include <fmt/ranges.h>
 
 namespace streaming {
 

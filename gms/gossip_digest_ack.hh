@@ -14,7 +14,7 @@
 #include "gms/inet_address.hh"
 #include "gms/endpoint_state.hh"
 #include "utils/chunked_vector.hh"
-#include <fmt/core.h>
+import fmt;
 
 namespace gms {
 

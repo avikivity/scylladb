@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "repair.hh"
 #include "gms/gossip_address_map.hh"
 #include "locator/abstract_replication_strategy.hh"
@@ -30,8 +31,6 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/range/algorithm_ext.hpp>
-
-#include <fmt/ranges.h>
 
 #include <limits>
 

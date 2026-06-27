@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <seastar/core/thread.hh>
-#include <fmt/ranges.h>
 #include <boost/make_shared.hpp>
 
 #include "db/config.hh"

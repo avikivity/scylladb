@@ -13,9 +13,9 @@
 #include <functional>
 #include <unordered_set>
 
-#include <fmt/format.h>
 
 #include <seastar/core/shared_ptr.hh>
+import fmt;
 
 namespace sstables {
 

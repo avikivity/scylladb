@@ -14,6 +14,7 @@
 #include <optional>
 #include <functional>
 
+import fmt;
 #include "bytes_fwd.hh"
 
 namespace gms {

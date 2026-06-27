@@ -11,7 +11,6 @@
 #include "mutation_fragment.hh"
 #include "position_in_partition.hh"
 
-#include <fmt/core.h>
 #include <optional>
 #include <seastar/util/optimized_optional.hh>
 
@@ -25,6 +24,8 @@
 //
 // Note, a range_tombstone_change with an empty tombstone() ends the range tombstone.
 // An empty tombstone naturally does not cover any timestamp.
+import fmt;
+
 class range_tombstone_change {
     position_in_partition _pos;
     ::tombstone _tomb;

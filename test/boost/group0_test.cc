@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include "test/lib/cql_assertions.hh"
@@ -24,7 +25,6 @@
 #include "transport/messages/result_message.hh"
 #include "service/migration_manager.hh"
 #include "service/raft/raft_group0_client.hh"
-#include <fmt/ranges.h>
 #include <seastar/core/metrics_api.hh>
 
 static future<utils::chunked_vector<std::vector<managed_bytes_opt>>> fetch_rows(cql_test_env& e, std::string_view cql) {

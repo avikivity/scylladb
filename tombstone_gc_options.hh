@@ -10,8 +10,8 @@
 
 #include <map>
 #include <chrono>
-#include <fmt/core.h>
 #include <seastar/core/sstring.hh>
+import fmt;
 
 enum class tombstone_gc_mode : uint8_t { timeout, disabled, immediate, repair };
 

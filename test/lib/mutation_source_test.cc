@@ -6,10 +6,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <iterator>
 #include <set>
 #include <boost/test/unit_test.hpp>
-#include <fmt/ranges.h>
 #include "partition_slice_builder.hh"
 #include "schema/schema_builder.hh"
 #include "test/lib/mutation_source_test.hh"

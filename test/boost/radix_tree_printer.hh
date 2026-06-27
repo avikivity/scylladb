@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include <fmt/format.h>
 #include "utils/compact-radix-tree.hh"
+import fmt;
 
 namespace compact_radix_tree {
 

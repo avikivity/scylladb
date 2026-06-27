@@ -7,9 +7,9 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include "gms/application_state.hh"
 #include <seastar/core/sstring.hh>
-#include <fmt/ostream.h>
 
 namespace gms {
 

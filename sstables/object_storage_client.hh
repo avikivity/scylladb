@@ -15,12 +15,12 @@
 
 #include <seastar/core/future.hh>
 #include <seastar/core/semaphore.hh>
-#include <fmt/core.h>
 
 #include "utils/lister.hh"
 #include "utils/s3/creds.hh"
 #include "sstables/storage.hh"
 #include "sstables/types.hh"
+import fmt;
 
 namespace seastar {
 class abort_source;

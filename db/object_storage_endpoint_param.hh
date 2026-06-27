@@ -12,8 +12,8 @@
 #include <string>
 #include <variant>
 #include <compare>
-#include <fmt/core.h>
 #include "utils/s3/creds.hh"
+import fmt;
 
 namespace YAML {
     class Node;

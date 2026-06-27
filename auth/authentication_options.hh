@@ -8,6 +8,7 @@
 
 #pragma once
 
+
 #include <optional>
 #include <stdexcept>
 #include <unordered_map>
@@ -18,6 +19,7 @@
 #include <seastar/core/sstring.hh>
 
 #include "seastarx.hh"
+import fmt;
 
 namespace auth {
 

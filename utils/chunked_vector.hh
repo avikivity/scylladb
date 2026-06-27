@@ -50,7 +50,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <malloc.h>
-#include <fmt/ostream.h>
+import fmt;
 
 namespace utils {
 

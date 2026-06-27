@@ -7,6 +7,7 @@
  */
 
 
+import fmt;
 #include <boost/test/unit_test.hpp>
 
 #include <stdlib.h>
@@ -17,8 +18,6 @@
 #include <unordered_set>
 #include <set>
 #include <deque>
-
-#include <fmt/ranges.h>
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
 
 #pragma once
+import fmt;
 
 #include <limits>
 
-#include <fmt/core.h>
 
 namespace cql3 {
 

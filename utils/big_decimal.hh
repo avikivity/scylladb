@@ -13,6 +13,8 @@
 #include <seastar/core/sstring.hh>
 #include <compare>
 #include <concepts>
+#include "seastarx.hh"
+import fmt;
 
 using seastar::sstring;
 

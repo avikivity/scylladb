@@ -4,6 +4,7 @@
 
 
 
+import fmt;
 #include <boost/test/unit_test.hpp>
 
 #include <cstdint>
@@ -22,8 +23,6 @@
 
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/test_fixture.hh>
-
-#include <fmt/ranges.h>
 
 #include "ent/encryption/azure_host.hh"
 #include "ent/encryption/encryption.hh"

@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include "utils/log.hh"
 #include "streaming/stream_fwd.hh"
 #include "streaming/stream_detail.hh"
@@ -27,7 +28,6 @@
 #include "dht/sharder.hh"
 #include <boost/icl/interval.hpp>
 #include <boost/icl/interval_set.hpp>
-#include <fmt/ranges.h>
 #include "sstables/sstables.hh"
 #include "replica/database.hh"
 #include "streaming/table_check.hh"

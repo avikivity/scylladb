@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <fmt/std.h>
+import fmt;
 #include <seastar/core/queue.hh>
 
 #include "tools/json_mutation_stream_parser.hh"

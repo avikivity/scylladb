@@ -10,9 +10,9 @@
 
 #include <boost/test/tree/visitor.hpp>
 
-#include <fmt/base.h>
 
 #include <memory>
+import fmt;
 
 namespace internal {
 

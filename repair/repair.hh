@@ -11,7 +11,6 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <exception>
-#include <fmt/core.h>
 
 #include <seastar/core/sstring.hh>
 #include <seastar/core/sharded.hh>
@@ -27,6 +26,7 @@
 #include "repair/sync_boundary.hh"
 #include "tasks/types.hh"
 #include "gms/gossip_address_map.hh"
+import fmt;
 
 struct tablets_unsupported : std::runtime_error {
     tablets_unsupported() : std::runtime_error("tablets are not supported for this operation") {}

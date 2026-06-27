@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <fmt/core.h>
 #include "replica/database_fwd.hh"
 #include "dht/decorated_key.hh"
 #include "dht/ring_position.hh"
@@ -23,6 +22,7 @@
 #include "readers/empty.hh"
 #include "readers/mutation_source.hh"
 #include "db/large_data_handler.hh"
+import fmt;
 
 class frozen_mutation;
 class row_cache;

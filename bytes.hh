@@ -9,7 +9,6 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <fmt/format.h>
 #include <seastar/core/sstring.hh>
 #include "utils/hashing.hh"
 #include <optional>
@@ -19,6 +18,7 @@
 #include "bytes_fwd.hh"
 #include "utils/mutable_view.hh"
 #include "utils/simple_hashers.hh"
+import fmt;
 
 using sstring_view = std::string_view;
 

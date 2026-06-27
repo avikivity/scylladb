@@ -11,11 +11,11 @@
 #include <string_view>
 #include <functional>
 #include <optional>
-#include <fmt/core.h>
 
 #include <seastar/core/sstring.hh>
 
 #include "seastarx.hh"
+import fmt;
 
 namespace auth {
 

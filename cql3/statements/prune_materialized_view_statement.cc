@@ -4,6 +4,7 @@
 
 /* Copyright 2022-present ScyllaDB */
 
+import fmt;
 #include "cql3/statements/prune_materialized_view_statement.hh"
 #include "transport/messages/result_message.hh"
 #include "cql3/selection/selection.hh"
@@ -11,7 +12,6 @@
 #include "cql3/restrictions/statement_restrictions.hh"
 #include "cql3/query_processor.hh"
 #include "service/storage_proxy.hh"
-#include <fmt/ranges.h>
 #include <seastar/core/coroutine.hh>
 
 using namespace std::chrono_literals;

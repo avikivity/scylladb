@@ -2,9 +2,10 @@
  * Copyright (C) 2019-present ScyllaDB
  */
 
+import fmt;
 #include "utils/assert.hh"
 #include "build_id.hh"
-#include <fmt/ostream.h>
+#include <cstring>
 #include <link.h>
 #include <seastar/core/align.hh>
 #include <sstream>

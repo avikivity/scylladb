@@ -7,8 +7,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <fcntl.h>
-#include <fmt/format.h>
 #include <seastar/core/align.hh>
 #include <seastar/core/file.hh>
 #include <seastar/core/byteorder.hh>

@@ -7,8 +7,8 @@
  */
 
 
+import fmt;
 #include "utils/assert.hh"
-#include <fmt/ranges.h>
 
 #include <boost/test/unit_test.hpp>
 #include "query/query-result-set.hh"

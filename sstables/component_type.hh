@@ -10,7 +10,7 @@
 #pragma once
 
 #include <seastar/core/sstring.hh>
-#include <fmt/format.h>
+import fmt;
 
 namespace sstables {
 

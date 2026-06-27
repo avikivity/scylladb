@@ -8,11 +8,12 @@
 
 #pragma once
 
-#include <fmt/format.h>
 #include <functional>
 
 /// Type-erased formatter.
 /// Allows passing formattable objects without exposing their types.
+import fmt;
+
 class abstract_formatter {
     std::function<void(fmt::format_context&)> _formatter;
 public:

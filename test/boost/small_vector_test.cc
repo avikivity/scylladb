@@ -6,10 +6,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #define BOOST_TEST_MODULE small_vector
 
 #include <boost/test/unit_test.hpp>
-#include <fmt/ranges.h>
 #include <algorithm>
 #include <functional>
 #include <sstream>

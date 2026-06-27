@@ -9,7 +9,7 @@
 #pragma once
 
 #include "mutation/frozen_mutation.hh"
-#include <fmt/core.h>
+import fmt;
 
 namespace service {
 

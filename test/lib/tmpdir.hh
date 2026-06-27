@@ -9,7 +9,7 @@
 #pragma once
 
 #include <filesystem>
-#include <fmt/format.h>
+import fmt;
 
 namespace fs = std::filesystem;
 

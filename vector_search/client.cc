@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "client.hh"
 #include "utils.hh"
 #include "utils/chain_abort_source.hh"
@@ -22,7 +23,6 @@
 #include <seastar/core/abort_on_expiry.hh>
 #include <seastar/coroutine/try_future.hh>
 #include <chrono>
-#include <fmt/format.h>
 #include <netinet/tcp.h>
 #include <seastar/net/inet_address.hh>
 

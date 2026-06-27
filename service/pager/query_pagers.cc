@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include "query_pagers.hh"
 #include "query_pager.hh"
 #include "cql3/selection/selection.hh"
@@ -17,8 +18,6 @@
 #include "service/storage_proxy.hh"
 #include "utils/result_combinators.hh"
 #include "db/view/delete_ghost_rows_visitor.hh"
-
-#include <fmt/ranges.h>
 
 template<typename T = void>
 using result = service::pager::query_pager::result<T>;

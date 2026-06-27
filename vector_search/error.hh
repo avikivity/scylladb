@@ -9,7 +9,7 @@
 #pragma once
 #include <seastar/http/reply.hh>
 #include <seastar/core/sstring.hh>
-#include <fmt/format.h>
+import fmt;
 
 namespace vector_search {
 

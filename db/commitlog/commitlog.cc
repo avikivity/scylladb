@@ -7,6 +7,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include <stdexcept>
 #include <string>
 #include <sys/stat.h>
@@ -18,8 +19,6 @@
 #include <exception>
 #include <filesystem>
 #include <concepts>
-
-#include <fmt/ranges.h>
 
 #include <seastar/core/align.hh>
 #include <seastar/core/seastar.hh>

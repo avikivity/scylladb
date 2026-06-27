@@ -11,11 +11,11 @@
 #include <boost/intrusive/parent_from_member.hpp>
 #include <seastar/util/alloc_failure_injector.hh>
 #include <cassert>
-#include <fmt/core.h>
 #include "utils/assert.hh"
 #include "utils/collection-concepts.hh"
 #include "utils/neat-object-id.hh"
 #include "utils/allocation_strategy.hh"
+import fmt;
 
 namespace intrusive_b {
 

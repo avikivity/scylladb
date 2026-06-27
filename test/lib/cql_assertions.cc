@@ -7,9 +7,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <boost/test/unit_test.hpp>
-#include <fmt/ranges.h>
-#include <fmt/std.h>
 #include "test/lib/cql_assertions.hh"
 #include "test/lib/eventually.hh"
 #include "test/lib/log.hh"

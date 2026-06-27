@@ -8,11 +8,11 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import abseil;
+import fmt;
 #include <algorithm>
 #include <functional>
 #include <random>
-
-#include <fmt/ranges.h>
 
 #include <seastar/core/coroutine.hh>
 #include <seastar/coroutine/maybe_yield.hh>
@@ -20,7 +20,6 @@
 #include "locator/network_topology_strategy.hh"
 #include "locator/load_sketch.hh"
 
-import abseil;
 #include <boost/algorithm/string.hpp>
 #include "exceptions/exceptions.hh"
 #include "utils/assert.hh"

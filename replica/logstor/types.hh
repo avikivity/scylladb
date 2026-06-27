@@ -8,10 +8,10 @@
 #pragma once
 
 #include <cstdint>
-#include <fmt/format.h>
 #include "dht/decorated_key.hh"
 #include "mutation/canonical_mutation.hh"
 #include "mutation/timestamp.hh"
+import fmt;
 
 namespace replica::logstor {
 

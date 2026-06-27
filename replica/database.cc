@@ -6,11 +6,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <algorithm>
 
 #include <exception>
-#include <fmt/ranges.h>
-#include <fmt/std.h>
 #include <seastar/core/rwlock.hh>
 #include "db/view/view.hh"
 #include "locator/network_topology_strategy.hh"

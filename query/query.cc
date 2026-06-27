@@ -6,10 +6,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <limits>
 #include <memory>
 #include <stdexcept>
-#include <fmt/ranges.h>
 #include "query-request.hh"
 #include "query-result.hh"
 #include "query-result-writer.hh"

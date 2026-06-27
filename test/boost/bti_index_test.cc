@@ -13,6 +13,7 @@
 // BTI index reader operations on it, checking that the results
 // are consistent with a "reference" index on the same dataset.
 
+import fmt;
 #include <generator>
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/testing/test_case.hh>
@@ -32,7 +33,6 @@
 #include "utils/cached_file.hh"
 #include "utils/i_filter.hh"
 #include "utils/memory_data_sink.hh"
-#include <fmt/std.h>
 
 struct clustering_index_entry {
     sstables::clustering_info first_ck;

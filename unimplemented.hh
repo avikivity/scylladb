@@ -8,9 +8,13 @@
 
 #pragma once
 
-#include <seastar/core/format.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/enum.hh>
+#include <stdexcept>
+#include <cstdlib>
+
+#include "seastarx.hh"
+#include <string_view>
+import fmt;
+
 
 namespace unimplemented {
 

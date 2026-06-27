@@ -14,8 +14,6 @@
 #include <chrono>
 #include <iosfwd>
 
-#include <fmt/core.h>
-#include <fmt/ostream.h>
 
 #include <seastar/core/future.hh>
 #include <seastar/core/sstring.hh>
@@ -24,6 +22,7 @@
 #include "../../bytes.hh"
 
 #include "symmetric_key.hh"
+import fmt;
 
 namespace encryption {
 

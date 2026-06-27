@@ -10,8 +10,10 @@
 
 #pragma once
 
-#include <fmt/core.h>
+#include <cstddef>
 #include <string_view>
+import fmt;
+
 
 namespace cql3 {
 

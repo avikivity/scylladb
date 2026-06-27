@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "utils/log.hh"
 #include <atomic>
 #include <concepts>
@@ -13,7 +14,6 @@
 #include <vector>
 #include <limits>
 #include <algorithm>
-#include <fmt/ranges.h>
 #include <seastar/core/future.hh>
 #include <seastar/core/future-util.hh>
 #include <seastar/core/sstring.hh>

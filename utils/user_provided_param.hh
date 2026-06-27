@@ -8,11 +8,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <fmt/format.h>
 
 #include <seastar/core/sstring.hh>
 
 #include "enum_set.hh"
+import fmt;
 
 using namespace seastar;
 

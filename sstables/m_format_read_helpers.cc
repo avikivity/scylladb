@@ -6,12 +6,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "vint-serialization.hh"
 #include "sstables/m_format_read_helpers.hh"
 #include "sstables/exceptions.hh"
 #include "sstables/random_access_reader.hh"
 #include "sstables/mx/types.hh"
-#include <fmt/format.h>
 
 namespace sstables {
 

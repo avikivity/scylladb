@@ -7,10 +7,10 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include <boost/range/algorithm.hpp>
 #include <boost/functional/hash.hpp>
 #include <boost/icl/interval_map.hpp>
-#include <fmt/ranges.h>
 #include <ranges>
 
 #include <seastar/core/coroutine.hh>

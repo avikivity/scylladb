@@ -17,9 +17,9 @@
 #include <compare>
 #include <ranges>
 #include <type_traits>
-#include <fmt/format.h>
 
 #include <seastar/util/defer.hh>
+import fmt;
 
 template <typename Comparator, typename T>
 concept IntervalComparatorFor = requires (T a, T b, Comparator& cmp) {

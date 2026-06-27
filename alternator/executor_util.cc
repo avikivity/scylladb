@@ -20,8 +20,8 @@
 #include "serialization.hh"
 #include "service/storage_proxy.hh"
 #include "types/map.hh"
+import fmt;
 #include "utils/overloaded_functor.hh"
-#include <fmt/format.h>
 
 namespace alternator {
 

@@ -7,13 +7,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #define BOOST_TEST_MODULE string_format
 
 #include <boost/test/unit_test.hpp>
-
-#include <fmt/format.h>
-#include <fmt/ranges.h>
-#include <fmt/std.h>
 
 #include "utils/to_string.hh"
 

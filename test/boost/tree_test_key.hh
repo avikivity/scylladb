@@ -9,7 +9,6 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <fmt/core.h>
 #include <cassert>
 #include <compare>
 #include <concepts>
@@ -19,6 +18,8 @@
  * - works with keys without default contstuctor
  * - moves the keys around properly
  */
+import fmt;
+
 class tree_test_key_base {
     int _val;
     int* _cookie;

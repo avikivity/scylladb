@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "vector_store_client.hh"
 #include "dns.hh"
 #include "clients.hh"
@@ -21,7 +22,6 @@
 #include "schema/schema.hh"
 #include <charconv>
 #include <exception>
-#include <fmt/ranges.h>
 #include <ranges>
 #include <regex>
 #include <seastar/core/sstring.hh>

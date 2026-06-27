@@ -13,7 +13,7 @@
 #include "types/types.hh"
 #include <vector>
 #include <optional>
-#include <fmt/ostream.h>
+import fmt;
 
 namespace db {
 namespace functions {
