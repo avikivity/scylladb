@@ -11,7 +11,7 @@
 #include <absl/container/flat_hash_map.h>
 #include <seastar/core/sstring.hh>
 
-using namespace seastar;
+using seastar::sstring;
 
 struct sstring_hash {
     using is_transparent = void;
