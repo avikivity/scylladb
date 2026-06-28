@@ -7,6 +7,7 @@
  */
 
 #include "utils/assert.hh"
+#include "seastarx.hh"
 
 #include <boost/test/unit_test.hpp>
 #include "test/lib/scylla_test_case.hh"
