@@ -49,7 +49,7 @@ class query_processor;
 
 }
 
-namespace scollectd {
+namespace seastar::scollectd {
 
 class registrations;
 
