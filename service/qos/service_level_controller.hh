@@ -20,6 +20,7 @@
 
 #include "auth/authenticated_user.hh"
 #include "seastarx.hh"
+#include <unordered_map>
 #include "auth/service.hh"
 #include "cql3/description.hh"
 #include <map>
