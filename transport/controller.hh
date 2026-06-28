@@ -8,15 +8,11 @@
 
 #pragma once
 
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/future.hh>
 
 #include "protocol_server.hh"
 #include "service/maintenance_mode.hh"
 
-using namespace seastar;
+#include "seastarx.hh"
 
 namespace auth { class service; }
 namespace service {

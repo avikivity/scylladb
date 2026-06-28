@@ -9,7 +9,6 @@
 #pragma once
 
 #include <vector>
-#include <seastar/core/shared_ptr.hh>
 
 #include "schema/schema_fwd.hh"
 #include "sstables/types.hh"

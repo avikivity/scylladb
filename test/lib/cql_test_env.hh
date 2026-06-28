@@ -11,10 +11,6 @@
 #include <functional>
 #include <vector>
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
 
 #include "db/view/view_building_worker.hh"
 #include "db/view/view_update_generator.hh"

@@ -14,7 +14,6 @@
 #include "db/timeout_clock.hh"
 #include "dht/i_partitioner_fwd.hh"
 
-#include <seastar/core/sharded.hh>
 
 #include "seastarx.hh"
 

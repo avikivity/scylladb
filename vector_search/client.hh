@@ -12,12 +12,7 @@
 #include "utils/log.hh"
 #include "utils/updateable_value.hh"
 #include <chrono>
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/http/client.hh>
-#include <seastar/http/common.hh>
-#include <seastar/net/tls.hh>
+#include <exception>
 #include <optional>
 #include <expected>
 #include <variant>

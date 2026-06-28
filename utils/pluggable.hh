@@ -11,9 +11,6 @@
 #include <stdexcept>
 #include <optional>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/shared_ptr.hh>
 
 #include "seastarx.hh"
 #include "utils/phased_barrier.hh"

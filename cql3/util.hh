@@ -12,7 +12,6 @@
 
 #include <vector>
 
-#include <seastar/core/sstring.hh>
 
 #include "cql3/column_identifier.hh"
 #include "cql3/CqlParser.hpp"

@@ -11,9 +11,6 @@
 #include "vint-serialization.hh"
 
 #include <bit>
-#include <seastar/core/bitops.hh>
-#include <seastar/util/std-compat.hh>
-
 #include <algorithm>
 #include <array>
 #include <limits>

@@ -11,8 +11,6 @@
 #include "mutation/mutation_rebuilder.hh"
 #include "replica/memtable.hh"
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/when_all.hh>
 
 namespace mutation_writer {
 

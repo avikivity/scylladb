@@ -11,7 +11,6 @@
 
 #ifndef SCYLLA_BUILD_MODE_RELEASE
 
-#include <seastar/core/coroutine.hh>
 
 #include "task_manager_test.hh"
 #include "api/api.hh"

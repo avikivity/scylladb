@@ -9,9 +9,8 @@
 
 #include <map>
 
-#include <seastar/core/sstring.hh>
 
-using namespace seastar;
+#include "seastarx.hh"
 
 namespace gms { class feature_service; }
 

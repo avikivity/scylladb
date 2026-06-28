@@ -11,8 +11,6 @@
 #include <optional>
 #include <utility>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/iostream.hh>
 
 #include "sstables/progress_monitor.hh"
 #include "sstables/component_type.hh"

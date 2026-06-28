@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/memtable_snapshot_source.hh"
 #include "test/lib/random_utils.hh"
@@ -17,14 +16,8 @@ import fmt;
 #include "db/config.hh"
 #include "db/commitlog/commitlog.hh"
 
-#include <seastar/core/app-template.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/units.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/timer.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/util/log.hh>
 
+import fmt;
 app_template app;
 
 class memory_demand_probe {

@@ -6,7 +6,6 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-import fmt;
 #include <map>
 #include <unordered_map>
 #include <tuple>
@@ -23,11 +22,6 @@ import fmt;
 #include <openssl/sha.h>
 #include <openssl/hmac.h>
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/reactor.hh>
 
 #include "utils/to_string.hh"
 
@@ -60,6 +54,7 @@ import fmt;
 #include "utils/UUID_gen.hh"
 #include "init.hh"
 
+import fmt;
 static seastar::logger logg{"encryption"};
 
 namespace encryption {

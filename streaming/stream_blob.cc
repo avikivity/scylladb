@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "db/view/view_building_worker.hh"
 #include "db/config.hh"
 #include "message/messaging_service.hh"
@@ -27,17 +26,12 @@ import fmt;
 #include "idl/streaming.dist.hh"
 #include "service/topology_guard.hh"
 #include "gms/feature_service.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/all.hh>
 #include <vector>
 #include <cfloat>
 #include <filesystem>
 #include "replica/exceptions.hh"
 
+import fmt;
 namespace streaming {
 
 static logging::logger blogger("stream_blob");

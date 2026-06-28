@@ -9,7 +9,6 @@
 #pragma once
 
 #include "alternator/executor.hh"
-#include <seastar/http/httpd.hh>
 #include "db/config.hh"
 
 namespace alternator {

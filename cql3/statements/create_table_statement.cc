@@ -13,7 +13,6 @@
 #include "utils/assert.hh"
 #include <cinttypes>
 
-#include <seastar/core/coroutine.hh>
 
 #include "cql3/statements/create_table_statement.hh"
 #include "cql3/statements/prepared_statement.hh"

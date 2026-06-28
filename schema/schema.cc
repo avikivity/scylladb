@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/on_internal_error.hh>
 #include <map>
 #include "bytes_ostream.hh"
 #include "cql3/description.hh"

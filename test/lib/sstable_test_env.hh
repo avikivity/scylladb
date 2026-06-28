@@ -8,10 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/do_with.hh>
-#include <seastar/util/noncopyable_function.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/util/defer.hh>
 
 #include "data_dictionary/storage_options.hh"
 #include "db/large_data_handler.hh"

@@ -14,8 +14,6 @@
 #include <condition_variable>
 #include <thread>
 
-#include <seastar/core/future.hh>
-#include <seastar/util/noncopyable_function.hh>
 
 #include "rust/cxx.h"
 #include "rust/wasmtime_bindings.hh"

@@ -18,8 +18,6 @@
 #   include <openssl/provider.h>
 #endif
 
-#include <seastar/core/align.hh>
-#include <seastar/core/print.hh>
 
 #include "symmetric_key.hh"
 #include "utils/hash.hh"

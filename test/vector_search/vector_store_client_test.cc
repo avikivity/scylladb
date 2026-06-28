@@ -15,8 +15,6 @@
 #include "unavailable_server.hh"
 #include "certificates.hh"
 #include "configure.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/when_all.hh>
 #include "db/config.hh"
 #include "exceptions/exceptions.hh"
 #include "cql3/statements/select_statement.hh"
@@ -27,19 +25,8 @@
 #include <functional>
 #include <chrono>
 #include <memory>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/metrics_api.hh>
-#include <seastar/net/api.hh>
-#include <seastar/http/function_handlers.hh>
-#include <seastar/http/httpd.hh>
-#include <seastar/json/json_elements.hh>
-#include <seastar/net/dns.hh>
-#include <seastar/net/inet_address.hh>
-#include <seastar/net/socket_defs.hh>
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/net/tcp.hh>
 #include <tuple>
 #include <variant>
 #include <vector>
@@ -47,7 +34,6 @@
 
 namespace {
 
-using namespace seastar;
 using namespace test::vector_search;
 
 using vector_store_client = vector_search::vector_store_client;

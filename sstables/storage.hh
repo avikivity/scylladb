@@ -9,15 +9,12 @@
 
 #pragma once
 
+#include <coroutine>
+
 #include "utils/assert.hh"
 #include <filesystem>
 #include <fmt/format.h>
 
-#include <seastar/core/file.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/sstring.hh>
 
 #include "data_dictionary/storage_options.hh"
 #include "schema/schema_fwd.hh"

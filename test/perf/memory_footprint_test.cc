@@ -8,9 +8,6 @@
 
 #include "utils/assert.hh"
 
-#include <seastar/util/defer.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/thread.hh>
 
 #include "partition_slice_builder.hh"
 #include "schema/schema_builder.hh"

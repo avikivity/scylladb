@@ -13,10 +13,6 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/reactor.hh>
 
 #include "local_file_provider.hh"
 #include "symmetric_key.hh"

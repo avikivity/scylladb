@@ -10,11 +10,6 @@
 
 #include "db/functions/function_name.hh"
 #include <list>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/scheduling.hh>
-#include <seastar/core/shared_mutex.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/timer.hh>
 #include <unordered_map>
 #include "rust/cxx.h"
 #include "rust/wasmtime_bindings.hh"

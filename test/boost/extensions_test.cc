@@ -9,8 +9,6 @@
 #include <variant>
 #include <stdexcept>
 
-#include <seastar/core/future-util.hh>
-#include <seastar/core/sleep.hh>
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>

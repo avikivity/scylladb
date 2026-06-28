@@ -6,8 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
 #include "mutation_partition_v2.hh"
 #include "db/large_data_cache_tracker.hh"
@@ -17,7 +15,6 @@
 #include "query/query-result-writer.hh"
 #include "counters.hh"
 #include "db/row_cache.hh"
-#include <seastar/core/execution_stage.hh>
 #include "compaction/compaction_garbage_collector.hh"
 #include "mutation_partition_view.hh"
 #include "utils/assert.hh"

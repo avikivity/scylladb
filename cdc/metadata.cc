@@ -10,10 +10,10 @@
 #include "exceptions/exceptions.hh"
 
 #include "cdc/generation.hh"
+#include <coroutine>
 #include "utils/stall_free.hh"
 #include "cdc/metadata.hh"
 
-#include <seastar/coroutine/maybe_yield.hh>
 
 extern logging::logger cdc_log;
 

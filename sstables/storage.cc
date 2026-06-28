@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "storage.hh"
 
 #include <cerrno>
@@ -15,11 +14,6 @@ import fmt;
 
 #include <exception>
 #include <stdexcept>
-#include <seastar/core/when_all.hh>
-#include <seastar/coroutine/exception.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/util/file.hh>
-#include <seastar/util/closeable.hh>
 
 #include "db/config.hh"
 #include "db/extensions.hh"
@@ -41,6 +35,7 @@ import fmt;
 #include "utils/io-wrappers.hh"
 import boost;
 
+import fmt;
 namespace sstables {
 
 // cannot define these classes in an anonymous namespace, as we need to

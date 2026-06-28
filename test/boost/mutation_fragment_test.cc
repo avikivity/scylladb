@@ -7,12 +7,9 @@
  */
 
 
-import fmt;
-#include <seastar/core/thread.hh>
 #include <seastar/testing/on_internal_error.hh>
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/closeable.hh>
 
 #include "test/lib/mutation_source_test.hh"
 #include "mutation/mutation_fragment.hh"
@@ -37,6 +34,7 @@ import fmt;
 import boost;
 
 
+import fmt;
 SEASTAR_TEST_CASE(test_mutation_merger_conforms_to_mutation_source) {
     return seastar::async([] {
         tests::reader_concurrency_semaphore_wrapper semaphore;

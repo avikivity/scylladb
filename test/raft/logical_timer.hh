@@ -8,15 +8,11 @@
 
 #pragma once
 
-#include <seastar/core/timed_out_error.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/sleep.hh>
 
 #include "raft/logical_clock.hh"
 #include "raft/raft.hh"
 
-using namespace seastar;
+#include "seastarx.hh"
 
 constexpr raft::logical_clock::duration operator ""_t(unsigned long long ticks) {
     return raft::logical_clock::duration{ticks};

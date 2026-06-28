@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 
 #include "dht/i_partitioner.hh"
 

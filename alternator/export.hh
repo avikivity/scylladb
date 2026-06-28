@@ -13,7 +13,6 @@
 #include <memory>
 #include <span>
 #include <vector>
-#include <seastar/core/future.hh>
 #include "utils/rjson.hh"
 
 namespace alternator {

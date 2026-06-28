@@ -14,13 +14,6 @@
 #include <filesystem>
 #include <boost/test/unit_test.hpp>
 
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/with_timeout.hh>
-
 #include "ent/encryption/symmetric_key.hh"
 #include "ent/encryption/encrypted_file_impl.hh"
 #include "test/lib/scylla_test_case.hh"

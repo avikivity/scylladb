@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/util/closeable.hh>
 
 #include "mutation/mutation_compactor.hh"
 #include "reader_concurrency_semaphore.hh"

@@ -7,16 +7,7 @@
  */
 
 
-import fmt;
 #include <boost/test/tools/old/interface.hpp>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/shard_id.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/bitops.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/util/file.hh>
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
@@ -61,6 +52,7 @@ import fmt;
 #include "test/lib/random_schema.hh"
 #include "dht/i_partitioner.hh"
 
+import fmt;
 using namespace std::chrono_literals;
 using namespace sstables;
 using namespace tests;

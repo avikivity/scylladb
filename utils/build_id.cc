@@ -2,17 +2,15 @@
  * Copyright (C) 2019-present ScyllaDB
  */
 
-import fmt;
 #include "utils/assert.hh"
 #include "build_id.hh"
 #include <cstring>
+#include "seastarx.hh"
 #include <link.h>
-#include <seastar/core/align.hh>
 #include <sstream>
 #include <cassert>
 
-using namespace seastar;
-
+import fmt;
 static const Elf64_Nhdr* get_nt_build_id(dl_phdr_info* info) {
     auto base = info->dlpi_addr;
     const auto* h = info->dlpi_phdr;

@@ -11,7 +11,6 @@
 
 #include <unordered_map>
 
-#include <seastar/core/sstring.hh>
 
 #include "seastarx.hh"
 #include "utils/enum_option.hh"

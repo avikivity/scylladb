@@ -16,7 +16,6 @@
 
 #include "test/lib/scylla_test_case.hh"
 
-#include <seastar/core/thread.hh>
 
 SEASTAR_THREAD_TEST_CASE(test_conversion_back_and_forth) {
     for (auto do_make_canonical_mutation_gently : {false, true}) {

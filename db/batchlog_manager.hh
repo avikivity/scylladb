@@ -10,11 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/abort_source.hh>
 
 #include "db_clock.hh"
 

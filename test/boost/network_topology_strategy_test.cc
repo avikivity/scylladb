@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 #include "db/tablet_options.hh"
 #include "gms/inet_address.hh"
@@ -26,7 +25,6 @@ import boost;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/core/sstring.hh>
 #include "utils/log.hh"
 #include "gms/gossiper.hh"
 #include "schema/schema_builder.hh"
@@ -45,10 +43,10 @@ import boost;
 #include "test/lib/random_utils.hh"
 #include "test/lib/test_utils.hh"
 #include "test/lib/topology_builder.hh"
-#include <seastar/core/coroutine.hh>
 #include "db/schema_tables.hh"
 #include "db/config.hh"
 
+import fmt;
 using namespace locator;
 
 struct ring_point {

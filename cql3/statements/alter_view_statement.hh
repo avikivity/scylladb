@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_ptr.hh>
 
 #include "cql3/statements/view_prop_defs.hh"
 #include "data_dictionary/data_dictionary.hh"

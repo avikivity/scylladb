@@ -8,7 +8,6 @@
 
 #include <seastar/testing/test_case.hh>
 
-#include <seastar/core/thread.hh>
 
 #include "db/view/row_locking.hh"
 #include "schema/schema_builder.hh"

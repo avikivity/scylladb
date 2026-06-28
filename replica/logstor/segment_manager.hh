@@ -9,14 +9,6 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <seastar/core/shared_future.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/rwlock.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/queue.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/util/bool_class.hh>
 #include "bytes_fwd.hh"
 #include "mutation_writer/token_group_based_splitting_writer.hh"
 #include "replica/logstor/segment_io.hh"

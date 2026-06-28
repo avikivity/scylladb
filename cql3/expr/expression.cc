@@ -6,13 +6,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "expression.hh"
 
 #include "cql3/expr/evaluate.hh"
 #include "cql3/expr/expr-utils.hh"
 
-#include <seastar/core/on_internal_error.hh>
 
 #include <unordered_map>
 #include <algorithm>
@@ -35,6 +33,7 @@ import fmt;
 #include "cql3/functions/first_function.hh"
 #include "cql3/prepare_context.hh"
 
+import fmt;
 namespace cql3 {
 namespace expr {
 

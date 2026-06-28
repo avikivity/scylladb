@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_ptr.hh>
 
 #include "schema/schema_fwd.hh"
 #include "query/query-request.hh"

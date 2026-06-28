@@ -6,12 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 #include "test/lib/scylla_test_case.hh"
-#include <seastar/core/smp.hh>
 #include <unordered_set>
-#include <seastar/core/simple-stream.hh>
 #include "utils/base64.hh"
 #include "utils/xx_hasher.hh"
 #include "idl/hinted_handoff.dist.hh"
@@ -19,6 +16,7 @@ import fmt;
 
 #include "db/hints/sync_point.hh"
 
+import fmt;
 enum class encode_version {
     v1,
     v2,

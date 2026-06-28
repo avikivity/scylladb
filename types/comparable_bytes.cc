@@ -8,8 +8,6 @@
 
 #include "types/comparable_bytes.hh"
 
-#include <seastar/core/byteorder.hh>
-#include <seastar/core/on_internal_error.hh>
 
 #include "bytes_ostream.hh"
 #include "concrete_types.hh"

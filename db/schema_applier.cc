@@ -7,20 +7,9 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import fmt;
 #include "schema_applier.hh"
 
 #include <memory>
-#include <seastar/util/noncopyable_function.hh>
-#include <seastar/rpc/rpc_types.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/future.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/core/loop.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/shard_id.hh>
-#include <seastar/core/sharded.hh>
 
 
 #include "absl-flat_hash_map.hh"
@@ -45,7 +34,6 @@ import fmt;
 #include "query/query-result-set.hh"
 #include "query/query-result-writer.hh"
 #include "utils/map_difference.hh"
-#include <seastar/coroutine/all.hh>
 #include "utils/log.hh"
 #include "schema/frozen_schema.hh"
 #include "system_keyspace.hh"
@@ -59,6 +47,7 @@ import fmt;
 #include "mutation/async_utils.hh"
 import boost;
 
+import fmt;
 namespace db {
 
 namespace schema_tables {

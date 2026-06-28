@@ -15,7 +15,6 @@
 #include "schema/schema_fwd.hh"
 #include "locator/host_id.hh"
 
-#include <seastar/core/abort_source.hh>
 
 #include <list>
 

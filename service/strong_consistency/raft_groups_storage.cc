@@ -20,7 +20,6 @@
 
 #include "cql3/query_processor.hh"
 
-#include <seastar/core/coroutine.hh>
 
 namespace service::strong_consistency {
 

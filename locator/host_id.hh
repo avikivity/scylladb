@@ -11,7 +11,6 @@
 
 #include "utils/UUID.hh"
 
-#include <seastar/util/noncopyable_function.hh>
 
 #include <exception>
 #include <variant>

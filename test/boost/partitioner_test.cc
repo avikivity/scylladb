@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <limits>
 
 #include <boost/test/tools/old/interface.hpp>
@@ -29,6 +28,7 @@ import fmt;
 #include "test/boost/total_order_check.hh"
 
 import boost;
+import fmt;
 
 static dht::token token_from_long(uint64_t value) {
     return dht::token(value);

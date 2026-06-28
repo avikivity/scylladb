@@ -13,7 +13,7 @@
 #include "api/api-doc/utils.json.hh"
 #include "db/config.hh"
 #include "utils/histogram.hh"
-#include <seastar/core/scheduling_specific.hh>
+
 
 namespace api {
 

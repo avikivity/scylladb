@@ -13,7 +13,6 @@
 #include "query-request.hh"
 #include "keys/full_position.hh"
 #include <optional>
-#include <seastar/util/bool_class.hh>
 #include "seastarx.hh"
 import fmt;
 

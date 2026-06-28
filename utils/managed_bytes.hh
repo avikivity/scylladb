@@ -14,11 +14,12 @@
 #include "utils/allocation_strategy.hh"
 #include "utils/fragment_range.hh"
 #include "utils/managed_bytes_fwd.hh"
-#include <seastar/util/alloc_failure_injector.hh>
 #include <type_traits>
 #include <utility>
 #include <iterator>
 #include <cstddef>
+
+import fmt;
 
 class bytes_ostream;
 

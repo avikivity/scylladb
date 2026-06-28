@@ -8,15 +8,14 @@
 
 #include "collectd.hh"
 #include "api/api-doc/collectd.json.hh"
-#include <seastar/core/scollectd.hh>
-#include <seastar/core/scollectd_api.hh>
 #include <ranges>
 #include <regex>
 #include "api/api_init.hh"
 
 namespace api {
 
-using namespace scollectd;
+namespace scollectd = seastar::scollectd;
+using namespace seastar::scollectd;
 using namespace httpd;
 
 using namespace json;
@@ -123,4 +122,3 @@ void set_collectd(http_context& ctx, routes& r) {
 }
 
 }
-

@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
 #include "gms/inet_address.hh"
 #include "streaming/stream_coordinator.hh"
 #include "streaming/stream_event_handler.hh"

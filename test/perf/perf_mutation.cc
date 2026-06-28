@@ -10,8 +10,6 @@
 #include "replica/database.hh"
 #include "schema/schema_builder.hh"
 #include "test/perf/perf.hh"
-#include <seastar/core/app-template.hh>
-#include <seastar/core/reactor.hh>
 
 static atomic_cell make_atomic_cell(data_type dt, bytes value) {
     return atomic_cell::make_live(*dt, 0, value);

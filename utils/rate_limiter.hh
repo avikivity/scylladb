@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include <seastar/core/timer.hh>
-#include <seastar/core/semaphore.hh>
+#include <cstddef>
+
 #include "seastarx.hh"
 
 namespace utils {

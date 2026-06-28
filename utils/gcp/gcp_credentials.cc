@@ -7,12 +7,10 @@
  */
 
 
-import fmt;
 #include "gcp_credentials.hh"
+#include <fcntl.h>
+#include <coroutine>
 
-#include <seastar/core/reactor.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/util/log.hh>
 
 namespace seastar::http::internal { sstring url_encode(std::string_view in); }
 
@@ -23,6 +21,7 @@ namespace seastar::http::internal { sstring url_encode(std::string_view in); }
 #include "utils/to_string.hh"
 #include "utils/rest/client.hh"
 
+import fmt;
 static logger gcp_cred_log("gcp_credentials");
 
 static const char CREDENTIAL_ENV_VAR[] = "GOOGLE_APPLICATION_CREDENTIALS";

@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include <seastar/core/simple-stream.hh>
 #include "bytes_ostream.hh"
+
+import seastar;
 
 namespace utils {
 

@@ -10,13 +10,10 @@
 
 #include "db/consistency_level_type.hh"
 #include "seastarx.hh"
-#include <seastar/core/format.hh>
-#include <seastar/core/sstring.hh>
 #include <map>
 #include <stdexcept>
 #include <string_view>
 #include <variant>
-#include <seastar/core/lowres_clock.hh>
 #include <optional>
 #include "exceptions/exceptions.hh"
 

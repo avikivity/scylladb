@@ -9,8 +9,6 @@
 #include <boost/test/unit_test.hpp>
 
 
-#include <seastar/core/sstring.hh>
-#include <seastar/json/json_elements.hh>
 #include <seastar/testing/thread_test_case.hh>
 
 #include "audit/audit.hh"
@@ -18,8 +16,6 @@
 #include "audit/preprocessed_audit_rules.hh"
 #include "db/config.hh"
 import boost;
-
-using namespace seastar;
 
 namespace bpo = boost::program_options;
 

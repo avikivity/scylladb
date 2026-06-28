@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "utils/assert.hh"
 #include <vector>
 #include <seastar/core/shared_future.hh>

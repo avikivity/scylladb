@@ -14,8 +14,6 @@
 #include <span>
 #include <vector>
 
-#include <seastar/core/fstream.hh>
-#include <seastar/core/temporary_buffer.hh>
 
 #include "replica/logstor/ondisk.hh"
 

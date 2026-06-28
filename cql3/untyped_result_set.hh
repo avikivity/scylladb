@@ -9,7 +9,6 @@
  */
 #include <unordered_map>
 #include <optional>
-#include <seastar/core/sharded.hh>
 #include "bytes.hh"
 #include "types/types.hh"
 #include "types/map.hh"

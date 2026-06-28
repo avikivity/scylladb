@@ -7,7 +7,6 @@
  */
 
 #include "http_client_error_processing.hh"
-#include <seastar/http/exception.hh>
 #include <gnutls/gnutls.h>
 
 namespace utils::http {

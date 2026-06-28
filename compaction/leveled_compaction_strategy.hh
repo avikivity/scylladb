@@ -13,7 +13,6 @@
 #include <map>
 #include <memory>
 
-#include <seastar/core/sstring.hh>
 
 #include "compaction_strategy_type.hh"
 #include "size_tiered_compaction_strategy.hh"

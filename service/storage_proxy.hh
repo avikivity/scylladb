@@ -15,15 +15,11 @@
 #include "inet_address_vectors.hh"
 #include "replica/database_fwd.hh"
 #include "message/messaging_service_fwd.hh"
-#include <seastar/core/sharded.hh>
-#include <seastar/core/execution_stage.hh>
-#include <seastar/core/scheduling_specific.hh>
 #include "db/read_repair_decision.hh"
 #include "db/write_type.hh"
 #include "db/hints/manager.hh"
 #include "db/view/node_view_update_backlog.hh"
 #include "tracing/trace_state.hh"
-#include <seastar/rpc/rpc_types.hh>
 #include "storage_proxy_stats.hh"
 #include "service_permit.hh"
 #include "query/query-result.hh"
@@ -33,7 +29,6 @@
 #include "utils/phased_barrier.hh"
 #include "utils/small_vector.hh"
 #include "service/endpoint_lifecycle_subscriber.hh"
-#include <seastar/core/chunked_fifo.hh>
 #include "exceptions/coordinator_result.hh"
 #include "replica/exceptions.hh"
 #include "locator/host_id.hh"

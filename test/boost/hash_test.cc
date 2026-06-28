@@ -8,7 +8,6 @@
 
 
 #include <boost/test/unit_test.hpp>
-#include <seastar/core/future.hh>
 
 #include "seastarx.hh"
 #include "test/lib/scylla_test_case.hh"

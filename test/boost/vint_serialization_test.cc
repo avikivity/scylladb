@@ -20,9 +20,6 @@
 
 #include <sys/mman.h>
 #include <unistd.h>
-
-using namespace seastar;
-
 namespace {
 
 typename bytes::value_type operator ""_b(unsigned long long value) {

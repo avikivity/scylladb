@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
 
 #include "readers/mutation_reader_fwd.hh"
 #include "schema/schema_fwd.hh"

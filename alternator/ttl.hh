@@ -9,9 +9,6 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <seastar/core/sharded.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/semaphore.hh>
 #include "data_dictionary/data_dictionary.hh"
 
 namespace gms {

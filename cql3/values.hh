@@ -15,7 +15,6 @@
 #include <optional>
 #include <variant>
 
-#include <seastar/util/variant_utils.hh>
 
 #include "utils/fragmented_temporary_buffer.hh"
 #include "utils/overloaded_functor.hh"

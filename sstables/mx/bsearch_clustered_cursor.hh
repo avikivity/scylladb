@@ -15,8 +15,6 @@
 #include "utils/cached_file.hh"
 #include "utils/to_string.hh"
 
-#include <seastar/core/byteorder.hh>
-#include <seastar/core/on_internal_error.hh>
 
 #include <optional>
 import fmt;

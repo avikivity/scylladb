@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "query-result-set.hh"
 #include "query-result-reader.hh"
 #include "partition_slice_builder.hh"
@@ -14,6 +13,7 @@ import fmt;
 #include "types/map.hh"
 #include "mutation_query.hh"
 
+import fmt;
 namespace query {
 
 static_assert(std::is_nothrow_move_constructible_v<non_null_data_value>);

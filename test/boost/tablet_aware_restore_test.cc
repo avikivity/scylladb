@@ -10,9 +10,7 @@
 
 #include "test/lib/cql_test_env.hh"
 #include "utils/assert.hh"
-#include <seastar/core/sstring.hh>
 
-#include <seastar/core/future.hh>
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/test_fixture.hh>
 

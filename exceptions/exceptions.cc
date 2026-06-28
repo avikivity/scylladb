@@ -11,8 +11,6 @@
 #include "exceptions.hh"
 
 #include "bytes.hh"
-#include <seastar/core/format.hh>
-#include <seastar/util/log.hh>
 
 namespace exceptions {
 

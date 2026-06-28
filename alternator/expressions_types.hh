@@ -12,7 +12,6 @@
 #include <string>
 #include <variant>
 
-#include <seastar/core/shared_ptr.hh>
 
 #include "utils/rjson.hh"
 

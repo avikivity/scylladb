@@ -11,8 +11,7 @@ import boost;
 #define CPP_JWT_USE_VENDORED_NLOHMANN_JSON
 #include <jwt/jwt.hpp>
 
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/util/file.hh>
+#include "seastarx.hh"
 
 namespace seastar::http::internal { sstring url_encode(std::string_view in); }
 

@@ -9,10 +9,6 @@
 #include <string>
 #include <memory>
 
-#include <seastar/core/with_timeout.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/net/inet_address.hh>
 
 #include "aws_kms_fixture.hh"
 #include "tmpdir.hh"

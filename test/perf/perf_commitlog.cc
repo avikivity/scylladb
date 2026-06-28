@@ -6,15 +6,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <fstream>
 
 #include <json/json.h>
 
-#include <seastar/core/app-template.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/on_internal_error.hh>
 #include <seastar/testing/test_runner.hh>
 
 #include "test/lib/tmpdir.hh"
@@ -31,6 +26,7 @@ import fmt;
 #include "utils/UUID_gen.hh"
 import boost;
 
+import fmt;
 struct test_config {
     unsigned concurrency;
     unsigned duration_in_seconds;

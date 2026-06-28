@@ -10,14 +10,6 @@
 #include "utils/loading_shared_values.hh"
 #include "utils/loading_cache.hh"
 #include <chrono>
-#include <seastar/core/aligned_buffer.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/manual_clock.hh>
-#include <seastar/util/defer.hh>
 
 
 #include "seastarx.hh"

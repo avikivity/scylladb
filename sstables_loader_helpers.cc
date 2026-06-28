@@ -8,9 +8,6 @@
 
 #include "sstables_loader_helpers.hh"
 
-#include <seastar/core/file.hh>
-#include <seastar/core/units.hh>
-#include <seastar/core/fstream.hh>
 #include "replica/database.hh"
 #include "sstables/shared_sstable.hh"
 #include "sstables/sstables.hh"

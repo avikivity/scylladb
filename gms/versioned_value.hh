@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 #include "locator/host_id.hh"
 #include "utils/chunked_string.hh"
 #include "version_generator.hh"

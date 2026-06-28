@@ -9,7 +9,6 @@
  */
 
 #include <vector>
-#include <seastar/core/future-util.hh>
 
 #include "list_permissions_statement.hh"
 #include "auth/authorizer.hh"

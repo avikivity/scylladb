@@ -8,10 +8,6 @@
 
 #include <algorithm>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/json/json_elements.hh>
-#include <seastar/core/reactor.hh>
 
 #include "auth/authenticated_user.hh"
 #include "cdc/generation_service.hh"

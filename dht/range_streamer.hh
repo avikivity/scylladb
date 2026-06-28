@@ -16,8 +16,6 @@
 #include "streaming/stream_reason.hh"
 #include "service/topology_guard.hh"
 #include "gms/inet_address.hh"
-#include <seastar/core/sharded.hh>
-#include <seastar/core/abort_source.hh>
 #include <unordered_map>
 #include <memory>
 

@@ -7,15 +7,13 @@
  */
 
 #include "instance_profile_credentials_provider.hh"
+#include <coroutine>
 #include "utils/http.hh"
 #include "utils/s3/client.hh"
 #include "utils/s3/default_aws_retry_strategy.hh"
 #include "utils/rjson.hh"
 #include <rapidjson/document.h>
 #include <rapidjson/error/en.h>
-#include <seastar/http/client.hh>
-#include <seastar/http/request.hh>
-#include <seastar/util/short_streams.hh>
 
 
 namespace aws {

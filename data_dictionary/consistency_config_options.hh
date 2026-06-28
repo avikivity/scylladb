@@ -9,7 +9,6 @@
 #pragma once
 
 #include <cstdint>
-#include <seastar/core/sstring.hh>
 
 namespace data_dictionary {
 enum class consistency_config_option : uint8_t {

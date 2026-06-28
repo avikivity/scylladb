@@ -1,5 +1,6 @@
 #pragma once
 
+#include <coroutine>
 #include "mutation_reader.hh"
 #include "mutation/mutation_fragment.hh"
 #include "mutation/mutation_rebuilder.hh"

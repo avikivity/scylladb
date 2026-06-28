@@ -30,7 +30,6 @@
 #include "readers/reversing.hh"
 #include "readers/upgrading_consumer.hh"
 #include "tombstone_gc.hh"
-#include <seastar/core/coroutine.hh>
 #include <stack>
 
 extern logging::logger mrlog;

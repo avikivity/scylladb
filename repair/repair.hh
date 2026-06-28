@@ -12,9 +12,6 @@
 #include <unordered_map>
 #include <exception>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/future.hh>
 
 #include "gms/inet_address.hh"
 #include "locator/abstract_replication_strategy.hh"

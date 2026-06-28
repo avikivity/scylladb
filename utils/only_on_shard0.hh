@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/shard_id.hh>
 
 // When passed to sharded<>::start(), translates to "val" passed to sharded instances on shard 0 and T{} on other shards.
 template <typename T>

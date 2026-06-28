@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/future.hh>  // IWYU pragma: keep
-#include <seastar/core/weak_ptr.hh>
 
 #include "utils/hash.hh"
 #include "schema/schema_fwd.hh"

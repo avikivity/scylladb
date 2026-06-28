@@ -10,9 +10,6 @@
 
 #include "gms/i_endpoint_state_change_subscriber.hh"
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
 
 namespace gms {
 class gossiper;

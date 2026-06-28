@@ -6,18 +6,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/core/sleep.hh>
 #include "dict_trainer.hh"
 #include "utils/alien_worker.hh"
 #include "shared_dict.hh"
 #include "utils/hashers.hh"
 #include "raft/raft.hh"
 #include <zdict.h>
-
-using namespace seastar;
 
 
 namespace netw {

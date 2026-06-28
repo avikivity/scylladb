@@ -14,8 +14,6 @@
 #include <optional>
 #include <string_view>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
 
 #include "auth/authenticated_user.hh"
 #include "bytes_fwd.hh"

@@ -9,9 +9,6 @@
 #pragma once
 
 #include <memory>
-#include <seastar/core/memory.hh>
-#include <seastar/core/shard_id.hh>
-#include <seastar/core/shared_ptr.hh>
 #include "allocation_strategy.hh"
 #include "seastarx.hh"
 #include "utils/assert.hh"

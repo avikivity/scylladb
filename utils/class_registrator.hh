@@ -9,8 +9,6 @@
 #pragma once
 
 #include <memory>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
 
 #include "seastarx.hh"
 
@@ -186,7 +184,7 @@ class qualified_name {
     sstring _qname;
 public:
     qualified_name(std::string_view pkg_pfx, std::string_view name)
-        : _qname(is_class_name_qualified(name) ? name : make_sstring(pkg_pfx, name))
+        : _qname(is_class_name_qualified(name) ? sstring(name) : sstring(pkg_pfx) + sstring(name))
     {}
     operator const sstring&() const {
         return _qname;

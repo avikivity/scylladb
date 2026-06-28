@@ -8,10 +8,15 @@
 
 #pragma once
 
-#include <seastar/core/alien.hh>
-#include <seastar/core/reactor.hh>
 
 #include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+#include <deque>
+#include <cassert>
+
+import seastar;
 
 namespace seastar {
     class logger;

@@ -8,10 +8,6 @@
 
 #pragma once
 
-#include <seastar/util/bool_class.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/circular_buffer.hh>
-#include <seastar/core/thread.hh>
 
 #include "mutation/mutation_fragment_v2.hh"
 #include "mutation/mutation.hh"

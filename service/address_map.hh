@@ -12,12 +12,10 @@
 #include "gms/inet_address.hh"
 #include "gms/generation-number.hh"
 
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/util/log.hh>
 
 
 #include <chrono>
+#include <source_location>
 #include "locator/host_id.hh"
 import boost;
 

@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_ptr.hh>
 
 #include "dht/i_partitioner_fwd.hh"
 

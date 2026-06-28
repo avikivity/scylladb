@@ -6,9 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/coroutine/maybe_yield.hh>
 
 #include "mutation_query.hh"
+#include <coroutine>
 #include "schema/schema_registry.hh"
 import boost;
 

@@ -6,27 +6,17 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "client.hh"
+#include <netinet/in.h>
 #include "utils.hh"
 #include "utils/chain_abort_source.hh"
 #include "utils/exceptions.hh"
 #include "utils/exponential_backoff_retry.hh"
 #include "utils/rjson.hh"
-#include <seastar/http/request.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/net/socket_defs.hh>
-#include <seastar/net/api.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/with_timeout.hh>
-#include <seastar/core/abort_on_expiry.hh>
-#include <seastar/coroutine/try_future.hh>
 #include <chrono>
 #include <netinet/tcp.h>
-#include <seastar/net/inet_address.hh>
 
-using namespace seastar;
+import fmt;
 using namespace std::chrono_literals;
 
 namespace vector_search {

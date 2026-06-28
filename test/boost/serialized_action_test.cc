@@ -7,15 +7,10 @@
  */
 
 #include <boost/test/unit_test.hpp>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/semaphore.hh>
 #include "utils/serialized_action.hh"
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
 #include "utils/phased_barrier.hh"
-#include <seastar/core/timer.hh>
-#include <seastar/core/sleep.hh>
 
 using namespace std::chrono_literals;
 

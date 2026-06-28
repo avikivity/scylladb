@@ -9,9 +9,6 @@
 #pragma once
 
 #include "utils/on_internal_error.hh"
-#include <seastar/core/rwlock.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/util/noncopyable_function.hh>
 
 #include <vector>
 

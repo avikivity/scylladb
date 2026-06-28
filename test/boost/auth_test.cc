@@ -7,13 +7,8 @@
  */
 
 
-import fmt;
 #include <cstdint>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/thread.hh>
 
 #include "cql3/CqlParser.hpp"
 #include "exceptions/exceptions.hh"
@@ -34,6 +29,7 @@ import fmt;
 #include "db/config.hh"
 #include "utils/chunked_string.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(auth_test)
 
 cql_test_config auth_on(bool with_authorizer = true) {

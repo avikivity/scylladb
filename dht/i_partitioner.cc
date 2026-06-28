@@ -9,17 +9,12 @@
 #include "i_partitioner.hh"
 #include "sharder.hh"
 #include "auto_refreshing_sharder.hh"
-#include <seastar/core/loop.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include "dht/ring_position.hh"
 #include "dht/token-sharding.hh"
 #include "utils/assert.hh"
 #include "utils/class_registrator.hh"
 #include "sstables/key.hh"
 #include "replica/database.hh"
-#include <seastar/core/thread.hh>
-#include <seastar/core/on_internal_error.hh>
 #include "utils/log.hh"
 
 namespace dht {

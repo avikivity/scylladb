@@ -8,8 +8,6 @@
  */
 #pragma once
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/sharded.hh>
 
 #include "gms/feature_service.hh"
 #include "mutation/mutation.hh"

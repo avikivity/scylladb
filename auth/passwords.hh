@@ -11,8 +11,6 @@
 #include <random>
 #include <stdexcept>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
 
 #include "seastarx.hh"
 

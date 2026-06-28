@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include <seastar/core/gate.hh>
-#include <seastar/core/abort_source.hh>
 #include <unordered_map>
 
 #include "data_dictionary/data_dictionary.hh"

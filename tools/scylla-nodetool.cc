@@ -17,17 +17,6 @@ import fmt;
 #include <iterator>
 #include <numeric>
 #include <fstream>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/when_all.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/http/exception.hh>
-#include <seastar/http/request.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/core/units.hh>
-#include <seastar/net/dns.hh>
-#include <seastar/net/inet_address.hh>
 
 #include <stdexcept>
 #include <ranges>
@@ -1934,7 +1923,7 @@ void restore_operation(scylla_rest_client& client, const bpo::variables_map& vm)
         }
     }
     writer.EndArray();
-    sstring sstables_body = make_sstring(output.view());
+    sstring sstables_body = seastar::make_sstring(output.view());
     
     const auto restore_res = client.post("/storage_service/restore", std::move(params),
                                          request_body{"application/json", std::move(sstables_body)});

@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/http/common.hh>
 #include "vector_search/client.hh"
 #include "vector_search/utils.hh"
 #include "vs_mock_server.hh"
@@ -15,9 +14,7 @@
 #include "utils/rjson.hh"
 #include <boost/test/tools/old/interface.hpp>
 #include <seastar/testing/test_case.hh>
-#include <seastar/coroutine/as_future.hh>
 
-using namespace seastar;
 using namespace vector_search;
 using namespace test::vector_search;
 using namespace seastar::httpd;

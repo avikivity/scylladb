@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "repair.hh"
 #include "gms/gossip_address_map.hh"
 #include "locator/abstract_replication_strategy.hh"
@@ -29,17 +28,6 @@ import fmt;
 
 
 #include <limits>
-
-#include <seastar/core/gate.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/exception.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-
 #include <exception>
 #include <cfloat>
 #include <atomic>
@@ -51,6 +39,7 @@ import fmt;
 #include "utils/labels.hh"
 import boost;
 
+import fmt;
 using namespace std::chrono_literals;
 
 logging::logger rlogger("repair");

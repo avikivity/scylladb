@@ -15,7 +15,6 @@
 #include <vector>
 
 
-#include <seastar/core/coroutine.hh>
 #include "cql3/column_identifier.hh"
 #include "cql3/restrictions/statement_restrictions.hh"
 #include "cql3/statements/create_view_statement.hh"

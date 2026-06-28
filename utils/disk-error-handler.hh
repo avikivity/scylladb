@@ -11,7 +11,6 @@
 #include <concepts>
 #include <functional>
 
-#include <seastar/core/future.hh>
 
 #include "seastarx.hh"
 import boost;

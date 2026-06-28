@@ -7,14 +7,12 @@
  */
 #pragma once
 
+#include <coroutine>
 #include "types.hh"
 #include "schema/schema_fwd.hh"
 #include "utils/chunked_vector.hh"
 #include "write_buffer.hh"
 #include "utils/log_heap.hh"
-#include <seastar/core/semaphore.hh>
-#include <seastar/util/noncopyable_function.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include "mutation_writer/token_group_based_splitting_writer.hh"
 #include <algorithm>
 #include <array>

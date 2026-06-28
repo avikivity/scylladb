@@ -10,10 +10,6 @@
 
 #include <chrono>
 #include <stdexcept>
-#include <fmt/format.h>
-#include <seastar/core/future.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include "utils/error_injection.hh"
 
 // Waits until enter_count for the named injection reaches the given threshold.

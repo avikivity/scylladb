@@ -7,9 +7,6 @@
  */
 
 #include "utils/assert.hh"
-#include <seastar/core/simple-stream.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
 #include "mutation_partition_view.hh"
 #include "schema/schema.hh"

@@ -6,16 +6,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/manual_clock.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/sleep.hh>
 #include "test/lib/scylla_test_case.hh"
 #include "message/dict_trainer.hh"
 #include "test/lib/random_utils.hh"
 #define ZSTD_STATIC_LINKING_ONLY
 #include <zstd.h>
 
-using namespace seastar;
 using namespace std::chrono_literals;
 using namespace netw;
 

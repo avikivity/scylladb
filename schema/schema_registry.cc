@@ -8,7 +8,6 @@
 
 #include "db/view/base_info.hh"
 #include "utils/assert.hh"
-#include <seastar/core/sharded.hh>
 
 #include "schema_registry.hh"
 #include "utils/error_injection.hh"

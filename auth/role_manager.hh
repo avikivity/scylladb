@@ -13,9 +13,6 @@
 #include <optional>
 #include <unordered_set>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/sstring.hh>
 
 #include "auth/common.hh"
 #include "auth/resource.hh"

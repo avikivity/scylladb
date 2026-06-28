@@ -14,6 +14,8 @@
 #include "gc_clock.hh"
 #include "utils/hashing.hh"
 
+import fmt;
+
 /**
  * Represents deletion operation. Can be commuted with other tombstones via apply() method.
  * Can be empty.

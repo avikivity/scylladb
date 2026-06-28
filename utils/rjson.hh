@@ -34,7 +34,6 @@
 #include "utils/base64.hh"
 #include "utils/chunked_vector.hh"
 
-#include <seastar/core/future.hh>
 
 namespace seastar {
     template<typename> class output_stream;
@@ -69,7 +68,6 @@ public:
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/allocators.h>
 #include <rapidjson/ostreamwrapper.h>
-#include <seastar/core/sstring.hh>
 #include "utils/UUID.hh"
 #include "dht/token.hh"
 #include "sstables/types.hh"

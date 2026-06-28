@@ -14,7 +14,6 @@
 #include "cql3/prepare_context.hh"
 #include "cql3/column_specification.hh"
 
-#include <seastar/core/shared_ptr.hh>
 
 #include <vector>
 #include "audit/audit.hh"

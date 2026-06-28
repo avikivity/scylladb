@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 #include <utility>
 #include <optional>
 #include "dht/token.hh"

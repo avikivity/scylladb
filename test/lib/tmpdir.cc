@@ -8,8 +8,8 @@
 
 #include "test/lib/tmpdir.hh"
 #include "utils/UUID.hh"
+#include <utility>
 
-#include <seastar/util/alloc_failure_injector.hh>
 
 // This is not really noexcept. But it is used only from the
 // destructor and move assignment operators which have to be

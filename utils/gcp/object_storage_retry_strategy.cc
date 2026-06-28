@@ -7,11 +7,10 @@
  */
 
 #include "object_storage_retry_strategy.hh"
+#include <coroutine>
 #include "utils/exceptions.hh"
 #include "utils/http_client_error_processing.hh"
 
-#include <seastar/core/sleep.hh>
-#include <seastar/http/exception.hh>
 
 static logger rs_logger("gcp_retry_strategy");
 

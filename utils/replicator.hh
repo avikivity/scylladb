@@ -7,13 +7,15 @@
  */
 #pragma once
 
+#include "seastarx.hh"
+#include <chrono>
+#include <coroutine>
+#include <cstdint>
+#include <exception>
+#include <functional>
+
 #include "utils/assert.hh"
 
-#include <seastar/util/later.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/coroutine.hh>
 #include "utils/on_internal_error.hh"
 
 namespace {

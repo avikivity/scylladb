@@ -12,7 +12,6 @@
 #include "index/external_index.hh"
 #include "types/types.hh"
 #include "utils/assert.hh"
-#include <seastar/core/coroutine.hh>
 #include "cql3/query_options.hh"
 #include "cql3/cql_config.hh"
 #include "cql3/statements/alter_table_statement.hh"

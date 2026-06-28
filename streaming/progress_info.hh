@@ -11,7 +11,6 @@
 #pragma once
 
 #include "locator/host_id.hh"
-#include <seastar/core/sstring.hh>
 
 namespace streaming {
 

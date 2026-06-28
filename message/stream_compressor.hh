@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include <seastar/rpc/rpc_types.hh>
+import seastar;
+
 #include <vector>
 #include <memory>
 #include <span>

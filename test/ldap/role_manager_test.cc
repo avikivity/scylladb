@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "auth/common.hh"
 #include "auth/config.hh"
 #include "auth/standard_role_manager.hh"
@@ -28,6 +27,7 @@ import fmt;
 #include "transport/messages/result_message.hh"
 #include "types/types.hh"
 
+import fmt;
 auto make_manager(cql_test_env& env) {
     auto stop_role_manager = [] (auth::standard_role_manager* m) {
         m->stop().get();

@@ -9,9 +9,10 @@
 #include "utils/assert.hh"
 #include "version.hh"
 #include "build_mode.hh"
+#include <vector>
+import fmt;
 
 
-#include <seastar/core/format.hh>
 import boost;
 
 static const char scylla_version_str[] = SCYLLA_VERSION;

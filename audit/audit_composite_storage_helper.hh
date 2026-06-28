@@ -8,7 +8,6 @@
 #pragma once
 
 #include "audit/audit.hh"
-#include <seastar/core/future.hh>
 
 #include "storage_helper.hh"
 

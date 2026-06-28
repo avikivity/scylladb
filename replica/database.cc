@@ -6,11 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <algorithm>
 
 #include <exception>
-#include <seastar/core/rwlock.hh>
 #include "db/view/view.hh"
 #include "locator/network_topology_strategy.hh"
 #include "locator/tablets.hh"
@@ -19,13 +17,10 @@ import fmt;
 #include "replica/logstor/types.hh"
 #include "utils/log.hh"
 #include "replica/database_fwd.hh"
-#include <seastar/core/shard_id.hh>
 #include "utils/assert.hh"
 #include "utils/lister.hh"
 #include "replica/database.hh"
 #include <memory>
-#include <seastar/core/future-util.hh>
-#include <seastar/coroutine/try_future.hh>
 #include "db/system_keyspace.hh"
 #include "db/system_keyspace_sstables_registry.hh"
 #include "db/system_distributed_keyspace.hh"
@@ -35,17 +30,10 @@ import fmt;
 #include "cql3/functions/functions.hh"
 #include "cql3/functions/user_function.hh"
 #include "cql3/functions/user_aggregate.hh"
-#include <seastar/core/seastar.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/metrics.hh>
 #include "sstables/sstables.hh"
 #include "sstables/sstables_manager.hh"
 #include "mutation/frozen_mutation.hh"
 #include "mutation/async_utils.hh"
-#include <seastar/core/do_with.hh>
 #include "service/migration_listener.hh"
 #include "cell_locking.hh"
 #include "view_info.hh"
@@ -68,11 +56,6 @@ import fmt;
 #include "db/data_listeners.hh"
 
 #include "data_dictionary/user_types_metadata.hh"
-#include <seastar/core/shared_ptr_incomplete.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/util/memory_diagnostics.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/util/file.hh>
 
 #include "locator/abstract_replication_strategy.hh"
 #include "timeout_config.hh"
@@ -93,6 +76,7 @@ import fmt;
 #include <flat_set>
 import boost;
 
+import fmt;
 using namespace std::chrono_literals;
 using namespace db;
 

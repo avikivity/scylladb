@@ -14,15 +14,8 @@
 #include "schema/schema_fwd.hh"
 #include "gc_clock.hh"
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/loop.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/gate.hh>
 
-using namespace seastar;
+#include "seastarx.hh"
 
 struct frozen_mutation_and_schema;
 class mutation;

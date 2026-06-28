@@ -8,10 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/gate.hh>
-#include <seastar/core/rwlock.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/condition-variable.hh>
 #include "seastarx.hh"
 
 #include <memory>

@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/future.hh>
 #include <stdexcept>
 
 #include "ent/ldap/ldap_connection.hh"

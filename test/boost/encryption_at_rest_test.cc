@@ -4,22 +4,12 @@
 
 
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 
 #include <cstdint>
 #include <random>
 #include <regex>
 
-#include <seastar/core/future-util.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/net/dns.hh>
-#include <seastar/net/tls.hh>
-#include <seastar/http/client.hh>
-#include <seastar/http/request.hh>
 
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/test_fixture.hh>
@@ -58,6 +48,7 @@ import fmt;
 #include "replica/database.hh"
 #include "service/client_state.hh"
 
+import fmt;
 using namespace encryption;
 namespace fs = std::filesystem;
 

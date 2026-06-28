@@ -6,18 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "dns.hh"
+#include <ranges>
+#include <coroutine>
 #include "utils/exceptions.hh"
 #include <chrono>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/net/dns.hh>
-#include <seastar/core/on_internal_error.hh>
 
-using namespace seastar;
-
+import fmt;
 namespace vector_search {
 namespace {
 

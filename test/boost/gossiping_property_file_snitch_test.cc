@@ -7,18 +7,16 @@
  */
 
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 #include "test/lib/scylla_test_case.hh"
 #include "test/lib/test_utils.hh"
-#include <seastar/util/std-compat.hh>
-#include <seastar/core/reactor.hh>
 #include <string>
 #include "locator/snitch_base.hh"
 #include "gms/inet_address.hh"
 #include "seastarx.hh"
 #include "locator/production_snitch_base.hh"
 
+import fmt;
 static std::filesystem::path test_files_subdir("test/resource/snitch_property_files");
 
 future<> one_test(const std::string& property_fname, bool exp_result) {

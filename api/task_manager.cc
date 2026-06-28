@@ -6,11 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/chunked_fifo.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/exception.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/http/exception.hh>
 
 #include "task_manager.hh"
 #include "api/api.hh"

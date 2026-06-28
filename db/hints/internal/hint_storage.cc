@@ -7,20 +7,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "db/hints/internal/hint_storage.hh"
+#include <coroutine>
 
 // Seastar features.
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/file-types.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/sstring.hh>
 
 // Scylla includes.
 #include "db/hints/internal/hint_logger.hh"
-#include <seastar/core/future.hh>
 #include "utils/disk-error-handler.hh"
 #include "utils/lister.hh"
 
@@ -35,6 +28,7 @@ import fmt;
 #include <type_traits>
 #include <unordered_map>
 
+import fmt;
 namespace fs = std::filesystem;
 
 namespace db::hints {

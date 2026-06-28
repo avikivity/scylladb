@@ -10,9 +10,6 @@
 
 #include "utils/assert.hh"
 #include <map>
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/shared_future.hh>
 
 #include "seastarx.hh"
 

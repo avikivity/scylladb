@@ -12,7 +12,7 @@
 #include <string>
 #include <memory>
 
-#include <seastar/core/future.hh>
+#include "seastarx.hh"
 
 /*
     Simple Azure KMS mock/real provider.

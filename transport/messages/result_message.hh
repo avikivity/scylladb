@@ -23,9 +23,6 @@
 #include "locator/host_id.hh"
 #include "types/types.hh"
 
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
 
 namespace cql_transport {
 

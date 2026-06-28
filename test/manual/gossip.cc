@@ -7,10 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/util/closeable.hh>
 
 #include "init.hh"
 #include "db/config.hh"
@@ -22,7 +18,6 @@
 #include "service/qos/service_level_controller.hh"
 #include "service/topology_state_machine.hh"
 #include "utils/log.hh"
-#include <seastar/core/thread.hh>
 #include <chrono>
 #include "db/schema_tables.hh"
 

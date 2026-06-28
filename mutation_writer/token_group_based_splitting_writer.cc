@@ -8,8 +8,6 @@
 
 #include "mutation_writer/token_group_based_splitting_writer.hh"
 
-#include <seastar/core/shared_mutex.hh>
-#include <seastar/core/on_internal_error.hh>
 
 #include "mutation_writer/feed_writers.hh"
 #include "utils/error_injection.hh"

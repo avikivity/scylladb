@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <ranges>
 #include "data_dictionary.hh"
 #include "cql3/description.hh"
@@ -23,6 +22,7 @@ import fmt;
 #include "replica/database.hh"
 #include "utils/overloaded_functor.hh"
 
+import fmt;
 namespace data_dictionary {
 
 schema_ptr

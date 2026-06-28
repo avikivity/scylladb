@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/smp.hh>
 
 #include "dht/decorated_key.hh"
 #include "seastarx.hh"

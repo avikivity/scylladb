@@ -7,10 +7,6 @@
  */
 
 #include "utils/assert.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/try_future.hh>
-#include <seastar/util/closeable.hh>
 
 #include "dht/sharder.hh"
 #include "readers/empty.hh"

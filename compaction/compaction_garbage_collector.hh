@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <seastar/util/bool_class.hh>
+#include <functional>
 
 #include "mutation/tombstone.hh"
 #include "schema/schema_fwd.hh"

@@ -23,10 +23,6 @@
 #include "db/config.hh"
 #include "idl/strong_consistency/groups_manager.dist.hh"
 #include "utils/error_injection.hh"
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-
-#include <seastar/core/abort_source.hh>
 
 namespace service::strong_consistency {
 

@@ -12,7 +12,6 @@
 #include "locator/token_metadata.hh"
 #include "locator/tablets.hh"
 
-#include <seastar/core/sstring.hh>
 
 namespace locator {
 

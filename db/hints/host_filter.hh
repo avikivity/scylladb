@@ -13,7 +13,6 @@
 #include <iosfwd>
 #include <string_view>
 
-#include <seastar/core/sstring.hh>
 #include "seastarx.hh"
 #include "db/hints/internal/common.hh"
 

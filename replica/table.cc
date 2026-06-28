@@ -6,18 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/shard_id.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/exception.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/switch_to.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/core/bitops.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/util/defer.hh>
 
 #include "dht/decorated_key.hh"
 #include "readers/mutation_reader.hh"

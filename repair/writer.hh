@@ -1,7 +1,5 @@
 #pragma once
 
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
 #include "schema/schema_fwd.hh"
 #include "reader_permit.hh"
 #include "service/topology_guard.hh"
@@ -10,7 +8,7 @@
 #include "readers/upgrading_consumer.hh"
 #include "./sstables/shared_sstable.hh"
 
-using namespace seastar;
+#include "seastarx.hh"
 
 namespace db {
     class system_distributed_keyspace;

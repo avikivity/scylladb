@@ -15,9 +15,6 @@
 #include <iosfwd>
 
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
 
 #include "../../bytes.hh"
 

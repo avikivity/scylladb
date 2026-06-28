@@ -11,7 +11,6 @@
 #include "cql3/expr/expression.hh"
 #include "cql3/statements/view_prop_defs.hh"
 
-#include <seastar/core/shared_ptr.hh>
 
 #include <utility>
 #include <vector>

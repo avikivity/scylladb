@@ -8,7 +8,6 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import fmt;
 #include <chrono>
 #include <deque>
 #include <exception>
@@ -20,11 +19,6 @@ import fmt;
 #include <vector>
 #include <algorithm>
 
-#include <seastar/core/future-util.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/all.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/as_future.hh>
 #include <flat_map>
 
 #include "db/config.hh"
@@ -60,7 +54,6 @@ import fmt;
 #include "locator/network_topology_strategy.hh"
 #include "mutation/mutation.hh"
 #include "mutation/mutation_partition.hh"
-#include <seastar/core/on_internal_error.hh>
 #include "service/migration_manager.hh"
 #include "service/raft/raft_group0_client.hh"
 #include "service/storage_proxy.hh"
@@ -86,6 +79,7 @@ import fmt;
 #include "cartesian_product.hh"
 #include "idl/view.dist.hh"
 
+import fmt;
 using namespace std::chrono_literals;
 
 static logging::logger vlogger("view");

@@ -10,7 +10,7 @@
 
 #include <map>
 #include <chrono>
-#include <seastar/core/sstring.hh>
+#include "seastarx.hh"
 import fmt;
 
 enum class tombstone_gc_mode : uint8_t { timeout, disabled, immediate, repair };

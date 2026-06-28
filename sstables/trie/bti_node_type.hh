@@ -8,10 +8,11 @@
 
 #pragma once
 
+#include <cstring>
+
 #include <cstdint>
 #include <iterator>
 #include <span>
-#include <seastar/core/byteorder.hh>
 
 using const_bytes = std::span<const std::byte>;
 

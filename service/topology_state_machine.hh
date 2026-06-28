@@ -13,8 +13,6 @@
 #include <set>
 #include <unordered_set>
 #include <unordered_map>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/sstring.hh>
 #include "cdc/generation_id.hh"
 #include "dht/token.hh"
 #include "raft/raft.hh"

@@ -8,17 +8,10 @@
 
 #pragma once
 
-#include <seastar/core/abort_source.hh>
 #include <string_view>
 #include <unordered_set>
 #include <unordered_map>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/metrics_registration.hh>
 
 #include "absl-flat_hash_map.hh"
 

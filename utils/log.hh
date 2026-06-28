@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <seastar/util/log.hh>
+#include "seastarx.hh"
 
 namespace logging {
 

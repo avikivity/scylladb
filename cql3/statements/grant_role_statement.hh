@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 
 #include "cql3/role_name.hh"
 #include "cql3/statements/authorization_statement.hh"

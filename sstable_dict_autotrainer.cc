@@ -9,10 +9,8 @@
 #include "sstable_dict_autotrainer.hh"
 #include "gms/feature_service.hh"
 #include "service/storage_service.hh"
-#include <seastar/core/sleep.hh>
 #include "schema/schema_builder.hh"
 #include "sstables/sstables_manager.hh"
-#include <seastar/coroutine/maybe_yield.hh>
 
 static seastar::logger alogger("sstable_dict_autotrainer");
 

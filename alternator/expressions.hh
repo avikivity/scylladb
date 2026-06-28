@@ -14,7 +14,6 @@
 #include <unordered_set>
 #include <string_view>
 
-#include <seastar/util/noncopyable_function.hh>
 
 #include "expressions_types.hh"
 #include "utils/rjson.hh"

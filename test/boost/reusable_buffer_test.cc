@@ -12,14 +12,9 @@
 
 #include "utils/assert.hh"
 #include "utils/reusable_buffer.hh"
-#include <seastar/core/manual_clock.hh>
 #include <seastar/testing/test_case.hh>
-#include <seastar/util/later.hh>
-#include <seastar/core/coroutine.hh>
 #include <bit>
 import boost;
-
-using namespace seastar;
 
 SEASTAR_TEST_CASE(test_get_linearized_view) {
     auto test = [] (size_t n, utils::reusable_buffer<manual_clock>& buffer) {

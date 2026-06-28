@@ -9,11 +9,6 @@
 #pragma once
 
 #include "index_entry.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/loop.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/shared_future.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include "utils/assert.hh"
 #include "utils/bptree.hh"
 #include "utils/lru.hh"

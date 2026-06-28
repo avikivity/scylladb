@@ -13,7 +13,6 @@
 #include <set>
 #include <unordered_set>
 
-#include <seastar/core/sstring.hh>
 
 #include "dht/token.hh"
 #include "mutation/canonical_mutation.hh"

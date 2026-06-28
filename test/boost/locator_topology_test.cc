@@ -6,14 +6,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "utils/assert.hh"
 #include <boost/test/unit_test.hpp>
 
 #include <functional>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/util/closeable.hh>
 
 #include "locator/types.hh"
 #include "test/lib/scylla_test_case.hh"
@@ -24,6 +20,7 @@ import fmt;
 #include "locator/load_sketch.hh"
 #include "utils/log.hh"
 
+import fmt;
 extern logging::logger testlog;
 
 using namespace locator;

@@ -7,21 +7,15 @@
  * Copyright (C) 2021-present ScyllaDB
  */
 
-import fmt;
 #include "locator/azure_snitch.hh"
+#include <coroutine>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/http/response_parser.hh>
-#include <seastar/http/reply.hh>
-#include <seastar/net/api.hh>
-#include <seastar/net/dns.hh>
-#include <seastar/util/closeable.hh>
 
 
 #include "utils/class_registrator.hh"
 import boost;
 
+import fmt;
 namespace locator {
 
 const std::string azure_snitch::REGION_NAME_QUERY_PATH = fmt::format(AZURE_QUERY_PATH_TEMPLATE, "location");

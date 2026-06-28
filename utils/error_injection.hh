@@ -10,18 +10,12 @@
 
 #include "utils/assert.hh"
 #include "utils/from_chars_exactly.hh"
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/util/defer.hh>
 #include "seastarx.hh"
 
 #include "log.hh"
 
 #include <ranges>
+#include <coroutine>
 #include <algorithm>
 #include <chrono>
 #include <numeric>
@@ -35,6 +29,8 @@ import boost;
 import fmt;
 
 namespace utils {
+
+namespace bi = boost::intrusive;
 
 // Exception thrown by enabled error injection
 class injected_error : public std::runtime_error {

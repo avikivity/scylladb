@@ -7,15 +7,12 @@
  */
 
 #include <exception>
-#include <seastar/core/alien.hh>
-#include <seastar/core/posix.hh>
-#include <seastar/core/reactor.hh>
+#include <signal.h>
 #include <unistd.h>
 
 #include "utils/log.hh"
 #include "lang/wasm.hh"
 #include "lang/wasm_alien_thread_runner.hh"
-#include <seastar/core/posix.hh>
 
 extern logging::logger wasm_logger;
 
@@ -41,7 +38,7 @@ alien_thread_runner::alien_thread_runner()
         sigset_t mask;
         sigfillset(&mask);
         auto r = ::pthread_sigmask(SIG_BLOCK, &mask, nullptr);
-        throw_pthread_error(r);
+        seastar::throw_pthread_error(r);
 
         errno = 0;
         int nice_value = nice(10);

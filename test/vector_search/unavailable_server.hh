@@ -8,8 +8,6 @@
 
 #pragma once
 #include "utils.hh"
-#include <seastar/core/seastar.hh>
-#include <seastar/net/api.hh>
 #include <cstdint>
 #include <vector>
 #include <memory>

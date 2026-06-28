@@ -9,7 +9,6 @@
 #include "scoring_fcts.hh"
 #include "native_scalar_function.hh"
 #include "utils/log.hh"
-#include <seastar/core/on_internal_error.hh>
 
 namespace cql3 {
 namespace functions {

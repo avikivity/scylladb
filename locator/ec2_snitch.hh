@@ -7,8 +7,6 @@
 #pragma once
 
 #include "locator/production_snitch_base.hh"
-#include <seastar/http/response_parser.hh>
-#include <seastar/net/api.hh>
 #include "utils/exponential_backoff_retry.hh"
 
 namespace locator {

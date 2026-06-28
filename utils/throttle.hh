@@ -1,12 +1,10 @@
 #pragma once
 
+#include "seastarx.hh"
 #include "utils/assert.hh"
-#include <seastar/core/future.hh>
 #include <optional>
 
 namespace utils {
-
-using namespace seastar;
 
 /// Synchronizes two processes (primary and secondary) in a way such that the primary process can know
 /// that between block().get() and unblock() the secondary process is at a particular execution point, blocked in enter().

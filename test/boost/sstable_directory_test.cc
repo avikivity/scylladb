@@ -7,11 +7,7 @@
  */
 
 
-import fmt;
 #include <functional>
-#include <seastar/core/smp.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/util/file.hh>
 #include "dht/token.hh"
 #include "sstables/generation_type.hh"
 import boost;
@@ -33,6 +29,7 @@ import boost;
 #include "db/config.hh"
 #include "sstables/exceptions.hh"
 
+import fmt;
 class distributed_loader_for_tests {
 public:
     static future<> process_sstable_dir(sharded<sstables::sstable_directory>& dir, sstable_directory::process_flags flags) {

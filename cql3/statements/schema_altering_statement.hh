@@ -16,7 +16,6 @@
 #include "cql3/statements/raw/cf_statement.hh"
 #include "cql3/cql_statement.hh"
 
-#include <seastar/core/shared_ptr.hh>
 
 #include "service/raft/raft_group0_client.hh"
 

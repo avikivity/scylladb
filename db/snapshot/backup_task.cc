@@ -7,9 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
 #include "utils/lister.hh"
 #include "replica/database.hh"

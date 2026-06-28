@@ -6,8 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
-#include <seastar/core/coroutine.hh>
 
 #include "keys/compound.hh"
 #include "db/marshal/type_parser.hh"
@@ -17,7 +15,7 @@ import fmt;
 #include "utils/managed_bytes.hh"
 #include "utils/chunked_string.hh"
 
-using namespace seastar;
+import fmt;
 using namespace tools::utils;
 
 namespace bpo = boost::program_options;

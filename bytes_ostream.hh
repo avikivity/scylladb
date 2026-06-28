@@ -11,8 +11,6 @@
 #include "bytes.hh"
 #include "utils/assert.hh"
 #include "utils/managed_bytes.hh"
-#include <seastar/core/simple-stream.hh>
-#include <seastar/core/loop.hh>
 #include <bit>
 #include <concepts>
 #include <ranges>

@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/thread.hh>
-#include <seastar/util/bool_class.hh>
 
 namespace utils {
 

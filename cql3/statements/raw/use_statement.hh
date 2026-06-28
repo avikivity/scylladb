@@ -12,7 +12,6 @@
 
 #include "cql3/statements/raw/parsed_statement.hh"
 
-#include <seastar/core/sstring.hh>
 
 namespace cql3 {
 

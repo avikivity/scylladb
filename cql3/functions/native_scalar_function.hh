@@ -13,8 +13,6 @@
 #include "native_function.hh"
 #include "scalar_function.hh"
 #include "exceptions/exceptions.hh"
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/util/log.hh>
 
 namespace cql3 {
 namespace functions {

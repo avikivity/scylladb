@@ -9,7 +9,6 @@
 #pragma once
 
 #include <chrono>
-#include <seastar/core/iostream.hh>
 
 class seekable_data_source_impl : public seastar::data_source_impl {
 public:

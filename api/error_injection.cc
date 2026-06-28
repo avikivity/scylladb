@@ -8,11 +8,8 @@
 
 #include "api/api-doc/error_injection.json.hh"
 #include "api/api_init.hh"
-#include <seastar/http/exception.hh>
 #include "utils/error_injection.hh"
 #include "utils/rjson.hh"
-#include <seastar/core/future-util.hh>
-#include <seastar/util/short_streams.hh>
 
 namespace api {
 using namespace seastar::httpd;

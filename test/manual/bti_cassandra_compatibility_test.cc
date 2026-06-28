@@ -8,8 +8,6 @@
 
 import fmt;
 #include <seastar/testing/random.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/app-template.hh>
 #include <xxhash.h>
 #include "readers/from_mutations.hh"
 #include "schema/schema_builder.hh"

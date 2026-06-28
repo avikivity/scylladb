@@ -10,7 +10,6 @@
 
 #include <memory>
 #include <vector>
-#include <seastar/core/sharded.hh>
 
 namespace replica {
 

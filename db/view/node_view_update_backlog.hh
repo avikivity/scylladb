@@ -8,14 +8,12 @@
 
 #pragma once
 
+
 #include "db/view/view_update_backlog.hh"
 #include "utils/error_injection.hh"
 #include "utils/updateable_value.hh"
 
-#include <seastar/core/cacheline.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/util/bool_class.hh>
+#include "seastarx.hh"
 
 #include <atomic>
 #include <chrono>

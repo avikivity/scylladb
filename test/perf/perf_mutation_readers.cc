@@ -7,9 +7,8 @@
  */
 
 
-#include <seastar/core/sleep.hh>
+#include "seastarx.hh"
 #include <seastar/testing/perf_tests.hh>
-#include <seastar/util/closeable.hh>
 
 #include "test/lib/simple_schema.hh"
 #include "test/lib/simple_position_reader_queue.hh"

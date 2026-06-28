@@ -11,7 +11,6 @@
 #include <string>
 #include <memory>
 
-#include <seastar/core/future.hh>
 
 #include "utils/gcp/object_storage.hh"
 

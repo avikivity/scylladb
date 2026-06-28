@@ -15,8 +15,6 @@
 #include <iosfwd>
 #include <string>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
 
 #include "symmetric_key.hh"
 

@@ -12,10 +12,6 @@
 #include <cstdint>
 #include <vector>
 #include <list>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future.hh>
-#include <seastar/rpc/rpc_types.hh>
 #include "utils/UUID.hh"
 #include "dht/i_partitioner.hh"
 #include "bytes.hh"

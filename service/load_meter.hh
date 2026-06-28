@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
 #include "service/load_broadcaster.hh"
 
-using namespace seastar;
+#include "seastarx.hh"
 
 namespace replica {
 class database;

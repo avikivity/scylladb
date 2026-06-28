@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 #pragma once
-#include <seastar/core/abort_source.hh>
 #include "raft.hh"
 #include <functional>
 

@@ -6,16 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "utils/assert.hh"
 #include <limits>
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/util/defer.hh>
 
 #include "locator/tablets.hh"
 #include "replica/tablet_mutation_builder.hh"
@@ -35,6 +28,7 @@ import fmt;
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/topology_builder.hh"
 
+import fmt;
 using namespace locator;
 using namespace replica;
 

@@ -14,7 +14,6 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 
-#include <seastar/core/align.hh>
 
 #include "symmetric_key.hh"
 #include "system_key.hh"

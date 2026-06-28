@@ -7,9 +7,6 @@
  */
 
 #include "api.hh"
-#include <seastar/http/file_handler.hh>
-#include <seastar/http/transformers.hh>
-#include <seastar/http/api_docs.hh>
 #include "cql_server_test.hh"
 #include "storage_service.hh"
 #include "token_metadata.hh"
@@ -28,7 +25,6 @@
 #include "hinted_handoff.hh"
 #include "error_injection.hh"
 #include "authorization_cache.hh"
-#include <seastar/http/exception.hh>
 #include "stream_manager.hh"
 #include "system.hh"
 #include "api/config.hh"

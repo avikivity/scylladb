@@ -12,7 +12,6 @@
 #include <vector>
 #include <functional>
 
-#include <seastar/core/future.hh>
 
 #include "service/query_state.hh"
 #include "seastarx.hh"

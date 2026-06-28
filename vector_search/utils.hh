@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/net/api.hh>
 #include <algorithm>
 #include <chrono>
 #include <vector>

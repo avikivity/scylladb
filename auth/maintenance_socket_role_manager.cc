@@ -8,7 +8,6 @@
 
 #include "auth/maintenance_socket_role_manager.hh"
 
-#include <seastar/core/future.hh>
 #include <stdexcept>
 #include <string_view>
 #include "auth/cache.hh"

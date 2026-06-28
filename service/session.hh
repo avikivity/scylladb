@@ -10,15 +10,13 @@
 
 #include "utils/UUID.hh"
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/shared_future.hh>
-#include <seastar/core/semaphore.hh>
 
 #include <unordered_set>
 import boost;
 
 namespace service {
+
+namespace bi = boost::intrusive;
 
 using session_id = utils::tagged_uuid<struct session_id_tag>;
 

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <coroutine>
+
 #include "group0_voter_calculator.hh"
 
 #include "raft/raft.hh"

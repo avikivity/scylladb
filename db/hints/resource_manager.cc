@@ -11,9 +11,6 @@
 #include "utils/log.hh"
 #include "utils/disk-error-handler.hh"
 #include "seastarx.hh"
-#include <seastar/core/sleep.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/when_all.hh>
 #include "utils/div_ceil.hh"
 #include "utils/lister.hh"
 import boost;

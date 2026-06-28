@@ -16,11 +16,6 @@
 #include "db/system_keyspace.hh"
 #include "schema/schema.hh"
 #include <iterator>
-#include <seastar/core/abort_source.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/do_with.hh>
 
 namespace auth {
 

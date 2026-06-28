@@ -8,12 +8,12 @@
  */
 
 #include "mutation_partition_serializer.hh"
+#include <coroutine>
 #include "mutation_partition.hh"
 
 #include "counters.hh"
 #include "idl/mutation.dist.impl.hh"
 #include "frozen_mutation.hh"
-#include <seastar/coroutine/maybe_yield.hh>
 
 using namespace db;
 

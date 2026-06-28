@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
 
 #include "message/messaging_service_fwd.hh"
 #include "raft/raft.hh"

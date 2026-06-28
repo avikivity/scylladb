@@ -16,7 +16,6 @@
 #include "utils/cached_file_stats.hh"
 #include "sstables/partition_index_cache_stats.hh"
 
-#include <seastar/core/metrics_registration.hh>
 
 #include <cstdint>
 

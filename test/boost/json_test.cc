@@ -11,11 +11,8 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <seastar/core/sstring.hh>
 
 #include "utils/rjson.hh"
-
-using namespace seastar;
 
 BOOST_AUTO_TEST_CASE(test_value_to_quoted_string) {
     std::vector<sstring> input = {

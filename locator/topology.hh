@@ -17,9 +17,6 @@
 #include <iostream>
 #include <random>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/util/bool_class.hh>
 
 #include "locator/types.hh"
 #include "inet_address_vectors.hh"

@@ -7,7 +7,6 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import fmt;
 #include "db/schema_tables.hh"
 
 #include "db/view/view_building_task_mutation_builder.hh"
@@ -26,7 +25,6 @@ import fmt;
 #include "utils/to_string.hh"
 #include <algorithm>
 #include <ranges>
-#include <seastar/coroutine/all.hh>
 #include "utils/log.hh"
 #include "schema/frozen_schema.hh"
 #include "schema/schema_registry.hh"
@@ -50,13 +48,6 @@ import fmt;
 #include "db/extensions.hh"
 #include "utils/hashers.hh"
 
-#include <seastar/util/noncopyable_function.hh>
-#include <seastar/rpc/rpc_types.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/future.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/core/loop.hh>
-#include <seastar/core/on_internal_error.hh>
 
 
 #include "compaction/compaction_strategy.hh"
@@ -85,6 +76,7 @@ import fmt;
 #include "mutation/async_utils.hh"
 import boost;
 
+import fmt;
 using namespace db;
 using namespace std::chrono_literals;
 

@@ -9,9 +9,8 @@
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <stdexcept>
+#include <coroutine>
 
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/shared_ptr.hh>
 #include "utils/pluggable.hh"
 
 BOOST_AUTO_TEST_SUITE(pluggable_test)

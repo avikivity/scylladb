@@ -7,7 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #ifdef HAVE_KMIP
 
 #include <deque>
@@ -15,12 +14,6 @@ import fmt;
 #include <regex>
 #include <algorithm>
 
-#include <seastar/net/dns.hh>
-#include <seastar/net/api.hh>
-#include <seastar/net/tls.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/reactor.hh>
 
 // workaround cryptsoft sdk issue:
 #define strcasestr  kmip_strcasestr
@@ -1195,6 +1188,7 @@ std::ostream& operator<<(std::ostream& os, const kmip_host::key_options& opts) {
 
 #include "kmip_host.hh"
 
+import fmt;
 namespace encryption {
 
 class kmip_host::impl {

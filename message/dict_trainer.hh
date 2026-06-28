@@ -10,10 +10,6 @@
 
 #include "utils/reservoir_sampling.hh"
 #include "utils/updateable_value.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/util/log.hh>
 
 namespace utils {
 class alien_worker;

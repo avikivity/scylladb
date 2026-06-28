@@ -12,7 +12,6 @@
 #include "bloom_calculations.hh"
 #include "utils/assert.hh"
 #include "utils/murmur_hash.hh"
-#include <seastar/core/thread.hh>
 
 namespace utils {
 static logging::logger filterlog("bloom_filter");

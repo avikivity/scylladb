@@ -7,10 +7,11 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import fmt;
 #include "gms/application_state.hh"
-#include <seastar/core/sstring.hh>
 
+#include <string_view>
+
+import fmt;
 namespace gms {
 
 static constexpr std::string_view application_state_name(application_state state) {

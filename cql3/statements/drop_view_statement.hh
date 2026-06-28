@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_ptr.hh>
 
 #include "cql3/statements/schema_altering_statement.hh"
 

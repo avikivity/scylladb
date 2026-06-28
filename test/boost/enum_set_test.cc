@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #define BOOST_TEST_MODULE core
 
 #include "enum_set.hh"
@@ -16,6 +15,7 @@ import fmt;
 
 #include <boost/test/unit_test.hpp>
 
+import fmt;
 
 enum class fruit { apple = 3, pear = 7, banana = 8 };
 

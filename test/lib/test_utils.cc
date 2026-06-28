@@ -8,9 +8,6 @@
 
 #include "test/lib/test_utils.hh"
 
-#include <seastar/util/file.hh>
-#include <seastar/core/format.hh>
-#include <seastar/util/backtrace.hh>
 #include "test/lib/log.hh"
 #include "test/lib/simple_schema.hh"
 #include "utils/to_string.hh"

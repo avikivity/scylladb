@@ -13,9 +13,6 @@
 #include <string_view>
 #include <unordered_map>
 
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/shared_ptr.hh>
 
 #include "cql3/prepared_statements_cache.hh"
 #include "cql3/authorized_prepared_statements_cache.hh"

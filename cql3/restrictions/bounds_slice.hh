@@ -11,7 +11,6 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <seastar/core/shared_ptr.hh>
 #include "index/secondary_index_manager.hh"
 #include "cql3/expr/expression.hh"
 #include "cql3/statements/bound.hh"

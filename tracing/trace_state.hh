@@ -10,9 +10,6 @@
 #pragma once
 
 #include <deque>
-#include <seastar/util/lazy.hh>
-#include <seastar/core/weak_ptr.hh>
-#include <seastar/core/checked_ptr.hh>
 #include "tracing/tracing.hh"
 #include "utils/chunked_string.hh"
 #include "gms/inet_address.hh"

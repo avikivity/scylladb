@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/future.hh>
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>

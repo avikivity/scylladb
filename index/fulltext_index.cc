@@ -13,7 +13,6 @@
 #include "index/fulltext_index.hh"
 #include "index/index_option_utils.hh"
 #include "index/secondary_index_manager.hh"
-#include <seastar/core/sstring.hh>
 import boost;
 
 namespace secondary_index {

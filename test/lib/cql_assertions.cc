@@ -7,7 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 #include "test/lib/cql_assertions.hh"
 #include "test/lib/eventually.hh"
@@ -18,6 +17,7 @@ import fmt;
 #include "bytes.hh"
 #include "cql3/query_result_printer.hh"
 
+import fmt;
 static inline void fail(std::string_view msg, std::source_location loc) {
     throw std::runtime_error(std::format("assertion at {}:{} failed: {}", loc.file_name(), loc.line(), msg));
 }

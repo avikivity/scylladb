@@ -9,23 +9,17 @@
 #pragma once
 
 #include "auth/service.hh"
-#include <seastar/core/seastar.hh>
-#include <seastar/core/scheduling.hh>
 #include "cql3/prepared_statements_cache.hh"
 #include "service/endpoint_lifecycle_subscriber.hh"
 #include "service/migration_listener.hh"
 #include "auth/authenticator.hh"
-#include <seastar/core/sharded.hh>
 #include "service/qos/qos_configuration_change_subscriber.hh"
 #include "timeout_config.hh"
-#include <seastar/core/semaphore.hh>
 #include <memory>
 #include <type_traits>
 #include "utils/fragmented_temporary_buffer.hh"
 #include "utils/result.hh"
 #include "service_permit.hh"
-#include <seastar/core/sharded.hh>
-#include <seastar/core/execution_stage.hh>
 #include "utils/updateable_value.hh"
 #include "generic_server.hh"
 #include "service/query_state.hh"

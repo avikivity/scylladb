@@ -9,7 +9,6 @@
 #include <algorithm>
 
 #include "utils/assert.hh"
-#include <seastar/util/defer.hh>
 
 
 #include "sstables.hh"

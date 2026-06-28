@@ -8,9 +8,6 @@
 
 #include <filesystem>
 
-#include <seastar/core/reactor.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/thread.hh>
 
 #include "utils/disk_space_monitor.hh"
 #include "utils/assert.hh"

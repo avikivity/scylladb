@@ -11,9 +11,8 @@
 
 #include <vector>
 #include <random>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/metrics_registration.hh>
+#include <deque>
+#include <set>
 #include "gc_clock.hh"
 #include "utils/UUID.hh"
 #include "gms/inet_address.hh"

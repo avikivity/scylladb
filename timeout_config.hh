@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include "db/timeout_clock.hh"
 #include "utils/updateable_value.hh"
 

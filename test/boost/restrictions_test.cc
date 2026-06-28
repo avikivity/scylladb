@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
@@ -22,6 +21,7 @@ import fmt;
 #include "types/map.hh"
 #include "types/set.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(restrictions_test)
 
 namespace {

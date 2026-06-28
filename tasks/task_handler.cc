@@ -11,7 +11,6 @@
 #include "tasks/virtual_task_hint.hh"
 #include "utils/overloaded_functor.hh"
 
-#include <seastar/core/with_timeout.hh>
 
 #include <queue>
 

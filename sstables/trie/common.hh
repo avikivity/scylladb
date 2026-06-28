@@ -8,7 +8,12 @@
 
 #pragma once
 
-#include <seastar/util/log.hh>
+#include <cstddef>
+#include <cassert>
+#include <span>
+#include <source_location>
+#include "seastarx.hh"
+
 
 extern seastar::logger trie_logger;
 

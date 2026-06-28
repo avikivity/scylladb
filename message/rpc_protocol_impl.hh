@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <seastar/rpc/rpc.hh>
 #include "messaging_service.hh"
 #include "serializer.hh"
 #include "serializer_impl.hh"

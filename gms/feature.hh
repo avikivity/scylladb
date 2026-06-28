@@ -11,9 +11,6 @@
 #include <any>
 
 
-#include <seastar/util/noncopyable_function.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
 
 #include "seastarx.hh"
 import boost;

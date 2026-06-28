@@ -7,7 +7,6 @@
 /*
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
-#include <seastar/core/metrics.hh>
 #include "types/types.hh"
 #include "tracing/trace_keyspace_helper.hh"
 #include "cql3/statements/batch_statement.hh"
@@ -392,7 +391,7 @@ std::vector<cql3::raw_value> trace_keyspace_helper::make_event_mutation_data(gms
 
 future<> trace_keyspace_helper::apply_events_mutation(cql3::query_processor& qp, service::migration_manager& mm, lw_shared_ptr<one_session_records> records, std::deque<event_record>& events_records) {
     if (events_records.empty()) {
-        return now();
+        return seastar::now();
     }
 
     return _events.cache_table_info(qp, mm, _dummy_query_state).then([this, &qp, records, &events_records] {
@@ -408,7 +407,7 @@ future<> trace_keyspace_helper::apply_events_mutation(cql3::query_processor& qp,
             cql3::query_options::make_batch_options(cql3::query_options(cql3::default_cql_config, db::consistency_level::ANY, std::nullopt, std::vector<cql3::raw_value>{}, false, cql3::query_options::specific_options::DEFAULT), std::move(values)),
             cql3::statements::batch_statement(cql3::statements::batch_statement::type::UNLOGGED, std::move(modifications), cql3::attributes::none(), qp.get_cql_stats()),
             [this, &qp] (auto& batch_options, auto& batch) {
-                return batch.execute(qp, _dummy_query_state, batch_options, std::nullopt).then([] (shared_ptr<cql_transport::messages::result_message> res) { return now(); });
+                return batch.execute(qp, _dummy_query_state, batch_options, std::nullopt).then([] (shared_ptr<cql_transport::messages::result_message> res) { return seastar::now(); });
             }
         );
     });
@@ -451,7 +450,7 @@ future<> trace_keyspace_helper::flush_one_session_mutations(lw_shared_ptr<one_se
                         return _sessions_time_idx.insert(qp, mm, _dummy_query_state, make_session_time_idx_mutation_data, my_address(), std::ref(*records));
                     }).then([this, &qp, &mm, records] {
                         if (!records->do_log_slow_query) {
-                            return now();
+        return seastar::now();
                         }
 
                         // if slow query log is requested - store a slow query log and a slow query log time index entries
@@ -463,7 +462,7 @@ future<> trace_keyspace_helper::flush_one_session_mutations(lw_shared_ptr<one_se
                         });
                     });
                 } else {
-                    return now();
+                    return seastar::now();
                 }
             });
         }).finally([records] {});

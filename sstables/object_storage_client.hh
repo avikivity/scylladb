@@ -13,8 +13,6 @@
 #include <filesystem>
 #include <unordered_map>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/semaphore.hh>
 
 #include "utils/lister.hh"
 #include "utils/s3/creds.hh"
@@ -37,8 +35,6 @@ class object_storage_endpoint_param;
 namespace utils {
 class upload_progress;
 }
-
-using namespace seastar;
 
 class memory_data_sink_buffers;
 class abstract_lister;

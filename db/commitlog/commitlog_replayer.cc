@@ -15,8 +15,6 @@
 #include <ranges>
 #include "utils/chunked_vector.hh"
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
 
 #include "commitlog.hh"
 #include "commitlog_replayer.hh"
@@ -27,7 +25,6 @@
 #include "commitlog_entry.hh"
 #include "validation.hh"
 #include "mutation/mutation_partition_view.hh"
-#include <seastar/core/on_internal_error.hh>
 #include "locator/tablet_replication_strategy.hh"
 #include "raft_commitlog_replay_buffer.hh"
 

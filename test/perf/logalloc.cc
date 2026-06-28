@@ -6,12 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
-#include <seastar/core/sharded.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/reactor.hh>
 
 #include <random>
 
@@ -20,6 +14,7 @@ import fmt;
 #include "utils/log.hh"
 #include "test/perf/perf.hh"
 
+import fmt;
 class piggie {
     size_t _extra_size;
 

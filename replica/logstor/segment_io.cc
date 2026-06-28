@@ -9,8 +9,6 @@
 #include "replica/logstor/segment_io.hh"
 #include "replica/logstor/logstor.hh"
 
-#include <seastar/core/align.hh>
-#include <seastar/core/simple-stream.hh>
 
 #include "idl/logstor.dist.hh"
 #include "idl/logstor.dist.impl.hh"

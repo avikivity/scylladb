@@ -12,11 +12,6 @@
 #include <memory>
 #include <optional>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/util/bool_class.hh>
-#include <seastar/core/sharded.hh>
 
 #include "auth/authenticator.hh"
 #include "auth/authorizer.hh"

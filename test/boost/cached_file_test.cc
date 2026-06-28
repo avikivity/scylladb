@@ -8,20 +8,12 @@
 
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/core/iostream.hh>
-#include <seastar/core/when_all.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/util/defer.hh>
 
 #include "test/lib/random_utils.hh"
 #include "test/lib/log.hh"
 #include "test/lib/tmpdir.hh"
 
 #include "utils/cached_file.hh"
-
-using namespace seastar;
 
 static lru cf_lru;
 

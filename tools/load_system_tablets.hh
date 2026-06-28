@@ -10,7 +10,6 @@
 
 #include <filesystem>
 #include <map>
-#include <seastar/core/future.hh>
 
 #include "reader_permit.hh"
 #include "dht/token.hh"

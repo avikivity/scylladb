@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_future.hh>
 
 #include "password_authenticator.hh"
 

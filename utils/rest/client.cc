@@ -8,15 +8,12 @@
  */
 
 
-#include <seastar/net/tls.hh>
-#include <seastar/net/dns.hh>
-#include <seastar/util/short_streams.hh>
+#include <coroutine>
+
 
 #include "client.hh"
 #include "utils/http.hh"
 import boost;
-
-using namespace seastar;
 
 rest::request_wrapper::request_wrapper(std::string_view host)
     : _req(http::request::make(httpd::operation_type::GET, sstring(host), ""))

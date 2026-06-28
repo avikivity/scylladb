@@ -11,10 +11,6 @@
 #include <regex>
 #include <vector>
 
-#include <seastar/core/with_timeout.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/net/inet_address.hh>
 
 #include "azure_kms_fixture.hh"
 #include "scoped_env_var.hh"

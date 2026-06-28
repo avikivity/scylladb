@@ -19,11 +19,6 @@
 #include <optional>
 #include <variant>
 #include <vector>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/http/reply.hh>
 
 class schema;
 namespace db {

@@ -6,14 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "utils/assert.hh"
 #include <lua.hpp>
 #include <random>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/util/short_streams.hh>
 
 #include "lang/lua_scylla_types.hh"
 #include "reader_permit.hh"
@@ -25,6 +20,7 @@ import fmt;
 #include "types/tuple.hh"
 #include "dht/i_partitioner.hh"
 
+import fmt;
 // Lua 5.4 added an extra parameter to lua_resume
 
 #if LUA_VERSION_NUM >= 504

@@ -17,7 +17,6 @@
 #include "mutation/position_in_partition.hh"
 #include "alternator/executor_util.hh"
 #include "utils/bit_cast.hh"
-#include <seastar/net/byteorder.hh>
 #include <bit>
 
 static logging::logger slogger("alternator-serialization");

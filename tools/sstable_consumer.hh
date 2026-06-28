@@ -10,7 +10,6 @@
 
 #include "seastarx.hh"
 
-#include <seastar/core/loop.hh>
 
 namespace sstables {
 class sstable;

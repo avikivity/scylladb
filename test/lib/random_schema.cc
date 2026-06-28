@@ -9,7 +9,6 @@
 #include <algorithm>
 
 
-#include <seastar/coroutine/maybe_yield.hh>
 
 #include "cql3/cql3_type.hh"
 #include "cql3/description.hh"

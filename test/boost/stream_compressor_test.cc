@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/util/alloc_failure_injector.hh>
+#define BOOST_TEST_MODULE core
 #include "message/stream_compressor.hh"
 #include "test/lib/log.hh"
 #include "test/lib/random_utils.hh"

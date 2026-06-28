@@ -7,9 +7,9 @@
  */
 
 #include "utils/alien_worker.hh"
-#include <seastar/util/log.hh>
+#include <signal.h>
 
-using namespace seastar;
+import fmt;
 
 namespace utils {
 

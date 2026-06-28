@@ -6,21 +6,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "alternator/server.hh"
 #include "audit/audit.hh"
 #include "alternator/executor_util.hh"
 #include "utils/chunked_string.hh"
 #include "gms/application_state.hh"
 #include "utils/log.hh"
-#include <seastar/http/function_handlers.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/try_future.hh>
-#include <seastar/util/defer.hh>
 #include "seastarx.hh"
 #include "error.hh"
 #include "service/client_state.hh"
@@ -44,6 +35,8 @@ import fmt;
 #include <zlib.h>
 #include "alternator/http_compression.hh"
 
+
+import fmt;
 static logging::logger slogger("alternator-server");
 
 using namespace httpd;

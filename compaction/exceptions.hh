@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include <seastar/core/format.hh>
 #include <exception>
 
 #include "seastarx.hh"

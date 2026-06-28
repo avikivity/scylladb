@@ -6,8 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/util/closeable.hh>
 
 #include "mutation.hh"
 #include "query/query-result-writer.hh"

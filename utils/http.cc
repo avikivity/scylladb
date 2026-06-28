@@ -9,7 +9,6 @@
 #include "http.hh"
 #include "rest/client.hh"
 
-#include <seastar/coroutine/all.hh>
 import boost;
 
 future<shared_ptr<tls::certificate_credentials>> utils::http::system_trust_credentials() {

@@ -7,7 +7,6 @@
  */
 
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 
 #include <stdlib.h>
@@ -21,14 +20,6 @@ import fmt;
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/do_with.hh>
-#include <seastar/core/scollectd_api.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/util/noncopyable_function.hh>
-#include <seastar/util/closeable.hh>
 
 #include "utils/assert.hh"
 #include "utils/UUID_gen.hh"
@@ -50,6 +41,7 @@ import fmt;
 #include "utils/checked-file-impl.hh"
 #include "idl/commitlog.dist.impl.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(commitlog_test)
 
 using namespace db;

@@ -14,7 +14,6 @@
 #include "cql3/attributes.hh"
 #include "cql3/cql_statement.hh"
 
-#include <seastar/core/shared_ptr.hh>
 
 
 #include <memory>

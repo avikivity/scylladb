@@ -7,7 +7,8 @@
  */
 #pragma once
 
-#include <seastar/core/sstring.hh>
+#include <vector>
+
 #include "enum_set.hh"
 
 namespace cql_transport {

@@ -10,8 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/shared_future.hh>
 
 #include "auth/authenticator.hh"
 #include "auth/passwords.hh"

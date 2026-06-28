@@ -7,7 +7,6 @@
  */
 
 #include "alternator/export.hh"
-#include <seastar/core/coroutine.hh>
 #include "utils/rjson.hh"
 #include <algorithm>
 #include <string>

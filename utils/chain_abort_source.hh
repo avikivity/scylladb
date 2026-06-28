@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <seastar/core/abort_source.hh>
-
-using namespace seastar;
+#include "seastarx.hh"
 
 namespace utils {
 

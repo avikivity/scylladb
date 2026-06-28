@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/shared_ptr.hh>
 
 class service_permit {
     seastar::lw_shared_ptr<seastar::semaphore_units<>> _permit;

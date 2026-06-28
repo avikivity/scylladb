@@ -9,9 +9,6 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/net/socket_defs.hh>
 #include <vector>
 #include "client_data.hh"
 #include "utils/chunked_vector.hh"

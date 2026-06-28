@@ -6,9 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/core/future.hh>
 
 #include "consumer.hh"
 #include "db/view/view_building_worker.hh"

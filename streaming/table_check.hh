@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/future.hh>
-#include <seastar/util/bool_class.hh>
 
 #include "schema/schema_fwd.hh"
 

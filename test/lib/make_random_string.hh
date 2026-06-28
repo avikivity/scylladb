@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 #include "seastarx.hh"
 
 sstring make_random_string(size_t size);

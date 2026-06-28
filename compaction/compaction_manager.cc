@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "compaction_manager.hh"
 #include "compaction_descriptor.hh"
 #include "compaction_strategy.hh"
@@ -15,12 +14,6 @@ import fmt;
 #include "sstables/sstables.hh"
 #include "sstables/sstables_manager.hh"
 #include <memory>
-#include <seastar/core/future.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/switch_to.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include "sstables/sstable_directory.hh"
 #include "utils/assert.hh"
 #include "utils/error_injection.hh"
@@ -32,6 +25,7 @@ import fmt;
 #include <cmath>
 #include "utils/labels.hh"
 
+import fmt;
 static logging::logger cmlog("compaction_manager");
 using namespace std::chrono_literals;
 

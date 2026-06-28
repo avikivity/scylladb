@@ -9,11 +9,8 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <seastar/core/reactor.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/future-util.hh>
 
-using namespace seastar;
+#include "seastarx.hh"
 
 // Calls the given function as fast as the Seastar reactor allows and waits on each call.
 // The function is passed an incrementing integer (incremented by one for each call, starting at 0).

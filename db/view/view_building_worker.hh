@@ -8,17 +8,12 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/shared_future.hh>
 #include <unordered_map>
 #include <unordered_set>
 #include <flat_set>
 #include "locator/abstract_replication_strategy.hh"
 #include "locator/tablets.hh"
 #include "raft/raft.hh"
-#include <seastar/core/gate.hh>
 #include "db/view/view_building_state.hh"
 #include "sstables/shared_sstable.hh"
 #include "utils/UUID.hh"

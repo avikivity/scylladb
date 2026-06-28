@@ -14,7 +14,6 @@
 #include "service/raft/raft_group0_client.hh"
 #include "transport/event.hh"
 
-#include <seastar/core/shared_ptr.hh>
 
 namespace locator {
 

@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/util/lazy.hh>
 
 #include "readers/mutation_reader.hh"
 #include "mutation/mutation_rebuilder.hh"

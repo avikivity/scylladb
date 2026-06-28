@@ -9,7 +9,6 @@
 
 #include "dht/decorated_key.hh"
 #include "dht/ring_position.hh"
-#include <seastar/coroutine/maybe_yield.hh>
 #include "types.hh"
 #include "utils/bptree.hh"
 #include "utils/double-decker.hh"

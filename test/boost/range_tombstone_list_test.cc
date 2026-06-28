@@ -17,7 +17,6 @@
 #include "test/boost/range_tombstone_list_assertions.hh"
 #include "test/lib/log.hh"
 
-#include <seastar/util/defer.hh>
 
 static thread_local schema_ptr s = schema_builder(1, "ks", "cf")
         .with_column("pk", int32_type, column_kind::partition_key)

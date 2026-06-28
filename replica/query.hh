@@ -21,9 +21,6 @@
 #include "schema/schema_fwd.hh"
 #include "query/query-result.hh"
 
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sharded.hh>
 
 class reconcilable_result;
 

@@ -10,7 +10,6 @@
 
 #include <type_traits>
 #include <concepts>
-#include <seastar/core/future.hh>
 #include "gc_clock.hh"
 #include "mutation/timestamp.hh"
 #include "sstables/types.hh"

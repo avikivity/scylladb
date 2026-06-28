@@ -16,12 +16,6 @@
 #include <map>
 #include <span>
 #include <vector>
-#include <fmt/format.h>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/util/memory-data-source.hh>
-#include <seastar/util/defer.hh>
 
 #include "replica/logstor/index.hh"
 #include "replica/logstor/logstor.hh"
@@ -33,7 +27,6 @@
 #include "idl/logstor.dist.impl.hh"
 #include "replica/logstor/segment_io.hh"
 #include "schema/schema_builder.hh"
-#include <seastar/core/simple-stream.hh>
 #include "test/lib/mutation_assertions.hh"
 #include "test/lib/tmpdir.hh"
 #include "utils/disk-error-handler.hh"

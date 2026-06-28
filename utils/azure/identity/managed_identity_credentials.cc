@@ -8,10 +8,8 @@
  */
 
 
-#include <seastar/net/dns.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/with_timeout.hh>
+#include <coroutine>
+
 
 #include "utils/rest/client.hh"
 #include "exceptions.hh"

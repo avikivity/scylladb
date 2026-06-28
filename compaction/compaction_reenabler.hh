@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/gate.hh>
 
 namespace compaction {
     class compaction_manager;

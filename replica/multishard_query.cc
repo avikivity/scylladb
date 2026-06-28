@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "schema/schema_registry.hh"
 #include "replica/multishard_query.hh"
 #include "mutation_query.hh"
@@ -16,10 +15,8 @@ import fmt;
 #include "readers/multishard.hh"
 #include "compaction/compaction_manager.hh"
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/try_future.hh>
 
+import fmt;
 
 namespace replica {
 

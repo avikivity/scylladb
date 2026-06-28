@@ -17,10 +17,9 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
+#include <coroutine>
 
 #include "crypt_sha512.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
 /* public domain sha512 implementation based on fips180-3 */
 /* >=2^64 bits messages are not supported (about 2000 peta bytes) */

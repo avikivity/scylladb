@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/net/inet_address.hh>
 
 #include "types/types.hh"
 #include "types/list.hh"

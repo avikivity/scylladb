@@ -6,20 +6,11 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-import fmt;
 #include <deque>
 #include <unordered_map>
 #include <regex>
 #include <algorithm>
 
-#include <seastar/net/dns.hh>
-#include <seastar/net/api.hh>
-#include <seastar/net/tls.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/json/formatter.hh>
-#include <seastar/http/url.hh>
 
 #include <rapidxml.h>
 
@@ -41,6 +32,9 @@ import fmt;
 #include "marshal_exception.hh"
 #include "db/config.hh"
 
+namespace seastar::http::internal { sstring url_encode(std::string_view); }
+
+import fmt;
 using namespace std::chrono_literals;
 using namespace std::string_literals;
 

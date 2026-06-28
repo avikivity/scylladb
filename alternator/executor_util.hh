@@ -23,8 +23,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <seastar/core/future.hh>
-#include <seastar/util/noncopyable_function.hh>
 
 #include "utils/rjson.hh"
 #include "schema/schema_fwd.hh"

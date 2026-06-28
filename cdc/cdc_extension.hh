@@ -9,7 +9,6 @@
 
 #include <map>
 
-#include <seastar/core/sstring.hh>
 
 #include "bytes_fwd.hh"
 #include "cdc/cdc_options.hh"

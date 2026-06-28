@@ -9,7 +9,6 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <seastar/net/inet_address.hh>
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
@@ -17,7 +16,6 @@
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/cql_assertions.hh"
 
-#include <seastar/core/future-util.hh>
 #include "test/lib/exception_utils.hh"
 
 BOOST_AUTO_TEST_SUITE(cql_query_group_test)

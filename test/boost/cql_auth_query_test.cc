@@ -6,14 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <string_view>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/util/defer.hh>
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
@@ -30,6 +24,7 @@ import fmt;
 #include "test/lib/cql_assertions.hh"
 #include "test/lib/exception_utils.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(cql_auth_query_test)
 
 static const auto alice = std::string_view("alice");

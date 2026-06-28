@@ -9,12 +9,11 @@
  */
 
 
-#include <seastar/core/sstring.hh>
 
 #include "enum_set.hh"
 import fmt;
 
-using namespace seastar;
+#include "seastarx.hh"
 
 namespace utils {
 

@@ -11,13 +11,9 @@
 #include <boost/test/unit_test.hpp>
 #include "test/lib/scylla_test_case.hh"
 
-#include <seastar/core/future.hh>
-#include <seastar/core/preempt.hh>
-#include <seastar/util/later.hh>
 #include <vector>
 #include <unordered_set>
 
-#include <seastar/core/coroutine.hh>
 
 #include "utils/scoped_item_list.hh"
 

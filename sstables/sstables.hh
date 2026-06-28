@@ -13,17 +13,10 @@
 #include "shared_sstable.hh"
 #include "open_info.hh"
 #include "sstables_registry.hh"
-#include <seastar/core/file.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/enum.hh>
-#include <seastar/core/shared_ptr.hh>
 #include <unordered_set>
 #include <unordered_map>
 #include <variant>
 #include "schema/schema_fwd.hh"
-#include <seastar/core/stream.hh>
 #include "encoding_stats.hh"
 #include "filter.hh"
 #include "utils/disk-error-handler.hh"
@@ -48,7 +41,6 @@
 #include "sstables/trie/bti_index.hh"
 #include "sstables/file_size_stats.hh"
 
-#include <seastar/util/optimized_optional.hh>
 import fmt;
 
 class sstable_assertions;

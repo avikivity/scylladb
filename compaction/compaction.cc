@@ -17,14 +17,6 @@
 #include <algorithm>
 
 
-#include <seastar/core/future-util.hh>
-#include <seastar/core/scheduling.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/shard_id.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
 #include "compaction/compaction_garbage_collector.hh"
 #include "compaction/exceptions.hh"

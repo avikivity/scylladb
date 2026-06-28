@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_ptr.hh>
 
 #include "utils/UUID.hh"
 #include "utils/UUID_gen.hh"

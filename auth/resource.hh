@@ -17,7 +17,6 @@
 #include <vector>
 #include <unordered_set>
 
-#include <seastar/core/sstring.hh>
 
 #include "auth/permission.hh"
 #include "cql3/functions/function.hh"

@@ -8,8 +8,13 @@
 
 #pragma once
 
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/shared_ptr.hh>
+#include "seastarx.hh"
+
+#include <string>
+#include <compare>
+#include <optional>
+#include <chrono>
+
 
 namespace s3 {
 

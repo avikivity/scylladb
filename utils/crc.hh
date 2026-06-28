@@ -10,8 +10,6 @@
 #pragma once
 
 #include <cstdint>
-#include <seastar/net/byteorder.hh>
-#include <seastar/core/byteorder.hh>
 
 #if defined(__x86_64__) || defined(__i386__)
 #include <smmintrin.h>

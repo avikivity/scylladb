@@ -20,8 +20,6 @@ import boost;
 
 namespace bi = boost::intrusive;
 
-using namespace seastar;
-
 class mutation_reader;
 using mutation_reader_opt = optimized_optional<mutation_reader>;
 

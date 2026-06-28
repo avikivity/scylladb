@@ -25,9 +25,6 @@
 
 #include "gms/inet_address_serializer.hh"
 
-#include <seastar/core/loop.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
 namespace service {
 

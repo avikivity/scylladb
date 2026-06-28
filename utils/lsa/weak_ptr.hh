@@ -9,7 +9,6 @@
 #pragma once
 
 #include "utils/entangled.hh"
-#include <seastar/core/shared_ptr.hh>
 
 namespace lsa {
 

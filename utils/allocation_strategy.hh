@@ -8,11 +8,13 @@
 
 #pragma once
 
+import seastar;
+
 #include <any>
+#include <cstdint>
 #include <memory>
 #include <cstdlib>
 #include <string>
-#include <seastar/util/alloc_failure_injector.hh>
 #include <malloc.h>
 
 // A function used by compacting collectors to migrate objects during

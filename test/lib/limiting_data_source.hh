@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include <seastar/core/iostream.hh>
-#include <seastar/core/temporary_buffer.hh>
+import seastar;
 
+#include <cstdlib>
+#include <cstdint>
 
 class limiting_data_source_impl : public seastar::data_source_impl {
     seastar::data_source _src;

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include <chrono>
 #include <memory_resource>
 #include <optional>
@@ -15,9 +17,6 @@
 #include <algorithm>
 
 
-#include <seastar/core/loop.hh>
-#include <seastar/core/timer.hh>
-#include <seastar/core/gate.hh>
 
 #include "exceptions/exceptions.hh"
 #include "utils/assert.hh"

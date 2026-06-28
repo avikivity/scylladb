@@ -6,18 +6,14 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "generic_server.hh"
 
 #include <exception>
-#include <seastar/core/when_all.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/switch_to.hh>
 #include <utility>
+#include <unordered_set>
+#include <coroutine>
 
+import fmt;
 namespace generic_server {
 
 class counted_data_source_impl : public data_source_impl {

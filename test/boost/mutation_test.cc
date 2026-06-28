@@ -16,11 +16,6 @@ import fmt;
 #include "utils/preempt.hh"
 #include "utils/xx_hasher.hh"
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/do_with.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/util/alloc_failure_injector.hh>
-#include <seastar/util/closeable.hh>
 
 #include "replica/database.hh"
 #include "utils/UUID_gen.hh"

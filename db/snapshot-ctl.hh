@@ -14,16 +14,11 @@
 
 #include <vector>
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/future.hh>
 #include "replica/database_fwd.hh"
 #include "tasks/task_manager.hh"
 #include "sstables/types.hh"
-#include <seastar/core/gate.hh>
-#include <seastar/core/rwlock.hh>
-#include <seastar/core/condition-variable.hh>
 
-using namespace seastar;
+#include "seastarx.hh"
 
 namespace netw { class messaging_service; }
 namespace sstables { class storage_manager; }

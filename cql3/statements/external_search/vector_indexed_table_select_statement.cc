@@ -22,9 +22,6 @@
 #include "types/vector.hh"
 #include "utils/assert.hh"
 
-#include <seastar/core/future.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/coroutine/exception.hh>
 
 
 namespace cql3 {

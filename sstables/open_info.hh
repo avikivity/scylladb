@@ -9,17 +9,14 @@
 
 #pragma once
 
+#include <filesystem>
 #include <expected>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/sharded.hh>
 #include <vector>
 #include "sstables/version.hh"
 #include "sstables/component_type.hh"
 #include "sstables/shareable_components.hh"
 #include "sstables/generation_type.hh"
 #include "sstables/types.hh"
-#include <seastar/core/shared_ptr.hh>
 
 namespace sstables {
 

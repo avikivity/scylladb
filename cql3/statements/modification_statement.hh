@@ -17,7 +17,6 @@
 #include "cql3/statements/statement_type.hh"
 #include "exceptions/coordinator_result.hh"
 
-#include <seastar/core/shared_ptr.hh>
 
 #include <memory>
 #include <optional>

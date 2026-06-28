@@ -11,9 +11,6 @@
 
 #include <memory>
 
-#include <seastar/http/reply.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
 
 #include "symmetric_key.hh"
 

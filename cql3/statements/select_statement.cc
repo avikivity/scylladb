@@ -23,8 +23,6 @@
 #include "cql3/statements/prune_materialized_view_statement.hh"
 
 #include "exceptions/exceptions.hh"
-#include <seastar/core/future.hh>
-#include <seastar/coroutine/exception.hh>
 #include "index/vector_index.hh"
 #include "index/fulltext_index.hh"
 #include "locator/tablets.hh"
@@ -44,14 +42,11 @@
 #include <optional>
 #include <ranges>
 #include <variant>
-#include <seastar/core/shared_ptr.hh>
 #include "query/query-result-reader.hh"
 #include "query_ranges_to_vnodes.hh"
 #include "query/query_result_merger.hh"
 #include "service/pager/query_pagers.hh"
 #include "service/storage_proxy.hh"
-#include <seastar/core/execution_stage.hh>
-#include <seastar/core/on_internal_error.hh>
 #include "view_info.hh"
 #include "partition_slice_builder.hh"
 #include "cql3/untyped_result_set.hh"

@@ -10,7 +10,6 @@
 
 #include <algorithm>
 #include <vector>
-#include <seastar/core/sharded.hh>
 #include "dht/i_partitioner_fwd.hh"
 #include "dht/token.hh"
 #include "schema/schema_fwd.hh"
@@ -20,7 +19,7 @@
 #include "locator/tablets.hh"
 #include "service/topology_guard.hh"
 
-using namespace seastar;
+#include "seastarx.hh"
 
 namespace replica {
 class database;

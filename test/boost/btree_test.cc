@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <boost/test/data/test_case.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -17,9 +16,8 @@ import fmt;
 #include "tree_test_key.hh"
 #include "utils/intrusive_btree.hh"
 
+import fmt;
 using namespace intrusive_b;
-using namespace seastar;
-
 class test_key : public tree_test_key_base {
     member_hook b_hook;
 

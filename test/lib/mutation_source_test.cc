@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <iterator>
 #include <set>
 #include <boost/test/unit_test.hpp>
@@ -32,10 +31,10 @@ import fmt;
 #include "types/map.hh"
 #include "types/list.hh"
 #include "types/set.hh"
-#include <seastar/util/closeable.hh>
 #include "utils/assert.hh"
 #include "utils/UUID_gen.hh"
 
+import fmt;
 // partitions must be sorted by decorated key
 static void require_no_token_duplicates(const utils::chunked_vector<mutation>& partitions) {
     std::optional<dht::token> last_token;

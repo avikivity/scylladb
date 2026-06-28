@@ -7,8 +7,9 @@
  */
 
 #pragma once
-#include <seastar/http/reply.hh>
-#include <seastar/util/bool_class.hh>
+
+#include "seastarx.hh"
+#include <system_error>
 
 namespace utils::http {
 

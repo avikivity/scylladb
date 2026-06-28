@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
+import seastar;
 
 namespace replica {
 class database;

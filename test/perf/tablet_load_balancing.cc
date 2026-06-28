@@ -6,14 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <bit>
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/reactor.hh>
 
 #include "locator/tablets.hh"
 #include "service/tablet_allocator.hh"
@@ -35,6 +29,7 @@ import fmt;
 #include "test/lib/random_utils.hh"
 #include "test/lib/key_utils.hh"
 
+import fmt;
 using namespace locator;
 using namespace replica;
 using namespace service;

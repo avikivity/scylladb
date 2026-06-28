@@ -8,15 +8,13 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
-#include <seastar/util/bool_class.hh>
 
 #include "utils/managed_string.hh"
 
 #include <optional>
 #include <vector>
 
-using namespace seastar;
+#include "seastarx.hh"
 
 namespace cql3 {
 

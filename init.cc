@@ -13,7 +13,6 @@
 #include "seastarx.hh"
 #include "db/config.hh"
 
-#include <seastar/core/coroutine.hh>
 #include "sstables/sstable_compressor_factory.hh"
 #include "gms/feature_service.hh"
 

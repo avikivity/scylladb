@@ -8,8 +8,9 @@
 
 #pragma once
 
+#include <span>
+
 #include <string_view>
-#include <seastar/core/sstring.hh>
 
 #include "seastarx.hh"
 

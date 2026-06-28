@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/coroutine.hh>
 #include "frozen_mutation.hh"
+#include <coroutine>
 #include "schema/schema_registry.hh"
 #include "mutation_partition.hh"
 #include "mutation.hh"

@@ -12,7 +12,6 @@
 #include <map>
 #include <optional>
 #include <ranges>
-#include <seastar/core/shared_ptr.hh>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>

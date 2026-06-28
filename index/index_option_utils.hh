@@ -8,9 +8,10 @@
 
 #pragma once
 
+#include "seastarx.hh"
+
 #include <string_view>
 #include <vector>
-#include <seastar/core/sstring.hh>
 
 namespace secondary_index::util {
 

@@ -6,20 +6,11 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-import fmt;
 #include <deque>
 #include <unordered_map>
 #include <regex>
 #include <algorithm>
 
-#include <seastar/net/dns.hh>
-#include <seastar/net/api.hh>
-#include <seastar/net/tls.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/json/formatter.hh>
-#include <seastar/http/exception.hh>
 
 #include <rapidxml.h>
 #include <openssl/evp.h>
@@ -45,6 +36,7 @@ import fmt;
 #include "db/config.hh"
 import boost;
 
+import fmt;
 using namespace std::chrono_literals;
 using namespace std::string_literals;
 

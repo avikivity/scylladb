@@ -7,6 +7,7 @@
  */
 
 #include "sts_assume_role_credentials_provider.hh"
+#include <coroutine>
 
 #include "utils/UUID.hh"
 #include "utils/http.hh"
@@ -14,10 +15,6 @@
 #include "utils/s3/default_aws_retry_strategy.hh"
 
 #include <rapidxml.h>
-#include <seastar/core/coroutine.hh>
-#include <seastar/http/client.hh>
-#include <seastar/http/request.hh>
-#include <seastar/util/short_streams.hh>
 
 namespace aws {
 

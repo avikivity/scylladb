@@ -8,7 +8,6 @@
 
 #include "cql3/description.hh"
 
-#include <seastar/core/on_internal_error.hh>
 
 #include "cql3/util.hh"
 #include "utils/log.hh"

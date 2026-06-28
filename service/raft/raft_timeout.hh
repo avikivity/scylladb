@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/util/std-compat.hh>
 
 #include "seastarx.hh"
 

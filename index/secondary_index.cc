@@ -12,7 +12,6 @@
 #include "index/target_parser.hh"
 #include "cql3/statements/index_target.hh"
 
-#include <seastar/util/log.hh>
 
 #include "exceptions/exceptions.hh"
 #include "utils/rjson.hh"

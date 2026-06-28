@@ -11,10 +11,8 @@
 #include "replica/database_fwd.hh"
 #include "schema/schema_fwd.hh"
 #include "utils/chunked_string.hh"
-#include <seastar/core/timer.hh>
-#include <seastar/core/sharded.hh>
 
-using namespace seastar;
+#include "seastarx.hh"
 
 namespace gms { class gossiper; }
 

@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include <seastar/core/condition-variable.hh>
 
 #include "schema/schema_fwd.hh"
 #include "sstables/open_info.hh"

@@ -18,6 +18,8 @@ import boost;
 
 class position_in_partition_view;
 
+namespace bi = boost::intrusive;
+
 class range_tombstone_entry {
     range_tombstone _tombstone;
     bi::set_member_hook<bi::link_mode<bi::auto_unlink>> _link;

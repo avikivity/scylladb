@@ -8,7 +8,6 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <seastar/core/thread.hh>
 
 #include "auth/service.hh"
 #include "db/system_keyspace.hh"

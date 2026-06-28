@@ -11,7 +11,6 @@
 #include <vector>
 #include <random>
 #include <string>
-#include <seastar/core/thread.hh>
 #include "utils/assert.hh"
 #include "utils/logalloc.hh"
 

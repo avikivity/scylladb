@@ -16,15 +16,12 @@
 #include "service/topology_guard.hh"
 #include "tasks/task_manager.hh"
 #include "locator/abstract_replication_strategy.hh"
-#include <seastar/core/sharded.hh>
-#include <seastar/util/bool_class.hh>
-#include <seastar/core/rwlock.hh>
 #include "utils/user_provided_param.hh"
 #include "locator/tablet_metadata_guard.hh"
 #include "utils/chunked_vector.hh"
 #include "utils/disk_space_monitor.hh"
 
-using namespace seastar;
+#include "seastarx.hh"
 
 class row_level_repair_gossip_helper;
 

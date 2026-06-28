@@ -7,7 +7,6 @@
  */
 
 import fmt;
-#include <seastar/core/on_internal_error.hh>
 #include "alternator/executor.hh"
 #include "alternator/executor_util.hh"
 #include "alternator/consumed_capacity.hh"
@@ -52,11 +51,6 @@ import fmt;
 #include "db/tags/utils.hh"
 #include "replica/database.hh"
 #include "alternator/rmw_operation.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/loop.hh>
-#include <seastar/core/when_all.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include <string_view>
 #include <unordered_set>
 #include "service/storage_proxy.hh"

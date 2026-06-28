@@ -7,17 +7,11 @@
  */
 
 
-import fmt;
 #include <list>
 #include <random>
 #include <source_location>
 #include <algorithm>
 
-#include <seastar/core/sleep.hh>
-#include <seastar/core/do_with.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/util/closeable.hh>
 
 #include "sstables/generation_type.hh"
 #undef SEASTAR_TESTING_MAIN
@@ -66,6 +60,7 @@ import fmt;
 #include "readers/evictable.hh"
 #include "readers/queue.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(mutation_reader_test)
 
 namespace test_label = boost::unit_test;

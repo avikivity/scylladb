@@ -16,8 +16,6 @@ extern "C" {
 #include <unistd.h>
 }
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/sleep.hh>
 
 #include "auth/common.hh"
 #include "auth/permission.hh"

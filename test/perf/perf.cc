@@ -7,12 +7,11 @@
  */
 
 #include "perf.hh"
-#include <seastar/core/reactor.hh>
-#include <seastar/core/memory.hh>
 #include "seastarx.hh"
 #include "reader_concurrency_semaphore.hh"
 #include "schema/schema.hh"
 #include "utils/logalloc.hh"
+#include <signal.h>
 #include "release.hh"
 #include <fstream>
 import boost;

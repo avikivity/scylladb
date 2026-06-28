@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include <seastar/core/bitops.hh>
-#include <seastar/core/byteorder.hh>
+#include <algorithm>
+
 
 namespace utils {
 

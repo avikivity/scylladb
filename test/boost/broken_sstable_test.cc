@@ -8,7 +8,6 @@
 
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/closeable.hh>
 
 #include "test/boost/sstable_test.hh"
 #include "test/lib/exception_utils.hh"

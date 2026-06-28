@@ -6,13 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/util/closeable.hh>
-
-#include <boost/program_options.hpp>
 
 #include "utils/assert.hh"
 #include "utils/logalloc.hh"

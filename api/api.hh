@@ -8,13 +8,11 @@
 
 #pragma once
 
-#include <seastar/json/json_elements.hh>
 #include <type_traits>
 #include "api/api_init.hh"
 #include "api/api-doc/utils.json.hh"
 #include "utils/histogram.hh"
 #include "utils/estimated_histogram.hh"
-#include <seastar/http/exception.hh>
 #include "seastarx.hh"
 import boost;
 

@@ -9,7 +9,6 @@
 
 #include "tombstone_gc_options.hh"
 #include "exceptions/exceptions.hh"
-#include <seastar/core/sstring.hh>
 #include <map>
 #include "utils/rjson.hh"
 import boost;

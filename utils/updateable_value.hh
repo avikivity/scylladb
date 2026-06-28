@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/future.hh>
 #include <vector>
 #include <functional>
 #include "observable.hh"

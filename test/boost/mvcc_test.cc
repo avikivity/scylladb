@@ -8,8 +8,6 @@
 
 
 #include "utils/assert.hh"
-#include <seastar/core/thread.hh>
-#include <seastar/util/defer.hh>
 
 #include "mutation/partition_version.hh"
 #include "db/partition_snapshot_row_cursor.hh"

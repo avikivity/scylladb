@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <algorithm>
 #include <exception>
 #include <functional>
@@ -14,22 +13,15 @@ import fmt;
 #include <vector>
 #include <ranges>
 #include <limits>
+#include <fcntl.h>
 
 #include <gnutls/pkcs11.h>
 
-#include <seastar/util/closeable.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/sstring.hh>
 #include "db/view/view_building_worker.hh"
 #include "exceptions/exceptions.hh"
 #include "gms/inet_address.hh"
 #include "auth/allow_all_authenticator.hh"
 #include "auth/allow_all_authorizer.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/signal.hh>
-#include <seastar/core/timer.hh>
-#include "locator/host_id.hh"
 #include "service/client_routes.hh"
 #include "service/qos/raft_service_level_distributed_data_accessor.hh"
 #include "db/view/view_building_state.hh"
@@ -42,11 +34,7 @@ import fmt;
 #include "timeout_config.hh"
 #include "replica/database.hh"
 #include "replica/tablets.hh"
-#include <seastar/core/reactor.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/sharded.hh>
 #include "transport/server.hh"
-#include <seastar/http/httpd.hh>
 #include "api/api_init.hh"
 #include "db/config.hh"
 #include "db/extensions.hh"
@@ -78,7 +66,6 @@ import fmt;
 #include "repair/row_level.hh"
 #include "vector_search/vector_store_client.hh"
 #include <cstdio>
-#include <seastar/core/file.hh>
 #include <stdexcept>
 #include <unistd.h>
 #include <sys/time.h>
@@ -86,13 +73,9 @@ import fmt;
 #include <sys/prctl.h>
 #include "tracing/tracing.hh"
 #include "audit/audit.hh"
-#include <seastar/core/prometheus.hh>
 #include "message/messaging_service.hh"
 #include "db/snapshot-ctl.hh"
 #include "cql3/query_processor.hh"
-#include <seastar/net/dns.hh>
-#include <seastar/core/io_queue.hh>
-#include <seastar/core/abort_on_ebadf.hh>
 #include <csignal>
 
 #include "db/view/view_update_generator.hh"
@@ -143,9 +126,8 @@ import fmt;
 
 
 namespace fs = std::filesystem;
-#include <seastar/core/metrics_api.hh>
-#include <seastar/core/relabel_config.hh>
 
+import fmt;
 seastar::metrics::metric_groups app_metrics;
 
 using namespace std::chrono_literals;

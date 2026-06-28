@@ -10,10 +10,9 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 #include "schema/schema_fwd.hh"
 
-using namespace seastar;
+#include "seastarx.hh"
 
 class partition_key_view;
 

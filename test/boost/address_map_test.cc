@@ -10,18 +10,13 @@
 #include <seastar/testing/on_internal_error.hh>
 #include <seastar/testing/thread_test_case.hh>
 #include <chrono>
+#include <coroutine>
 #include <ranges>
 
 #include "service/address_map.hh"
 #include "gms/inet_address.hh"
 #include "utils/UUID.hh"
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/manual_clock.hh>
-#include <seastar/core/timer.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/util/alloc_failure_injector.hh>
 
 using namespace service;
 using namespace std::chrono_literals;

@@ -6,9 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "expr_test_utils.hh"
 
+import fmt;
 namespace cql3 {
 namespace expr {
 namespace test_utils {

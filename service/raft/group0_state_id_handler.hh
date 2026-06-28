@@ -10,8 +10,6 @@
 #include "raft/raft.hh"
 #include "service/topology_state_machine.hh"
 #include "utils/UUID.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/timer.hh>
 
 namespace gms {
 class gossiper;

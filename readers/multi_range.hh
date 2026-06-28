@@ -15,7 +15,7 @@
 #include "readers/mutation_reader.hh"
 #include "tracing/trace_state.hh"
 
-using namespace seastar;
+#include "seastarx.hh"
 
 class mutation_reader;
 class reader_permit;

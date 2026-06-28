@@ -20,11 +20,9 @@
 #include "validation.hh"
 #include "db/consistency_level_validations.hh"
 #include <optional>
-#include <seastar/core/shared_ptr.hh>
 #include "transport/messages/result_message.hh"
 #include "data_dictionary/data_dictionary.hh"
 #include "replica/database.hh"
-#include <seastar/core/execution_stage.hh>
 #include "cas_request.hh"
 #include "cql3/query_processor.hh"
 #include "service/storage_proxy.hh"

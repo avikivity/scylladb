@@ -8,10 +8,6 @@
 
 #pragma once
 
-#include <seastar/util/bool_class.hh>
-#include <seastar/util/noncopyable_function.hh>
-#include <seastar/core/preempt.hh>
-#include <seastar/core/thread.hh>
 
 #include "seastarx.hh"
 

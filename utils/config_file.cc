@@ -12,17 +12,7 @@
 #include <yaml-cpp/yaml.h>
 
 
-#include <seastar/core/file.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/do_with.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/util/defer.hh>
 
-#include <seastar/json/json_elements.hh>
 
 #include <ranges>
 

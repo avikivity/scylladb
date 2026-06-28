@@ -10,12 +10,6 @@
 
 #include "cql3/query_processor.hh"
 
-#include <seastar/core/metrics.hh>
-#include <seastar/core/memory.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/try_future.hh>
 
 #include "auth/authenticated_user.hh"
 #include "service/storage_proxy.hh"

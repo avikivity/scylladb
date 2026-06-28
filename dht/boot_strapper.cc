@@ -10,7 +10,6 @@
 
 import fmt;
 
-#include <seastar/core/coroutine.hh>
 
 #include "dht/boot_strapper.hh"
 #include "dht/range_streamer.hh"

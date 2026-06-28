@@ -17,7 +17,6 @@
 #include <unordered_set>
 #include <exception>
 
-#include <seastar/core/sstring.hh>
 
 #include "bytes_fwd.hh"
 #include "schema/schema_fwd.hh"

@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include <seastar/http/httpd.hh>
-#include <seastar/core/future.hh>
 
 #include "gms/gossip_address_map.hh"
 #include "replica/database_fwd.hh"

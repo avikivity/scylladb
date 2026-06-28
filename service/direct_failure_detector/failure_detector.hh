@@ -9,9 +9,11 @@
 
 #include "utils/UUID.hh"
 
-#include <seastar/core/sharded.hh>
 
-using namespace seastar;
+import seastar;
+
+using seastar::future;
+using seastar::abort_source;
 
 namespace seastar {
 class abort_source;

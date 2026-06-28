@@ -10,18 +10,13 @@
 
 #include "alternator/executor.hh"
 #include "utils/scoped_item_list.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/http/httpd.hh>
-#include <seastar/net/tls.hh>
 #include <optional>
 #include "alternator/auth.hh"
 #include "timeout_config.hh"
 #include "service/qos/service_level_controller.hh"
 #include "utils/small_vector.hh"
 #include "utils/updateable_value.hh"
-#include <seastar/core/units.hh>
-#include <boost/regex.hpp>
+
 
 struct client_data;
 
@@ -34,7 +29,7 @@ class server : public peering_sharded_service<server> {
     // in bytes. This is a safety measure to prevent Alternator from
     // running out of memory when a client sends a very large request.
     // DynamoDB also has the same limit set to 16 MB.
-    static constexpr size_t request_content_length_limit = 16*MB;
+    static constexpr size_t request_content_length_limit = 16*seastar::MB;
     using alternator_callback = std::function<future<executor::request_return_type>(executor&, executor::client_state&,
             tracing::trace_state_ptr, service_permit, rjson::value, std::unique_ptr<http::request>, std::unique_ptr<audit::audit_info_alternator>&)>;
     using alternator_callbacks_map = std::unordered_map<std::string_view, alternator_callback>;
@@ -78,7 +73,7 @@ class server : public peering_sharded_service<server> {
     ::shared_ptr<seastar::tls::server_credentials> _credentials;
 
     class json_parser {
-        static constexpr size_t yieldable_parsing_threshold = 16*KB;
+        static constexpr size_t yieldable_parsing_threshold = 16*seastar::KB;
         chunked_content _raw_document;
         rjson::value _parsed_document;
         std::exception_ptr _current_exception;
@@ -146,4 +141,3 @@ private:
 };
 
 }
-

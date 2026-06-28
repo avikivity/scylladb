@@ -8,7 +8,6 @@
 
 #include "test/lib/scylla_test_case.hh"
 
-#include <seastar/core/coroutine.hh>
 #include "alternator/export.hh"
 #include <string>
 #include <vector>

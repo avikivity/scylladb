@@ -9,14 +9,6 @@
 #pragma once
 
 // Seastar features.
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/scheduling.hh>
-#include <seastar/core/shared_mutex.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
 
 // Scylla includes.
 #include "db/commitlog/replay_position.hh"

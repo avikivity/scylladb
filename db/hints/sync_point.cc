@@ -8,8 +8,6 @@
 
 #include <unordered_set>
 
-#include <seastar/core/simple-stream.hh>
-#include <seastar/core/smp.hh>
 
 #include "db/hints/sync_point.hh"
 #include "sync_point.hh"

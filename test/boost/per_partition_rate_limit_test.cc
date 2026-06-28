@@ -1,6 +1,5 @@
 #include <chrono>
 #include <cstdint>
-#include <seastar/core/coroutine.hh>
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 

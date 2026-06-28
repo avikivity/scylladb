@@ -10,15 +10,6 @@
 #include <unordered_set>
 #include <regex>
 #include <boost/test/unit_test.hpp>
-#include <seastar/core/thread.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/http/exception.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/core/units.hh>
 #include "test/lib/scylla_test_case.hh"
 #include "test/lib/log.hh"
 #include "test/lib/random_utils.hh"

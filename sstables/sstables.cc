@@ -16,30 +16,8 @@ import fmt;
 #include <vector>
 #include <limits>
 #include <algorithm>
-#include <seastar/core/future.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/shared_ptr_incomplete.hh>
-#include <seastar/core/do_with.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/byteorder.hh>
-#include <seastar/core/aligned_buffer.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/coroutine/all.hh>
-#include <seastar/util/file.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/util/memory-data-source.hh>
-#include <seastar/util/memory-data-sink.hh>
 #include <expected>
 #include <iterator>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/as_future.hh>
 
 #include "utils/error_injection.hh"
 #include "utils/to_string.hh"
@@ -58,7 +36,8 @@ import fmt;
 #include "digest_checked_data_source.hh"
 #include "index_reader.hh"
 #include "downsampling.hh"
-#include <seastar/core/align.hh>
+#include <sys/stat.h>
+#include <seastar/core/shared_ptr_incomplete.hh>  // intentionally not in seastar module
 #include "mutation/range_tombstone_list.hh"
 #include "binary_search.hh"
 #include "utils/bloom_filter.hh"

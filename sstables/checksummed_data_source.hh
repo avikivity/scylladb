@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/iostream.hh>
 
 #include "sstables/types.hh"
 

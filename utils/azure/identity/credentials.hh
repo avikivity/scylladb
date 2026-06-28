@@ -12,7 +12,6 @@
 
 #include <chrono>
 
-#include <seastar/core/future.hh>
 
 #include "utils/log.hh"
 

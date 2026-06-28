@@ -1,11 +1,9 @@
-import fmt;
 #include "raft/raft.hh"
 #include "replication.hh"
 #include "utils/error_injection.hh"
 #include "test/lib/error_injection.hh"
-#include <seastar/util/defer.hh>
-#include <seastar/core/when_all.hh>
 
+import fmt;
 #ifdef SEASTAR_DEBUG
 // Increase tick time to allow debug to process messages
  const auto tick_delay = 200ms;

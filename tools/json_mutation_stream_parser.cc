@@ -6,14 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
-#include <seastar/core/queue.hh>
 
 #include "tools/json_mutation_stream_parser.hh"
 #include "dht/i_partitioner.hh"
 #include "utils/rjson.hh"
 #include "utils/chunked_string.hh"
 
+import fmt;
 namespace tools {
 namespace {
 

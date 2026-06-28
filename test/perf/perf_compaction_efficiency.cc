@@ -13,14 +13,6 @@
 #include <sstream>
 #include <json/json.h>
 
-#include <seastar/core/app-template.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/timer.hh>
 
 #include "test/lib/cql_test_env.hh"
 #include "test/perf/perf.hh"

@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/smp.hh>
+#include "seastarx.hh"
 
 #include "transport/protocol_server.hh"
 
@@ -56,8 +55,6 @@ namespace alternator {
 // It represents the last major reorganization of that API, and all the features
 // that were added since did NOT increment this version string.
 constexpr const char* version = "2012-08-10";
-
-using namespace seastar;
 
 class executor;
 class server;

@@ -13,7 +13,6 @@
 #include "lang/wasm.hh"
 #include "utils/managed_string.hh"
 
-#include <seastar/core/thread.hh>
 
 #include <ranges>
 

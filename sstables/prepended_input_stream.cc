@@ -7,8 +7,9 @@
  */
 
 #include "prepended_input_stream.hh"
-
-using namespace seastar;
+#include <cstdint>
+#include <memory>
+#include <utility>
 
 class prepended_data_source_impl : public data_source_impl {
 private:

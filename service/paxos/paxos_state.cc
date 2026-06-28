@@ -8,9 +8,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 #include <exception>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/all.hh>
-#include <seastar/coroutine/exception.hh>
 #include "service/storage_proxy.hh"
 #include "service/paxos/proposal.hh"
 #include "service/paxos/paxos_state.hh"

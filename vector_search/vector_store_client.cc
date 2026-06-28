@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "vector_store_client.hh"
 #include "dns.hh"
 #include "clients.hh"
@@ -24,18 +23,8 @@ import fmt;
 #include <exception>
 #include <ranges>
 #include <regex>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/exception.hh>
-#include <seastar/http/client.hh>
-#include <seastar/http/request.hh>
-#include <seastar/net/dns.hh>
-#include <seastar/net/inet_address.hh>
-#include <seastar/net/socket_defs.hh>
-#include <seastar/util/lazy.hh>
-#include <seastar/util/short_streams.hh>
 
+import fmt;
 namespace {
 
 using namespace std::chrono_literals;

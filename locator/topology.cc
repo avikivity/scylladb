@@ -6,17 +6,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <bit>
+#include <coroutine>
 #include <ranges>
 #include <utility>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/util/lazy.hh>
 
-#include <seastar/core/shard_id.hh>
 #include "utils/log.hh"
 #include "locator/topology.hh"
 #include "locator/production_snitch_base.hh"
@@ -24,6 +19,7 @@ import fmt;
 #include "utils/stall_free.hh"
 #include "utils/to_string.hh"
 
+import fmt;
 struct node_printer {
     const locator::node* v;
     node_printer(const locator::node* n) noexcept : v(n) {}

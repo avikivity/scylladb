@@ -7,7 +7,6 @@
  */
 
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 #include "replica/database.hh"
 #include "types/user.hh"
@@ -28,6 +27,7 @@ import fmt;
 #include "types/vector.hh"
 #include "utils/chunked_string.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(view_schema_test)
 
 using namespace std::literals::chrono_literals;

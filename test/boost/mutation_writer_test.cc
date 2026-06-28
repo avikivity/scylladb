@@ -6,13 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
-#include <seastar/core/thread.hh>
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/bool_class.hh>
-#include <seastar/util/closeable.hh>
 
 #include "mutation/mutation_fragment.hh"
 #include "mutation/mutation_rebuilder.hh"
@@ -36,6 +32,7 @@ import fmt;
 #include "readers/generating.hh"
 #include "readers/combined.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(mutation_writer_test)
 
 using namespace mutation_writer;

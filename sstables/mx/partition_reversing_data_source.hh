@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/iostream.hh>
 #include "reader_permit.hh"
 #include "sstables/index_reader.hh"
 #include "sstables/shared_sstable.hh"

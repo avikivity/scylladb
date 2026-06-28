@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/seastar.hh>
 
 namespace db {
     class commitlog_file_extension {

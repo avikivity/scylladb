@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "test/lib/mutation_source_test.hh"
 #include "test/lib/random_utils.hh"
 #include "test/lib/cql_test_env.hh"
@@ -19,11 +18,10 @@ import fmt;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/util/defer.hh>
 #include <map>
 #include <optional>
 
+import fmt;
 
 BOOST_AUTO_TEST_SUITE(replicator_test)
 

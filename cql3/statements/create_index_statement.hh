@@ -17,7 +17,6 @@
 
 #include "schema/schema_fwd.hh"
 
-#include <seastar/core/shared_ptr.hh>
 
 #include <vector>
 

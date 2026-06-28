@@ -7,7 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "auth/certificate_authenticator.hh"
 #include "auth/cache.hh"
 #include "auth/config.hh"
@@ -19,6 +18,7 @@ import fmt;
 #include "cql3/query_processor.hh"
 import boost;
 
+import fmt;
 
 static logging::logger clogger("certificate_authenticator");
 

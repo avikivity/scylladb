@@ -8,11 +8,8 @@
 
 
 
-import fmt;
 #include "utils/UUID.hh"
 #include <boost/test/tools/old/interface.hpp>
-#include <seastar/core/shard_id.hh>
-#include <seastar/coroutine/as_future.hh>
 #include <source_location>
 import boost;
 
@@ -54,6 +51,7 @@ import boost;
 
 #include <atomic>
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(tablets_test)
 
 using namespace locator;

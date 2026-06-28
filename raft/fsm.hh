@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/on_internal_error.hh>
 #include "utils/assert.hh"
 #include "utils/chunked_vector.hh"
 #include "utils/small_vector.hh"

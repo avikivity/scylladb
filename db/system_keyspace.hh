@@ -23,7 +23,6 @@
 #include "mutation_query.hh"
 #include "system_keyspace_view_types.hh"
 #include "sstables/sstables_registry.hh"
-#include <seastar/core/sharded.hh>
 #include "cdc/generation_id.hh"
 #include "cdc/generation.hh"
 #include "locator/host_id.hh"

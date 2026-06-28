@@ -11,8 +11,6 @@
 #include <functional>
 #include <map>
 #include <optional>
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
 #include "seastarx.hh"
 
 #include "schema/schema.hh"

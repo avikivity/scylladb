@@ -7,11 +7,9 @@
  */
 
 #include <string>
+#include <coroutine>
 #include <memory>
 
-#include <seastar/core/with_timeout.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/sleep.hh>
 
 #include "gcs_fixture.hh"
 #include "tmpdir.hh"

@@ -11,28 +11,18 @@
 #include <ranges>
 #include <regex>
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/with_timeout.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/net/inet_address.hh>
-#include <seastar/net/api.hh>
-#include <seastar/util/log.hh>
 
 #include "utils/overloaded_functor.hh"
 #include "utils/UUID.hh"
 #include "test_utils.hh"
 
-using namespace seastar;
-
 static logger proc_logger("docker_service");
 
 class tests::proc::process_fixture::impl {
 public:
-    experimental::process _process;
+    seastar::process _process;
     gate _gate;
-    impl(experimental::process process)
+    impl(seastar::process process)
         : _process(std::move(process))
     {}
 };
@@ -52,7 +42,7 @@ future<tests::proc::process_fixture> tests::proc::process_fixture::create(const 
     , handler_type stderr_handler
     , bool inherit_env
 ) {
-    experimental::spawn_parameters params;
+    seastar::spawn_parameters params;
 
     if (inherit_env) {
         // copy existing env
@@ -64,7 +54,7 @@ future<tests::proc::process_fixture> tests::proc::process_fixture::create(const 
     std::copy(args.begin(), args.end(), std::back_inserter(params.argv));
     std::copy(env.begin(), env.end(), std::back_inserter(params.env));
 
-    process_fixture res(std::make_unique<impl>(co_await experimental::spawn_process(exec, params)));
+    process_fixture res(std::make_unique<impl>(co_await seastar::spawn_process(exec, params)));
 
     auto& proc = res._impl->_process;
     auto& gate = res._impl->_gate;
@@ -95,7 +85,7 @@ future<tests::proc::process_fixture> tests::proc::process_fixture::create(const 
         };
     };
 
-    auto wrap_handler = [&](handler_type handler, input_stream<char> (experimental::process::*func)()) {
+    auto wrap_handler = [&](handler_type handler, input_stream<char> (seastar::process::*func)()) {
         auto h = std::visit(overloaded_functor(
             [&](std::monostate) -> stream_handler { return {}; },
             [&](line_handler&& h) -> stream_handler { return wrap_line_handler(std::move(h)); },
@@ -110,8 +100,8 @@ future<tests::proc::process_fixture> tests::proc::process_fixture::create(const 
         }
     };
 
-    wrap_handler(std::move(stdout_handler), &experimental::process::cout);
-    wrap_handler(std::move(stderr_handler), &experimental::process::cerr);
+    wrap_handler(std::move(stdout_handler), &seastar::process::cout);
+    wrap_handler(std::move(stderr_handler), &seastar::process::cerr);
 
     co_return res;
 }
@@ -123,7 +113,7 @@ tests::proc::process_fixture::line_handler tests::proc::process_fixture::create_
     };
 }
 
-future<experimental::process::wait_status> tests::proc::process_fixture::wait() {
+future<seastar::process::wait_status> tests::proc::process_fixture::wait() {
     co_await _impl->_gate.close();
     co_return co_await _impl->_process.wait();
 }
@@ -414,7 +404,7 @@ future<std::tuple<tests::proc::process_fixture, int>> tests::proc::start_docker_
         }
 
         if (p != nullptr) {
-            BOOST_TEST_MESSAGE(fmt::format("Got exception starting {}: {}", name, p));
+            BOOST_TEST_MESSAGE(fmt::format("Got exception starting {}", name));
             ps.terminate();
             co_await ps.wait();
             if (!retry || retries >= max_retries) {

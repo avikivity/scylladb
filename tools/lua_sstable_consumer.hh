@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/util/program-options.hh>
 
 #include "schema/schema_fwd.hh"
 #include "tools/sstable_consumer.hh"

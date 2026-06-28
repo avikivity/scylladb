@@ -10,8 +10,6 @@
 #include <random>
 #include <unordered_set>
 #include <algorithm>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
 #include "keys/keys.hh"
 #include "replica/database.hh"

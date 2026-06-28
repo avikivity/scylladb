@@ -9,10 +9,8 @@
 
 #pragma once
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/loop.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/do_with.hh>
+#include <utility>
+
 #include "seastarx.hh"
 #include <chrono>
 

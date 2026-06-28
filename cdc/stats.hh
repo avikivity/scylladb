@@ -10,7 +10,6 @@
 
 #include <array>
 #include <cstdint>
-#include <seastar/core/metrics_registration.hh>
 #include "enum_set.hh"
 
 namespace cdc {

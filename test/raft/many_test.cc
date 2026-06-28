@@ -10,9 +10,9 @@
 //
 // Using slower but precise clock
 
-import fmt;
 #include "replication.hh"
 
+import fmt;
 #ifdef SEASTAR_DEBUG
 // Increase tick time to allow debug to process messages
 const auto tick_delay = 200ms;

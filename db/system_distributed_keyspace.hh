@@ -16,9 +16,6 @@
 #include "dht/token.hh"
 #include "sstables/types.hh"
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/util/bool_class.hh>
 
 #include <optional>
 #include <unordered_map>

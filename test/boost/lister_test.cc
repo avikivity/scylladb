@@ -6,13 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <unordered_set>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/pipe.hh>
 
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
@@ -25,6 +20,7 @@ import fmt;
 #include "utils/lister.hh"
 #include "utils/error_injection.hh"
 
+import fmt;
 class expected_exception : public std::exception {
 public:
     virtual const char* what() const noexcept override {

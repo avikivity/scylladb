@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/shared_ptr.hh>
 #include "seastarx.hh"
 
 namespace utils {

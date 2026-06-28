@@ -6,12 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/future.hh>
-#include <seastar/core/format.hh>
 
 #include "tracing/traced_file.hh"
-
-using namespace seastar;
+#include <sys/uio.h>
 
 class traced_file_impl : public file_impl {
 private:

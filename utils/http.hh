@@ -8,10 +8,13 @@
 
 #pragma once
 
-#include <seastar/core/seastar.hh>
-#include <seastar/http/client.hh>
-#include <seastar/net/dns.hh>
-#include <seastar/net/tls.hh>
+#include <chrono>
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <vector>
+#include "seastarx.hh"
+
 
 #include "seastarx.hh"
 #include "utils/log.hh"

@@ -7,13 +7,11 @@
  */
 
 #include "stream_compressor.hh"
+#include <cassert>
 
 #include <array>
 #include <memory>
 #include <bit>
-#include <seastar/core/byteorder.hh>
-#include <seastar/rpc/rpc_types.hh>
-#include <seastar/core/memory.hh>
 #include "utils/small_vector.hh"
 #include "seastarx.hh"
 #include "utils/crc.hh"

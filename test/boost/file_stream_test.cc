@@ -26,12 +26,6 @@
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/test_fixture.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/fstream.hh>
 #include <cstdio>
 #include <sstream>
 #include <cryptopp/sha.h>

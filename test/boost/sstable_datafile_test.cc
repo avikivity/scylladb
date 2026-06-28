@@ -6,15 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "utils/assert.hh"
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/memory.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/align.hh>
-#include <seastar/core/aligned_buffer.hh>
-#include <seastar/util/closeable.hh>
 #include <seastar/testing/test_fixture.hh>
 
 #include "sstables/sstables.hh"
@@ -29,8 +22,6 @@ import fmt;
 #include "sstables/sstable_writer.hh"
 #include <memory>
 #include "test/boost/sstable_test.hh"
-#include <seastar/core/seastar.hh>
-#include <seastar/core/do_with.hh>
 #include <seastar/testing/test_case.hh>
 #include "dht/i_partitioner.hh"
 #include "test/lib/mutation_reader_assertions.hh"
@@ -60,6 +51,7 @@ import fmt;
 #include "sstables/exceptions.hh"
 import boost;
 
+import fmt;
 namespace fs = std::filesystem;
 
 using namespace sstables;

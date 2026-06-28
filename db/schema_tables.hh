@@ -20,7 +20,6 @@
 #include "query/query-result-set.hh"
 #include "db/view/base_info.hh"
 
-#include <seastar/core/sharded.hh>
 
 #include <vector>
 #include <map>

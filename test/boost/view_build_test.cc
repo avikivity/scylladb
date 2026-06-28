@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 
 #include "replica/database.hh"
@@ -20,7 +19,6 @@ import fmt;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/closeable.hh>
 
 #include "schema/schema_builder.hh"
 #include "test/lib/cql_test_env.hh"
@@ -39,6 +37,7 @@ import fmt;
 #include "readers/from_mutations.hh"
 #include "readers/evictable.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(view_build_test)
 
 using namespace std::literals::chrono_literals;

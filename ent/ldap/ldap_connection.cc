@@ -6,23 +6,21 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #define LDAP_DEPRECATED 1
 
 #include "ldap_connection.hh"
 
 #include <cerrno>
 #include <cstring>
+#include <algorithm>
+#include <sys/eventfd.h>
 #include <stdexcept>
 #include <string>
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/when_all.hh>
-#include <seastar/util/later.hh>
-#include <seastar/util/log.hh>
 
 #include "seastarx.hh"
 
+import fmt;
 extern "C" {
 // Declared in `ldap_pvt.h`, but this header is not usually installed by distributions even though
 // it's considered public by upstream.
@@ -53,7 +51,7 @@ int ssbi_remove(Sockbuf_IO_Desc* sid) {
 
 void throw_if_failed(int status, const char* op, const ldap_connection& conn, int success = LDAP_SUCCESS) {
     if (status != success) {
-        throw std::runtime_error(fmt::format("{} returned {}: {}", op, status, conn.get_error()));
+        throw std::runtime_error(fmt::format("{} returned {}: {}", op, static_cast<int>(status), conn.get_error()));
     }
 }
 
@@ -76,9 +74,9 @@ ldap_connection::ldap_connection(seastar::connected_socket&& socket) :
     , _input_stream(_socket.input())
     , _output_stream(_socket.output())
     , _status(status::up)
-    , _read_consumer(now())
+    , _read_consumer(seastar::now())
     , _read_in_progress(false)
-    , _outstanding_write(now())
+    , _outstanding_write(seastar::now())
     , _currently_polling(false) {
     // Proactively initiate Seastar read, before ldap_connection::read() is first called.
     read_ahead();
@@ -354,7 +352,7 @@ ber_slen_t ldap_connection::write(char const* b, ber_len_t size) {
             set_status(status::err);
         });
     });
-    mylog.trace("write({}) done, status={}", size, _status);
+    mylog.trace("write({}) done, status={}", size, static_cast<int>(_status));
     return _status == status::up ? size : -1; // _status can be err here if _outstanding_write threw.
 }
 
@@ -461,7 +459,7 @@ void ldap_connection::set_status(ldap_connection::status s) {
 }
 
 ldap_reuser::ldap_reuser(sequential_producer<ldap_reuser::conn_ptr>::factory_t&& f)
-    : _make_conn(std::move(f)), _reaper(now()) {
+    : _make_conn(std::move(f)), _reaper(seastar::now()) {
 }
 
 void ldap_reuser::reap(conn_ptr& conn) {

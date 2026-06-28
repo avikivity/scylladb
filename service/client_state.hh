@@ -23,6 +23,8 @@
 #include "transport/cql_protocol_extension.hh"
 #include "service/qos/service_level_controller.hh"
 
+#include <netinet/in.h>
+
 namespace auth {
 class resource;
 }

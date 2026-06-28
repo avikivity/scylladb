@@ -12,7 +12,6 @@
 #include <boost/test/unit_test.hpp>
 
 #include "test/lib/scylla_test_case.hh"
-#include <seastar/core/thread.hh>
 #include "schema/schema_builder.hh"
 #include "keys/keys.hh"
 #include "mutation/mutation_partition.hh"

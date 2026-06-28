@@ -15,7 +15,6 @@
 #include "sstables/file_size_stats.hh"
 #include "shared_sstable.hh"
 #include "dht/ring_position.hh"
-#include <seastar/core/shared_ptr.hh>
 #include <type_traits>
 #include <vector>
 #include <tuple>

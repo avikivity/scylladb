@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/future.hh>
 
 // This file defines an interface between the format-agnostic part of a trie
 // reader (the cursor which can be set to a specific key and then

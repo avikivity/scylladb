@@ -8,8 +8,14 @@
 
 #pragma once
 
-#include <seastar/core/file.hh>
-#include <seastar/core/seastar.hh>
+#include <cstdint>
+#include <vector>
+#include <sys/uio.h>
+#include <sys/stat.h>
+#include <functional>
+#include <memory>
+#include <string_view>
+
 #include "utils/log.hh"
 #include "seastarx.hh"
 

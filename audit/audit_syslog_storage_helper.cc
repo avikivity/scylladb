@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "audit/audit_syslog_storage_helper.hh"
 
 #include <sys/socket.h>
@@ -15,12 +14,10 @@ import fmt;
 #include <unistd.h>
 #include <syslog.h>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/net/api.hh>
 
 #include "cql3/query_processor.hh"
 
+import fmt;
 namespace cql3 {
 
 class query_processor;
@@ -70,7 +67,7 @@ future<> audit_syslog_storage_helper::syslog_send_helper(temporary_buffer<char> 
 
 audit_syslog_storage_helper::audit_syslog_storage_helper(cql3::query_processor& qp, service::migration_manager&) :
     _syslog_address(syslog_address_helper(qp.db().get_config())),
-    _sender(make_unbound_datagram_channel(AF_UNIX)),
+    _sender(seastar::make_unbound_datagram_channel(AF_UNIX)),
     _semaphore(1) {
 }
 

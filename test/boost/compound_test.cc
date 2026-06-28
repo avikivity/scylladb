@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
 #include "test/lib/random_utils.hh"
@@ -18,6 +17,7 @@ import fmt;
 #include "schema/schema_builder.hh"
 #include "dht/murmur3_partitioner.hh"
 
+import fmt;
 static std::vector<managed_bytes> to_bytes_vec(std::vector<sstring> values) {
     std::vector<managed_bytes> result;
     for (auto&& v : values) {

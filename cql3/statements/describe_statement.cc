@@ -17,9 +17,6 @@
 #include "cql3/statements/prepared_statement.hh"
 #include "exceptions/exceptions.hh"
 #include <ranges>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/exception.hh>
 #include "index/vector_index.hh"
 #include "schema/schema.hh"
 #include "service/client_state.hh"
@@ -29,7 +26,6 @@
 #include "cql3/cql_statement.hh"
 #include "cql3/statements/raw/describe_statement.hh"
 #include "cql3/statements/describe_statement.hh"
-#include <seastar/core/shared_ptr.hh>
 #include <sstream>
 #include "transport/messages/result_message.hh"
 #include "transport/messages/result_message_base.hh"

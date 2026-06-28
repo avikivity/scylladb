@@ -8,8 +8,6 @@
 
 
 #include "utils/assert.hh"
-#include <seastar/core/seastar.hh>
-#include <seastar/core/posix.hh>
 #include <unistd.h>
 #include <fcntl.h>
 

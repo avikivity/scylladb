@@ -7,6 +7,7 @@
  */
 
 #include <string_view>
+#include <set>
 #include "alternator/conditions.hh"
 #include "alternator/error.hh"
 #include <unordered_map>

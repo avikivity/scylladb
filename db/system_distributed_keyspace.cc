@@ -28,12 +28,6 @@
 #include "locator/host_id.hh"
 #include "view_info.hh"
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
 
 #include <optional>
 #include <vector>

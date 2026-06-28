@@ -13,10 +13,6 @@
 #include <chrono>
 #include <vector>
 
-#include <seastar/core/timer.hh>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/util/bool_class.hh>
 
 #include "seastarx.hh"
 #include "utils/chunked_vector.hh"

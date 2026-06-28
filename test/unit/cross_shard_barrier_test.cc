@@ -6,17 +6,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
+#include <chrono>
 #include <iostream>
 #include <random>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/util/defer.hh>
 #include "utils/cross-shard-barrier.hh"
 
+import fmt;
 static constexpr unsigned phases_scale = 11;
 
 class worker : public seastar::peering_sharded_service<worker> {

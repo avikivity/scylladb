@@ -15,9 +15,6 @@
 #include <limits>
 #include <ranges>
 #include <stdexcept>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/sstring.hh>
 #include "types/types.hh"
 #include "utils/assert.hh"
 #include "utils/UUID_gen.hh"

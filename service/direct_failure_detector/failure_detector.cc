@@ -6,19 +6,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/scheduling.hh>
 #include "utils/assert.hh"
+#include <utility>
+#include <coroutine>
 #include <unordered_set>
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/queue.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/coroutine/switch_to.hh>
 
 #include "utils/log.hh"
 

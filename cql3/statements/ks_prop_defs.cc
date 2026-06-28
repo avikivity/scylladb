@@ -8,8 +8,6 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <seastar/core/format.hh>
-#include <seastar/core/sstring.hh>
 #include "utils/assert.hh"
 #include "cql3/statements/ks_prop_defs.hh"
 #include "cql3/statements/request_validations.hh"

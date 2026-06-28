@@ -8,18 +8,16 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import fmt;
 #include "dht/range_streamer.hh"
 #include "replica/database.hh"
 #include "gms/gossiper.hh"
 #include "utils/log.hh"
 #include "streaming/stream_plan.hh"
 #include "db/config.hh"
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/sleep.hh>
 #include "utils/assert.hh"
 #include "utils/stall_free.hh"
 
+import fmt;
 namespace dht {
 
 static logging::logger logger("range_streamer");

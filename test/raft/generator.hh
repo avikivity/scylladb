@@ -13,8 +13,6 @@
 
 
 
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/util/variant_utils.hh>
 #include "utils/assert.hh"
 #include "utils/chunked_vector.hh"
 

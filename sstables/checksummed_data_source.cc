@@ -7,11 +7,8 @@
  */
 
 #include <cstdint>
+#include <coroutine>
 
-#include <seastar/core/bitops.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/temporary_buffer.hh>
 
 #include "types.hh"
 #include "exceptions.hh"

@@ -6,15 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/file.hh>
-#include <seastar/util/lazy.hh>
-#include <seastar/util/log.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/core/metrics.hh>
 #include <utility>
+#include <sys/uio.h>
 
 #include "reader_concurrency_semaphore.hh"
 #include "query/query-result.hh"

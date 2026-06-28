@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <regex>
 
-#include <seastar/core/when_all.hh>
 
 #include "types/map.hh"
 #include "auth/authentication_options.hh"

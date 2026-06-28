@@ -11,16 +11,12 @@
 #include "client.hh"
 #include "dns.hh"
 #include "truststore.hh"
-#include <seastar/core/future.hh>
 #include "uri.hh"
 #include "utils/sequential_producer.hh"
 #include "vector_search/error.hh"
 #include "utils/log.hh"
 #include "utils/updateable_value.hh"
 #include <expected>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/condition-variable.hh>
 #include <vector>
 
 namespace vector_search {

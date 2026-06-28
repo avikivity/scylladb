@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 
 #include "cql3/statements/service_level_statement.hh"
 #include "service/qos/qos_common.hh"

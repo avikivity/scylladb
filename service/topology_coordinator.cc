@@ -11,15 +11,6 @@ import fmt;
 #include <chrono>
 
 #include <memory>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/util/noncopyable_function.hh>
 
 #include <variant>
 
@@ -77,7 +68,6 @@ import fmt;
 
 #include "service/topology_coordinator.hh"
 
-#include <seastar/core/metrics_registration.hh>
 #include "utils/labels.hh"
 import boost;
 

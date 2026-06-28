@@ -6,8 +6,7 @@
 #include "open_info.hh"
 
 #include <vector>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future.hh>
+
 #include "locator/host_id.hh"
 #include "schema/schema_fwd.hh"
 #include "seastarx.hh"

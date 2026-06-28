@@ -10,7 +10,6 @@
 
 #include <queue>
 
-#include <seastar/util/log.hh>
 
 #include "gms/feature_service.hh"
 #include "gms/gossiper.hh"

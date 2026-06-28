@@ -13,7 +13,6 @@
 #include <variant>
 #include <chrono>
 
-#include <seastar/core/metrics.hh>
 
 #include "utils/small_vector.hh"
 #include "utils/murmur_hash.hh"

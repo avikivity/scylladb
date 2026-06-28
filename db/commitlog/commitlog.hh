@@ -11,8 +11,6 @@
 
 #include <memory>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/simple-stream.hh>
 #include "replay_position.hh"
 #include "commitlog_entry.hh"
 #include "db/timeout_clock.hh"

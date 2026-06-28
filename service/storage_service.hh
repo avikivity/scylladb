@@ -12,7 +12,6 @@
 #pragma once
 
 #include <variant>
-#include <seastar/core/shared_future.hh>
 #include "absl-flat_hash_map.hh"
 #include "gms/endpoint_state.hh"
 #include "gms/i_endpoint_state_change_subscriber.hh"
@@ -27,17 +26,11 @@
 #include "locator/tablets.hh"
 #include "locator/tablet_metadata_guard.hh"
 #include "inet_address_vectors.hh"
-#include <seastar/core/sharded.hh>
-#include <seastar/core/condition-variable.hh>
 #include "dht/token_range_endpoints.hh"
 #include "gms/application_state.hh"
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/gate.hh>
 #include "replica/database_fwd.hh"
 #include "streaming/stream_reason.hh"
 #include "service/migration_listener.hh"
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/shared_ptr.hh>
 #include "cdc/generation_id.hh"
 #include "db/system_keyspace.hh"
 #include "raft/raft.hh"

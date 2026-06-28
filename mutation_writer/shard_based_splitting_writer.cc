@@ -8,7 +8,6 @@
 
 #include "mutation_writer/shard_based_splitting_writer.hh"
 
-#include <seastar/core/shared_mutex.hh>
 #include "dht/i_partitioner.hh"
 #include "mutation_writer/feed_writers.hh"
 

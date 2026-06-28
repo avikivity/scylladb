@@ -5,11 +5,6 @@
 /* SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/format.hh>
-#include <seastar/rpc/rpc.hh>
-#include <seastar/util/log.hh>
-#include <seastar/util/backtrace.hh>
-#include <seastar/core/abort_on_ebadf.hh>
 
 #include <exception>
 #include <system_error>

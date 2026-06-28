@@ -9,12 +9,8 @@
 #pragma once
 
 #include <boost/test/unit_test.hpp>
-
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/manual_clock.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/util/noncopyable_function.hh>
-#include <seastar/util/later.hh>
+#include <chrono>
+#include <functional>
 
 #include "seastarx.hh"
 

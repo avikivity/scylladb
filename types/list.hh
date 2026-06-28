@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
 #include <vector>
 
 #include "types/types.hh"

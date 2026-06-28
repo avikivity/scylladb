@@ -9,9 +9,6 @@
  #pragma once
 
 #include <vector>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/rwlock.hh>
-#include <seastar/core/smp.hh>
 
 namespace replica {
 

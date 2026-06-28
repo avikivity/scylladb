@@ -7,7 +7,7 @@
  */
 
 #include "environment_aws_credentials_provider.hh"
-#include <seastar/core/coroutine.hh>
+#include <coroutine>
 
 namespace aws {
 environment_aws_credentials_provider::environment_aws_credentials_provider() {

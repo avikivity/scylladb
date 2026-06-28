@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "locator/network_topology_strategy.hh"
 #include "locator/tablet_replication_strategy.hh"
 #include "locator/tablets.hh"
@@ -28,10 +27,9 @@ import fmt;
 #include <iterator>
 #include <chrono>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include <type_traits>
 
+import fmt;
 namespace locator {
 
 seastar::logger tablet_logger("tablets");

@@ -7,7 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "db/config.hh"
 #include "utils/config_file_impl.hh"
 
@@ -15,6 +14,7 @@ import fmt;
 #include "encryption_config.hh"
 #include "encryption.hh"
 
+import fmt;
 encryption::encryption_config::encryption_config()
                 : config_file()
 // BEGIN entry definitions

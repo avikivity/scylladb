@@ -10,7 +10,6 @@
 
 #include <cstdint>
 #include <variant>
-#include <seastar/util/bool_class.hh>
 
 #include "seastarx.hh"
 

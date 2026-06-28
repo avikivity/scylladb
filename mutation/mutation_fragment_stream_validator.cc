@@ -6,10 +6,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "mutation/mutation_fragment_stream_validator.hh"
 #include "seastarx.hh"
 
+import fmt;
 logging::logger validator_log("mutation_fragment_stream_validator");
 
 invalid_mutation_fragment_stream::invalid_mutation_fragment_stream(std::runtime_error e) : std::runtime_error(std::move(e)) {

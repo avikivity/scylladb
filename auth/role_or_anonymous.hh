@@ -12,7 +12,6 @@
 #include <functional>
 #include <optional>
 
-#include <seastar/core/sstring.hh>
 
 #include "seastarx.hh"
 import fmt;

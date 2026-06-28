@@ -9,10 +9,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/metrics.hh>
 
 #include "utils/assert.hh"
 #include "utils/disk-error-handler.hh"

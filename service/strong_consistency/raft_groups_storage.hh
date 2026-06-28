@@ -12,7 +12,6 @@
 #include <vector>
 #include <functional>
 
-#include <seastar/core/future.hh>
 
 #include "seastarx.hh"
 #include "raft_commitlog.hh"

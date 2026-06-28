@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "test/lib/boost_test_tree_lister.hh"
 
 
@@ -15,6 +14,7 @@ import fmt;
 #include <ranges>
 import boost;
 
+import fmt;
 namespace {
 
 using label_info = internal::label_info;

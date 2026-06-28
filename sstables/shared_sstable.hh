@@ -13,7 +13,6 @@
 #include <functional>
 #include <unordered_set>
 
-
 #include <seastar/core/shared_ptr.hh>
 import fmt;
 

@@ -10,12 +10,11 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 
 #include "gms/inet_address.hh"
 #include "locator/host_id.hh"
 
-using namespace seastar;
+#include "seastarx.hh"
 
 namespace locator {
 

@@ -11,7 +11,6 @@
 
 #include <string_view>
 #include <vector>
-#include <seastar/core/sstring.hh>
 
 #include "types/types.hh"
 

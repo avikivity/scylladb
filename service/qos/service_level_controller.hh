@@ -8,15 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/timer.hh>
-#include <seastar/util/bool_class.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/core/lowres_clock.hh>
 
 #include "auth/authenticated_user.hh"
 #include "seastarx.hh"

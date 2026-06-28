@@ -12,7 +12,6 @@
 
 #include <unordered_set>
 
-#include <seastar/core/sstring.hh>
 
 #include "enum_set.hh"
 #include "seastarx.hh"

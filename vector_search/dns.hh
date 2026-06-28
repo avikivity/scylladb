@@ -8,18 +8,11 @@
 
 #pragma once
 
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/sstring.hh>
 #include "utils/log.hh"
 #include <chrono>
 #include <map>
 #include <vector>
 #include <functional>
-#include <seastar/net/inet_address.hh>
 
 namespace vector_search {
 

@@ -19,8 +19,6 @@
 #include "mutation/mutation_consumer_concepts.hh"
 #include "utils/preempt.hh"
 
-#include <seastar/util/later.hh>
-#include <seastar/util/optimized_optional.hh>
 
 struct mutation_consume_cookie {
     using crs_iterator_type = mutation_partition::rows_type::iterator;

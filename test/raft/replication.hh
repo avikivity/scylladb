@@ -11,15 +11,6 @@
 #include <memory>
 #include <random>
 #include <bit>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/loop.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/util/log.hh>
-#include <seastar/util/later.hh>
-#include <seastar/util/variant_utils.hh>
 #include <seastar/testing/random.hh>
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/testing/test_case.hh>

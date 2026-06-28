@@ -9,12 +9,11 @@
 #pragma once
 #include <optional>
 #include "mutation/frozen_mutation.hh"
-#include <seastar/core/shared_ptr.hh>
 #include "repair/decorated_key_with_hash.hh"
 #include "repair/hash.hh"
 #include "repair/sync_boundary.hh"
 
-using namespace seastar;
+#include "seastarx.hh"
 
 using is_dirty_on_master = bool_class<class is_dirty_on_master_tag>;
 class decorated_key_with_hash;

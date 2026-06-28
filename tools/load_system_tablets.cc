@@ -8,8 +8,6 @@
 
 #include "tools/load_system_tablets.hh"
 
-#include <seastar/core/thread.hh>
-#include <seastar/util/closeable.hh>
 
 #include "utils/log.hh"
 #include "db/system_keyspace.hh"

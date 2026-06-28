@@ -13,12 +13,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <seastar/core/future-util.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/thread.hh>
 
 #include "auth/common.hh"
 #include "auth/config.hh"
@@ -33,8 +27,6 @@
 #include "exceptions/exceptions.hh"
 #include "utils/error_injection.hh"
 #include "utils/log.hh"
-#include <seastar/core/loop.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include "service/raft/raft_group0_client.hh"
 #include "service/migration_manager.hh"
 #include "utils/managed_string.hh"

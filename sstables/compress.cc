@@ -7,13 +7,9 @@
  */
 
 #include <stdexcept>
+#include <coroutine>
 #include <cstdlib>
 
-#include <seastar/core/align.hh>
-#include <seastar/core/bitops.hh>
-#include <seastar/core/byteorder.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/on_internal_error.hh>
 
 #include "compress.hh"
 #include "compressor.hh"

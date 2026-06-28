@@ -14,7 +14,6 @@ import fmt;
 #include "replica/tablets.hh"
 #include <boost/test/unit_test.hpp>
 
-#include <seastar/net/inet_address.hh>
 import boost;
 
 #undef SEASTAR_TESTING_MAIN
@@ -26,8 +25,6 @@ import boost;
 #include "test/lib/test_utils.hh"
 #include "test/lib/eventually.hh"
 
-#include <seastar/core/future-util.hh>
-#include <seastar/core/sleep.hh>
 #include "transport/messages/result_message.hh"
 #include "transport/messages/result_message_base.hh"
 #include "types/types.hh"
@@ -61,6 +58,7 @@ import boost;
 #include "service/strong_consistency/coordinator.hh"
 #include "service/strong_consistency/groups_manager.hh"
 
+import fmt;
 
 BOOST_AUTO_TEST_SUITE(cql_query_test)
 

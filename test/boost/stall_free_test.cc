@@ -12,7 +12,6 @@
 #include <set>
 #include <unordered_set>
 
-#include <seastar/util/later.hh>
 
 #include "test/lib/scylla_test_case.hh"
 #include "test/lib/random_utils.hh"

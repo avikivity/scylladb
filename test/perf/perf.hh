@@ -9,18 +9,10 @@
 #pragma once
 
 #include <ranges>
-#include <seastar/core/format.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/weak_ptr.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/core/signal.hh>
 #include "seastarx.hh"
 #include "utils/extremum_tracking.hh"
 #include "utils/estimated_histogram.hh"
 #include <seastar/testing/linux_perf_event.hh>
-#include <seastar/util/defer.hh>
 #include "reader_permit.hh"
 
 #include <chrono>

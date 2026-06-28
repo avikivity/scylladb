@@ -6,13 +6,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #define BOOST_TEST_MODULE core
 
 #include "utils/assert.hh"
 #include <boost/test/unit_test.hpp>
 
-#include <seastar/util/variant_utils.hh>
 
 #include <vector>
 #include <optional>
@@ -165,6 +163,7 @@ struct const_template_arg_test_object {
 #include "idl/idl_test.dist.hh"
 #include "idl/idl_test.dist.impl.hh"
 
+import fmt;
 BOOST_AUTO_TEST_CASE(test_simple_compound)
 {
     simple_compound sc = { 0xdeadbeef, 0xbadc0ffe };

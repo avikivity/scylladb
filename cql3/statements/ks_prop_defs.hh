@@ -15,8 +15,6 @@
 #include "locator/abstract_replication_strategy.hh"
 #include "data_dictionary/consistency_config_options.hh"
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
 #include <optional>
 
 namespace data_dictionary {

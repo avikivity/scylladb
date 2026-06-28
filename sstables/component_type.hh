@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
+#include "seastarx.hh"
 import fmt;
 
 namespace sstables {

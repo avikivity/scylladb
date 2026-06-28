@@ -15,14 +15,6 @@ import fmt;
 
 #include <yaml-cpp/yaml.h>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/json/json_elements.hh>
-#include <seastar/util/log.hh>
-#include <seastar/util/log-cli.hh>
-#include <seastar/net/tls.hh>
 
 #include "cdc/cdc_extension.hh"
 #include "tombstone_gc_extension.hh"
@@ -40,12 +32,9 @@ import fmt;
 #include "backlog_controller_fwd.hh"
 #include "utils/config_file_impl.hh"
 #include "exceptions/exceptions.hh"
-#include <seastar/core/metrics_api.hh>
-#include <seastar/core/relabel_config.hh>
 import boost;
 
 static logging::logger cfglogger("config");
-#include <seastar/util/file.hh>
 
 namespace utils {
 

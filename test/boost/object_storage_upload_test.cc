@@ -6,11 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "utils/assert.hh"
-#include <seastar/core/sstring.hh>
 
-#include <seastar/core/future.hh>
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/test_fixture.hh>
 
@@ -28,6 +25,7 @@ import fmt;
 #include "test/lib/key_utils.hh"
 #include "test/lib/gcs_fixture.hh"
 
+import fmt;
 namespace fs = std::filesystem;
 
 using namespace sstables;

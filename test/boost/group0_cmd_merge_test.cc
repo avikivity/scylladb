@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include "test/lib/cql_test_env.hh"
@@ -27,6 +26,7 @@ import fmt;
 #include "test/lib/mutation_source_test.hh"
 #include <seastar/core/thread.hh>
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(group0_cmd_merge_test)
 
 const auto OLD_TIMEUUID = utils::UUID_gen::get_time_UUID(std::chrono::system_clock::time_point::min());

@@ -10,11 +10,6 @@
 
 #include "locator/abstract_replication_strategy.hh"
 #include "index/secondary_index_manager.hh"
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/execution_stage.hh>
-#include <seastar/core/when_all.hh>
 #include "replica/global_table_ptr.hh"
 #include "replica/logstor/compaction.hh"
 #include "replica/logstor/types.hh"
@@ -25,15 +20,12 @@
 #include "db_clock.hh"
 #include "gc_clock.hh"
 #include <chrono>
-#include <seastar/core/sharded.hh>
 #include <functional>
 #include <unordered_map>
 #include <set>
 #include <optional>
 #include <cstring>
 #include "types/types.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
 #include "db/commitlog/replay_position.hh"
 #include "db/commitlog/commitlog_types.hh"
 #include "logstor/logstor.hh"
@@ -46,7 +38,6 @@
 #include "compaction/compaction_strategy.hh"
 #include "compaction/compaction_descriptor.hh"
 #include "utils/estimated_histogram.hh"
-#include <seastar/core/metrics_registration.hh>
 #include "db/view/view_stats.hh"
 #include "db/view/view_update_backlog.hh"
 #include "db/view/row_locking.hh"

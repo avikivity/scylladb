@@ -15,8 +15,6 @@
 #include "transport/messages/result_message_base.hh"
 #include "bytes.hh"
 #include <source_location>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/future.hh>
 
 class columns_assertions {
     const cql3::metadata& _metadata;

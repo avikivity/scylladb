@@ -10,11 +10,8 @@
 #pragma once
 
 #include <unordered_map>
+#include <filesystem>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/rwlock.hh>
-#include <seastar/util/program-options.hh>
-#include <seastar/util/log.hh>
 
 #include "locator/abstract_replication_strategy.hh"
 #include "seastarx.hh"

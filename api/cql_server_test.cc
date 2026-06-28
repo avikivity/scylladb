@@ -10,7 +10,6 @@
 
 #ifndef SCYLLA_BUILD_MODE_RELEASE
 
-#include <seastar/core/coroutine.hh>
 
 #include "api/api-doc/cql_server_test.json.hh"
 #include "cql_server_test.hh"
