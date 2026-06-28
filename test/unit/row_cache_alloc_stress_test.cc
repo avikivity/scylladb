@@ -12,6 +12,8 @@
 #include <seastar/core/thread.hh>
 #include <seastar/util/closeable.hh>
 
+#include <boost/program_options.hpp>
+
 #include "utils/assert.hh"
 #include "utils/logalloc.hh"
 #include "db/row_cache.hh"

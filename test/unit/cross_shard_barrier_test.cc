@@ -7,6 +7,7 @@
  */
 
 import fmt;
+#include <iostream>
 #include <random>
 #include <seastar/core/app-template.hh>
 #include <seastar/core/thread.hh>
