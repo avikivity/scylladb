@@ -425,7 +425,7 @@ future<read_result_t<M>> read(
 // The `on_server_update` function passed into the constructor is called when servers
 // are added or removed when our cluster configuration changes.
 template <typename State>
-class rpc : public raft::rpc {
+class nemesis_rpc : public raft::rpc {
     using reply_id_t = uint32_t;
 
     struct snapshot_message {
@@ -542,7 +542,7 @@ private:
     }
 
 public:
-    rpc(raft::server_id id, snapshots_t<State>& snaps, send_message_t send, on_server_update_t on_server_update)
+    nemesis_rpc(raft::server_id id, snapshots_t<State>& snaps, send_message_t send, on_server_update_t on_server_update)
         : _id(id), _snapshots(snaps), _send(std::move(send)), _on_server_update(std::move(on_server_update)) {
     }
 
@@ -565,7 +565,7 @@ public:
             }
 
             ++_snapshot_applications;
-            (void)[] (rpc& self, raft::server_id src, snapshot_message m, gate::holder holder) -> future<> {
+            (void)[] (nemesis_rpc& self, raft::server_id src, snapshot_message m, gate::holder holder) -> future<> {
                 try {
                     self._snapshots.emplace(m.ins.snp.id, std::move(m.snapshot_payload));
                     auto reply = co_await self._client->apply_snapshot(src, std::move(m.ins));
@@ -619,7 +619,7 @@ public:
             }
 
             ++_read_barrier_executions;
-            (void)[] (rpc& self, raft::server_id src, execute_barrier_on_leader m, gate::holder holder) -> future<> {
+            (void)[] (nemesis_rpc& self, raft::server_id src, execute_barrier_on_leader m, gate::holder holder) -> future<> {
                 try {
                     auto reply = co_await self._client->execute_read_barrier(src, nullptr);
 
@@ -651,7 +651,7 @@ public:
             }
 
             ++_add_entry_executions;
-            (void)[] (rpc& self, raft::server_id src, add_entry_message m, gate::holder holder) -> future<> {
+            (void)[] (nemesis_rpc& self, raft::server_id src, add_entry_message m, gate::holder holder) -> future<> {
                 try {
                     auto reply = co_await self._client->execute_add_entry(src, std::move(m.cmd), nullptr);
 
@@ -683,7 +683,7 @@ public:
             }
 
             ++_modify_config_executions;
-            (void)[] (rpc& self, raft::server_id src, modify_config_message m, gate::holder holder) -> future<> {
+            (void)[] (nemesis_rpc& self, raft::server_id src, modify_config_message m, gate::holder holder) -> future<> {
                 try {
                     auto reply = co_await self._client->execute_modify_config(src, std::move(m.add), std::move(m.del), nullptr);
 
@@ -1083,10 +1083,10 @@ public:
 
 template <typename State>
 class direct_fd_pinger final : public direct_failure_detector::pinger {
-    ::rpc<State>& _rpc;
+    ::nemesis_rpc<State>& _rpc;
 
 public:
-    direct_fd_pinger(::rpc<State>& rpc)
+    direct_fd_pinger(::nemesis_rpc<State>& rpc)
             : _rpc(rpc) {
         SCYLLA_ASSERT(this_shard_id() == 0);
     }
@@ -1365,7 +1365,7 @@ class raft_server {
 
     // _sm and _rpc are owned by _server:
     impure_state_machine<M>& _sm;
-    rpc<typename M::state_t>& _rpc;
+    nemesis_rpc<typename M::state_t>& _rpc;
 
     std::unique_ptr<sharded<direct_failure_detector::failure_detector>> _fd_service;
     std::unique_ptr<direct_fd_pinger<typename M::state_t>> _fd_pinger;
@@ -1400,7 +1400,7 @@ public:
             lw_shared_ptr<persistence<typename M::state_t>> persistence,
             raft::logical_clock::duration fd_convict_threshold,
             raft::server::configuration cfg,
-            typename rpc<typename M::state_t>::send_message_t send_rpc) {
+            typename nemesis_rpc<typename M::state_t>::send_message_t send_rpc) {
         using state_t = typename M::state_t;
 
         auto fd_service = std::make_unique<sharded<direct_failure_detector::failure_detector>>();
@@ -1420,7 +1420,7 @@ public:
 
         auto snapshots = std::make_unique<snapshots_t<state_t>>();
         auto sm = std::make_unique<impure_state_machine<M>>(id, *snapshots);
-        auto rpc_ = std::make_unique<rpc<state_t>>(id, *snapshots, std::move(send_rpc), std::move(update_fd_server));
+        auto rpc_ = std::make_unique<nemesis_rpc<state_t>>(id, *snapshots, std::move(send_rpc), std::move(update_fd_server));
         auto persistence_ = std::make_unique<persistence_proxy<state_t>>(*snapshots, std::move(persistence));
 
         auto fd_pinger = std::make_unique<direct_fd_pinger<state_t>>(*rpc_);
@@ -1578,7 +1578,7 @@ public:
         return _server->get_configuration();
     }
 
-    void deliver(raft::server_id src, const typename rpc<typename M::state_t>::message_t& m) {
+    void deliver(raft::server_id src, const typename nemesis_rpc<typename M::state_t>::message_t& m) {
         SCYLLA_ASSERT(_started);
         if (!_gate.is_closed()) {
             _rpc.receive(src, m);
@@ -1597,7 +1597,7 @@ private:
         std::unique_ptr<raft::server> _server;
 
         impure_state_machine<M>& _sm;
-        rpc<typename M::state_t>& _rpc;
+        nemesis_rpc<typename M::state_t>& _rpc;
 
         std::unique_ptr<sharded<direct_failure_detector::failure_detector>> _fd_service;
         std::unique_ptr<direct_fd_pinger<typename M::state_t>> _fd_pinger;
@@ -1709,7 +1709,7 @@ class environment : public seastar::weakly_referencable<environment<M>> {
     // Used to create a new ID in `new_server`.
     size_t _next_id = 0;
 
-    using message_t = typename rpc<state_t>::message_t;
+    using message_t = typename nemesis_rpc<state_t>::message_t;
     network<message_t> _network;
 
     bool _stopped = false;
@@ -1891,7 +1891,7 @@ public:
 
             lw_shared_ptr<raft_server<M>*> this_srv_addr = make_lw_shared<raft_server<M>*>(nullptr);
             auto srv = raft_server<M>::create(id, n._persistence, _fd_convict_threshold, n._cfg,
-                    [id, this_srv_addr, &n, this] (raft::server_id dst, typename rpc<state_t>::message_t m) {
+                    [id, this_srv_addr, &n, this] (raft::server_id dst, typename nemesis_rpc<state_t>::message_t m) {
                 // Allow the message out only if we are still the currently running server on this node.
                 if (*this_srv_addr == n._server.get()) {
                     _network.send(id, dst, {std::move(m)});
