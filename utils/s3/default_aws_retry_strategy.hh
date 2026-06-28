@@ -8,6 +8,8 @@
 
 #pragma once
 #include <seastar/http/retry_strategy.hh>
+#include <chrono>
+#include <exception>
 
 #include "utils/s3/noop_throttling_controller.hh"
 

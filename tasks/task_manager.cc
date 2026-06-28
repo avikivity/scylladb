@@ -28,6 +28,7 @@
 #include "tasks/virtual_task_hint.hh"
 #include "utils/error_injection.hh"
 #include "idl/tasks.dist.hh"
+#include <time.h>
 
 using namespace std::chrono_literals;
 

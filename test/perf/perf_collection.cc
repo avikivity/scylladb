@@ -12,6 +12,7 @@
 #include <vector>
 #include <random>
 #include <fmt/core.h>
+#include <boost/program_options.hpp>
 #include "perf.hh"
 
 using per_key_t = int64_t;

@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+#include <csignal>
 #include "lang/wasm.hh"
 #include "lang/wasm_instance_cache.hh"
 #include "rust/wasmtime_bindings.hh"

@@ -12,6 +12,8 @@
 
 #include <seastar/core/format.hh>
 #include <stdexcept>
+#include <algorithm>
+#include <format>
 #include "cql3/statements/property_definitions.hh"
 #include "exceptions/exceptions.hh"
 #include "utils/overloaded_functor.hh"

@@ -19,6 +19,7 @@
 #include <boost/intrusive/list.hpp>
 
 #include <chrono>
+#include <source_location>
 #include "locator/host_id.hh"
 
 namespace bi = boost::intrusive;

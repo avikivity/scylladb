@@ -15,6 +15,7 @@
 #include <seastar/core/shared_future.hh>
 #include <seastar/util/later.hh>
 #include <seastar/core/abort_source.hh>
+#include <coroutine>
 
 // An async action wrapper which ensures that at most one action
 // is running at any time.

@@ -12,6 +12,7 @@
 #include "tracing/traced_file.hh"
 
 using namespace seastar;
+#include <sys/uio.h>
 
 class traced_file_impl : public file_impl {
 private:

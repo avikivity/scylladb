@@ -7,6 +7,7 @@
  */
 
 #include "stream_compressor.hh"
+#include <cassert>
 
 #include <array>
 #include <memory>

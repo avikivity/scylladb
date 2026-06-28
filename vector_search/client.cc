@@ -7,6 +7,7 @@
  */
 
 #include "client.hh"
+#include <netinet/in.h>
 #include "utils.hh"
 #include "utils/chain_abort_source.hh"
 #include "utils/exceptions.hh"

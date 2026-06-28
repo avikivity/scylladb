@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <sys/uio.h>
 #include "reader_permit.hh"
 #include "utils/assert.hh"
 #include "utils/div_ceil.hh"

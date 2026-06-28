@@ -12,6 +12,8 @@
 #include <seastar/core/thread.hh>
 #include <seastar/util/defer.hh>
 
+#include <iostream>
+#include <iostream>
 #include "utils/managed_bytes.hh"
 #include "utils/logalloc.hh"
 #include "utils/log.hh"

@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <functional>
 #include "utils/rjson.hh"
 #include "credentials.hh"
 

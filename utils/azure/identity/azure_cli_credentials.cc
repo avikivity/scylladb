@@ -14,6 +14,7 @@
 #include <seastar/util/short_streams.hh>
 
 #include "utils/rjson.hh"
+#include <coroutine>
 #include "utils/exceptions.hh"
 #include "exceptions.hh"
 #include "azure_cli_credentials.hh"

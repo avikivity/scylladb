@@ -16,6 +16,7 @@
 #include <seastar/http/reply.hh>
 #include <seastar/http/exception.hh>
 
+#include <functional>
 #include "utils/rjson.hh"
 
 namespace seastar {

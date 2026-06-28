@@ -13,6 +13,7 @@
 #include <vector>
 #include <ranges>
 #include <fmt/ranges.h>
+#include <fcntl.h>
 
 #include <gnutls/pkcs11.h>
 

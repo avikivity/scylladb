@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <mutex>
 #include <ldap.h>
 #include <memory>
 #include <unordered_map>

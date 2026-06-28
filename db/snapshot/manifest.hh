@@ -11,6 +11,7 @@
 
 #include <string>
 #include <seastar/json/json_elements.hh>
+#include <cstdint>
 
 namespace sstables {
     struct sstable_snapshot_metadata;

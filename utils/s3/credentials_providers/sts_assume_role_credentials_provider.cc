@@ -7,6 +7,7 @@
  */
 
 #include "sts_assume_role_credentials_provider.hh"
+#include <coroutine>
 
 #include "utils/UUID.hh"
 #include "utils/http.hh"

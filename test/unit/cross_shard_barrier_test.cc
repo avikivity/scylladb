@@ -6,6 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+#include <chrono>
+#include <iostream>
 #include <random>
 #include <seastar/core/app-template.hh>
 #include <seastar/core/thread.hh>

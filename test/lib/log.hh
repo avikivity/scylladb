@@ -7,6 +7,7 @@
  */
 #pragma once
 #include <seastar/util/log.hh>
+#include <string>
 
 // A test log to use in all unit tests, including boost unit
 // tests. Built-in boost logging log levels do not allow to filter

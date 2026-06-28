@@ -7,6 +7,7 @@
  */
 
 #include "audit/preprocessed_audit_rules.hh"
+#include <coroutine>
 #include "audit/audit_rule.hh"
 
 #include <seastar/coroutine/maybe_yield.hh>

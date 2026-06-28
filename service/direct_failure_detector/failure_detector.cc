@@ -8,6 +8,8 @@
 
 #include <seastar/core/scheduling.hh>
 #include "utils/assert.hh"
+#include <utility>
+#include <coroutine>
 #include <unordered_set>
 
 #include <seastar/core/abort_source.hh>

@@ -8,6 +8,8 @@
 
 
 #include "gcp_credentials.hh"
+#include <fcntl.h>
+#include <coroutine>
 
 #include <fmt/chrono.h>
 #include <fmt/ranges.h>

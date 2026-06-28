@@ -13,6 +13,10 @@
 #include <initializer_list>
 #include <memory>
 #include <numeric>
+#include <time.h> // strptime
+#include <regex>
+#include <sys/stat.h>
+#include <sys/uio.h>
 #include <stdexcept>
 #if __has_include(<rapidxml.h>)
 #include <rapidxml.h>

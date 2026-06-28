@@ -7,6 +7,7 @@
  */
 
 #include "test/lib/eventually.hh"
+#include <coroutine>
 
 sleep_fn seastar_sleep_fn = [] (std::chrono::milliseconds ms) -> future<> {
     return seastar::sleep(ms);

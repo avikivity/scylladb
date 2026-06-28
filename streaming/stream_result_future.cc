@@ -96,7 +96,7 @@ void stream_result_future::maybe_complete() {
         (void)_mgr.get_progress_on_all_shards(plan_id).then([duration, stats] (auto sbytes) {
             auto tx_bw = sstring("0");
             auto rx_bw = sstring("0");
-            if (std::fabs(duration) > FLT_EPSILON) {
+            if (std::fabs(duration) > std::numeric_limits<float>::epsilon()) {
                 tx_bw = format("{:.2f}", sbytes.bytes_sent / duration / 1024);
                 rx_bw = format("{:.2f}", sbytes.bytes_received  / duration / 1024);
             }

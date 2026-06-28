@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <expected>
 #include <seastar/core/sstring.hh>
 #include <seastar/core/file.hh>

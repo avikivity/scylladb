@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <syslog.h>
+#include <time.h>
 
 #include <seastar/core/coroutine.hh>
 #include <seastar/core/seastar.hh>

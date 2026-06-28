@@ -7,6 +7,10 @@
  */
 
 #include "rate_limiter.hh"
+#include <algorithm>
+#include <chrono>
+#include <cstddef>
+#include <functional>
 
 utils::rate_limiter::rate_limiter(size_t rate)
         : _units_per_s(rate) {

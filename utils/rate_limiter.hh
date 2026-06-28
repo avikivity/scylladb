@@ -11,6 +11,7 @@
 #include <seastar/core/timer.hh>
 #include <seastar/core/semaphore.hh>
 #include <seastar/core/lowres_clock.hh>
+#include <cstddef>
 #include "seastarx.hh"
 
 namespace utils {

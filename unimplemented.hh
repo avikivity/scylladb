@@ -11,6 +11,9 @@
 #include <seastar/core/format.hh>
 #include <seastar/core/sstring.hh>
 #include <seastar/core/enum.hh>
+#include <stdexcept>
+#include <cstdlib>
+#include <string_view>
 
 namespace unimplemented {
 

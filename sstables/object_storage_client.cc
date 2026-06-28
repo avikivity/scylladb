@@ -9,6 +9,7 @@
 #include <exception>
 #include <string>
 #include <optional>
+#include <coroutine>
 
 #include <seastar/core/future.hh>
 #include <seastar/core/gate.hh>

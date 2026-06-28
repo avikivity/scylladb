@@ -10,6 +10,7 @@
 #include <seastar/core/metrics.hh>
 #include <seastar/core/coroutine.hh>
 #include "tracing/tracing.hh"
+#include <coroutine>
 #include "tracing/trace_state.hh"
 #include "tracing/trace_keyspace_helper.hh"
 #include "utils/UUID_gen.hh"

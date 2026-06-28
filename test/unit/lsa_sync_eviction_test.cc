@@ -11,6 +11,10 @@
 #include <seastar/core/sstring.hh>
 #include <seastar/core/thread.hh>
 
+#include <deque>
+#include <iostream>
+#include <deque>
+#include <iostream>
 #include "utils/managed_bytes.hh"
 #include "utils/logalloc.hh"
 #include "utils/log.hh"

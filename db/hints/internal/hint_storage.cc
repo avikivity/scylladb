@@ -8,6 +8,7 @@
  */
 
 #include "db/hints/internal/hint_storage.hh"
+#include <coroutine>
 
 #include <fmt/std.h>
 

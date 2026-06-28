@@ -19,6 +19,7 @@
 #include <stdexcept>
 #include <type_traits>
 #include <limits>
+#include <bitset>
 
 /**
  *

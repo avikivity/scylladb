@@ -25,6 +25,8 @@
 #include <seastar/core/units.hh>
 #include <seastar/http/client.hh>
 #include <seastar/util/short_streams.hh>
+#include <sys/uio.h>
+#include <sys/stat.h>
 
 #include "utils/rest/client.hh"
 #include "utils/exponential_backoff_retry.hh"

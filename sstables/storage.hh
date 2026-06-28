@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <coroutine>
 #include "utils/assert.hh"
 #include <filesystem>
 #include <fmt/format.h>

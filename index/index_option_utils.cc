@@ -11,6 +11,7 @@
 #include <boost/algorithm/string.hpp>
 #include <fmt/ranges.h>
 #include <seastar/core/format.hh>
+#include <algorithm>
 
 namespace secondary_index::util {
 

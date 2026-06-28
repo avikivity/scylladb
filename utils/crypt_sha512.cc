@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
+#include <coroutine>
 
 #include "crypt_sha512.hh"
 #include <seastar/core/coroutine.hh>

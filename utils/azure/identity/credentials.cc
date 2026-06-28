@@ -10,6 +10,7 @@
 #include <seastar/core/coroutine.hh>
 
 #include "credentials.hh"
+#include <coroutine>
 
 logger az_creds_logger("azure_creds");
 

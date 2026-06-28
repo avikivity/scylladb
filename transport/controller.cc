@@ -8,6 +8,9 @@
 
 #include "utils/assert.hh"
 #include <grp.h>
+#include <sys/un.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "transport/controller.hh"
 #include <seastar/core/sharded.hh>
 #include <seastar/net/socket_defs.hh>

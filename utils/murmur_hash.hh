@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <array>
+#include <algorithm>
 
 #include "bytes_fwd.hh"
 

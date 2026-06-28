@@ -7,6 +7,10 @@
  */
 
 #include "limiting_data_source.hh"
+#include <cstdint>
+#include <memory>
+#include <algorithm>
+#include <utility>
 
 using namespace seastar;
 

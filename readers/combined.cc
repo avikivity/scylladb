@@ -10,6 +10,7 @@
 #include <seastar/core/when_all.hh>
 
 #include "readers/empty.hh"
+#include <coroutine>
 #include "readers/clustering_combined.hh"
 #include "readers/range_tombstone_change_merger.hh"
 #include "readers/combined.hh"

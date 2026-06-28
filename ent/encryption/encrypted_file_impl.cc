@@ -13,6 +13,9 @@
 #include <seastar/core/file.hh>
 #include <seastar/core/byteorder.hh>
 #include <seastar/core/iostream.hh>
+#include <cassert>
+#include <utility>
+#include <coroutine>
 
 #include "symmetric_key.hh"
 #include "encryption.hh"

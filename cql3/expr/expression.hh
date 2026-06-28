@@ -13,6 +13,7 @@
 #include <seastar/core/shared_ptr.hh>
 #include <variant>
 #include <concepts>
+#include <algorithm>
 
 #include "cql3/column_identifier.hh"
 #include "cql3/cql3_type.hh"

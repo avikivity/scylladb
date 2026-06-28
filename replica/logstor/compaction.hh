@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <coroutine>
 #include "types.hh"
 #include "schema/schema_fwd.hh"
 #include "utils/chunked_vector.hh"

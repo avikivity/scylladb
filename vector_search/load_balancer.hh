@@ -10,6 +10,7 @@
 
 #include <seastar/core/shared_ptr.hh>
 #include <vector>
+#include <random>
 
 namespace vector_search {
 

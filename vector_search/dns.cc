@@ -7,6 +7,8 @@
  */
 
 #include "dns.hh"
+#include <ranges>
+#include <coroutine>
 #include "utils/exceptions.hh"
 #include <chrono>
 #include <fmt/format.h>

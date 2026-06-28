@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+#include <optional>
 #include <concepts>
 #include <exception>
 #include <optional>

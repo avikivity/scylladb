@@ -11,6 +11,7 @@
 #include <seastar/core/sstring.hh>
 #include <fmt/ostream.h>
 
+#include <string_view>
 namespace gms {
 
 static constexpr std::string_view application_state_name(application_state state) {

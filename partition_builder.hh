@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <coroutine>
 #include "schema/schema.hh"
 #include "mutation/mutation.hh"
 #include "mutation/mutation_partition.hh"

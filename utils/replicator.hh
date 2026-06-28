@@ -7,6 +7,11 @@
  */
 #pragma once
 
+#include <chrono>
+#include <coroutine>
+#include <cstdint>
+#include <exception>
+#include <functional>
 #include "utils/assert.hh"
 
 #include <seastar/util/later.hh>

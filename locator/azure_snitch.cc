@@ -8,6 +8,7 @@
  */
 
 #include "locator/azure_snitch.hh"
+#include <coroutine>
 
 #include <seastar/core/coroutine.hh>
 #include <seastar/core/seastar.hh>

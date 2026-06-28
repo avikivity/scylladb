@@ -9,6 +9,7 @@
 #pragma once
 
 #include <filesystem>
+#include <mutex>
 
 #include <seastar/core/future.hh>
 #include <string>

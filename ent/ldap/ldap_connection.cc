@@ -13,6 +13,8 @@
 #include <cerrno>
 #include <cstring>
 #include <fmt/format.h>
+#include <algorithm>
+#include <sys/eventfd.h>
 #include <stdexcept>
 #include <string>
 

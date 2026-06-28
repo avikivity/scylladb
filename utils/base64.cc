@@ -7,6 +7,9 @@
  */
 
 #include "base64.hh"
+#include <cstdint>
+#include <stdexcept>
+#include <algorithm>
 
 #include <seastar/core/format.hh>
 

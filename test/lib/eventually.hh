@@ -15,6 +15,8 @@
 #include <seastar/core/sleep.hh>
 #include <seastar/util/noncopyable_function.hh>
 #include <seastar/util/later.hh>
+#include <chrono>
+#include <functional>
 
 #include "seastarx.hh"
 

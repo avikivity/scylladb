@@ -10,6 +10,7 @@
 #include <seastar/testing/on_internal_error.hh>
 #include <seastar/testing/thread_test_case.hh>
 #include <chrono>
+#include <coroutine>
 #include <ranges>
 
 #include "service/address_map.hh"

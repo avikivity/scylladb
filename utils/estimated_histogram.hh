@@ -12,6 +12,7 @@
 
 #include "utils/assert.hh"
 #include <cmath>
+#include <cstdint>
 #include <algorithm>
 #include <vector>
 #include <chrono>

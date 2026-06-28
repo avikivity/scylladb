@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstring>
 /*
  * Copyright (C) 2014-present ScyllaDB
  */
