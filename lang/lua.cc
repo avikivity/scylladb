@@ -439,7 +439,6 @@ static lua_slice_state load_script(const lua::runtime_config& cfg, lua::bitcode_
 }
 
 using millisecond = std::chrono::duration<double, std::milli>;
-static auto now() { return std::chrono::system_clock::now(); }
 
 static utils::multiprecision_int get_varint(lua_State* l, int index) {
     return visit_lua_number(l, index, make_visitor(
@@ -1110,14 +1109,14 @@ future<bytes_opt> lua::run_script(lua::bitcode_view bitcode, const std::vector<d
         // if it detects we are spending too much time in C.
         // The hook will be called after 1000 instructions.
         lua_sethook(l, debug_hook, LUA_MASKCALL | LUA_MASKCOUNT, 1000);
-        auto start = ::now();
+        auto start = std::chrono::system_clock::now();
         LUA_504_PLUS(int nresults;)
         switch (lua_resume(l, nullptr, nargs LUA_504_PLUS(, &nresults))) {
         case LUA_OK:
             return make_ready_future<std::optional<bytes_opt>>(convert_return(l, return_type));
         case LUA_YIELD: {
             nargs = 0;
-            elapsed += ::now() - start;
+            elapsed += std::chrono::system_clock::now() - start;
             if (elapsed > timeout) {
                 millisecond ms = elapsed;
                 throw exceptions::invalid_request_exception(format("lua execution timeout: {}ms elapsed", ms.count()));
