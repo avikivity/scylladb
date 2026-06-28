@@ -10,6 +10,7 @@
 #include "exceptions/exceptions.hh"
 
 #include "cdc/generation.hh"
+#include <coroutine>
 #include "utils/stall_free.hh"
 #include "cdc/metadata.hh"
 

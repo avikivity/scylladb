@@ -19,6 +19,7 @@
 
 #include <absl/container/btree_set.h>
 #include <seastar/util/defer.hh>
+#include <coroutine>
 
 #include <optional>
 #include <vector>

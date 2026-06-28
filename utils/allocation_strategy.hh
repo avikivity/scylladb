@@ -9,6 +9,7 @@
 #pragma once
 
 #include <any>
+#include <cstdint>
 #include <memory>
 #include <cstdlib>
 #include <string>

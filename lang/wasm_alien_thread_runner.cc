@@ -10,6 +10,7 @@
 #include <seastar/core/alien.hh>
 #include <seastar/core/posix.hh>
 #include <seastar/core/reactor.hh>
+#include <signal.h>
 #include <unistd.h>
 
 #include "utils/log.hh"

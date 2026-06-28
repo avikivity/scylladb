@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
 #include <map>
 #include <seastar/core/lowres_clock.hh>
 

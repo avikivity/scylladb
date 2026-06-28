@@ -15,6 +15,7 @@
 #include <seastar/core/future.hh>
 #include <seastar/core/sstring.hh>
 
+#include <cstdint>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>

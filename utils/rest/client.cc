@@ -12,6 +12,7 @@
 #include <seastar/net/tls.hh>
 #include <seastar/net/dns.hh>
 #include <seastar/util/short_streams.hh>
+#include <coroutine>
 
 #include "client.hh"
 #include "utils/http.hh"

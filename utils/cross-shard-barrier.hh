@@ -10,6 +10,7 @@
 
 #include "utils/assert.hh"
 #include <atomic>
+#include <memory>
 #include <vector>
 #include <optional>
 #include <seastar/core/future.hh>

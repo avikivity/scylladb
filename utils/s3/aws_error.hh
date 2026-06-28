@@ -11,6 +11,10 @@
 #include <seastar/core/sstring.hh>
 #include <seastar/http/reply.hh>
 #include <seastar/util/bool_class.hh>
+#include <cstdint>
+#include <optional>
+#include <exception>
+#include <system_error>
 #include <string>
 #include "aws_error_definitions.hh"
 #include "utils/http_client_error_processing.hh"

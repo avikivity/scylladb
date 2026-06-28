@@ -10,6 +10,8 @@
 
 #include "utils/assert.hh"
 #include "cql3/keyspace_element_name.hh"
+#include <algorithm>
+#include <cctype>
 
 namespace cql3 {
 

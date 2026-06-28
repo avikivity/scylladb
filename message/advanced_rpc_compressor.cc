@@ -9,6 +9,7 @@
 #include <seastar/core/metrics.hh>
 #include <seastar/util/defer.hh>
 #include <numeric>
+#include <variant>
 #include "utils/log.hh"
 #include "bytes.hh"
 #include "advanced_rpc_compressor.hh"

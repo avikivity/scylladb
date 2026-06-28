@@ -39,6 +39,8 @@
 #include <ranges>
 #include <unordered_map>
 
+#include <unistd.h>
+#include <time.h>
 #include "api/stop_compaction.hh"
 #include "api/scrub_status.hh"
 #include "gms/application_state.hh"

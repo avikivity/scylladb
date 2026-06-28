@@ -13,6 +13,7 @@
 #include <seastar/core/sstring.hh>
 #include <compare>
 #include <concepts>
+#include <cstdint>
 
 using seastar::sstring;
 

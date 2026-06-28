@@ -8,6 +8,7 @@
 
 #include "test/lib/tmpdir.hh"
 #include "utils/UUID.hh"
+#include <utility>
 
 #include <seastar/util/alloc_failure_injector.hh>
 

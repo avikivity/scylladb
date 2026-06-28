@@ -7,6 +7,7 @@
  */
 
 #include <bit>
+#include <coroutine>
 #include <ranges>
 #include <utility>
 #include <fmt/std.h>

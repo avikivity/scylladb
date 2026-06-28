@@ -20,6 +20,7 @@
 ///    $ sudo DUMMY_META_SERVER_IP="128.0.0.8" ./gce_snitch_test
 
 #include <boost/test/unit_test.hpp>
+#include <filesystem>
 #include "locator/gce_snitch.hh"
 #include <seastar/testing/test_case.hh>
 #include <seastar/http/httpd.hh>

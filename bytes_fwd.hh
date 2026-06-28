@@ -9,6 +9,8 @@
 #pragma once
 
 #include <seastar/core/sstring.hh>
+#include <cstdint>
+#include <optional>
 
 #include "utils/mutable_view.hh"
 

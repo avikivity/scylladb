@@ -7,6 +7,7 @@
  */
 
 #include <compare>
+#include <deque>
 #include <random>
 #include <set>
 #include <unordered_set>

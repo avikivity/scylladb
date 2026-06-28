@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <cstring>
 #include <cstdint>
 #include <iterator>
 #include <span>

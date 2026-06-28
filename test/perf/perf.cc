@@ -13,6 +13,7 @@
 #include "reader_concurrency_semaphore.hh"
 #include "schema/schema.hh"
 #include "utils/logalloc.hh"
+#include <signal.h>
 #include "release.hh"
 #include <boost/algorithm/string.hpp>
 #include <fstream>

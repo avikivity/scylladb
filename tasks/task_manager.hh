@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <set>
 #include <cstdint>
 #include <list>
 #include <ranges>

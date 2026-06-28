@@ -22,6 +22,7 @@
 #include "log.hh"
 
 #include <ranges>
+#include <coroutine>
 #include <algorithm>
 #include <chrono>
 #include <numeric>

@@ -10,6 +10,8 @@
 #include <seastar/core/do_with.hh>
 #include <seastar/core/format.hh>
 #include "bytes.hh"
+#include <algorithm>
+#include <fcntl.h>
 
 namespace sstables {
 

@@ -9,6 +9,7 @@
 #pragma once
 
 #include <seastar/core/coroutine.hh>
+#include <coroutine>
 #include "sstables/consumer.hh"
 
 // Clang < 14 only supports the TS

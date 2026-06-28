@@ -9,6 +9,7 @@
 #include "utils/assert.hh"
 #include "version.hh"
 #include "build_mode.hh"
+#include <vector>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>

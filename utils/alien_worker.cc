@@ -7,7 +7,10 @@
  */
 
 #include "utils/alien_worker.hh"
+#include <cerrno>
+#include <pthread.h>
 #include <seastar/util/log.hh>
+#include <signal.h>
 
 using namespace seastar;
 

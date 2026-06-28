@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+#include <tuple>
 #include "gms/generation-number.hh"
 #include "gms/inet_address.hh"
 #include <seastar/core/shard_id.hh>
@@ -20,6 +21,7 @@
 
 #include "message/messaging_service.hh"
 #include <seastar/core/sharded.hh>
+#include <coroutine>
 #include "gms/gossiper.hh"
 #include "service/storage_service.hh"
 #include "service/qos/service_level_controller.hh"

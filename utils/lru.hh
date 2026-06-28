@@ -11,6 +11,7 @@
 #include "utils/assert.hh"
 #include <boost/intrusive/list.hpp>
 #include <seastar/core/memory.hh>
+#include <type_traits>
 
 class evictable {
     friend class lru;

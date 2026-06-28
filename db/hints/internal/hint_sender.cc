@@ -8,6 +8,7 @@
  */
 
 #include "db/hints/internal/hint_sender.hh"
+#include <sys/stat.h>
 
 // Seastar features.
 #include <chrono>

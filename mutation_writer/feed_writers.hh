@@ -9,6 +9,7 @@
 #pragma once
 
 #include <seastar/coroutine/as_future.hh>
+#include <coroutine>
 
 #include "readers/queue.hh"
 

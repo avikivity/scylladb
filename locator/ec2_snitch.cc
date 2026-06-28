@@ -4,6 +4,7 @@
 #include <seastar/core/sleep.hh>
 #include <seastar/core/do_with.hh>
 #include <seastar/http/reply.hh>
+#include <coroutine>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>

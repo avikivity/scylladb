@@ -9,6 +9,7 @@
 #include "utils/assert.hh"
 #include <fmt/chrono.h>
 #include <lua.hpp>
+#include <time.h>
 #include <random>
 #include <seastar/core/fstream.hh>
 #include <seastar/core/seastar.hh>

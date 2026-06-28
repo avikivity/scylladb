@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include <any>
+#include <optional>
+#include <tuple>
 #include "messaging_service_fwd.hh"
 #include "msg_addr.hh"
 #include <seastar/core/sharded.hh>

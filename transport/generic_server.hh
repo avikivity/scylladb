@@ -15,6 +15,7 @@
 #include "utils/scoped_item_list.hh"
 
 #include <cstdint>
+#include <chrono>
 
 #include <seastar/core/file-types.hh>
 #include <seastar/core/future.hh>

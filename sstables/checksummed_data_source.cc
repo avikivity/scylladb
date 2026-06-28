@@ -7,6 +7,7 @@
  */
 
 #include <cstdint>
+#include <coroutine>
 
 #include <seastar/core/bitops.hh>
 #include <seastar/core/fstream.hh>

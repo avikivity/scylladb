@@ -12,6 +12,7 @@
 #ifdef __linux__
 #include <net/if.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
 #include <net/if_arp.h>
 #endif // __linux__
 

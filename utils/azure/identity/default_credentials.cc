@@ -10,6 +10,7 @@
 #include <seastar/core/coroutine.hh>
 
 #include "exceptions.hh"
+#include <coroutine>
 #include "default_credentials.hh"
 #include "azure_cli_credentials.hh"
 #include "managed_identity_credentials.hh"

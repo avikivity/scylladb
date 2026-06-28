@@ -7,6 +7,7 @@
  */
 
 #include <stdexcept>
+#include <coroutine>
 #include <cstdlib>
 
 #include <seastar/core/align.hh>

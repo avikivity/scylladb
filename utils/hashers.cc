@@ -7,6 +7,7 @@
  */
 
 #include "utils/hashers.hh"
+#include <cassert>
 #include "utils/xx_hasher.hh"
 #include "utils/simple_hashers.hh"
 #include "utils/managed_bytes.hh"

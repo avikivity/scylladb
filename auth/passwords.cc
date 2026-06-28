@@ -7,6 +7,7 @@
  */
 
 #include "auth/passwords.hh"
+#include <coroutine>
 #include "utils/crypt_sha512.hh"
 #include <seastar/core/coroutine.hh>
 

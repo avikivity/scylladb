@@ -18,6 +18,7 @@
 #include <seastar/http/client.hh>
 #include <seastar/http/common.hh>
 #include <seastar/net/tls.hh>
+#include <exception>
 #include <optional>
 #include <expected>
 #include <variant>

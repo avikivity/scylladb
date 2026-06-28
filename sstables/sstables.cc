@@ -59,6 +59,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/regex.hpp>
 #include <seastar/core/align.hh>
+#include <sys/stat.h>
 #include "mutation/range_tombstone_list.hh"
 #include "binary_search.hh"
 #include "utils/bloom_filter.hh"

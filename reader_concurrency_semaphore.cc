@@ -15,6 +15,7 @@
 #include <seastar/coroutine/maybe_yield.hh>
 #include <seastar/core/metrics.hh>
 #include <utility>
+#include <sys/uio.h>
 
 #include "reader_concurrency_semaphore.hh"
 #include "query/query-result.hh"

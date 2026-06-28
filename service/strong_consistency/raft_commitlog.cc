@@ -7,6 +7,7 @@
  */
 
 #include <seastar/core/on_internal_error.hh>
+#include <coroutine>
 #include "db/commitlog/commitlog.hh"
 #include "db/commitlog/commitlog_entry.hh"
 #include "raft/raft.hh"

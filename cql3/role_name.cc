@@ -11,6 +11,7 @@
 #include "cql3/role_name.hh"
 
 #include <algorithm>
+#include <cctype>
 
 namespace cql3 {
 

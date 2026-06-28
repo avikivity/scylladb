@@ -8,6 +8,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <vector>
 #include <variant>
 #include <iosfwd>

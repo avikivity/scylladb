@@ -8,6 +8,7 @@
  */
 
 #include "mutation_partition_serializer.hh"
+#include <coroutine>
 #include "mutation_partition.hh"
 
 #include "counters.hh"

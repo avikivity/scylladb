@@ -10,6 +10,8 @@
 
 #include <seastar/core/file.hh>
 #include <seastar/core/seastar.hh>
+#include <sys/uio.h>
+#include <coroutine>
 #include "utils/disk-error-handler.hh"
 
 #include "seastarx.hh"

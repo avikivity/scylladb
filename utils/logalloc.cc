@@ -9,8 +9,11 @@
 #include <boost/intrusive/list.hpp>
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/slist.hpp>
+#include <cstring>
 #include <stack>
 #include <ranges>
+#include <coroutine>
+#include <sys/mman.h>
 
 #include <seastar/core/memory.hh>
 #include <seastar/core/align.hh>

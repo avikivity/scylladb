@@ -12,6 +12,11 @@
 #include <seastar/core/reactor.hh>
 
 #include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+#include <deque>
+#include <cassert>
 
 namespace seastar {
     class logger;

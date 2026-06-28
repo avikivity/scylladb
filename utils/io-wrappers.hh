@@ -12,8 +12,11 @@
 #include <seastar/core/temporary_buffer.hh>
 #include <seastar/core/file.hh>
 #include <seastar/util/noncopyable_function.hh>
+#include <cstdint>
+#include <optional>
 #include "seastarx.hh"
 
+#include <functional>
 /**
  * Creates a write-only file wrapping a data_sink.
  * 
