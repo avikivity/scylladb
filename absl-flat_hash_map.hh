@@ -12,7 +12,7 @@
 
 import abseil;
 
-using namespace seastar;
+using seastar::sstring;
 
 struct sstring_hash {
     using is_transparent = void;
