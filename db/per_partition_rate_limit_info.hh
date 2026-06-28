@@ -12,6 +12,8 @@
 #include <variant>
 #include <seastar/util/bool_class.hh>
 
+#include "seastarx.hh"
+
 namespace db {
 
 using allow_per_partition_rate_limit = seastar::bool_class<class allow_per_partition_rate_limit_tag>;

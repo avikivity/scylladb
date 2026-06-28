@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include <list>
 
+#include "seastarx.hh"
+
 namespace utils {
 
 // A map with the track of least recent visited entries.

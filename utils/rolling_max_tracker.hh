@@ -16,6 +16,8 @@
 #include <seastar/core/bitops.hh>
 #include <seastar/core/circular_buffer_fixed_capacity.hh>
 
+#include "seastarx.hh"
+
 namespace utils {
 
 /// Tracks the rolling maximum over the last `window_size` samples
