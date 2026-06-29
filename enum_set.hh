@@ -136,10 +136,20 @@ private:
         return Enum::template sequence_for<Elem>();
     }
 
-    static auto make_iterator(mask_iterator iter) {
-        return boost::make_transform_iterator(std::move(iter), [](typename Enum::sequence_type s) {
+    // A named functor instead of a lambda: clang/modules has trouble
+    // checking access on a captureless lambda's compiler-generated
+    // conversion-to-function-pointer operator when the lambda is the
+    // template argument to `boost::make_transform_iterator` and the
+    // iterator is later instantiated in an importer translation unit.
+    // A plain struct sidesteps that lookup path entirely.
+    struct sequence_to_enum {
+        constexpr enum_type operator()(typename Enum::sequence_type s) const {
             return enum_type(s);
-        });
+        }
+    };
+
+    static auto make_iterator(mask_iterator iter) {
+        return boost::make_transform_iterator(std::move(iter), sequence_to_enum{});
     }
 
 public:
