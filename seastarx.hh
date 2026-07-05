@@ -23,6 +23,7 @@ std::ostream& operator<<(std::ostream&, const std::exception&);
 std::ostream& operator<<(std::ostream&, const std::system_error&);
 }
 
+import fmt;
 import seastar;
 
 // Explicit using declarations for seastar symbols.

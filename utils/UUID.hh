@@ -20,7 +20,8 @@
 #include "utils/assert.hh"
 #include "utils/hashing.hh"
 #include "utils/serialization.hh"
-#include <fmt/format.h>
+
+import fmt;
 
 namespace utils {
 
