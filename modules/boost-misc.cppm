@@ -45,6 +45,7 @@ module;
 #include <boost/accumulators/framework/features.hpp>
 #include <boost/accumulators/statistics/error_of_mean.hpp>
 #include <boost/version.hpp>
+#include <boost/move/detail/placement_new.hpp>
 
 export module boost:misc;
 
@@ -197,3 +198,6 @@ export namespace boost {
         }
     }
 }
+
+using ::operator new;
+

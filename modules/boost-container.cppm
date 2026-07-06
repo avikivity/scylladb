@@ -19,3 +19,5 @@ export namespace boost::container {
     using boost::container::static_vector;
     using boost::container::deque;
 }
+
+using ::operator new;
