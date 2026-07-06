@@ -46,3 +46,7 @@ export namespace boost::intrusive {
     using boost::intrusive::compare;
     using boost::intrusive::get_parent_from_member;
 }
+
+export namespace boost::intrusive::detail {
+    using boost::intrusive::detail::destructor_impl;
+}
