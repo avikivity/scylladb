@@ -160,7 +160,7 @@ future<> service::client_state::check_access_rules(const sstring& ks, auth::perm
     if (alteration_permissions.contains(permission)) {
         // prevent system keyspace modification
         auto name = ks;
-        std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c){ return std::tolower(c); });
         if (is_system_keyspace(name) && !alter_system_with_allowed_opts) {
             throw exceptions::unauthorized_exception(ks + " keyspace is not user-modifiable.");
         }

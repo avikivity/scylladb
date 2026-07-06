@@ -88,9 +88,9 @@ encryption::parse_key_spec(const sstring& alg) {
     auto mode = m[2].str();
     auto pad = m[3].str();
 
-    std::transform(type.begin(), type.end(), type.begin(), ::tolower);
-    std::transform(mode.begin(), mode.end(), mode.begin(), ::tolower);
-    std::transform(pad.begin(), pad.end(), pad.begin(), ::tolower);
+    std::transform(type.begin(), type.end(), type.begin(), [](unsigned char c){ return std::tolower(c); });
+    std::transform(mode.begin(), mode.end(), mode.begin(), [](unsigned char c){ return std::tolower(c); });
+    std::transform(pad.begin(), pad.end(), pad.begin(), [](unsigned char c){ return std::tolower(c); });
 
     static constexpr std::string_view padding = "padding";
     if (pad.ends_with(padding)) {

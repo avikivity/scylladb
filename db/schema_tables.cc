@@ -2447,7 +2447,7 @@ static schema::columns_type create_columns_from_column_rows(
 
         if (auto val = row.get<sstring>("clustering_order")) {
             auto order = *val;
-            std::transform(order.begin(), order.end(), order.begin(), ::toupper);
+            std::transform(order.begin(), order.end(), order.begin(), [](unsigned char c){ return std::toupper(c); });
             if (order == "DESC") {
                 type = reversed_type_impl::get_instance(type);
             }
@@ -2810,7 +2810,7 @@ future<std::optional<column_mapping>> get_column_mapping_if_exists(db::system_ke
         column_id position = row.get_as<int32_t>("position");
 
         auto order = row.get_as<sstring>("clustering_order");
-        std::transform(order.begin(), order.end(), order.begin(), ::toupper);
+        std::transform(order.begin(), order.end(), order.begin(), [](unsigned char c){ return std::toupper(c); });
         if (order == "DESC") {
             type = reversed_type_impl::get_instance(type);
         }

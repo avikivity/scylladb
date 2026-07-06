@@ -67,7 +67,7 @@ speculative_retry::to_sstring() const {
 
 speculative_retry
 speculative_retry::from_sstring(sstring str) {
-    std::transform(str.begin(), str.end(), str.begin(), ::toupper);
+    std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c){ return std::toupper(c); });
 
     sstring ms("MS");
     sstring percentile("PERCENTILE");

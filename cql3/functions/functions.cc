@@ -197,7 +197,7 @@ functions::make_arg_spec(const sstring& receiver_ks, std::optional<const std::st
         const function& fun, size_t i) const {
     auto&& name = fmt::to_string(fun.name());
     const std::string_view receiver_cf = receiver_cf_opt.has_value() ? *receiver_cf_opt : "<unknown_col_family>";
-    std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c){ return std::tolower(c); });
     return make_lw_shared<column_specification>(receiver_ks,
                                    receiver_cf,
                                    ::make_shared<column_identifier>(seastar::format("arg{:d}({})", i, name), true),

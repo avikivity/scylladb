@@ -56,7 +56,7 @@ static unsigned get_abs_rf_diff(const locator::replication_strategy_config_optio
 
 void cql3::statements::alter_keyspace_statement::validate(query_processor& qp, const service::client_state& state) const {
         auto tmp = _name;
-        std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
+        std::transform(tmp.begin(), tmp.end(), tmp.begin(), [](unsigned char c){ return std::tolower(c); });
         if (is_system_keyspace(tmp)) {
             throw exceptions::invalid_request_exception("Cannot alter system keyspace");
         }

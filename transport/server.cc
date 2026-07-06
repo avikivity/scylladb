@@ -1431,7 +1431,7 @@ future<std::unique_ptr<cql_server::response>> cql_server::connection::process_st
     auto compression_opt = options.find("COMPRESSION");
     if (compression_opt != options.end()) {
          auto compression = compression_opt->second;
-         std::transform(compression.begin(), compression.end(), compression.begin(), ::tolower);
+         std::transform(compression.begin(), compression.end(), compression.begin(), [](unsigned char c){ return std::tolower(c); });
          if (compression == "lz4") {
              _compression = cql_compression::lz4;
          } else if (compression == "snappy") {

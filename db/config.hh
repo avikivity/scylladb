@@ -725,7 +725,7 @@ V get_or_default(const std::unordered_map<K, V, Args...>& ss, const K2& key, con
 }
 
 inline bool is_true(sstring val) {
-    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+    std::transform(val.begin(), val.end(), val.begin(), [](unsigned char c){ return std::tolower(c); });
     return val == "true" || val == "1";
 }
 

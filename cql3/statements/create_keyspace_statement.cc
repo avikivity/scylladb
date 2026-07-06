@@ -56,7 +56,7 @@ void create_keyspace_statement::validate(query_processor& qp, const service::cli
 {
     std::string name;
     name.resize(_name.length());
-    std::transform(_name.begin(), _name.end(), name.begin(), ::tolower);
+    std::transform(_name.begin(), _name.end(), name.begin(), [](unsigned char c){ return std::tolower(c); });
     if (is_system_keyspace(name)) {
         throw exceptions::invalid_request_exception("system keyspace is not user-modifiable");
     }

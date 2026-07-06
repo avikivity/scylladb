@@ -219,7 +219,7 @@ std::optional<sstring> secondary_index_manager::custom_index_class(const schema&
 // them to "vector_index" (or a regular index) before the metadata is persisted.
 std::optional<std::function<std::unique_ptr<custom_index>()>> secondary_index_manager::get_custom_class_factory(const sstring& class_name) {
     sstring lower_class_name = class_name;
-    std::transform(lower_class_name.begin(), lower_class_name.end(), lower_class_name.begin(), ::tolower);
+    std::transform(lower_class_name.begin(), lower_class_name.end(), lower_class_name.begin(), [](unsigned char c){ return std::tolower(c); });
 
     const static std::unordered_map<std::string_view, std::function<std::unique_ptr<custom_index>()>> classes = {
         {"fulltext_index", fulltext_index_factory},

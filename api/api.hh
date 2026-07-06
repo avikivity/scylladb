@@ -181,7 +181,7 @@ public:
             if constexpr (std::is_same_v<Base, bool>) {
                 // Cannot use boolalpha because we (probably) want to
                 // accept 1 and 0 as well as true and false. And True. And fAlse.
-                std::transform(param.begin(), param.end(), param.begin(), ::tolower);
+                std::transform(param.begin(), param.end(), param.begin(), [](unsigned char c){ return std::tolower(c); });
                 if (param == "true" || param == "1") {
                     value = T(true);
                 } else if (param == "false" || param == "0") {

@@ -415,8 +415,8 @@ cdc::options::options(const std::map<sstring, sstring>& map) {
         auto key = p.first;
         auto val = p.second;
 
-        std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-        std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+        std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c){ return std::tolower(c); });
+        std::transform(val.begin(), val.end(), val.begin(), [](unsigned char c){ return std::tolower(c); });
 
         auto is_true = val == "true" || val == "1";
         auto is_false = val == "false" || val == "0";

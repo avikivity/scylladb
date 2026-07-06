@@ -237,7 +237,7 @@ inline int max_expression_nesting = 12;
 
     sstring to_lower(std::string_view s) {
         sstring lower_s(s.size(), '\0');
-        std::transform(s.cbegin(), s.cend(), lower_s.begin(), &::tolower);
+        std::transform(s.cbegin(), s.cend(), lower_s.begin(), [](unsigned char c){ return std::tolower(c); });
         return lower_s;
     }
 
@@ -1637,11 +1637,11 @@ userOrRoleName returns [uninitialized<cql3::role_name> name]
     
 serviceLevelOrRoleName returns [sstring name]
 : t=IDENT              { $name = sstring($t.text);
-						 std::transform($name.begin(), $name.end(), $name.begin(), ::tolower); }
+						 std::transform($name.begin(), $name.end(), $name.begin(), [](unsigned char c){ return std::tolower(c); }); }
 | t=STRING_LITERAL     { $name = sstring($t.text); }
 | t=QUOTED_NAME        { $name = sstring($t.text); }
 | k=unreserved_keyword { $name = k;
-						 std::transform($name.begin(), $name.end(), $name.begin(), ::tolower);}
+						 std::transform($name.begin(), $name.end(), $name.begin(), [](unsigned char c){ return std::tolower(c); });}
 // The literal `default` will not be parsed by any of the previous
 // rules, so we need to cover it manually. Needed by CREATE SERVICE
 // LEVEL and ATTACH SERVICE LEVEL.
@@ -1757,7 +1757,7 @@ functionName returns [cql3::functions::function_name s]
     ;
 
 allowedFunctionName returns [sstring s]
-    : f=IDENT                       { $s = $f.text; std::transform(s.begin(), s.end(), s.begin(), ::tolower); }
+    : f=IDENT                       { $s = $f.text; std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::tolower(c); }); }
     | f=QUOTED_NAME                 { $s = $f.text; }
     | u=unreserved_function_keyword { $s = u; }
     | K_TOKEN                       { $s = "token"; }

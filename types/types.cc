@@ -267,7 +267,7 @@ int64_t timestamp_from_string(std::string_view s) {
     try {
         std::string str;
         str.resize(s.size());
-        std::transform(s.begin(), s.end(), str.begin(), ::tolower);
+        std::transform(s.begin(), s.end(), str.begin(), [](unsigned char c){ return std::tolower(c); });
         if (str == "now") {
             return db_clock::now().time_since_epoch().count();
         }
@@ -3061,7 +3061,7 @@ struct from_string_visitor {
     managed_bytes operator()(const boolean_type_impl& t) {
         return s.with_linearized([&](std::string_view sv) {
             sstring s_lower(sv.begin(), sv.end());
-            std::transform(s_lower.begin(), s_lower.end(), s_lower.begin(), ::tolower);
+            std::transform(s_lower.begin(), s_lower.end(), s_lower.begin(), [](unsigned char c){ return std::tolower(c); });
             bool v;
             if (sv.empty() || s_lower == "false") {
                 v = false;

@@ -447,7 +447,7 @@ storage_options make_local_options(std::filesystem::path dir) {
 
 static std::string fqn_type(const std::string& fqn) {
     auto i = fqn.find_first_of(':');
-    return fqn.substr(0, i) | std::views::transform(&toupper) | std::ranges::to<std::string>();
+    return fqn.substr(0, i) | std::views::transform([](unsigned char c){ return std::toupper(c); }) | std::ranges::to<std::string>();
 }
 
 storage_options make_object_storage_options(const std::string& endpoint, const std::string& fqn, abort_source* as, storage_options::object_storage_layout layout) {
@@ -464,7 +464,7 @@ storage_options make_object_storage_options(const std::string& endpoint, const s
     storage_options::object_storage os{
         .bucket = std::move(bucket), .endpoint = endpoint, .location = std::move(prefix),
         .abort_source = as,
-        .type = type | std::views::transform(&toupper) | std::ranges::to<std::string>(),
+        .type = type | std::views::transform([](unsigned char c){ return std::toupper(c); }) | std::ranges::to<std::string>(),
         .layout = layout
     };
     so.value = std::move(os);
@@ -480,7 +480,7 @@ static fs::path object_store_canonicalize(const fs::path& path, std::string_view
     }
     // Canonicalizing the original "<type>://" changes it to "<type>:/". Trim and re-add the "type://" prefix.
     auto canonical = path.lexically_normal().string().substr(type.length() + 2);
-    return (type | std::views::transform(&tolower) | std::ranges::to<std::string>()) + "://"s + canonical;
+    return (type | std::views::transform([](unsigned char c){ return std::tolower(c); }) | std::ranges::to<std::string>()) + "://"s + canonical;
 }
 
 bool is_object_storage_fqn(const fs::path& fqn, std::string_view type) {
@@ -665,7 +665,7 @@ auto fmt::formatter<data_dictionary::keyspace_metadata>::format(const data_dicti
 }
 
 auto fmt::formatter<data_dictionary::storage_options>::format(const data_dictionary::storage_options& so, fmt::format_context& ctx) const -> decltype(ctx.out()) {
-    auto type = so.type_string() | std::views::transform(&tolower) | std::ranges::to<std::string>();
+    auto type = so.type_string() | std::views::transform([](unsigned char c){ return std::tolower(c); }) | std::ranges::to<std::string>();
     return std::visit(overloaded_functor {
         [&ctx] (const data_dictionary::storage_options::local& so) -> decltype(ctx.out()) {
             return fmt::format_to(ctx.out(), "{}", so.dir);

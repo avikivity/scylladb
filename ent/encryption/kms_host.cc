@@ -113,7 +113,7 @@ namespace kms_errors {
 
 static std::string to_lower(std::string_view s) {
     std::string tmp(s.size(), 0);
-    std::transform(s.begin(), s.end(), tmp.begin(), ::tolower);
+    std::transform(s.begin(), s.end(), tmp.begin(), [](unsigned char c){ return std::tolower(c); });
     return tmp;
 }
 

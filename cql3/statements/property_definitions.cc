@@ -137,7 +137,7 @@ bool property_definitions::get_boolean(sstring key, bool default_value) const {
     auto value = get_simple(key);
     if (value) {
         std::string s{value.value()};
-        std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::tolower(c); });
         return s == "1" || s == "true" || s == "yes";
     } else {
         return default_value;

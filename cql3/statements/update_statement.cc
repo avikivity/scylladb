@@ -49,7 +49,7 @@ static std::unordered_map<sstring, rjson::value> handle_case_sensitivity(rjson::
         if (name.size() > 1 && *name.begin() == '"' && name.back() == '"') {
             case_sensitive_map.emplace(name.substr(1, name.size() - 2), std::move(it->value));
         } else {
-            std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+            std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c){ return std::tolower(c); });
             case_sensitive_map.emplace(std::move(name), std::move(it->value));
         }
     }

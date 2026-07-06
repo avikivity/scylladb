@@ -393,7 +393,7 @@ future<std::string> server::verify_signature(const request& req, const chunked_c
     for (auto& header : req._headers) {
         std::string header_str;
         header_str.resize(header.first.size());
-        std::transform(header.first.begin(), header.first.end(), header_str.begin(), ::tolower);
+        std::transform(header.first.begin(), header.first.end(), header_str.begin(), [](unsigned char c){ return std::tolower(c); });
         auto it = signed_headers_map.find(header_str);
         if (it != signed_headers_map.end()) {
             // replace multiple spaces in the header value header.second with
