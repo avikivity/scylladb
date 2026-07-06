@@ -41,9 +41,7 @@
 #include "utils/overloaded_functor.hh"
 #include "utils/error_injection.hh"
 #include "vector_search/vector_store_client.hh"
-#include <seastar/core/abort_on_expiry.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
+#include "seastarx.hh"
 #include <charconv>
 #include <stdexcept>
 import boost;

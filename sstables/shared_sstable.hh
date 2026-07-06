@@ -13,7 +13,7 @@
 #include <functional>
 #include <unordered_set>
 
-#include <seastar/core/shared_ptr.hh>
+#include "seastarx.hh"
 import fmt;
 
 namespace sstables {

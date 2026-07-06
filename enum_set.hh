@@ -9,7 +9,7 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <seastar/core/bitset-iter.hh>
+#include "seastarx.hh"
 
 #include <algorithm>
 #include <cstddef>

@@ -10,7 +10,6 @@
 #include "seekable_source.hh"
 #include <sys/uio.h>
 #include <seastar/util/internal/iovec_utils.hh>
-#include <seastar/core/file.hh>
 #include <cassert>
 #include <coroutine>
 #include <memory>

@@ -12,7 +12,7 @@
 #include <coroutine>
 #include "utils/exceptions.hh"
 #include "exceptions.hh"
-#include <seastar/util/process.hh>
+#include "seastarx.hh"
 #include "azure_cli_credentials.hh"
 
 namespace azure {

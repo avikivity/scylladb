@@ -10,7 +10,7 @@
 #include <ranges>
 #include <generator>
 
-#include <seastar/json/formatter.hh>
+#include "seastarx.hh"
 
 #include "db/config.hh"
 

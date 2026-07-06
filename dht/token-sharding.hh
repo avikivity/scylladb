@@ -9,7 +9,7 @@
 #pragma once
 
 #include "dht/token.hh"
-#include <seastar/core/smp.hh>
+#include "seastarx.hh"
 
 import boost;
 

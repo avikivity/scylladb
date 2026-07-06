@@ -9,9 +9,9 @@
 #pragma once
 
 #include "multiprecision_int.hh"
-#include <seastar/core/sstring.hh>
 #include <compare>
 #include <concepts>
+#include <cstdint>
 #include "seastarx.hh"
 import fmt;
 
