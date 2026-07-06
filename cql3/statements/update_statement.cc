@@ -34,7 +34,6 @@
 
 namespace cql3 {
 
-
 namespace statements {
 
 update_statement::update_statement(

@@ -75,7 +75,7 @@ const std::unordered_map<std::string_view, compaction::compaction_strategy_type>
 compaction::compaction_strategy_type parse_strategy(const sstring& name) {
     // the short names are recognized regardless of case, e.g. both lcs and LCS
     auto short_name = name;
-    std::transform(short_name.begin(), short_name.end(), short_name.begin(), ::tolower);
+    std::transform(short_name.begin(), short_name.end(), short_name.begin(), [](unsigned char c){ return std::tolower(c); });
     if (auto it = strategy_short_names.find(std::string_view(short_name)); it != strategy_short_names.end()) {
         return it->second;
     }

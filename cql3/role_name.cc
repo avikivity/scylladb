@@ -17,7 +17,7 @@ namespace cql3 {
 
 role_name::role_name(sstring name, preserve_role_case p) : _name(std::move(name)) {
     if (p == preserve_role_case::no) {
-        std::transform(_name.begin(), _name.end(), _name.begin(), &::tolower);
+        std::transform(_name.begin(), _name.end(), _name.begin(), [](unsigned char c){ return std::tolower(c); });
     }
 }
 
