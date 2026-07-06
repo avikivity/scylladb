@@ -10,6 +10,7 @@
 #include <grp.h>
 #include <sys/un.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include "transport/controller.hh"
 #include "transport/server.hh"
 #include "service/memory_limiter.hh"

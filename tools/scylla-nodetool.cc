@@ -22,6 +22,8 @@ import fmt;
 #include <ranges>
 #include <unordered_map>
 
+#include <unistd.h>
+
 #include "api/scrub_status.hh"
 #include "gms/application_state.hh"
 #include "db/config.hh"
