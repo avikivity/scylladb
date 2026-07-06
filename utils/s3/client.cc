@@ -337,7 +337,7 @@ void client::group_client::register_metrics(std::string class_name, std::string 
         auto method = static_cast<httpd::operation_type>(i);
         auto method_name = httpd::type2str(method);
         auto lower_method_name = method_name;
-        std::ranges::transform(method_name, lower_method_name.begin(), ::tolower);
+        std::ranges::transform(method_name, lower_method_name.begin(), [](unsigned char c){ return std::tolower(c); });
         auto ml = method_label(method_name);
         defs.emplace_back(sm::make_counter(format("total_{}_requests", lower_method_name),
                 [this, method] { return http.get_stats()[method].ops; },
@@ -694,7 +694,7 @@ future<object_info> client::get_object_info(sstring object_name, seastar::abort_
         for (const auto& [name, value] : rep._headers) {
             if (has_object_metadata_header_prefix(name)) {
                 auto key = name.substr(object_metadata_header_prefix.size());
-                std::ranges::transform(key, key.begin(), ::tolower);
+                std::ranges::transform(key, key.begin(), [](unsigned char c){ return std::tolower(c); });
                 info.metadata.emplace(std::move(key), value);
             }
         }

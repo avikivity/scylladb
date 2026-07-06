@@ -54,7 +54,7 @@ utils::http_client_metrics::http_client_metrics(const seastar::http::client& htt
         auto method = static_cast<httpd::operation_type>(i);
         auto method_name = httpd::type2str(method);
         auto lower_method_name = method_name;
-        std::ranges::transform(method_name, lower_method_name.begin(), ::tolower);
+        std::ranges::transform(method_name, lower_method_name.begin(), [](unsigned char c){ return std::tolower(c); });
         auto method_labels = label_set;
         method_labels.emplace_back(method_label(method_name));
         defs.emplace_back(sm::make_counter(format("total_{}_requests", lower_method_name),

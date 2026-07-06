@@ -402,7 +402,7 @@ future<std::string> server::verify_signature(const request& req, const chunked_c
     for (auto& header : req._headers) {
         std::string header_str;
         header_str.resize(header.first.size());
-        std::transform(header.first.begin(), header.first.end(), header_str.begin(), ::tolower);
+        std::transform(header.first.begin(), header.first.end(), header_str.begin(), [](unsigned char c){ return std::tolower(c); });
         auto it = signed_headers_map.find(header_str);
         if (it != signed_headers_map.end()) {
             // replace multiple spaces in the header value header.second with
@@ -951,7 +951,7 @@ server::server(executor& exec, service::storage_proxy& proxy, gms::gossiper& gos
                 auto query_it  = q.find("query");
                 if (source_it == q.end() || query_it == q.end()) { continue; }
                 sstring source = source_it->second;
-                std::transform(source.begin(), source.end(), source.begin(), ::toupper);
+                std::transform(source.begin(), source.end(), source.begin(), [](unsigned char c){ return std::toupper(c); });
                 cert_pattern::source_type src;
                 if (source == "SUBJECT") {
                     src = cert_pattern::source_type::subject;

@@ -49,7 +49,7 @@ auth::certificate_authenticator::certificate_authenticator(cql3::query_processor
                     sstring source = map.at(cfg_source_attr);
                     std::string query = map.at(cfg_query_attr);
 
-                    std::transform(source.begin(), source.end(), source.begin(), ::toupper);
+                    std::transform(source.begin(), source.end(), source.begin(), [](unsigned char c){ return std::toupper(c); });
 
                     boost::regex ex(query);
                     if (ex.mark_count() != 1) {

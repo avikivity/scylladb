@@ -35,7 +35,7 @@ sstring keyspace_element_name::to_internal_name(std::string_view view, bool keep
 {
     sstring name(view);
     if (!keep_case) {
-        std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c){ return std::tolower(c); });
     }
     return name;
 }
