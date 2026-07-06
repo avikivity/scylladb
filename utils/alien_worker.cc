@@ -8,6 +8,8 @@
 
 #include "utils/alien_worker.hh"
 #include <signal.h>
+#include <cerrno>
+#include <pthread.h>
 
 import fmt;
 

@@ -14,6 +14,7 @@
 #include <regex>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include <time.h> // strptime
 #include "seastarx.hh"
 #include <stdexcept>
 #if __has_include(<rapidxml.h>)
