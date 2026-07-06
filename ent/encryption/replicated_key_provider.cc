@@ -7,6 +7,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 #include <unordered_map>
+// <cstdlib> pulls <bits/c++config.h> in normal linkage before the OpenSSL
+// headers include it inside their extern "C" block (which would otherwise
+// re-declare __glibcxx_assert_fail etc. with C linkage, clashing with the
+// std module).
+#include <cstdlib>
 #include <stdexcept>
 #include <regex>
 #include <tuple>
