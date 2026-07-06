@@ -15,7 +15,8 @@
 #include <numeric>
 #include <deque>
 
-
+#include <sys/uio.h>
+#include <sys/stat.h>
 
 namespace seastar::http::internal { sstring url_encode(std::string_view in); }
 
