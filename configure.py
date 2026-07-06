@@ -2823,6 +2823,19 @@ def write_build_file(f,
         f.write(f'  module_flags =\n')
         f.write(f'  obj_cxxflags = -Wno-reserved-module-identifier\n')
 
+        # std.compat module — re-exports the C library names into the global
+        # namespace (::uint8_t, ::memcpy, ...).  Consumers `import std.compat;`
+        # so that code relying on unqualified C names (previously supplied by
+        # textual <cstdint>/<cstring> includes) keeps compiling.  It lives
+        # beside std.cc as std.compat.cc and imports the std module.
+        std_compat_src = os.path.join(os.path.dirname(std_module_src), 'std.compat.cc')
+        std_compat_pcm = f'$builddir/{mode}/modules/std.compat.pcm'
+        std_compat_obj = f'$builddir/{mode}/modules/std.compat.o'
+        f.write(f'build {std_compat_obj} | {std_compat_pcm}: cxx_build_module.{mode} {std_compat_src} | {std_pcm}\n')
+        f.write(f'  pcm = {std_compat_pcm}\n')
+        f.write(f'  module_flags = -fmodule-file=std={std_pcm}\n')
+        f.write(f'  obj_cxxflags = -Wno-reserved-module-identifier\n')
+
         # abseil module — uses textual standard library includes in GMF.
         abseil_module_src = 'modules/abseil.cppm'
         abseil_pcm = f'$builddir/{mode}/modules/abseil.pcm'
@@ -2874,17 +2887,19 @@ def write_build_file(f,
 
         boost_all_objs = boost_partition_objs + [boost_obj]
 
-        # Consumer TU module flags — all library module PCMs EXCEPT std.
-        # The std module is not referenced until `import std;` is added.
+        # Consumer TU module flags — all library module PCMs, including std.
+        # Consumers now write `import std;`; C-compatibility headers (<cassert>,
+        # <cstring>, ...) stay textual because the std module does not export
+        # macros or the global-namespace C names.
         seastar_pcm = f'$builddir/{mode}/seastar/CMakeFiles/seastar.dir/seastar.pcm'
         boost_consumer_flags = f'-fmodule-file=boost={boost_pcm} ' + ' '.join(
             f'-fmodule-file=boost:{part}={pcm}'
             for part, pcm in zip(boost_partitions, boost_partition_pcms)
         )
-        module_flags = f'-fmodule-file=seastar={seastar_pcm} -fmodule-file=abseil={abseil_pcm} -fmodule-file=fmt={fmt_pcm} {boost_consumer_flags}'
+        module_flags = f'-fmodule-file=std={std_pcm} -fmodule-file=std.compat={std_compat_pcm} -fmodule-file=seastar={seastar_pcm} -fmodule-file=abseil={abseil_pcm} -fmodule-file=fmt={fmt_pcm} {boost_consumer_flags}'
         f.write(f'module_flags_{mode} = {module_flags}\n')
 
-        all_module_pcms = f'{abseil_pcm} {fmt_pcm} {boost_pcm} {all_partition_pcm_deps}'
+        all_module_pcms = f'{std_pcm} {std_compat_pcm} {abseil_pcm} {fmt_pcm} {boost_pcm} {all_partition_pcm_deps}'
         seastar_dep = f'$builddir/{mode}/seastar/libseastar.{seastar_lib_ext}'
 
         compiles = {}
@@ -2930,6 +2945,7 @@ def write_build_file(f,
                 parent_mode = modes[mode].get('parent_mode', mode)
                 objs.append(f'$builddir/{parent_mode}/rust-{parent_mode}/librust_combined.a')
             objs.append(std_obj)
+            objs.append(std_compat_obj)
             objs.append(abseil_obj)
             objs.append(fmt_obj)
             objs.extend(boost_all_objs)
