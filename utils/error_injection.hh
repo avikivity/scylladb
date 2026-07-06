@@ -14,16 +14,7 @@
 
 #include "log.hh"
 
-#include <ranges>
-#include <coroutine>
-#include <algorithm>
-#include <chrono>
-#include <numeric>
-#include <type_traits>
-#include <functional>
-#include <source_location>
-#include <optional>
-#include <unordered_map>
+import std.compat;
 
 import boost;
 import fmt;

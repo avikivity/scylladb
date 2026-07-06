@@ -6,14 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <tuple>
+import std.compat;
 #include "gms/generation-number.hh"
 #include "gms/inet_address.hh"
 #include "message/msg_addr.hh"
 #include "utils/assert.hh"
 
 #include "message/messaging_service.hh"
-#include <coroutine>
 #include "gms/gossiper.hh"
 #include "service/storage_service.hh"
 #include "service/qos/service_level_controller.hh"

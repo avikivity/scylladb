@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <iosfwd>
+import std.compat;
 #include "raft/raft.hh"
 #include "gms/inet_address.hh"
 

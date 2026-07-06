@@ -13,10 +13,7 @@
 #include "utils/hash.hh"
 
 #include <cstdint>
-#include <string_view>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
+import std.compat;
 import boost;
 
 namespace audit {

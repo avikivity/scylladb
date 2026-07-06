@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include <compare>
+import std.compat;
 #include <cstddef>
-#include <limits>
-#include <chrono>
 #include "db/timeout_clock.hh"
 
 namespace db::view {

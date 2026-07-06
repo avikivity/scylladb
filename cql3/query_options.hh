@@ -10,8 +10,7 @@
 
 #pragma once
 
-#include <concepts>
-#include <initializer_list>
+import std.compat;
 #include "mutation/timestamp.hh"
 #include "bytes.hh"
 #include "db/consistency_level_type.hh"

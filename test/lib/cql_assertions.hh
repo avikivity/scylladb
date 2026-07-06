@@ -14,7 +14,7 @@
 #include "test/lib/cql_test_env.hh"
 #include "transport/messages/result_message_base.hh"
 #include "bytes.hh"
-#include <source_location>
+import std.compat;
 
 class columns_assertions {
     const cql3::metadata& _metadata;

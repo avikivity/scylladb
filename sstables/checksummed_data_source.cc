@@ -7,7 +7,7 @@
  */
 
 #include <cstdint>
-#include <coroutine>
+import std.compat;
 
 
 #include "types.hh"

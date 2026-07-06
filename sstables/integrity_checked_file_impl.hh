@@ -9,12 +9,9 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
+import std.compat;
 #include <sys/uio.h>
 #include <sys/stat.h>
-#include <functional>
-#include <memory>
-#include <string_view>
 
 #include "utils/log.hh"
 #include "seastarx.hh"

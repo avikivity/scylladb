@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 #include "tracing/tracing.hh"
-#include <coroutine>
+import std.compat;
 #include "tracing/trace_state.hh"
 #include "utils/class_registrator.hh"
 #include "utils/UUID_gen.hh"

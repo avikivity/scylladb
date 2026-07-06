@@ -8,10 +8,7 @@
 
 #include "auth/standard_role_manager.hh"
 
-#include <optional>
-#include <stdexcept>
-#include <unordered_set>
-#include <vector>
+import std.compat;
 
 
 #include "auth/common.hh"

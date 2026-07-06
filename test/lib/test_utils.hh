@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include <filesystem>
-#include <mutex>
+import std.compat;
 
-#include <string>
 #include <boost/test/unit_test.hpp>
 import fmt;
 

@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <memory>
-#include <vector>
+import std.compat;
 
 namespace replica {
 

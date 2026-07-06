@@ -9,7 +9,7 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <system_error>
+import std.compat;
 
 namespace utils::http {
 

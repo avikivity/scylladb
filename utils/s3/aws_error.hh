@@ -8,13 +8,9 @@
 
 #pragma once
 
-#include <cstdint>
-#include <optional>
-#include <exception>
-#include <system_error>
+import std.compat;
 #include "seastarx.hh"
 
-#include <string>
 #include "aws_error_definitions.hh"
 #include "utils/http_client_error_processing.hh"
 import fmt;

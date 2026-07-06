@@ -9,7 +9,7 @@
 
 #include "timeout_config.hh"
 #include "db/config.hh"
-#include <chrono>
+import std.compat;
 
 using namespace std::chrono_literals;
 

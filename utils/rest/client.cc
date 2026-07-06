@@ -8,7 +8,7 @@
  */
 
 
-#include <coroutine>
+import std.compat;
 
 
 #include "client.hh"

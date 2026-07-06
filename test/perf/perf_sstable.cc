@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <random>
+import std.compat;
 
 #include "test/perf/perf_sstable.hh"
 import boost;

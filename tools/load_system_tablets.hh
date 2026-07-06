@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <filesystem>
-#include <map>
+import std.compat;
 
 #include "reader_permit.hh"
 #include "dht/token.hh"

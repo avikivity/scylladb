@@ -8,8 +8,7 @@
 
 #include "prepended_input_stream.hh"
 #include <cstdint>
-#include <memory>
-#include <utility>
+import std.compat;
 
 class prepended_data_source_impl : public data_source_impl {
 private:

@@ -14,7 +14,7 @@
 #include "utils/managed_string.hh"
 
 
-#include <ranges>
+import std.compat;
 
 namespace cql3 {
 namespace functions {

@@ -5,8 +5,7 @@
  */
 
 #include <boost/test/unit_test.hpp>
-#include <memory>
-#include <utility>
+import std.compat;
 
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>

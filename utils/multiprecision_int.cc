@@ -8,7 +8,7 @@
 
 
 #include "multiprecision_int.hh"
-#include <iostream>
+import std.compat;
 
 namespace utils {
 

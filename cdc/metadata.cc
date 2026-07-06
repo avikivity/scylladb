@@ -10,7 +10,7 @@
 #include "exceptions/exceptions.hh"
 
 #include "cdc/generation.hh"
-#include <coroutine>
+import std.compat;
 #include "utils/stall_free.hh"
 #include "cdc/metadata.hh"
 

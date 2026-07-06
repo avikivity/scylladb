@@ -9,9 +9,7 @@
 #pragma once
 
 #include <cstdint>
-#include <limits>
-#include <chrono>
-#include <string>
+import std.compat;
 #include "clocks-impl.hh"
 
 namespace api {

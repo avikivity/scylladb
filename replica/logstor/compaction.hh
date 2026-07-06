@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include <coroutine>
+import std.compat;
 #include "types.hh"
 #include "schema/schema_fwd.hh"
 #include "utils/chunked_vector.hh"

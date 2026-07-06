@@ -12,7 +12,7 @@
 #include "auth/role_manager.hh"
 #include "auth/cache.hh"
 
-#include <string_view>
+import std.compat;
 
 
 #include "cql3/description.hh"

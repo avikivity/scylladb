@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <array>
+import std.compat;
 #include <cstdint>
 #include "enum_set.hh"
 

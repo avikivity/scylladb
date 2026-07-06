@@ -9,9 +9,7 @@
 #define BOOST_TEST_MODULE small_vector
 
 #include <boost/test/unit_test.hpp>
-#include <algorithm>
-#include <functional>
-#include <sstream>
+import std.compat;
 
 #include "utils/small_vector.hh"
 

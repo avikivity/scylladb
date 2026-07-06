@@ -7,14 +7,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <unordered_map>
+import std.compat;
 
 #include <yaml-cpp/yaml.h>
 
 
 
 
-#include <ranges>
 
 #include "config_file.hh"
 #include "config_file_impl.hh"

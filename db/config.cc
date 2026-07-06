@@ -9,9 +9,7 @@
 
 import fmt;
 
-#include <optional>
-#include <unordered_map>
-#include <sstream>
+import std.compat;
 
 #include <yaml-cpp/yaml.h>
 

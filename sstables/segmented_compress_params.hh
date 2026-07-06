@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include <array>
+import std.compat;
 #include <cstdint>
 
 namespace sstables {

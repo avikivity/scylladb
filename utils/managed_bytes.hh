@@ -14,9 +14,7 @@
 #include "utils/allocation_strategy.hh"
 #include "utils/fragment_range.hh"
 #include "utils/managed_bytes_fwd.hh"
-#include <type_traits>
-#include <utility>
-#include <iterator>
+import std.compat;
 #include <cstddef>
 
 import fmt;

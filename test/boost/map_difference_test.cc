@@ -12,8 +12,7 @@
 
 #include "utils/map_difference.hh"
 
-#include <map>
-#include <set>
+import std.compat;
 
 using std::map;
 using std::set;

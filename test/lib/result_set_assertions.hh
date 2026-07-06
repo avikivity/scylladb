@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <map>
+import std.compat;
 
 #include "query/query-result-set.hh"
 

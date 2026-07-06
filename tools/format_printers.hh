@@ -9,11 +9,7 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
-#include <string>
-#include <type_traits>
-#include <variant>
-#include <vector>
+import std.compat;
 
 #include <yaml-cpp/yaml.h>
 

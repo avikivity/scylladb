@@ -23,11 +23,7 @@
 #include "utils/runtime.hh"
 
 // STD.
-#include <algorithm>
-#include <chrono>
-#include <exception>
-#include <utility>
-#include <vector>
+import std.compat;
 
 namespace db::hints {
 namespace internal {

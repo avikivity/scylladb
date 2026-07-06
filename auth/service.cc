@@ -6,14 +6,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <exception>
+import std.compat;
 #include "auth/authentication_options.hh"
 #include "auth/authorizer.hh"
 #include "auth/resource.hh"
 #include "auth/service.hh"
 
-#include <algorithm>
-#include <chrono>
 
 
 
@@ -42,7 +40,6 @@
 #include "db/functions/function_name.hh"
 #include "utils/log.hh"
 #include "schema/schema_fwd.hh"
-#include <variant>
 #include "service/migration_manager.hh"
 #include "service/raft/raft_group0_client.hh"
 #include "mutation/timestamp.hh"

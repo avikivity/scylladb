@@ -12,7 +12,7 @@
 
 #include "bytes_fwd.hh"
 #include "function.hh"
-#include <span>
+import std.compat;
 
 namespace db::functions {
 

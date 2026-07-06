@@ -12,9 +12,7 @@
 #include "cql3/expr/expr-utils.hh"
 
 
-#include <unordered_map>
-#include <algorithm>
-#include <ranges>
+import std.compat;
 
 #include "cql3/selection/selection.hh"
 #include "cql3/util.hh"

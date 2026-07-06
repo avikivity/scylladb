@@ -9,10 +9,9 @@
 
 #pragma once
 
-#include <utility>
+import std.compat;
 
 #include "seastarx.hh"
-#include <chrono>
 
 // Implements retry policy that exponentially increases sleep time between retries.
 class exponential_backoff_retry {

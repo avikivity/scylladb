@@ -9,13 +9,7 @@
 
 #pragma once
 
-#include <set>
-#include <functional>
-#include <map>
-#include <variant>
-#include <vector>
-#include <unordered_set>
-#include <exception>
+import std.compat;
 
 
 #include "bytes_fwd.hh"

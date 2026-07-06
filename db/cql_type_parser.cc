@@ -6,7 +6,7 @@
 /*
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
-#include <unordered_map>
+import std.compat;
 
 #include "replica/database.hh"
 #include "cql3/CqlParser.hpp"

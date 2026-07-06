@@ -9,11 +9,10 @@
 #pragma once
 
 #include <cstdint>
-#include <optional>
+import std.compat;
 
 #include "seastarx.hh"
 
-#include <functional>
 
 /**
  * Creates a write-only file wrapping a data_sink.

@@ -9,7 +9,7 @@
 
 
 #include "credentials.hh"
-#include <coroutine>
+import std.compat;
 
 logger az_creds_logger("azure_creds");
 

@@ -9,8 +9,7 @@
 #pragma once
 
 #include <cstring>
-#include <type_traits>
-#include <span>
+import std.compat;
 
 template <class T> concept Trivial = std::is_trivial_v<T>;
 template <class T> concept TriviallyCopyable = std::is_trivially_copyable_v<T>;

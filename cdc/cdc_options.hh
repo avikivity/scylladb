@@ -10,8 +10,7 @@
 
 #include <cstdint>
 
-#include <map>
-#include <optional>
+import std.compat;
 #include "seastarx.hh"
 import fmt;
 

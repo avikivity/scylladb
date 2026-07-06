@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <any>
+import std.compat;
 
 
 

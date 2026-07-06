@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include <span>
+import std.compat;
 
-#include <string_view>
 
 #include "seastarx.hh"
 

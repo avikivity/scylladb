@@ -8,7 +8,7 @@
 
 #define BOOST_TEST_MODULE utils
 
-#include <iterator>
+import std.compat;
 #include <boost/test/unit_test.hpp>
 #include "utils/pretty_printers.hh"
 

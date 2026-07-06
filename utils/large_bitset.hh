@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <limits>
+import std.compat;
 #include "utils/chunked_vector.hh"
 
 class large_bitset {

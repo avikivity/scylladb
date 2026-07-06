@@ -9,7 +9,7 @@
 #include "lang/wasm.hh"
 #include "lang/wasm_instance_cache.hh"
 #include "rust/wasmtime_bindings.hh"
-#include <chrono>
+import std.compat;
 #include "test/lib/scylla_test_case.hh"
 
 SEASTAR_TEST_CASE(test_long_udf_yields) {

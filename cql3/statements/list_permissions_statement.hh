@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <optional>
+import std.compat;
 
 #include "authorization_statement.hh"
 #include "auth/permission.hh"

@@ -9,7 +9,7 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
+import std.compat;
 
 struct combined_reader_statistics {
     // Histogram describing a distribution of clustering keys. The vector

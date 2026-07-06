@@ -12,10 +12,8 @@
 
 #include <cerrno>
 #include <cstring>
-#include <algorithm>
+import std.compat;
 #include <sys/eventfd.h>
-#include <stdexcept>
-#include <string>
 
 
 #include "seastarx.hh"

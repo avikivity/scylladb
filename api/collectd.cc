@@ -8,8 +8,7 @@
 
 #include "collectd.hh"
 #include "api/api-doc/collectd.json.hh"
-#include <ranges>
-#include <regex>
+import std.compat;
 #include "api/api_init.hh"
 
 namespace api {

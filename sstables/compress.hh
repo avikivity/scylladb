@@ -34,10 +34,8 @@
 // level Cassandra rows, not disk blocks.
 
 #include "utils/assert.hh"
-#include <vector>
+import std.compat;
 #include <cstdint>
-#include <iterator>
-#include <deque>
 
 
 #include "types/types.hh"

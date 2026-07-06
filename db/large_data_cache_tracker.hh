@@ -9,7 +9,7 @@
 #pragma once
 
 #include <cstdint>
-#include <unordered_map>
+import std.compat;
 #include "bytes.hh"
 #include "utils/managed_bytes.hh"
 #include "schema/schema_fwd.hh"

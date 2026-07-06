@@ -10,9 +10,7 @@
 
 #include "auth/resource.hh"
 
-#include <algorithm>
-#include <iterator>
-#include <unordered_map>
+import std.compat;
 
 
 #include "cql3/functions/aggregate_function.hh"

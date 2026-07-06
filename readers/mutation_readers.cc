@@ -30,7 +30,7 @@
 #include "readers/reversing.hh"
 #include "readers/upgrading_consumer.hh"
 #include "tombstone_gc.hh"
-#include <stack>
+import std.compat;
 
 extern logging::logger mrlog;
 

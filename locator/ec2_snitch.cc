@@ -1,5 +1,5 @@
 #include "locator/ec2_snitch.hh"
-#include <coroutine>
+import std.compat;
 
 
 #include "utils/assert.hh"

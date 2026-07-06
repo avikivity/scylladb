@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <map>
+import std.compat;
 
 
 #include "bytes_fwd.hh"

@@ -15,9 +15,7 @@
 #include "replica/database.hh"
 
 
-#include <optional>
-#include <unordered_map>
-#include <vector>
+import std.compat;
 
 namespace db {
 

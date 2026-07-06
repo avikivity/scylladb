@@ -9,12 +9,8 @@
 /*
  */
 
-#include <vector>
-#include <map>
-#include <functional>
-#include <utility>
+import std.compat;
 #include <cassert>
-#include <algorithm>
 
 
 

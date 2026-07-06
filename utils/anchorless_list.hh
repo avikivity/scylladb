@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <iterator>
+import std.compat;
 
 template<typename T>
 class anchorless_list_base_hook {

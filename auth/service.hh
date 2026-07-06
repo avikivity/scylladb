@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <string_view>
-#include <memory>
-#include <optional>
+import std.compat;
 
 
 #include "auth/authenticator.hh"

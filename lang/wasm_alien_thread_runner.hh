@@ -8,11 +8,7 @@
 
 #pragma once
 
-#include <functional>
-#include <mutex>
-#include <queue>
-#include <condition_variable>
-#include <thread>
+import std.compat;
 
 
 #include "rust/cxx.h"

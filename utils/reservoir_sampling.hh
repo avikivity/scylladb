@@ -9,12 +9,9 @@
 #pragma once
 
 #include <cassert>
-#include <random>
+import std.compat;
 #include <cmath>
-#include <span>
-#include <optional>
 #include <cstring>
-#include <limits>
 
 namespace utils {
 

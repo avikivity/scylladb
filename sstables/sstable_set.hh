@@ -15,9 +15,7 @@
 #include "sstables/file_size_stats.hh"
 #include "shared_sstable.hh"
 #include "dht/ring_position.hh"
-#include <type_traits>
-#include <vector>
-#include <tuple>
+import std.compat;
 
 namespace utils {
 class estimated_histogram;

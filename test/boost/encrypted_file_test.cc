@@ -6,7 +6,7 @@
 
 #include <boost/test/unit_test.hpp>
 #include <cstdint>
-#include <random>
+import std.compat;
 
 
 #include <seastar/testing/test_case.hh>

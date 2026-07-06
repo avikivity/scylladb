@@ -18,8 +18,7 @@
 #include "exceptions/coordinator_result.hh"
 
 
-#include <memory>
-#include <optional>
+import std.compat;
 
 namespace db {
 enum class large_data_violation_type : uint8_t;

@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <variant>
+import std.compat;
 #include "absl-flat_hash_map.hh"
 #include "gms/endpoint_state.hh"
 #include "gms/i_endpoint_state_change_subscriber.hh"

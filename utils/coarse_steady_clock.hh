@@ -14,7 +14,7 @@
 // Intended for measuring time taken by synchronous code paths (where
 // seastar::lowres_clock is not suitable).
 
-#include <chrono>
+import std.compat;
 #include <ctime>
 
 namespace utils {

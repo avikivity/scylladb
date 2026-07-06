@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <ranges>
+import std.compat;
 #include "data_dictionary.hh"
 #include "cql3/description.hh"
 #include "data_dictionary/consistency_config_options.hh"
@@ -16,9 +16,6 @@
 #include "schema/schema.hh"
 #include "cql3/util.hh"
 #include "gms/feature_service.hh"
-#include <ios>
-#include <ostream>
-#include <array>
 #include "replica/database.hh"
 #include "utils/overloaded_functor.hh"
 

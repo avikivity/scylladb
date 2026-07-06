@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 
 
 #include "cql3/untyped_result_set.hh"

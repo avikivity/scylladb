@@ -12,7 +12,7 @@
 #include "utils/overloaded_functor.hh"
 
 
-#include <queue>
+import std.compat;
 
 namespace tasks {
 

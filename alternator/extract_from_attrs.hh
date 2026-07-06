@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <string>
-#include <string_view>
+import std.compat;
 
 #include "utils/rjson.hh"
 #include "serialization.hh"

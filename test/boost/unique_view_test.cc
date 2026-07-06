@@ -1,10 +1,7 @@
 #define BOOST_TEST_MODULE test-ranges
 
 #include <boost/test/unit_test.hpp>
-#include <vector>
-#include <list>
-#include <string>
-#include <ranges>
+import std.compat;
 
 #include "utils/unique_view.hh"
 

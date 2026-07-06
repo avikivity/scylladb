@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include <optional>
+import std.compat;
 
 #include "cdc/log.hh"
 #include "mutation/timestamp.hh"

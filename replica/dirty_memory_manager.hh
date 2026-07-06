@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <optional>
-#include <utility>
+import std.compat;
 
 #include "seastarx.hh"
 #include "db/timeout_clock.hh"

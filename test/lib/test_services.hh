@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include <memory>
+import std.compat;
 
 #include "schema/schema.hh"
 #include "schema/schema_builder.hh"

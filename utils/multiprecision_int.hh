@@ -8,11 +8,7 @@
 
 #pragma once
 
-#include <limits>
-#include <compare>
-#include <iosfwd>
-#include <string>
-#include <utility>
+import std.compat;
 
 import boost;
 

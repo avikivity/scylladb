@@ -8,7 +8,7 @@
 #pragma once
 
 #include <cstdint>
-#include <filesystem>
+import std.compat;
 #include "bytes_fwd.hh"
 #include "mutation_writer/token_group_based_splitting_writer.hh"
 #include "replica/logstor/segment_io.hh"

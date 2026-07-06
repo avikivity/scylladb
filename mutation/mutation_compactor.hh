@@ -14,7 +14,7 @@
 #include "mutation_tombstone_stats.hh"
 #include "tombstone_gc.hh"
 #include "keys/full_position.hh"
-#include <type_traits>
+import std.compat;
 #include "utils/log.hh"
 
 extern logging::logger mclog;

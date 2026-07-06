@@ -8,8 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <algorithm>
-#include <regex>
+import std.compat;
 
 
 #include "types/map.hh"

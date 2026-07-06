@@ -14,9 +14,8 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <array>
+import std.compat;
 #include <cstdint>
-#include <random>
 
 #include <sys/mman.h>
 #include <unistd.h>

@@ -8,10 +8,7 @@
 
 #include "generic_server.hh"
 
-#include <exception>
-#include <utility>
-#include <unordered_set>
-#include <coroutine>
+import std.compat;
 
 import fmt;
 namespace generic_server {

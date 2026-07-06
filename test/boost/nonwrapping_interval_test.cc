@@ -12,7 +12,7 @@ import boost;
 #define BOOST_TEST_MODULE core
 
 #include <boost/test/unit_test.hpp>
-#include <unordered_set>
+import std.compat;
 
 #include "schema/schema_builder.hh"
 

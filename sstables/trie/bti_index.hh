@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <memory>
+import std.compat;
 #include "sstables/abstract_index_reader.hh"
 
 namespace sstables {

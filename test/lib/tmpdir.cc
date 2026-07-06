@@ -8,7 +8,7 @@
 
 #include "test/lib/tmpdir.hh"
 #include "utils/UUID.hh"
-#include <utility>
+import std.compat;
 
 
 // This is not really noexcept. But it is used only from the

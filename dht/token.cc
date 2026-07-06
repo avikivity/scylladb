@@ -6,11 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
-#include <limits>
-#include <ostream>
-#include <random>
-#include <ranges>
+import std.compat;
 
 #include "dht/token.hh"
 #include "dht/token-sharding.hh"

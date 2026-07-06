@@ -5,7 +5,7 @@
 
 #include "open_info.hh"
 
-#include <vector>
+import std.compat;
 
 #include "locator/host_id.hh"
 #include "schema/schema_fwd.hh"

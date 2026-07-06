@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 
 #include "replica/database_fwd.hh"
 #include "tasks/task_manager.hh"

@@ -22,11 +22,8 @@
 #include "message/messaging_service.hh"
 #include "utils/log.hh"
 #include "db/system_keyspace.hh"
-#include <algorithm>
-#include <ranges>
-#include <chrono>
+import std.compat;
 #include "locator/host_id.hh"
-#include <utility>
 #include "gms/generation-number.hh"
 #include "locator/token_metadata.hh"
 #include "utils/assert.hh"

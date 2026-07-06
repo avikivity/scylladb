@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-#include <ostream>
+import std.compat;
 #include "schema/schema.hh"
 
 import abseil;

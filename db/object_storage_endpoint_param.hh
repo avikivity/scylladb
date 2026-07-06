@@ -9,9 +9,7 @@
 
 #pragma once
 
-#include <string>
-#include <variant>
-#include <compare>
+import std.compat;
 #include "utils/s3/creds.hh"
 import fmt;
 

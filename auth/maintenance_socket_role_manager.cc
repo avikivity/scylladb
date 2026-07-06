@@ -8,8 +8,7 @@
 
 #include "auth/maintenance_socket_role_manager.hh"
 
-#include <stdexcept>
-#include <string_view>
+import std.compat;
 #include "auth/cache.hh"
 #include "auth/config.hh"
 #include "cql3/description.hh"

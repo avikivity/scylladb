@@ -13,12 +13,7 @@
 #include "seastarx.hh"
 #include "error.hh"
 #include "utils/rjson.hh"
-#include <chrono>
-#include <expected>
-#include <functional>
-#include <optional>
-#include <variant>
-#include <vector>
+import std.compat;
 
 class schema;
 namespace db {

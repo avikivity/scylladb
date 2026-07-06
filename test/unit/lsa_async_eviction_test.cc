@@ -7,9 +7,8 @@
  */
 
 
-#include <iostream>
+import std.compat;
 
-#include <iostream>
 #include "utils/managed_bytes.hh"
 #include "utils/logalloc.hh"
 #include "utils/log.hh"

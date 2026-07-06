@@ -9,9 +9,7 @@
 
 #pragma once
 
-#include <utility>
-#include <functional>
-#include <unordered_set>
+import std.compat;
 
 #include "seastarx.hh"
 import fmt;

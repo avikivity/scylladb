@@ -27,7 +27,7 @@
 #include <seastar/testing/test_fixture.hh>
 #include <seastar/testing/thread_test_case.hh>
 #include <cstdio>
-#include <sstream>
+import std.compat;
 #include <cryptopp/sha.h>
 #include "utils/io-wrappers.hh"
 import boost;

@@ -18,7 +18,7 @@
 #include "exceptions/exceptions.hh"
 #include "gms/feature_service.hh"
 #include "db/config.hh"
-#include <random>
+import std.compat;
 
 namespace cql3 {
 

@@ -9,7 +9,7 @@
 #pragma once
 
 #include <cstdint>
-#include <optional>
+import std.compat;
 
 
 #include "utils/mutable_view.hh"

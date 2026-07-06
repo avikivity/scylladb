@@ -25,7 +25,7 @@
 #include "test/lib/reader_concurrency_semaphore.hh"
 #include "test/lib/test_utils.hh"
 
-#include <variant>
+import std.compat;
 
 /*
  * ===================

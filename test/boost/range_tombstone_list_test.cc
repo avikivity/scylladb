@@ -9,8 +9,7 @@
 #define BOOST_TEST_MODULE core
 
 #include <boost/test/unit_test.hpp>
-#include <random>
-#include <iostream>
+import std.compat;
 #include "keys/keys.hh"
 #include "schema/schema_builder.hh"
 #include "mutation/range_tombstone_list.hh"

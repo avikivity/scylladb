@@ -10,7 +10,7 @@
 #pragma once
 
 #include <cstdint>
-#include <type_traits>
+import std.compat;
 
 inline
 constexpr uint64_t clmul_u32_constexpr(uint32_t p1, uint32_t p2) {

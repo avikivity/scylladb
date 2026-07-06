@@ -10,8 +10,7 @@
 
 #pragma once
 
-#include <string_view>
-#include <iosfwd>
+import std.compat;
 
 
 #include "seastarx.hh"

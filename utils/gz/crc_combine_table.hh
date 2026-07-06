@@ -10,7 +10,7 @@
 #pragma once
 
 #include <cstdint>
-#include <array>
+import std.compat;
 
 /*
  * Let t_i be the following polynomial depending on i and u:

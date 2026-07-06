@@ -8,8 +8,7 @@
  */
 
 #include "streaming/stream_session_state.hh"
-#include <map>
-#include <string_view>
+import std.compat;
 #include "seastarx.hh"
 
 namespace streaming {

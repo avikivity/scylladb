@@ -7,7 +7,7 @@
  */
 
 #pragma once
-#include <memory>
+import std.compat;
 #include "query/query-request.hh"
 
 class mutation_reader;

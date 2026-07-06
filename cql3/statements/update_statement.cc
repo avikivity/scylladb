@@ -31,7 +31,7 @@
 #include "types/concrete_types.hh"
 #include "validation.hh"
 #include "dht/i_partitioner.hh"
-#include <optional>
+import std.compat;
 
 namespace cql3 {
 

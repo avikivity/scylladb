@@ -9,15 +9,12 @@
 
 #ifdef HAVE_KMIP
 
-#include <deque>
+import std.compat;
 // <cstdlib> pulls <bits/c++config.h> in normal linkage before the OpenSSL
 // headers include it inside their extern "C" block (which would otherwise
 // re-declare __glibcxx_assert_fail etc. with C linkage, clashing with the
 // std module).
 #include <cstdlib>
-#include <unordered_map>
-#include <regex>
-#include <algorithm>
 
 
 // workaround cryptsoft sdk issue:

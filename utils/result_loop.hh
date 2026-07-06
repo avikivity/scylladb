@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <iterator>
-#include <type_traits>
+import std.compat;
 #include "utils/result.hh"
 
 namespace utils {

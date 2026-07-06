@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <variant>
-#include <string>
-#include <chrono>
+import std.compat;
 
 
 #include "utils/rjson.hh"

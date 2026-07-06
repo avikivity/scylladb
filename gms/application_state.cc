@@ -9,7 +9,7 @@
 
 #include "gms/application_state.hh"
 
-#include <string_view>
+import std.compat;
 
 import fmt;
 namespace gms {

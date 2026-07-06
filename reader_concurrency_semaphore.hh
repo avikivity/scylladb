@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <deque>
-#include <functional>
+import std.compat;
 #include <boost/intrusive/list.hpp>
 #include "seastarx.hh"
 

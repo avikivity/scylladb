@@ -8,9 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <random>
-#include <algorithm>
-#include <ranges>
+import std.compat;
 
 #include "gms/inet_address.hh"
 #include "inet_address_vectors.hh"
@@ -57,7 +55,6 @@
 #include "db/large_data_handler.hh"
 #include "service/topology_mutation.hh"
 #include "locator/token_metadata.hh"
-#include <type_traits>
 #include "locator/abstract_replication_strategy.hh"
 #include "service/paxos/cas_request.hh"
 #include "mutation/mutation_partition_view.hh"

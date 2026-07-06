@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <algorithm>
+import std.compat;
 
 
 namespace utils {

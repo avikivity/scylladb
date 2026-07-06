@@ -9,7 +9,7 @@
 
 
 #include "exceptions.hh"
-#include <coroutine>
+import std.compat;
 #include "default_credentials.hh"
 #include "azure_cli_credentials.hh"
 #include "managed_identity_credentials.hh"

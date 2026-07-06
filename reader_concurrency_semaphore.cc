@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <utility>
+import std.compat;
 #include <sys/uio.h>
 
 #include "reader_concurrency_semaphore.hh"

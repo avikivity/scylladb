@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <filesystem>
+import std.compat;
 
 
 #include "utils/disk_space_monitor.hh"

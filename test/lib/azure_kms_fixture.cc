@@ -6,10 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <string>
-#include <memory>
-#include <regex>
-#include <vector>
+import std.compat;
 
 
 #include "azure_kms_fixture.hh"

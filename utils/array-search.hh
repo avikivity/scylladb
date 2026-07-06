@@ -9,7 +9,7 @@
 #pragma once
 
 #include <cstdint>
-#include <limits>
+import std.compat;
 
 namespace utils {
 

@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <optional>
-#include <vector>
-#include <map>
-#include <memory>
+import std.compat;
 
 
 #include "compaction_strategy_type.hh"

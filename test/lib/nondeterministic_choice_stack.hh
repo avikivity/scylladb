@@ -6,8 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <vector>
-#include <utility>
+import std.compat;
 #include "utils/assert.hh"
 
 #pragma once

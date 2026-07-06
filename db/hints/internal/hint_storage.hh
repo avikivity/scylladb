@@ -15,7 +15,7 @@
 #include "utils/loading_shared_values.hh"
 
 // STD.
-#include <filesystem>
+import std.compat;
 
 /// This file is supposed to gather meta information about data structures
 /// and types related to storing hints.

@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <iterator>
+import std.compat;
 
 #include "sstables/generation_type.hh"
 #include "sstables/sstables.hh"
@@ -23,7 +23,6 @@ import boost;
 #include "compaction/leveled_manifest.hh"
 #include "sstables/metadata_collector.hh"
 #include "sstables/sstable_writer.hh"
-#include <memory>
 #include "test/boost/sstable_test.hh"
 #include "compaction/compaction_manager.hh"
 #include "test/lib/tmpdir.hh"
@@ -49,7 +48,6 @@ import boost;
 #include <cstdio>
 #include <ftw.h>
 #include <unistd.h>
-#include <limits>
 #include "test/lib/test_services.hh"
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/reader_concurrency_semaphore.hh"

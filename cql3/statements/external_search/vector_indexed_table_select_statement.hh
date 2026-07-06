@@ -11,7 +11,7 @@
 #include "cql3/statements/external_search/external_index_select_statement.hh"
 #include "cql3/statements/external_search/filter.hh"
 
-#include <optional>
+import std.compat;
 
 namespace cql3::statements {
 

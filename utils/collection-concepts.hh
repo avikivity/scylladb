@@ -7,8 +7,7 @@
  */
 
 #pragma once
-#include <type_traits>
-#include <compare>
+import std.compat;
 
 template <typename Func, typename T>
 concept Disposer = requires (Func f, T* val) { 

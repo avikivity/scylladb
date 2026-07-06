@@ -10,7 +10,7 @@
 
 #include "utils/assert.hh"
 #include "cql3/keyspace_element_name.hh"
-#include <algorithm>
+import std.compat;
 #include <cctype>
 
 namespace cql3 {

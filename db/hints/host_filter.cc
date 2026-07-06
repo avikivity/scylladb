@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <string_view>
+import std.compat;
 #include "locator/topology.hh"
 #include "gms/inet_address.hh"
 #include "host_filter.hh"

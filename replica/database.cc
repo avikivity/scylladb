@@ -6,9 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
+import std.compat;
 
-#include <exception>
 #include "db/view/view.hh"
 #include "locator/network_topology_strategy.hh"
 #include "locator/tablets.hh"
@@ -20,7 +19,6 @@
 #include "utils/assert.hh"
 #include "utils/lister.hh"
 #include "replica/database.hh"
-#include <memory>
 #include "db/system_keyspace.hh"
 #include "db/system_keyspace_sstables_registry.hh"
 #include "db/system_distributed_keyspace.hh"
@@ -72,8 +70,6 @@
 #include "service/paxos/paxos_state.hh"
 #include "tracing/trace_keyspace_helper.hh"
 
-#include <algorithm>
-#include <flat_set>
 import boost;
 
 import fmt;

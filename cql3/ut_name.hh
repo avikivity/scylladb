@@ -13,7 +13,7 @@
 #include "seastarx.hh"
 #include "bytes.hh"
 
-#include <optional>
+import std.compat;
 import fmt;
 
 namespace cql3 {

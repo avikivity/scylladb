@@ -7,9 +7,7 @@
  */
 
 
-#include <algorithm>
-#include <exception>
-#include <ranges>
+import std.compat;
 #include "db/view/view_building_coordinator.hh"
 #include "db/view/view_build_status.hh"
 #include "locator/tablets.hh"

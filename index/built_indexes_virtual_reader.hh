@@ -17,7 +17,7 @@
 #include "secondary_index_manager.hh"
 #include "view_info.hh"
 
-#include <memory>
+import std.compat;
 
 namespace tracing { class trace_state_ptr; }
 

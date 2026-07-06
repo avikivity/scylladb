@@ -11,7 +11,7 @@
 #pragma once
 
 #include "cql3/column_identifier.hh"
-#include <variant>
+import std.compat;
 
 import boost;
 

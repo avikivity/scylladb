@@ -16,7 +16,7 @@
 #include "test/lib/test_utils.hh"
 #include "types/list.hh"
 #include "utils/log.hh"
-#include <chrono>
+import std.compat;
 
 BOOST_AUTO_TEST_SUITE(error_injection_test)
 

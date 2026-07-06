@@ -9,7 +9,7 @@
 #include <seastar/testing/perf_tests.hh>
 #include <seastar/testing/test_runner.hh>
 
-#include <random>
+import std.compat;
 
 #include "utils/big_decimal.hh"
 #include "test/lib/make_random_string.hh"

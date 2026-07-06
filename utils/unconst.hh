@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <ranges>
+import std.compat;
 
 template <typename Container>
 std::ranges::range auto

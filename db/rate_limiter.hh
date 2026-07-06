@@ -10,8 +10,7 @@
 
 #include <cstdint>
 #include <cstddef>
-#include <chrono>
-#include <vector>
+import std.compat;
 
 
 #include "seastarx.hh"

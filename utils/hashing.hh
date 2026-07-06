@@ -8,12 +8,7 @@
 
 #pragma once
 
-#include <concepts>
-#include <map>
-#include <optional>
-#include <memory>
-#include <unordered_map>
-#include <chrono>
+import std.compat;
 #include <cmath>
 #include <cstring>
 #include "seastarx.hh"

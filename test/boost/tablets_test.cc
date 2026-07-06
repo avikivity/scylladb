@@ -10,7 +10,7 @@
 
 #include "utils/UUID.hh"
 #include <boost/test/tools/old/interface.hpp>
-#include <source_location>
+import std.compat;
 import boost;
 
 #undef SEASTAR_TESTING_MAIN
@@ -49,7 +49,6 @@ import boost;
 #include "service/topology_state_machine.hh"
 #include "service/migration_manager.hh"
 
-#include <atomic>
 
 import fmt;
 BOOST_AUTO_TEST_SUITE(tablets_test)

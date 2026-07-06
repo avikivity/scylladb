@@ -11,9 +11,7 @@
 #include "bytes.hh"
 #include "utils/assert.hh"
 #include "utils/managed_bytes.hh"
-#include <bit>
-#include <concepts>
-#include <ranges>
+import std.compat;
 
 
 class bytes_ostream_fragment_iterator {

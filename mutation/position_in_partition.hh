@@ -14,7 +14,7 @@
 #include "keys/clustering_bounds_comparator.hh"
 #include "query/query-request.hh"
 
-#include <optional>
+import std.compat;
 #include <cstdlib>
 
 inline

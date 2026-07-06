@@ -46,10 +46,7 @@
 #include "seastarx.hh"
 
 #include <cstdio>
-#include <list>
-#include <optional>
-#include <unordered_map>
-#include <tuple>
+import std.compat;
 #include <cassert>
 
 #include "utils/assert.hh"

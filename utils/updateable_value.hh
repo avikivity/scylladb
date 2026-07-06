@@ -10,8 +10,7 @@
 
 #pragma once
 
-#include <vector>
-#include <functional>
+import std.compat;
 #include "observable.hh"
 #include "serialized_action.hh"
 #include "seastarx.hh"

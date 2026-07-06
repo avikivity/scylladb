@@ -12,7 +12,7 @@
 #include "db/row_cache.hh"
 #include "utils/assert.hh"
 #include "utils/small_vector.hh"
-#include <algorithm>
+import std.compat;
 import fmt;
 
 class partition_snapshot_row_cursor;

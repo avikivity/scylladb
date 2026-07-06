@@ -8,11 +8,7 @@
  */
 
 #include "utils/assert.hh"
-#include <memory>
-#include <vector>
-#include <algorithm>
-#include <unordered_map>
-#include <ranges>
+import std.compat;
 #include "utils/chunked_vector.hh"
 
 

@@ -7,7 +7,7 @@
  */
 
 #pragma once
-#include <filesystem>
+import std.compat;
 
 namespace s3 {
 

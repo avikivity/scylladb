@@ -39,7 +39,7 @@
 #include "tombstone_gc_extension.hh"
 #include "index/secondary_index.hh"
 
-#include <stdexcept>
+import std.compat;
 import boost;
 
 namespace cql3 {

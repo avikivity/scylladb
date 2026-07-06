@@ -10,8 +10,7 @@
 
 #include <cstddef>
 #include <cassert>
-#include <span>
-#include <source_location>
+import std.compat;
 #include "seastarx.hh"
 
 

@@ -9,12 +9,8 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <optional>
-#include <string>
-#include <string_view>
-#include <vector>
+import std.compat;
 
-#include <map>
 
 // The declared below get_signature() method makes the Signature string for AWS
 // authenticated requests as described in [1]. It can be used in two ways.

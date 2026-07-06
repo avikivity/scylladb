@@ -11,7 +11,7 @@
 #include "data_dictionary/data_dictionary.hh"
 #include "schema/schema.hh"
 #include "replica/global_table_ptr.hh"
-#include <optional>
+import std.compat;
 
 namespace replica {
 

@@ -12,8 +12,7 @@
 #include <seastar/testing/test_case.hh>
 #include "sstables/trie/trie_traversal.hh"
 #include "test/lib/reader_concurrency_semaphore.hh"
-#include <generator>
-#include <numeric>
+import std.compat;
 
 import fmt;
 namespace trie = sstables::trie;

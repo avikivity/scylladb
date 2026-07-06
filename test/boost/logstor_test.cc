@@ -6,16 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 #include <boost/test/unit_test.hpp>
-#include <algorithm>
-#include <chrono>
-#include <array>
-#include <cmath>
-#include <deque>
-#include <functional>
-#include <stdexcept>
-#include <map>
-#include <span>
-#include <vector>
+import std.compat;
 
 #include "replica/logstor/index.hh"
 #include "replica/logstor/logstor.hh"

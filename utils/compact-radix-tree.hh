@@ -9,8 +9,7 @@
 #pragma once
 
 #include <cassert>
-#include <algorithm>
-#include <bitset>
+import std.compat;
 #include "utils/assert.hh"
 #include "utils/allocation_strategy.hh"
 #include "utils/array-search.hh"

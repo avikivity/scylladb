@@ -8,16 +8,13 @@
 
 #pragma once
 
-#include <ranges>
+import std.compat;
 #include "seastarx.hh"
 #include "utils/extremum_tracking.hh"
 #include "utils/estimated_histogram.hh"
 #include <seastar/testing/linux_perf_event.hh>
 #include "reader_permit.hh"
 
-#include <chrono>
-#include <iosfwd>
-#include <vector>
 #include <json/json.h>
 
 template <typename Func>

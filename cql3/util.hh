@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 
 
 #include "cql3/column_identifier.hh"

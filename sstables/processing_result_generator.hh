@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <coroutine>
+import std.compat;
 
 #include "sstables/consumer.hh"
 

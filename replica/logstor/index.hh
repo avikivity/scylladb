@@ -14,8 +14,9 @@
 #include "utils/double-decker.hh"
 #include "utils/on_internal_error.hh"
 #include "utils/phased_barrier.hh"
-#include <utility>
 #include "replica/logstor/cache.hh"
+import std.compat;
+import std;
 
 namespace replica::logstor {
 

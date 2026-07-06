@@ -11,7 +11,7 @@
 #include "native_scalar_function.hh"
 #include "cql3/assignment_testable.hh"
 #include "cql3/functions/function_name.hh"
-#include <span>
+import std.compat;
 
 namespace cql3 {
 namespace functions {

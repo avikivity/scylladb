@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <unordered_set>
+import std.compat;
 
 
 #include "enum_set.hh"

@@ -12,7 +12,7 @@
 #include "cql3/untyped_result_set.hh"
 #include "db/consistency_level_type.hh"
 #include "transport/controller.hh"
-#include <unordered_map>
+import std.compat;
 
 
 namespace api {

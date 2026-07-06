@@ -13,9 +13,7 @@
 #include "utils/serialization.hh"
 #include "test/lib/random_utils.hh"
 #include <boost/test/unit_test.hpp>
-#include <iterator>
-#include <memory>
-#include <unordered_set>
+import std.compat;
 
 struct fragmenting_allocation_strategy : standard_allocation_strategy {
     size_t allocated_bytes = 0;

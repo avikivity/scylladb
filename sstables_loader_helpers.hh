@@ -15,7 +15,7 @@
 #include "sstables/version.hh"
 #include "utils/log.hh"
 
-#include <vector>
+import std.compat;
 
 namespace replica {
 class table;

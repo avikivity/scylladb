@@ -39,9 +39,7 @@
 #include "validation.hh"
 #include "db/system_keyspace.hh"
 #include "exceptions/unrecognized_entity_exception.hh"
-#include <optional>
-#include <ranges>
-#include <variant>
+import std.compat;
 #include "query/query-result-reader.hh"
 #include "query_ranges_to_vnodes.hh"
 #include "query/query_result_merger.hh"

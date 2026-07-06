@@ -16,7 +16,7 @@
 
 
 
-#include <memory>
+import std.compat;
 
 namespace cql3 {
 

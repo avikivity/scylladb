@@ -9,9 +9,7 @@
 #pragma once
 
 
-#include <type_traits>
-#include <array>
-#include <unordered_map>
+import std.compat;
 #include "seastarx.hh"
 import fmt;
 

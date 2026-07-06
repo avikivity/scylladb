@@ -10,11 +10,7 @@
 
 
 #include <cctype>
-#include <optional>
-#include <limits>
-#include <sstream>
-#include <string>
-#include <unordered_map>
+import std.compat;
 import boost;
 
 namespace {

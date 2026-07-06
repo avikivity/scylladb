@@ -13,8 +13,7 @@
 #include "locator/abstract_replication_strategy.hh"
 #include "locator/tablet_replication_strategy.hh"
 
-#include <optional>
-#include <unordered_set>
+import std.compat;
 
 namespace locator {
 

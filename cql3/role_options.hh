@@ -1,7 +1,6 @@
 #pragma once
 
-#include <map>
-#include <optional>
+import std.compat;
 
 
 #include "seastarx.hh"

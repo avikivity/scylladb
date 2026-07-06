@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <optional>
-#include <map>
+import std.compat;
 
 
 #include "operation_type.hh"

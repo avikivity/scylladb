@@ -17,7 +17,7 @@
 #include "mutation/position_in_partition.hh"
 #include "alternator/executor_util.hh"
 #include "utils/bit_cast.hh"
-#include <bit>
+import std.compat;
 
 static logging::logger slogger("alternator-serialization");
 

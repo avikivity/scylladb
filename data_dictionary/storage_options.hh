@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <filesystem>
-#include <map>
-#include <variant>
+import std.compat;
 #include "schema/schema_fwd.hh"
 #include "utils/s3/utils/manip_s3.hh"
 #include "seastarx.hh"

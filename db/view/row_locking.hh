@@ -19,7 +19,7 @@
 // row_locker could release its shared-pointer to the old schema, and take
 // the new.
 
-#include <unordered_map>
+import std.compat;
 
 
 #include "db/timeout_clock.hh"

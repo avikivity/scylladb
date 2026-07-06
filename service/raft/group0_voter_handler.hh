@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <coroutine>
+import std.compat;
 
 #include "group0_voter_calculator.hh"
 

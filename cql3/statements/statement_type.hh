@@ -11,7 +11,7 @@
 #pragma once
 
 #include <cstddef>
-#include <string_view>
+import std.compat;
 import fmt;
 
 

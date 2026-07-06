@@ -10,10 +10,7 @@
 
 #pragma once
 
-#include <string_view>
-#include <stdexcept>
-#include <tuple>
-#include <vector>
+import std.compat;
 
 
 #include "auth/permission.hh"

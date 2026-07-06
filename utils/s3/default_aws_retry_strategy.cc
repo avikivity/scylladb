@@ -7,9 +7,8 @@
  */
 
 #include "default_aws_retry_strategy.hh"
-#include <coroutine>
+import std.compat;
 #include "aws_error.hh"
-#include <utility>
 #include "utils/log.hh"
 
 namespace seastar::http {

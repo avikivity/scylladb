@@ -10,8 +10,7 @@
 
 #include "bytes.hh"
 #include "utils/managed_bytes.hh"
-#include <memory>
-#include <seastar/core/shared_ptr.hh>
+import std.compat;
 
 class schema;
 class partition_key;

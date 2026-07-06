@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <span>
-#include <tuple>
+import std.compat;
 #include "gc_clock.hh"
 #include "db/commitlog/replay_position.hh"
 #include "dht/token.hh"

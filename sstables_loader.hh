@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <algorithm>
-#include <vector>
+import std.compat;
 #include "dht/i_partitioner_fwd.hh"
 #include "dht/token.hh"
 #include "schema/schema_fwd.hh"

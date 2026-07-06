@@ -9,8 +9,7 @@
 #include "alternator/error.hh"
 #include "auth/common.hh"
 #include "utils/log.hh"
-#include <string>
-#include <string_view>
+import std.compat;
 #include "alternator/auth.hh"
 #include "db/consistency_level_type.hh"
 #include "db/system_keyspace.hh"

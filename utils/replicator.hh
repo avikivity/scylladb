@@ -8,11 +8,8 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <chrono>
-#include <coroutine>
+import std.compat;
 #include <cstdint>
-#include <exception>
-#include <functional>
 
 #include "utils/assert.hh"
 

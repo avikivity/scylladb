@@ -7,7 +7,7 @@
  */
 
 #include "frozen_mutation.hh"
-#include <coroutine>
+import std.compat;
 #include "schema/schema_registry.hh"
 #include "mutation_partition.hh"
 #include "mutation.hh"

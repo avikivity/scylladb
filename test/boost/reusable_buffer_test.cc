@@ -13,7 +13,7 @@
 #include "utils/assert.hh"
 #include "utils/reusable_buffer.hh"
 #include <seastar/testing/test_case.hh>
-#include <bit>
+import std.compat;
 import boost;
 
 SEASTAR_TEST_CASE(test_get_linearized_view) {

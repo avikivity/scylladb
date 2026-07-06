@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <concepts>
+import std.compat;
 #include <cstddef>
 
 // A contiguous buffer of char objects which can be trimmed and

@@ -11,8 +11,7 @@
 #include <boost/test/unit_test.hpp>
 #include "test/lib/scylla_test_case.hh"
 
-#include <vector>
-#include <unordered_set>
+import std.compat;
 
 
 #include "utils/scoped_item_list.hh"

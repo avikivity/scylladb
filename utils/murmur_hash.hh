@@ -11,8 +11,7 @@
 #pragma once
 
 #include <cstdint>
-#include <array>
-#include <algorithm>
+import std.compat;
 
 #include "bytes_fwd.hh"
 

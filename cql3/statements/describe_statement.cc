@@ -5,10 +5,7 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-#include <algorithm>
-#include <iterator>
-#include <memory>
-#include <optional>
+import std.compat;
 
 #include "cdc/cdc_options.hh"
 #include "cdc/log.hh"
@@ -16,7 +13,6 @@
 #include "cql3/functions/function_name.hh"
 #include "cql3/statements/prepared_statement.hh"
 #include "exceptions/exceptions.hh"
-#include <ranges>
 #include "index/vector_index.hh"
 #include "schema/schema.hh"
 #include "service/client_state.hh"
@@ -26,7 +22,6 @@
 #include "cql3/cql_statement.hh"
 #include "cql3/statements/raw/describe_statement.hh"
 #include "cql3/statements/describe_statement.hh"
-#include <sstream>
 #include "transport/messages/result_message.hh"
 #include "transport/messages/result_message_base.hh"
 #include "service/query_state.hh"

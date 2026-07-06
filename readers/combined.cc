@@ -8,7 +8,7 @@
 
 
 #include "readers/empty.hh"
-#include <coroutine>
+import std.compat;
 #include "readers/clustering_combined.hh"
 #include "readers/range_tombstone_change_merger.hh"
 #include "readers/combined.hh"

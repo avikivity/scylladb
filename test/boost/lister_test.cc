@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <unordered_set>
+import std.compat;
 
 
 #include "test/lib/scylla_test_case.hh"

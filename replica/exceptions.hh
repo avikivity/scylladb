@@ -9,8 +9,7 @@
 #pragma once
 
 #include <cstdint>
-#include <exception>
-#include <variant>
+import std.compat;
 
 import seastar;
 

@@ -11,9 +11,7 @@
 #include "gcp_credentials.hh"
 #include "object_storage_retry_strategy.hh"
 
-#include <algorithm>
-#include <numeric>
-#include <deque>
+import std.compat;
 
 #include <sys/uio.h>
 #include <sys/stat.h>

@@ -10,13 +10,11 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 
 #include "db/consistency_level_type.hh"
 #include "db/write_type.hh"
 #include "db/operation_type.hh"
-#include <stdexcept>
-#include <unordered_map>
 #include "bytes_fwd.hh"
 
 namespace exceptions {

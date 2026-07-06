@@ -9,8 +9,7 @@
 #pragma once
 #include "utils.hh"
 #include <cstdint>
-#include <vector>
-#include <memory>
+import std.compat;
 
 namespace test::vector_search {
 

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <compare>
+import std.compat;
 
 #include "timestamp.hh"
 #include "gc_clock.hh"

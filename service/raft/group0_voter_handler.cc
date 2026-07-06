@@ -8,7 +8,7 @@
 
 #include "group0_voter_handler.hh"
 
-#include <queue>
+import std.compat;
 
 
 #include "gms/feature_service.hh"

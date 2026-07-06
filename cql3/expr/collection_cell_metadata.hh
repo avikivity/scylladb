@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <map>
+import std.compat;
 
 #include "bytes.hh"
 #include "mutation/timestamp.hh"

@@ -9,10 +9,7 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <atomic>
-#include <memory>
-#include <vector>
-#include <optional>
+import std.compat;
 
 #include "seastarx.hh"
 

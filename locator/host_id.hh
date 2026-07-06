@@ -12,8 +12,7 @@
 #include "utils/UUID.hh"
 
 
-#include <exception>
-#include <variant>
+import std.compat;
 
 namespace locator {
 

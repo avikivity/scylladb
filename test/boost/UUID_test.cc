@@ -9,7 +9,7 @@
 #define BOOST_TEST_MODULE core
 
 #include <boost/test/unit_test.hpp>
-#include <utility>
+import std.compat;
 #include "utils/UUID_gen.hh"
 #include "marshal_exception.hh"
 

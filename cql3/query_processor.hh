@@ -10,8 +10,7 @@
 
 #pragma once
 
-#include <string_view>
-#include <unordered_map>
+import std.compat;
 
 
 #include "cql3/prepared_statements_cache.hh"

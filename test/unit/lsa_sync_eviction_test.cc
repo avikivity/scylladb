@@ -7,16 +7,12 @@
  */
 
 
-#include <deque>
-#include <iostream>
+import std.compat;
 
-#include <deque>
-#include <iostream>
 #include "utils/managed_bytes.hh"
 #include "utils/logalloc.hh"
 #include "utils/log.hh"
 
-#include <random>
 import boost;
 
 int main(int argc, char** argv) {

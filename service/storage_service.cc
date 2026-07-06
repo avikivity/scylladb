@@ -18,16 +18,13 @@
 #include "gc_clock.hh"
 #include "raft/raft.hh"
 #include "auth/cache.hh"
-#include <ranges>
+import std.compat;
 #include "service/qos/raft_service_level_distributed_data_accessor.hh"
 #include "service/qos/service_level_controller.hh"
 #include "locator/token_metadata.hh"
 #include "service/topology_guard.hh"
 #include "service/session.hh"
 #include "dht/boot_strapper.hh"
-#include <chrono>
-#include <exception>
-#include <optional>
 #include "gms/endpoint_state.hh"
 #include "locator/snitch_base.hh"
 #include "db/system_keyspace.hh"
@@ -56,8 +53,6 @@
 #include "service/raft/raft_group0.hh"
 #include "gms/gossiper.hh"
 #include "gms/feature_service.hh"
-#include <algorithm>
-#include <bit>
 #include "locator/local_strategy.hh"
 #include "locator/tablet_replication_strategy.hh"
 #include "utils/user_provided_param.hh"
@@ -107,10 +102,7 @@
 #include "view_info.hh"
 #include "debug.hh"
 
-#include <stdexcept>
 #include <unistd.h>
-#include <variant>
-#include <utility>
 import boost;
 
 import fmt;

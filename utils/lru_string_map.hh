@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <optional>
-#include <string>
-#include <string_view>
+import std.compat;
 #include "seastarx.hh"
 #include "utils/log.hh"
 

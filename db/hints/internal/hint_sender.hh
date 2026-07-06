@@ -22,11 +22,7 @@
 #include "gc_clock.hh"
 
 // STD.
-#include <list>
-#include <map>
-#include <optional>
-#include <set>
-#include <unordered_map>
+import std.compat;
 
 namespace service {
 class storage_proxy;

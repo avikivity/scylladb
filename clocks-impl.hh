@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <algorithm>
-#include <atomic>
-#include <chrono>
+import std.compat;
 #include <cstdint>
 
 extern std::atomic<int64_t> clocks_offset;

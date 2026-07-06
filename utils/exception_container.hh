@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <exception>
-#include <type_traits>
-#include <memory>
-#include <variant>
+import std.compat;
 #include "utils/variant_element.hh"
 #include "seastarx.hh"
 import fmt;

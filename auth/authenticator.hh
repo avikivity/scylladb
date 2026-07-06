@@ -10,11 +10,7 @@
 
 #pragma once
 
-#include <string_view>
-#include <memory>
-#include <unordered_map>
-#include <optional>
-#include <functional>
+import std.compat;
 
 
 #include "auth/authentication_options.hh"

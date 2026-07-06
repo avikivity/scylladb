@@ -9,7 +9,7 @@
 #define BOOST_TEST_MODULE rolling_max_tracker
 
 #include <boost/test/unit_test.hpp>
-#include <algorithm>
+import std.compat;
 
 
 #include "utils/rolling_max_tracker.hh"

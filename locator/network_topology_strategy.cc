@@ -8,10 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <algorithm>
-#include <coroutine>
-#include <functional>
-#include <random>
+import std.compat;
 
 
 #include "locator/network_topology_strategy.hh"

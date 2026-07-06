@@ -20,10 +20,7 @@
 #include "utils/chunked_vector.hh"
 
 
-#include <unordered_map>
-#include <vector>
-#include <set>
-#include <optional>
+import std.compat;
 
 namespace cql3 {
 

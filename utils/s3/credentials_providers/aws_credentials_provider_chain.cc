@@ -7,7 +7,7 @@
  */
 
 #include "aws_credentials_provider_chain.hh"
-#include <coroutine>
+import std.compat;
 #include "utils/log.hh"
 
 namespace aws {

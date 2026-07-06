@@ -9,8 +9,7 @@
 #define BOOST_TEST_MODULE observable_test
 
 #include <boost/test/unit_test.hpp>
-#include <variant>
-#include <numeric>
+import std.compat;
 
 #include "utils/observable.hh"
 

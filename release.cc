@@ -9,7 +9,7 @@
 #include "utils/assert.hh"
 #include "version.hh"
 #include "build_mode.hh"
-#include <vector>
+import std.compat;
 import fmt;
 
 

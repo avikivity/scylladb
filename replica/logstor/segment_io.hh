@@ -8,11 +8,7 @@
 
 #pragma once
 
-#include <concepts>
-#include <functional>
-#include <optional>
-#include <span>
-#include <vector>
+import std.compat;
 
 
 #include "replica/logstor/ondisk.hh"

@@ -15,7 +15,7 @@
 #include "utils/scoped_item_list.hh"
 
 #include <cstdint>
-#include <chrono>
+import std.compat;
 
 
 namespace generic_server {

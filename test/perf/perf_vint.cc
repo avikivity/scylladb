@@ -10,7 +10,7 @@
 #include <seastar/testing/random.hh>
 #include <seastar/testing/test_runner.hh>
 
-#include <random>
+import std.compat;
 
 #include "vint-serialization.hh"
 

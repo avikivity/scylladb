@@ -9,10 +9,7 @@
 #pragma once
 
 #include <cstddef>
-#include <functional>
-#include <memory>
-#include <span>
-#include <vector>
+import std.compat;
 #include "utils/rjson.hh"
 
 namespace alternator {

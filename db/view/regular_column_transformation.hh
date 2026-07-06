@@ -11,7 +11,7 @@
 #include "schema/column_computation.hh"
 #include "mutation/atomic_cell.hh"
 #include "mutation/timestamp.hh"
-#include <type_traits>
+import std.compat;
 
 class row_marker;
 

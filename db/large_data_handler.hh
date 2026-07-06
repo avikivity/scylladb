@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include <concepts>
+import std.compat;
 #include <cstdint>
-#include <optional>
-#include <type_traits>
 #include "seastarx.hh"
 #include "bytes.hh"
 #include "utils/managed_bytes.hh"

@@ -8,7 +8,7 @@
 
 
 #include "simple_strategy.hh"
-#include <coroutine>
+import std.compat;
 #include "exceptions/exceptions.hh"
 #include "utils/assert.hh"
 #include "utils/chunked_vector.hh"

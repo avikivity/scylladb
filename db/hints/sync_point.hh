@@ -9,8 +9,7 @@
 #pragma once
 
 #include <cstdint>
-#include <unordered_map>
-#include <vector>
+import std.compat;
 #include "gms/inet_address.hh"
 #include "db/commitlog/replay_position.hh"
 #include "locator/host_id.hh"

@@ -9,7 +9,7 @@
 #pragma once
 
 #include <cstddef>
-#include <string_view>
+import std.compat;
 
 #include "seastarx.hh"
 import abseil;

@@ -3,9 +3,8 @@
 
 #pragma once
 
-#include <compare>
+import std.compat;
 #include <cstdint>
-#include <iterator>
 
 // Specifies position in a lexicographically ordered sequence
 // relative to some value.

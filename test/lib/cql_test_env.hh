@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <functional>
-#include <vector>
+import std.compat;
 
 
 #include "db/view/view_building_worker.hh"

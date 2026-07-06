@@ -9,7 +9,7 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <map>
+import std.compat;
 
 #include "seastarx.hh"
 

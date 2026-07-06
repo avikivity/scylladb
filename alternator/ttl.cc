@@ -6,10 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <chrono>
+import std.compat;
 #include <cstdint>
-#include <exception>
-#include <optional>
 
 #include "cdc/log.hh"
 #include "exceptions/exceptions.hh"

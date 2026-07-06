@@ -9,11 +9,7 @@
 
 #pragma once 
 
-#include <vector>
-#include <optional>
-#include <chrono>
-#include <iosfwd>
-#include <string>
+import std.compat;
 
 
 #include "symmetric_key.hh"

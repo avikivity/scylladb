@@ -18,9 +18,7 @@
 #include "schema/schema_fwd.hh"
 #include "service/state_id.hh"
 #include "version.hh"
-#include <set>
-#include <unordered_set>
-#include <fmt/ranges.h>
+import std.compat;
 
 namespace gms {
 

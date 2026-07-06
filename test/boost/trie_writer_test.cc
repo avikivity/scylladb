@@ -9,7 +9,7 @@
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/testing/test_case.hh>
 #include <xxhash.h>
-#include <numeric>
+import std.compat;
 #include "test/lib/log.hh"
 #include "test/lib/test_utils.hh"
 #include "test/lib/key_utils.hh"

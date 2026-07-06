@@ -20,7 +20,7 @@
 #include "index/target_parser.hh"
 #include "types/concrete_types.hh"
 #include "types/types.hh"
-#include <ranges>
+import std.compat;
 import boost;
 
 namespace secondary_index {

@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 #include "utils/atomic_vector.hh"
 #include "utils/chunked_vector.hh"
 

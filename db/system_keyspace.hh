@@ -10,10 +10,7 @@
 #pragma once
 
 #include <cstdint>
-#include <optional>
-#include <unordered_map>
-#include <utility>
-#include <vector>
+import std.compat;
 #include "db/view/view_build_status.hh"
 #include "gms/gossiper.hh"
 #include "schema/schema_fwd.hh"

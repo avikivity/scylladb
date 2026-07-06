@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <ranges>
-#include <compare>
-#include <cstdint>
+import std.compat;
 #include "compound.hh"
 #include "schema/schema.hh"
 #include "sstables/version.hh"

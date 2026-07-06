@@ -28,7 +28,7 @@
 #include "utils/chunked_string.hh"
 #include "utils/hash.hh"
 
-#include <ranges>
+import std.compat;
 
 namespace cql3::expr {
 

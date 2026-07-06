@@ -36,13 +36,11 @@ import fmt;
 #include "cql3/result_set.hh"
 #include "bytes.hh"
 #include "service/pager/query_pagers.hh"
-#include <algorithm>
-#include <functional>
+import std.compat;
 #include "error.hh"
 #include "serialization.hh"
 #include "expressions.hh"
 #include "conditions.hh"
-#include <optional>
 #include "utils/assert.hh"
 #include "utils/overloaded_functor.hh"
 #include "mutation/collection_mutation.hh"
@@ -51,8 +49,6 @@ import fmt;
 #include "db/tags/utils.hh"
 #include "replica/database.hh"
 #include "alternator/rmw_operation.hh"
-#include <string_view>
-#include <unordered_set>
 #include "service/storage_proxy.hh"
 #include "gms/feature_service.hh"
 #include "gms/gossiper.hh"

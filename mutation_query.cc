@@ -8,7 +8,7 @@
 
 
 #include "mutation_query.hh"
-#include <coroutine>
+import std.compat;
 #include "schema/schema_registry.hh"
 import boost;
 

@@ -8,7 +8,7 @@
  */
 
 #include "mutation_partition_serializer.hh"
-#include <coroutine>
+import std.compat;
 #include "mutation_partition.hh"
 
 #include "counters.hh"

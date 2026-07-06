@@ -13,7 +13,7 @@
 #include "utils/to_string.hh"
 #include "replica/database.hh"
 #include "seastarx.hh"
-#include <random>
+import std.compat;
 #include <sys/resource.h>
 
 namespace tests {

@@ -10,7 +10,7 @@
 
 #include "like_matcher.hh"
 
-#include <string>
+import std.compat;
 import boost;
 
 namespace {

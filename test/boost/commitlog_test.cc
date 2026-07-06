@@ -10,13 +10,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <stdlib.h>
-#include <sstream>
-#include <regex>
-#include <iostream>
-#include <unordered_map>
-#include <unordered_set>
-#include <set>
-#include <deque>
+import std.compat;
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>

@@ -12,8 +12,7 @@ import boost;
 #define BOOST_TEST_MODULE core
 
 #include <boost/test/unit_test.hpp>
-#include <unordered_map>
-#include <algorithm>
+import std.compat;
 #include "utils/bit_cast.hh"
 #include "utils/reservoir_sampling.hh"
 

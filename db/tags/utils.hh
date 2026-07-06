@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <functional>
-#include <map>
-#include <optional>
+import std.compat;
 #include "seastarx.hh"
 
 #include "schema/schema.hh"

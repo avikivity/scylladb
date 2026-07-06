@@ -9,8 +9,7 @@
 
 #include "raft/raft.hh"
 
-#include <vector>
-#include <functional>
+import std.compat;
 
 
 #include "service/query_state.hh"

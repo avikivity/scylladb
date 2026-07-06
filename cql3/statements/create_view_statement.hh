@@ -12,8 +12,7 @@
 #include "cql3/statements/view_prop_defs.hh"
 
 
-#include <utility>
-#include <vector>
+import std.compat;
 
 namespace cql3 {
 

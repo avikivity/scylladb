@@ -10,8 +10,7 @@
 
 import seastar;
 
-#include <functional>
-#include <coroutine>
+import std.compat;
 
 // An async action wrapper which ensures that at most one action
 // is running at any time.

@@ -8,9 +8,7 @@
 
 #include "alternator/export.hh"
 #include "utils/rjson.hh"
-#include <algorithm>
-#include <string>
-#include <string_view>
+import std.compat;
 
 namespace alternator {
 

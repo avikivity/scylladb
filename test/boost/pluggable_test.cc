@@ -8,8 +8,7 @@
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
-#include <stdexcept>
-#include <coroutine>
+import std.compat;
 
 #include "utils/pluggable.hh"
 

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <variant>
+import std.compat;
 
 #include "db_clock.hh"
 #include "utils/UUID.hh"

@@ -42,8 +42,7 @@
 #include "utils/error_injection.hh"
 #include "vector_search/vector_store_client.hh"
 #include "seastarx.hh"
-#include <charconv>
-#include <stdexcept>
+import std.compat;
 import boost;
 
 using namespace std::chrono_literals;

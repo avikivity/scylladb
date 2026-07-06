@@ -12,7 +12,7 @@
 #include "seastarx.hh"
 #include <cstdint>
 
-#include <tuple>
+import std.compat;
 
 namespace version {
 class version {

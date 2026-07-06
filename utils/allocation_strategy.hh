@@ -10,11 +10,9 @@
 
 import seastar;
 
-#include <any>
+import std.compat;
 #include <cstdint>
-#include <memory>
 #include <cstdlib>
-#include <string>
 #include <malloc.h>
 
 // A function used by compacting collectors to migrate objects during

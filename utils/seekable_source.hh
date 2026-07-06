@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <chrono>
+import std.compat;
 
 class seekable_data_source_impl : public seastar::data_source_impl {
 public:

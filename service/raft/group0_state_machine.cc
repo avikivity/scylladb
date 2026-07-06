@@ -38,7 +38,7 @@
 #include "mutation/timestamp.hh"
 #include "utils/overloaded_functor.hh"
 #include "utils/to_string.hh"
-#include <optional>
+import std.compat;
 #include "db/config.hh"
 #include "replica/database.hh"
 #include "replica/tablets.hh"

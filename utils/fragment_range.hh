@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <concepts>
-#include <compare>
-#include <algorithm>
+import std.compat;
 
 #include "marshal_exception.hh"
 #include "bytes.hh"

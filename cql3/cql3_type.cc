@@ -7,7 +7,7 @@
  */
 
 #include "utils/assert.hh"
-#include <iterator>
+import std.compat;
 
 #include "cql3_type.hh"
 #include "cql3/util.hh"

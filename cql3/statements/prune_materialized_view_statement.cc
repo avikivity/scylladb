@@ -4,7 +4,7 @@
 
 /* Copyright 2022-present ScyllaDB */
 
-#include <optional>
+import std.compat;
 #include "cql3/statements/prune_materialized_view_statement.hh"
 #include "transport/messages/result_message.hh"
 #include "cql3/selection/selection.hh"

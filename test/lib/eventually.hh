@@ -9,8 +9,7 @@
 #pragma once
 
 #include <boost/test/unit_test.hpp>
-#include <chrono>
-#include <functional>
+import std.compat;
 
 #include "seastarx.hh"
 

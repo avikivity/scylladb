@@ -7,9 +7,7 @@
 
 #pragma once
 
-#include <type_traits>
-#include <concepts>
-#include <functional>
+import std.compat;
 
 
 #include "seastarx.hh"

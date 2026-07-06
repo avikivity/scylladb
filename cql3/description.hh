@@ -11,8 +11,7 @@
 
 #include "utils/managed_string.hh"
 
-#include <optional>
-#include <vector>
+import std.compat;
 
 #include "seastarx.hh"
 

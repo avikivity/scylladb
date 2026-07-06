@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <unordered_map>
-#include <functional>
-#include <set>
-#include <unordered_set>
+import std.compat;
 #include "seastarx.hh"
 #include "db/schema_features.hh"
 #include "gms/feature.hh"

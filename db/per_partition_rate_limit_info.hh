@@ -9,7 +9,7 @@
 #pragma once
 
 #include <cstdint>
-#include <variant>
+import std.compat;
 
 #include "seastarx.hh"
 

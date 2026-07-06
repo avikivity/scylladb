@@ -19,10 +19,7 @@
 #include "utils/rjson.hh"
 #include "types/json_utils.hh"
 #include "schema/schema.hh"
-#include <charconv>
-#include <exception>
-#include <ranges>
-#include <regex>
+import std.compat;
 
 import fmt;
 namespace {

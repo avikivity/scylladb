@@ -7,7 +7,7 @@
  */
 
 
-#include <random>
+import std.compat;
 
 #include "utils/allocation_strategy.hh"
 #include "utils/logalloc.hh"

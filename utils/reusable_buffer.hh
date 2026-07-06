@@ -13,8 +13,7 @@
 #include "utils/fragmented_temporary_buffer.hh"
 #include "utils/managed_bytes.hh"
 #include "utils/result.hh"
-#include <bit>
-#include <concepts>
+import std.compat;
 
 namespace utils {
 

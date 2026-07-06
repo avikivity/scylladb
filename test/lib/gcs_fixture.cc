@@ -6,9 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <string>
-#include <coroutine>
-#include <memory>
+import std.compat;
 
 
 #include "gcs_fixture.hh"

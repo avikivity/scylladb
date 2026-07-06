@@ -18,11 +18,7 @@
 
 #include "enum_set.hh"
 
-#include <functional>
-#include <memory>
-#include <optional>
-#include <set>
-#include <vector>
+import std.compat;
 
 namespace db {
 

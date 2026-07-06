@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include <chrono>
+import std.compat;
 
-#include <stdexcept>
-#include <unordered_map>
 
 #include "utils/log.hh"
 #include "raft/raft.hh"

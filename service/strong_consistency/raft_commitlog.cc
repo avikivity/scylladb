@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <coroutine>
+import std.compat;
 #include "db/commitlog/commitlog.hh"
 #include "db/commitlog/commitlog_entry.hh"
 #include "raft/raft.hh"

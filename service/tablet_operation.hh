@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <variant>
+import std.compat;
 #include "gc_clock.hh"
 
 namespace service {

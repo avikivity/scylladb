@@ -9,7 +9,7 @@
 
 #include "gcp_credentials.hh"
 #include <fcntl.h>
-#include <coroutine>
+import std.compat;
 
 
 namespace seastar::http::internal { sstring url_encode(std::string_view in); }

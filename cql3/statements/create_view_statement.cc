@@ -11,8 +11,7 @@
 #include "cql3/statements/view_prop_defs.hh"
 #include "exceptions/exceptions.hh"
 #include "utils/assert.hh"
-#include <unordered_set>
-#include <vector>
+import std.compat;
 
 
 #include "cql3/column_identifier.hh"

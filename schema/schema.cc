@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <map>
+import std.compat;
 #include "bytes_ostream.hh"
 #include "cql3/description.hh"
 #include "db/tablet_options.hh"
@@ -24,7 +24,6 @@
 #include "db/extensions.hh"
 #include "db/marshal/type_parser.hh"
 #include "schema_registry.hh"
-#include <type_traits>
 #include "view_info.hh"
 #include "partition_slice_builder.hh"
 #include "replica/database.hh"

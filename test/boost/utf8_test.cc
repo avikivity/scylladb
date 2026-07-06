@@ -9,9 +9,8 @@
 #define BOOST_TEST_MODULE core
 
 #include <cstdint>
-#include <vector>
+import std.compat;
 #include <boost/test/unit_test.hpp>
-#include <random>
 
 #include "utils/utf8.hh"
 #include "utils/fragmented_temporary_buffer.hh"

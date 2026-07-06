@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <functional>
+import std.compat;
 
 /// Type-erased formatter.
 /// Allows passing formattable objects without exposing their types.

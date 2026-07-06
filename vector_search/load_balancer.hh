@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <vector>
-#include <random>
+import std.compat;
 
 #include "seastarx.hh"
 

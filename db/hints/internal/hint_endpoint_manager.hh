@@ -20,7 +20,7 @@
 
 // STD.
 #include <cassert>
-#include <filesystem>
+import std.compat;
 
 namespace db::hints {
 

@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <string_view>
-#include <unordered_set>
-#include <unordered_map>
+import std.compat;
 
 
 #include "absl-flat_hash_map.hh"

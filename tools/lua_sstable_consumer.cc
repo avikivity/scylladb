@@ -8,7 +8,7 @@
 
 #include "utils/assert.hh"
 #include <lua.hpp>
-#include <random>
+import std.compat;
 
 #include "lang/lua_scylla_types.hh"
 #include "reader_permit.hh"

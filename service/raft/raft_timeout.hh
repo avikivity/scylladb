@@ -6,7 +6,7 @@
 
 #include "seastarx.hh"
 
-#include <optional>
+import std.compat;
 
 namespace service {
 

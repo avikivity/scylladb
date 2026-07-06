@@ -11,7 +11,7 @@
 #include "auth/permission.hh"
 
 
-#include <unordered_map>
+import std.compat;
 import boost;
 
 const auth::permission_set auth::permissions::ALL = auth::permission_set::of<

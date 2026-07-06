@@ -6,8 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <numeric>
-#include <variant>
+import std.compat;
 #include "utils/log.hh"
 #include "bytes.hh"
 #include "advanced_rpc_compressor.hh"

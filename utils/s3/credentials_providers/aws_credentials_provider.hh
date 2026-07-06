@@ -8,8 +8,7 @@
 
 #pragma once
 #include "utils/s3/creds.hh"
-#include <functional>
-#include <memory>
+import std.compat;
 
 namespace seastar::http { class retry_strategy; }
 

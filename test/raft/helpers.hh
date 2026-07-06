@@ -17,7 +17,7 @@
 #include "test/lib/log.hh"
 #include "test/lib/random_utils.hh"
 #include "serializer_impl.hh"
-#include <limits>
+import std.compat;
 
 #include "raft/fsm.hh"
 

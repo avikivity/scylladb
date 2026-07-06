@@ -9,7 +9,7 @@
 
 #include "schema_applier.hh"
 
-#include <memory>
+import std.compat;
 
 
 #include "absl-flat_hash_map.hh"

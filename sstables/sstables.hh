@@ -13,9 +13,7 @@
 #include "shared_sstable.hh"
 #include "open_info.hh"
 #include "sstables_registry.hh"
-#include <unordered_set>
-#include <unordered_map>
-#include <variant>
+import std.compat;
 #include "schema/schema_fwd.hh"
 #include "encoding_stats.hh"
 #include "filter.hh"

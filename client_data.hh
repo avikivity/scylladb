@@ -10,8 +10,7 @@
 #include "seastarx.hh"
 #include "utils/loading_shared_values.hh"
 
-#include <list>
-#include <optional>
+import std.compat;
 
 enum class client_type {
     cql = 0,

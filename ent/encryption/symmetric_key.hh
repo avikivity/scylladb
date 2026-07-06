@@ -9,9 +9,7 @@
 
 #pragma once
 
-#include <memory>
-#include <tuple>
-#include <iosfwd>
+import std.compat;
 
 #include "../../bytes.hh"
 

@@ -11,15 +11,10 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
-#include <unordered_map>
+import std.compat;
 
 
-#include <optional>
 #include <cctype>
-#include <map>
-#include <set>
-#include <variant>
 
 #include "seastarx.hh"
 

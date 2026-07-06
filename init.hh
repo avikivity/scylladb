@@ -7,8 +7,7 @@
  */
 #pragma once
 
-#include <any>
-#include <functional>
+import std.compat;
 
 #include "utils/log.hh"
 #include "utils/s3/creds.hh"

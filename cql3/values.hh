@@ -12,8 +12,7 @@
 #include "types/collection.hh"
 #include "bytes.hh"
 
-#include <optional>
-#include <variant>
+import std.compat;
 
 
 #include "utils/fragmented_temporary_buffer.hh"

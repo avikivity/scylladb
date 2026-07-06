@@ -10,7 +10,7 @@
 #include <boost/test/unit_test.hpp>
 #include "test/lib/scylla_test_case.hh"
 #include "test/lib/test_utils.hh"
-#include <string>
+import std.compat;
 #include "locator/snitch_base.hh"
 #include "gms/inet_address.hh"
 #include "seastarx.hh"

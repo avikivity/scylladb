@@ -15,7 +15,7 @@
 #include "locator/abstract_replication_strategy.hh"
 #include "data_dictionary/consistency_config_options.hh"
 
-#include <optional>
+import std.compat;
 
 namespace data_dictionary {
 class keyspace_metadata;

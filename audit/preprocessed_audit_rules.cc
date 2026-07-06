@@ -7,7 +7,7 @@
  */
 
 #include "audit/preprocessed_audit_rules.hh"
-#include <coroutine>
+import std.compat;
 #include "audit/audit_rule.hh"
 
 

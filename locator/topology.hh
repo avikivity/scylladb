@@ -11,11 +11,7 @@
 #pragma once
 
 #include <cstddef>
-#include <functional>
-#include <unordered_set>
-#include <unordered_map>
-#include <iostream>
-#include <random>
+import std.compat;
 
 
 #include "locator/types.hh"

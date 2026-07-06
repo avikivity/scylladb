@@ -9,7 +9,7 @@
 #pragma once
 
 #include <cstddef>
-#include <iostream>
+import std.compat;
 #include "utils/bptree.hh"
 import fmt;
 

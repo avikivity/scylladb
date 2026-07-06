@@ -9,11 +9,7 @@
 #pragma once
 
 
-#include <optional>
-#include <stdexcept>
-#include <unordered_map>
-#include <unordered_set>
-#include <variant>
+import std.compat;
 
 
 #include "seastarx.hh"

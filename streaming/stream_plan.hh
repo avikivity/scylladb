@@ -17,7 +17,7 @@
 #include "streaming/stream_coordinator.hh"
 #include "streaming/stream_detail.hh"
 #include "streaming/stream_reason.hh"
-#include <vector>
+import std.compat;
 
 namespace streaming {
 

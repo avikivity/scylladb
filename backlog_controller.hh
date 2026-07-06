@@ -7,7 +7,7 @@
  */
 
 #pragma once
-#include <chrono>
+import std.compat;
 #include <cmath>
 
 #include "seastarx.hh"

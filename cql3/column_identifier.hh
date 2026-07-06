@@ -12,8 +12,7 @@
 
 #include "schema/schema.hh"
 
-#include <algorithm>
-#include <functional>
+import std.compat;
 
 namespace cql3 {
 

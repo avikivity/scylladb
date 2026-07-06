@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include <vector>
+import std.compat;
 
 #include "enum_set.hh"
 

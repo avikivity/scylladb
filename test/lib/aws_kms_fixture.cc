@@ -6,8 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <string>
-#include <memory>
+import std.compat;
 
 
 #include "aws_kms_fixture.hh"

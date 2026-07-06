@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <ostream>
+import std.compat;
 
 namespace cql3 {
 

@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <string_view>
-#include <memory>
-#include <optional>
-#include <unordered_set>
+import std.compat;
 
 
 #include "auth/common.hh"

@@ -11,10 +11,8 @@
 #include "utils.hh"
 #include "utils/assert.hh"
 #include "utils/rjson.hh"
-#include <chrono>
+import std.compat;
 #include <cstdint>
-#include <memory>
-#include <vector>
 
 namespace test::vector_search {
 

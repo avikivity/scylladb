@@ -12,9 +12,7 @@
 
 #include "exceptions/exceptions.hh"
 
-#include <stdexcept>
-#include <string>
-#include <tuple>
+import std.compat;
 
 #include "cql3/cql3_type.hh"
 #include "types/user.hh"

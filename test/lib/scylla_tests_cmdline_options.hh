@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <utility>
+import std.compat;
 
 class scylla_tests_cmdline_options_processor {
 private:

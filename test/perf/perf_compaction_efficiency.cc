@@ -7,10 +7,7 @@
  */
 
 #include <cmath>
-#include <random>
-#include <algorithm>
-#include <numeric>
-#include <sstream>
+import std.compat;
 #include <json/json.h>
 
 

@@ -7,7 +7,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <regex>
+import std.compat;
 
 #include "utils/UUID.hh"
 #include "utils/UUID_gen.hh"

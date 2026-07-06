@@ -16,8 +16,7 @@
 #include "utils/utf8.hh"
 #include "replica/database_fwd.hh"
 #include "schema/schema_fwd.hh"
-#include <compare>
-#include <span>
+import std.compat;
 
 //
 // This header defines type system for primary key holders.

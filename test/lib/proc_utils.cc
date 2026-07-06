@@ -7,9 +7,7 @@
 
 #include "proc_utils.hh"
 
-#include <iostream>
-#include <ranges>
-#include <regex>
+import std.compat;
 
 
 #include "utils/overloaded_functor.hh"

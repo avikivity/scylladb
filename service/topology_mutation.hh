@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include <concepts>
+import std.compat;
 #include <cstdint>
-#include <set>
-#include <unordered_set>
 
 
 #include "dht/token.hh"

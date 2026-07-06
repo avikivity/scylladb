@@ -11,8 +11,7 @@
 #include <cstring>
 
 #include <cstdint>
-#include <iterator>
-#include <span>
+import std.compat;
 
 using const_bytes = std::span<const std::byte>;
 

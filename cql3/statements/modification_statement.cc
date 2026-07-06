@@ -19,7 +19,7 @@
 #include "cql3/util.hh"
 #include "validation.hh"
 #include "db/consistency_level_validations.hh"
-#include <optional>
+import std.compat;
 #include "transport/messages/result_message.hh"
 #include "data_dictionary/data_dictionary.hh"
 #include "replica/database.hh"

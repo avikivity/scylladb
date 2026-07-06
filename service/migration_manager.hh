@@ -23,7 +23,7 @@
 #include "service/raft/raft_group0_client.hh"
 #include "db/timeout_clock.hh"
 
-#include <vector>
+import std.compat;
 
 class canonical_mutation;
 namespace cql3 {

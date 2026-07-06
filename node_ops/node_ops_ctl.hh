@@ -16,7 +16,7 @@
 #include "locator/host_id.hh"
 
 
-#include <list>
+import std.compat;
 
 
 class node_ops_info {

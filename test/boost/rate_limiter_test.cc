@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <chrono>
+import std.compat;
 #include <cstdint>
 #include <seastar/testing/test_case.hh>
 

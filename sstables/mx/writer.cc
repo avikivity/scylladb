@@ -22,8 +22,7 @@
 #include "db/corrupt_data_handler.hh"
 #include "keys/keys.hh"
 
-#include <functional>
-#include <queue>
+import std.compat;
 import boost;
 
 logging::logger slogger("mc_writer");

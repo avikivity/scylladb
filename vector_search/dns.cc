@@ -7,10 +7,8 @@
  */
 
 #include "dns.hh"
-#include <ranges>
-#include <coroutine>
+import std.compat;
 #include "utils/exceptions.hh"
-#include <chrono>
 
 import fmt;
 namespace vector_search {

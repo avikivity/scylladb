@@ -10,7 +10,7 @@
 #pragma once
 
 
-#include <chrono>
+import std.compat;
 
 
 #include "utils/log.hh"

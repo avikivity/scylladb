@@ -10,8 +10,7 @@
 
 #include "time_window_compaction_strategy.hh"
 #include "leveled_compaction_strategy.hh"
-#include <utility>
-#include <variant>
+import std.compat;
 
 namespace compaction {
 

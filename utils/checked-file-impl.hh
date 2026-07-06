@@ -9,7 +9,7 @@
 #pragma once
 
 #include <sys/uio.h>
-#include <coroutine>
+import std.compat;
 
 #include "utils/disk-error-handler.hh"
 

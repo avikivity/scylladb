@@ -32,9 +32,7 @@
 #include "seastarx.hh"
 
 // STD.
-#include <algorithm>
-#include <exception>
-#include <variant>
+import std.compat;
 
 import fmt;
 namespace db::hints {

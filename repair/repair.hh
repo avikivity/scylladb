@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <stdexcept>
-#include <unordered_map>
-#include <exception>
+import std.compat;
 
 
 #include "gms/inet_address.hh"

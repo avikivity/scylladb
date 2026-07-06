@@ -10,8 +10,7 @@
 #pragma once
 
 #include "keys/keys.hh"
-#include <memory>
-#include <utility>
+import std.compat;
 #include "dht/token.hh"
 #include "dht/token-sharding.hh"
 #include "dht/decorated_key.hh"

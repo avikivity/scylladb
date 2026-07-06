@@ -11,7 +11,7 @@
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/on_internal_error.hh>
-#include <sstream>
+import std.compat;
 
 #include "audit/audit.hh"
 #include "test/lib/cql_test_env.hh"

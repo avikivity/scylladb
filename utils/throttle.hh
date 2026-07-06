@@ -2,7 +2,7 @@
 
 #include "seastarx.hh"
 #include "utils/assert.hh"
-#include <optional>
+import std.compat;
 
 namespace utils {
 

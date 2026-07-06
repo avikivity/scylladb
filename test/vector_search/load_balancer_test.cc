@@ -8,7 +8,7 @@
 
 #include "vector_search/load_balancer.hh"
 #include <seastar/testing/test_case.hh>
-#include <random>
+import std.compat;
 
 using namespace vector_search;
 

@@ -10,11 +10,10 @@
 
 #pragma once
 
-#include <string_view>
+import std.compat;
 
 #include "seastarx.hh"
 
-#include <optional>
 
 namespace cql3 {
 

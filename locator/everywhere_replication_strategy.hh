@@ -11,7 +11,7 @@
 #pragma once
 
 #include "locator/abstract_replication_strategy.hh"
-#include <optional>
+import std.compat;
 
 namespace locator {
 class everywhere_replication_strategy : public abstract_replication_strategy {

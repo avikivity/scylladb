@@ -14,7 +14,7 @@
 #include "replica/database.hh"
 #include "utils/stall_free.hh"
 
-#include <variant>
+import std.compat;
 import boost;
 
 import fmt;

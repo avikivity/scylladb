@@ -8,8 +8,7 @@
 
 
 #include "UUID.hh"
-#include <random>
-#include <string>
+import std.compat;
 #include "marshal_exception.hh"
 import boost;
 

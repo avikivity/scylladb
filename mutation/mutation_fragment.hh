@@ -11,7 +11,7 @@
 #include "mutation_partition.hh"
 #include "position_in_partition.hh"
 
-#include <optional>
+import std.compat;
 
 #include "reader_permit.hh"
 #include "mutation_fragment_fwd.hh"

@@ -10,11 +10,9 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <mutex>
+import std.compat;
 
 #include <ldap.h>
-#include <memory>
-#include <unordered_map>
 
 
 #include "utils/sequential_producer.hh"

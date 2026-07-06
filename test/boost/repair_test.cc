@@ -18,7 +18,7 @@
 #include "test/lib/cql_test_env.hh"
 #include "service/storage_proxy.hh"
 #include "test/lib/reader_concurrency_semaphore.hh"
-#include <limits>
+import std.compat;
 import boost;
 
 #undef SEASTAR_TESTING_MAIN

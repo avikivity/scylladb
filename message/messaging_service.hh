@@ -8,15 +8,12 @@
 
 #pragma once
 
-#include <any>
-#include <optional>
-#include <tuple>
+import std.compat;
 
 #include "seastarx.hh"
 #include "messaging_service_fwd.hh"
 #include "msg_addr.hh"
 #include "gms/inet_address.hh"
-#include <unordered_map>
 #include "utils/interval.hh"
 #include "schema/schema_fwd.hh"
 #include "streaming/stream_fwd.hh"
@@ -28,10 +25,6 @@
 #include "message/advanced_rpc_compressor.hh"
 #include "utils/chunked_vector.hh"
 
-#include <list>
-#include <vector>
-#include <optional>
-#include <array>
 
 import abseil;
 

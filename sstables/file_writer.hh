@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <optional>
-#include <utility>
+import std.compat;
 
 
 #include "sstables/progress_monitor.hh"

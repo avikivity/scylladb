@@ -8,7 +8,7 @@
  */
 
 #pragma once
-#include <variant>
+import std.compat;
 #include "query/query-result.hh"
 #include "service/paxos/proposal.hh"
 import fmt;

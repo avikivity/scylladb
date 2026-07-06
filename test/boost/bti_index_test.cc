@@ -13,7 +13,7 @@
 // BTI index reader operations on it, checking that the results
 // are consistent with a "reference" index on the same dataset.
 
-#include <generator>
+import std.compat;
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/testing/test_case.hh>
 #include "sstables/mx/types.hh"

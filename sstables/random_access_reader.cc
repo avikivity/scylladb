@@ -8,7 +8,7 @@
 
 #include "sstables/random_access_reader.hh"
 
-#include <exception>
+import std.compat;
 #include "utils/disk-error-handler.hh"
 #include "utils/log.hh"
 

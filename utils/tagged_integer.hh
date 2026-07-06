@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <iostream>
+import std.compat;
 import fmt;
 
 

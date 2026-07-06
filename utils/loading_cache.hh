@@ -8,13 +8,8 @@
 
 #pragma once
 
-#include <functional>
+import std.compat;
 
-#include <chrono>
-#include <memory_resource>
-#include <optional>
-#include <ranges>
-#include <algorithm>
 
 
 

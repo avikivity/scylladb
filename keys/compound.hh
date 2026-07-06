@@ -9,10 +9,7 @@
 #pragma once
 
 #include "types/types.hh"
-#include <algorithm>
-#include <vector>
-#include <span>
-#include <ranges>
+import std.compat;
 #include "utils/assert.hh"
 #include "utils/serialization.hh"
 #include "exceptions/exceptions.hh"

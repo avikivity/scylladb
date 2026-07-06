@@ -11,7 +11,7 @@
 #include "external_index_select_statement.hh"
 #include "cql3/expr/temporary_allocator.hh"
 
-#include <optional>
+import std.compat;
 
 namespace cql3::statements {
 

@@ -6,13 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
-#include <exception>
-#include <functional>
-#include <string_view>
-#include <vector>
-#include <ranges>
-#include <limits>
+import std.compat;
 #include <fcntl.h>
 
 #include <gnutls/pkcs11.h>
@@ -66,7 +60,6 @@
 #include "repair/row_level.hh"
 #include "vector_search/vector_store_client.hh"
 #include <cstdio>
-#include <stdexcept>
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/resource.h>

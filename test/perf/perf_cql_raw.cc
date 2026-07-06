@@ -7,8 +7,7 @@
  */
 
 #include <cstdlib>
-#include <limits>
-#include <memory>
+import std.compat;
 #include <signal.h>
 
 #include "db/config.hh"
@@ -17,8 +16,6 @@
 #include "transport/server.hh"
 #include "transport/response.hh"
 #include <cstring>
-#include <unordered_map>
-#include <stack>
 import boost;
 
 import fmt;

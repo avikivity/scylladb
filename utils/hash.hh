@@ -9,7 +9,7 @@
 #ifndef UTILS_HASH_HH_
 #define UTILS_HASH_HH_
 
-#include <functional>
+import std.compat;
 
 namespace utils {
 

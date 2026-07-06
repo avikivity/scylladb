@@ -7,10 +7,7 @@
 
 #pragma once
 
-#include <algorithm>
-#include <random>
-#include <ranges>
-#include <iostream>
+import std.compat;
 
 #include <seastar/testing/random.hh>
 #include <seastar/testing/test_runner.hh>

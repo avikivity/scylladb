@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 #include "utils/interval.hh"
 #include "dht/ring_position.hh"
 

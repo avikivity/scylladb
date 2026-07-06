@@ -7,10 +7,7 @@
  */
 
 
-#include <list>
-#include <random>
-#include <source_location>
-#include <algorithm>
+import std.compat;
 
 
 #include "sstables/generation_type.hh"

@@ -8,7 +8,7 @@
 
 
 #include <boost/test/unit_test.hpp>
-#include <iterator>
+import std.compat;
 #include <cstdint>
 
 #undef SEASTAR_TESTING_MAIN

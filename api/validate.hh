@@ -12,7 +12,7 @@
 #include "locator/token_metadata.hh"
 #include <cstdint>
 #include <cstdlib>
-#include <stdexcept>
+import std.compat;
 #include <strings.h>
 
 inline locator::host_id validate_host_id(const sstring& param) {

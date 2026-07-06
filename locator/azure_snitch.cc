@@ -8,7 +8,7 @@
  */
 
 #include "locator/azure_snitch.hh"
-#include <coroutine>
+import std.compat;
 
 
 

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 #include "gms/gossip_address_map.hh"
 #include "gms/inet_address.hh"
 #include "repair/repair.hh"

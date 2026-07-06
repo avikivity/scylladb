@@ -9,8 +9,7 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <optional>
-#include <string_view>
+import std.compat;
 #include "commitlog_types.hh"
 #include "mutation/frozen_mutation.hh"
 #include "schema/schema_fwd.hh"

@@ -6,11 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <iterator>
-#include <ranges>
-#include <stdexcept>
-#include <unordered_set>
-#include <utility>
+import std.compat;
 
 #include "db/view/view_building_worker.hh"
 #include "db/view/view_building_task_mutation_builder.hh"

@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <variant>
-#include <type_traits>
+import std.compat;
 
 namespace utils {
 

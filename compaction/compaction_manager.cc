@@ -13,7 +13,7 @@
 #include "compaction_weight_registration.hh"
 #include "sstables/sstables.hh"
 #include "sstables/sstables_manager.hh"
-#include <memory>
+import std.compat;
 #include "sstables/sstable_directory.hh"
 #include "utils/assert.hh"
 #include "utils/error_injection.hh"

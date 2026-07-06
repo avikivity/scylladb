@@ -9,9 +9,7 @@
 
 #pragma once
 
-#include <filesystem>
-#include <expected>
-#include <vector>
+import std.compat;
 #include "sstables/version.hh"
 #include "sstables/component_type.hh"
 #include "sstables/shareable_components.hh"

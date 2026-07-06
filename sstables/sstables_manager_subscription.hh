@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <optional>
+import std.compat;
 
 
 #include "sstables/generation_type.hh"

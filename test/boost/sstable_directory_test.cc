@@ -7,7 +7,7 @@
  */
 
 
-#include <functional>
+import std.compat;
 #include "dht/token.hh"
 #include "sstables/generation_type.hh"
 import boost;

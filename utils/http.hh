@@ -8,11 +8,8 @@
 
 #pragma once
 
-#include <chrono>
+import std.compat;
 #include <cstdint>
-#include <string>
-#include <string_view>
-#include <vector>
 #include "seastarx.hh"
 
 

@@ -9,11 +9,7 @@
 #pragma once
 
 
-#include <queue>
-#include <mutex>
-#include <condition_variable>
-#include <thread>
-#include <deque>
+import std.compat;
 #include <cassert>
 
 import seastar;

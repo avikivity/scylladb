@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <optional>
-#include <vector>
+import std.compat;
 
 #include "query/query-request.hh"
 #include "schema/schema_fwd.hh"

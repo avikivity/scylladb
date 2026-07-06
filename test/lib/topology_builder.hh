@@ -21,7 +21,7 @@
 #include "test/lib/log.hh"
 #include "version.hh"
 
-#include <atomic>
+import std.compat;
 
 struct shared_load_stats {
     locator::load_stats stats;

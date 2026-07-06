@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <unordered_map>
-#include <unordered_set>
-#include <flat_set>
+import std.compat;
 #include "locator/abstract_replication_strategy.hh"
 #include "locator/tablets.hh"
 #include "raft/raft.hh"

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <concepts>
+import std.compat;
 
 inline auto
 div_ceil(std::integral auto dividend, std::integral auto divisor) {

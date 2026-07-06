@@ -8,8 +8,7 @@
 
 #include "base64.hh"
 #include <cstdint>
-#include <stdexcept>
-#include <algorithm>
+import std.compat;
 
 
 // Arrays for quickly converting to and from an integer between 0 and 63,

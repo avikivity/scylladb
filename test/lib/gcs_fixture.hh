@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <string>
-#include <memory>
+import std.compat;
 
 
 #include "utils/gcp/object_storage.hh"

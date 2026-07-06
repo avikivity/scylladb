@@ -10,9 +10,7 @@
 
 #pragma once
 
-#include <functional>
-#include <optional>
-#include <string_view>
+import std.compat;
 
 
 #include "auth/authenticated_user.hh"

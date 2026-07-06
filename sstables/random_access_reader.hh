@@ -9,7 +9,7 @@
 #pragma once
 
 #include "exceptions.hh"
-#include <memory>
+import std.compat;
 #include "seastarx.hh"
 #include "sstables/checksum_utils.hh"
 

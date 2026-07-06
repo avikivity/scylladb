@@ -7,16 +7,9 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <stdexcept>
-#include <string>
+import std.compat;
 #include <sys/stat.h>
 #include <malloc.h>
-#include <filesystem>
-#include <unordered_map>
-#include <unordered_set>
-#include <exception>
-#include <filesystem>
-#include <concepts>
 
 
 #include "seastarx.hh"

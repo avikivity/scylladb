@@ -8,9 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <chrono>
-#include <exception>
-#include <ranges>
+import std.compat;
 
 #include "batchlog_manager.hh"
 #include "batchlog.hh"

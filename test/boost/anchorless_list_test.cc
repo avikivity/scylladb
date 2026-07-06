@@ -8,8 +8,7 @@
 
 #define BOOST_TEST_MODULE core
 
-#include <memory>
-#include <vector>
+import std.compat;
 #include <boost/test/unit_test.hpp>
 
 #include "utils/anchorless_list.hh"

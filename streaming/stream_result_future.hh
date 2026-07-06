@@ -14,7 +14,7 @@
 #include "streaming/stream_event_handler.hh"
 #include "streaming/stream_state.hh"
 #include "streaming/progress_info.hh"
-#include <vector>
+import std.compat;
 
 namespace streaming {
     using inet_address = gms::inet_address;

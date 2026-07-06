@@ -8,8 +8,7 @@
 #pragma once
 
 
-#include <unordered_map>
-#include <list>
+import std.compat;
 
 #include "seastarx.hh"
 

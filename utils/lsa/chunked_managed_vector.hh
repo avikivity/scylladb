@@ -16,12 +16,7 @@
 #include "utils/logalloc.hh"
 #include "utils/managed_vector.hh"
 
-#include <type_traits>
-#include <iterator>
-#include <utility>
-#include <algorithm>
-#include <bit>
-#include <stdexcept>
+import std.compat;
 
 namespace lsa {
 

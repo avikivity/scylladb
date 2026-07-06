@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <coroutine>
+import std.compat;
 
 
 #include "readers/queue.hh"

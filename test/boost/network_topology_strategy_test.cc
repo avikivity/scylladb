@@ -28,15 +28,7 @@ import boost;
 #include "utils/log.hh"
 #include "gms/gossiper.hh"
 #include "schema/schema_builder.hh"
-#include <ranges>
-#include <vector>
-#include <string>
-#include <map>
-#include <set>
-#include <iostream>
-#include <sstream>
-#include <compare>
-#include <ranges>
+import std.compat;
 #include "test/lib/log.hh"
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/key_utils.hh"

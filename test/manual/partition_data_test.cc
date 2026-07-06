@@ -9,7 +9,7 @@
 #define BOOST_TEST_MODULE partition_data
 #include <boost/test/unit_test.hpp>
 
-#include <random>
+import std.compat;
 
 #include "test/lib/random_utils.hh"
 #include "utils/disk-error-handler.hh"

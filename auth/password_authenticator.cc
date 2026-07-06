@@ -10,11 +10,8 @@
 
 #include "auth/password_authenticator.hh"
 
-#include <random>
-#include <string_view>
-#include <optional>
+import std.compat;
 
-#include <variant>
 
 #include "auth/authenticated_user.hh"
 #include "auth/authentication_options.hh"

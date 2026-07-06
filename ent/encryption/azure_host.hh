@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <memory>
+import std.compat;
 
 
 #include "symmetric_key.hh"

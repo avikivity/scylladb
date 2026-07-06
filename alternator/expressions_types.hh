@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <vector>
-#include <string>
-#include <variant>
+import std.compat;
 
 
 #include "utils/rjson.hh"

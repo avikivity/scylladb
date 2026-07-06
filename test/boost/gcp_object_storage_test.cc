@@ -9,9 +9,7 @@
 #include "utils/gcp/object_storage.hh"
 #include "utils/gcp/gcp_credentials.hh"
 
-#include <ranges>
-#include <unordered_set>
-#include <filesystem>
+import std.compat;
 #include <boost/test/unit_test.hpp>
 
 #include "ent/encryption/symmetric_key.hh"

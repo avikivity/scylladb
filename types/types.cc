@@ -8,7 +8,7 @@
 
 import fmt;
 import boost;
-#include <algorithm>
+import std.compat;
 #include "cql3/cql3_type.hh"
 #include "cql3/description.hh"
 #include "cql3/lists.hh"
@@ -16,21 +16,13 @@ import boost;
 #include "cql3/sets.hh"
 #include "cql3/util.hh"
 #include "concrete_types.hh"
-#include <exception>
-#include <iterator>
 #include "types/types.hh"
 #include "utils/assert.hh"
 #include "utils/serialization.hh"
 #include "vint-serialization.hh"
 #include <cmath>
-#include <chrono>
-#include <sstream>
-#include <string>
-#include <concepts>
 #include <ctime>
 #include <cstdlib>
-#include <type_traits>
-#include <unordered_set>
 #include "utils/big_decimal.hh"
 #include "utils/date.h"
 #include "utils/utf8.hh"

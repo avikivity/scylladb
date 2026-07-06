@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <stdexcept>
-#include <string_view>
-#include <vector>
-#include <map>
+import std.compat;
 #include "utils/stall_free.hh"
 
 namespace utils {

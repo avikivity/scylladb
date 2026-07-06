@@ -7,10 +7,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
-#include <functional>
-#include <ranges>
-#include <stdexcept>
+import std.compat;
 
 #include "cql3/expr/expression.hh"
 #include "cql3/expr/evaluate.hh"

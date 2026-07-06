@@ -15,7 +15,7 @@
 #include "version.hh"
 #include "mutation/counters.hh"
 #include "dht/i_partitioner_fwd.hh"
-#include <set>
+import std.compat;
 
 namespace sstables {
 

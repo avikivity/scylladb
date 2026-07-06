@@ -8,7 +8,7 @@
  */
 
 import fmt;
-#include <ranges>
+import std.compat;
 
 #include "system_keyspace.hh"
 #include "cql3/untyped_result_set.hh"
@@ -51,7 +51,6 @@ import fmt;
 #include "mutation/async_utils.hh"
 #include "utils/chunked_string.hh"
 
-#include <unordered_map>
 import boost;
 
 using days = std::chrono::duration<int, std::ratio<24 * 3600>>;

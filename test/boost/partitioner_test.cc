@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <limits>
+import std.compat;
 
 #include <boost/test/tools/old/interface.hpp>
 #include "test/lib/scylla_test_case.hh"

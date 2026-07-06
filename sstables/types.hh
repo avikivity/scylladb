@@ -18,10 +18,7 @@
 #include "sstables/key.hh"
 #include "sstables/file_writer.hh"
 #include "db/commitlog/replay_position.hh"
-#include <vector>
-#include <unordered_map>
-#include <type_traits>
-#include <concepts>
+import std.compat;
 #include "version.hh"
 #include "encoding_stats.hh"
 #include "types_fwd.hh"

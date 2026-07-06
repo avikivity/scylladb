@@ -19,7 +19,7 @@
 #include "cql3/functions/aggregate_fcts.hh"
 #include "types/types.hh"
 
-#include <ranges>
+import std.compat;
 
 namespace cql3 {
 

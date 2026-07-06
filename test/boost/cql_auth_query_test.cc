@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <string_view>
+import std.compat;
 
 
 #undef SEASTAR_TESTING_MAIN
