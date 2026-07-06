@@ -854,7 +854,7 @@ private:
             // currently giving back false always, we can't simply do this though. Thus this ugly loop.
             // Adding the stop defer before actually creating the service should be fine.
 
-            auto stop_ms_func = [this] { _ms.stop().get(); };
+            auto stop_ms_func = [this] noexcept { _ms.stop().get(); };
             using stop_type = decltype(stop_ms_func);
             std::optional<decltype(defer_verbose_shutdown("", stop_type(stop_ms_func)))> stop_ms;
 
