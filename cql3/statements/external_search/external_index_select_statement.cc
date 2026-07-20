@@ -15,7 +15,7 @@
 #include "service/storage_proxy.hh"
 #include "utils/result_loop.hh"
 
-#include <seastar/core/future.hh>
+import seastar;
 
 template<typename T = void>
 using coordinator_result = cql3::statements::select_statement::coordinator_result<T>;
