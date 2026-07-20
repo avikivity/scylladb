@@ -279,6 +279,21 @@ if(_std_module_src STREQUAL "")
 endif()
 message(STATUS "Found std module source: ${_std_module_src}")
 
+# Consume fmt via `import fmt;` (Seastar_IMPORT_FMT). Seastar keeps this off its
+# target INTERFACE so its own targets stay textual, so define it here for
+# Scylla's own targets (created below; fmt/seastar/abseil were added earlier and
+# are unaffected). fmt's macros aren't in the module, so also supply FMT_VERSION,
+# derived from the fmt found above.
+if(Seastar_IMPORT_FMT)
+  string(REPLACE "." ";" _fmt_version_components "${fmt_VERSION}")
+  list(GET _fmt_version_components 0 _fmt_version_major)
+  list(GET _fmt_version_components 1 _fmt_version_minor)
+  list(GET _fmt_version_components 2 _fmt_version_patch)
+  math(EXPR _fmt_version_int
+    "${_fmt_version_major} * 10000 + ${_fmt_version_minor} * 100 + ${_fmt_version_patch}")
+  add_compile_definitions(SEASTAR_IMPORT_FMT FMT_VERSION=${_fmt_version_int})
+endif()
+
 # C++20 modules: build the std module from libstdc++'s source.
 # All targets that consume 'import std;' link against this.
 add_library(scylla-stdmodule STATIC)
