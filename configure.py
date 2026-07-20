@@ -2646,7 +2646,7 @@ def write_build_file(f,
             command = echo -e $text > $out
             description = GEN $out
         rule swagger
-            command = {seastar_path}/scripts/seastar-json2code.py --create-cc -f $in -o $out
+            command = {seastar_path}/scripts/seastar-json2code.py --module-dependencies --create-cc -f $in -o $out
             description = SWAGGER $out
         rule serializer
             command = ./idl-compiler.py --ns ser -f $in -o $out
