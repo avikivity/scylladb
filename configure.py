@@ -2260,6 +2260,10 @@ def configure_seastar(build_dir, mode, mode_config, compiler_cache=None):
         '-DSeastar_API_LEVEL=9',
         '-DSeastar_DEPRECATED_OSTREAM_FORMATTERS=OFF',
         '-DSeastar_MODULE=ON',
+        # Consume fmt via `import fmt;`. Seastar exports SEASTAR_IMPORT_FMT and
+        # FMT_VERSION through its INTERFACE_COMPILE_DEFINITIONS, which land in
+        # seastar.pc's seastar_cflags and thus on Scylla's own TU compiles.
+        '-DSeastar_IMPORT_FMT=ON',
         '-DSeastar_UNUSED_RESULT_ERROR=ON',
         '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
         '-DSeastar_SCHEDULING_GROUPS_COUNT=25',

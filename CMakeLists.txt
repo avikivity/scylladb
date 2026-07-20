@@ -127,6 +127,10 @@ if(is_multi_config)
 else()
     set(Seastar_TESTING ON CACHE BOOL "" FORCE)
     set(Seastar_MODULE ON CACHE BOOL "" FORCE)
+    # Consume fmt through `import fmt;`; Seastar exports SEASTAR_IMPORT_FMT and
+    # FMT_VERSION to consumers via its INTERFACE (pairs with the attach-to-global
+    # fmt module above).
+    set(Seastar_IMPORT_FMT ON CACHE BOOL "" FORCE)
     set(Seastar_API_LEVEL 9 CACHE STRING "" FORCE)
     set(Seastar_DEPRECATED_OSTREAM_FORMATTERS OFF CACHE BOOL "" FORCE)
     set(Seastar_APPS ON CACHE BOOL "" FORCE)
