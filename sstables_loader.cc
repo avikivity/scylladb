@@ -590,8 +590,8 @@ future<> sstable_streamer::stream_sstable_mutations(streaming::plan_id ops_uuid,
         llog.info("load_and_stream: ops_uuid={}, ks={}, table={}, target_node={}, num_partitions_sent={}, num_bytes_sent={}",
                 ops_uuid, s->ks_name(), s->cf_name(), node, meta.num_partitions_sent(), meta.num_bytes_sent());
     }
-    auto partition_rate = std::fabs(duration) > FLT_EPSILON ? num_partitions_processed / duration : 0;
-    auto bytes_rate = std::fabs(duration) > FLT_EPSILON ? num_bytes_read / duration / 1024 / 1024 : 0;
+    auto partition_rate = std::fabs(duration) > std::numeric_limits<float>::epsilon() ? num_partitions_processed / duration : 0;
+    auto bytes_rate = std::fabs(duration) > std::numeric_limits<float>::epsilon() ? num_bytes_read / duration / 1024 / 1024 : 0;
     auto status = failed ? "failed" : "succeeded";
     llog.info("load_and_stream: finished ops_uuid={}, ks={}, table={}, partitions_processed={} partitions, bytes_processed={} bytes, partitions_per_second={} partitions/s, bytes_per_second={} MiB/s, duration={} s, status={}",
             ops_uuid, s->ks_name(), s->cf_name(), num_partitions_processed, num_bytes_read, partition_rate, bytes_rate, duration, status);

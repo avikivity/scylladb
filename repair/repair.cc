@@ -923,14 +923,14 @@ sstring repair_stats::get_stats() {
     std::map<locator::host_id, float> row_from_disk_rows_per_sec;
     auto duration = std::chrono::duration_cast<std::chrono::duration<float>>(lowres_clock::now() - start_time).count();
     for (auto& x : row_from_disk_bytes) {
-        if (std::fabs(duration) > FLT_EPSILON) {
+        if (std::fabs(duration) > std::numeric_limits<float>::epsilon()) {
             row_from_disk_bytes_per_sec[x.first] = x.second / duration / 1024 / 1024;
         } else {
             row_from_disk_bytes_per_sec[x.first] = 0;
         }
     }
     for (auto& x : row_from_disk_nr) {
-        if (std::fabs(duration) > FLT_EPSILON) {
+        if (std::fabs(duration) > std::numeric_limits<float>::epsilon()) {
             row_from_disk_rows_per_sec[x.first] = x.second / duration;
         } else {
             row_from_disk_rows_per_sec[x.first] = 0;
