@@ -10,7 +10,9 @@
 
 #include "utils/assert.hh"
 
+import std.compat;
 import boost;
+import seastar;
 
 class evictable {
     friend class lru;

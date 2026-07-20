@@ -11,7 +11,7 @@
 #include "index/secondary_index_manager.hh"
 #include "replica/database.hh"
 
-#include <seastar/core/lowres_clock.hh>
+#include "seastarx.hh"
 
 namespace cql3::statements {
 
