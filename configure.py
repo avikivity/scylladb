@@ -2356,6 +2356,10 @@ def configure_fmt(build_dir, mode, mode_config, compiler_cache=None):
 
     cxx_flags += ' ' + fmt_cflags.strip()
 
+    # Detach fmt's module declarations from the named 'fmt' module so they get
+    # traditional mangling, letting `import fmt;` and textual #include <fmt/...>
+    # TUs share one consistent set of fmt symbols.
+    cxx_flags += ' -DFMT_ATTACH_TO_GLOBAL_MODULE'
     cmake_mode = mode_config['cmake_build_type']
     fmt_cmake_args = [
         '-DCMAKE_BUILD_TYPE={}'.format(cmake_mode),

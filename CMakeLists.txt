@@ -303,6 +303,10 @@ set_target_properties(scylla-abseilmodule PROPERTIES CXX_SCAN_FOR_MODULES ON)
 # target; we just consume it. Scylla disables module scanning globally, so
 # force it back on for this target (its FILE_SET CXX_MODULES needs it).
 set_target_properties(fmt-module PROPERTIES CXX_SCAN_FOR_MODULES ON)
+# Detach the module's declarations from the named 'fmt' module (traditional
+# mangling) so `import fmt;` and textual #include <fmt/...> TUs share one
+# consistent set of fmt symbols.
+target_compile_definitions(fmt-module PRIVATE FMT_ATTACH_TO_GLOBAL_MODULE)
 
 # C++20 modules: Boost libraries module (partitioned).
 # Wraps Boost headers used by ScyllaDB, excluding Boost.Test
