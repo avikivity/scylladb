@@ -1725,14 +1725,11 @@ for t in sorted(scylla_tests):
 
 for t in sorted(perf_tests | perf_standalone_tests):
     deps[t] = [t + '.cc'] + scylla_tests_dependencies
-    deps[t] += ['test/perf/perf.cc', 'seastar/tests/perf/linux_perf_event.cc']
-
-perf_tests_seastar_deps = [
-    'seastar/tests/perf/perf_tests.cc'
-]
-
-for t in sorted(perf_tests):
-    deps[t] += perf_tests_seastar_deps
+    deps[t] += ['test/perf/perf.cc']
+    # The Seastar perf-test framework (perf_tests.cc), linux_perf_event.cc and
+    # random.cc come from Seastar's libseastar_perf_testing, which perf tests
+    # link (see below), rather than recompiling Seastar's sources with Scylla's
+    # flags.
 
 deps['test/boost/combined_tests'] += [
     'test/boost/aggregate_fcts_test.cc',
@@ -1842,9 +1839,8 @@ deps['test/boost/rolling_max_tracker_test'] = ['test/boost/rolling_max_tracker_t
 deps['test/boost/estimated_histogram_test'] = ['test/boost/estimated_histogram_test.cc']
 deps['test/boost/summary_test'] = ['test/boost/summary_test.cc']
 deps['test/boost/anchorless_list_test'] = ['test/boost/anchorless_list_test.cc']
-deps['test/perf/perf_canonical_mutation'] += ['seastar/tests/perf/linux_perf_event.cc']
-deps['test/perf/perf_commitlog'] += ['test/perf/perf.cc', 'seastar/tests/perf/linux_perf_event.cc']
-deps['test/perf/perf_row_cache_reads'] += ['test/perf/perf.cc', 'seastar/tests/perf/linux_perf_event.cc']
+deps['test/perf/perf_commitlog'] += ['test/perf/perf.cc']
+deps['test/perf/perf_row_cache_reads'] += ['test/perf/perf.cc']
 deps['test/boost/reusable_buffer_test'] = [
     "test/boost/reusable_buffer_test.cc",
     "test/lib/log.cc",
@@ -2741,6 +2737,7 @@ def write_build_file(f,
         seastar_lib_ext = 'so' if modeval['build_seastar_shared_libs'] else 'a'
         seastar_dep = f'$builddir/{mode}/seastar/libseastar.{seastar_lib_ext}'
         seastar_testing_dep = f'$builddir/{mode}/seastar/libseastar_testing.{seastar_lib_ext}'
+        seastar_perf_testing_dep = f'$builddir/{mode}/seastar/libseastar_perf_testing.{seastar_lib_ext}'
         abseil_dep = ' '.join(f'$builddir/{mode}/abseil/{lib}' for lib in abseil_libs)
         fmt_dep = fmt_lib(mode, modeval)
         fmt_libs = fmt_link_flags(outdir, mode, modeval)
@@ -2999,10 +2996,18 @@ def write_build_file(f,
                 # quickly re-link the test unstripped by adding a "_g"
                 # to the test name, e.g., "ninja build/release/testname_g"
                 link_rule = perf_tests_link_rule if binary.startswith('test/perf/') else tests_link_rule
-                f.write('build $builddir/{}/{}: {}.{} {} | {} {} {} {}\n'.format(mode, binary, link_rule, mode, str.join(' ', objs), seastar_dep, seastar_testing_dep, abseil_dep, fmt_dep))
-                f.write('   libs = {}\n'.format(local_libs))
-                f.write('build $builddir/{}/{}_g: {}.{} {} | {} {} {} {}\n'.format(mode, binary, regular_link_rule, mode, str.join(' ', objs), seastar_dep, seastar_testing_dep, abseil_dep, fmt_dep))
-                f.write('   libs = {}\n'.format(local_libs))
+                # perf tests link Seastar's libseastar_perf_testing (the PERF_TEST
+                # framework + linux_perf_event + random) instead of recompiling
+                # those Seastar sources.
+                perf_local_libs = local_libs
+                perf_extra_dep = ''
+                if 'test/perf/perf.cc' in srcs or binary.startswith('test/perf/'):
+                    perf_local_libs += f' {seastar_perf_testing_dep}'
+                    perf_extra_dep = f' {seastar_perf_testing_dep}'
+                f.write('build $builddir/{}/{}: {}.{} {} | {} {} {}{}\n'.format(mode, binary, link_rule, mode, str.join(' ', objs), seastar_dep, seastar_testing_dep, abseil_dep, perf_extra_dep))
+                f.write('   libs = {}\n'.format(perf_local_libs))
+                f.write('build $builddir/{}/{}_g: {}.{} {} | {} {} {}{}\n'.format(mode, binary, regular_link_rule, mode, str.join(' ', objs), seastar_dep, seastar_testing_dep, abseil_dep, perf_extra_dep))
+                f.write('   libs = {}\n'.format(perf_local_libs))
             else:
                 if binary == 'scylla':
                     local_libs += f' {seastar_testing_libs}'
@@ -3155,6 +3160,12 @@ def write_build_file(f,
         f.write(f'  pool = submodule_pool\n')
         f.write(f'  subdir = $builddir/{mode}/fmt\n')
         f.write(f'  target = fmt-module\n')
+        f.write(f'  profile_dep = {profile_dep}\n')
+
+        f.write(f'build {seastar_perf_testing_dep}: ninja $builddir/{mode}/seastar/build.ninja | always {fmt_lib(mode, modeval)} {profile_dep}\n')
+        f.write('  pool = submodule_pool\n')
+        f.write(f'  subdir = $builddir/{mode}/seastar\n')
+        f.write('  target = seastar_perf_testing\n')
         f.write(f'  profile_dep = {profile_dep}\n')
 
         for lib in abseil_libs:
