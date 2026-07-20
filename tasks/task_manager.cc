@@ -21,6 +21,8 @@
 #include "utils/error_injection.hh"
 #include "idl/tasks.dist.hh"
 
+#include <time.h>
+
 using namespace std::chrono_literals;
 
 template <typename T>
