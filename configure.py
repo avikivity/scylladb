@@ -3137,7 +3137,7 @@ def write_build_file(f,
                     mode=mode, hh=hh, gen_headers_dep=gen_headers_dep, profile_dep=profile_dep, seastar_dep=seastar_dep, all_module_pcms=all_module_pcms))
 
         seastar_testing_dep = f'$builddir/{mode}/seastar/libseastar_testing.{seastar_lib_ext}'
-        f.write(f'build {seastar_dep}: ninja $builddir/{mode}/seastar/build.ninja | always {fmt_lib(mode, modeval)} {profile_dep}\n')
+        f.write(f'build {seastar_dep} {seastar_pcm}: ninja $builddir/{mode}/seastar/build.ninja | always {fmt_lib(mode, modeval)} {profile_dep}\n')
         f.write('  pool = submodule_pool\n')
         f.write(f'  subdir = $builddir/{mode}/seastar\n')
         f.write('  target = seastar\n')
