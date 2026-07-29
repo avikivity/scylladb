@@ -1,5 +1,6 @@
 ---
 applyTo: "**/*.{cc,hh}"
+paths: ["**/*.{cc,hh}"]
 ---
 
 # C++ Guidelines

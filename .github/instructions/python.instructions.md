@@ -1,5 +1,6 @@
 ---
 applyTo: "**/*.py"
+paths: ["**/*.py"]
 ---
 
 # Python Guidelines
