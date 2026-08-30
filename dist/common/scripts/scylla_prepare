@@ -188,8 +188,16 @@ def setup_hugepages(cfg):
     HUGEPAGES empty and let scylla start on ordinary pages.
     """
     hugepages_arg = ''
+    enabled = cfg.has_option('SET_HUGEPAGES') and cfg.get('SET_HUGEPAGES') == 'yes'
     try:
-        if cfg.has_option('SET_HUGEPAGES') and cfg.get('SET_HUGEPAGES') == 'yes':
+        if not enabled:
+            # Give back any pages a previous run reserved. Without this, turning
+            # the option off would leave them reserved until the next reboot,
+            # where they are useless to everything - including scylla, which is
+            # now starting on ordinary pages.
+            run('/opt/scylladb/scripts/perftune.py --tune hugepages --release-hugepages '
+                '--hugepages-prefix {prefix}'.format(prefix=HUGEPAGES_PREFIX), shell=True, check=False)
+        else:
             params = '--tune hugepages --memory {memory} --hugepages-prefix {prefix} --hugepages-user {user}'.format(
                 memory=get_cur_memory(), prefix=HUGEPAGES_PREFIX, user=cfg.get('USER'))
 
