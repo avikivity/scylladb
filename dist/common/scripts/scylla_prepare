@@ -130,6 +130,94 @@ def create_perftune_conf(cfg):
     else:
         return False
 
+HUGEPAGES_PREFIX = 'scylla'
+HUGEPAGES_CONF = '/etc/scylla.d/hugepages.conf'
+
+
+def get_cur_smp():
+    """
+    Return the '--smp' value written in cpuset.conf, or None if only a cpuset
+    (or nothing) is configured there.
+    """
+    try:
+        cfg = sysconfig_parser('/etc/scylla.d/cpuset.conf')
+        m = re.search(r'--smp\s+(\d+)', cfg.get('CPUSET'))
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+
+def get_cur_memory():
+    """
+    Return the amount of memory scylla will be started with, as a string
+    perftune.py understands.
+
+    If an explicit --memory was configured (scylla_memory_setup --memory) we use
+    it. Otherwise scylla lets seastar work the amount out at startup, so we
+    estimate it the way seastar does - see resource::calculate_memory() - as all
+    of the machine's memory less the larger of 1.5G and 7%. The estimate does
+    not have to be exact: reserving a little too much only leaves some huge
+    pages unused, and reserving too little makes seastar fall back to smaller
+    pages for the remainder.
+    """
+    try:
+        cfg = sysconfig_parser('/etc/scylla.d/memory.conf')
+        m = re.search(r'--memory[= ]([^ "]+)', cfg.get('MEM_CONF'))
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+
+    total = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')
+    reserve = max(1536 * 1024 * 1024, int(0.07 * total))
+    return '{}'.format(total - reserve)
+
+
+def setup_hugepages(cfg):
+    """
+    Reserve huge pages for scylla and point it at them.
+
+    perftune.py does the privileged part - sizing the huge page pools and
+    mounting one hugetlbfs per page size, owned by the user scylla runs as -
+    and we pass the resulting directory to scylla as --hugepages, through
+    HUGEPAGES in /etc/scylla.d/hugepages.conf. systemd re-reads the files
+    matched by EnvironmentFile= for every command it spawns, so a file written
+    here is picked up by the ExecStart= that follows.
+
+    Huge pages are an optimization, so a failure here is not fatal: we leave
+    HUGEPAGES empty and let scylla start on ordinary pages.
+    """
+    hugepages_arg = ''
+    try:
+        if cfg.has_option('SET_HUGEPAGES') and cfg.get('SET_HUGEPAGES') == 'yes':
+            params = '--tune hugepages --memory {memory} --hugepages-prefix {prefix} --hugepages-user {user}'.format(
+                memory=get_cur_memory(), prefix=HUGEPAGES_PREFIX, user=cfg.get('USER'))
+
+            # Reserve the pages on the NUMA nodes the shards will actually run
+            # on. perftune works that out from its compute CPU mask, which is
+            # all CPUs less the ones reserved for IRQs - the same masks the net
+            # tuning above uses, so the two agree on where scylla will run.
+            smp = get_cur_smp()
+            if smp:
+                params += ' --smp {}'.format(smp)
+            try:
+                params += ' --irq-cpu-mask "{}"'.format(get_irq_cpu_mask())
+            except Exception:
+                pass
+
+            run('/opt/scylladb/scripts/perftune.py ' + params, shell=True, check=True)
+            hugepages_arg = '--hugepages {}'.format(out(
+                '/opt/scylladb/scripts/perftune.py {} --get-hugepages-path'.format(params)).strip())
+    except Exception:
+        print('WARNING: failed to reserve huge pages, starting without them:')
+        traceback.print_exc()
+        hugepages_arg = ''
+
+    with open(HUGEPAGES_CONF, 'w') as f:
+        f.write('HUGEPAGES="{}"\n'.format(hugepages_arg))
+    os.chmod(HUGEPAGES_CONF, 0o644)
+
+
 def verify_cpu():
     if platform.machine() == 'x86_64':
         needed_flags = set(['sse4_2', 'pclmulqdq'])
@@ -180,6 +268,7 @@ if __name__ == '__main__':
             scylla_excepthook(*sys.exc_info())
             print('\nTo fix the error, please re-run scylla_setup.')
             sys.exit(1)
+        setup_hugepages(cfg)
         try:
             if res:
                 run("{} --options-file /etc/scylla.d/perftune.yaml".format(perftune_base_command()), shell=True, check=True)
