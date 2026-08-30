@@ -17,7 +17,7 @@ SET_NIC_AND_DISKS=no
 SET_CLOCKSOURCE=no
 
 # back scylla's memory with huge pages (reserved by perftune.py at startup)
-SET_HUGEPAGES=no
+SET_HUGEPAGES=yes
 
 # ethernet device driver (dpdk)
 ETHDRV=
