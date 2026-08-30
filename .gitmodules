@@ -1,6 +1,6 @@
 [submodule "seastar"]
 	path = seastar
-	url = ../seastar
+	url = https://github.com/avikivity/seastar.git
 	ignore = dirty
 [submodule "swagger-ui"]
 	path = swagger-ui
