@@ -72,4 +72,11 @@ export namespace boost {
     namespace range_detail {
         using boost::range_detail::operator|;
     }
+
+    // Postfix operator++ for iterator_facade-derived iterators (such as the
+    // one boost::irange returns) is a namespace-scope function template in
+    // boost::iterators, so ADL in an importer TU only finds it if exported.
+    namespace iterators {
+        using boost::iterators::operator++;
+    }
 }
