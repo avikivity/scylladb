@@ -8,7 +8,8 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <seastar/core/on_internal_error.hh>
+import std.compat;
+#include "seastarx.hh"
 
 #include "cql3/prepare_context.hh"
 #include "cql3/column_identifier.hh"

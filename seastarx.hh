@@ -197,6 +197,7 @@ using seastar::list_directory_generator_type;
 // NOT: using seastar::file_handle;
 using seastar::file_handle_impl;
 using seastar::file_impl;
+using seastar::layered_file_impl;
 using seastar::file_input_stream_options;
 using seastar::file_input_stream_history;
 using seastar::file_output_stream_options;

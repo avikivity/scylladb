@@ -4,6 +4,7 @@
 
 /* Copyright 2020-present ScyllaDB */
 
+import std.compat;
 #include "utils/assert.hh"
 #include "util.hh"
 #include "cql_config.hh"
@@ -14,8 +15,7 @@
 
 #ifdef DEBUG
 
-#include <seastar/core/align.hh>
-#include <seastar/core/posix.hh>
+#include "seastarx.hh"
 
 #include <sys/mman.h>
 #include <ucontext.h>

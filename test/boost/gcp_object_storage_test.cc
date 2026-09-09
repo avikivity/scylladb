@@ -28,7 +28,7 @@ import std.compat;
 #include "utils/io-wrappers.hh"
 #include "utils/error_injection.hh"
 
-#include <seastar/core/metrics_api.hh>
+#include "seastarx.hh"
 #include <seastar/testing/test_fixture.hh>
 import boost;
 

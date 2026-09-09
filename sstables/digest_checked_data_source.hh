@@ -8,8 +8,8 @@
  
 #pragma once
 
+import std.compat;
 #include "seastarx.hh"
-#include <seastar/core/iostream.hh>
 
 namespace sstables {
 

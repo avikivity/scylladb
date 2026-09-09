@@ -6,27 +6,18 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#define BOOST_TEST_MODULE core
 #include "message/stream_compressor.hh"
 #include "test/lib/log.hh"
 #include "test/lib/random_utils.hh"
 #include "test/lib/scylla_test_case.hh"
 #include "utils/small_vector.hh"
-#include <seastar/core/reactor.hh>
-#include <seastar/core/thread.hh>
+import std.compat;
+#include "seastarx.hh"
+import fmt;
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/defer.hh>
 #include <boost/test/unit_test.hpp>
 
-#include <algorithm>
-#include <bit>
-#include <chrono>
 #include <cstdlib>
-#include <memory>
-#include <random>
-#include <span>
-#include <string_view>
-#include <fmt/format.h>
 
 template<class T>
 concept RpcBuf = std::same_as<T, rpc::rcv_buf> || std::same_as<T, rpc::snd_buf>;

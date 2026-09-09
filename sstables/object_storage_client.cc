@@ -24,7 +24,7 @@ import std.compat;
 #include "utils/http.hh"
 #include "utils/object_storage_metrics.hh"
 
-#include <seastar/core/metrics.hh>
+#include "seastarx.hh"
 
 import fmt;
 using namespace sstables;

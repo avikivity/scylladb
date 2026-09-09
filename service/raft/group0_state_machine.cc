@@ -17,7 +17,6 @@
 #include "mutation/canonical_mutation.hh"
 #include "mutation/mutation.hh"
 #include "mutation/async_utils.hh"
-#include "service/broadcast_tables/experimental/query_result.hh"
 #include "schema/schema_mutations.hh"
 #include "schema/frozen_schema.hh"
 #include "serialization_visitors.hh"

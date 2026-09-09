@@ -7,8 +7,8 @@
  */
 
 #include <boost/lexical_cast.hpp>
-#include <seastar/util/short_streams.hh>
-#include <seastar/util/closeable.hh>
+import std.compat;
+#include "seastarx.hh"
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/thread_test_case.hh>

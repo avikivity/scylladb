@@ -8,7 +8,7 @@
 
 #include "reader_concurrency_semaphore_group.hh"
 #include "reader_concurrency_semaphore_group.hh"
-#include <seastar/core/metrics.hh>
+#include "seastarx.hh"
 import std.compat;
 
 namespace sm = seastar::metrics;

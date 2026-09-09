@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include <utility>
-#include <seastar/core/shard_id.hh>
+import std.compat;
+#include "seastarx.hh"
 #include "schema/schema.hh"
 #include "locator/abstract_replication_strategy.hh"
 #include "dht/token.hh"

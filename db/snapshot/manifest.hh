@@ -9,8 +9,8 @@
 
 #pragma once
 
-#include <string>
-#include <seastar/json/json_elements.hh>
+import std.compat;
+#include "seastarx.hh"
 
 namespace sstables {
     struct sstable_snapshot_metadata;

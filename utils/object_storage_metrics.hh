@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include <cstdint>
-#include <string>
+import std.compat;
 
-#include <seastar/core/metrics_registration.hh>
+#include "seastarx.hh"
 
 namespace seastar::http {
 class client;

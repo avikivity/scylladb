@@ -6,19 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
-#include <vector>
-
-#include <seastar/core/format.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/http/client.hh>
+import std.compat;
 
 #include "utils/object_storage_metrics.hh"
 #include "utils/log.hh"
+#include "seastarx.hh"
 
 static logging::logger oslog("object_storage_metrics");
-
-using namespace seastar;
 
 utils::http_client_metrics::http_client_metrics(const seastar::http::client& http, object_storage_metrics_labels labels) {
     namespace sm = seastar::metrics;
@@ -53,7 +47,7 @@ utils::http_client_metrics::http_client_metrics(const seastar::http::client& htt
         auto method = static_cast<httpd::operation_type>(i);
         auto method_name = httpd::type2str(method);
         auto lower_method_name = method_name;
-        std::ranges::transform(method_name, lower_method_name.begin(), ::tolower);
+        std::ranges::transform(method_name, lower_method_name.begin(), [](unsigned char c){ return std::tolower(c); });
         auto method_labels = label_set;
         method_labels.emplace_back(method_label(method_name));
         defs.emplace_back(sm::make_counter(format("total_{}_requests", lower_method_name),

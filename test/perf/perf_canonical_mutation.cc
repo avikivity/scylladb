@@ -10,9 +10,8 @@
 #include "mutation/mutation.hh"
 #include "schema/schema_builder.hh"
 #include "utils/UUID_gen.hh"
-#include <seastar/core/app-template.hh>
-#include <seastar/core/memory.hh>
-#include <seastar/core/reactor.hh>
+import std.compat;
+#include "seastarx.hh"
 #include <seastar/testing/linux_perf_event.hh>
 
 // Builds a partition with rows [first_row, first_row + rows), all columns set.

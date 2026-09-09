@@ -8,9 +8,8 @@
 
 #include <boost/test/unit_test.hpp>
 #include <seastar/testing/test_case.hh>
-#include <seastar/http/reply.hh>
-#include <seastar/core/sleep.hh>
-#include <system_error>
+import std.compat;
+#include "seastarx.hh"
 
 #include "utils/http_client_error_processing.hh"
 #include "utils/exponential_backoff_retry.hh"

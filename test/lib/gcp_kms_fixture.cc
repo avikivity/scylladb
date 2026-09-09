@@ -6,14 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <string>
-#include <memory>
-#include <regex>
 
-#include <seastar/core/with_timeout.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/net/inet_address.hh>
+import std.compat;
+#include "seastarx.hh"
 
 #include "gcp_kms_fixture.hh"
 #include "tmpdir.hh"

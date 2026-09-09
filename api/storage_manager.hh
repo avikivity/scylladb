@@ -7,7 +7,8 @@
  */
 
 #pragma once
-#include <seastar/core/sharded.hh>
+import std.compat;
+#include "seastarx.hh"
 
 namespace seastar::httpd {
 class routes;

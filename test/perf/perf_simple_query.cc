@@ -31,8 +31,8 @@ import fmt;
 #include "keys/keys.hh"
 #include "dht/i_partitioner.hh"
 #include "replica/database.hh"
-#include <seastar/core/sleep.hh>
-#include <seastar/core/sharded.hh>
+import std.compat;
+#include "seastarx.hh"
 import boost;
 
 import fmt;

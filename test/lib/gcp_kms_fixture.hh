@@ -9,10 +9,9 @@
 
 #pragma once
 
-#include <string>
-#include <memory>
 
-#include <seastar/core/future.hh>
+import std.compat;
+#include "seastarx.hh"
 
 class tmpdir;
 
