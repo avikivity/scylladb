@@ -2234,7 +2234,7 @@ future<> configure_tls_creds_builder(seastar::tls::credentials_builder& creds, d
         creds.set_priority_string(options.at("priority_string"));
     }
     auto require_client_auth_val = get_or_default(options, "require_client_auth", "false");
-    std::transform(require_client_auth_val.begin(), require_client_auth_val.end(), require_client_auth_val.begin(), ::tolower);
+    std::transform(require_client_auth_val.begin(), require_client_auth_val.end(), require_client_auth_val.begin(), [](unsigned char c){ return std::tolower(c); });
     if (is_true(require_client_auth_val)) {
         creds.set_client_auth(seastar::tls::client_auth::REQUIRE);
     } else if (require_client_auth_val == "optional") {

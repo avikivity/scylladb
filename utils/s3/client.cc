@@ -615,7 +615,7 @@ future<object_info> client::get_object_info(sstring object_name, seastar::abort_
         for (const auto& [name, value] : rep._headers) {
             if (has_object_metadata_header_prefix(name)) {
                 auto key = name.substr(object_metadata_header_prefix.size());
-                std::ranges::transform(key, key.begin(), ::tolower);
+                std::ranges::transform(key, key.begin(), [](unsigned char c){ return std::tolower(c); });
                 info.metadata.emplace(std::move(key), value);
             }
         }

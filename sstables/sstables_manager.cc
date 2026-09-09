@@ -530,7 +530,7 @@ void sstables_manager::validate_new_keyspace_storage_options(const data_dictiona
             }
             // It's non-system keyspace
             // The endpoint must be configured and have the same storage type the keyspace declares
-            auto requested_type = so.type | std::views::transform(&tolower) | std::ranges::to<std::string>();
+            auto requested_type = so.type | std::views::transform([](unsigned char c){ return std::tolower(c); }) | std::ranges::to<std::string>();
             if (!is_known_endpoint(so.endpoint, requested_type)) {
                 throw exceptions::configuration_exception(format("Endpoint {} not configured as {}", so.endpoint, so.type));
             }

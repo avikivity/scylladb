@@ -938,7 +938,7 @@ server::server(executor& exec, service::storage_proxy& proxy, gms::gossiper& gos
                 auto query_it  = q.find("query");
                 if (source_it == q.end() || query_it == q.end()) { continue; }
                 sstring source = source_it->second;
-                std::transform(source.begin(), source.end(), source.begin(), ::toupper);
+                std::transform(source.begin(), source.end(), source.begin(), [](unsigned char c){ return std::toupper(c); });
                 cert_pattern::source_type src;
                 if (source == "SUBJECT") {
                     src = cert_pattern::source_type::subject;
