@@ -11,7 +11,6 @@
 import std.compat;
 #include <cstddef>
 #include <cstring>
-#include <new>
 
 #include "utils/UUID.hh"
 #include "db_clock.hh"

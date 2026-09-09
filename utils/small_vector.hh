@@ -12,7 +12,6 @@ import std.compat;
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
-#include <new>
 #include <malloc.h>
 import fmt;
 

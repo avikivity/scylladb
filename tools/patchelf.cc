@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
 
 import std.compat;
-#include <fstream>
 #include <cstring>
 #include <cstdio>
 #include <sys/stat.h>

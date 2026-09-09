@@ -10,8 +10,6 @@
 
 #include "seastarx.hh"
 
-#include <memory>
-#include <unordered_set>
 
 #include "compaction/compaction_fwd.hh"
 #include "compaction/compaction_backlog_manager.hh"

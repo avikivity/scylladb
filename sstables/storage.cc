@@ -9,7 +9,6 @@
 #include "storage.hh"
 
 #include <cerrno>
-#include <algorithm>
 #include <cctype>
 
 import std.compat;

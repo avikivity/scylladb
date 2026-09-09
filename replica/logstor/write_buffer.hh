@@ -7,9 +7,6 @@
  */
 #pragma once
 
-#include <algorithm>
-#include <memory>
-#include <vector>
 #include "replica/exceptions.hh"
 #include "replica/logstor/ondisk.hh"
 #include "schema/schema_fwd.hh"

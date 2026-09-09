@@ -7,7 +7,6 @@
  */
 
 #include "utils/assert.hh"
-#include <limits>
 
 
 #include "locator/tablets.hh"

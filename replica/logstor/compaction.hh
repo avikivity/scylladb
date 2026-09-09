@@ -14,14 +14,6 @@ import std.compat;
 #include "write_buffer.hh"
 #include "utils/log_heap.hh"
 #include "mutation_writer/token_group_based_splitting_writer.hh"
-#include <algorithm>
-#include <array>
-#include <limits>
-#include <ranges>
-#include <optional>
-#include <vector>
-#include <functional>
-#include <utility>
 
 namespace replica {
 class compaction_group;

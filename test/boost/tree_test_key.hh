@@ -10,8 +10,6 @@
 
 #include "utils/assert.hh"
 #include <cassert>
-#include <compare>
-#include <concepts>
 
 /*
  * Helper class that helps to check that tree

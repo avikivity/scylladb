@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
 #include "utils/assert.hh"
 #include "db/system_keyspace.hh"
 #include "topology_mutation.hh"

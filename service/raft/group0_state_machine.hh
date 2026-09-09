@@ -7,7 +7,6 @@
  */
 #pragma once
 
-#include <unordered_map>
 
 #include "data_dictionary/data_dictionary.hh"
 #include "keys/keys.hh"

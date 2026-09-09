@@ -24,7 +24,6 @@ import std.compat;
 #include "compaction/compaction_manager.hh"
 #include "transport/messages/result_message.hh"
 #include "sstables/partition_index_cache.hh"
-#include <fstream>
 import boost;
 
 import fmt;

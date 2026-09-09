@@ -8,7 +8,6 @@
 
 #include "compaction_strategy_impl.hh"
 
-#include <chrono>
 
 namespace compaction {
 

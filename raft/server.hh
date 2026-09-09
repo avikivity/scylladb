@@ -7,7 +7,6 @@
  */
 #pragma once
 #include "raft.hh"
-#include <functional>
 
 namespace raft {
 

@@ -10,7 +10,6 @@ import fmt;
 import std.compat;
 #include <cctype>
 #include <cstdlib>
-#include <fstream>
 
 
 #include <unistd.h>

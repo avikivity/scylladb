@@ -10,8 +10,6 @@
 
 #pragma once
 
-#include <optional>
-#include <string_view>
 
 #include "timeout_config.hh"
 #include "service/pager/query_plan.hh"
