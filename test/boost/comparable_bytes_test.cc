@@ -7,7 +7,7 @@
  */
 #include "test/lib/scylla_test_case.hh"
 
-#include <vector>
+import std.compat;
 
 #include "bytes_ostream.hh"
 #include "db/marshal/type_parser.hh"

@@ -10,8 +10,7 @@
 
 #include <boost/test/unit_test.hpp>
 #include "utils/streaming_histogram.hh"
-#include <map>
-#include <cmath>
+import std.compat;
 
 BOOST_AUTO_TEST_CASE(basic_streaming_histogram_test) {
     utils::streaming_histogram hist(5);

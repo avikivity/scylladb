@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <limits>
-#include <optional>
-#include <span>
+import std.compat;
 
 #include "idl/uuid.dist.hh"
 #include "idl/uuid.dist.impl.hh"

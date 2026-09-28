@@ -17,8 +17,7 @@
 #include "cql3/statements/index_prop_defs.hh"
 #include "utils/estimated_histogram.hh"
 
-#include <string_view>
-#include <vector>
+import std.compat;
 
 namespace cql3::expr {
 

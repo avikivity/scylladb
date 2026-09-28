@@ -12,7 +12,7 @@
 
 #include "exceptions/exceptions.hh"
 
-#include <set>
+import std.compat;
 
 namespace cql3 {
 namespace statements {

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <atomic>
+import std.compat;
 
 namespace utils {
 

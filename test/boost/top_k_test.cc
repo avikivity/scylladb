@@ -11,9 +11,7 @@
 #include <boost/test/unit_test.hpp>
 #include "utils/top_k.hh"
 #include "test/lib/test_utils.hh"
-#include <vector>
-#include <algorithm>
-#include <optional>
+import std.compat;
 
 import fmt;
 //---------------------------------------------------------------------------------------------

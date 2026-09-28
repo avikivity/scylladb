@@ -8,11 +8,10 @@
 
 #pragma once
 
-#include <cstdint>
-
 #include "utils/histogram.hh"
 #include "utils/estimated_histogram.hh"
 #include "cql3/stats.hh"
+import std.compat;
 
 namespace alternator {
 using batch_histogram = utils::estimated_histogram_with_max<128>;

@@ -12,8 +12,8 @@
 #include "locator/token_metadata.hh"
 #include "locator/abstract_replication_strategy.hh"
 #include "dht/token.hh"
-#include <unordered_set>
-#include <unordered_map>
+import std.compat;
+#include "replica/database_fwd.hh"
 #include "streaming/stream_reason.hh"
 #include "service/topology_guard.hh"
 

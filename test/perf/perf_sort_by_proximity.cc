@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
+import std.compat;
 #include "inet_address_vectors.hh"
 #include "seastarx.hh"
 

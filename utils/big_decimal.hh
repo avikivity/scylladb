@@ -9,9 +9,7 @@
 #pragma once
 
 #include "multiprecision_int.hh"
-#include <compare>
-#include <concepts>
-#include <cstdint>
+import std.compat;
 #include "seastarx.hh"
 import fmt;
 

@@ -9,8 +9,7 @@
 #define BOOST_TEST_MODULE core
 
 #include <boost/test/unit_test.hpp>
-#include <unordered_set>
-#include <utility>
+import std.compat;
 #include "utils/UUID_gen.hh"
 #include "clocks-impl.hh"
 #include "marshal_exception.hh"

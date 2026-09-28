@@ -31,7 +31,7 @@ import jsoncpp;
 #include "keys/keys.hh"
 #include "dht/i_partitioner.hh"
 #include "replica/database.hh"
-#include <ranges>
+import std.compat;
 #include "seastarx.hh"
 import boost;
 

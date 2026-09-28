@@ -8,7 +8,7 @@
 
 #define BOOST_TEST_MODULE core
 
-#include <string_view>
+import std.compat;
 
 #include <boost/test/unit_test.hpp>
 

@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <cstdint>
-#include <cassert>
+#include "utils/assert.hh"
+import std.compat;
 
 #pragma once
 
@@ -20,7 +20,7 @@ public:
     refcounted() = default;
     refcounted(refcounted&&) = delete;
     ~refcounted() noexcept {
-        assert(_count == 0);
+        SCYLLA_ASSERT(_count == 0);
     }
     template <typename T>
     class ref {

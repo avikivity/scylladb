@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <functional>
-#include <type_traits>
+import std.compat;
 import fmt;
 
 /// Makes a callable usable as a "{}" argument of fmt::format and friends.

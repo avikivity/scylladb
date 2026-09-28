@@ -20,9 +20,7 @@
 #include "query/query-result-set.hh"
 #include "db/view/base_info.hh"
 
-#include <vector>
-#include <map>
-#include <string_view>
+import std.compat;
 
 namespace data_dictionary {
 class keyspace_metadata;

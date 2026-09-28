@@ -10,9 +10,8 @@
 
 #pragma once
 
-#include <cassert>
-#include <cstdint>
 import fmt;
+import std.compat;
 
 namespace db {
 

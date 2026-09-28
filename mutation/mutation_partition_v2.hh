@@ -10,7 +10,7 @@
 
 #include "mutation_partition.hh"
 
-#include <ranges>
+import std.compat;
 
 namespace db { class large_data_cache_tracker; }
 

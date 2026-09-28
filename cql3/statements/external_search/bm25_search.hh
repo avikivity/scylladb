@@ -15,8 +15,7 @@
 #include "schema/schema.hh"
 #include "vector_search/vector_store_client.hh"
 
-#include <optional>
-#include <span>
+import std.compat;
 
 /// The parts of running a full-text search that are specific to it: which index serves it, how the
 /// query value is read, which relation on it is accepted, and how excerpts are fetched. The

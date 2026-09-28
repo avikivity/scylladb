@@ -8,12 +8,7 @@
 
 #pragma once
 
-#include <chrono>
-#include <concepts>
-#include <cstdint>
-#include <optional>
-#include <string_view>
-#include <type_traits>
+import std.compat;
 
 #include "gms/inet_address.hh"
 #include "seastarx.hh"

@@ -7,11 +7,7 @@
  */
 #pragma once
 
-#include <chrono>
-#include <cstdint>
-#include <optional>
-#include <ratio>
-#include <type_traits>
+import std.compat;
 
 namespace raft {
 

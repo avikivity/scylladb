@@ -9,8 +9,7 @@
 #pragma once
 
 #include "db/functions/function_name.hh"
-#include <list>
-#include <unordered_map>
+import std.compat;
 #include "rust/cxx.h"
 #include "rust/wasmtime_bindings.hh"
 #include "types/types.hh"

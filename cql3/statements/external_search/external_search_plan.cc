@@ -26,10 +26,7 @@
 #include "utils/assert.hh"
 #include "utils/on_internal_error.hh"
 
-#include <algorithm>
-#include <cmath>
-#include <ranges>
-#include <utility>
+import std.compat;
 
 namespace cql3::statements {
 

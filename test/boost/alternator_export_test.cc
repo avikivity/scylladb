@@ -26,6 +26,7 @@
 #include "utils/hashers.hh"
 #include "utils/rjson.hh"
 #include "utils/s3/client.hh"
+import std.compat;
 
 #include <seastar/testing/test_fixture.hh>
 
@@ -33,22 +34,6 @@
 #include "bytes.hh"
 #include "utils/hashers.hh"
 
-#include <chrono>
-#include <cstdint>
-#include <map>
-#include <optional>
-#include <set>
-#include <span>
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <tuple>
-#include <cstdlib>
-#include <exception>
-#include <string>
-#include <string_view>
-#include <utility>
-#include <vector>
 
 // Tests of the export (sink) and import (source) pipelines from alternator/export.hh.
 // Except for test_s3_flush_and_close_result, which needs an S3 server, they use the in-memory storage backend,

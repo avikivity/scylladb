@@ -5,7 +5,7 @@
 
 #include "scalar_function.hh"
 #include "function_name.hh"
-#include <optional>
+import std.compat;
 
 namespace db::functions {
 

@@ -8,7 +8,7 @@
 
 #include "index/index_option_utils.hh"
 #include "exceptions/exceptions.hh"
-#include <algorithm>
+import std.compat;
 import fmt;
 import boost;
 

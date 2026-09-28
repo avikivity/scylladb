@@ -9,8 +9,7 @@
 
 #include <fcntl.h>
 #include <cassert>
-#include <utility>
-#include <coroutine>
+import std.compat;
 
 #include "symmetric_key.hh"
 #include "encryption.hh"

@@ -13,7 +13,7 @@
 #include "keys/clustering_key_filter.hh"
 #include "query/query-request.hh"
 #include "db/partition_snapshot_row_cursor.hh"
-#include <any>
+import std.compat;
 
 extern seastar::logger mplog;
 

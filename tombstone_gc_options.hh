@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <map>
-#include <chrono>
+import std.compat;
 #include "seastarx.hh"
 import fmt;
 

@@ -14,9 +14,7 @@
 #include "utils/managed_bytes.hh"
 #include "vector_search/hybrid_search.hh"
 
-#include <optional>
-#include <span>
-#include <vector>
+import std.compat;
 
 class schema;
 class column_definition;

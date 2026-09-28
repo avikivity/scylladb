@@ -9,7 +9,6 @@
  */
 
 #include <boost/test/unit_test.hpp>
-#include <cstdint>
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
@@ -20,6 +19,7 @@
 #include "db/size_estimates_virtual_reader.hh"
 #include "db/system_keyspace.hh"
 #include "db/view/view_builder.hh"
+import std.compat;
 
 BOOST_AUTO_TEST_SUITE(virtual_reader_test)
 

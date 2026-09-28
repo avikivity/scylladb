@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <functional>
+import std.compat;
 #include "utils/rjson.hh"
 #include "credentials.hh"
 

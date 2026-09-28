@@ -44,11 +44,7 @@
  * @author Hideaki Ohno
  */
 
-#include <vector>
-#include <cmath>
-#include <sstream>
-#include <stdexcept>
-#include <algorithm>
+import std.compat;
 
 #include "seastarx.hh"
 

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <type_traits>
+import std.compat;
 #include "utils/assert.hh"
 #include "utils/bptree.hh"
 #include "utils/intrusive-array.hh"

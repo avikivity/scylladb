@@ -20,7 +20,7 @@
 #include "schema/schema_builder.hh"
 #include "replica/database.hh"
 #include "sstables/sstable_writer.hh"
-#include <memory>
+import std.compat;
 #include "test/boost/sstable_test.hh"
 #include <seastar/testing/test_case.hh>
 #include "dht/i_partitioner.hh"

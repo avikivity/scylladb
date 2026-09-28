@@ -10,6 +10,7 @@
 #include "mutation/mutation.hh"
 #include "schema/schema_builder.hh"
 #include "utils/UUID_gen.hh"
+import std.compat;
 #include "seastarx.hh"
 #include <seastar/testing/linux_perf_event.hh>
 

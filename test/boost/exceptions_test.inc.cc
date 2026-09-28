@@ -10,9 +10,7 @@
 //   handle_exception_optimized_test.cc
 //   handle_exception_fallback_test.cc
 
-#include <exception>
-#include <stdexcept>
-#include <type_traits>
+import std.compat;
 #include <cxxabi.h>
 #include <boost/test/unit_test_log.hpp>
 #include <boost/test/tools/old/interface.hpp>

@@ -8,11 +8,7 @@
 
 #pragma once
 
-#include <iterator>
-#include <vector>
-#include <string>
-
-#include <ranges>
+import std.compat;
 
 #include "types/types.hh"
 

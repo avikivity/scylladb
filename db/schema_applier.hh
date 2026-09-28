@@ -21,7 +21,7 @@
 #include "replica/global_table_ptr.hh"
 #include "replica/tables_metadata_lock.hh"
 
-#include <unordered_map>
+import std.compat;
 
 namespace db {
 

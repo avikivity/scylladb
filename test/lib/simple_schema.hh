@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <map>
+import std.compat;
 
 #include "schema/schema.hh"
 #include "schema/schema_registry.hh"

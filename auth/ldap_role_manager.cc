@@ -9,7 +9,7 @@
 #include "ldap_role_manager.hh"
 
 #include <ldap.h>
-#include <vector>
+import std.compat;
 
 #include "common.hh"
 #include "auth/config.hh"

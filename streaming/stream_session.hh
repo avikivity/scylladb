@@ -20,8 +20,7 @@
 #include "streaming/stream_reason.hh"
 #include "streaming/session_info.hh"
 #include "service/topology_guard.hh"
-#include <map>
-#include <vector>
+import std.compat;
 
 namespace db {
 

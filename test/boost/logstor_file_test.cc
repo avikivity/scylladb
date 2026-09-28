@@ -8,10 +8,7 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <algorithm>
-#include <cstring>
-#include <stdexcept>
-#include <type_traits>
+import std.compat;
 
 import fmt;
 

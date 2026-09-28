@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <stdexcept>
+import std.compat;
 
 #include "auth/authenticated_user.hh"
 #include "auth/authenticator.hh"

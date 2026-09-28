@@ -12,7 +12,7 @@
 
 #include "streaming/session_info.hh"
 #include "streaming/stream_fwd.hh"
-#include <vector>
+import std.compat;
 
 namespace streaming {
 

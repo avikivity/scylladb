@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <unordered_set>
-#include <stdexcept>
-#include <iosfwd>
-#include <string_view>
+import std.compat;
 
 #include "seastarx.hh"
 #include "db/hints/internal/common.hh"

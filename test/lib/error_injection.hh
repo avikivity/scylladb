@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <chrono>
-#include <stdexcept>
 #include "utils/error_injection.hh"
 
 // Waits until enter_count for the named injection reaches the given threshold.

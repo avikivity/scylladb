@@ -22,9 +22,7 @@
 #include "utils/loading_shared_values.hh"
 #include "utils/updateable_value.hh"
 #include "message/messaging_service_fwd.hh"
-#include <optional>
-#include <chrono>
-#include <set>
+import std.compat;
 #include "locator/token_metadata.hh"
 #include "locator/types.hh"
 #include "gms/gossip_address_map.hh"

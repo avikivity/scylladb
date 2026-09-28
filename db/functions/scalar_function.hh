@@ -12,7 +12,7 @@
 
 #include "function.hh"
 #include "utils/managed_bytes.hh"
-#include <span>
+import std.compat;
 
 namespace db::functions {
 

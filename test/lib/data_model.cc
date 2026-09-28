@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
+import std.compat;
 
 #include "utils/assert.hh"
 #include "test/lib/data_model.hh"

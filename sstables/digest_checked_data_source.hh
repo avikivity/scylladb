@@ -8,8 +8,7 @@
  
 #pragma once
 
-#include <cstdint>
-#include <functional>
+import std.compat;
 #include "seastarx.hh"
 
 namespace sstables {

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <functional>
+import std.compat;
 #include "readers/mutation_reader.hh"
 #include "dht/token.hh"
 

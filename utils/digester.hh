@@ -12,8 +12,7 @@
 #include "utils/hashing.hh"
 #include "utils/xx_hasher.hh"
 
-#include <type_traits>
-#include <variant>
+import std.compat;
 
 namespace query {
 

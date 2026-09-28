@@ -8,12 +8,9 @@
 
 #pragma once
 
+#include <stdlib.h> // posix_memalign()
 import seastar;
-#include <any>
-#include <cstdint>
-#include <memory>
-#include <cstdlib>
-#include <string>
+import std.compat;
 #include <malloc.h>
 
 // A function used by compacting collectors to migrate objects during

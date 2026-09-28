@@ -11,14 +11,7 @@
 #include "utils/assert.hh"
 #include "seastarx.hh"
 
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <stdexcept>
-#include <type_traits>
-#include <limits>
-#include <bitset>
+import std.compat;
 import seastar;
 import boost;
 

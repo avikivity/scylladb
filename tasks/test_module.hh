@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <unordered_map>
+import std.compat;
 
 #include "task_manager.hh"
 #include "seastarx.hh"

@@ -8,11 +8,7 @@
 
 #pragma once
 
-#include <filesystem>
-#include <initializer_list>
-#include <stdexcept>
-#include <utility>
-#include <unordered_map>
+import std.compat;
 #include "utils/lister.hh"
 #include "utils/object_storage_metrics.hh"
 #include "utils/s3/creds.hh"

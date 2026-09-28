@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <optional>
+import std.compat;
 
 #include "cql3/statements/authorization_statement.hh"
 #include "cql3/role_name.hh"

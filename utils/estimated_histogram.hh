@@ -11,14 +11,8 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <cmath>
-#include <cstdint>
-#include <algorithm>
-#include <vector>
-#include <chrono>
+import std.compat;
 #include "seastarx.hh"
-#include <limits>
-#include <array>
 import fmt;
 
 namespace utils {
@@ -615,7 +609,7 @@ public:
     int64_t max() const {
         int lastBucket = buckets.size() - 1;
         if (buckets[lastBucket] > 0) {
-            return INT64_MAX;
+            return std::numeric_limits<int64_t>::max();
         }
         for (int i = lastBucket - 1; i >= 0; i--) {
             if (buckets[i] > 0) {

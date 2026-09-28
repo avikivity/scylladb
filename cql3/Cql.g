@@ -89,9 +89,7 @@ options {
 #include "cql3/expr/expression.hh"
 #include "CqlLexer.hpp"
 
-#include <algorithm>
-#include <unordered_map>
-#include <map>
+import std.compat;
 }
 
 @parser::traits {

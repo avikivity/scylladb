@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <memory>
+import std.compat;
 
 #include "replay_position.hh"
 #include "commitlog_entry.hh"

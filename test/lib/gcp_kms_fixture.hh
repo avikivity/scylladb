@@ -9,9 +9,7 @@
 
 #pragma once
 
-#include <string>
-#include <memory>
-
+import std.compat;
 #include "seastarx.hh"
 
 class tmpdir;

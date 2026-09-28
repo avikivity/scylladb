@@ -14,9 +14,7 @@
 #include "sstables/exceptions.hh"
 #include "sstables/sstables.hh"
 #include "sstables/sstables_manager.hh"
-#include <algorithm>
-#include <memory>
-#include <ranges>
+import std.compat;
 #include "sstables/sstable_directory.hh"
 #include "utils/assert.hh"
 #include "utils/error_injection.hh"
@@ -25,7 +23,6 @@
 #include "db/system_keyspace.hh"
 #include "db/config.hh"
 #include "tombstone_gc-internals.hh"
-#include <cmath>
 #include "utils/labels.hh"
 
 import fmt;

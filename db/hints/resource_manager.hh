@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include <cstdint>
-#include <filesystem>
+#include <sys/types.h> // dev_t
+import std.compat;
 #include "seastarx.hh"
-#include <unordered_set>
 #include "utils/small_vector.hh"
 #include "utils/updateable_value.hh"
 #include "enum_set.hh"

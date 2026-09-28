@@ -11,9 +11,7 @@
 // logstor::make_mutation_sources_for_dump() makes the sources for a MUTATION_FRAGMENTS() query.
 
 #include "replica/logstor/logstor.hh"
-#include <algorithm>
-#include <queue>
-#include <vector>
+import std.compat;
 #include "mutation/mutation_fragment.hh"
 #include "query/query-request.hh"
 #include "readers/forwardable.hh"

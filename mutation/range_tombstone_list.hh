@@ -13,7 +13,7 @@
 #include "utils/assert.hh"
 #include "utils/preempt.hh"
 #include "utils/chunked_vector.hh"
-#include <variant>
+import std.compat;
 import boost;
 
 class position_in_partition_view;

@@ -10,7 +10,7 @@
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
 
-#include <string>
+import std.compat;
 
 #include "utils/double-decker.hh"
 #include "utils/logalloc.hh"

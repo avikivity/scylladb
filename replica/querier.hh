@@ -13,7 +13,7 @@
 #include "readers/mutation_source.hh"
 #include "keys/full_position.hh"
 
-#include <variant>
+import std.compat;
 import boost;
 
 namespace replica {

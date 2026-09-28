@@ -11,7 +11,7 @@
 #pragma once
 
 #include "streaming/stream_state.hh"
-#include <exception>
+import std.compat;
 
 namespace streaming {
 

@@ -10,7 +10,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <cstdlib>
-#include <iostream>
+import std.compat;
 
 #include <seastar/testing/test_case.hh>
 

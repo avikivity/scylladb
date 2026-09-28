@@ -12,7 +12,7 @@
 #include "utils/digest_algorithm.hh"
 #include "query-request.hh"
 #include "keys/full_position.hh"
-#include <optional>
+import std.compat;
 #include "seastarx.hh"
 import fmt;
 

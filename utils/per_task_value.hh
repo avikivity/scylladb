@@ -7,8 +7,7 @@
  */
 #pragma once
 
-#include <concepts>
-#include <optional>
+import std.compat;
 
 namespace utils {
 

@@ -8,12 +8,7 @@
 
 #pragma once
 
-#include <map>
-#include <memory>
-#include <optional>
-#include <string>
-#include <unordered_map>
-#include <variant>
+import std.compat;
 
 #include "utils/rjson.hh"
 #include "utils/overloaded_functor.hh"

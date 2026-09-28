@@ -8,7 +8,7 @@
 
 #include "cql3/util.hh"
 #include "utils/assert.hh"
-#include <chrono>
+import std.compat;
 
 #include "cql3/untyped_result_set.hh"
 #include "db/config.hh"

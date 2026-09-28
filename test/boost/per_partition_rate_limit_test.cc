@@ -1,5 +1,4 @@
-#include <chrono>
-#include <cstdint>
+import std.compat;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 

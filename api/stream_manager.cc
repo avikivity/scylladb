@@ -12,7 +12,7 @@
 #include "api/api.hh"
 #include "api/api-doc/stream_manager.json.hh"
 #include "api/api-doc/storage_service.json.hh"
-#include <vector>
+import std.compat;
 import rapidjson;
 #include "gms/gossiper.hh"
 

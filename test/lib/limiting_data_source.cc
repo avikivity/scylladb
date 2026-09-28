@@ -7,10 +7,7 @@
  */
 
 #include "limiting_data_source.hh"
-#include <cstdint>
-#include <memory>
-#include <algorithm>
-#include <utility>
+import std.compat;
 
 #include "seastarx.hh"
 

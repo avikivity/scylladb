@@ -13,7 +13,7 @@
 #include "index/secondary_index.hh"
 #include "schema/schema.hh"
 
-#include <optional>
+import std.compat;
 
 namespace cql3::restrictions {
 class select_restrictions;

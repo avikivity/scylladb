@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <cassert>
-#include <vector>
+import std.compat;
 #include "utils/assert.hh"
 #include "utils/allocation_strategy.hh"
 #include "utils/collection-concepts.hh"

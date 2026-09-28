@@ -8,7 +8,7 @@
 
 #include <boost/test/unit_test.hpp>
 #include "test/lib/scylla_test_case.hh"
-#include <unordered_set>
+import std.compat;
 #include "utils/base64.hh"
 #include "utils/xx_hasher.hh"
 #include "idl/hinted_handoff.dist.hh"

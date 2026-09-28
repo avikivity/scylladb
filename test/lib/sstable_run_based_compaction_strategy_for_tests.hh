@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <vector>
-#include <map>
+import std.compat;
 #include "compaction/compaction_strategy_impl.hh"
 #include "sstables/sstable_set.hh"
 #include "compaction/compaction.hh"

@@ -7,7 +7,8 @@
  */
 
 #pragma once
-#include <cstddef>
+
+import std.compat;
 
 namespace utils {
 struct upload_progress {

@@ -8,8 +8,7 @@
 
 
 #include <boost/test/unit_test.hpp>
-#include <algorithm>
-#include <chrono>
+import std.compat;
 
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>

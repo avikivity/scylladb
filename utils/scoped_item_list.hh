@@ -66,7 +66,7 @@
 #pragma once
 
 
-#include <list>
+import std.compat;
 
 #include "seastarx.hh"
 #include "utils/on_internal_error.hh"

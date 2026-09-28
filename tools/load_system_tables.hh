@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <filesystem>
-#include <map>
+import std.compat;
 
 #include "data_dictionary/storage_options.hh"
 #include "db_clock.hh"

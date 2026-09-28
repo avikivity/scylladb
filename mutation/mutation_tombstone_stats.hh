@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <cstdint>
+import std.compat;
 
 struct tombstone_purge_stats {
     int64_t attempts { 0 };

@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <deque>
-#include <functional>
+import std.compat;
 #include "seastarx.hh"
 #include "reader_permit.hh"
 #include "utils/updateable_value.hh"

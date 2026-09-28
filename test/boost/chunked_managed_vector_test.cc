@@ -9,10 +9,7 @@
 #include <boost/test/unit_test.hpp>
 #include "test/lib/scylla_test_case.hh"
 
-#include <deque>
-#include <random>
-#include <ranges>
-#include <algorithm>
+import std.compat;
 
 #include "utils/lsa/chunked_managed_vector.hh"
 #include "utils/managed_ref.hh"

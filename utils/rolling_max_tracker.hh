@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <utility>
+import std.compat;
 
 #include "seastarx.hh"
 namespace utils {

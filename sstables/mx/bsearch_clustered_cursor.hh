@@ -15,7 +15,7 @@
 #include "utils/cached_file.hh"
 #include "utils/to_string.hh"
 
-#include <optional>
+import std.compat;
 import fmt;
 
 namespace sstables {

@@ -8,7 +8,7 @@
 
 #include "replica/logstor/record_value.hh"
 
-#include <optional>
+import std.compat;
 
 import boost;
 

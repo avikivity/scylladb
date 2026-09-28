@@ -9,14 +9,9 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <cstddef>
-#include <functional>
-#include <memory>
-#include <span>
-#include <variant>
-#include <vector>
 #include "schema/schema_fwd.hh"
 #include "service_permit.hh"
+import std.compat;
 #include "utils/rjson.hh"
 
 namespace s3 { class client; }

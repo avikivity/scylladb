@@ -17,8 +17,7 @@
 #include "data_dictionary/data_dictionary.hh"
 #include "index/secondary_index.hh"
 
-#include <optional>
-#include <vector>
+import std.compat;
 
 namespace cql3::restrictions {
 class select_restrictions;

@@ -7,15 +7,13 @@
  */
 
 #include "token_metadata.hh"
-#include <optional>
+import std.compat;
 #include "locator/snitch_base.hh"
 #include "locator/abstract_replication_strategy.hh"
 #include "locator/tablets.hh"
 #include "utils/chunked_vector.hh"
 #include "utils/log.hh"
 #include "partition_range_compat.hh"
-#include <unordered_map>
-#include <algorithm>
 #include "utils/assert.hh"
 #include "utils/stall_free.hh"
 #include "gms/gossiper.hh"

@@ -12,7 +12,7 @@
 #include "cql3/query_processor.hh"
 #include "cql3/result_set.hh"
 #include "cql3/untyped_result_set.hh"
-#include <string_view>
+import std.compat;
 
 namespace qos {
 

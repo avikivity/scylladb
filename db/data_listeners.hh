@@ -14,7 +14,7 @@
 #include "utils/top_k.hh"
 #include "schema/schema_registry.hh"
 
-#include <set>
+import std.compat;
 
 class frozen_mutation;
 

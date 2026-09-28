@@ -14,12 +14,11 @@
 #include "test/lib/key_utils.hh"
 #include "test/lib/log.hh"
 #include "test/lib/nondeterministic_choice_stack.hh"
+import std.compat;
 #include "test/lib/random_schema.hh"
 #include "test/lib/random_utils.hh"
-#include <generator>
 #include "marshal_exception.hh"
 #include "exceptions/exceptions.hh"
-#include <fstream>
 #include "db/marshal/type_parser.hh"
 #include "types/list.hh"
 #include "types/map.hh"

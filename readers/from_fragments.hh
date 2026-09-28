@@ -8,7 +8,7 @@
 
 #pragma once
 #include "schema/schema_fwd.hh"
-#include <deque>
+import std.compat;
 #include "dht/i_partitioner_fwd.hh"
 
 class mutation_reader;

@@ -13,7 +13,7 @@
 #include "cql3/statements/select_statement.hh"
 #include "vector_search/hybrid_search.hh"
 
-#include <vector>
+import std.compat;
 
 namespace cql3::statements {
 

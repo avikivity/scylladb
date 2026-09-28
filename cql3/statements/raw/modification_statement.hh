@@ -15,7 +15,7 @@
 #include "cql3/cql_statement.hh"
 
 
-#include <memory>
+import std.compat;
 
 namespace cql3 {
 

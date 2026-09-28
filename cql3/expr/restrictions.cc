@@ -13,8 +13,7 @@
 #include "cql3/expr/expr-utils.hh"
 #include "types/list.hh"
 #include "types/tuple.hh"
-#include <iterator>
-#include <ranges>
+import std.compat;
 
 namespace cql3 {
 namespace expr {

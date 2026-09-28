@@ -21,18 +21,9 @@
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/cql_assertions.hh"
 #include "test/lib/log.hh"
-#include <cstdio>
-#include <functional>
-#include <chrono>
-#include <memory>
+import std.compat;
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <tuple>
-#include <variant>
-#include <vector>
-#include <algorithm>
-#include <ranges>
-#include <filesystem>
 
 namespace {
 

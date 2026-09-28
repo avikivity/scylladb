@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <variant>
+import std.compat;
 #include "cdc/log.hh"
 #include "inet_address_vectors.hh"
 #include "replica/database_fwd.hh"

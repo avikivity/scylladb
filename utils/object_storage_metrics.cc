@@ -6,8 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
-#include <vector>
+import std.compat;
 
 #include "utils/object_storage_metrics.hh"
 #include "utils/log.hh"

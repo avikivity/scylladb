@@ -7,7 +7,7 @@
  */
 
 #include "client_data.hh"
-#include <stdexcept>
+import std.compat;
 
 sstring to_string(client_type ct) {
     switch (ct) {

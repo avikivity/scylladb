@@ -8,6 +8,7 @@
 
 #pragma once
 
+import std.compat;
 #include "locator/abstract_replication_strategy.hh"
 #include "locator/tablets.hh"
 #include "locator/tablet_metadata_guard.hh"
@@ -18,7 +19,6 @@
 #include "db/commitlog/raft_commitlog_replay_buffer.hh"
 #include "utils/hash.hh"
 
-#include <source_location>
 #include "seastarx.hh"
 
 namespace db {

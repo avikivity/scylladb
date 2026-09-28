@@ -16,7 +16,7 @@
 #include "utils/small_vector.hh"
 #include "exceptions.hh"
 
-#include <variant>
+import std.compat;
 
 template<typename T, ContiguousSharedBuffer Buffer>
 inline T consume_be(Buffer& p) {

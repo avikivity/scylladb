@@ -8,8 +8,7 @@
 
 #include "repair/incremental.hh"
 #include "utils/log.hh"
-#include <algorithm>
-#include <ranges>
+import std.compat;
 
 extern logging::logger rlogger;
 

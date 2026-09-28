@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <vector>
+import std.compat;
 
 #include "list_permissions_statement.hh"
 #include "auth/authorizer.hh"

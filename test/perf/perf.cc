@@ -7,7 +7,7 @@
  */
 
 #include "perf.hh"
-#include <ranges>
+import std.compat;
 #include "seastarx.hh"
 #include "reader_concurrency_semaphore.hh"
 #include "schema/schema.hh"
@@ -15,8 +15,6 @@
 #include <signal.h>
 #include <time.h>
 #include "release.hh"
-#include <fstream>
-#include <stdexcept>
 import boost;
 
 

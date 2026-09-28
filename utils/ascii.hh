@@ -10,9 +10,9 @@
 
 #pragma once
 
-#include <cstdint>
 #include "bytes_fwd.hh"
 #include "utils/managed_bytes_fwd.hh"
+import std.compat;
 
 namespace utils {
 

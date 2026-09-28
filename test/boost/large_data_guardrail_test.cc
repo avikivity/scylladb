@@ -7,7 +7,7 @@
  */
 
 #include <boost/test/unit_test.hpp>
-#include <deque>
+import std.compat;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/thread_test_case.hh>
 #include "db/large_data_handler.hh"

@@ -9,9 +9,7 @@
 
 #include "schema_applier.hh"
 
-#include <memory>
-
-#include <ranges>
+import std.compat;
 
 #include "absl-flat_hash_map.hh"
 #include "service/storage_service.hh"

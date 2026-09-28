@@ -18,7 +18,7 @@
 #include "replica/database.hh"
 #include "locator/abstract_replication_strategy.hh"
 
-#include <charconv>
+import std.compat;
 
 namespace service {
 

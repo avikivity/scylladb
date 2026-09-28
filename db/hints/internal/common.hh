@@ -12,9 +12,9 @@
 
 // Scylla includes.
 #include "locator/host_id.hh"
+import std.compat;
 
 // STD.
-#include <cstdint>
 
 namespace db::hints {
 namespace internal {

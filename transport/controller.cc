@@ -7,6 +7,7 @@
  */
 
 #include "utils/assert.hh"
+#include <cerrno>
 #include <grp.h>
 #include <sys/un.h>
 #include <sys/stat.h>

@@ -6,16 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <string_view>
-#include <set>
+import std.compat;
 #include "alternator/conditions.hh"
 #include "alternator/error.hh"
-#include <unordered_map>
 #include "utils/rjson.hh"
 #include "serialization.hh"
 #include "utils/base64.hh"
 #include "utils/rjson.hh"
-#include <stdexcept>
 #include "utils/overloaded_functor.hh"
 
 #include "expressions.hh"

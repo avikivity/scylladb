@@ -8,13 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <functional>
-#include <map>
-#include <optional>
-#include <ranges>
-#include <string_view>
-#include <unordered_map>
-#include <unordered_set>
+import std.compat;
 
 #include "index/secondary_index_manager.hh"
 #include "index/secondary_index.hh"

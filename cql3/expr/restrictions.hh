@@ -10,7 +10,7 @@
 
 #include "expression.hh"
 #include "data_dictionary/data_dictionary.hh"
-#include <map>
+import std.compat;
 
 namespace cql3 {
 namespace expr {

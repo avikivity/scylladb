@@ -13,11 +13,7 @@
 #include "utils/chain_abort_source.hh"
 #include "utils/overloaded_functor.hh"
 
-#include <cmath>
-#include <map>
-#include <optional>
-#include <ranges>
-#include <span>
+import std.compat;
 
 namespace vector_search {
 

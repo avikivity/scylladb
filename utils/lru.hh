@@ -9,7 +9,7 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <type_traits>
+import std.compat;
 import boost;
 import seastar;
 

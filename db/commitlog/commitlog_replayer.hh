@@ -9,8 +9,7 @@
 
 #pragma once
 
-#include <functional>
-#include <memory>
+import std.compat;
 
 #include "schema/schema_fwd.hh"
 #include "seastarx.hh"

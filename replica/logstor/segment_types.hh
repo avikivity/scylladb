@@ -7,8 +7,7 @@
  */
 #pragma once
 
-#include <compare>
-#include <cstdint>
+import std.compat;
 import fmt;
 
 // The identifiers and positions of segments and of the records in them. They depend on nothing

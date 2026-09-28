@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <functional>
+import std.compat;
 
 #include "mutation/tombstone.hh"
 #include "schema/schema_fwd.hh"

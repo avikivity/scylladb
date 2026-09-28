@@ -10,7 +10,7 @@
 
 #include "abstract_replication_strategy.hh"
 
-#include <optional>
+import std.compat;
 
 // forward declaration since replica/database.hh includes this file
 class keyspace;

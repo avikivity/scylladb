@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <cstdint>
+import std.compat;
 
 namespace data_dictionary {
 enum class consistency_config_option : uint8_t {

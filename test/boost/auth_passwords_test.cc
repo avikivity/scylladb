@@ -8,10 +8,7 @@
 
 #include <seastar/testing/test_case.hh>
 
-#include <array>
-#include <coroutine>
-#include <random>
-#include <unordered_set>
+import std.compat;
 
 #include "auth/passwords.hh"
 

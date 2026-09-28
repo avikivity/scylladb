@@ -12,9 +12,7 @@
 
 #include "audit/audit.hh"
 
-#include <algorithm>
-#include <array>
-#include <vector>
+import std.compat;
 
 #include "exceptions/exceptions.hh"
 #include "types/types.hh"

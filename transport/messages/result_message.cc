@@ -11,7 +11,7 @@
 #include "cql3/cql_statement.hh"
 #include "replica/tablets.hh"
 #include "types/tuple.hh"
-#include <bit>
+import std.compat;
 
 import fmt;
 namespace cql_transport::messages {

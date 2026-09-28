@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <functional>
-#include <unordered_set>
+import std.compat;
 #include "raft/server.hh"
 #include "service/raft/raft_rpc.hh"
 #include "seastarx.hh"

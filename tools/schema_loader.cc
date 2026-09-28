@@ -8,7 +8,7 @@
 
 import fmt;
 #include "utils/assert.hh"
-#include <algorithm>
+import std.compat;
 
 #include "cdc/cdc_partitioner.hh"
 #include "cdc/log.hh"

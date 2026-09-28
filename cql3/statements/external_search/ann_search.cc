@@ -20,8 +20,7 @@
 #include "cql3/expr/expr-utils.hh"
 #include "cql3/util.hh"
 
-#include <algorithm>
-#include <cmath>
+import std.compat;
 
 namespace cql3::statements::ann_search {
 

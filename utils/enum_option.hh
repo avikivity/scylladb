@@ -11,11 +11,7 @@
 
 #pragma once
 
-#include <optional>
-#include <iosfwd>
-#include <sstream>
-#include <type_traits>
-#include <concepts>
+import std.compat;
 import fmt;
 import boost;
 

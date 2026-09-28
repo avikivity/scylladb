@@ -10,7 +10,7 @@
 
 #include "alternator/executor.hh"
 #include "utils/scoped_item_list.hh"
-#include <optional>
+import std.compat;
 #include "alternator/auth.hh"
 #include "timeout_config.hh"
 #include "service/qos/service_level_controller.hh"

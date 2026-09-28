@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <optional>
+import std.compat;
 #include "expression.hh"
 
 namespace cql3 {

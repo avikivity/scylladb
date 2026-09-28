@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include <optional>
+import std.compat;
 #include "dht/decorated_key.hh"
 #include "mutation/mutation_partition.hh"
 #include "mutation/tombstone.hh"

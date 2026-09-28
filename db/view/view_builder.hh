@@ -14,9 +14,7 @@
 #include "utils/cross-shard-barrier.hh"
 #include "replica/database.hh"
 
-#include <optional>
-#include <unordered_map>
-#include <vector>
+import std.compat;
 
 namespace db {
 

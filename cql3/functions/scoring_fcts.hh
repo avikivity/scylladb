@@ -13,7 +13,7 @@
 #include "cql3/functions/function_name.hh"
 #include "cql3/functions/native_scalar_function.hh"
 
-#include <string_view>
+import std.compat;
 
 class schema;
 

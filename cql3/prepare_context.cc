@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import std.compat;
 #include "seastarx.hh"
 
 #include "cql3/prepare_context.hh"

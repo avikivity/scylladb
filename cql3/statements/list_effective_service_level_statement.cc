@@ -9,7 +9,7 @@
 #include "list_effective_service_level_statement.hh"
 #include "auth/role_manager.hh"
 #include "cql3/statements/prepared_statement.hh"
-#include <memory>
+import std.compat;
 #include "exceptions/exceptions.hh"
 #include "service/qos/qos_common.hh"
 #include "service/query_state.hh"

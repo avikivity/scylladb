@@ -7,16 +7,7 @@
  */
 #include "replica/logstor/segment_file.hh"
 
-#include <algorithm>
-#include <charconv>
-#include <cstring>
-#include <ranges>
-#include <set>
-#include <stdexcept>
-#include <string>
-#include <system_error>
-#include <utility>
-#include <vector>
+import std.compat;
 
 #include "replica/logstor/ondisk.hh"
 #include "utils/checked-file-impl.hh"

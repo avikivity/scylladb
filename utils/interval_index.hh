@@ -8,18 +8,7 @@
 
 #pragma once
 
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <concepts>
-#include <cstdint>
-#include <limits>
-#include <optional>
-#include <ranges>
-#include <type_traits>
-#include <utility>
-#include <vector>
-
+import std.compat;
 import boost;
 
 #include "utils/assert.hh"

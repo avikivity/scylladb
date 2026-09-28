@@ -10,9 +10,7 @@
 
 #include "locator/tablets.hh"
 
-#include <algorithm>
-#include <concepts>
-#include <span>
+import std.compat;
 
 namespace service::strong_consistency {
 

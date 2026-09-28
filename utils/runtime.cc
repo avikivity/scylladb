@@ -8,7 +8,7 @@
 
 #include "utils/runtime.hh"
 
-#include <chrono>
+import std.compat;
 
 namespace runtime {
 

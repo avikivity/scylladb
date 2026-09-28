@@ -8,13 +8,7 @@
 
 #pragma once
 
-#include <charconv>
-#include <chrono>
-#include <cstdint>
-#include <compare>
-#include <limits>
-#include <ranges>
-#include <stdexcept>
+import std.compat;
 #include "types/types.hh"
 #include "utils/assert.hh"
 #include "utils/UUID_gen.hh"

@@ -7,9 +7,7 @@
  */
 #pragma once
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
+import std.compat;
 
 namespace replica::logstor {
 

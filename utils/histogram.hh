@@ -9,10 +9,10 @@
 #pragma once
 
 #include "latency.hh"
-#include <cmath>
 #include "seastarx.hh"
 #include "estimated_histogram.hh"
 import boost;
+import std.compat;
 
 namespace utils {
 /**

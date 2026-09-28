@@ -13,7 +13,7 @@
 #include "replica/logstor/index.hh"
 #include "replica/logstor/single_row_partition.hh"
 #include "db/cache_tracker.hh"
-#include <variant>
+import std.compat;
 #include "schema/schema_builder.hh"
 #include "test/lib/logstor_test_utils.hh"
 #include "test/lib/mutation_assertions.hh"

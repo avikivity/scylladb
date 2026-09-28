@@ -10,8 +10,7 @@
 
 #include "enum_set.hh"
 
-#include <iterator>
-#include <unordered_set>
+import std.compat;
 
 #include <boost/test/unit_test.hpp>
 

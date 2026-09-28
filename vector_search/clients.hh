@@ -16,8 +16,7 @@
 #include "vector_search/error.hh"
 #include "utils/log.hh"
 #include "utils/updateable_value.hh"
-#include <expected>
-#include <vector>
+import std.compat;
 
 namespace vector_search {
 

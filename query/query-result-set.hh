@@ -12,8 +12,7 @@
 #include "types/types.hh"
 #include "schema/schema.hh"
 
-#include <optional>
-#include <stdexcept>
+import std.compat;
 import fmt;
 
 class mutation;

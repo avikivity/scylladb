@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <concepts>
-#include <iterator>
-#include <span>
+import std.compat;
 
 template <typename T>
 concept bytespan_ref = std::same_as<T, std::span<std::byte>&&>

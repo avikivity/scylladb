@@ -8,7 +8,7 @@
 
 #include "test/lib/scylla_test_case.hh"
 
-#include <exception>
+import std.compat;
 #include "alternator/export.hh"
 #include "utils/rjson.hh"
 #include "utils/s3/client.hh"

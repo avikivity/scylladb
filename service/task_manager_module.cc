@@ -16,7 +16,7 @@
 #include "tasks/task_handler.hh"
 #include "tasks/virtual_task_hint.hh"
 #include "utils/UUID_gen.hh"
-#include <cmath>
+import std.compat;
 
 namespace service {
 

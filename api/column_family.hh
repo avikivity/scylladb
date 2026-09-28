@@ -9,7 +9,7 @@
 #pragma once
 
 #include "replica/database.hh"
-#include <any>
+import std.compat;
 #include "api/api_init.hh"
 
 namespace api {

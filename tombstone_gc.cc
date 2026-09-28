@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <chrono>
+import std.compat;
 #include "schema/schema.hh"
 #include "gc_clock.hh"
 #include "tombstone_gc.hh"

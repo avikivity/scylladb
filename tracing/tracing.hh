@@ -9,10 +9,7 @@
  */
 #pragma once
 
-#include <vector>
-#include <random>
-#include <deque>
-#include <set>
+import std.compat;
 #include "gc_clock.hh"
 #include "utils/UUID.hh"
 #include "gms/inet_address.hh"

@@ -16,8 +16,7 @@
 #include "utils/compact-radix-tree.hh"
 #include "utils/array-search.hh"
 
-#include <array>
-#include <numeric>
+import std.compat;
 
 import fmt;
 using namespace compact_radix_tree;

@@ -11,10 +11,7 @@
 #include "clocks-impl.hh"
 #include "gc_clock.hh"
 
-#include <chrono>
-#include <cstdint>
-#include <ratio>
-#include <type_traits>
+import std.compat;
 
 // the database clock follows Java - 1ms granularity, 64-bit counter, 1970 epoch
 import fmt;

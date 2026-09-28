@@ -10,7 +10,7 @@
 #include "utils/log.hh"
 
 #include "utils/lru_string_map.hh"
-#include <variant>
+import std.compat;
 
 static logging::logger logger_("parsed-expression-cache");
 

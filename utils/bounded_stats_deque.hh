@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <deque>
+import std.compat;
 
 namespace utils {
 

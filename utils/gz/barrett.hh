@@ -28,8 +28,8 @@
 
 #pragma once
 
-#include <cstdint>
 #include "utils/clmul.hh"
+import std.compat;
 
 inline
 constexpr uint64_t barrett_reduction_constants[2] = { 0x00000001F7011641, 0x00000001DB710641 };

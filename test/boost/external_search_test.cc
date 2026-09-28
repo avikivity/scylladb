@@ -22,6 +22,7 @@
 // reads them. Joining the searches' answers themselves is vector_search::search_all(), tested
 // through the statements in test/cqlpy.
 
+import std.compat;
 #include <boost/test/unit_test.hpp>
 
 #undef SEASTAR_TESTING_MAIN
@@ -46,8 +47,6 @@
 #include "types/types.hh"
 #include "types/vector.hh"
 
-#include <cmath>
-#include <utility>
 #include "seastarx.hh"
 
 using namespace cql3;

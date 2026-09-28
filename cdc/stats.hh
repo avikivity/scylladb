@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <array>
-#include <cstdint>
+import std.compat;
 #include "enum_set.hh"
 
 namespace cdc {

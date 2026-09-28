@@ -9,11 +9,9 @@
 #include "storage.hh"
 
 #include <cerrno>
-#include <algorithm>
 #include <cctype>
 
-#include <exception>
-#include <stdexcept>
+import std.compat;
 
 #include "db/config.hh"
 #include "db/extensions.hh"

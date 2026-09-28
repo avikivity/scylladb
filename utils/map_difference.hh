@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <set>
+import std.compat;
 
 template<typename Key>
 struct map_difference {

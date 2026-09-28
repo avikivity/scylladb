@@ -9,7 +9,7 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <vector>
+import std.compat;
 #include "row_cache.hh"
 #include "mutation/mutation_fragment.hh"
 #include "query/query-request.hh"

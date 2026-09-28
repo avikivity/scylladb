@@ -15,8 +15,7 @@
 #include "auth/authenticator.hh"
 #include "service/qos/qos_configuration_change_subscriber.hh"
 #include "timeout_config.hh"
-#include <memory>
-#include <type_traits>
+import std.compat;
 #include "utils/fragmented_temporary_buffer.hh"
 #include "utils/result.hh"
 #include "service_permit.hh"

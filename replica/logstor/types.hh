@@ -7,13 +7,13 @@
  */
 #pragma once
 
-#include <cstdint>
 #include "dht/decorated_key.hh"
 #include "replica/logstor/key_utils.hh"
 #include "replica/logstor/segment_types.hh"
 #include "bytes_ostream.hh"
 #include "mutation/timestamp.hh"
 import fmt;
+import std.compat;
 
 namespace replica::logstor {
 

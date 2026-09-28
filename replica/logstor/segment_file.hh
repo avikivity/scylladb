@@ -7,12 +7,7 @@
  */
 #pragma once
 
-#include <cstdint>
-#include <filesystem>
-#include <memory>
-#include <optional>
-#include <string_view>
-#include <vector>
+import std.compat;
 
 import fmt;
 

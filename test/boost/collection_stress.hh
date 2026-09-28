@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <vector>
-#include <random>
-#include <string>
+import std.compat;
 #include "utils/assert.hh"
 #include "utils/logalloc.hh"
 

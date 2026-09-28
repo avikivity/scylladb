@@ -10,7 +10,7 @@
 
 #include <boost/test/tree/visitor.hpp>
 
-#include <memory>
+import std.compat;
 import fmt;
 
 namespace internal {

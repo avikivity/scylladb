@@ -12,7 +12,7 @@
 
 #include "types/types.hh"
 #include "data_dictionary/data_dictionary.hh"
-#include <iosfwd>
+import std.compat;
 #include "enum_set.hh"
 
 namespace data_dictionary {

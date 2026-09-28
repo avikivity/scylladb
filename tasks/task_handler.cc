@@ -11,7 +11,7 @@
 #include "tasks/virtual_task_hint.hh"
 #include "utils/overloaded_functor.hh"
 
-#include <queue>
+import std.compat;
 
 namespace tasks {
 

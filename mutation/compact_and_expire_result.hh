@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include <cstdint>
 import fmt;
+import std.compat;
 
 struct compact_and_expire_result {
     uint64_t live_cells = 0;

@@ -10,10 +10,7 @@
 #include "seastarx.hh"
 #include "enum_set.hh"
 
-#include <algorithm>
-#include <array>
-#include <string_view>
-#include <vector>
+import std.compat;
 import fmt;
 
 namespace audit {

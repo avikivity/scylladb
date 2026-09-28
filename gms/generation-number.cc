@@ -8,8 +8,7 @@
 
 #include "utils/assert.hh"
 #include <cassert>
-#include <chrono>
-#include <utility>
+import std.compat;
 
 #include "generation-number.hh"
 

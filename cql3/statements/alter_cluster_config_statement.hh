@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <optional>
+import std.compat;
 
 #include "cql3/statements/schema_altering_statement.hh"
 #include "utils/UUID.hh"

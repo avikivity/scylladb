@@ -14,8 +14,7 @@
 #include "streaming/stream_summary.hh"
 #include "streaming/stream_session_state.hh"
 #include "streaming/progress_info.hh"
-#include <vector>
-#include <map>
+import std.compat;
 #include "locator/host_id.hh"
 
 namespace streaming {

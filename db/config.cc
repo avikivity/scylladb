@@ -8,9 +8,7 @@
  */
 
 import fmt;
-#include <optional>
-#include <unordered_map>
-#include <sstream>
+import std.compat;
 
 import yaml_cpp;
 

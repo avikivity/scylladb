@@ -8,10 +8,7 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <vector>
-#include <unordered_set>
-#include <functional>
-#include <source_location>
+import std.compat;
 #include "seastarx.hh"
 #include "bytes_ostream.hh"
 #include "internal.hh"

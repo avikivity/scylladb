@@ -12,7 +12,7 @@
 #include "test/perf/perf.hh"
 
 #include <seastar/testing/linux_perf_event.hh>
-#include <stdexcept>
+import std.compat;
 
 static atomic_cell make_atomic_cell(data_type dt, bytes value) {
     return atomic_cell::make_live(*dt, 0, value);

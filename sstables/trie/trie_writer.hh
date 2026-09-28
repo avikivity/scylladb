@@ -32,8 +32,7 @@
 
 #pragma once
 
-#include <map>
-#include <set>
+import std.compat;
 #include "bytes.hh"
 #include "utils/assert.hh"
 #include "utils/small_vector.hh"

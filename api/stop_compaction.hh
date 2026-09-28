@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <expected>
+import std.compat;
 #include "compaction/compaction_descriptor.hh"
 
 namespace api {

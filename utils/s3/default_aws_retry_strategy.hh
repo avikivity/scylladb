@@ -8,8 +8,7 @@
 
 #pragma once
 #include "seastarx.hh"
-#include <chrono>
-#include <exception>
+import std.compat;
 
 #include "utils/s3/noop_throttling_controller.hh"
 

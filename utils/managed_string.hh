@@ -9,7 +9,7 @@
 #pragma once
 
 #include "utils/fragment_range.hh"
-#include <algorithm>
+import std.compat;
 #include "utils/managed_bytes.hh"
 #include "bytes_ostream.hh"
 

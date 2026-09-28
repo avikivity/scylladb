@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstring>
 /*
  * Copyright (C) 2014-present ScyllaDB
  */
@@ -26,9 +25,8 @@
 // DataOutput.writeChars(string) - because the latter does not include
 // the length, which is necessary for reading the string back.
 
-#include <cstdint>
-
 #include "seastarx.hh"
+import std.compat;
 
 class UTFDataFormatException { };
 class EOFException { };

@@ -10,7 +10,7 @@
 #include "utils/big_decimal.hh"
 #include "utils/UUID_gen.hh"
 #include "cql3/functions/native_scalar_function.hh"
-#include <chrono>
+import std.compat;
 import boost;
 
 namespace cql3 {

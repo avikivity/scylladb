@@ -8,12 +8,7 @@
 
 #pragma once
 
-#include <cstdint>
-#include <memory>
-#include <string>
-#include <type_traits>
-#include <variant>
-#include <vector>
+import std.compat;
 
 import yaml_cpp;
 

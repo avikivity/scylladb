@@ -10,20 +10,13 @@
 #include "test/lib/log.hh"
 #include "test/lib/random_utils.hh"
 #include "test/lib/scylla_test_case.hh"
+import std.compat;
 #include "seastarx.hh"
 import fmt;
 #include <seastar/testing/thread_test_case.hh>
 #include <boost/test/unit_test.hpp>
 
-#include <algorithm>
-#include <bit>
-#include <chrono>
 #include <cstdlib>
-#include <cstring>
-#include <memory>
-#include <random>
-#include <span>
-#include <string_view>
 
 template<class T>
 concept RpcBuf = std::same_as<T, rpc::rcv_buf> || std::same_as<T, rpc::snd_buf>;

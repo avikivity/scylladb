@@ -8,7 +8,7 @@
 
 #include "mutation_writer/timestamp_based_splitting_writer.hh"
 
-#include <optional>
+import std.compat;
 
 #include "mutation_writer/feed_writers.hh"
 

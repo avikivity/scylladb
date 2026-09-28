@@ -6,18 +6,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <exception>
-#include <algorithm>
-#include <cctype>
-#include <initializer_list>
-#include <memory>
-#include <numeric>
-#include <time.h> // strptime
-#include <regex>
+import std.compat;
+#include <cerrno>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include <time.h> // strptime
 #include "seastarx.hh"
-#include <stdexcept>
 #if __has_include(<rapidxml.h>)
 #include <rapidxml.h>
 #else

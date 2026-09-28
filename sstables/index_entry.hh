@@ -7,8 +7,7 @@
  */
 
 #pragma once
-#include <functional>
-#include <variant>
+import std.compat;
 #include "mutation/position_in_partition.hh"
 #include "utils/overloaded_functor.hh"
 #include "utils/lsa/chunked_managed_vector.hh"

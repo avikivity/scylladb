@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <memory>
-#include <functional>
-#include <unordered_map>
+import std.compat;
 #include "gms/inet_address.hh"
 #include "locator/token_range_splitter.hh"
 #include "dht/token-sharding.hh"

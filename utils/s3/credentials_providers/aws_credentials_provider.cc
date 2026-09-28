@@ -7,7 +7,7 @@
  */
 
 #include "aws_credentials_provider.hh"
-#include <coroutine>
+import std.compat;
 
 namespace aws {
 

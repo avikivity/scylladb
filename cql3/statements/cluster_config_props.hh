@@ -8,11 +8,7 @@
 
 #pragma once
 
-#include <map>
-#include <optional>
-#include <set>
-#include <utility>
-#include <vector>
+import std.compat;
 
 #include "cql3/statements/property_definitions.hh"
 #include "cql3/statements/request_validations.hh"

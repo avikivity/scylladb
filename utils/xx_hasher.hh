@@ -13,7 +13,7 @@
 
 import xxhash;
 
-#include <array>
+import std.compat;
 
 class xx_hasher {
     static constexpr size_t digest_size = 16;

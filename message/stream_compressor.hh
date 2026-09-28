@@ -9,9 +9,7 @@
 #pragma once
 
 import seastar;
-#include <vector>
-#include <memory>
-#include <span>
+import std.compat;
 
 #define ZSTD_STATIC_LINKING_ONLY
 #include <zstd.h>

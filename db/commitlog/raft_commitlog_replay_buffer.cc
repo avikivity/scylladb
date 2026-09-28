@@ -25,7 +25,7 @@
 #include "idl/raft_storage.dist.hh"
 #include "idl/raft_storage.dist.impl.hh"
 
-#include <algorithm>
+import std.compat;
 
 namespace db {
 

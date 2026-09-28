@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <cstdint>
-#include <cstddef>
-#include <chrono>
-#include <vector>
+import std.compat;
 
 #include "seastarx.hh"
 #include "utils/chunked_vector.hh"

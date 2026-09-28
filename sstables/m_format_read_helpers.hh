@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <type_traits>
-#include <concepts>
+import std.compat;
 #include "gc_clock.hh"
 #include "mutation/timestamp.hh"
 #include "sstables/types.hh"

@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <functional>
-#include <filesystem>
+import std.compat;
 #include "enum_set.hh"
 #include "seastarx.hh"
 

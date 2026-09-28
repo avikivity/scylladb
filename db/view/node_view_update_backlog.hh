@@ -14,8 +14,7 @@
 
 #include "seastarx.hh"
 
-#include <atomic>
-#include <chrono>
+import std.compat;
 
 namespace db::view {
 

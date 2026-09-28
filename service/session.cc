@@ -7,7 +7,7 @@
  */
 
 #include "service/session.hh"
-#include <coroutine>
+import std.compat;
 #include "utils/log.hh"
 
 namespace service {

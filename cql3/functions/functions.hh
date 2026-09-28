@@ -15,7 +15,7 @@
 #include "cql3/cql3_type.hh"
 #include "cql3/functions/function_name.hh"
 #include "schema/schema.hh"
-#include <unordered_map>
+import std.compat;
 #include "data_dictionary/user_types_metadata.hh"
 #include "utils/result.hh"
 #include "exceptions/exceptions.hh"

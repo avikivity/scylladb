@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <compare>
+import std.compat;
 import fmt;
 
 template <> struct fmt::formatter<std::strong_ordering> : fmt::formatter<string_view> {

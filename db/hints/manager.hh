@@ -24,9 +24,7 @@
 #include "locator/abstract_replication_strategy.hh"
 
 // STD.
-#include <chrono>
-#include <span>
-#include <unordered_map>
+import std.compat;
 
 namespace utils {
 class directories;

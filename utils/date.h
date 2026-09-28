@@ -28,27 +28,10 @@
 // been invented (that would involve another several millennia of evolution).
 // We did not mean to shout.
 
-#include <algorithm>
-#include <cctype>
-#include <chrono>
 #if !(__cplusplus >= 201402)
 #  include <cmath>
 #endif
-#include <cstdint>
-#include <cstdlib>
-#include <ctime>
-#include <ios>
-#include <istream>
-#include <iterator>
-#include <limits>
-#include <locale>
-#include <ostream>
-#include <ratio>
-#include <sstream>
-#include <stdexcept>
-#include <string>
-#include <utility>
-#include <type_traits>
+import std.compat;
 
 namespace date
 {

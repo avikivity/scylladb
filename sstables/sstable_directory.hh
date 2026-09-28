@@ -8,11 +8,7 @@
 
 #pragma once
 
-#include <filesystem>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
-#include <functional>
+import std.compat;
 #include "seastarx.hh"
 #include "sstables/shared_sstable.hh"            // sstables::shared_sstable
 #include "sstables/version.hh"                   // sstable versions

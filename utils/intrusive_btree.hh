@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include <cassert>
 #include "utils/assert.hh"
 #include "utils/collection-concepts.hh"
 #include "utils/neat-object-id.hh"
 #include "utils/allocation_strategy.hh"
 import fmt;
 import boost;
+import std.compat;
 
 namespace intrusive_b {
 

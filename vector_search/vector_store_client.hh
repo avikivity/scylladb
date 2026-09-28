@@ -13,15 +13,7 @@
 #include "seastarx.hh"
 #include "error.hh"
 #include "utils/rjson.hh"
-#include <chrono>
-#include <cstdint>
-#include <expected>
-#include <functional>
-#include <optional>
-#include <string>
-#include <unordered_map>
-#include <variant>
-#include <vector>
+import std.compat;
 
 class schema;
 namespace db {

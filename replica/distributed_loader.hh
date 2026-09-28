@@ -9,8 +9,7 @@
 #pragma once
 
 
-#include <vector>
-#include <functional>
+import std.compat;
 #include "seastarx.hh"
 #include "compaction/compaction_descriptor.hh"
 #include "db/system_keyspace.hh"

@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <map>
+import std.compat;
 #include "schema/schema_fwd.hh"
 
 namespace replica {

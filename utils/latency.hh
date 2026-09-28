@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <chrono>
+import std.compat;
 /**
  * A helper class to keep track of latencies
  */

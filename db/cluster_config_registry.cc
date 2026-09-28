@@ -6,16 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import std.compat;
 #include "db/cluster_config_registry.hh"
-
-#include <algorithm>
-#include <array>
-#include <cctype>
-#include <string>
-#include <string_view>
-#include <type_traits>
-#include <variant>
-#include <vector>
 
 #include "gms/feature_service.hh"
 #include "types/types.hh"

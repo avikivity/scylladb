@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <ranges>
+import std.compat;
 #include "db/view/view_build_status.hh"
 #include "locator/host_id.hh"
 #include "locator/tablets.hh"

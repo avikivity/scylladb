@@ -10,10 +10,7 @@
 
 #include "seastarx.hh"
 
-#include <cstdint>
-#include <string_view>
-#include <ostream>
-#include <stdexcept>
+import std.compat;
 
 // Wrapper for a value with a type-tag for differentiating instances.
 template <class Value, class Tag>

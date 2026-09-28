@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <list>
+import std.compat;
 
 #include "utils/fragment_range.hh"
 #include "utils/bit_cast.hh"

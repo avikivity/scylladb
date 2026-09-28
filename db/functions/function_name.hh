@@ -11,7 +11,7 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <functional>
+import std.compat;
 import fmt;
 
 namespace db {

@@ -6,10 +6,8 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-#include <deque>
-#include <unordered_map>
-#include <regex>
-#include <algorithm>
+#include <cerrno>
+import std.compat;
 
 #include <rapidxml.h>
 #include <openssl/evp.h>

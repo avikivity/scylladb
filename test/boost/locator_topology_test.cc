@@ -9,7 +9,7 @@
 #include "utils/assert.hh"
 #include <boost/test/unit_test.hpp>
 
-#include <functional>
+import std.compat;
 
 #include "locator/types.hh"
 #include "test/lib/scylla_test_case.hh"

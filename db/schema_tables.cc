@@ -23,8 +23,7 @@
 #include "utils/assert.hh"
 #include "utils/UUID_gen.hh"
 #include "utils/to_string.hh"
-#include <algorithm>
-#include <ranges>
+import std.compat;
 #include "utils/log.hh"
 #include "schema/frozen_schema.hh"
 #include "schema/schema_registry.hh"

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <string_view>
+import std.compat;
 
 #include "types/types.hh"
 #include "service/raft/raft_group0_client.hh"

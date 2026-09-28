@@ -8,7 +8,7 @@
 
 #define BOOST_TEST_MODULE utils
 #include <boost/test/unit_test.hpp>
-#include <ranges>
+import std.compat;
 
 #include "utils/lru_string_map.hh"
 

@@ -19,7 +19,7 @@
 
 #pragma once
 
-#include <string_view>
+import std.compat;
 
 namespace utils {
 

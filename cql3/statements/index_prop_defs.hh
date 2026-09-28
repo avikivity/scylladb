@@ -14,8 +14,7 @@
 #include "property_definitions.hh"
 #include "schema/schema_fwd.hh"
 
-#include <unordered_map>
-#include <optional>
+import std.compat;
 
 typedef std::unordered_map<sstring, sstring> index_options_map;
 

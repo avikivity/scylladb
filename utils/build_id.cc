@@ -7,7 +7,7 @@
 #include <cstring>
 #include "seastarx.hh"
 #include <link.h>
-#include <sstream>
+import std.compat;
 #include <cassert>
 
 import fmt;

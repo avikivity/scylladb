@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <algorithm>
-#include <cstdint>
+import std.compat;
 
 namespace utils {
 

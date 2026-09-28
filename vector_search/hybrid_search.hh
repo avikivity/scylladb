@@ -11,11 +11,7 @@
 #include "vector_search/vector_store_client.hh"
 #include "utils/rjson.hh"
 
-#include <cstdint>
-#include <expected>
-#include <optional>
-#include <variant>
-#include <vector>
+import std.compat;
 
 /// Several searches run as one, their answers joined by primary key: for every key any answer
 /// names, what each answer said about it.

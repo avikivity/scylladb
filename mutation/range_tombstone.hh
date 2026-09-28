@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <optional>
+import std.compat;
 #include "utils/hashing.hh"
 #include "keys/keys.hh"
 #include "mutation/tombstone.hh"

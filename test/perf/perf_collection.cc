@@ -6,9 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
-#include <vector>
-#include <random>
+import std.compat;
 #include "perf.hh"
 
 using per_key_t = int64_t;

@@ -10,13 +10,9 @@
 
 #pragma once
 
-#include <functional>
-#include <unordered_set>
-#include <unordered_map>
+import std.compat;
 #include "gms/inet_address.hh"
 #include "dht/ring_position.hh"
-#include <optional>
-#include <memory>
 #include "utils/interval.hh"
 #include "utils/chunked_vector.hh"
 #include "utils/phased_barrier.hh"

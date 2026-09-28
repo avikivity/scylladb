@@ -8,8 +8,7 @@
 
 #include "mutation/counters.hh"
 
-#include <algorithm>
-#include <random>
+import std.compat;
 
 #include <seastar/testing/random.hh>
 

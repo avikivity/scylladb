@@ -8,8 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <stdexcept>
-#include <vector>
+import std.compat;
 #include "alter_keyspace_statement.hh"
 #include "cql3/statements/property_definitions.hh"
 #include "locator/tablets.hh"

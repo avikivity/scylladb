@@ -7,13 +7,8 @@
  */
 
 import fmt;
-#include <algorithm>
 #include <cassert>
-#include <chrono>
-
-#include <memory>
-
-#include <variant>
+import std.compat;
 
 #include "auth/service.hh"
 #include "cdc/cdc_options.hh"
@@ -71,7 +66,6 @@ import fmt;
 
 #include "service/topology_coordinator.hh"
 
-#include <ranges>
 #include "utils/labels.hh"
 
 using token = dht::token;

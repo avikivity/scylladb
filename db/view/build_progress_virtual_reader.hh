@@ -15,8 +15,7 @@
 #include "query/query-request.hh"
 #include "schema/schema_fwd.hh"
 
-#include <iterator>
-#include <memory>
+import std.compat;
 
 namespace tracing { class trace_state_ptr; }
 

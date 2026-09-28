@@ -9,9 +9,7 @@
 #pragma once
 #include "vector_search/vector_store_client.hh"
 #include "utils.hh"
-#include <optional>
-#include <chrono>
-#include <vector>
+import std.compat;
 
 namespace test::vector_search {
 

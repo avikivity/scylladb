@@ -8,11 +8,7 @@
 
 #pragma once
 
-#include <cstdint>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <variant>
+import std.compat;
 
 #include "enum_set.hh"
 #include "seastarx.hh"

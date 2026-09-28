@@ -11,7 +11,7 @@
 #include "compaction_manager.hh"
 #include "incremental_compaction_strategy.hh"
 #include "incremental_backlog_tracker.hh"
-#include <ranges>
+import std.compat;
 
 namespace compaction {
 

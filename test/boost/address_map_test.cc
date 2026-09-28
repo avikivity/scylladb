@@ -9,9 +9,7 @@
 #include <boost/test/unit_test.hpp>
 #include <seastar/testing/on_internal_error.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <chrono>
-#include <coroutine>
-#include <ranges>
+import std.compat;
 
 #include "service/address_map.hh"
 #include "gms/inet_address.hh"

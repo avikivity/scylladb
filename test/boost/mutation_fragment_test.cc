@@ -32,7 +32,7 @@
 
 #include "readers/from_mutations.hh"
 
-#include <ranges>
+import std.compat;
 
 import fmt;
 SEASTAR_TEST_CASE(test_mutation_merger_conforms_to_mutation_source) {

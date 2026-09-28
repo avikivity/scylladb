@@ -7,7 +7,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <regex>
+import std.compat;
 
 #include "kms_key_provider.hh"
 #include "kms_host.hh"

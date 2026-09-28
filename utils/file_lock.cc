@@ -8,6 +8,7 @@
 
 
 #include "utils/assert.hh"
+#include <cerrno>
 #include <unistd.h>
 #include <fcntl.h>
 

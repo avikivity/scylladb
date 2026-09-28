@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <functional>
-#include <limits>
-#include <optional>
+import std.compat;
 
 namespace detail {
 

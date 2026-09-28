@@ -11,8 +11,7 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <unordered_map>
-#include <unordered_set>
+import std.compat;
 
 #include "snitch_base.hh"
 

@@ -10,7 +10,7 @@
 #define UTILS_DATA_INPUT_HH_
 
 #include "bytes_fwd.hh"
-#include <concepts>
+import std.compat;
 
 class data_input {
 public:

@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include <cstddef>
-#include <cassert>
-#include <span>
-#include <source_location>
+#include "utils/assert.hh"
+import std.compat;
 #include "seastarx.hh"
 
 extern seastar::logger trie_logger;

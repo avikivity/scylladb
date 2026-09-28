@@ -8,8 +8,7 @@
 
 
 #include <boost/test/unit_test.hpp>
-#include <algorithm>
-#include <deque>
+import std.compat;
 
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/random.hh>

@@ -9,9 +9,7 @@
 #pragma once
 
 import seastar;
-
-#include <cstdlib>
-#include <cstdint>
+import std.compat;
 
 class limiting_data_source_impl : public seastar::data_source_impl {
     seastar::data_source _src;

@@ -13,7 +13,7 @@
 #include "utils/exceptions.hh"
 #include "utils/exponential_backoff_retry.hh"
 #include "utils/rjson.hh"
-#include <chrono>
+import std.compat;
 #include <netinet/tcp.h>
 
 import fmt;

@@ -35,8 +35,7 @@ import fmt;
 #include "table_helper.hh"
 
 #include <cfloat>
-#include <algorithm>
-#include <set>
+import std.compat;
 
 import fmt;
 static logging::logger llog("sstables_loader");

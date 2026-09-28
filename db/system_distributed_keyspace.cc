@@ -28,8 +28,7 @@
 #include "locator/host_id.hh"
 #include "view_info.hh"
 
-#include <optional>
-#include <vector>
+import std.compat;
 
 static logging::logger dlogger("system_distributed_keyspace");
 extern logging::logger cdc_log;

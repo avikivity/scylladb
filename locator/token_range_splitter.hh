@@ -12,7 +12,7 @@
 #include "dht/token.hh"
 #include "locator/token_metadata_fwd.hh"
 
-#include <optional>
+import std.compat;
 
 namespace locator {
 

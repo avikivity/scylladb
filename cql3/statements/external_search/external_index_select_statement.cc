@@ -25,9 +25,7 @@
 #include "utils/result_loop.hh"
 import seastar;
 
-#include <algorithm>
-#include <utility>
-#include <variant>
+import std.compat;
 
 namespace cql3::statements {
 

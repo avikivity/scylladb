@@ -11,10 +11,8 @@
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 
+import std.compat;
 #include "seastarx.hh"
-
-#include <string_view>
-#include <utility>
 
 #include "test/lib/cql_test_env.hh"
 

@@ -8,7 +8,7 @@
 
 #include "replica/logstor/ondisk.hh"
 
-#include <stdexcept>
+import std.compat;
 import fmt;
 
 #include "utils/crc.hh"

@@ -7,8 +7,6 @@
  */
 
 
-#include <cstdint>
-
 #include "exceptions/exceptions.hh"
 #include "service/raft/raft_group0_client.hh"
 
@@ -28,6 +26,7 @@
 #include "utils/chunked_string.hh"
 
 import fmt;
+import std.compat;
 BOOST_AUTO_TEST_SUITE(auth_test)
 
 cql_test_config auth_on(bool with_authorizer = true) {

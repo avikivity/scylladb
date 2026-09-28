@@ -14,7 +14,7 @@
 #include "tasks/task_handler.hh"
 #include "tasks/virtual_task_hint.hh"
 #include "utils/error_injection.hh"
-#include <variant>
+import std.compat;
 #include "utils/overloaded_functor.hh"
 
 using namespace std::chrono_literals;

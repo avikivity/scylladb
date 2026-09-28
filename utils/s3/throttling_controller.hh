@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <cstdint>
+import std.compat;
 #include "seastarx.hh"
 
 namespace s3 {

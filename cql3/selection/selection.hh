@@ -22,7 +22,6 @@
 #include "cql3/values.hh"
 #include "exceptions/exceptions.hh"
 #include "unimplemented.hh"
-#include <span>
 
 namespace cql3 {
 

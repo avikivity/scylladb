@@ -9,7 +9,7 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <vector>
+import std.compat;
 #include "client_data.hh"
 #include "utils/chunked_vector.hh"
 

@@ -7,8 +7,7 @@
  */
 
 #include "rjson.hh"
-#include <coroutine>
-#include <iomanip>
+import std.compat;
 #ifdef SANITIZE
 #endif
 

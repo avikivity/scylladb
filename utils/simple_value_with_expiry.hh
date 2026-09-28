@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <optional>
-#include <chrono>
+import std.compat;
 
 namespace utils {
     // simple value with attached expiry timeout

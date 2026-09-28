@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 #include "bounds_slice.hh"
 #include "cql3/expr/expression.hh"
 #include "cql3/expr/restrictions.hh"

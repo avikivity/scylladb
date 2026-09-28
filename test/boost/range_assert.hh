@@ -9,7 +9,7 @@
 #pragma once
 
 #include <boost/test/unit_test.hpp>
-#include <vector>
+import std.compat;
 
 template <typename Iterator>
 class range_assert {

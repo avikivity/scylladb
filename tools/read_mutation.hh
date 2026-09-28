@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <filesystem>
-#include <functional>
-#include <string_view>
-#include <optional>
+import std.compat;
 
 #include "init.hh"
 #include "db/cache_tracker.hh"

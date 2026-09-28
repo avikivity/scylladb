@@ -1,6 +1,5 @@
 #include <boost/test/unit_test.hpp>
-#include <memory>
-#include <utility>
+import std.compat;
 
 #include "sstables/sstables.hh"
 #include "test/lib/scylla_test_case.hh"

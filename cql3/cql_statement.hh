@@ -10,9 +10,6 @@
 
 #pragma once
 
-#include <optional>
-#include <string_view>
-
 #include "timeout_config.hh"
 #include "service/pager/query_plan.hh"
 #include "service/raft/raft_group0_client.hh"

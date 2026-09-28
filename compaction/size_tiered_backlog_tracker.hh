@@ -8,7 +8,7 @@
 #pragma once
 #include "compaction_backlog_manager.hh"
 #include "size_tiered_compaction_strategy.hh"
-#include <cmath>
+import std.compat;
 
 namespace compaction {
 

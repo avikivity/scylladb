@@ -10,9 +10,9 @@
 
 #pragma once
 
-#include <cstdint>
 #include "db/config.hh"
 #include "utils/updateable_value.hh"
+import std.compat;
 
 namespace cql3::restrictions {
 

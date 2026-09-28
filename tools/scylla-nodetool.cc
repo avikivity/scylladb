@@ -8,20 +8,10 @@
 
 #include <string.h> // strerror_r()
 import fmt;
-#include <algorithm>
+import std.compat;
+#include <cerrno>
 #include <cctype>
-#include <chrono>
-#include <concepts>
 #include <cstdlib>
-#include <future>
-#include <limits>
-#include <iterator>
-#include <numeric>
-#include <fstream>
-
-#include <stdexcept>
-#include <ranges>
-#include <unordered_map>
 
 #include <unistd.h>
 #include <time.h>

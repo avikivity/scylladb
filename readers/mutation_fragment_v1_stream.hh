@@ -1,6 +1,6 @@
 #pragma once
 
-#include <coroutine>
+import std.compat;
 #include "mutation_reader.hh"
 #include "mutation/mutation_fragment.hh"
 #include "mutation/mutation_rebuilder.hh"

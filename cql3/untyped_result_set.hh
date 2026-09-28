@@ -7,8 +7,7 @@
 /*
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
-#include <unordered_map>
-#include <optional>
+import std.compat;
 #include "bytes.hh"
 #include "types/types.hh"
 #include "types/map.hh"

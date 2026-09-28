@@ -265,11 +265,7 @@
 // `logstor_bench` and a name in `test_kinds`.
 
 import fmt;
-#include <charconv>
-#include <filesystem>
-#include <ranges>
-#include <variant>
-#include <vector>
+import std.compat;
 
 import jsoncpp;
 

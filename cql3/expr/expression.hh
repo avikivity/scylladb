@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <ostream>
-#include <variant>
-#include <concepts>
-#include <algorithm>
+import std.compat;
 
 #include "cql3/column_identifier.hh"
 #include "cql3/cql3_type.hh"

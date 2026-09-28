@@ -19,7 +19,6 @@
 #include "test/lib/exception_utils.hh"
 #include "test/lib/log.hh"
 #include "test/lib/test_utils.hh"
-#include <set>
 
 #include "ldap_common.hh"
 #include "service/migration_manager.hh"

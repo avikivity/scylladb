@@ -10,8 +10,7 @@
 
 #pragma once
 
-#include <cstdint>
-#include <map>
+import std.compat;
 
 namespace utils {
 

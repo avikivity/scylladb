@@ -10,11 +10,7 @@
 
 #include "db/consistency_level_type.hh"
 #include "seastarx.hh"
-#include <map>
-#include <stdexcept>
-#include <string_view>
-#include <variant>
-#include <optional>
+import std.compat;
 #include "exceptions/exceptions.hh"
 
 namespace cql3 {

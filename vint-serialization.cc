@@ -10,11 +10,7 @@
 
 #include "vint-serialization.hh"
 
-#include <bit>
-
-#include <algorithm>
-#include <array>
-#include <limits>
+import std.compat;
 
 static_assert(-1 == ~0, "Not a twos-complement architecture");
 

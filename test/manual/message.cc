@@ -7,8 +7,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <chrono>
-#include <optional>
+import std.compat;
 #include "db/config.hh"
 #include "gms/feature_service.hh"
 #include "message/messaging_service.hh"

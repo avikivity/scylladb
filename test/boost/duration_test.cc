@@ -12,7 +12,7 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <string_view>
+import std.compat;
 #include "test/lib/exception_utils.hh"
 
 namespace {

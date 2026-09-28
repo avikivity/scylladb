@@ -7,10 +7,7 @@
 /*
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
-#include <algorithm>
-#include <iterator>
-#include <utility>
-#include <stdexcept>
+import std.compat;
 #include "untyped_result_set.hh"
 #include "result_set.hh"
 #include "cql3/column_identifier.hh"

@@ -13,7 +13,7 @@
 #include "reader_concurrency_semaphore.hh"
 #include "readers/foreign.hh"
 #include "readers/queue.hh"
-#include <vector>
+import std.compat;
 
 namespace mutation_writer {
 

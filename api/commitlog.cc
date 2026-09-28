@@ -12,7 +12,7 @@
 #include "api/api-doc/storage_service.json.hh"
 #include "api/api_init.hh"
 #include "replica/database.hh"
-#include <vector>
+import std.compat;
 
 namespace api {
 using namespace seastar::httpd;

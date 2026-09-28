@@ -12,8 +12,7 @@
 #include "cql3/expr/temporary_allocator.hh"
 #include "cql3/selection/selector.hh"
 
-#include <optional>
-#include <string_view>
+import std.compat;
 
 class schema;
 class column_definition;

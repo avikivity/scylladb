@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include <vector>
+import std.compat;
 #include "raft/raft.hh"
 #include "service/raft/raft_rpc.hh"
 

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <filesystem>
+import std.compat;
 
 #include "reader_permit.hh"
 #include "schema/schema_fwd.hh"

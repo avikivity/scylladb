@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 
 #include "db/config.hh"
 #include "reader_permit.hh"

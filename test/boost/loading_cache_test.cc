@@ -9,7 +9,7 @@
 #include <boost/test/unit_test.hpp>
 #include "utils/loading_shared_values.hh"
 #include "utils/loading_cache.hh"
-#include <chrono>
+import std.compat;
 
 #include "seastarx.hh"
 #include "test/lib/eventually.hh"
@@ -20,10 +20,6 @@
 #include "test/lib/log.hh"
 #include "test/lib/random_utils.hh"
 #include "test/lib/cql_test_env.hh"
-
-#include <vector>
-#include <numeric>
-#include <random>
 
 BOOST_AUTO_TEST_SUITE(loading_cache_test)
 

@@ -20,11 +20,7 @@
 #include "timeout_config.hh"
 #include "utils/rjson.hh"
 #include "auth.hh"
-#include <cctype>
-#include <string_view>
-#include <algorithm>
-#include <utility>
-#include <variant>
+import std.compat;
 #include "service/storage_proxy.hh"
 #include "gms/gossiper.hh"
 #include "utils/overloaded_functor.hh"

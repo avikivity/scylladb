@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <optional>
+import std.compat;
 
 #include "timestamp.hh"
 

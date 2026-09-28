@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 #include <sys/types.h>
 
 // Single-pass range over cartesian product of vectors.

@@ -11,9 +11,9 @@
 
 #pragma once
 
-#include <cstdint>
 #include "bytes_fwd.hh"
 #include "fragment_range.hh"
+import std.compat;
 
 namespace utils {
 

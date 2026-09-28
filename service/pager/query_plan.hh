@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <variant>
+import std.compat;
 
 #include "schema/schema_fwd.hh"
 

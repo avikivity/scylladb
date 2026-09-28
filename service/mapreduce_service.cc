@@ -8,7 +8,7 @@
 
 #include "service/mapreduce_service.hh"
 
-#include <stdexcept>
+import std.compat;
 
 #include "db/consistency_level.hh"
 #include "dht/sharder.hh"

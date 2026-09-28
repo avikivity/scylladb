@@ -12,8 +12,7 @@
 #include "utils/exponential_backoff_retry.hh"
 #include "utils/updateable_value.hh"
 #include "utils/serialized_action.hh"
-#include <vector>
-#include <functional>
+import std.compat;
 #include "compaction.hh"
 #include "compaction_backlog_manager.hh"
 #include "compaction/compaction_descriptor.hh"

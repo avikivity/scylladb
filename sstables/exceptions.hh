@@ -9,12 +9,7 @@
 
 #pragma once
 
-#include <cstdint>
-#include <optional>
-#include <concepts>
-#include <exception>
-#include <optional>
-#include <string_view>
+import std.compat;
 
 #include "sstables/component_type.hh"
 #include "sstables/generation_type.hh"

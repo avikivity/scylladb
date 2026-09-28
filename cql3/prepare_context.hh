@@ -12,9 +12,7 @@
 
 #include "seastarx.hh"
 
-#include <optional>
-#include <vector>
-#include <cstddef>
+import std.compat;
 #include "cql3/expr/expression.hh"
 #include "cql3/dialect.hh"
 

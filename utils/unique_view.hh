@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <concepts>
-#include <iterator>
-#include <ranges>
-#include <type_traits>
+import std.compat;
 
 /**
  * @brief A lazy view adapter that yields only the first element from every consecutive

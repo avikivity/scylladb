@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <cstdint>
-#include <string_view>
-#include <unordered_map>
+import std.compat;
 
 namespace aws {
 

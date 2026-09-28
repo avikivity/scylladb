@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include <vector>
-#include <compare>
+import std.compat;
 #include <boost/test/unit_test.hpp>
-#include <variant>
 #include "test/lib/log.hh"
 
 template<typename Comparator, typename... T>

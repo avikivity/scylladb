@@ -21,7 +21,7 @@
 #include "utils/result.hh"
 #include "utils/unique_view.hh"
 
-#include <ranges>
+import std.compat;
 
 template<typename T = void>
 using coordinator_result = exceptions::coordinator_result<T>;

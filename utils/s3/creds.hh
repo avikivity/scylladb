@@ -9,10 +9,7 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <string>
-#include <compare>
-#include <optional>
-#include <chrono>
+import std.compat;
 
 namespace s3 {
 

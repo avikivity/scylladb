@@ -8,12 +8,7 @@
 
 #pragma once
 
-#include <functional>
-#include <optional>
-#include <string_view>
-#include <tuple>
-#include <cstdint>
-#include <vector>
+import std.compat;
 
 #include "schema/schema_fwd.hh"
 #include "service/migration_listener.hh"

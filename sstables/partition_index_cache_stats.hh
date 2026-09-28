@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <cstdint>
+import std.compat;
 
 struct partition_index_cache_stats {
     uint64_t hits = 0; // Number of times entry was found ready

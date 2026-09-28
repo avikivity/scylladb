@@ -8,7 +8,7 @@
 
 #include "manip_s3.hh"
 #include "data_dictionary/storage_options.hh"
-#include <iostream>
+import std.compat;
 
 namespace s3 {
 namespace fs = std::filesystem;

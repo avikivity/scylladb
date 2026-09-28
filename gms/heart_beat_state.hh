@@ -12,7 +12,7 @@
 
 #include "gms/generation-number.hh"
 #include "gms/version_generator.hh"
-#include <limits>
+import std.compat;
 import fmt;
 
 namespace gms {

@@ -7,10 +7,6 @@
  */
 #pragma once
 
-#include <algorithm>
-#include <memory>
-#include <vector>
-
 #include "replica/logstor/ondisk.hh"
 #include "timeout_config.hh"
 

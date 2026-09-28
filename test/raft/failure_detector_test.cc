@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <ranges>
+import std.compat;
 #include <seastar/testing/test_case.hh>
 
 #include "service/direct_failure_detector/failure_detector.hh"

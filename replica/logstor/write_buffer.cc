@@ -7,7 +7,6 @@
  */
 #include "replica/logstor/write_buffer.hh"
 
-#include <chrono>
 
 
 #include "dht/token.hh"

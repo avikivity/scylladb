@@ -9,7 +9,7 @@
 #pragma once
 
 #include "bytes_fwd.hh"
-#include <memory>
+import std.compat;
 
 /// Implements <code>text LIKE pattern</code>.
 ///

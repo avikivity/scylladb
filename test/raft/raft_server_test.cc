@@ -1,3 +1,4 @@
+import std.compat;
 import fmt;
 #include "raft/raft.hh"
 #include "replication.hh"

@@ -7,7 +7,7 @@
  */
 
 
-#include <limits>
+import std.compat;
 
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/test_case.hh>

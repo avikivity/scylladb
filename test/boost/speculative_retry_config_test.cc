@@ -7,6 +7,7 @@
  */
 
 #include <boost/test/unit_test.hpp>
+import std.compat;
 #include "seastarx.hh"
 
 #include "db/config.hh"

@@ -21,6 +21,7 @@
 #include "utils/UUID_gen.hh"
 
 #include <seastar/testing/thread_test_case.hh>
+import std.compat;
 #include "seastarx.hh"
 
 BOOST_AUTO_TEST_SUITE(vnodes_to_tablets_migration_test)

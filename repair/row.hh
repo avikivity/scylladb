@@ -7,7 +7,7 @@
  */
 
 #pragma once
-#include <optional>
+import std.compat;
 #include "mutation/frozen_mutation.hh"
 #include "repair/decorated_key_with_hash.hh"
 #include "repair/hash.hh"

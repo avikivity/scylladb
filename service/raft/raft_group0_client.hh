@@ -10,8 +10,7 @@
 
 #pragma once
 
-#include <memory>
-#include <optional>
+import std.compat;
 
 #include "service/raft/group0_fwd.hh"
 #include "service/raft/raft_timeout.hh"

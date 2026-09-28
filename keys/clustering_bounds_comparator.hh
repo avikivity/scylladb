@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <functional>
+import std.compat;
 #include "keys.hh"
 #include "schema/schema_fwd.hh"
 #include "utils/interval.hh"

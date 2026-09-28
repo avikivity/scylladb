@@ -9,9 +9,7 @@
 
 #pragma once
 
-#include <functional>
-#include <optional>
-#include <variant>
+import std.compat;
 #include "sstables/component_type.hh"
 #include "sstables/types_fwd.hh"
 #include "sstables/sstable_set.hh"

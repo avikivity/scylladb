@@ -12,8 +12,7 @@
 #include "types/types.hh"
 #include "test/lib/cql_test_env.hh"
 #include "db/config.hh"
-#include <functional>
-#include <chrono>
+import std.compat;
 
 namespace test::vector_search {
 

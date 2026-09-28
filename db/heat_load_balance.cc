@@ -5,10 +5,7 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-#include <vector>
-#include <list>
-#include <random>
-#include <ranges>
+import std.compat;
 #include "heat_load_balance.hh"
 
 import fmt;

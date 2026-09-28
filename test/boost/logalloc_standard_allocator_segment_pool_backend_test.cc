@@ -13,7 +13,7 @@ SEASTAR_TEST_CASE(test_preinit) {
 
 #else
 
-#include <iostream>
+import std.compat;
 
 int main() {
     std::cout << "this test is for debug mode only" << std::endl;

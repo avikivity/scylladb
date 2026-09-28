@@ -6,8 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 #include "replica/logstor/compaction.hh"
-#include <algorithm>
-#include <cmath>
+import std.compat;
 
 namespace replica::logstor {
 

@@ -11,7 +11,7 @@
 #include "compress.hh"
 #include "schema/schema_fwd.hh"
 #include "utils/updateable_value.hh"
-#include <span>
+import std.compat;
 
 namespace db {
 class config;

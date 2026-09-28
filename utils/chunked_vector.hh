@@ -42,13 +42,7 @@
 
 #include "utils/small_vector.hh"
 
-#include <ranges>
-#include <memory>
-#include <type_traits>
-#include <iterator>
-#include <utility>
-#include <algorithm>
-#include <stdexcept>
+import std.compat;
 #include <malloc.h>
 import fmt;
 

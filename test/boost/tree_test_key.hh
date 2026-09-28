@@ -9,9 +9,6 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <cassert>
-#include <compare>
-#include <concepts>
 
 /*
  * Helper class that helps to check that tree
@@ -19,6 +16,7 @@
  * - moves the keys around properly
  */
 import fmt;
+import std.compat;
 class tree_test_key_base {
     int _val;
     int* _cookie;

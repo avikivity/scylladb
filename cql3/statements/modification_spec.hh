@@ -12,9 +12,7 @@
 #include "dht/i_partitioner_fwd.hh"
 #include "query/query-request.hh"
 
-#include <optional>
-#include <unordered_map>
-#include <vector>
+import std.compat;
 
 namespace cql3 {
 class query_options;

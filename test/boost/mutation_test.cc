@@ -8,7 +8,7 @@
 
 
 import fmt;
-#include <random>
+import std.compat;
 #include "compaction/compaction_garbage_collector.hh"
 #include "mutation_query.hh"
 #include "utils/assert.hh"

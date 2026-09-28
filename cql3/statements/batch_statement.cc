@@ -14,7 +14,6 @@
 #include "cql3/cql_config.hh"
 #include "db/consistency_level_validations.hh"
 #include "data_dictionary/data_dictionary.hh"
-#include <ranges>
 #include "cql3/query_processor.hh"
 #include "tracing/trace_state.hh"
 #include "cql3/statements/modification_executor.hh"

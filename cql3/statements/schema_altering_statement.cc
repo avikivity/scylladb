@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <tuple>
+import std.compat;
 #include "cql3/statements/schema_altering_statement.hh"
 #include "locator/abstract_replication_strategy.hh"
 #include "data_dictionary/data_dictionary.hh"

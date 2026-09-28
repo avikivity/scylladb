@@ -9,8 +9,8 @@
 #include "utils/assert.hh"
 #include "big_decimal.hh"
 #include <cassert>
-#include <cmath>
 #include "marshal_exception.hh"
+import std.compat;
 
 #ifdef __clang__
 

@@ -34,8 +34,7 @@
 
 #include "bytes.hh"
 
-#include <cstdint>
-#include <bit>
+import std.compat;
 
 using vint_size_type = bytes::size_type;
 

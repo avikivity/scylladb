@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <span>
+import std.compat;
 #include "types/types.hh"
 #include "db/functions/function_name.hh"
 #include "rust/wasmtime_bindings.hh"

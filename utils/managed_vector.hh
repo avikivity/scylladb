@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <array>
-#include <type_traits>
-#include <algorithm>
+import std.compat;
 
 #include "utils/allocation_strategy.hh"
 

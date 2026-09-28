@@ -10,10 +10,8 @@
 #define BOOST_TEST_MODULE test-serialization
 #include <boost/test/unit_test.hpp>
 
-#include <iostream>
+import std.compat;
 #include <cassert>
-#include <sstream>
-#include <initializer_list>
 
 #include "utils/serialization.hh"
 #include "types/types.hh"

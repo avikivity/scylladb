@@ -8,12 +8,12 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <cstdint>
 #include "types/json_utils.hh"
 #include "utils/assert.hh"
 #include "utils/hashers.hh"
 #include "utils/rjson.hh"
 #include "cql3/result_set.hh"
+import std.compat;
 
 namespace cql3 {
 

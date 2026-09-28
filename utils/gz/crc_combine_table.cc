@@ -9,7 +9,7 @@
 
 #if defined(__x86_64__) || defined(__i386__) || defined(__aarch64__)
 
-#include <array>
+import std.compat;
 
 #include "crc_combine_table.hh"
 #include "utils/clmul.hh"

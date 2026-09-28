@@ -17,7 +17,7 @@
 #include "types/types.hh"
 #include "utils/assert.hh"
 
-#include <utility>
+import std.compat;
 
 namespace cql3::statements::external_search {
 

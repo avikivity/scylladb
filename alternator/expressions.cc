@@ -17,8 +17,7 @@
 
 #include "seastarx.hh"
 
-#include <functional>
-#include <unordered_map>
+import std.compat;
 
 namespace alternator {
 

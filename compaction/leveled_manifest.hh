@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <algorithm>
+import std.compat;
 
 #include "utils/assert.hh"
 #include "sstables/sstables.hh"

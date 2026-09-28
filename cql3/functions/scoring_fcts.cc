@@ -16,9 +16,8 @@
 #include "types/types.hh"
 #include "utils/log.hh"
 
-#include <algorithm>
+import std.compat;
 #include <cctype>
-#include <utility>
 
 namespace cql3 {
 namespace functions {

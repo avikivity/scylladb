@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <iosfwd>
-
-#include <ranges>
+import std.compat;
 
 #include "schema/schema_fwd.hh"
 #include "tombstone.hh"

@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <random>
+import std.compat;
 #include "lua.hh"
 #include "lang/lua_scylla_types.hh"
 #include "exceptions/exceptions.hh"
