@@ -14,9 +14,7 @@
 #include <seastar/http/reply.hh>
 #include <seastar/util/closeable.hh>
 
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
-
+import boost;
 
 namespace locator {
 

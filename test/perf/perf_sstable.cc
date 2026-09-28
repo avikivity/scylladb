@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <boost/program_options/errors.hpp>
 #include <seastar/core/sharded.hh>
 #include <seastar/core/app-template.hh>
 #include <seastar/core/sstring.hh>
@@ -14,6 +13,7 @@
 #include <random>
 
 #include "test/perf/perf_sstable.hh"
+import boost;
 
 using namespace sstables;
 

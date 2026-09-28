@@ -15,9 +15,8 @@
 #include "readers/mutation_source.hh"
 #include "keys/full_position.hh"
 
-#include <boost/intrusive/set.hpp>
-
 #include <variant>
+import boost;
 
 namespace replica {
 

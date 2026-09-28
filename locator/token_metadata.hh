@@ -17,7 +17,6 @@
 #include "dht/ring_position.hh"
 #include <optional>
 #include <memory>
-#include <boost/icl/interval.hpp>
 #include "utils/interval.hh"
 #include <seastar/core/shared_future.hh>
 #include <seastar/core/shared_ptr.hh>
@@ -30,6 +29,7 @@
 #include "locator/types.hh"
 #include "locator/topology.hh"
 #include "locator/token_metadata_fwd.hh"
+import boost;
 
 struct sort_by_proximity_topology;
 

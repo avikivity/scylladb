@@ -11,7 +11,7 @@
 #include "utils/assert.hh"
 #include "schema/schema_fwd.hh"
 #include "mutation/position_in_partition.hh"
-#include <boost/icl/interval_set.hpp>
+import boost;
 
 // Represents a non-contiguous subset of clustering_key domain of a particular schema.
 // Can be treated like an ordered and non-overlapping sequence of position_range:s.

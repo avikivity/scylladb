@@ -6,8 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <boost/date_time/gregorian/greg_date.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <random>
 #include "lua.hh"
 #include "lang/lua_scylla_types.hh"
@@ -22,6 +20,7 @@
 #include "seastarx.hh"
 
 // Lua 5.4 added an extra parameter to lua_resume
+import boost;
 
 #if LUA_VERSION_NUM >= 504
 #    define LUA_504_PLUS(x...) x

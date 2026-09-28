@@ -36,8 +36,6 @@ import fmt;
 #include <seastar/coroutine/switch_to.hh>
 #include <chrono>
 #include "locator/host_id.hh"
-#include <boost/range/algorithm/set_algorithm.hpp>
-#include <boost/range/algorithm/partition.hpp>
 #include <utility>
 #include "gms/generation-number.hh"
 #include "locator/token_metadata.hh"
@@ -50,6 +48,7 @@ import fmt;
 #include <csignal>
 #include "build_mode.hh"
 #include "utils/labels.hh"
+import boost;
 
 namespace gms {
 

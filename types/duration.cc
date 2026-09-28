@@ -8,16 +8,15 @@
 
 #include "duration.hh"
 
-#include <boost/lexical_cast.hpp>
 #include <seastar/core/format.hh>
 
 #include <cctype>
 #include <optional>
 #include <limits>
-#include <boost/regex.hpp>
 #include <sstream>
 #include <string>
 #include <unordered_map>
+import boost;
 
 namespace {
 

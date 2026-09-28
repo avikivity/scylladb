@@ -9,8 +9,6 @@
 import fmt;
 #include <fstream>
 
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
 #include <json/json.h>
 
 #include <seastar/core/app-template.hh>
@@ -31,6 +29,7 @@ import fmt;
 #include "db/commitlog/commitlog.hh"
 #include "utils/assert.hh"
 #include "utils/UUID_gen.hh"
+import boost;
 
 struct test_config {
     unsigned concurrency;

@@ -12,7 +12,7 @@
 #include "dht/i_partitioner.hh"
 #include "clustering_bounds_comparator.hh"
 #include "utils/chunked_string.hh"
-#include <boost/algorithm/string.hpp>
+import boost;
 
 logging::logger klog("keys");
 

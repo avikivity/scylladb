@@ -8,7 +8,6 @@
 
 import fmt;
 #include <seastar/core/thread.hh>
-#include <boost/make_shared.hpp>
 
 #include "db/config.hh"
 #include "db/extensions.hh"
@@ -16,6 +15,7 @@ import fmt;
 #include "utils/assert.hh"
 #include "utils/logalloc.hh"
 #include "init.hh"
+import boost;
 
 namespace bpo = boost::program_options;
 

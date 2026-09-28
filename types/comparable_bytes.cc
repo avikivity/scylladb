@@ -505,8 +505,8 @@ std::size_t count_digits(const boost::multiprecision::cpp_int& value) {
     // So, total bits = (num of limbs - 1) * bits per limb + bits in ms limb.
     const auto& backend = value.backend();
     const auto limb_count = backend.size();
-    const auto num_bits_in_ms_limb = boost::multiprecision::bits_per_limb - std::countl_zero(backend.limbs()[limb_count - 1]);
-    const auto total_num_bits = (limb_count - 1) * boost::multiprecision::bits_per_limb + num_bits_in_ms_limb;
+    const auto num_bits_in_ms_limb = boost::multiprecision::bits_per_limb_v - std::countl_zero(backend.limbs()[limb_count - 1]);
+    const auto total_num_bits = (limb_count - 1) * boost::multiprecision::bits_per_limb_v + num_bits_in_ms_limb;
 
     // The number of digits = floor(log10(2) * total_num_bits) + 1.
     // Since total_num_bits is always positive, an explicit cast to std::size is sufficient, making floor() redundant.

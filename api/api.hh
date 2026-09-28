@@ -10,8 +10,6 @@
 
 #include <seastar/json/json_elements.hh>
 #include <type_traits>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
 #include "api/api_init.hh"
 #include "api/utils.hh"
 #include "api/api-doc/utils.json.hh"
@@ -19,6 +17,7 @@
 #include "utils/estimated_histogram.hh"
 #include <seastar/http/exception.hh>
 #include "seastarx.hh"
+import boost;
 
 namespace api {
 

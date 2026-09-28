@@ -26,10 +26,9 @@
 #include "locator/host_id.hh"
 #include "reader_concurrency_semaphore.hh"
 #include "utils/s3/creds.hh"
-#include <boost/intrusive/list.hpp>
-#include <boost/intrusive/set.hpp>
 #include "sstable_compressor_factory.hh"
 #include "sstables/sstables_manager_subscription.hh"
+import boost;
 
 namespace db {
 

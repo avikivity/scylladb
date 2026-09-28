@@ -9,13 +9,13 @@
 #pragma once
 
 #include <vector>
-#include <boost/program_options.hpp>
 
 #include "db/config.hh"
 #include "reader_permit.hh"
 #include "schema/schema_fwd.hh"
 #include "seastarx.hh"
 #include "sstables/shared_sstable.hh"
+import boost;
 
 namespace sstables {
 class sstables_manager;

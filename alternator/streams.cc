@@ -9,9 +9,7 @@
 #include <type_traits>
 #include <ranges>
 #include <generator>
-#include <boost/lexical_cast.hpp>
-#include <boost/io/ios_state.hpp>
-#include <boost/multiprecision/cpp_int.hpp>
+#include <time.h>
 
 #include <seastar/json/formatter.hh>
 #include "seastarx.hh"
@@ -38,6 +36,7 @@
 #include "alternator/executor_util.hh"
 #include "data_dictionary/data_dictionary.hh"
 #include "utils/rjson.hh"
+import boost;
 
 static logging::logger slogger("alternator-streams");
 

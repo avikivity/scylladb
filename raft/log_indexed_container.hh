@@ -11,8 +11,8 @@
 #include <concepts>
 #include <optional>
 #include <type_traits>
-#include <boost/container/deque.hpp>
 #include <seastar/util/defer.hh>
+import boost;
 
 #include "utils/assert.hh"
 #include "raft/raft.hh"

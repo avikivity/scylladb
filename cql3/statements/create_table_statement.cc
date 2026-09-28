@@ -12,7 +12,6 @@
 #include "cql3/statements/cf_prop_defs.hh"
 #include "utils/assert.hh"
 #include <cinttypes>
-#include <boost/regex.hpp>
 
 #include <seastar/core/coroutine.hh>
 
@@ -37,6 +36,7 @@
 #include "db/schema_tables.hh"
 #include "replica/database.hh"
 #include "alternator/ttl_tag.hh"
+import boost;
 
 namespace cql3 {
 

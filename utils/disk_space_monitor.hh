@@ -11,10 +11,6 @@
 #include <filesystem>
 #include <any>
 
-#include <boost/signals2/connection.hpp>
-#include <boost/signals2/signal_type.hpp>
-#include <boost/signals2/dummy_mutex.hpp>
-
 #include <seastar/core/abort_source.hh>
 #include <seastar/core/future.hh>
 #include <seastar/core/lowres_clock.hh>
@@ -22,6 +18,7 @@
 #include <seastar/core/condition-variable.hh>
 
 #include "seastarx.hh"
+import boost;
 #include "utils/updateable_value.hh"
 #include "utils/phased_barrier.hh"
 

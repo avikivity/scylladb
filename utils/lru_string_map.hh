@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <boost/intrusive/list.hpp>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -20,6 +19,7 @@
 #include <seastar/coroutine/maybe_yield.hh>
 #include "utils/log.hh"
 import abseil;
+import boost;
 
 // A simple LRU cache, mapping strings to values of type Value.
 // The cache keeps track of the order of usage of the entries, and allows

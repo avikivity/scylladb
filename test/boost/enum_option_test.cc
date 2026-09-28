@@ -5,12 +5,12 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
+import boost;
 
 #define BOOST_TEST_MODULE core
 
 #include <boost/test/unit_test.hpp>
 
-#include <boost/program_options.hpp>
 #include <map>
 #include <set>
 #include <sstream>

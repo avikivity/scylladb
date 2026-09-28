@@ -25,7 +25,7 @@
 #include <functional>
 #include <iterator>
 #include <queue>
-#include <boost/container/static_vector.hpp>
+import boost;
 
 logging::logger slogger("mc_writer");
 

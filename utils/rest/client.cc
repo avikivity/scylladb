@@ -7,8 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <boost/regex.hpp>
-
 #include <seastar/net/tls.hh>
 #include <seastar/net/dns.hh>
 #include <seastar/util/short_streams.hh>
@@ -16,6 +14,7 @@
 
 #include "client.hh"
 #include "utils/http.hh"
+import boost;
 
 using namespace seastar;
 

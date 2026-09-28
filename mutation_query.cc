@@ -11,8 +11,7 @@
 #include "mutation_query.hh"
 #include <coroutine>
 #include "schema/schema_registry.hh"
-
-#include <boost/range/algorithm/equal.hpp>
+import boost;
 
 reconcilable_result::~reconcilable_result() {}
 

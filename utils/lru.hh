@@ -9,9 +9,9 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <boost/intrusive/list.hpp>
 #include <seastar/core/memory.hh>
 #include <type_traits>
+import boost;
 
 class evictable {
     friend class lru;

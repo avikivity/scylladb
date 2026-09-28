@@ -39,7 +39,7 @@
 #include "sstables/binary_search.hh"
 #include "sstables/exceptions.hh"
 
-#include <boost/range/combine.hpp>
+import boost;
 
 using namespace sstables;
 

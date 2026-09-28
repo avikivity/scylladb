@@ -15,8 +15,7 @@
 #include "utils/logalloc.hh"
 #include "utils/coroutine.hh"
 #include "utils/chunked_vector.hh"
-
-#include <boost/intrusive/parent_from_member.hpp>
+import boost;
 
 class static_row;
 

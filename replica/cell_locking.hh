@@ -10,8 +10,6 @@
 
 #include <exception>
 
-#include <boost/intrusive/unordered_set.hpp>
-
 #include "utils/assert.hh"
 #include "utils/small_vector.hh"
 #include "mutation/mutation_partition.hh"
@@ -19,6 +17,10 @@
 
 #include "db/timeout_clock.hh"
 #include "utils/log.hh"
+
+import boost;
+
+namespace bi = boost::intrusive;
 
 extern logging::logger cell_locker_log;
 

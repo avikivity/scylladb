@@ -10,8 +10,7 @@
 
 #include <optional>
 
-#include <boost/variant/apply_visitor.hpp>
-#include <boost/variant/static_visitor.hpp>
+import boost;
 
 #include "mutation/converting_mutation_partition_applier.hh"
 #include "mutation/frozen_mutation.hh"

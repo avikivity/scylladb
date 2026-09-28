@@ -9,7 +9,6 @@
 import fmt;
 #include "ldap_role_manager.hh"
 
-#include <boost/algorithm/string/replace.hpp>
 #include <ldap.h>
 #include <seastar/core/seastar.hh>
 #include <seastar/core/sstring.hh>
@@ -26,6 +25,7 @@ import fmt;
 #include "service/raft/raft_group0_client.hh"
 #include "db/config.hh"
 #include "utils/exponential_backoff_retry.hh"
+import boost;
 
 namespace {
 

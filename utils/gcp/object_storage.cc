@@ -15,8 +15,6 @@
 #include <numeric>
 #include <deque>
 
-#include <boost/regex.hpp>
-
 #include <seastar/core/align.hh>
 #include <seastar/core/gate.hh>
 #include <seastar/core/metrics.hh>
@@ -36,6 +34,7 @@
 #include "utils/http_client_error_processing.hh"
 #include "utils/object_storage_metrics.hh"
 #include "utils/overloaded_functor.hh"
+import boost;
 
 static logger gcp_storage("gcp_storage");
 

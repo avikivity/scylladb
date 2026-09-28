@@ -21,6 +21,7 @@
 #include "readers/from_mutations.hh"
 #include "readers/empty.hh"
 #include "readers/combined.hh"
+import boost;
 
 namespace sstables {
 

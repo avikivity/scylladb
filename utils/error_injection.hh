@@ -31,6 +31,7 @@
 #include <source_location>
 #include <optional>
 #include <unordered_map>
+import boost;
 import fmt;
 
 namespace utils {

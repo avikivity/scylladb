@@ -11,6 +11,7 @@
 #include "exceptions.hh"
 #include "utils/exception_container.hh"
 #include "utils/result.hh"
+import boost;
 
 namespace exceptions {
 

@@ -9,13 +9,13 @@
 #pragma once
 
 #include <filesystem>
-#include <boost/program_options.hpp>
 
 #include "reader_permit.hh"
 #include "schema/schema_fwd.hh"
 #include "seastarx.hh"
 #include "sstables/shared_sstable.hh"
 #include "utils/log.hh"
+import boost;
 
 namespace db {
 class config;

@@ -15,7 +15,6 @@
 #include <optional>
 #include <unordered_map>
 #include <ranges>
-#include <boost/dynamic_bitset.hpp>
 
 #include "cql3/column_specification.hh"
 #include <seastar/core/shared_ptr.hh>
@@ -34,6 +33,7 @@
 #include "db/tablet_options.hh"
 #include "schema_fwd.hh"
 #include "db/view/base_info.hh"
+import boost;
 
 namespace dht {
 

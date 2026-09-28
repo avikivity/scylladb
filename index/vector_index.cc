@@ -23,7 +23,7 @@
 #include "utils/rjson.hh"
 #include <ranges>
 #include <seastar/core/sstring.hh>
-#include <boost/algorithm/string.hpp>
+import boost;
 
 namespace secondary_index {
 

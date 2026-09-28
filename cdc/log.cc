@@ -9,7 +9,6 @@
 #include <utility>
 #include <algorithm>
 #include <unordered_set>
-#include <boost/range/irange.hpp>
 #include <seastar/core/thread.hh>
 #include <seastar/core/metrics.hh>
 
@@ -48,6 +47,7 @@
 #include "stats.hh"
 #include "utils/labels.hh"
 #include "alternator/executor.hh"
+import boost;
 
 namespace std {
 

@@ -7,10 +7,10 @@
  */
 
 #include <string_view>
-#include <boost/algorithm/string.hpp>
 #include "locator/topology.hh"
 #include "gms/inet_address.hh"
 #include "host_filter.hh"
+import boost;
 
 namespace db {
 namespace hints {

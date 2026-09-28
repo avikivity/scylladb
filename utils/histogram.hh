@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include <boost/circular_buffer.hpp>
 #include "latency.hh"
 #include <cmath>
 #include <seastar/core/timer.hh>
 #include "seastarx.hh"
 #include "estimated_histogram.hh"
+import boost;
 
 namespace utils {
 /**

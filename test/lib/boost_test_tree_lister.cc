@@ -9,11 +9,10 @@
 import fmt;
 #include "test/lib/boost_test_tree_lister.hh"
 
-#include <boost/algorithm/string/replace.hpp>
-
 #include <flat_set>
 #include <memory>
 #include <ranges>
+import boost;
 
 namespace {
 

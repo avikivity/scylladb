@@ -9,10 +9,10 @@
 
 #pragma once
 
-#include <boost/intrusive/list.hpp>
 #include <limits>
 #include <seastar/core/bitops.hh>
 #include "seastarx.hh"
+import boost;
 
 namespace bi = boost::intrusive;
 

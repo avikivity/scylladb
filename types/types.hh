@@ -9,7 +9,6 @@
 #pragma once
 
 #include <optional>
-#include <boost/functional/hash.hpp>
 #include <cstddef>
 #include <cstring>
 #include <iosfwd>
@@ -41,6 +40,7 @@
 #include "utils/lexicographical_compare.hh"
 #include "utils/overloaded_functor.hh"
 #include "tasks/types.hh"
+import boost;
 
 class tuple_type_impl;
 class vector_type_impl;

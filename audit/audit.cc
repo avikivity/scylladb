@@ -24,10 +24,7 @@
 #include "../db/config.hh"
 #include "service/migration_listener.hh"
 #include "service/migration_manager.hh"
-
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/trim.hpp>
-#include <boost/algorithm/string/classification.hpp>
+import boost;
 
 
 namespace audit {

@@ -14,7 +14,7 @@
 #include "exceptions/exceptions.hh"
 #include "utils/assert.hh"
 #include "utils/chunked_vector.hh"
-#include <boost/algorithm/string.hpp>
+import boost;
 
 namespace locator {
 

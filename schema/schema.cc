@@ -45,10 +45,9 @@
 #include "alternator/extract_from_attrs.hh"
 #include "utils/managed_string.hh"
 #include "alternator/ttl_tag.hh"
+import boost;
 
 #include <cmath>
-
-#include <boost/lexical_cast.hpp>
 
 extern logging::logger dblog;
 

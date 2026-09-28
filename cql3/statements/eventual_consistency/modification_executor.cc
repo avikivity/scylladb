@@ -26,7 +26,7 @@
 #include "utils/error_injection.hh"
 #include "utils/result.hh"
 
-#include <boost/lexical_cast.hpp>
+import boost;
 
 template<typename T = void>
 using coordinator_result = exceptions::coordinator_result<T>;

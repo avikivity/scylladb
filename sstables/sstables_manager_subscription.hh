@@ -11,14 +11,12 @@
 
 #include <optional>
 
-#include <boost/signals2/dummy_mutex.hpp>
-#include <boost/signals2/signal_type.hpp>
-
 #include <seastar/core/coroutine.hh>
 #include <seastar/core/gate.hh>
 
 #include "sstables/generation_type.hh"
 #include "utils/assert.hh"
+import boost;
 #include "seastarx.hh"
 
 namespace bs2 = boost::signals2;

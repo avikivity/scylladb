@@ -5,7 +5,6 @@
 
 
 #include <boost/test/unit_test.hpp>
-#include <boost/lexical_cast.hpp>
 #include <cstdint>
 #include <random>
 
@@ -19,6 +18,7 @@
 
 #include "ent/encryption/encryption.hh"
 #include "ent/encryption/symmetric_key.hh"
+import boost;
 
 using namespace encryption;
 

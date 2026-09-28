@@ -12,8 +12,6 @@ import fmt;
 #include <cerrno>
 #include <algorithm>
 #include <cctype>
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/erase.hpp>
 
 #include <exception>
 #include <stdexcept>
@@ -43,6 +41,7 @@ import fmt;
 #include "utils/to_string.hh"
 #include "utils/checked-file-impl.hh"
 #include "utils/io-wrappers.hh"
+import boost;
 
 namespace sstables {
 

@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <boost/intrusive/parent_from_member.hpp>
 #include <seastar/util/defer.hh>
 #include <cassert>
 #include <vector>
@@ -17,6 +16,7 @@
 #include "utils/collection-concepts.hh"
 #include "utils/neat-object-id.hh"
 #include "utils/array-search.hh"
+import boost;
 
 namespace bplus {
 

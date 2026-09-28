@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <boost/intrusive/parent_from_member.hpp>
-
 #include <seastar/util/noncopyable_function.hh>
 
 #include "mutation/mutation_partition.hh"
@@ -22,6 +20,7 @@
 #include "readers/empty.hh"
 #include "readers/mutation_source.hh"
 #include "compaction/compaction_garbage_collector.hh"
+import boost;
 
 class row_cache;
 class cache_tracker;

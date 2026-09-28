@@ -8,12 +8,12 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <boost/io/ios_state.hpp>
 #include <seastar/net/inet_address.hh>
 #include <seastar/net/dns.hh>
 #include <seastar/core/format.hh>
 #include <seastar/core/future.hh>
 #include "inet_address.hh"
+import boost;
 
 using namespace seastar;
 

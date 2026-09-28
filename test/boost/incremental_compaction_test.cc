@@ -5,7 +5,6 @@
  */
 
 #include <boost/test/unit_test.hpp>
-#include <boost/range/iterator_range_core.hpp>
 #include <filesystem>
 #include <memory>
 #include <utility>
@@ -39,6 +38,7 @@
 #include "test/lib/test_services.hh"
 #include "test/lib/eventually.hh"
 #include "test/lib/log.hh"
+import boost;
 #include "seastarx.hh"
 import fmt;
 

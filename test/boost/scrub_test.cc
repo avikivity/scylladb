@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <boost/lexical_cast.hpp>
+import boost;
 #include <seastar/util/short_streams.hh>
 #include <seastar/util/closeable.hh>
 #include "seastarx.hh"

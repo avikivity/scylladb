@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <boost/intrusive/parent_from_member.hpp>
-
 #include "mutation_partition.hh"
 
 #include <ranges>
@@ -18,6 +16,7 @@ namespace db { class large_data_cache_tracker; }
 
 #ifdef SEASTAR_DEBUG
 #include "utils/assert.hh"
+import boost;
 #endif
 
 // is_evictable::yes means that the object is part of an evictable snapshots in MVCC,

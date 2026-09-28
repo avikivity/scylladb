@@ -6,6 +6,7 @@
  */
 
 #include <cstdlib>
+#include <strings.h>
 
 #include "exceptions/exceptions.hh"
 #include "db/tablet_options.hh"

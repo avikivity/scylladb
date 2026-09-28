@@ -6,10 +6,8 @@
 #include <seastar/http/reply.hh>
 #include <coroutine>
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-
 #include "utils/assert.hh"
+import boost;
 
 namespace locator {
 

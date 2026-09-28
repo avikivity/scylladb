@@ -11,13 +11,13 @@
 
 #pragma once
 
-#include <boost/program_options/errors.hpp>
 #include <optional>
 #include <iosfwd>
 #include <sstream>
 #include <type_traits>
 #include <concepts>
 import fmt;
+import boost;
 
 template<typename T>
 concept HasMapInterface = requires(T t) {

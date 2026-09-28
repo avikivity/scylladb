@@ -9,7 +9,6 @@
 import fmt;
 #include "utils/assert.hh"
 #include <algorithm>
-#include <boost/algorithm/string.hpp>
 #include <seastar/core/fstream.hh>
 #include <seastar/util/closeable.hh>
 #include <seastar/util/short_streams.hh>
@@ -49,6 +48,7 @@ import fmt;
 #include "tools/schema_loader.hh"
 #include "tools/read_mutation.hh"
 #include "view_info.hh"
+import boost;
 
 namespace {
 
