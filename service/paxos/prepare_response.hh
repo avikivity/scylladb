@@ -9,9 +9,9 @@
 
 #pragma once
 #include <variant>
-#include <fmt/core.h>
 #include "query/query-result.hh"
 #include "service/paxos/proposal.hh"
+import fmt;
 
 namespace service {
 

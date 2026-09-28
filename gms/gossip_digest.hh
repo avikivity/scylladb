@@ -10,10 +10,10 @@
 
 #pragma once
 
-#include <fmt/core.h>
 #include "gms/inet_address.hh"
 #include "gms/generation-number.hh"
 #include "gms/version_generator.hh"
+import fmt;
 
 namespace gms {
 

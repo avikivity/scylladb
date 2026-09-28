@@ -8,11 +8,11 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include <random>
 #include <algorithm>
 #include <ranges>
 
-#include <fmt/ranges.h>
 #include <seastar/core/sleep.hh>
 #include <seastar/coroutine/maybe_yield.hh>
 #include <seastar/util/later.hh>

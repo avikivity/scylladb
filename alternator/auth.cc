@@ -6,13 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "alternator/error.hh"
 #include "auth/common.hh"
 #include "utils/log.hh"
 #include <string>
 #include <string_view>
 #include "alternator/auth.hh"
-#include <fmt/format.h>
 #include "db/consistency_level_type.hh"
 #include "db/system_keyspace.hh"
 #include "service/storage_proxy.hh"

@@ -18,6 +18,7 @@
 #include <seastar/core/sstring.hh>
 
 #include "seastarx.hh"
+import fmt;
 
 namespace auth {
 

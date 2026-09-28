@@ -13,6 +13,7 @@
 #include <seastar/core/sstring.hh>
 #include "seastarx.hh"
 #include <functional>
+import fmt;
 
 namespace db {
 

@@ -5,8 +5,8 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
+import fmt;
 #include "raft.hh"
-#include <fmt/ranges.h>
 
 namespace raft {
 

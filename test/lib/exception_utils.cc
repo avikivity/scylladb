@@ -6,12 +6,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "test/lib/exception_utils.hh"
 
 #include <boost/regex.hpp>
 #include <boost/test/unit_test.hpp>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
 
 std::function<bool(const std::exception&)> exception_predicate::make(
         std::function<bool(const std::exception&)> check,

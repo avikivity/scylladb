@@ -10,9 +10,9 @@
 
 #pragma once
 
-#include <fmt/core.h>
 #include "gms/inet_address.hh"
 #include "gms/endpoint_state.hh"
+import fmt;
 
 namespace gms {
 /**

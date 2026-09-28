@@ -6,9 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <seastar/core/coroutine.hh>
 #include <seastar/coroutine/exception.hh>
-#include <fmt/ranges.h>
 
 #include "api/api.hh"
 #include "api/storage_service.hh"

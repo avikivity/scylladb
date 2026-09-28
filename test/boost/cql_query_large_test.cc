@@ -7,10 +7,9 @@
  */
 
 
+import fmt;
 #include <boost/test/unit_test.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
-
-#include <fmt/ranges.h>
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>

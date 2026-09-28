@@ -19,6 +19,7 @@
 #include <string>
 #include "aws_error_definitions.hh"
 #include "utils/http_client_error_processing.hh"
+import fmt;
 
 namespace aws {
 

@@ -11,7 +11,6 @@
 
 #include <memory>
 #include <optional>
-#include <fmt/ostream.h>
 
 #include "db/functions/function_name.hh"
 #include "db/functions/function.hh"
@@ -26,6 +25,7 @@
 #include "db/per_partition_rate_limit_info.hh"
 #include "query_id.hh"
 #include "bytes.hh"
+import fmt;
 
 using cql_protocol_version_type = uint8_t;
 

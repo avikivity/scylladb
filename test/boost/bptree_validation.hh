@@ -10,8 +10,8 @@
 
 #include <cstddef>
 #include <iostream>
-#include <fmt/format.h>
 #include "utils/bptree.hh"
+import fmt;
 
 namespace bplus {
 

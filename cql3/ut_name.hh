@@ -12,11 +12,11 @@
 
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/sstring.hh>
-#include <fmt/core.h>
 #include "seastarx.hh"
 #include "bytes.hh"
 
 #include <optional>
+import fmt;
 
 namespace cql3 {
 

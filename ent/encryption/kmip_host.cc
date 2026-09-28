@@ -7,6 +7,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #ifdef HAVE_KMIP
 
 #include <deque>
@@ -20,9 +21,6 @@
 #include <seastar/core/thread.hh>
 #include <seastar/core/sleep.hh>
 #include <seastar/core/reactor.hh>
-
-#include <fmt/core.h>
-#include <fmt/ostream.h>
 
 // workaround cryptsoft sdk issue:
 #define strcasestr  kmip_strcasestr

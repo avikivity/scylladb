@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "locator/network_topology_strategy.hh"
 #include "locator/tablet_replication_strategy.hh"
 #include "locator/tablets.hh"
@@ -26,8 +27,6 @@
 #include <flat_set>
 #include <iterator>
 #include <chrono>
-
-#include <fmt/ranges.h>
 
 #include <seastar/core/coroutine.hh>
 #include <seastar/coroutine/maybe_yield.hh>

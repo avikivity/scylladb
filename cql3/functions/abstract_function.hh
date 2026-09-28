@@ -16,7 +16,7 @@
 #include "cql3/functions/function_name.hh"
 #include <vector>
 #include <boost/functional/hash.hpp>
-#include <fmt/core.h>
+import fmt;
 
 
 template <> struct fmt::formatter<std::vector<data_type>> : fmt::formatter<string_view> {

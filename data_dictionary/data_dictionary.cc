@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <ranges>
 #include "data_dictionary.hh"
 #include "cql3/description.hh"
@@ -16,9 +17,6 @@
 #include "schema/schema.hh"
 #include "cql3/util.hh"
 #include "gms/feature_service.hh"
-#include <fmt/core.h>
-#include <fmt/ranges.h>
-#include <fmt/std.h>
 #include <ios>
 #include <ostream>
 #include <array>

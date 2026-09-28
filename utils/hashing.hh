@@ -14,6 +14,7 @@
 #include <memory>
 #include <unordered_map>
 #include <chrono>
+#include <cmath>
 #include <seastar/core/byteorder.hh>
 #include <seastar/core/sstring.hh>
 #include <cstring>

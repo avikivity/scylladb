@@ -10,10 +10,9 @@
 
 #include <ranges>
 
-#include <fmt/ranges.h>
-
 #include "gms/feature_service.hh"
 #include "seastarx.hh"
+import fmt;
 
 namespace cql3::statements {
 

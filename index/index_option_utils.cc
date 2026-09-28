@@ -9,9 +9,9 @@
 #include "index/index_option_utils.hh"
 #include "exceptions/exceptions.hh"
 #include <boost/algorithm/string.hpp>
-#include <fmt/ranges.h>
 #include <seastar/core/format.hh>
 #include <algorithm>
+import fmt;
 
 namespace secondary_index::util {
 

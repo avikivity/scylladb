@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <algorithm>
 
 #include "replica/querier.hh"
@@ -18,7 +19,6 @@
 #include "test/lib/eventually.hh"
 #include "db/config.hh"
 
-#include <fmt/ranges.h>
 #include <seastar/core/sleep.hh>
 #include <seastar/core/thread.hh>
 #undef SEASTAR_TESTING_MAIN

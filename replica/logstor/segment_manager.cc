@@ -5,6 +5,7 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
+import abseil;
 #include "replica/logstor/segment_manager.hh"
 #include "replica/logstor/segment_file.hh"
 #include "replica/logstor/ondisk.hh"
@@ -16,7 +17,6 @@
 #include "replica/logstor/logstor.hh"
 #include "replica/logstor/types.hh"
 #include "replica/logstor/compaction.hh"
-import abseil;
 #include <algorithm>
 #include <array>
 #include <chrono>

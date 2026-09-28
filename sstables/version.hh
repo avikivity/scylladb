@@ -14,6 +14,7 @@
 #include <array>
 #include <unordered_map>
 #include "seastarx.hh"
+import fmt;
 
 namespace sstables {
 

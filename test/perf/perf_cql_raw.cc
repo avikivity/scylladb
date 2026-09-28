@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <cstdlib>
 #include <limits>
 #include <memory>
@@ -27,7 +28,6 @@
 #include <seastar/net/socket_defs.hh>
 #include <seastar/coroutine/as_future.hh>
 #include <seastar/core/lowres_clock.hh>
-#include <fmt/format.h>
 #include <seastar/util/log.hh>
 #include <signal.h>
 

@@ -25,7 +25,7 @@
 #include <seastar/core/sstring.hh>
 #include <seastar/util/log.hh>
 
-#include <fmt/format.h>
+import fmt;
 
 #include "seastarx.hh"
 

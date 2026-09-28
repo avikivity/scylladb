@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "mutation/mutation_fragment_stream_validator.hh"
-#include <fmt/std.h>
 #include "seastarx.hh"
 
 logging::logger validator_log("mutation_fragment_stream_validator");

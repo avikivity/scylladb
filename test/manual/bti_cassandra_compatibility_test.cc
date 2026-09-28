@@ -6,12 +6,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <seastar/testing/random.hh>
 #include <seastar/core/thread.hh>
 #include <seastar/core/app-template.hh>
 #include <boost/program_options.hpp>
 #include <xxhash.h>
-#include <fmt/std.h>
 #include "readers/from_mutations.hh"
 #include "schema/schema_builder.hh"
 #include "sstables/sstable_writer.hh"

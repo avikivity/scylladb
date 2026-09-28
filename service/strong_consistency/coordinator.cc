@@ -25,11 +25,9 @@
 #include "utils/histogram_metrics_helper.hh"
 #include "utils/abstract_formatter.hh"
 
-#include <fmt/ranges.h>
-#include <fmt/std.h>
-
 #include <algorithm>
 #include "seastarx.hh"
+import fmt;
 
 namespace service::strong_consistency {
 

@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include "gms/inet_address.hh"
 #include "gms/endpoint_state.hh"
 #include "gms/gossip_digest.hh"
@@ -23,8 +24,6 @@
 #include "utils/log.hh"
 #include "db/system_keyspace.hh"
 #include <algorithm>
-#include <fmt/chrono.h>
-#include <fmt/ranges.h>
 #include <ranges>
 #include <seastar/core/sleep.hh>
 #include <seastar/core/thread.hh>

@@ -10,7 +10,6 @@
 
 #include <chrono>
 #include <stdexcept>
-#include <fmt/format.h>
 #include <seastar/core/future.hh>
 #include <seastar/core/coroutine.hh>
 #include <seastar/coroutine/maybe_yield.hh>

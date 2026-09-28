@@ -21,7 +21,6 @@
 #include "version.hh"
 #include <set>
 #include <unordered_set>
-#include <fmt/ranges.h>
 
 namespace gms {
 

@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <exception>
 #include <string>
 #include <optional>
@@ -15,7 +16,6 @@
 #include <seastar/core/gate.hh>
 #include <seastar/core/semaphore.hh>
 #include <seastar/core/iostream.hh>
-#include <fmt/core.h>
 
 #include "utils/log.hh"
 

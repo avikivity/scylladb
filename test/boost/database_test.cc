@@ -7,6 +7,7 @@
  */
 
 
+import fmt;
 #include <boost/test/tools/old/interface.hpp>
 #include <seastar/core/seastar.hh>
 #include <seastar/core/shard_id.hh>
@@ -21,8 +22,6 @@
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
 #include <utility>
-#include <fmt/ranges.h>
-#include <fmt/std.h>
 
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/result_set_assertions.hh"

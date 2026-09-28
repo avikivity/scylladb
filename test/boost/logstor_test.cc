@@ -16,7 +16,6 @@
 #include <map>
 #include <span>
 #include <vector>
-#include <fmt/format.h>
 #include <seastar/core/memory.hh>
 #include <seastar/util/closeable.hh>
 #include <seastar/core/semaphore.hh>

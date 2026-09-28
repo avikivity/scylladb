@@ -15,8 +15,6 @@
 #include <seastar/coroutine/maybe_yield.hh>
 #include <seastar/core/when_all.hh>
 
-#include <fmt/chrono.h>
-
 #include "cql3/query_processor.hh"
 #include "cql3/untyped_result_set.hh"
 #include "db/cluster_config_registry.hh"
@@ -26,6 +24,7 @@
 #include "replica/database.hh"
 #include "utils/on_internal_error.hh"
 #include "seastarx.hh"
+import fmt;
 
 namespace db {
 

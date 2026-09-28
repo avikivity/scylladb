@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #undef SEASTAR_TESTING_MAIN
-#include <fmt/ranges.h>
 #include <seastar/util/defer.hh>
 #include <seastar/testing/thread_test_case.hh>
 #include "sstables/sstable_compressor_factory.hh"

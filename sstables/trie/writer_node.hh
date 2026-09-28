@@ -9,6 +9,10 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdlib>
+import fmt;
+#include <memory>
+#include <vector>
 #include <new>
 #include "common.hh"
 #include "utils/assert.hh"

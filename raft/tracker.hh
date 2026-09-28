@@ -8,8 +8,8 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <fmt/core.h>
 #include "raft.hh"
+import fmt;
 
 namespace raft {
 

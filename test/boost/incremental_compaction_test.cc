@@ -5,7 +5,6 @@
  */
 
 #include <boost/test/unit_test.hpp>
-#include <fmt/ranges.h>
 #include <boost/range/iterator_range_core.hpp>
 #include <filesystem>
 #include <memory>
@@ -41,6 +40,7 @@
 #include "test/lib/eventually.hh"
 #include "test/lib/log.hh"
 #include "seastarx.hh"
+import fmt;
 
 namespace fs = std::filesystem;
 

@@ -6,9 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "raft/raft.hh"
 #include "utils/assert.hh"
-#include <fmt/ranges.h>
 #include <seastar/core/reactor.hh>
 #include <seastar/testing/test_case.hh>
 #include <seastar/core/timed_out_error.hh>

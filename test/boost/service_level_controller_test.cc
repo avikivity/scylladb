@@ -7,11 +7,9 @@
  */
 
 
+import fmt;
 #include <boost/test/unit_test.hpp>
-#include <fmt/std.h>
-#include <fmt/ranges.h>
 #include <cstdlib>
-#include <fmt/std.h>
 
 #include <seastar/core/future.hh>
 #include <seastar/util/closeable.hh>

@@ -9,7 +9,7 @@
 
 #include <seastar/core/on_internal_error.hh>
 #include <seastar/util/log.hh>
-#include <fmt/format.h>
+import fmt;
 
 #include "utils/allocation_strategy.hh"
 

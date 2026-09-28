@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "expression.hh"
 #include "cql3/query_options.hh"
 
@@ -14,7 +15,6 @@
 
 #include <seastar/core/on_internal_error.hh>
 
-#include <fmt/ostream.h>
 #include <unordered_map>
 #include <algorithm>
 #include <ranges>

@@ -6,11 +6,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "ldap_role_manager.hh"
 
 #include <boost/algorithm/string/replace.hpp>
-#include <fmt/format.h>
-#include <fmt/ranges.h>
 #include <ldap.h>
 #include <seastar/core/seastar.hh>
 #include <seastar/core/sstring.hh>

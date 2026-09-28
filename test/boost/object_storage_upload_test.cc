@@ -6,10 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "utils/assert.hh"
 #include <seastar/core/sstring.hh>
-#include <fmt/ranges.h>
-#include <fmt/format.h>
 
 #include <seastar/core/future.hh>
 #include <seastar/testing/test_case.hh>

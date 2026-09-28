@@ -13,7 +13,7 @@
 #include <stdexcept>
 #include <type_traits>
 
-#include <fmt/format.h>
+import fmt;
 
 #include <seastar/core/aligned_buffer.hh>
 #include <seastar/core/on_internal_error.hh>

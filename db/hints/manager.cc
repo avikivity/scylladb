@@ -7,9 +7,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "db/hints/manager.hh"
-
-#include <fmt/ranges.h>
 
 // Seastar features.
 #include <seastar/core/abort_source.hh>

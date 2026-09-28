@@ -12,8 +12,6 @@
 #include "test/lib/s3_fixture.hh"
 #include "utils/assert.hh"
 #include <seastar/core/sstring.hh>
-#include <fmt/ranges.h>
-#include <fmt/format.h>
 
 #include <seastar/core/future.hh>
 #include <seastar/testing/test_case.hh>
@@ -42,6 +40,7 @@
 #include "test/lib/random_utils.hh"
 #include "test/lib/sstable_test_env.hh"
 #include "test/boost/database_test.hh"
+import fmt;
 #include "seastarx.hh"
 
 using namespace std::string_literals;

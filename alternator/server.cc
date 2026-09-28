@@ -6,13 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "alternator/server.hh"
 #include "audit/audit.hh"
 #include "alternator/executor_util.hh"
 #include "utils/chunked_string.hh"
 #include "gms/application_state.hh"
 #include "utils/log.hh"
-#include <fmt/ranges.h>
 #include <seastar/http/function_handlers.hh>
 #include <seastar/util/short_streams.hh>
 #include <seastar/core/coroutine.hh>

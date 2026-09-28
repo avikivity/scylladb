@@ -264,13 +264,13 @@
 // functions are on the path, then add a test here for the ones that look expensive - a method on
 // `logstor_bench` and a name in `test_kinds`.
 
+import fmt;
 #include <charconv>
 #include <filesystem>
 #include <ranges>
 #include <variant>
 #include <vector>
 
-#include <fmt/ranges.h>
 #include <json/json.h>
 
 #include <seastar/core/align.hh>

@@ -6,12 +6,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "dns.hh"
 #include <ranges>
 #include <coroutine>
 #include "utils/exceptions.hh"
 #include <chrono>
-#include <fmt/format.h>
 #include <seastar/coroutine/as_future.hh>
 #include <seastar/coroutine/parallel_for_each.hh>
 #include <seastar/core/sleep.hh>

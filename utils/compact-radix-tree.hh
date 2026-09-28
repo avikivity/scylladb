@@ -11,11 +11,11 @@
 #include <cassert>
 #include <algorithm>
 #include <bitset>
-#include <fmt/core.h>
 #include "utils/assert.hh"
 #include "utils/allocation_strategy.hh"
 #include "utils/array-search.hh"
 #include <boost/intrusive/parent_from_member.hpp>
+import fmt;
 
 class size_calculator;
 

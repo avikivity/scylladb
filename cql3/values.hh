@@ -14,12 +14,12 @@
 
 #include <optional>
 #include <variant>
-#include <fmt/core.h>
 
 #include <seastar/util/variant_utils.hh>
 
 #include "utils/fragmented_temporary_buffer.hh"
 #include "utils/overloaded_functor.hh"
+import fmt;
 
 namespace cql3 {
 

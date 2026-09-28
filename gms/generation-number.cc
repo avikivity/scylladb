@@ -6,12 +6,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "utils/assert.hh"
 #include <cassert>
 #include <chrono>
 #include <utility>
-
-#include <fmt/format.h>
 
 #include "generation-number.hh"
 

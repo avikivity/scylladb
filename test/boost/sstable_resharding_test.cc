@@ -1,5 +1,5 @@
+import fmt;
 #include <boost/test/unit_test.hpp>
-#include <fmt/ranges.h>
 #include <memory>
 #include <utility>
 

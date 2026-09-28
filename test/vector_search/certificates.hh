@@ -9,7 +9,7 @@
 #pragma once
 #include <seastar/core/seastar.hh>
 #include <seastar/net/tls.hh>
-#include <fmt/format.h>
+import fmt;
 
 namespace test::vector_search {
 

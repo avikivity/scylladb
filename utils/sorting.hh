@@ -14,7 +14,6 @@
 #include <map>
 #include <seastar/core/future.hh>
 #include <seastar/coroutine/maybe_yield.hh>
-#include <fmt/core.h>
 #include "utils/stall_free.hh"
 
 namespace utils {

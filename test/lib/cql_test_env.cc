@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <iterator>
 #include <random>
 #include <seastar/core/thread.hh>
@@ -26,7 +27,6 @@
 #include "cql3/statements/eventual_consistency/modification_executor.hh"
 #include "cql3/cql_config.hh"
 #include "timeout_config.hh"
-#include <fmt/ranges.h>
 #include <seastar/core/sharded.hh>
 #include <seastar/core/abort_source.hh>
 #include <seastar/core/shared_ptr.hh>

@@ -9,7 +9,7 @@
 #include "replica/logstor/ondisk.hh"
 
 #include <stdexcept>
-#include <fmt/format.h>
+import fmt;
 
 #include "utils/crc.hh"
 

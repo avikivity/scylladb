@@ -9,7 +9,7 @@
 
 #include <compare>
 #include <cstdint>
-#include <fmt/format.h>
+import fmt;
 
 // The identifiers and positions of segments and of the records in them. They depend on nothing
 // else in logstor, so that headers included nearly everywhere, such as replica/database.hh,

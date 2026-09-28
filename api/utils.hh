@@ -15,7 +15,6 @@
 #include <string_view>
 #include <type_traits>
 
-#include <fmt/format.h>
 #include <seastar/core/sstring.hh>
 #include <seastar/http/exception.hh>
 #include <seastar/http/request.hh>
@@ -25,6 +24,7 @@
 #include "seastarx.hh"
 #include "utils/UUID.hh"
 #include "utils/from_chars_exactly.hh"
+import fmt;
 
 namespace api {
 

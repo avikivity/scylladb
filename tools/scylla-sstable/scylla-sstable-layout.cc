@@ -6,9 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <fmt/chrono.h>
-#include <fmt/ranges.h>
-
+import fmt;
 #include "compaction/compaction_strategy.hh"
 #include "compaction/time_window_compaction_strategy.hh"
 #include "db/config.hh"
