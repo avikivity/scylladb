@@ -9,7 +9,7 @@
  
 #include <string>
 #include <variant>
-#include <yaml-cpp/yaml.h>
+import yaml_cpp;
 
 #include "utils/s3/creds.hh"
 #include "utils/http.hh"

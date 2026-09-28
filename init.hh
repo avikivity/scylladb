@@ -9,11 +9,12 @@
 
 #include <any>
 #include <functional>
+#include <set>
 
 #include "utils/log.hh"
 #include "utils/s3/creds.hh"
 #include "seastarx.hh"
-#include <yaml-cpp/yaml.h>
+import yaml_cpp;
 import boost;
 
 namespace db {

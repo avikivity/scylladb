@@ -15,7 +15,7 @@
 #include <variant>
 #include <vector>
 
-#include <yaml-cpp/yaml.h>
+import yaml_cpp;
 
 #include "utils/rjson.hh"
 

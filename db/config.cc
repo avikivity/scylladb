@@ -12,7 +12,7 @@ import fmt;
 #include <unordered_map>
 #include <sstream>
 
-#include <yaml-cpp/yaml.h>
+import yaml_cpp;
 
 #include "cdc/cdc_extension.hh"
 #include "tombstone_gc_extension.hh"

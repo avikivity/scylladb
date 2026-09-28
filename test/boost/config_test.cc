@@ -14,7 +14,7 @@
 #include "test/lib/scylla_test_case.hh"
 #include "test/lib/test_utils.hh"
 #include <seastar/testing/thread_test_case.hh>
-#include <yaml-cpp/yaml.h>
+import yaml_cpp;
 #include "db/config.hh"
 #include "db/object_storage_endpoint_param.hh"
 #include "utils/updateable_value.hh"
