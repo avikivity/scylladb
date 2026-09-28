@@ -12,8 +12,7 @@
 #ifdef SANITIZE
 #endif
 
-#include <rapidjson/stream.h>
-#include <rapidjson/error/en.h>
+#include "utils/rjson_config.hh"
 
 namespace rjson {
 
@@ -184,7 +183,7 @@ protected:
     }
 
     void check_nested_level() const {
-        if (RAPIDJSON_UNLIKELY(_nested_level > _max_nested_level)) {
+        if (_nested_level > _max_nested_level) [[unlikely]] {
             throw rjson::error(format("Max nested level reached: {}", _max_nested_level));
         }
     }

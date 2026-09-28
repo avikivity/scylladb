@@ -49,18 +49,14 @@ public:
 };
 }
 
-#include "utils/rjson_config.hh"
-
-#include <rapidjson/document.h>
-#include <rapidjson/writer.h>
-#include <rapidjson/stringbuffer.h>
-#include <rapidjson/allocators.h>
-#include <rapidjson/ostreamwrapper.h>
+// rapidjson is configured (see utils/rjson_config.hh) to throw rjson::error
+// on assertion failures instead of calling assert().
 #include "utils/UUID.hh"
 #include "dht/token.hh"
 #include "sstables/types.hh"
 
 #include "seastarx.hh"
+import rapidjson;
 
 namespace rjson {
 

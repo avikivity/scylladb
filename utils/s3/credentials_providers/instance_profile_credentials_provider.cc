@@ -12,8 +12,7 @@
 #include "utils/s3/client.hh"
 #include "utils/s3/default_aws_retry_strategy.hh"
 #include "utils/rjson.hh"
-#include <rapidjson/document.h>
-#include <rapidjson/error/en.h>
+import rapidjson;
 
 namespace aws {
 

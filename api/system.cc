@@ -12,7 +12,7 @@
 #include "replica/database.hh"
 #include "sstables/sstables_manager.hh"
 
-#include <rapidjson/document.h>
+import rapidjson;
 
 #include "utils/log.hh"
 import boost;
