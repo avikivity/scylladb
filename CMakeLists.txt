@@ -382,7 +382,7 @@ list(APPEND scylla_cxx_module_flags
 # C++20 modules: wrappers for third-party libraries whose headers include
 # the standard library textually; like abseil, they keep those includes in
 # their global module fragment. modules/<name>.cppm exports <name>.
-set(scylla_wrapper_modules rapidjson jsoncpp yaml_cpp jwt_cpp)
+set(scylla_wrapper_modules rapidjson jsoncpp yaml_cpp jwt_cpp cryptopp)
 foreach(name IN LISTS scylla_wrapper_modules)
   add_library(scylla-${name}module STATIC)
   target_sources(scylla-${name}module
