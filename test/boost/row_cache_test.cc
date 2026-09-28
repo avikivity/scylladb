@@ -7,6 +7,7 @@
  */
 
 
+import fmt;
 #include <boost/test/unit_test.hpp>
 #include <seastar/core/sleep.hh>
 #include <seastar/util/backtrace.hh>
@@ -40,7 +41,6 @@
 #include "utils/throttle.hh"
 #include "utils/rjson.hh"
 
-#include <fmt/ranges.h>
 #include "readers/from_mutations.hh"
 #include "readers/delegating_impl.hh"
 #include "readers/empty.hh"

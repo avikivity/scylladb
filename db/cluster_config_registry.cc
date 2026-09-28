@@ -16,8 +16,6 @@
 #include <variant>
 #include <vector>
 
-#include <fmt/format.h>
-
 #include <seastar/core/smp.hh>
 
 #include "gms/feature_service.hh"
@@ -26,6 +24,7 @@
 #include "utils/log.hh"
 #include "utils/on_internal_error.hh"
 #include "seastarx.hh"
+import fmt;
 
 namespace db::cluster_config_registry {
 

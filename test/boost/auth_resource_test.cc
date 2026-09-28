@@ -6,13 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #define BOOST_TEST_MODULE core
 
 #include "auth/resource.hh"
 #include "test/lib/test_utils.hh"
 
 #include <boost/test/unit_test.hpp>
-#include <fmt/ranges.h>
 
 BOOST_AUTO_TEST_CASE(root_of) {
     //

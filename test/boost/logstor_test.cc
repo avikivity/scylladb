@@ -16,7 +16,6 @@
 #include <map>
 #include <span>
 #include <vector>
-#include <fmt/format.h>
 #include <seastar/core/semaphore.hh>
 #include <seastar/core/format.hh>
 #include <seastar/core/temporary_buffer.hh>

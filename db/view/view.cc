@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include <chrono>
 #include <deque>
 #include <exception>
@@ -18,8 +19,6 @@
 #include <unordered_set>
 #include <vector>
 #include <algorithm>
-
-#include <fmt/ranges.h>
 
 #include <seastar/core/future-util.hh>
 #include <seastar/core/coroutine.hh>

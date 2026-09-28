@@ -78,9 +78,9 @@ set(FMT_INSTALL OFF CACHE BOOL "" FORCE)
 set(FMT_TEST OFF CACHE BOOL "" FORCE)
 set(FMT_DOC OFF CACHE BOOL "" FORCE)
 set(FMT_FUZZ OFF CACHE BOOL "" FORCE)
-# We don't consume fmt's C++20 module; building it drags in module dependency
-# scanning, which Scylla otherwise disables.
-set(FMT_MODULE OFF CACHE BOOL "" FORCE)
+# Build fmt's own C++20 module (the fmt-module target) instead of a
+# hand-written wrapper; consumers just link fmt::fmt-module and `import fmt;`.
+set(FMT_MODULE ON CACHE BOOL "" FORCE)
 add_subdirectory(fmt)
 
 # Same story for c-ares: build the bundled submodule rather than the host's,
@@ -159,6 +159,14 @@ if(is_multi_config)
     add_dependencies(Seastar::seastar_testing Seastar)
 else()
     set(Seastar_TESTING ON CACHE BOOL "" FORCE)
+    # Consume fmt through `import fmt;`; pairs with the attach-to-global fmt
+    # module below. Seastar_IMPORT_FMT itself stays off: it only affects
+    # Seastar's install interface, and with it Seastar expects fmt::fmt-module
+    # to be the IMPORTED target of an installed fmt and sets properties on it,
+    # while the bundled fmt added above defines it as an ALIAS. The
+    # SEASTAR_IMPORT_FMT block below defines what Scylla's targets need.
+    set(Seastar_IMPORT_FMT OFF CACHE BOOL "" FORCE)
+    set(scylla_import_fmt ON)
     set(Seastar_API_LEVEL 9 CACHE STRING "" FORCE)
     set(Seastar_DEPRECATED_OSTREAM_FORMATTERS OFF CACHE BOOL "" FORCE)
     set(Seastar_APPS ON CACHE BOOL "" FORCE)
@@ -310,6 +318,25 @@ if(_std_module_src STREQUAL "")
 endif()
 message(STATUS "Found std module source: ${_std_module_src}")
 
+# Consume fmt via `import fmt;` (Seastar_IMPORT_FMT). Seastar keeps this off its
+# target INTERFACE so its own targets stay textual, so define it here for
+# Scylla's own targets (created below; fmt/seastar/abseil were added earlier and
+# are unaffected). fmt's macros aren't in the module, so also supply
+# SEASTAR_FMT_VERSION, derived from the bundled fmt (find_package(fmt) above
+# reports the version of the host's fmt package, not of the bundled one), and
+# FMT_ATTACH_TO_GLOBAL_MODULE, which is inert outside fmt's module; configure.py
+# gets the same three from seastar.pc.
+if(scylla_import_fmt)
+  get_target_property(_bundled_fmt_version fmt VERSION)
+  string(REPLACE "." ";" _fmt_version_components "${_bundled_fmt_version}")
+  list(GET _fmt_version_components 0 _fmt_version_major)
+  list(GET _fmt_version_components 1 _fmt_version_minor)
+  list(GET _fmt_version_components 2 _fmt_version_patch)
+  math(EXPR _fmt_version_int
+    "${_fmt_version_major} * 10000 + ${_fmt_version_minor} * 100 + ${_fmt_version_patch}")
+  add_compile_definitions(SEASTAR_IMPORT_FMT SEASTAR_FMT_VERSION=${_fmt_version_int} FMT_ATTACH_TO_GLOBAL_MODULE)
+endif()
+
 # C++20 modules: build the std module from libstdc++'s source.
 # All targets that consume 'import std;' link against this.
 # The std.compat module (re-exporting the C library names into the global
@@ -344,6 +371,19 @@ set_target_properties(scylla-abseilmodule PROPERTIES CXX_SCAN_FOR_MODULES ON)
 list(APPEND scylla_cxx_module_targets scylla-abseilmodule)
 list(APPEND scylla_cxx_module_flags
   -fmodule-file=abseil=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/scylla-abseilmodule.dir/abseil.pcm)
+
+# C++20 modules: fmt formatting library module.
+# Built by fmt's own CMake (FMT_MODULE=ON above) as the fmt::fmt-module
+# target; we just consume it. Scylla disables module scanning globally, so
+# force it back on for this target (its FILE_SET CXX_MODULES needs it).
+set_target_properties(fmt-module PROPERTIES CXX_SCAN_FOR_MODULES ON)
+# Detach the module's declarations from the named 'fmt' module (traditional
+# mangling) so `import fmt;` and textual #include <fmt/...> TUs share one
+# consistent set of fmt symbols.
+target_compile_definitions(fmt-module PRIVATE FMT_ATTACH_TO_GLOBAL_MODULE)
+list(APPEND scylla_cxx_module_targets fmt-module)
+list(APPEND scylla_cxx_module_flags
+  -fmodule-file=fmt=${CMAKE_CURRENT_BINARY_DIR}/fmt/CMakeFiles/fmt-module.dir/fmt.pcm)
 
 add_library(scylla-main STATIC)
 
@@ -394,6 +434,7 @@ target_link_libraries(scylla-main
     zstd::zstd_static
     scylla-stdmodule
     scylla-abseilmodule
+    fmt::fmt-module
 )
 
 option(Scylla_CHECK_HEADERS

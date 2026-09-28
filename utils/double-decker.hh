@@ -13,7 +13,6 @@
 #include "utils/bptree.hh"
 #include "utils/intrusive-array.hh"
 #include "utils/collection-concepts.hh"
-#include <fmt/core.h>
 
 /*
  * The double-decker is the ordered keeper of key:value pairs having
@@ -22,6 +21,7 @@
  * The keys collisions are expected to be rare enough to afford holding
  * the values in a sorted array with the help of linear algorithms.
  */
+import fmt;
 
 template <typename Key, typename T, typename Less, typename Compare, int NodeSize,
             bplus::key_search Search = bplus::key_search::binary, bplus::with_debug Debug = bplus::with_debug::no>

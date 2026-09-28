@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "storage.hh"
 
 #include <cerrno>
@@ -16,7 +17,6 @@
 
 #include <exception>
 #include <stdexcept>
-#include <fmt/std.h>
 #include <seastar/core/when_all.hh>
 #include <seastar/coroutine/exception.hh>
 #include <seastar/coroutine/parallel_for_each.hh>

@@ -27,6 +27,7 @@
 
 using namespace seastar;
 #include "seastarx.hh"
+import fmt;
 class memory_data_sink_buffers;
 
 namespace s3 {

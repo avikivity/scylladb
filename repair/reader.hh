@@ -6,7 +6,7 @@
 #include "reader_permit.hh"
 #include "utils/phased_barrier.hh"
 #include "readers/mutation_fragment_v1_stream.hh"
-#include <fmt/core.h>
+import fmt;
 
 struct incremental_repair_meta;
 

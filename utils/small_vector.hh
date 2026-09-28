@@ -21,7 +21,7 @@
 #include <stdexcept>
 #include <malloc.h>
 #include <iostream>
-#include <fmt/ostream.h>
+import fmt;
 
 namespace utils {
 

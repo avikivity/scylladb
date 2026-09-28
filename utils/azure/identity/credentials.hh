@@ -17,6 +17,7 @@
 
 using namespace seastar;
 #include "seastarx.hh"
+import fmt;
 
 extern logger az_creds_logger;
 

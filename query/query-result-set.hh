@@ -10,12 +10,12 @@
 
 
 #include <seastar/core/shared_ptr.hh>
-#include <fmt/ostream.h>
 #include "types/types.hh"
 #include "schema/schema.hh"
 
 #include <optional>
 #include <stdexcept>
+import fmt;
 
 class mutation;
 

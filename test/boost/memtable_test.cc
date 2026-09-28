@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <boost/test/unit_test.hpp>
 #include <boost/test/framework.hpp>
 #include "replica/database.hh"
@@ -19,7 +20,6 @@
 #include <seastar/util/closeable.hh>
 #include "service/migration_manager.hh"
 
-#include <fmt/ranges.h>
 #include <seastar/core/thread.hh>
 #include "replica/memtable.hh"
 #include "test/lib/cql_test_env.hh"

@@ -7,13 +7,11 @@
  */
 
 
+import fmt;
 #include <list>
 #include <random>
 #include <source_location>
 #include <algorithm>
-
-#include <fmt/ranges.h>
-#include <fmt/std.h>
 
 #include <seastar/core/sleep.hh>
 #include <seastar/core/do_with.hh>

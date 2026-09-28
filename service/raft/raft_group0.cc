@@ -5,9 +5,9 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
+import fmt;
 #include <iterator>
 #include <source_location>
-#include <fmt/ranges.h>
 
 #include "mutation/async_utils.hh"
 #include "raft/raft.hh"

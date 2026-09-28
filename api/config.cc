@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "api/api.hh"
 #include "api/config.hh"
 #include "api/api-doc/config.json.hh"
@@ -14,7 +15,6 @@
 #include "replica/database.hh"
 #include "db/config.hh"
 #include <sstream>
-#include <fmt/ranges.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <seastar/http/exception.hh>
 

@@ -8,10 +8,10 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include "auth/resource.hh"
 
 #include <algorithm>
-#include <fmt/core.h>
 #include <iterator>
 #include <unordered_map>
 

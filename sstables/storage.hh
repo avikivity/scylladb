@@ -12,7 +12,6 @@
 #include <coroutine>
 #include "utils/assert.hh"
 #include <filesystem>
-#include <fmt/format.h>
 
 #include <seastar/core/file.hh>
 #include <seastar/core/fstream.hh>

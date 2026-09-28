@@ -27,8 +27,11 @@
 #include <chrono>
 #include <numeric>
 #include <type_traits>
+#include <functional>
+#include <source_location>
 #include <optional>
 #include <unordered_map>
+import fmt;
 
 namespace utils {
 

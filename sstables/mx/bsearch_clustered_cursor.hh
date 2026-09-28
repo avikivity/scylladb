@@ -19,7 +19,7 @@
 #include <seastar/core/on_internal_error.hh>
 
 #include <optional>
-#include <fmt/std.h>
+import fmt;
 
 namespace sstables {
 

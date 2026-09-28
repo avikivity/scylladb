@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <expected>
 #include "compaction/compaction_descriptor.hh"
 
 namespace api {

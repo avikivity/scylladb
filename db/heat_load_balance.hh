@@ -31,8 +31,8 @@
 #include <vector>
 #include <cassert>
 #include <ranges>
-#include <fmt/ranges.h>  // IWYU pragma: keep
 #include "utils/log.hh"
+import fmt;
 
 extern logging::logger hr_logger;
 

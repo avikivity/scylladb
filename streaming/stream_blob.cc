@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "db/view/view_building_worker.hh"
 #include "db/config.hh"
 #include "message/messaging_service.hh"
@@ -35,7 +36,6 @@
 #include <vector>
 #include <cfloat>
 #include <filesystem>
-#include <fmt/ranges.h>
 #include "replica/exceptions.hh"
 
 namespace streaming {

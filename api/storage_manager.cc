@@ -8,8 +8,8 @@
 
 #include <seastar/core/coroutine.hh>
 #include <seastar/util/closeable.hh>
-#include <fmt/ranges.h>
 #include "seastarx.hh"
+import fmt;
 
 #include "storage_manager.hh"
 #include "api/api.hh"

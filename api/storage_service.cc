@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "storage_service.hh"
 #include "api/api.hh"
 #include "api/api-doc/column_family.json.hh"
@@ -30,7 +31,6 @@
 #include <boost/algorithm/string/trim_all.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/functional/hash.hpp>
-#include <fmt/ranges.h>
 #include "service/raft/raft_group0_client.hh"
 #include "service/storage_service.hh"
 #include "service/topology_state_machine.hh"

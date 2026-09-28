@@ -11,10 +11,10 @@
 #pragma once
 
 #include <seastar/core/sstring.hh>
-#include <fmt/core.h>
 #include "gms/gossip_digest.hh"
 #include "utils/chunked_vector.hh"
 #include "utils/UUID.hh"
+import fmt;
 
 namespace gms {
 

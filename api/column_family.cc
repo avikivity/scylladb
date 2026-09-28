@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <fmt/ranges.h>
+import fmt;
 #include "column_family.hh"
 #include "api/api.hh"
 #include "api/validate.hh"

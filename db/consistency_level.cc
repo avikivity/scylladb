@@ -8,11 +8,11 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include "db/consistency_level.hh"
 #include "db/consistency_level_validations.hh"
 
 #include "exceptions/exceptions.hh"
-#include <fmt/ranges.h>
 #include <seastar/core/sstring.hh>
 #include "locator/host_id.hh"
 #include "schema/schema.hh"

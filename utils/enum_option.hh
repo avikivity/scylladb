@@ -16,8 +16,8 @@
 #include <iosfwd>
 #include <sstream>
 #include <type_traits>
-#include <fmt/ostream.h>
 #include <concepts>
+import fmt;
 
 template<typename T>
 concept HasMapInterface = requires(T t) {

@@ -6,12 +6,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "db/consistency_level_type.hh"
 #include "utils/assert.hh"
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <json/json.h>
-#include <fmt/ranges.h>
 
 #include "test/lib/cql_test_env.hh"
 #include "test/perf/perf.hh"

@@ -7,12 +7,12 @@
  */
 
 #include <tuple>
+import fmt;
 #include "gms/generation-number.hh"
 #include "gms/inet_address.hh"
 #include <seastar/core/shard_id.hh>
 #include "message/msg_addr.hh"
 #include "utils/assert.hh"
-#include <fmt/ranges.h>
 #include <seastar/core/coroutine.hh>
 #include <seastar/coroutine/as_future.hh>
 #include <seastar/coroutine/exception.hh>

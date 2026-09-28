@@ -7,10 +7,10 @@
  */
 
 
+import fmt;
 #include <boost/test/unit_test.hpp>
 #include <cstdlib>
 #include <iostream>
-#include <fmt/ranges.h>
 
 #include "test/lib/scylla_test_case.hh"
 #include "test/lib/test_utils.hh"

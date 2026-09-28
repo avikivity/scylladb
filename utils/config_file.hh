@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include <fmt/format.h>
-
 #include <unordered_map>
 #include <string_view>
 
@@ -21,6 +19,7 @@
 #include "utils/updateable_value.hh"
 
 #include "seastarx.hh"
+import fmt;
 
 namespace seastar { class file; }
 namespace seastar::json { class json_return_type; }

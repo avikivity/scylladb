@@ -24,12 +24,11 @@
 #include "utils/histogram_metrics_helper.hh"
 #include "utils/abstract_formatter.hh"
 
-#include <fmt/std.h>
-
 #include <algorithm>
 #include <concepts>
 #include <span>
 #include "seastarx.hh"
+import fmt;
 
 namespace service::strong_consistency {
 

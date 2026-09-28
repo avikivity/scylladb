@@ -23,9 +23,7 @@
 #include "locator/host_id.hh"
 #include "service/topology_guard.hh"
 #include "sstables/open_info.hh"
-
-#include <fmt/core.h>
-#include <fmt/ostream.h>
+import fmt;
 
 namespace db {
 namespace view {

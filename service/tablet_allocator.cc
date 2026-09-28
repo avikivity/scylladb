@@ -6,6 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import abseil;
+import fmt;
 #include "cdc/cdc_options.hh"
 #include "cql3/statements/ks_prop_defs.hh"
 #include "db/system_keyspace.hh"
@@ -31,13 +33,9 @@
 #include <iterator>
 #include <ranges>
 #include <utility>
-#include <fmt/ranges.h>
 #include <seastar/core/on_internal_error.hh>
 #include <seastar/coroutine/maybe_yield.hh>
 #include <seastar/coroutine/switch_to.hh>
-import abseil;
-#include <fmt/format.h>
-#include <fmt/chrono.h>
 
 using namespace locator;
 using namespace replica;

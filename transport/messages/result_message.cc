@@ -7,13 +7,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "result_message.hh"
 #include "cql3/cql_statement.hh"
 #include "replica/tablets.hh"
 #include "types/tuple.hh"
 #include <bit>
 #include <seastar/core/format.hh>
-#include <fmt/std.h>
 
 namespace cql_transport::messages {
 

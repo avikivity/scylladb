@@ -11,7 +11,7 @@
 #pragma once
 
 #include "schema/schema_fwd.hh"
-#include <fmt/core.h>
+import fmt;
 
 namespace streaming {
 

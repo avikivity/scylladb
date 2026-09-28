@@ -12,7 +12,7 @@
 
 #include <cassert>
 #include <cstdint>
-#include <fmt/core.h>
+import fmt;
 
 namespace db {
 

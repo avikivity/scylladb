@@ -5,6 +5,7 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
+import abseil;
 #include "server.hh"
 
 #include "utils/assert.hh"
@@ -23,7 +24,6 @@
 #include <seastar/core/pipe.hh>
 #include <seastar/core/metrics.hh>
 #include <seastar/rpc/rpc_types.hh>
-import abseil;
 #include <list>
 #include <seastar/core/gate.hh>
 

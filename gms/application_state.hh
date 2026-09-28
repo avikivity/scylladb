@@ -9,8 +9,7 @@
  */
 
 #pragma once
-
-#include <fmt/core.h>
+import fmt;
 
 namespace gms {
 

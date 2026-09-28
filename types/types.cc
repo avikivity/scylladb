@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
 #include "cql3/cql3_type.hh"
@@ -31,7 +32,6 @@
 #include <concepts>
 #include <ctime>
 #include <cstdlib>
-#include <fmt/chrono.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/date_time/c_local_time_adjustor.hpp>
 #include <boost/locale/encoding_utf.hpp>

@@ -13,7 +13,7 @@
 #include "utils/assert.hh"
 #include "utils/small_vector.hh"
 #include <algorithm>
-#include <fmt/core.h>
+import fmt;
 
 class partition_snapshot_row_cursor;
 

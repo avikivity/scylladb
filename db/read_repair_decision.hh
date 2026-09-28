@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include <fmt/format.h>
 #include <string_view>
+import fmt;
 
 namespace db {
 

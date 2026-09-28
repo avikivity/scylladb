@@ -11,12 +11,11 @@
 #include "enum_set.hh"
 #include <seastar/core/sstring.hh>
 
-#include <fmt/format.h>
-#include <fmt/ranges.h>
 #include <algorithm>
 #include <array>
 #include <string_view>
 #include <vector>
+import fmt;
 
 namespace audit {
 

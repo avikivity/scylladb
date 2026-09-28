@@ -1732,14 +1732,11 @@ for t in sorted(scylla_tests):
 
 for t in sorted(perf_tests | perf_standalone_tests):
     deps[t] = [t + '.cc'] + scylla_tests_dependencies
-    deps[t] += ['test/perf/perf.cc', 'seastar/tests/perf/linux_perf_event.cc']
-
-perf_tests_seastar_deps = [
-    'seastar/tests/perf/perf_tests.cc'
-]
-
-for t in sorted(perf_tests):
-    deps[t] += perf_tests_seastar_deps
+    deps[t] += ['test/perf/perf.cc']
+    # The Seastar perf-test framework (perf_tests.cc), linux_perf_event.cc and
+    # random.cc come from Seastar's libseastar_perf_testing, which perf tests
+    # link (see below), rather than recompiling Seastar's sources with Scylla's
+    # flags.
 
 deps['test/boost/combined_tests'] += [
     'test/boost/aggregate_fcts_test.cc',
@@ -1853,10 +1850,8 @@ deps['test/boost/rolling_max_tracker_test'] = ['test/boost/rolling_max_tracker_t
 deps['test/boost/estimated_histogram_test'] = ['test/boost/estimated_histogram_test.cc']
 deps['test/boost/summary_test'] = ['test/boost/summary_test.cc']
 deps['test/boost/anchorless_list_test'] = ['test/boost/anchorless_list_test.cc']
-deps['test/perf/perf_canonical_mutation'] += ['seastar/tests/perf/linux_perf_event.cc']
-deps['test/perf/perf_mutation'] += ['seastar/tests/perf/linux_perf_event.cc']
-deps['test/perf/perf_commitlog'] += ['test/perf/perf.cc', 'seastar/tests/perf/linux_perf_event.cc']
-deps['test/perf/perf_row_cache_reads'] += ['test/perf/perf.cc', 'seastar/tests/perf/linux_perf_event.cc']
+deps['test/perf/perf_commitlog'] += ['test/perf/perf.cc']
+deps['test/perf/perf_row_cache_reads'] += ['test/perf/perf.cc']
 deps['test/boost/reusable_buffer_test'] = [
     "test/boost/reusable_buffer_test.cc",
     "test/lib/log.cc",
@@ -2331,6 +2326,10 @@ def configure_seastar(build_dir, mode, mode_config, compiler_cache=None):
         '-DSeastar_LD_FLAGS={}'.format(semicolon_separated(mode_config['lib_ldflags'], seastar_cxx_ld_flags)),
         '-DSeastar_API_LEVEL=9',
         '-DSeastar_DEPRECATED_OSTREAM_FORMATTERS=OFF',
+        # Consume fmt via `import fmt;`. Seastar exports SEASTAR_IMPORT_FMT and
+        # SEASTAR_FMT_VERSION through seastar.pc's cflags, and thus onto
+        # Scylla's own TU compiles.
+        '-DSeastar_IMPORT_FMT=ON',
         '-DSeastar_UNUSED_RESULT_ERROR=ON',
         '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
         '-DSeastar_SCHEDULING_GROUPS_COUNT=25',
@@ -2424,6 +2423,10 @@ def configure_fmt(build_dir, mode, mode_config, compiler_cache=None):
 
     cxx_flags += ' ' + fmt_cflags.strip()
 
+    # Detach fmt's module declarations from the named 'fmt' module so they get
+    # traditional mangling, letting `import fmt;` and textual #include <fmt/...>
+    # TUs share one consistent set of fmt symbols.
+    cxx_flags += ' -DFMT_ATTACH_TO_GLOBAL_MODULE'
     cmake_mode = mode_config['cmake_build_type']
     fmt_cmake_args = [
         '-DCMAKE_BUILD_TYPE={}'.format(cmake_mode),
@@ -2448,9 +2451,11 @@ def configure_fmt(build_dir, mode, mode_config, compiler_cache=None):
         '-DFMT_TEST=OFF',
         '-DFMT_DOC=OFF',
         '-DFMT_FUZZ=OFF',
-        # We don't consume fmt's C++20 module; building it drags in module
-        # dependency scanning, which Scylla otherwise disables.
-        '-DFMT_MODULE=OFF',
+        # Build fmt's own C++20 module (the fmt-module target). We consume the
+        # BMI and object it produces rather than maintaining a hand-written
+        # wrapper. fmt's standalone CMake enables module scanning for that
+        # target on its own; Scylla's global scanning setting doesn't apply here.
+        '-DFMT_MODULE=ON',
     ]
 
     if compiler_cache:
@@ -2944,6 +2949,7 @@ def write_build_file(f,
         seastar_lib_ext = 'so' if modeval['build_seastar_shared_libs'] else 'a'
         seastar_dep = f'$builddir/{mode}/seastar/libseastar.{seastar_lib_ext}'
         seastar_testing_dep = f'$builddir/{mode}/seastar/libseastar_testing.{seastar_lib_ext}'
+        seastar_perf_testing_dep = f'$builddir/{mode}/seastar/libseastar_perf_testing.{seastar_lib_ext}'
         abseil_dep = ' '.join(f'$builddir/{mode}/abseil/{lib}' for lib in abseil_libs)
         fmt_dep = fmt_lib(mode, modeval)
         fmt_libs = fmt_link_flags(outdir, mode, modeval)
@@ -2959,7 +2965,7 @@ def write_build_file(f,
               description = CXX $out
               depfile = $out.d
             rule cxx_build_module.{mode}
-              command = $cxx_launcher $cxx -MD -MT $out -MF $out.d $cxxflags_{mode} $cxxflags $obj_cxxflags $module_flags -Wno-reserved-module-identifier -x c++-module -fmodule-output=$pcm -c -o $out $in
+              command = $cxx_launcher $cxx -MD -MT $out -MF $out.d $cxxflags_{mode} $cxxflags $obj_cxxflags $module_flags -x c++-module -fmodule-output=$pcm -c -o $out $in
               description = CXX-MODULE $out
               depfile = $out.d
             rule link.{mode}
@@ -3055,15 +3061,20 @@ def write_build_file(f,
         f.write(f'  pcm = {abseil_pcm}\n')
         f.write(f'  module_flags =\n')
 
+        # fmt module — built by fmt's own CMake (FMT_MODULE=ON in
+        # configure_fmt()); we just consume the BMI and object it emits.
+        fmt_pcm = f'$builddir/{mode}/fmt/CMakeFiles/fmt-module.dir/fmt.pcm'
+        fmt_obj = f'$builddir/{mode}/fmt/CMakeFiles/fmt-module.dir/src/fmt.cc.o'
+
         # Consumer TU module flags — all library module PCMs, including std.
         # Library modules keep textual #includes in their GMFs and are built
         # with their own (empty) module_flags. Every compile depends on the
         # BMIs, even one that imports nothing: sccache hashes each
         # -fmodule-file= input.
-        module_flags = f'-fmodule-file=std={std_pcm} -fmodule-file=std.compat={std_compat_pcm} -fmodule-file=abseil={abseil_pcm}'
+        module_flags = f'-fmodule-file=std={std_pcm} -fmodule-file=std.compat={std_compat_pcm} -fmodule-file=abseil={abseil_pcm} -fmodule-file=fmt={fmt_pcm}'
         f.write(f'module_flags_{mode} = {module_flags}\n')
 
-        all_module_pcms = f'{std_pcm} {std_compat_pcm} {abseil_pcm}'
+        all_module_pcms = f'{std_pcm} {std_compat_pcm} {abseil_pcm} {fmt_pcm}'
 
         compiles = {}
         swaggers = set()
@@ -3110,6 +3121,7 @@ def write_build_file(f,
             objs.append(std_obj)
             objs.append(std_compat_obj)
             objs.append(abseil_obj)
+            objs.append(fmt_obj)
             if binary in cpp_apps:
                 # binary only needs the C++ standard library, no additional
                 # libraries.
@@ -3152,10 +3164,18 @@ def write_build_file(f,
                 # quickly re-link the test unstripped by adding a "_g"
                 # to the test name, e.g., "ninja build/release/testname_g"
                 link_rule = perf_tests_link_rule if binary.startswith('test/perf/') else tests_link_rule
-                f.write('build $builddir/{}/{}: {}.{} {} | {} {} {} {}\n'.format(mode, binary, link_rule, mode, str.join(' ', objs), seastar_dep, seastar_testing_dep, abseil_dep, fmt_dep))
-                f.write('   libs = {}\n'.format(local_libs))
-                f.write('build $builddir/{}/{}_g: {}.{} {} | {} {} {} {}\n'.format(mode, binary, regular_link_rule, mode, str.join(' ', objs), seastar_dep, seastar_testing_dep, abseil_dep, fmt_dep))
-                f.write('   libs = {}\n'.format(local_libs))
+                # perf tests link Seastar's libseastar_perf_testing (the PERF_TEST
+                # framework + linux_perf_event + random) instead of recompiling
+                # those Seastar sources.
+                perf_local_libs = local_libs
+                perf_extra_dep = ''
+                if 'test/perf/perf.cc' in srcs or binary.startswith('test/perf/'):
+                    perf_local_libs += f' {seastar_perf_testing_dep}'
+                    perf_extra_dep = f' {seastar_perf_testing_dep}'
+                f.write('build $builddir/{}/{}: {}.{} {} | {} {} {}{}\n'.format(mode, binary, link_rule, mode, str.join(' ', objs), seastar_dep, seastar_testing_dep, abseil_dep, perf_extra_dep))
+                f.write('   libs = {}\n'.format(perf_local_libs))
+                f.write('build $builddir/{}/{}_g: {}.{} {} | {} {} {}{}\n'.format(mode, binary, regular_link_rule, mode, str.join(' ', objs), seastar_dep, seastar_testing_dep, abseil_dep, perf_extra_dep))
+                f.write('   libs = {}\n'.format(perf_local_libs))
             else:
                 if binary == 'scylla':
                     local_libs += f' {seastar_testing_libs}'
@@ -3309,6 +3329,21 @@ def write_build_file(f,
         f.write(f'  pool = submodule_pool\n')
         f.write(f'  subdir = $builddir/{mode}/c-ares\n')
         f.write(f'  target = install\n')
+        f.write(f'  profile_dep = {profile_dep}\n')
+
+        # fmt's C++20 module (FMT_MODULE=ON in configure_fmt()). The BMI and
+        # object come out of the same fmt sub-build as libfmt, but from the
+        # fmt-module target, which nothing else pulls in.
+        f.write(f'build {fmt_pcm} {fmt_obj}: ninja $builddir/{mode}/fmt/build.ninja | always {profile_dep}\n')
+        f.write(f'  pool = submodule_pool\n')
+        f.write(f'  subdir = $builddir/{mode}/fmt\n')
+        f.write(f'  target = fmt-module\n')
+        f.write(f'  profile_dep = {profile_dep}\n')
+
+        f.write(f'build {seastar_perf_testing_dep}: ninja $builddir/{mode}/seastar/build.ninja | always {fmt_lib(mode, modeval)} {profile_dep}\n')
+        f.write('  pool = submodule_pool\n')
+        f.write(f'  subdir = $builddir/{mode}/seastar\n')
+        f.write('  target = seastar_perf_testing\n')
         f.write(f'  profile_dep = {profile_dep}\n')
 
         for lib in abseil_libs:

@@ -15,6 +15,7 @@
 #include <seastar/core/reactor.hh>
 #include <seastar/core/thread.hh>
 #include "seastarx.hh"
+import fmt;
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/util/defer.hh>
 #include <boost/test/unit_test.hpp>
@@ -27,7 +28,6 @@
 #include <random>
 #include <span>
 #include <string_view>
-#include <fmt/format.h>
 
 template<class T>
 concept RpcBuf = std::same_as<T, rpc::rcv_buf> || std::same_as<T, rpc::snd_buf>;

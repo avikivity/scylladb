@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/memtable_snapshot_source.hh"
 #include "test/lib/random_utils.hh"
@@ -16,7 +17,6 @@
 #include "db/config.hh"
 #include "db/commitlog/commitlog.hh"
 
-#include <fmt/ranges.h>
 #include <seastar/core/app-template.hh>
 #include <seastar/core/seastar.hh>
 #include <seastar/core/units.hh>

@@ -6,9 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <seastar/testing/thread_test_case.hh>
 
-#include <fmt/ranges.h>
 #include <ranges>
 #include "test/lib/log.hh"
 #include "test/lib/random_utils.hh"

@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "compaction_manager.hh"
 #include "compaction_descriptor.hh"
 #include "compaction_strategy.hh"
@@ -16,7 +17,6 @@
 #include <algorithm>
 #include <memory>
 #include <ranges>
-#include <fmt/ranges.h>
 #include <seastar/core/future.hh>
 #include <seastar/core/metrics.hh>
 #include <seastar/core/coroutine.hh>

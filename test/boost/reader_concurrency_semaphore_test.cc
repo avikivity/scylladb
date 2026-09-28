@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "utils/assert.hh"
 #include <seastar/util/closeable.hh>
 #include <seastar/core/file.hh>
@@ -23,7 +24,6 @@
 #include "test/lib/test_utils.hh"
 #include "test/lib/tmpdir.hh"
 
-#include <fmt/ranges.h>
 #include <seastar/core/coroutine.hh>
 #include <seastar/coroutine/parallel_for_each.hh>
 #include <seastar/testing/on_internal_error.hh>

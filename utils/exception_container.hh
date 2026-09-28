@@ -15,6 +15,7 @@
 #include <seastar/core/future.hh>
 #include "utils/variant_element.hh"
 #include "seastarx.hh"
+import fmt;
 
 namespace utils {
 

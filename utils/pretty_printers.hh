@@ -9,7 +9,7 @@
 #pragma once
 
 #include <chrono>
-#include <fmt/format.h>
+import fmt;
 
 namespace utils {
 

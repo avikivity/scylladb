@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <algorithm>
 
 #include "utils/assert.hh"
@@ -15,7 +16,6 @@
 #include <boost/range/irange.hpp>
 #include <boost/range/algorithm_ext.hpp>
 #include <json/json.h>
-#include <fmt/ranges.h>
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/reader_concurrency_semaphore.hh"
 #include "test/perf/perf.hh"

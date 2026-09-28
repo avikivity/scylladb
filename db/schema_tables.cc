@@ -7,6 +7,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include "db/schema_tables.hh"
 
 #include "db/view/view_building_task_mutation_builder.hh"
@@ -48,8 +49,6 @@
 #include "db/marshal/type_parser.hh"
 #include "db/extensions.hh"
 #include "utils/hashers.hh"
-
-#include <fmt/ranges.h>
 
 #include <seastar/util/noncopyable_function.hh>
 #include <seastar/rpc/rpc_types.hh>

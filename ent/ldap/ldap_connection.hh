@@ -51,9 +51,7 @@ class ldap_connection {
         eof,            ///< Read encountered EOF, write should be OK.
         err             ///< IO error encountered.
     };
-#if FMT_VERSION >= 9'00'00
     friend auto format_as(status s) { return fmt::underlying(s); }
-#endif
     status _status; ///< When not OK, all \c read() and \c write() calls will immediately return without action.
     seastar::future<> _read_consumer; ///< Consumes Seastar read data.
     bool _read_in_progress; ///< Is there a Seastar read in progress?

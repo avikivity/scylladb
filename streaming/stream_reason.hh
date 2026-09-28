@@ -10,7 +10,7 @@
 
 #include <cstdint>
 #include <string_view>
-#include <fmt/format.h>
+import fmt;
 
 namespace streaming {
 

@@ -7,12 +7,12 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "auth/certificate_authenticator.hh"
 #include "auth/cache.hh"
 #include "auth/config.hh"
 
 #include <boost/regex.hpp>
-#include <fmt/ranges.h>
 
 #include "utils/to_string.hh"
 #include "utils/error_injection.hh"

@@ -15,6 +15,7 @@
 #include <concepts>
 #include <cstdint>
 #include "seastarx.hh"
+import fmt;
 
 using seastar::sstring;
 

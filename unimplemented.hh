@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include "seastarx.hh"
 #include <string_view>
+import fmt;
 
 namespace unimplemented {
 

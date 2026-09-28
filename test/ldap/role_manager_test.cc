@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "auth/common.hh"
 #include "auth/config.hh"
 #include "auth/standard_role_manager.hh"
@@ -13,8 +14,6 @@
 #include "auth/password_authenticator.hh"
 #include "db/config.hh"
 
-#include <fmt/format.h>
-#include <fmt/ranges.h>
 #include "utils/to_string.hh"
 #include <seastar/testing/test_case.hh>
 

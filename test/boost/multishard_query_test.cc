@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "utils/assert.hh"
 #include "replica/multishard_query.hh"
 #include "schema/schema_registry.hh"
@@ -32,7 +33,6 @@
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
 
-#include <fmt/ranges.h>
 #include <utility>
 #include <algorithm>
 

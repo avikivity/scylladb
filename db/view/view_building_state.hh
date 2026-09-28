@@ -16,8 +16,8 @@
 #include "locator/tablets.hh"
 #include "mutation/timestamp.hh"
 #include "utils/UUID.hh"
-#include <fmt/base.h>
 #include "schema/schema_fwd.hh"
+import fmt;
 
 namespace db {
 

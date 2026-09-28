@@ -9,7 +9,7 @@
 #pragma once
 
 #include <cstdint>
-#include <fmt/core.h>
+import fmt;
 
 struct compact_and_expire_result {
     uint64_t live_cells = 0;

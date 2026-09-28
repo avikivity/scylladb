@@ -17,7 +17,6 @@
 #include <vector>
 #include <unordered_set>
 
-#include <fmt/core.h>
 #include <seastar/core/sstring.hh>
 
 #include "auth/permission.hh"
@@ -26,6 +25,7 @@
 #include "utils/hash.hh"
 #include "utils/small_vector.hh"
 #include "cql3/cql3_type.hh"
+import fmt;
 
 namespace auth {
 

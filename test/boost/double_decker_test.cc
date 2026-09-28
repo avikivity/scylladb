@@ -7,11 +7,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
 
 #include <seastar/core/format.hh>
-#include <fmt/core.h>
 #include <string>
 
 #include "utils/double-decker.hh"

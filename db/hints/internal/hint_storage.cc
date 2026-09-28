@@ -7,10 +7,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "db/hints/internal/hint_storage.hh"
 #include <coroutine>
-
-#include <fmt/std.h>
 
 // Seastar features.
 #include <seastar/core/coroutine.hh>

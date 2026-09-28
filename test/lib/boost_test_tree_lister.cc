@@ -6,10 +6,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include "test/lib/boost_test_tree_lister.hh"
 
 #include <boost/algorithm/string/replace.hpp>
-#include <fmt/ranges.h>
 
 #include <flat_set>
 #include <memory>

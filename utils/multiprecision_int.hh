@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <limits>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <compare>
 #include <iosfwd>

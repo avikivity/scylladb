@@ -49,7 +49,7 @@
 #include "sstables/file_size_stats.hh"
 
 #include <seastar/util/optimized_optional.hh>
-#include <fmt/format.h>
+import fmt;
 
 class sstable_assertions;
 class cached_file;

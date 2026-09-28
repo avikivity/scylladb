@@ -6,8 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <fmt/chrono.h>
-
+import fmt;
 #include "mutation/timestamp.hh"
 
 #include "clocks-impl.hh"

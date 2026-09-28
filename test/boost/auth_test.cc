@@ -7,8 +7,8 @@
  */
 
 
+import fmt;
 #include <cstdint>
-#include <fmt/ranges.h>
 
 #include <seastar/core/future.hh>
 #include <seastar/core/future-util.hh>

@@ -10,9 +10,9 @@
 #include "audit/audit.hh"
 #include "utils/rjson.hh"
 
-#include <fmt/ranges.h>
 #include <fnmatch.h>
 #include <seastar/core/on_internal_error.hh>
+import fmt;
 
 namespace audit {
 

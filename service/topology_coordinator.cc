@@ -6,9 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import fmt;
 #include <algorithm>
 #include <chrono>
-#include <fmt/ranges.h>
 
 #include <memory>
 #include <seastar/core/abort_source.hh>

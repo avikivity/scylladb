@@ -7,6 +7,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import fmt;
 #include "schema_applier.hh"
 
 #include <memory>
@@ -22,8 +23,6 @@
 #include <seastar/core/sharded.hh>
 
 #include <boost/range/join.hpp>
-
-#include <fmt/ranges.h>
 
 #include "absl-flat_hash_map.hh"
 #include "service/storage_service.hh"

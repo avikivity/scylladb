@@ -7,12 +7,11 @@
  */
 
 
+import fmt;
 #include <seastar/core/thread.hh>
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/util/closeable.hh>
-
-#include <fmt/ranges.h>
 
 #include "mutation/mutation.hh"
 #include "mutation/mutation_fragment.hh"

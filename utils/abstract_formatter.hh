@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <fmt/format.h>
 #include <functional>
 #include <type_traits>
+import fmt;
 
 /// Makes a callable usable as a "{}" argument of fmt::format and friends.
 /// The callable receives the enclosing format context and writes into it,

@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <fmt/std.h>
+import fmt;
 #include "replication.hh"
 
 // Test Raft library with declarative test definitions
