@@ -344,6 +344,19 @@ if(scylla_import_fmt)
   add_compile_definitions(SEASTAR_IMPORT_FMT SEASTAR_FMT_VERSION=${_fmt_version_int} FMT_ATTACH_TO_GLOBAL_MODULE)
 endif()
 
+# Work around a clang bug (still present in clang 23.1): in C++26 mode,
+# a translation unit that both imports std and includes libstdc++'s <memory>
+# textually fails in <bits/indirect.h> ("too many template arguments for
+# alias template 'indirect'"). Wrapper modules keep most textual <memory>
+# includes away from our translation units, but Boost.Test and
+# seastar/testing are macro-based and must stay textual. Predefining the
+# feature-test macros as 0 ("not available") makes libstdc++'s <version> leave
+# std::indirect and std::polymorphic disabled, so <bits/indirect.h> declares
+# nothing and the std module doesn't export them. Scylla doesn't use either.
+# Defined here, after fmt/seastar/abseil were added, so that only Scylla's own
+# targets (including the std module) get it.
+add_compile_definitions(__cpp_lib_indirect=0 __cpp_lib_polymorphic=0)
+
 # C++20 modules: build the std module from libstdc++'s source.
 # All targets that consume 'import std;' link against this.
 # The std.compat module (re-exporting the C library names into the global

@@ -916,6 +916,19 @@ if args.list_artifacts:
 
 defines = ['XXH_PRIVATE_API',
            'SEASTAR_TESTING_MAIN',
+           # Work around a clang bug (still present in clang 23.1): in
+           # C++26 mode, a translation unit that both imports std and includes
+           # libstdc++'s <memory> textually fails in <bits/indirect.h> ("too
+           # many template arguments for alias template 'indirect'"). Wrapper
+           # modules keep most textual <memory> includes away from our
+           # translation units, but Boost.Test and seastar/testing are
+           # macro-based and must stay textual. Predefining the feature-test
+           # macros as 0 ("not available") makes libstdc++'s <version> leave
+           # std::indirect and std::polymorphic disabled, so <bits/indirect.h>
+           # declares nothing and the std module doesn't export them. Scylla
+           # doesn't use either.
+           '__cpp_lib_indirect=0',
+           '__cpp_lib_polymorphic=0',
 ]
 
 scylla_raft_core = [
