@@ -16,6 +16,7 @@
 #include "utils/lister.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace db {
 class config;

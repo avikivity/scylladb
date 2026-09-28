@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include "seastarx.hh"
 
 #include "seastarx.hh"
 #include "utils/log.hh"

@@ -5,6 +5,7 @@
 #include "utils/assert.hh"
 #include "build_id.hh"
 #include <fmt/ostream.h>
+#include "seastarx.hh"
 #include <link.h>
 #include <seastar/core/align.hh>
 #include <sstream>

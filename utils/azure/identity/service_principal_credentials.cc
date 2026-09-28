@@ -13,6 +13,7 @@
 
 #include <seastar/core/on_internal_error.hh>
 #include <seastar/util/file.hh>
+#include "seastarx.hh"
 
 #include "db/config.hh"
 #include "types/types.hh"

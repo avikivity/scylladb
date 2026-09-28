@@ -21,6 +21,7 @@
 #include "test/lib/test_utils.hh"
 
 #include "utils/s3/client.hh"
+#include "seastarx.hh"
 
 using namespace seastar;
 

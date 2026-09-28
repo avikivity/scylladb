@@ -11,6 +11,7 @@
 #include <seastar/core/coroutine.hh>
 #include <seastar/core/sleep.hh>
 #include <chrono>
+#include "seastarx.hh"
 
 namespace s3 {
 

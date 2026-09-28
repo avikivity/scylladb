@@ -31,6 +31,7 @@
 #include "repair/sync_boundary.hh"
 #include "tasks/types.hh"
 #include "gms/gossip_address_map.hh"
+#include "seastarx.hh"
 
 struct tablets_unsupported : std::runtime_error {
     tablets_unsupported() : std::runtime_error("tablets are not supported for this operation") {}

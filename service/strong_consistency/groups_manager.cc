@@ -30,6 +30,7 @@
 #include <seastar/coroutine/as_future.hh>
 #include "utils/chain_abort_source.hh"
 #include "utils/exponential_backoff_retry.hh"
+#include "seastarx.hh"
 
 #include <seastar/core/abort_source.hh>
 #include <seastar/util/defer.hh>

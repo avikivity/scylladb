@@ -15,6 +15,7 @@
 #include "utils/mutable_view.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 using bytes = basic_sstring<int8_t, uint32_t, 31, false>;
 using bytes_view = std::basic_string_view<int8_t>;

@@ -17,6 +17,7 @@
 #include "raft/raft.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 constexpr raft::logical_clock::duration operator ""_t(unsigned long long ticks) {
     return raft::logical_clock::duration{ticks};

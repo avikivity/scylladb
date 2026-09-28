@@ -13,6 +13,7 @@
 
 #include <seastar/core/lowres_clock.hh>
 #include <seastar/core/sleep.hh>
+#include "seastarx.hh"
 
 #include <string_view>
 #include <utility>

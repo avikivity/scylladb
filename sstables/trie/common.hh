@@ -13,6 +13,7 @@
 #include <cassert>
 #include <span>
 #include <source_location>
+#include "seastarx.hh"
 
 extern seastar::logger trie_logger;
 

@@ -10,6 +10,7 @@
 #include "reader_concurrency_semaphore_group.hh"
 #include <seastar/core/metrics.hh>
 #include <algorithm>
+#include "seastarx.hh"
 
 namespace sm = seastar::metrics;
 

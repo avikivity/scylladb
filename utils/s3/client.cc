@@ -17,6 +17,7 @@
 #include <regex>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include "seastarx.hh"
 #include <stdexcept>
 #if __has_include(<rapidxml.h>)
 #include <rapidxml.h>

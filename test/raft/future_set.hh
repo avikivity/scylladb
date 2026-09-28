@@ -15,6 +15,7 @@
 #include "test/raft/logical_timer.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 // A set of futures that can be polled to obtain the result of some ready future in the set.
 //

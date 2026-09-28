@@ -16,6 +16,7 @@
 #include "utils/log.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 extern logger az_creds_logger;
 

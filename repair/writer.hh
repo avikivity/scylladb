@@ -11,6 +11,7 @@
 #include "./sstables/shared_sstable.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace db {
     class system_distributed_keyspace;

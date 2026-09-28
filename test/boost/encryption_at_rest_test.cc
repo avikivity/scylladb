@@ -62,6 +62,7 @@
 #include "replica/database.hh"
 #include "service/client_state.hh"
 
+#include "seastarx.hh"
 using namespace encryption;
 namespace fs = std::filesystem;
 

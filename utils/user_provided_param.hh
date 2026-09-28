@@ -15,6 +15,7 @@
 #include "enum_set.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace utils {
 

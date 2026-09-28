@@ -13,6 +13,7 @@
 #include <seastar/core/enum.hh>
 #include <stdexcept>
 #include <cstdlib>
+#include "seastarx.hh"
 #include <string_view>
 
 namespace unimplemented {

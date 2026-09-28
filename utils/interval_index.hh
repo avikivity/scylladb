@@ -26,6 +26,7 @@
 
 #include "utils/assert.hh"
 #include "utils/chunked_vector.hh"
+#include "seastarx.hh"
 
 namespace utils {
 

@@ -21,6 +21,7 @@
 #include "service/topology_guard.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace replica {
 class database;

@@ -18,6 +18,7 @@
 #include <fmt/format.h>
 
 using namespace seastar;
+#include "seastarx.hh"
 
 // Thread safe alternatives to BOOST_REQUIRE_*, BOOST_CHECK_* and BOOST_FAIL().
 // Use these if instead of the BOOST provided macros if you want to use them on

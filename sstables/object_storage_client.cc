@@ -33,6 +33,7 @@
 #include "utils/object_storage_metrics.hh"
 
 #include <seastar/core/metrics.hh>
+#include "seastarx.hh"
 
 using namespace seastar;
 using namespace sstables;

@@ -18,6 +18,7 @@
 #include <seastar/core/sstring.hh>
 
 #include "enum_set.hh"
+#include "seastarx.hh"
 
 namespace seastar {
 template <typename T> class sharded;

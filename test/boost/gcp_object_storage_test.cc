@@ -51,6 +51,7 @@
 
 #include <seastar/core/metrics_api.hh>
 #include <seastar/util/defer.hh>
+#include "seastarx.hh"
 #include <seastar/testing/test_fixture.hh>
 
 using namespace std::string_view_literals;

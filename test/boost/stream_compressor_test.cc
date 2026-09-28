@@ -13,6 +13,7 @@
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/core/reactor.hh>
 #include <seastar/core/thread.hh>
+#include "seastarx.hh"
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/util/defer.hh>
 #include <boost/test/unit_test.hpp>

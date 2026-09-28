@@ -24,6 +24,7 @@
 #include <seastar/coroutine/maybe_yield.hh>
 
 using namespace seastar;
+#include "seastarx.hh"
 
 /// \brief A read-through cache of a file.
 ///

@@ -11,6 +11,7 @@
 #include <seastar/http/reply.hh>
 #include <seastar/core/sleep.hh>
 #include <system_error>
+#include "seastarx.hh"
 
 #include "utils/http_client_error_processing.hh"
 #include "utils/exponential_backoff_retry.hh"

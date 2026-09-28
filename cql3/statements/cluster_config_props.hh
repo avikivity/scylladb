@@ -22,6 +22,7 @@
 #include "db/cluster_config_registry.hh"
 #include "exceptions/exceptions.hh"
 #include "gms/feature_service.hh"
+#include "seastarx.hh"
 
 // Shared, scope-parameterized handling of registry-backed cluster-config
 // properties in CQL statements. cf_prop_defs (scope::table) and ks_prop_defs

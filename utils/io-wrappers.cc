@@ -9,6 +9,7 @@
 #include "io-wrappers.hh"
 #include "seekable_source.hh"
 #include <sys/uio.h>
+#include "seastarx.hh"
 #include <seastar/util/internal/iovec_utils.hh>
 #include <seastar/util/memory-data-sink.hh>
 #include <seastar/util/memory-data-source.hh>

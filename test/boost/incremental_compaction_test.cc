@@ -40,6 +40,7 @@
 #include "test/lib/test_services.hh"
 #include "test/lib/eventually.hh"
 #include "test/lib/log.hh"
+#include "seastarx.hh"
 
 namespace fs = std::filesystem;
 

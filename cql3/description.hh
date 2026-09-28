@@ -17,6 +17,7 @@
 #include <vector>
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace cql3 {
 

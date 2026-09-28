@@ -14,6 +14,7 @@
 #include <compare>
 #include <concepts>
 #include <cstdint>
+#include "seastarx.hh"
 
 using seastar::sstring;
 

@@ -15,6 +15,7 @@
 #include "repair/sync_boundary.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 using is_dirty_on_master = bool_class<class is_dirty_on_master_tag>;
 class decorated_key_with_hash;

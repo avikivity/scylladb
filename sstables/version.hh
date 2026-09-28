@@ -13,6 +13,7 @@
 #include <seastar/core/enum.hh>
 #include <array>
 #include <unordered_map>
+#include "seastarx.hh"
 
 namespace sstables {
 

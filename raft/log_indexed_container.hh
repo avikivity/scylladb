@@ -16,6 +16,7 @@
 
 #include "utils/assert.hh"
 #include "raft/raft.hh"
+#include "seastarx.hh"
 
 namespace raft {
 

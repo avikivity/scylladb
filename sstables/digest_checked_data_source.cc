@@ -7,6 +7,7 @@
  */
 
 #include <seastar/core/iostream.hh>
+#include "seastarx.hh"
 #include <memory>
 
 #include "digest_checked_data_source.hh"

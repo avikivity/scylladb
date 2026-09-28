@@ -38,6 +38,7 @@
 #include <seastar/core/sharded.hh>
 #include <seastar/core/loop.hh>
 #include <ranges>
+#include "seastarx.hh"
 
 static const sstring table_name = "cf";
 

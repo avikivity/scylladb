@@ -22,6 +22,7 @@
 #include "service/query_state.hh"
 #include "service_permit.hh"
 #include "types/types.hh"
+#include "seastarx.hh"
 
 namespace cql3::statements {
 

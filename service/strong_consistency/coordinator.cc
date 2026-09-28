@@ -29,6 +29,7 @@
 #include <fmt/std.h>
 
 #include <algorithm>
+#include "seastarx.hh"
 
 namespace service::strong_consistency {
 

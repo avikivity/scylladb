@@ -12,6 +12,7 @@
 #include <string>
 #include <seastar/json/json_elements.hh>
 #include <cstdint>
+#include "seastarx.hh"
 
 namespace sstables {
     struct sstable_snapshot_metadata;

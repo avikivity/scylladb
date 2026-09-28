@@ -16,6 +16,7 @@
 #include <seastar/core/future.hh>
 #include <seastar/core/iostream.hh>
 #include <seastar/util/process.hh>
+#include "seastarx.hh"
 
 namespace tests::proc {
     using namespace seastar;
