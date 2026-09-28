@@ -26,11 +26,7 @@
  * or calling Size() on a non-array value.
  */
 
-#include <iostream>
-#include <map>
-#include <string>
-#include <string_view>
-#include <type_traits>
+import std.compat;
 #include "utils/base64.hh"
 #include "utils/chunked_vector.hh"
 

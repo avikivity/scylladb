@@ -8,12 +8,7 @@
 
 #pragma once
 
-#include <functional>
-#include <chrono>
-#include <memory_resource>
-#include <optional>
-#include <ranges>
-#include <algorithm>
+import std.compat;
 
 #include "exceptions/exceptions.hh"
 #include "utils/assert.hh"

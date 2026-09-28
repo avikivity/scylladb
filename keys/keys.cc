@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <iostream>
+import std.compat;
 
 #include "keys.hh"
 #include "dht/i_partitioner.hh"

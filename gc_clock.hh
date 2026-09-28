@@ -11,9 +11,8 @@
 #include "clocks-impl.hh"
 #include "utils/hashing.hh"
 
-#include <chrono>
+import std.compat;
 import fmt;
-#include <optional>
 
 class gc_clock final {
 public:

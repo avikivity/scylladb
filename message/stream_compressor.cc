@@ -9,9 +9,7 @@
 #include "stream_compressor.hh"
 #include <cassert>
 
-#include <array>
-#include <memory>
-#include <bit>
+import std.compat;
 #include "utils/small_vector.hh"
 #include "seastarx.hh"
 #include "utils/crc.hh"

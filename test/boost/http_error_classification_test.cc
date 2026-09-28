@@ -8,7 +8,7 @@
 
 #include <boost/test/unit_test.hpp>
 #include <seastar/testing/test_case.hh>
-#include <system_error>
+import std.compat;
 #include "seastarx.hh"
 
 #include "utils/http_client_error_processing.hh"

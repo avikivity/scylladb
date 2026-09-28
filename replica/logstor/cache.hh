@@ -12,7 +12,7 @@
 #include "utils/entangled.hh"
 #include "utils/lru.hh"
 #include "utils/logalloc.hh"
-#include <optional>
+import std.compat;
 
 namespace replica::logstor {
 

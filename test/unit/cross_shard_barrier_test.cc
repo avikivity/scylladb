@@ -6,10 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <chrono>
-#include <iostream>
-import fmt;
-#include <random>
+import std.compat;
 #include "utils/cross-shard-barrier.hh"
 
 import fmt;

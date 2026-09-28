@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
+import std.compat;
 
 #include "replica/querier.hh"
 #include "mutation_query.hh"

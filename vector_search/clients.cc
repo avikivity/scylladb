@@ -9,8 +9,7 @@
 #include "clients.hh"
 #include "load_balancer.hh"
 #include "utils/exceptions.hh"
-#include <random>
-#include <expected>
+import std.compat;
 
 namespace vector_search {
 namespace {

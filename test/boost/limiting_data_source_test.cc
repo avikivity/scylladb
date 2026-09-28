@@ -13,7 +13,7 @@
 #include "test/lib/scylla_test_case.hh"
 #include "test/lib/limiting_data_source.hh"
 #include <seastar/testing/thread_test_case.hh>
-#include <cstdint>
+import std.compat;
 
 namespace {
 

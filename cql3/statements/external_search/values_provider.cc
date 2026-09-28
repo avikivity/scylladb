@@ -8,14 +8,13 @@
 
 #include "values_provider.hh"
 
-#include <cmath>
-
 #include "keys/keys.hh"
 #include "query/query-request.hh"
 #include "query/query-result-reader.hh"
 #include "schema/schema.hh"
 #include "types/types.hh"
 #include "utils/assert.hh"
+import std.compat;
 
 namespace cql3::statements::external_search {
 

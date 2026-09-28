@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 
 #include "types/types.hh"
 #include "types/collection.hh"

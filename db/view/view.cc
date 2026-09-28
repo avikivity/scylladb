@@ -8,18 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <chrono>
-#include <deque>
-#include <exception>
-#include <functional>
-#include <optional>
-#include <ranges>
-#include <stdexcept>
-#include <unordered_set>
-#include <vector>
-#include <algorithm>
-
-#include <flat_map>
+import std.compat;
 
 #include "db/config.hh"
 #include "db/view/base_info.hh"

@@ -15,7 +15,7 @@
 #include "aws_error.hh"
 #include "utils/exceptions.hh"
 #include "utils/log.hh"
-#include <memory>
+import std.compat;
 
 namespace s3 {
 extern logging::logger s3l;

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <memory>
+import std.compat;
 #include "schema/schema_fwd.hh"
 #include "mutation/mutation_fragment.hh"
 #include "mutation/mutation_fragment_v2.hh"

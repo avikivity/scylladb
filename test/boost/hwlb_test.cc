@@ -16,8 +16,7 @@
 
 import boost;
 
-#include <random>
-#include <algorithm>
+import std.compat;
 
 #include "db/heat_load_balance.hh"
 

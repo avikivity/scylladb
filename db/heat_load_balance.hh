@@ -28,9 +28,7 @@
  *    to them).
  */
 #include "utils/assert.hh"
-#include <vector>
-#include <cassert>
-#include <ranges>
+import std.compat;
 #include "utils/log.hh"
 import fmt;
 

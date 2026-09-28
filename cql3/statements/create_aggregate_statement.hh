@@ -11,7 +11,7 @@
 #include "cql3/statements/function_statement.hh"
 #include "cql3/cql3_type.hh"
 #include "cql3/expr/expression.hh"
-#include <optional>
+import std.compat;
 
 namespace cql3 {
 

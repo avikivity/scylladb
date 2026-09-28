@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
+import std.compat;
 
 #include "utils/assert.hh"
 import jsoncpp;
@@ -23,7 +23,6 @@ import jsoncpp;
 #include "compaction/compaction_manager.hh"
 #include "transport/messages/result_message.hh"
 #include "sstables/partition_index_cache.hh"
-#include <fstream>
 import boost;
 
 import fmt;

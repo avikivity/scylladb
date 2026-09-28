@@ -11,7 +11,7 @@
 #include "utils/UUID.hh"
 #include "cql3/statements/ks_prop_defs.hh"
 #include <boost/test/tools/old/interface.hpp>
-#include <source_location>
+import std.compat;
 import boost;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
@@ -53,8 +53,6 @@ import boost;
 #include "service/migration_manager.hh"
 #include "service/strong_consistency/coordinator.hh"
 #include "service/strong_consistency/groups_manager.hh"
-
-#include <atomic>
 
 import fmt;
 BOOST_AUTO_TEST_SUITE(tablets_test)

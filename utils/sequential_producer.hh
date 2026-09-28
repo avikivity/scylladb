@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <functional>
-#include <stdexcept>
+import std.compat;
 
 /// Invokes a factory to produce an object, but sequentially: only one fiber at a time may be executing the
 /// factory.  Any other fiber requesting the object will wait for the existing factory invocation to finish, then

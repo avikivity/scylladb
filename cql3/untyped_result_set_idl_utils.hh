@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <string_view>
-#include <type_traits>
+import std.compat;
 
 #include "cql3/untyped_result_set.hh"
 #include "serializer_impl.hh"

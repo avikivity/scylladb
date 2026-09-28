@@ -10,9 +10,7 @@
 
 #pragma once
 
-#include <sstream>
-#include <chrono>
-#include <optional>
+import std.compat;
 #include "production_snitch_base.hh"
 
 namespace locator {

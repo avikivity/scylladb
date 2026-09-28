@@ -12,7 +12,7 @@
 #include "utils/enum_option.hh"
 #include "utils/updateable_value.hh"
 #include "dict_trainer.hh"
-#include <any>
+import std.compat;
 
 namespace db {
     class system_keyspace;

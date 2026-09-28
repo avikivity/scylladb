@@ -8,8 +8,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <functional>
-#include <optional>
+import std.compat;
 #include "raft_group0_client.hh"
 #include "raft_group_registry.hh"
 

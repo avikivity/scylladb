@@ -10,8 +10,6 @@
 
 #pragma once
 
-#include <unordered_map>
-
 #include "gc_clock.hh"
 #include "mutation/timestamp.hh"
 #include "schema/schema_fwd.hh"

@@ -6,8 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <chrono>
-#include <cstdint>
+import std.compat;
 #include <seastar/testing/test_case.hh>
 
 #include "db/rate_limiter.hh"
@@ -109,7 +108,7 @@ SEASTAR_TEST_CASE(test_rate_limiter_account_operation) {
 
     // We use UINT_MAX as the random parameter so that we get rejected quickly
     db::per_partition_rate_limit::account_and_enforce info {
-        .random_variable = UINT32_MAX,
+        .random_variable = std::numeric_limits<uint32_t>::max(),
     };
 
     bool encountered_rejection = false;

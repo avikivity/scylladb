@@ -8,6 +8,7 @@
 
 
 
+import std.compat;
 #include "db/timeout_clock.hh"
 #include "message/messaging_service.hh"
 #include "utils/assert.hh"

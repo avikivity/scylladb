@@ -9,9 +9,7 @@
 
 #pragma once
 
-#include <cstdint>
-#include <optional>
-#include <concepts>
+import std.compat;
 
 #include "sstables/component_type.hh"
 #include "seastarx.hh"

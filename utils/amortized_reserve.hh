@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <concepts>
-#include <vector>
+import std.compat;
 
 /// Represents a container which can preallocate space for future insertions
 /// which can be used to reduce the number of overall memory re-allocation and item movement.

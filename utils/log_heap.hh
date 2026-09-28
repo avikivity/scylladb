@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <limits>
+import std.compat;
 #include "seastarx.hh"
 import boost;
 

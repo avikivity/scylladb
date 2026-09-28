@@ -9,8 +9,7 @@
 
 #pragma once
 
-#include <string_view>
-#include <vector>
+import std.compat;
 
 #include "types/types.hh"
 

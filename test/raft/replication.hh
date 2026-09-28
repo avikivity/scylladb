@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <memory>
-#include <random>
-#include <bit>
+import std.compat;
 #include <seastar/testing/random.hh>
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/testing/test_case.hh>

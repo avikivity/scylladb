@@ -6,9 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import std.compat;
 #include "cql3/statements/view_prop_defs.hh"
-
-#include <ranges>
 
 #include "gms/feature_service.hh"
 #include "seastarx.hh"

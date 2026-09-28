@@ -1,19 +1,12 @@
 // Copyright (C) 2025-present ScyllaDB
 // SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
 
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <string>
+import std.compat;
 #include <cstring>
-#include <memory>
-#include <stdexcept>
 #include <cstdio>
 #include <sys/stat.h>
 #include <getopt.h>
 #include <elf.h>
-#include <bit>
-#include <concepts>
 
 class elf_patcher {
 private:

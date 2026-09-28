@@ -9,9 +9,7 @@
 #pragma once
 
 #include "message/messaging_service_fwd.hh"
-#include <cstdint>
-#include <vector>
-#include <list>
+import std.compat;
 #include "utils/UUID.hh"
 #include "dht/i_partitioner.hh"
 #include "bytes.hh"

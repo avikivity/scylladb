@@ -10,9 +10,7 @@
 
 #include "alternator/export.hh"
 #include "utils/rjson.hh"
-#include <string>
-#include <vector>
-#include <span>
+import std.compat;
 
 SEASTAR_TEST_CASE(test_in_memory_roundtrip_single_item) {
     auto storage = alternator::in_memory_test_storage();

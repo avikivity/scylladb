@@ -9,10 +9,7 @@
 #pragma once
 
 #include "utils/log.hh"
-#include <chrono>
-#include <map>
-#include <vector>
-#include <functional>
+import std.compat;
 
 namespace vector_search {
 

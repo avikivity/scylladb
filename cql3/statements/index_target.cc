@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <stdexcept>
+import std.compat;
 #include "index_target.hh"
 #include "index/secondary_index.hh"
 import boost;

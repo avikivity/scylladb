@@ -11,7 +11,7 @@
 #include "utils/on_internal_error.hh"
 #include "seastarx.hh"
 
-#include <vector>
+import std.compat;
 
 // This class supports atomic removes (by using a lock and returning a
 // future) and non atomic insert and iteration (by using indexes).

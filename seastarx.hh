@@ -8,15 +8,11 @@
 
 #pragma once
 
-#include <coroutine>
 // Operators defined in headers at namespace std (e.g. operator<< for
 // seastar::lazy_eval, std::exception_ptr) are not visible via the seastar
-// module import.  Pull them in textually (before `import seastar;` to avoid
-// std-library redefinition diagnostics) so BOOST_CHECK_MESSAGE and similar
+// module import.  Declare them here so BOOST_CHECK_MESSAGE and similar
 // can find them.
-#include <iosfwd>
-#include <exception>
-#include <system_error>
+import std;
 namespace std {
 std::ostream& operator<<(std::ostream&, const std::exception_ptr&);
 std::ostream& operator<<(std::ostream&, const std::exception&);

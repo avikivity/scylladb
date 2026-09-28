@@ -15,7 +15,7 @@
 #include "db/consistency_level_type.hh"
 #include "db/system_keyspace.hh"
 #include "schema/schema.hh"
-#include <iterator>
+import std.compat;
 
 namespace auth {
 

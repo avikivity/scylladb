@@ -10,8 +10,7 @@
 
 #pragma once
 
-#include <span>
-#include <vector>
+import std.compat;
 #include "cql3/expr/expression.hh"
 #include "cql3/expr/restrictions.hh"
 #include "cql3/prepare_context.hh"

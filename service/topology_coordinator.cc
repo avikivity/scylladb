@@ -7,12 +7,7 @@
  */
 
 import fmt;
-#include <algorithm>
-#include <chrono>
-
-#include <memory>
-
-#include <variant>
+import std.compat;
 
 #include "auth/service.hh"
 #include "cdc/cdc_options.hh"

@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <exception>
+import std.compat;
 #include "dht/auto_refreshing_sharder.hh"
 #include "db/view/view_building_worker.hh"
 #include "gms/endpoint_state.hh"
@@ -23,11 +23,6 @@
 #include "utils/xx_hasher.hh"
 #include "utils/UUID.hh"
 #include "replica/database.hh"
-#include <list>
-#include <vector>
-#include <algorithm>
-#include <random>
-#include <optional>
 #include "gms/i_endpoint_state_change_subscriber.hh"
 #include "gms/gossiper.hh"
 #include "repair/row_level.hh"

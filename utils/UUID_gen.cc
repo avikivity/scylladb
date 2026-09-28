@@ -16,7 +16,7 @@
 #include <net/if_arp.h>
 #endif // __linux__
 
-#include <atomic>
+import std.compat;
 #include <cstdlib>
 #include "utils/hashers.hh"
 

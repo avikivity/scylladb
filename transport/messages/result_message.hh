@@ -10,7 +10,7 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <concepts>
+import std.compat;
 
 #include "cql3/result_set.hh"
 #include "cql3/prepared_statements_cache.hh"

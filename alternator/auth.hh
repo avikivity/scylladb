@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <string>
+import std.compat;
 #include "utils/loading_cache.hh"
 #include "auth/service.hh"
 

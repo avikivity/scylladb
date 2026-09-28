@@ -7,6 +7,7 @@
  */
 
 
+import std.compat;
 import fmt;
 #include "locator/abstract_replication_strategy.hh"
 #include "locator/tablets.hh"

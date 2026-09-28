@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <unordered_set>
-#include <memory>
+import std.compat;
 #include "sstables/shared_sstable.hh"
 #include "mutation/timestamp.hh"
 

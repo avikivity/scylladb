@@ -14,10 +14,7 @@
 #include "mutation/atomic_cell.hh"
 #include "mutation/compact_and_expire_result.hh"
 #include "compaction/compaction_garbage_collector.hh"
-#include <iosfwd>
-#include <forward_list>
-#include <iterator>
-#include <optional>
+import std.compat;
 
 class abstract_type;
 class compaction_garbage_collector;

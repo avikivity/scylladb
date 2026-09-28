@@ -13,9 +13,7 @@
 #include "cql3/values.hh"
 #include "vector_search/vector_store_client.hh"
 
-#include <optional>
-#include <span>
-#include <vector>
+import std.compat;
 
 class schema;
 

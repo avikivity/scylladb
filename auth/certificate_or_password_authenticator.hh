@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <memory>
+import std.compat;
 
 #include "auth/authenticator.hh"
 

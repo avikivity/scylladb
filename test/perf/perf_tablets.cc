@@ -7,7 +7,6 @@
  */
 
 #include "utils/assert.hh"
-#include <limits>
 
 #include "locator/tablets.hh"
 #include "replica/tablet_mutation_builder.hh"

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <chrono>
+import std.compat;
 import fmt;
 
 namespace utils {

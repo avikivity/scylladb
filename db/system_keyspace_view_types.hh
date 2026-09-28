@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <utility>
-#include <optional>
+import std.compat;
 #include "dht/token.hh"
 #include "seastarx.hh"
 

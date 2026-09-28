@@ -9,10 +9,7 @@
 
 #pragma once
 
-#include <functional>
-#include <set>
-#include <unordered_set>
-#include <unordered_map>
+import std.compat;
 #include "cdc/generation_id.hh"
 #include "dht/token.hh"
 #include "raft/raft.hh"

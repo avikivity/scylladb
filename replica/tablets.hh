@@ -16,7 +16,7 @@
 #include "mutation/canonical_mutation.hh"
 #include "replica/database_fwd.hh"
 
-#include <vector>
+import std.compat;
 
 
 namespace cql3 {

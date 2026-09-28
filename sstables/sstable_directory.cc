@@ -7,7 +7,7 @@
  */
 
 import fmt;
-#include <type_traits>
+import std.compat;
 #include "sstables/sstable_directory.hh"
 #include "sstables/sstables.hh"
 #include "sstables/sstables_manager.hh"

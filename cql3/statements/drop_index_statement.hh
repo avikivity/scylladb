@@ -12,8 +12,7 @@
 
 #include "cql3/statements/schema_altering_statement.hh"
 
-#include <optional>
-#include <memory>
+import std.compat;
 
 #include "schema/schema_fwd.hh"
 

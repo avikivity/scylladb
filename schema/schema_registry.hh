@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <unordered_map>
+import std.compat;
 #include "schema_fwd.hh"
 #include "frozen_schema.hh"
 #include "replica/database_fwd.hh"

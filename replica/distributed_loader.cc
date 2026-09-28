@@ -27,7 +27,7 @@
 #include "tracing/trace_keyspace_helper.hh"
 #include "db/view/view_update_checks.hh"
 #include "ent/encryption/replicated_key_provider.hh"
-#include <unordered_map>
+import std.compat;
 #include "db/view/view_builder.hh"
 
 import fmt;

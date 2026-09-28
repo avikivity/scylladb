@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <concepts>
-#include <cstdint>
-#include <set>
-#include <unordered_set>
+import std.compat;
 
 #include "dht/token.hh"
 #include "mutation/canonical_mutation.hh"

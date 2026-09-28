@@ -10,11 +10,8 @@
 
 #include "cql3/description.hh"
 #include "utils/assert.hh"
+import std.compat;
 #include "utils/chunked_vector.hh"
-#include <functional>
-#include <optional>
-#include <unordered_map>
-#include <ranges>
 
 #include "cql3/column_specification.hh"
 #include "types/types.hh"

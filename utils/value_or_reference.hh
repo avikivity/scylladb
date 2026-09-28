@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <optional>
+import std.compat;
 
 template <typename T>
 struct value_or_reference {

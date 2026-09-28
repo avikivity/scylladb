@@ -8,9 +8,9 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <cstdint>
-
 #pragma once
+
+import std.compat;
 
 namespace cql3 {
 

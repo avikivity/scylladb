@@ -14,8 +14,8 @@
 // Intended for measuring time taken by synchronous code paths (where
 // seastar::lowres_clock is not suitable).
 
-#include <chrono>
-#include <ctime>
+#include <time.h> // clock_gettime(), CLOCK_MONOTONIC_COARSE
+import std.compat;
 
 namespace utils {
 

@@ -17,10 +17,8 @@
 #include "utils/div_ceil.hh"
 #include "utils/pretty_printers.hh"
 
-#include <coroutine>
+import std.compat;
 
-#include <optional>
-#include <vector>
 import abseil;
 
 namespace locator {

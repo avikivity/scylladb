@@ -9,7 +9,7 @@
 
 #include <string.h> // strsignal()
 #include "utils/rjson.hh"
-#include <coroutine>
+import std.compat;
 #include "utils/exceptions.hh"
 #include "exceptions.hh"
 #include "seastarx.hh"

@@ -7,7 +7,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <coroutine>
+import std.compat;
 
 #include "client.hh"
 #include "utils/http.hh"

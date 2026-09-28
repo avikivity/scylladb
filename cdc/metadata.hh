@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <map>
+import std.compat;
 
 #include "db_clock.hh"
 #include "mutation/timestamp.hh"

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <filesystem>
+import std.compat;
 import fmt;
 
 namespace fs = std::filesystem;

@@ -10,8 +10,7 @@
 #pragma once
 
 #include <unwind.h>
-#include <typeinfo>
-#include <exception>
+import std.compat;
 
 // This file defines structures/functions derived from the Itanium C++ ABI.
 // Source: https://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html

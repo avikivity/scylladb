@@ -14,7 +14,7 @@ import fmt;
 #include "api/api-doc/storage_service.json.hh"
 #include "replica/database.hh"
 #include "db/config.hh"
-#include <sstream>
+import std.compat;
 import boost;
 
 namespace api {

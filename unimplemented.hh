@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include <stdexcept>
-#include <cstdlib>
+import std.compat;
 #include "seastarx.hh"
-#include <string_view>
 import fmt;
 
 namespace unimplemented {

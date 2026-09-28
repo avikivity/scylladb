@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <cstdint>
+import std.compat;
 
 struct cached_file_stats {
     uint64_t page_hits = 0;

@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <set>
-#include <cstdint>
-#include <list>
-#include <ranges>
+import std.compat;
 #include "db_clock.hh"
 #include "utils/log.hh"
 #include "locator/host_id.hh"

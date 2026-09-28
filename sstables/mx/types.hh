@@ -10,7 +10,7 @@
 
 #include "sstables/exceptions.hh"
 #include "keys/clustering_bounds_comparator.hh"
-#include <iosfwd>
+import std.compat;
 
 namespace sstables {
 

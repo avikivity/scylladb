@@ -11,7 +11,7 @@
 #define BOOST_TEST_MODULE core
 
 #include <boost/test/unit_test.hpp>
-#include <utility>
+import std.compat;
 #include "cql3/expr/expression.hh"
 #include "utils/overloaded_functor.hh"
 #include "utils/to_string.hh"

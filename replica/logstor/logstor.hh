@@ -7,9 +7,8 @@
  */
 #pragma once
 
-#include <map>
-#include <optional>
 #include "db/cache_tracker.hh"
+import std.compat;
 #include "readers/mutation_reader.hh"
 #include "readers/mutation_reader_fwd.hh"
 #include "replica/logstor/compaction.hh"

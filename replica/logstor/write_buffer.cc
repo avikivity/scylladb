@@ -10,7 +10,6 @@
 #include "bytes_fwd.hh"
 #include "logstor.hh"
 #include "replica/logstor/types.hh"
-#include <chrono>
 #include "serializer_impl.hh"
 #include "idl/frozen_schema.dist.hh"
 #include "idl/frozen_schema.dist.impl.hh"

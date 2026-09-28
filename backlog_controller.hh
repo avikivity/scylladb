@@ -7,8 +7,7 @@
  */
 
 #pragma once
-#include <chrono>
-#include <cmath>
+import std.compat;
 
 #include "seastarx.hh"
 #include "backlog_controller_fwd.hh"

@@ -8,10 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <algorithm>
-#include <random>
-#include <ranges>
-#include <set>
+import std.compat;
 #include "auth/resource.hh"
 #include "db/view/view_building_task_mutation_builder.hh"
 #include "locator/host_id.hh"

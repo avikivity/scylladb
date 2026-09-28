@@ -7,12 +7,10 @@
  */
 
 #include "default_aws_retry_strategy.hh"
-#include <coroutine>
+import std.compat;
 #include "aws_error.hh"
 #include "throttling_controller.hh"
 
-#include <algorithm>
-#include <utility>
 #include "utils/log.hh"
 
 namespace seastar::http {

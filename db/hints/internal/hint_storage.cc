@@ -8,7 +8,7 @@
  */
 
 #include "db/hints/internal/hint_storage.hh"
-#include <coroutine>
+import std.compat;
 
 // Seastar features.
 
@@ -18,15 +18,6 @@
 #include "utils/lister.hh"
 
 // STD.
-#include <concepts>
-#include <filesystem>
-#include <functional>
-#include <list>
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <type_traits>
-#include <unordered_map>
 
 import fmt;
 namespace fs = std::filesystem;

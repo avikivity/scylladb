@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include <utility>
+import std.compat;
 #include "seastarx.hh"
 #include "schema/schema.hh"
 #include "locator/abstract_replication_strategy.hh"

@@ -5,8 +5,8 @@
 /* SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <exception>
-#include <system_error>
+import std.compat;
+#include <cerrno>
 #include "utils/exceptions.hh"
 #include "exceptions/exceptions.hh"
 #include "utils/abi/eh_ia64.hh"
@@ -68,7 +68,6 @@ bool is_timeout_exception(std::exception_ptr e) {
 
 #if defined(OPTIMIZED_EXCEPTION_HANDLING_AVAILABLE)
 
-#include <typeinfo>
 #include "utils/abi/eh_ia64.hh"
 
 void* utils::internal::try_catch_dynamic(std::exception_ptr& eptr, const std::type_info* catch_type) noexcept {

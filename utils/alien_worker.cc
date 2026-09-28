@@ -7,6 +7,7 @@
  */
 
 #include "utils/alien_worker.hh"
+#include <cassert>
 #include <cerrno>
 #include <pthread.h>
 #include <signal.h>

@@ -25,10 +25,7 @@
 #include "sstables/types.hh"
 #include "idl/streaming.dist.hh"
 #include "service/topology_guard.hh"
-#include "gms/feature_service.hh"
-#include <vector>
-#include <cfloat>
-#include <filesystem>
+import std.compat;
 #include "replica/exceptions.hh"
 
 import fmt;

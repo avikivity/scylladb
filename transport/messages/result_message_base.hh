@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 
 #include "seastarx.hh"
 #include "locator/tablets.hh"

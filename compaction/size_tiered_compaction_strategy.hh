@@ -11,8 +11,6 @@
 #include "compaction_strategy_impl.hh"
 #include "sstables/shared_sstable.hh"
 
-#include <chrono>
-
 namespace compaction {
 
 class size_tiered_backlog_tracker;

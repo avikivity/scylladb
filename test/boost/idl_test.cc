@@ -11,8 +11,7 @@
 #include "utils/assert.hh"
 #include <boost/test/unit_test.hpp>
 
-#include <vector>
-#include <optional>
+import std.compat;
 
 #include "test/lib/test_utils.hh"
 #include "bytes.hh"

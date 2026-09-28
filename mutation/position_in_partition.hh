@@ -14,8 +14,7 @@
 #include "keys/clustering_bounds_comparator.hh"
 #include "query/query-request.hh"
 
-#include <optional>
-#include <cstdlib>
+import std.compat;
 
 inline
 lexicographical_relation relation_for_lower_bound(composite_view v) {

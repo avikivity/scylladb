@@ -8,12 +8,8 @@
 
 #pragma once
 
-#include <cstdint>
-#include <cstdlib>
 import fmt;
-#include <memory>
-#include <vector>
-#include <new>
+import std.compat;
 #include "common.hh"
 #include "utils/assert.hh"
 
@@ -23,7 +19,6 @@ import fmt;
 
 #if TRIE_SANITIZE_BUMP_ALLOCATOR
 static_assert(sstables::trie::developer_build, "TRIE_SANITIZE_BUMP_ALLOCATOR needs sstables::trie::developer_build == true");
-#include <map>
 #endif
 
 namespace sstables::trie {

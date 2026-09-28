@@ -12,7 +12,7 @@
 #include "cql3/statements/external_search/external_function.hh"
 #include "cql3/expr/temporary_allocator.hh"
 
-#include <optional>
+import std.compat;
 
 namespace cql3::statements {
 

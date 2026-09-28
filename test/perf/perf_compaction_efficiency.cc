@@ -6,11 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <cmath>
-#include <random>
-#include <algorithm>
-#include <numeric>
-#include <sstream>
+import std.compat;
 import jsoncpp;
 
 #include "test/lib/cql_test_env.hh"

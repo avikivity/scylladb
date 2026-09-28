@@ -10,14 +10,7 @@
 
 #include "utils/assert.hh"
 #include "seastarx.hh"
-#include <algorithm>
-#include <list>
-#include <vector>
-#include <optional>
-#include <iosfwd>
-#include <compare>
-#include <ranges>
-#include <type_traits>
+import std.compat;
 
 import fmt;
 

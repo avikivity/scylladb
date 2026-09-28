@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <iterator>
-#include <map>
-#include <vector>
+import std.compat;
 
 #include "cql3/query_processor.hh"
 #include "cql3/untyped_result_set.hh"

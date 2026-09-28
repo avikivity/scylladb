@@ -7,7 +7,7 @@
  */
 
 #include "object_storage_retry_strategy.hh"
-#include <coroutine>
+import std.compat;
 #include "utils/exceptions.hh"
 #include "utils/http_client_error_processing.hh"
 

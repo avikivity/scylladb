@@ -6,8 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 #include "fsm.hh"
-#include <random>
-#include <ranges>
+import std.compat;
 #include "raft/raft.hh"
 #include "utils/assert.hh"
 #include "utils/error_injection.hh"

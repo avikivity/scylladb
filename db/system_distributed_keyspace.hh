@@ -16,8 +16,7 @@
 #include "dht/token.hh"
 #include "sstables/types.hh"
 
-#include <optional>
-#include <unordered_map>
+import std.compat;
 
 namespace cql3 {
 class query_processor;

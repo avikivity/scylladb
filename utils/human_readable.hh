@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include <cstdint>
 import fmt;
+import std.compat;
 
 namespace utils {
 

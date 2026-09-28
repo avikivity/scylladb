@@ -10,8 +10,7 @@
 #include "types/types.hh"
 #include "types/vector.hh"
 #include "exceptions/exceptions.hh"
-#include <bit>
-#include <span>
+import std.compat;
 
 namespace cql3 {
 namespace functions {

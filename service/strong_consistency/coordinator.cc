@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import std.compat;
 #include "coordinator.hh"
 #include "db/consistency_level_type.hh"
 #include "exceptions/exceptions.hh"
@@ -24,9 +25,6 @@
 #include "utils/histogram_metrics_helper.hh"
 #include "utils/abstract_formatter.hh"
 
-#include <algorithm>
-#include <concepts>
-#include <span>
 #include "seastarx.hh"
 import fmt;
 

@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include <cstddef>
 #include "utils/intrusive_btree.hh"
+import std.compat;
 
 namespace intrusive_b {
 

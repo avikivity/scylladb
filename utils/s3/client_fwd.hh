@@ -7,9 +7,9 @@
  */
 
 #pragma once
-#include <cstddef>
 
 #include "utils/upload_progress.hh"
+import std.compat;
 
 namespace s3 {
 class client;

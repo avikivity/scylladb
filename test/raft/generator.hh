@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <unordered_set>
-#include <random>
+import std.compat;
 
 #include "utils/assert.hh"
 #include "utils/chunked_vector.hh"

@@ -14,7 +14,7 @@
 #include "cql3/expr/unset.hh"
 #include "cql3/cql_statement.hh"
 #include "cql3/stats.hh"
-#include <string_view>
+import std.compat;
 #include "transport/messages/result_message.hh"
 #include "index/secondary_index_manager.hh"
 #include "exceptions/coordinator_result.hh"

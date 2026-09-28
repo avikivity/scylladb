@@ -10,7 +10,7 @@
 
 #include "cql3/role_name.hh"
 
-#include <algorithm>
+import std.compat;
 #include <cctype>
 
 namespace cql3 {

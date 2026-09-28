@@ -6,10 +6,9 @@
 
 #pragma once
 
-#include <cmath>
-
 #include "compaction_backlog_manager.hh"
 #include "incremental_compaction_strategy.hh"
+import std.compat;
 
 namespace compaction {
 

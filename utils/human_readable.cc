@@ -8,8 +8,7 @@
 
 #include "utils/human_readable.hh"
 
-#include <array>
-#include <ostream>
+import std.compat;
 
 namespace utils {
 

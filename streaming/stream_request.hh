@@ -12,7 +12,7 @@
 
 #include "utils/interval.hh"
 #include "partition_range_compat.hh"
-#include <vector>
+import std.compat;
 
 namespace streaming {
 

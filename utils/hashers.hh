@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <memory>
+import std.compat;
 #include "bytes_fwd.hh"
 #include "managed_bytes_fwd.hh"
 #include "utils/hashing.hh"

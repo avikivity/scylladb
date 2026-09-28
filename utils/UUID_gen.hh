@@ -10,12 +10,8 @@
  */
 
 #include "utils/assert.hh"
-#include <cstdint>
-#include <cassert>
 
-#include <chrono>
-#include <random>
-#include <limits>
+import std.compat;
 
 #include "UUID.hh"
 #include "on_internal_error.hh"

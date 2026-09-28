@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include <optional>
-#include <set>
-#include <string_view>
-#include <vector>
+import std.compat;
 #include "seastarx.hh"
 #include "schema/schema_fwd.hh"
 

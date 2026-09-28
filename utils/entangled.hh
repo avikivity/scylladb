@@ -9,8 +9,8 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <cassert>
 import boost;
+import std.compat;
 
 //  A movable pointer-like object paired with exactly one other object of the same type. 
 //  The two objects which are paired with each other point at each other.

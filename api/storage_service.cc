@@ -18,14 +18,8 @@
 #include "gms/feature_service.hh"
 #include "schema/schema_builder.hh"
 #include "sstables/sstables_manager.hh"
-#include <optional>
-#include <stdexcept>
+import std.compat;
 #include <time.h>
-#include <algorithm>
-#include <functional>
-#include <iterator>
-#include <chrono>
-#include <string>
 #include "service/raft/raft_group0_client.hh"
 #include "service/storage_service.hh"
 #include "service/topology_state_machine.hh"

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <functional>
+import std.compat;
 
 #include "db/config.hh"
 #include "db/extensions.hh"

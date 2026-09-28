@@ -25,10 +25,7 @@
 
 import seastar;
 
-#include <functional>
-#include <optional>
-#include <system_error>
-#include <type_traits>
+import std.compat;
 
 namespace seastar { class logger; }
 

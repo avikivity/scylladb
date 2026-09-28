@@ -7,8 +7,7 @@
  */
 
 
-#include <string_view>
-#include <variant>
+import std.compat;
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>

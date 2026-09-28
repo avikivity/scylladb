@@ -9,7 +9,7 @@
  */
 #pragma once
 
-#include <cstdint>
+import std.compat;
 
 namespace sstables {
 class sstable;

@@ -8,7 +8,7 @@
 
 #include "auth/common.hh"
 
-#include <optional>
+import std.compat;
 
 #include "mutation/canonical_mutation.hh"
 #include "mutation/timestamp.hh"

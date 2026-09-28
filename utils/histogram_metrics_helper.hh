@@ -10,10 +10,10 @@
 
 #pragma once
 
-#include <cstdint>
 #include "seastarx.hh"
 #include "estimated_histogram.hh"
 #include "histogram.hh"
+import std.compat;
 
 template<uint64_t Min, uint64_t Max, size_t Precision>
 seastar::metrics::histogram to_metrics_histogram(const utils::approx_exponential_histogram<Min, Max, Precision>& hist) {

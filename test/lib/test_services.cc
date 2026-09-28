@@ -22,8 +22,7 @@
 #include "replica/compaction_group.hh"
 #include "utils/assert.hh"
 #include "utils/overloaded_functor.hh"
-#include <filesystem>
-#include <iostream>
+import std.compat;
 #include "sstables/generation_type.hh"
 import boost;
 #include "sstables/storage.hh"

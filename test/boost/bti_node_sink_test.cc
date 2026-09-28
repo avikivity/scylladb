@@ -8,7 +8,7 @@
 
 #include <seastar/testing/thread_test_case.hh>
 
-#include <ranges>
+import std.compat;
 #include "test/lib/log.hh"
 #include "test/lib/random_utils.hh"
 #include "utils/memory_data_sink.hh"

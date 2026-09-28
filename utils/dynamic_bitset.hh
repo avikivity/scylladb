@@ -9,9 +9,7 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <cstdint>
-#include <limits>
-#include <vector>
+import std.compat;
 
 namespace utils {
 

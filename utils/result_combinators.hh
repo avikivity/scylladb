@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <utility>
+import std.compat;
 #include "utils/result.hh"
 #include "seastarx.hh"
 

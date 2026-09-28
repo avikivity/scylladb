@@ -8,6 +8,6 @@
 
 #pragma once
 
-#include <cstdint>
+import std.compat;
 
 static constexpr uint64_t default_compaction_maximum_shares = 1000;

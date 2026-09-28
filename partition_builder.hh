@@ -9,7 +9,7 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <coroutine>
+import std.compat;
 #include "schema/schema.hh"
 #include "mutation/mutation.hh"
 #include "mutation/mutation_partition.hh"

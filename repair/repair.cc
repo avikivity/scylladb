@@ -28,12 +28,7 @@
 #include "utils/error_injection.hh"
 #include "utils/from_chars_exactly.hh"
 
-#include <limits>
-
-#include <exception>
-#include <cfloat>
-#include <atomic>
-#include <utility>
+import std.compat;
 
 #include "idl/repair.dist.hh"
 #include "idl/node_ops.dist.hh"

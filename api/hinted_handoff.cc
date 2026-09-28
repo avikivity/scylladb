@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <vector>
+import std.compat;
 
 #include "hinted_handoff.hh"
 #include "api/api.hh"

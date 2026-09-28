@@ -24,7 +24,7 @@
 #include "gms/feature_service.hh"
 #include "replica/database.hh"
 
-#include <stdexcept>
+import std.compat;
 import boost;
 
 bool is_system_keyspace(std::string_view keyspace);

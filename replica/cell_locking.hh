@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <exception>
+import std.compat;
 
 #include "utils/assert.hh"
 #include "utils/small_vector.hh"

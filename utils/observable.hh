@@ -9,10 +9,7 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <vector>
-#include <algorithm>
-#include <utility>
-#include <functional>
+import std.compat;
 
 namespace utils {
 

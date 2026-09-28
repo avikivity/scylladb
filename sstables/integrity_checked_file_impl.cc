@@ -8,7 +8,7 @@
 
 #include "integrity_checked_file_impl.hh"
 #include "bytes.hh"
-#include <algorithm>
+import std.compat;
 #include <fcntl.h>
 
 namespace sstables {

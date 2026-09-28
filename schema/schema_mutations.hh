@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 #include "mutation/mutation.hh"
 #include "schema/schema_fwd.hh"
 #include "mutation/canonical_mutation.hh"

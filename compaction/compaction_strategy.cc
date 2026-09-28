@@ -9,8 +9,7 @@
 /*
  */
 
-#include <vector>
-#include <chrono>
+import std.compat;
 #include "sstables/shared_sstable.hh"
 #include "sstables/sstables.hh"
 #include "compaction_strategy.hh"

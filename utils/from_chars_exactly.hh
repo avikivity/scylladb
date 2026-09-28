@@ -3,9 +3,7 @@
 
 #pragma once
 
-#include <charconv>
-#include <concepts>
-#include <string_view>
+import std.compat;
 
 namespace utils {
 

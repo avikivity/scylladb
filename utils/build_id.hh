@@ -4,6 +4,6 @@
 
 #pragma once
 
-#include <string>
+import std.compat;
 
 std::string get_build_id();

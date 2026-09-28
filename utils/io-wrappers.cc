@@ -13,10 +13,8 @@
 #include <seastar/util/internal/iovec_utils.hh>
 
 #include <cassert>
-#include <coroutine>
-#include <memory>
+import std.compat;
 #include <sys/uio.h>
-#include <utility>
 #include <sys/stat.h>
 
 class noop_file_impl : public file_impl {

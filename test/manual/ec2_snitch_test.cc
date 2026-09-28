@@ -7,8 +7,7 @@
  */
 
 
-#include <filesystem>
-#include <string>
+import std.compat;
 #include <boost/test/unit_test.hpp>
 #include <seastar/testing/test_case.hh>
 #include "locator/snitch_base.hh"

@@ -9,7 +9,7 @@
 
 #include "tombstone_gc_options.hh"
 #include "exceptions/exceptions.hh"
-#include <map>
+import std.compat;
 #include "utils/rjson.hh"
 import boost;
 

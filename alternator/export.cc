@@ -12,12 +12,7 @@
 #include "alternator/executor_util.hh"
 #include "service/storage_proxy.hh"
 #include "utils/rjson.hh"
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cmath>
-#include <string>
-#include <string_view>
+import std.compat;
 
 namespace alternator {
 

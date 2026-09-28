@@ -8,7 +8,7 @@
 
 #define BOOST_TEST_MODULE sstable-generation
 
-#include <string>
+import std.compat;
 #include <boost/test/unit_test.hpp>
 
 #include "sstables/generation_type.hh"

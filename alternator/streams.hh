@@ -10,7 +10,7 @@
 
 #include "utils/chunked_vector.hh"
 #include "cdc/generation.hh"
-#include <generator>
+import std.compat;
 
 namespace cdc {
     class stream_id;

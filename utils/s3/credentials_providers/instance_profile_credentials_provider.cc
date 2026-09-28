@@ -7,7 +7,7 @@
  */
 
 #include "instance_profile_credentials_provider.hh"
-#include <coroutine>
+import std.compat;
 #include "utils/http.hh"
 #include "utils/s3/client.hh"
 #include "utils/s3/default_aws_retry_strategy.hh"

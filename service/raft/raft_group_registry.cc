@@ -19,7 +19,7 @@
 #include "utils/chain_abort_source.hh"
 #include "utils/error_injection.hh"
 
-#include <chrono>
+import std.compat;
 
 namespace service {
 

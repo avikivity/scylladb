@@ -14,7 +14,7 @@
 #include "streaming/stream_fwd.hh"
 #include "streaming/stream_session.hh"
 #include "streaming/session_info.hh"
-#include <map>
+import std.compat;
 
 namespace streaming {
 

@@ -15,7 +15,7 @@
 #include "exceptions/exceptions.hh"
 #include "service/qos/service_level_controller.hh"
 #include "types/types.hh"
-#include <optional>
+import std.compat;
 
 namespace cql3 {
 

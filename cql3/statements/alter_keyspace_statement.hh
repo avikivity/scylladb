@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <memory>
+import std.compat;
 
 #include "cql3/statements/schema_altering_statement.hh"
 

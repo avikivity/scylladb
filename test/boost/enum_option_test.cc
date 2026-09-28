@@ -11,11 +11,7 @@ import boost;
 
 #include <boost/test/unit_test.hpp>
 
-#include <map>
-#include <set>
-#include <sstream>
-#include <string>
-#include <unordered_map>
+import std.compat;
 
 #include "utils/enum_option.hh"
 

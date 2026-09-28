@@ -8,7 +8,7 @@
 
 #include <boost/test/unit_test.hpp>
 #include "test/lib/scylla_test_case.hh"
-#include <chrono>
+import std.compat;
 
 #include "utils/recent_entries_map.hh"
 #include "utils/UUID.hh"

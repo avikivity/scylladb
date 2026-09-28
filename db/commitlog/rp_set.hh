@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <unordered_map>
+import std.compat;
 
 #include "replay_position.hh"
 

@@ -16,9 +16,7 @@
 // Everything else should use the type-erased parse_*() functions in
 // cql3/util.hh.
 
-#include <optional>
-#include <type_traits>
-#include <utility>
+import std.compat;
 
 #include "cql3/CqlParser.hpp"
 #include "cql3/error_collector.hh"

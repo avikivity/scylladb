@@ -6,12 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <cmath>
-#include <numbers>
-#include <array>
-#include <random>
-#include <variant>
-#include <chrono>
+import std.compat;
 
 #include "utils/small_vector.hh"
 #include "utils/murmur_hash.hh"

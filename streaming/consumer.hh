@@ -11,7 +11,7 @@
 #include "sstables/sstable_set.hh"
 #include "streaming/stream_reason.hh"
 #include "service/topology_guard.hh"
-#include <optional>
+import std.compat;
 
 namespace replica {
 class database;

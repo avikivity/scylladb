@@ -10,9 +10,7 @@
  * Copyright (C) 2020-present ScyllaDB
  */
 
-#include <algorithm>
-#include <stdexcept>
-#include <unordered_set>
+import std.compat;
 
 #include "db/snapshot-ctl.hh"
 #include "db/snapshot/backup_task.hh"

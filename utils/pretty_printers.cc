@@ -8,7 +8,7 @@
 
 #include "utils/assert.hh"
 #include "pretty_printers.hh"
-#include <tuple>
+import std.compat;
 #include <cassert>
 
 template <typename Suffixes>

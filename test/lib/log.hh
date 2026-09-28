@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 #pragma once
-#include <string>
+import std.compat;
 #include "seastarx.hh"
 
 // A test log to use in all unit tests, including boost unit

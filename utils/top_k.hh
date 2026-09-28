@@ -44,12 +44,7 @@
 */
 
 #include "seastarx.hh"
-#include <cstdio>
-#include <list>
-#include <optional>
-#include <unordered_map>
-#include <tuple>
-#include <cassert>
+import std.compat;
 
 #include "utils/assert.hh"
 #include "utils/chunked_vector.hh"

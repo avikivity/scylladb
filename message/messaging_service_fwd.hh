@@ -9,7 +9,7 @@
 #pragma once
 
 #include "locator/host_id.hh"
-#include <functional>
+import std.compat;
 import boost;
 
 namespace gms { class inet_address; }

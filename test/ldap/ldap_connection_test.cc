@@ -11,9 +11,7 @@
 #include <seastar/testing/thread_test_case.hh>
 
 #include <cassert>
-#include <exception>
-#include <set>
-#include <string>
+import std.compat;
 
 #include "ent/ldap/ldap_connection.hh"
 #include "test/lib/exception_utils.hh"

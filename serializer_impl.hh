@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <list>
-#include <unordered_set>
+import std.compat;
 
 #include "serializer.hh"
 #include "utils/chunked_string.hh"

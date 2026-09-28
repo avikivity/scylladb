@@ -9,9 +9,7 @@
 
 #include "raft/raft.hh"
 
-#include <optional>
-#include <vector>
-#include <functional>
+import std.compat;
 
 #include "seastarx.hh"
 #include "raft_commitlog.hh"

@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <optional>
-#include <functional>
+import std.compat;
 
 import fmt;
 #include "bytes_fwd.hh"

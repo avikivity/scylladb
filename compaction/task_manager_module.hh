@@ -13,7 +13,7 @@
 #include "schema/schema_fwd.hh"
 #include "tasks/task_manager.hh"
 
-#include <optional>
+import std.compat;
 
 namespace sstables {
 class sstable_directory;

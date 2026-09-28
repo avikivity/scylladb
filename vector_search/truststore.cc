@@ -7,7 +7,7 @@
  */
 
 #include "truststore.hh"
-#include <unordered_set>
+import std.compat;
 
 namespace vector_search {
 

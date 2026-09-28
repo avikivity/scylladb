@@ -6,8 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <iterator>
-#include <set>
+import std.compat;
 #include <boost/test/unit_test.hpp>
 #include "partition_slice_builder.hh"
 #include "schema/schema_builder.hh"

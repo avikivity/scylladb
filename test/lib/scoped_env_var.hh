@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include <cstdlib>
-#include <optional>
-#include <string>
+#include <stdlib.h> // setenv(), unsetenv()
+import std.compat;
 
 // RAII helper that overrides a single environment variable and restores its
 // previous state on destruction (or on release()). If the variable was not set

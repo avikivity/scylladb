@@ -15,7 +15,7 @@
 
 #include "utils/UUID.hh"
 
-#include <memory>
+import std.compat;
 
 namespace netw {
 

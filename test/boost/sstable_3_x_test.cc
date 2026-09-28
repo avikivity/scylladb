@@ -7,9 +7,7 @@
  */
 
 #include "utils/assert.hh"
-#include <set>
-#include <iterator>
-#include <algorithm>
+import std.compat;
 
 #include <boost/test/unit_test.hpp>
 

@@ -13,7 +13,7 @@
 #include "utils/interval.hh"
 #include "utils/chunked_vector.hh"
 
-#include <vector>
+import std.compat;
 
 namespace dht {
 

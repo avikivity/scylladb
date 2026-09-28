@@ -10,8 +10,7 @@
 
 #include "service/raft/raft_state_machine.hh"
 #include "mutation/frozen_mutation.hh"
-#include <functional>
-#include <unordered_map>
+import std.compat;
 #include "locator/tablets.hh"
 #include "service/strong_consistency/raft_groups_storage.hh"
 #include "utils/loading_cache.hh"

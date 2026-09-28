@@ -8,11 +8,8 @@
 
 #pragma once
 
-#include <cassert>
 #include <cstddef>
-#include <cstdlib>
-#include <limits>
-#include <utility>
+import std.compat;
 
 #include "utils/assert.hh"
 #include "utils/collection-concepts.hh"

@@ -6,10 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <iomanip>
-#include <limits>
-#include <memory>
-#include <stdexcept>
+import std.compat;
 #include "query-request.hh"
 #include "query-result.hh"
 #include "query-result-writer.hh"

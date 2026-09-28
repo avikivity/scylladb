@@ -20,7 +20,7 @@
 #include "db/config.hh"
 #include "db/cluster_config_registry.hh"
 #include "cql3/statements/cluster_config_props.hh"
-#include <random>
+import std.compat;
 
 namespace cql3 {
 

@@ -13,10 +13,10 @@
 #include "gc_clock.hh"
 #include "utils/assert.hh"
 #include "utils/managed_bytes.hh"
-#include <cstdint>
 #include "utils/fragmented_temporary_buffer.hh"
 
 #include "serializer.hh"
+import std.compat;
 
 class abstract_type;
 class collection_type_impl;

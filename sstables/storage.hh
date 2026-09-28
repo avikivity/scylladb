@@ -9,9 +9,8 @@
 
 #pragma once
 
-#include <coroutine>
+import std.compat;
 #include "utils/assert.hh"
-#include <filesystem>
 
 #include "data_dictionary/storage_options.hh"
 #include "schema/schema_fwd.hh"

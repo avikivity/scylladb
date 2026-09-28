@@ -10,15 +10,9 @@ import fmt;
 import boost;
 #define BOOST_TEST_MODULE core
 
-#include <ranges>
-#include <stdexcept>
-#include <optional>
-#include <variant>
-#include <algorithm>
+import std.compat;
 
 #include <boost/test/unit_test.hpp>
-#include <deque>
-#include <random>
 #include "utils/chunked_vector.hh"
 #include "utils/amortized_reserve.hh"
 

@@ -9,8 +9,7 @@
 
 #pragma once
 
-#include <memory>
-#include <optional>
+import std.compat;
 
 #include "db/functions/function_name.hh"
 #include "db/functions/function.hh"

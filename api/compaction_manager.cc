@@ -6,8 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <ranges>
-
 #include "compaction_manager.hh"
 #include "compaction/compaction_manager.hh"
 #include "api/api.hh"
@@ -19,7 +17,7 @@
 #include "unimplemented.hh"
 #include "storage_service.hh"
 
-#include <utility>
+import std.compat;
 
 namespace api {
 

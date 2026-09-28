@@ -12,8 +12,7 @@
 
 #include "db_clock.hh"
 
-#include <chrono>
-#include <limits>
+import std.compat;
 
 namespace cql3 {
 

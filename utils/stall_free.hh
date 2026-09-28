@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <list>
-#include <algorithm>
-#include <functional>
+import std.compat;
 #include "utils/collection-concepts.hh"
 
 #include "seastarx.hh"

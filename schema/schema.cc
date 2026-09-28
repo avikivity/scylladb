@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <map>
+import std.compat;
 #include "bytes_ostream.hh"
 #include "cql3/statements/index_target.hh"
 #include "cql3/description.hh"
@@ -25,7 +25,6 @@
 #include "db/extensions.hh"
 #include "db/marshal/type_parser.hh"
 #include "schema_registry.hh"
-#include <type_traits>
 #include "view_info.hh"
 #include "partition_slice_builder.hh"
 #include "replica/database.hh"
@@ -45,8 +44,6 @@
 #include "utils/managed_string.hh"
 #include "alternator/ttl_tag.hh"
 import boost;
-
-#include <cmath>
 
 extern logging::logger dblog;
 

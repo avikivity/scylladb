@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import std.compat;
 #include "cql3/statements/alter_cluster_config_statement.hh"
 
 #include "cql3/statements/prepared_statement.hh"

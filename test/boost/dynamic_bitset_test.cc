@@ -9,9 +9,7 @@
 #define BOOST_TEST_MODULE core
 
 #include <boost/test/unit_test.hpp>
-#include <vector>
-#include <random>
-#include <ranges>
+import std.compat;
 
 #include "utils/dynamic_bitset.hh"
 

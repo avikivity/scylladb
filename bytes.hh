@@ -10,10 +10,7 @@
 
 #include "seastarx.hh"
 #include "utils/hashing.hh"
-#include <optional>
-#include <iosfwd>
-#include <functional>
-#include <compare>
+import std.compat;
 #include "bytes_fwd.hh"
 #include "utils/mutable_view.hh"
 #include "utils/simple_hashers.hh"

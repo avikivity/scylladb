@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <type_traits>
+import std.compat;
 #include "api/api_init.hh"
 #include "api/api-doc/utils.json.hh"
 #include "utils/histogram.hh"

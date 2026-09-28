@@ -7,10 +7,7 @@
  */
 #pragma once
 
-#include <algorithm>
-#include <concepts>
-#include <optional>
-#include <type_traits>
+import std.compat;
 import boost;
 
 #include "utils/assert.hh"

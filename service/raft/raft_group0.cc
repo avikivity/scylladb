@@ -5,8 +5,7 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-#include <iterator>
-#include <source_location>
+import std.compat;
 
 #include "mutation/async_utils.hh"
 #include "raft/raft.hh"
@@ -33,9 +32,7 @@
 #include "utils/assert.hh"
 #include "utils/error_injection.hh"
 
-#include <stdexcept>
 #include <csignal>
-#include <unordered_set>
 
 #include "idl/group0.dist.hh"
 #include "idl/migration_manager.dist.hh"

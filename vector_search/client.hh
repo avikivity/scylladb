@@ -11,11 +11,7 @@
 #include "error.hh"
 #include "utils/log.hh"
 #include "utils/updateable_value.hh"
-#include <chrono>
-#include <exception>
-#include <optional>
-#include <expected>
-#include <variant>
+import std.compat;
 
 namespace vector_search {
 

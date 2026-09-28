@@ -14,7 +14,7 @@
 #include "cql3/prepare_context.hh"
 #include "cql3/column_specification.hh"
 
-#include <vector>
+import std.compat;
 #include "audit/audit.hh"
 
 namespace cql3 {

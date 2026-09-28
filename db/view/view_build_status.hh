@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <string_view>
+import std.compat;
 #include "seastarx.hh"
 
 namespace db {

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <string>
+import std.compat;
 #include "build_mode.hh"
 
 std::string scylla_version();

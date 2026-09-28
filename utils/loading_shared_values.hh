@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include <optional>
+import std.compat;
 #include "utils/assert.hh"
-#include <vector>
 #include "seastarx.hh"
 import boost;
 

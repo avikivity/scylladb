@@ -14,7 +14,7 @@
 #include <signal.h>
 #include <time.h>
 #include "release.hh"
-#include <fstream>
+import std.compat;
 import boost;
 
 

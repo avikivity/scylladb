@@ -8,7 +8,7 @@
 
 #pragma once
 #include "schema/schema_fwd.hh"
-#include <vector>
+import std.compat;
 #include "dht/i_partitioner_fwd.hh"
 #include "readers/mutation_reader_fwd.hh"
 #include "readers/mutation_reader.hh"

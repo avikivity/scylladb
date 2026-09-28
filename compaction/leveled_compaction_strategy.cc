@@ -10,7 +10,7 @@
 #include "leveled_manifest.hh"
 #include "compaction_strategy_state.hh"
 #include "sstables/sstable_set_impl.hh"
-#include <algorithm>
+import std.compat;
 
 namespace compaction {
 

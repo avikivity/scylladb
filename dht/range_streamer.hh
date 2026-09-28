@@ -16,8 +16,7 @@
 #include "streaming/stream_reason.hh"
 #include "service/topology_guard.hh"
 #include "gms/inet_address.hh"
-#include <unordered_map>
-#include <memory>
+import std.compat;
 
 namespace gms { class gossiper; }
 namespace locator { class topology; }

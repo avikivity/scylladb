@@ -15,10 +15,8 @@
 #include "replica/logstor/logstor.hh"
 #include "replica/logstor/types.hh"
 #include "replica/logstor/compaction.hh"
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <system_error>
+import std.compat;
+#include <cerrno>
 #include <linux/if_link.h>
 #include "replica/logstor/write_buffer.hh"
 #include "utils/checked-file-impl.hh"

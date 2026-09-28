@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <unordered_map>
+import std.compat;
 #include "utils/chunked_vector.hh"
 #include "raft/raft.hh"
 #include "db/commitlog/replay_position.hh"

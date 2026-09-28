@@ -5,6 +5,7 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
+import std.compat;
 #include "replica/logstor/logstor.hh"
 #include "query/query-request.hh"
 #include "readers/from_mutations.hh"
@@ -14,10 +15,6 @@
 #include "replica/logstor/segment_manager.hh"
 #include "replica/logstor/types.hh"
 #include "utils/managed_bytes.hh"
-#include <algorithm>
-#include <queue>
-#include <random>
-#include <vector>
 
 import xxhash;
 #include "seastarx.hh"

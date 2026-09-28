@@ -8,8 +8,8 @@
 
 #include "utils/assert.hh"
 #include <lua.hpp>
+import std.compat;
 #include <time.h>
-#include <random>
 
 #include "lang/lua_scylla_types.hh"
 #include "reader_permit.hh"

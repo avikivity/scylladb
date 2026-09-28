@@ -10,11 +10,7 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <algorithm>
-#include <limits>
-#include <random>
-#include <stdexcept>
-#include <vector>
+import std.compat;
 
 #include "utils/interval_index.hh"
 

@@ -9,8 +9,7 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <string_view>
-#include <vector>
+import std.compat;
 
 namespace secondary_index::util {
 

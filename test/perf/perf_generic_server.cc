@@ -6,11 +6,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <cstdint>
-
 #include "db/config.hh"
 #include "transport/generic_server.hh"
 #include "test/perf/perf.hh"
+import std.compat;
 
 seastar::logger plog("perf");
 

@@ -16,8 +16,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
-#include <cstdint>
-#include <coroutine>
+import std.compat;
 
 #include "crypt_sha512.hh"
 

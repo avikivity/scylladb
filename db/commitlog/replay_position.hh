@@ -9,11 +9,11 @@
 
 #pragma once
 
-#include <cstdint>
 #include "schema/schema_fwd.hh"
 #include "utils/hash.hh"
 #include "sstables/version.hh"
 #include "seastarx.hh"
+import std.compat;
 
 namespace db {
 

@@ -11,8 +11,7 @@
 #include <sys/stat.h>
 
 // Seastar features.
-#include <chrono>
-#include <exception>
+import std.compat;
 
 // Scylla includes.
 #include "db/hints/internal/common.hh"
@@ -31,10 +30,6 @@
 #include "gc_clock.hh"
 
 // STD.
-#include <ranges>
-#include <span>
-#include <stdexcept>
-#include <string_view>
 
 namespace db::hints {
 namespace internal {

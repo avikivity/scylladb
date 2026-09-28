@@ -7,6 +7,7 @@
  */
 
 #include "dht/decorated_key.hh"
+#include <cerrno>
 #include "readers/mutation_reader.hh"
 #include "replica/database.hh"
 #include "replica/data_dictionary_impl.hh"

@@ -8,7 +8,7 @@
 
 #include "lang/wasm_instance_cache.hh"
 #include "lang/wasm.hh"
-#include <exception>
+import std.compat;
 #include <unistd.h>
 
 namespace wasm {

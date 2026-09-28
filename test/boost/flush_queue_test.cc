@@ -7,9 +7,7 @@
  */
 
 
-#include <random>
-#include <bitset>
-#include <ranges>
+import std.compat;
 #include <boost/test/unit_test.hpp>
 #include <seastar/testing/random.hh>
 

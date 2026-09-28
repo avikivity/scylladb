@@ -21,7 +21,7 @@
 #include "types/concrete_types.hh"
 #include "types/types.hh"
 #include "utils/rjson.hh"
-#include <ranges>
+import std.compat;
 import boost;
 
 namespace secondary_index {

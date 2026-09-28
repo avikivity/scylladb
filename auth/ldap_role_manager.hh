@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <stdexcept>
+import std.compat;
 
 #include "ent/ldap/ldap_connection.hh"
 #include "standard_role_manager.hh"

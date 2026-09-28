@@ -4,6 +4,7 @@
 
 /* Copyright 2020-present ScyllaDB */
 
+import std.compat;
 #include "utils/assert.hh"
 #include "util.hh"
 #include "cql3/do_with_parser.hh"

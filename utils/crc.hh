@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include <cstdint>
-
 #if defined(__x86_64__) || defined(__i386__)
 #include <smmintrin.h>
 #elif defined(__aarch64__)
@@ -36,6 +34,7 @@ inline uint32_t _mm_crc32_u64(uint32_t crc, uint64_t in)
 
 #include "utils/clmul.hh"
 #include "utils/fragment_range.hh"
+import std.compat;
 
 namespace utils {
 

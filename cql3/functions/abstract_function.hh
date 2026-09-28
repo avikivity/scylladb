@@ -14,7 +14,7 @@
 #include "types/types.hh"
 #include "cql3/cql3_type.hh"
 #include "cql3/functions/function_name.hh"
-#include <vector>
+import std.compat;
 import fmt;
 import boost;
 

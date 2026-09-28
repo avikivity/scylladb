@@ -15,14 +15,7 @@
 
 #pragma once
 
-#include <map>
-#include <optional>
-#include <set>
-#include <string>
-#include <string_view>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
+import std.compat;
 
 #include "utils/rjson.hh"
 #include "schema/schema_fwd.hh"

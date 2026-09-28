@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <compare>
-#include <cstdint>
+import std.compat;
 
 #include "keys/keys.hh"
 #include "utils/managed_bytes.hh"

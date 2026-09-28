@@ -10,7 +10,7 @@
 #include "cql3/result_set.hh"
 #include "exceptions/exceptions.hh"
 
-#include <map>
+import std.compat;
 
 namespace cql_transport {
 

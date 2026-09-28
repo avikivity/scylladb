@@ -15,8 +15,7 @@
 #include "mutation/mutation_cleaner.hh"
 #include "utils/cached_file_stats.hh"
 #include "sstables/partition_index_cache_stats.hh"
-
-#include <cstdint>
+import std.compat;
 
 class cache_entry;
 

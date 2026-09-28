@@ -10,10 +10,9 @@
 
 #include "auth/authenticated_user.hh"
 #include "seastarx.hh"
+import std.compat;
 #include "auth/service.hh"
 #include "cql3/description.hh"
-#include <map>
-#include <unordered_map>
 #include "qos_common.hh"
 #include "mutation/mutation.hh"
 #include "service/endpoint_lifecycle_subscriber.hh"

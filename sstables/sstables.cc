@@ -9,16 +9,8 @@
 import fmt;
 #include "utils/log.hh"
 #include <seastar/core/shared_ptr_incomplete.hh>
-#include <atomic>
-#include <cmath>
-#include <complex>
-#include <concepts>
+import std.compat;
 #include <cstdlib>
-#include <vector>
-#include <limits>
-#include <algorithm>
-#include <expected>
-#include <iterator>
 
 #include "utils/error_injection.hh"
 #include "utils/to_string.hh"

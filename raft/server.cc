@@ -10,8 +10,7 @@
 #include "utils/assert.hh"
 #include "utils/error_injection.hh"
 #include "utils/exceptions.hh"
-#include <map>
-#include <list>
+import std.compat;
 
 #include "fsm.hh"
 #include "log_indexed_container.hh"

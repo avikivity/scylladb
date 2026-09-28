@@ -14,7 +14,7 @@
 #include "cql3/statements/index_target.hh"
 #include "index/external_index.hh"
 
-#include <vector>
+import std.compat;
 
 namespace secondary_index {
 

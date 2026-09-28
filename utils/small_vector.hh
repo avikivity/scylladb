@@ -8,19 +8,8 @@
 
 #pragma once
 
-#include <compare>
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
-#include <new>
-#include <utility>
-#include <ranges>
-#include <algorithm>
-#include <initializer_list>
-#include <memory>
-#include <stdexcept>
+import std.compat;
 #include <malloc.h>
-#include <iostream>
 import fmt;
 
 namespace utils {

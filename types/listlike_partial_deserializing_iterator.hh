@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <iterator>
+import std.compat;
 
 #include "utils/fragment_range.hh"
 #include "utils/managed_bytes.hh"

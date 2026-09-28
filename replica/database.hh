@@ -19,12 +19,7 @@
 #include "cell_locking.hh"
 #include "db_clock.hh"
 #include "gc_clock.hh"
-#include <chrono>
-#include <functional>
-#include <unordered_map>
-#include <set>
-#include <optional>
-#include <cstring>
+import std.compat;
 #include "types/types.hh"
 #include "db/commitlog/replay_position.hh"
 #include "db/commitlog/commitlog_types.hh"
@@ -48,7 +43,6 @@
 #include "db/timeout_clock.hh"
 #include "replica/querier.hh"
 #include "cache_temperature.hh"
-#include <unordered_set>
 #include "utils/error_injection.hh"
 #include "utils/updateable_value.hh"
 #include "readers/multishard.hh"

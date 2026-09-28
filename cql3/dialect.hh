@@ -4,8 +4,6 @@
 #pragma once
 import fmt;
 
-#include <limits>
-
 namespace cql3 {
 
 struct dialect {

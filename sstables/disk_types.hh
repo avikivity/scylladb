@@ -10,9 +10,7 @@
 
 #include "bytes.hh"
 #include "utils/chunked_vector.hh"
-#include <unordered_map>
-#include <variant>
-#include <type_traits>
+import std.compat;
 #include "mutation/atomic_cell.hh"
 
 namespace sstables {

@@ -19,8 +19,7 @@
 
 #pragma once
 
-#include <vector>
-#include <unordered_set>
+import std.compat;
 
 #include "replica/database_fwd.hh"
 #include "db_clock.hh"

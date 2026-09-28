@@ -6,9 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+import std.compat;
 #include "utils/s3/aws_throttling_controller.hh"
 
-#include <chrono>
 #include "seastarx.hh"
 
 namespace s3 {

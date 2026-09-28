@@ -13,7 +13,7 @@
 #include "cql3/cf_name.hh"
 #include "service/pager/query_plan.hh"
 
-#include <optional>
+import std.compat;
 
 #include "parsed_statement.hh"
 

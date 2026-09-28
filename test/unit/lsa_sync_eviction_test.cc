@@ -6,15 +6,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <deque>
-#include <iostream>
-#include <deque>
-#include <iostream>
+import std.compat;
 #include "utils/managed_bytes.hh"
 #include "utils/logalloc.hh"
 #include "utils/log.hh"
 
-#include <random>
 import boost;
 
 int main(int argc, char** argv) {

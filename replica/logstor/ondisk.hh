@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <limits>
+import std.compat;
 
 #include "idl/uuid.dist.hh"
 #include "idl/uuid.dist.impl.hh"

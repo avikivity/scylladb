@@ -12,10 +12,7 @@
 #include "types/types.hh"
 #include "utils/chunked_vector.hh"
 
-#include <limits>
-#include <functional>
-#include <utility>
-#include <compare>
+import std.compat;
 #include <byteswap.h>
 import fmt;
 

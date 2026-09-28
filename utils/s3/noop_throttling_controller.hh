@@ -8,6 +8,7 @@
 
 #pragma once
 
+import std.compat;
 #include "utils/s3/throttling_controller.hh"
 #include "seastarx.hh"
 

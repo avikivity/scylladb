@@ -7,7 +7,7 @@
 /*
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
-#include <chrono>
+import std.compat;
 #include "cql3/statements/prepared_statement.hh"
 #include "tracing/trace_state.hh"
 #include "mutation/timestamp.hh"

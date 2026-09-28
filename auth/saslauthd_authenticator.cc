@@ -10,8 +10,7 @@
 
 #include "auth/saslauthd_authenticator.hh"
 
-#include <algorithm>
-#include <system_error>
+import std.compat;
 #include "auth/config.hh"
 #include "common.hh"
 #include "cql3/query_processor.hh"

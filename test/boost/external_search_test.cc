@@ -21,6 +21,7 @@
 // similarities_of() is tested beside it: the join decides which rows have a score to report, and
 // it reads them.
 
+import std.compat;
 #include <boost/test/unit_test.hpp>
 
 #undef SEASTAR_TESTING_MAIN
@@ -45,7 +46,6 @@
 #include "types/types.hh"
 #include "types/vector.hh"
 
-#include <utility>
 #include "seastarx.hh"
 
 using namespace cql3;

@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
+import std.compat;
 #include "utils/assert.hh"
 #include "insert_statement.hh"
 #include "cql3/expr/expression.hh"
@@ -28,7 +29,6 @@
 #include "types/concrete_types.hh"
 #include "validation.hh"
 #include "dht/i_partitioner.hh"
-#include <optional>
 #include "seastarx.hh"
 
 namespace cql3 {

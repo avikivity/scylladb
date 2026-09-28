@@ -7,7 +7,7 @@
  */
 
 #include "caching_options.hh"
-#include <map>
+import std.compat;
 #include "exceptions/exceptions.hh"
 #include "utils/rjson.hh"
 import boost;

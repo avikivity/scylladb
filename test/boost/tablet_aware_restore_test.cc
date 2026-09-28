@@ -8,6 +8,7 @@
 
 
 
+import std.compat;
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/s3_fixture.hh"
 #include "utils/assert.hh"

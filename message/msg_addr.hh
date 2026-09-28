@@ -9,7 +9,7 @@
 #pragma once
 
 #include "gms/inet_address.hh"
-#include <cstdint>
+import std.compat;
 
 namespace netw {
 

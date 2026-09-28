@@ -6,13 +6,7 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-#include <map>
-#include <unordered_map>
-#include <tuple>
-#include <stdexcept>
-#include <regex>
-#include <algorithm>
-#include <ios>
+import std.compat;
 
 #include <cstring>
 

@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <string>
+import std.compat;
 #include "seastarx.hh"
 
 #include "tasks/task_manager.hh"

@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 #include "cql3/statements/prepared_statement.hh"
 #include "utils/chunked_vector.hh"
 #include "enum_set.hh"

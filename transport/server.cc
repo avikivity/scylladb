@@ -44,7 +44,7 @@
 #include "auth/authenticator.hh"
 
 #include <cassert>
-#include <string>
+import std.compat;
 
 #include <snappy-c.h>
 #include <lz4.h>

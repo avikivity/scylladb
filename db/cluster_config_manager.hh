@@ -8,12 +8,7 @@
 
 #pragma once
 
-#include <functional>
-#include <optional>
-#include <string_view>
-#include <tuple>
-#include <cstdint>
-#include <vector>
+import std.compat;
 
 #include "service/migration_listener.hh"
 #include "seastarx.hh"

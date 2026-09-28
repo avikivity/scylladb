@@ -8,13 +8,8 @@
 
 #pragma once
 
-#include <cassert>
-#include <random>
-#include <cmath>
-#include <span>
-#include <optional>
-#include <cstring>
-#include <limits>
+#include "utils/assert.hh"
+import std.compat;
 
 namespace utils {
 
@@ -88,7 +83,7 @@ public:
     //
     // Mustn't be called if sample_size was 0. That would be nonsensical.
     uint64_t replace() {
-        assert(_size != 0);
+        SCYLLA_ASSERT(_size != 0);
         // The algorithm used below is "Algorithm L"
         // from "Reservoir-sampling algorithms of time complexity O(n(1 + log(N/n)))", Kim-Hung Li 1994
         if (_next < _size) {

@@ -8,14 +8,7 @@
 
 #pragma once
 
-#include <optional>
-#include <cstddef>
-#include <cstring>
-#include <iosfwd>
-#include <initializer_list>
-#include <new>
-#include <type_traits>
-#include <unordered_set>
+import std.compat;
 
 #include "utils/UUID.hh"
 #include "db_clock.hh"

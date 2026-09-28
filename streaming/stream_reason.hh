@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <cstdint>
-#include <string_view>
+import std.compat;
 import fmt;
 
 namespace streaming {

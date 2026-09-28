@@ -23,8 +23,7 @@
 #include "utils/UUID.hh"
 #include "raft/raft.hh"
 
-#include <memory>
-#include <ranges>
+import std.compat;
 
 namespace gms {
 class feature_service;

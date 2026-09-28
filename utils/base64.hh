@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <string_view>
+import std.compat;
 #include "bytes_fwd.hh"
 
 std::string base64_encode(bytes_view);

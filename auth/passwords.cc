@@ -7,7 +7,7 @@
  */
 
 #include "auth/passwords.hh"
-#include <coroutine>
+import std.compat;
 #include "utils/crypt_sha512.hh"
 
 #include <cerrno>

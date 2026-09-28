@@ -9,8 +9,7 @@
 
 #pragma once
 
-#include <functional>
-#include <tuple>
+import std.compat;
 
 namespace utils {
     template <typename T>

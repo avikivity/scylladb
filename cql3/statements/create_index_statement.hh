@@ -17,7 +17,7 @@
 
 #include "schema/schema_fwd.hh"
 
-#include <vector>
+import std.compat;
 
 
 namespace cql3 {

@@ -23,9 +23,7 @@
 #include "exceptions/exceptions.hh"
 #include "utils/multiprecision_int.hh"
 #include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <type_traits>
+import std.compat;
 #include "utils/managed_string.hh"
 
 using namespace cql3;

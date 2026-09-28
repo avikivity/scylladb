@@ -9,7 +9,7 @@
  */
 #pragma once
 
-#include <deque>
+import std.compat;
 #include "tracing/tracing.hh"
 #include "utils/chunked_string.hh"
 #include "gms/inet_address.hh"

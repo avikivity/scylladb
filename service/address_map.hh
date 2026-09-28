@@ -12,8 +12,7 @@
 #include "gms/inet_address.hh"
 #include "gms/generation-number.hh"
 
-#include <chrono>
-#include <source_location>
+import std.compat;
 #include "locator/host_id.hh"
 import boost;
 

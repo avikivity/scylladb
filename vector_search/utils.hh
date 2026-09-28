@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <algorithm>
-#include <chrono>
-#include <vector>
+import std.compat;
 
 namespace vector_search {
 

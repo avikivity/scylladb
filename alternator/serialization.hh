@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <string>
-#include <string_view>
-#include <optional>
+import std.compat;
 #include "types/types.hh"
 #include "schema/schema_fwd.hh"
 #include "keys/keys.hh"

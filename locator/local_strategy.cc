@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <algorithm>
+import std.compat;
 #include "local_strategy.hh"
 #include "dht/token.hh"
 #include "utils/class_registrator.hh"

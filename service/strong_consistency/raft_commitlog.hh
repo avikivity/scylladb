@@ -9,7 +9,7 @@
 #pragma once
 #include "raft/raft.hh"
 #include "db/commitlog/commitlog.hh"
-#include <deque>
+import std.compat;
 
 namespace service::strong_consistency {
 struct index_and_replay_position {

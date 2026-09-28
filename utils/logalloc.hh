@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <memory>
-#include <chrono>
+import std.compat;
 #include "allocation_strategy.hh"
 #include "seastarx.hh"
 #include "utils/assert.hh"

@@ -11,7 +11,7 @@
 #include "schema/schema_fwd.hh"
 #include "replica/database_fwd.hh"
 #include "bytes_ostream.hh"
-#include <iosfwd>
+import std.compat;
 
 // Immutable mutation form which can be read using any schema version of the same table.
 // Safe to access from other shards via const&.

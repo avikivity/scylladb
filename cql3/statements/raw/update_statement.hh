@@ -16,7 +16,7 @@
 
 #include "data_dictionary/data_dictionary.hh"
 
-#include <vector>
+import std.compat;
 
 namespace cql3 {
 

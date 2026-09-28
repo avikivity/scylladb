@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <vector>
+import std.compat;
 
 #include "schema/schema_fwd.hh"
 #include "sstables/types.hh"

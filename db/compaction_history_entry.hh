@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <vector>
-#include <unordered_map>
+import std.compat;
 #include "sstables/basic_info.hh"
 #include "utils/UUID.hh"
 

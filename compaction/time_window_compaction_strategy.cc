@@ -15,7 +15,7 @@
 #include "compaction_strategy_state.hh"
 #include "utils/error_injection.hh"
 
-#include <ranges>
+import std.compat;
 
 namespace compaction {
 

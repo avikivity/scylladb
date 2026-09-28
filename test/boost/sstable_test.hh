@@ -22,7 +22,7 @@
 #include "test/lib/sstable_utils.hh"
 #include "test/lib/tmpdir.hh"
 #include <boost/test/unit_test.hpp>
-#include <array>
+import std.compat;
 
 constexpr auto la = sstables::sstable::version_types::la;
 constexpr auto big = sstables::sstable::format_types::big;

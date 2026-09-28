@@ -8,8 +8,6 @@
 #pragma once
 
 #include "dht/i_partitioner.hh"
-#include <functional>
-#include <optional>
 #include "dht/token.hh"
 #include "types.hh"
 #include "utils/bptree.hh"
@@ -17,8 +15,8 @@
 #include "utils/on_internal_error.hh"
 #include "utils/phased_barrier.hh"
 #include "utils/small_vector.hh"
-#include <utility>
 #include "replica/logstor/cache.hh"
+import std.compat;
 
 namespace replica::logstor {
 

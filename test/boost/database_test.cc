@@ -12,7 +12,7 @@
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <utility>
+import std.compat;
 
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/result_set_assertions.hh"

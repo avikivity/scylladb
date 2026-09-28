@@ -7,8 +7,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
  
-#include <string>
-#include <variant>
+import std.compat;
 import yaml_cpp;
 
 #include "utils/s3/creds.hh"

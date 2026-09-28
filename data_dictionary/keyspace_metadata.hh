@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <unordered_map>
-#include <vector>
+import std.compat;
 
 #include "cql3/description.hh"
 #include "schema/schema.hh"

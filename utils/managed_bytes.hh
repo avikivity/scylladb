@@ -9,15 +9,11 @@
 
 #pragma once
 
-#include <cstdint>
 #include "bytes.hh"
 #include "utils/allocation_strategy.hh"
 #include "utils/fragment_range.hh"
 #include "utils/managed_bytes_fwd.hh"
-#include <type_traits>
-#include <utility>
-#include <iterator>
-#include <cstddef>
+import std.compat;
 import fmt;
 
 class bytes_ostream;

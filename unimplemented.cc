@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <unordered_map>
+import std.compat;
 #include "unimplemented.hh"
 #include "utils/log.hh"
 #include "seastarx.hh"

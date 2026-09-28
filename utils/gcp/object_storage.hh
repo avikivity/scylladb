@@ -8,11 +8,7 @@
 
 #pragma once
 
-#include <variant>
-#include <string>
-#include <chrono>
-#include <functional>
-#include <unordered_map>
+import std.compat;
 
 #include "utils/rjson.hh"
 #include "utils/object_storage_metrics.hh"

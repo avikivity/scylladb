@@ -12,8 +12,7 @@
 
 #include "cql3/statements/statement_type.hh"
 #include "db/consistency_level_type.hh"
-
-#include <cstdint>
+import std.compat;
 
 namespace cql3 {
 

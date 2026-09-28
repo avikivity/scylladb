@@ -7,6 +7,7 @@
  */
 
 #pragma once
+import std.compat;
 #include "seastarx.hh"
 
 namespace seastar::httpd {

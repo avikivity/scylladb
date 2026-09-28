@@ -10,11 +10,7 @@
 
 // This class is the parts of java.util.UUID that we need
 
-#include <cstdint>
-#include <cassert>
-#include <array>
-#include <iosfwd>
-#include <compare>
+import std.compat;
 
 #include "bytes_fwd.hh"
 #include "utils/assert.hh"

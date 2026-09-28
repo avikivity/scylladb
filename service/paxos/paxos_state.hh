@@ -7,13 +7,12 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 #pragma once
-#include <chrono>
 #include "service/paxos/proposal.hh"
 #include "utils/log.hh"
 #include "utils/digest_algorithm.hh"
 #include "utils/hash.hh"
 #include "db/timeout_clock.hh"
-#include <unordered_map>
+import std.compat;
 #include "utils/UUID_gen.hh"
 #include "service/paxos/prepare_response.hh"
 #include "service/migration_listener.hh"

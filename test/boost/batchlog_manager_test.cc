@@ -8,7 +8,6 @@
 
 
 #include <boost/test/unit_test.hpp>
-#include <cstdint>
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
@@ -29,6 +28,7 @@
 #include "message/messaging_service.hh"
 #include "service/storage_proxy.hh"
 #include "utils/rjson.hh"
+import std.compat;
 
 BOOST_AUTO_TEST_SUITE(batchlog_manager_test)
 

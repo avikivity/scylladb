@@ -10,7 +10,7 @@
 #define BOOST_TEST_MODULE raft
 
 #include <boost/test/unit_test.hpp>
-#include <stdexcept>
+import std.compat;
 
 using namespace raft;
 

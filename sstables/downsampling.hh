@@ -11,10 +11,7 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <vector>
-#include <array>
-#include <algorithm>
-#include <cassert>
+import std.compat;
 
 namespace sstables {
 

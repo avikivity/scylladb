@@ -7,11 +7,10 @@
 
 #pragma once
 
-#include <cstdint>
-
 #include "serializer.hh"
 #include "schema/schema.hh"
 #include "utils/log.hh"
+import std.compat;
 
 extern logging::logger dblog;
 

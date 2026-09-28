@@ -12,8 +12,7 @@
 #include "exceptions/exceptions.hh"
 #include "utils/assert.hh"
 #include "cql3/selection/raw_selector.hh"
-#include <unordered_set>
-#include <vector>
+import std.compat;
 
 #include "cql3/column_identifier.hh"
 #include "cql3/restrictions/statement_restrictions.hh"

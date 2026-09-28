@@ -32,8 +32,7 @@
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
 
-#include <utility>
-#include <algorithm>
+import std.compat;
 
 import fmt;
 namespace {

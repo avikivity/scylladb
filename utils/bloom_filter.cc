@@ -11,7 +11,7 @@
 #include "i_filter.hh"
 #include "bytes.hh"
 #include "utils/large_bitset.hh"
-#include <array>
+import std.compat;
 #include <cstdlib>
 #include "utils/bloom_calculations.hh"
 #include "bloom_filter.hh"
