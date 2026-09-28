@@ -169,6 +169,9 @@ else()
     set(Seastar_UNUSED_RESULT_ERROR ON CACHE BOOL "" FORCE)
     set(Seastar_OPENSSL OFF CACHE BOOL "" FORCE)
     set(Seastar_LTTNG OFF CACHE BOOL "" FORCE)
+    # Our bundled c-ares carries the fix for the DNS freeze of 1.34.7/1.34.8,
+    # which Seastar otherwise rejects (matching configure_seastar()).
+    set(Seastar_ASSUME_C_ARES_DNS_FREEZE_FIXED ON CACHE BOOL "" FORCE)
     # Match configure.py's build_seastar_shared_libs: Debug and Dev
     # build Seastar as a shared library, others build it static.
     if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "Dev")
