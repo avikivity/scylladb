@@ -342,7 +342,9 @@ def categorize_compile_flags(command_str):
         elif tok.startswith("-march="):
             flags["arch_flags"].add(tok)
         elif tok.startswith("-std="):
-            flags["std_flags"].add(tok)
+            # Only the last -std= takes effect. configure.py's commands also
+            # carry an overridden -std=c++26 from seastar.pc's cflags.
+            flags["std_flags"] = {tok}
         elif tok in ("-o", "-MT", "-MF", "-Xclang"):
             skip_next = True
         elif tok == "-include":

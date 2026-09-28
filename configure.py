@@ -2326,6 +2326,7 @@ def configure_seastar(build_dir, mode, mode_config, compiler_cache=None):
         '-DSeastar_LD_FLAGS={}'.format(semicolon_separated(mode_config['lib_ldflags'], seastar_cxx_ld_flags)),
         '-DSeastar_API_LEVEL=9',
         '-DSeastar_DEPRECATED_OSTREAM_FORMATTERS=OFF',
+        '-DSeastar_MODULE=ON',
         # Consume fmt via `import fmt;`. Seastar exports SEASTAR_IMPORT_FMT and
         # SEASTAR_FMT_VERSION through seastar.pc's cflags, and thus onto
         # Scylla's own TU compiles.
@@ -3109,14 +3110,16 @@ def write_build_file(f,
         # with their own (empty) module_flags. Every compile depends on the
         # BMIs, even one that imports nothing: sccache hashes each
         # -fmodule-file= input.
+        seastar_pcm = f'$builddir/{mode}/seastar/CMakeFiles/seastar.dir/seastar.pcm'
         boost_consumer_flags = f'-fmodule-file=boost={boost_pcm} ' + ' '.join(
             f'-fmodule-file=boost:{part}={pcm}'
             for part, pcm in zip(boost_partitions, boost_partition_pcms)
         )
-        module_flags = f'-fmodule-file=std={std_pcm} -fmodule-file=std.compat={std_compat_pcm} -fmodule-file=abseil={abseil_pcm} -fmodule-file=fmt={fmt_pcm} {boost_consumer_flags}'
+        module_flags = f'-fmodule-file=std={std_pcm} -fmodule-file=std.compat={std_compat_pcm} -fmodule-file=seastar={seastar_pcm} -fmodule-file=abseil={abseil_pcm} -fmodule-file=fmt={fmt_pcm} {boost_consumer_flags}'
         f.write(f'module_flags_{mode} = {module_flags}\n')
 
         all_module_pcms = f'{std_pcm} {std_compat_pcm} {abseil_pcm} {fmt_pcm} {boost_pcm} {all_partition_pcm_deps}'
+        seastar_dep = f'$builddir/{mode}/seastar/libseastar.{seastar_lib_ext}'
 
         compiles = {}
         swaggers = set()
@@ -3306,7 +3309,6 @@ def write_build_file(f,
             compiles[obj] = cc
         for obj in compiles:
             src = compiles[obj]
-            seastar_dep = f'$builddir/{mode}/seastar/libseastar.{seastar_lib_ext}'
             abseil_dep = ' '.join(f'$builddir/{mode}/abseil/{lib}' for lib in abseil_libs)
             f.write(f'build {obj}: cxx.{mode} {src} | {profile_dep} {seastar_dep} {abseil_dep} {gen_headers_dep} {all_module_pcms}\n')
             if src in modeval['per_src_extra_cxxflags']:
@@ -3317,7 +3319,7 @@ def write_build_file(f,
             obj = swagger.objects(gen_dir)[0]
             src = swagger.source
             f.write('build {} | {} : swagger {} | {}/scripts/seastar-json2code.py\n'.format(hh, cc, src, args.seastar_path))
-            f.write(f'build {obj}: cxx.{mode} {cc} | {profile_dep} {all_module_pcms}\n')
+            f.write(f'build {obj}: cxx.{mode} {cc} | {profile_dep} {seastar_dep} {all_module_pcms}\n')
         for hh in serializers:
             src = serializers[hh]
             f.write('build {}: serializer {} | idl-compiler.py\n'.format(hh, src))
@@ -3334,7 +3336,7 @@ def write_build_file(f,
                                                                    grammar.source.rsplit('.', 1)[0]))
             for cc in grammar.sources('$builddir/{}/gen'.format(mode)):
                 obj = cc.replace('.cpp', '.o')
-                f.write(f'build {obj}: cxx.{mode} {cc} | {profile_dep} {all_module_pcms} || {" ".join(serializers)}\n')
+                f.write(f'build {obj}: cxx.{mode} {cc} | {profile_dep} {seastar_dep} {all_module_pcms} || {" ".join(serializers)}\n')
                 flags = '-Wno-parentheses-equality'
                 if cc.endswith('Parser.cpp'):
                     # Unoptimized parsers end up using huge amounts of stack space and overflowing their stack
@@ -3345,12 +3347,11 @@ def write_build_file(f,
                 f.write('  obj_cxxflags = %s\n' % flags)
         f.write(f'build $builddir/{mode}/gen/empty.cc: gen\n')
         for hh in headers:
-            f.write('build $builddir/{mode}/{hh}.o: checkhh.{mode} {hh} | $builddir/{mode}/gen/empty.cc {profile_dep} || {gen_headers_dep} {all_module_pcms}\n'.format(
-                    mode=mode, hh=hh, gen_headers_dep=gen_headers_dep, profile_dep=profile_dep, all_module_pcms=all_module_pcms))
+            f.write('build $builddir/{mode}/{hh}.o: checkhh.{mode} {hh} | $builddir/{mode}/gen/empty.cc {profile_dep} {seastar_dep} || {gen_headers_dep} {all_module_pcms}\n'.format(
+                    mode=mode, hh=hh, gen_headers_dep=gen_headers_dep, profile_dep=profile_dep, seastar_dep=seastar_dep, all_module_pcms=all_module_pcms))
 
-        seastar_dep = f'$builddir/{mode}/seastar/libseastar.{seastar_lib_ext}'
         seastar_testing_dep = f'$builddir/{mode}/seastar/libseastar_testing.{seastar_lib_ext}'
-        f.write(f'build {seastar_dep}: ninja $builddir/{mode}/seastar/build.ninja | always {fmt_lib(mode, modeval)} {c_ares_lib(outdir, mode)} {profile_dep}\n')
+        f.write(f'build {seastar_dep} {seastar_pcm}: ninja $builddir/{mode}/seastar/build.ninja | always {fmt_lib(mode, modeval)} {c_ares_lib(outdir, mode)} {profile_dep}\n')
         f.write('  pool = submodule_pool\n')
         f.write(f'  subdir = $builddir/{mode}/seastar\n')
         f.write('  target = seastar\n')

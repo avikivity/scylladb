@@ -16,6 +16,8 @@ import fmt;
 #include <seastar/core/fstream.hh>
 #include <seastar/util/log.hh>
 
+namespace seastar::http::internal { sstring url_encode(std::string_view in); }
+
 #define CPP_JWT_USE_VENDORED_NLOHMANN_JSON
 #include <jwt/jwt.hpp>
 

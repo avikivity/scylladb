@@ -159,6 +159,7 @@ if(is_multi_config)
     add_dependencies(Seastar::seastar_testing Seastar)
 else()
     set(Seastar_TESTING ON CACHE BOOL "" FORCE)
+    set(Seastar_MODULE ON CACHE BOOL "" FORCE)
     # Consume fmt through `import fmt;`; pairs with the attach-to-global fmt
     # module below. Seastar_IMPORT_FMT itself stays off: it only affects
     # Seastar's install interface, and with it Seastar expects fmt::fmt-module
@@ -188,6 +189,12 @@ else()
         set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     endif()
     add_subdirectory(seastar)
+    # Seastar_MODULE: the seastar library's own compile of src/seastar.cppm
+    # emits the seastar BMI; point Scylla's targets at it, as configure.py
+    # does (see scylla_cxx_module_flags below).
+    list(APPEND scylla_cxx_module_flags
+      -fmodule-file=seastar=${CMAKE_CURRENT_BINARY_DIR}/seastar/CMakeFiles/seastar.dir/seastar.pcm)
+    list(APPEND scylla_cxx_module_dependencies seastar)
 endif()
 
 set(ABSL_PROPAGATE_CXX_STD ON CACHE BOOL "" FORCE)
