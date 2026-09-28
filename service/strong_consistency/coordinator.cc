@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <concepts>
 #include <span>
+#include "seastarx.hh"
 
 namespace service::strong_consistency {
 

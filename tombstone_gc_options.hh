@@ -12,6 +12,7 @@
 #include <chrono>
 #include <fmt/core.h>
 #include <seastar/core/sstring.hh>
+#include "seastarx.hh"
 
 enum class tombstone_gc_mode : uint8_t { timeout, disabled, immediate, repair };
 

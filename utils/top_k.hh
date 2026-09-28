@@ -43,6 +43,7 @@
 
 */
 
+#include "seastarx.hh"
 #include <cstdio>
 #include <list>
 #include <optional>

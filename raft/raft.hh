@@ -16,6 +16,7 @@
 #include <seastar/util/log.hh>
 #include <seastar/core/abort_source.hh>
 #include <source_location>
+#include "seastarx.hh"
 #include "bytes_ostream.hh"
 #include "internal.hh"
 #include "logical_clock.hh"

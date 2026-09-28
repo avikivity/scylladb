@@ -22,6 +22,7 @@
 #include "readers/mutation_source.hh"
 #include "schema/schema_registry.hh"
 #include "locator/abstract_replication_strategy.hh"
+#include "seastarx.hh"
 
 extern logger mrlog;
 

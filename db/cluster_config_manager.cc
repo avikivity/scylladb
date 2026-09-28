@@ -25,6 +25,7 @@
 #include "locator/topology.hh"
 #include "replica/database.hh"
 #include "utils/on_internal_error.hh"
+#include "seastarx.hh"
 
 namespace db {
 

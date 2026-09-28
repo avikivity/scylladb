@@ -11,6 +11,7 @@
 
 #include <string>
 #include <seastar/core/future.hh>
+#include "seastarx.hh"
 
 #include "tasks/task_manager.hh"
 #include "db/snapshot_types.hh"

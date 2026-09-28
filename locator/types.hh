@@ -16,6 +16,7 @@
 #include "locator/host_id.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace locator {
 

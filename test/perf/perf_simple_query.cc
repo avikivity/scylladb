@@ -36,6 +36,7 @@
 #include "replica/database.hh"
 #include <seastar/core/sleep.hh>
 #include <seastar/core/sharded.hh>
+#include "seastarx.hh"
 
 static const sstring table_name = "cf";
 

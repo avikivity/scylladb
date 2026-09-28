@@ -68,6 +68,7 @@
 #include "locator/topology.hh"
 #include <seastar/core/smp.hh>
 
+#include "seastarx.hh"
 
 BOOST_AUTO_TEST_SUITE(cql_query_test)
 

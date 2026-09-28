@@ -22,6 +22,7 @@
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include "locator/gce_snitch.hh"
+#include "seastarx.hh"
 #include <seastar/testing/test_case.hh>
 #include <seastar/http/httpd.hh>
 #include <seastar/net/inet_address.hh>

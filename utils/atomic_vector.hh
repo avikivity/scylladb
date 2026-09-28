@@ -12,6 +12,7 @@
 #include <seastar/core/rwlock.hh>
 #include <seastar/util/defer.hh>
 #include <seastar/util/noncopyable_function.hh>
+#include "seastarx.hh"
 
 #include <vector>
 

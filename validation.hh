@@ -14,6 +14,7 @@
 #include "schema/schema_fwd.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 class partition_key_view;
 

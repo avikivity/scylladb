@@ -17,6 +17,7 @@
 #include "service/maintenance_mode.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace auth { class service; }
 namespace service {

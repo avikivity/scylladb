@@ -15,6 +15,7 @@
 #include <seastar/core/sharded.hh>
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace gms { class gossiper; }
 

@@ -12,6 +12,7 @@
 #include "mutation/mutation_fragment_fwd.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 class mutation_reader;
 class reader_permit;

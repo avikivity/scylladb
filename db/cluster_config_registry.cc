@@ -25,6 +25,7 @@
 #include "utils/chunked_string.hh"
 #include "utils/log.hh"
 #include "utils/on_internal_error.hh"
+#include "seastarx.hh"
 
 namespace db::cluster_config_registry {
 

@@ -14,6 +14,7 @@
 #include <boost/multiprecision/cpp_int.hpp>
 
 #include <seastar/json/formatter.hh>
+#include "seastarx.hh"
 
 #include "db/config.hh"
 

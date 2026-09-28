@@ -19,6 +19,7 @@
 #include <seastar/core/sstring.hh>
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace bs2 = boost::signals2;
 

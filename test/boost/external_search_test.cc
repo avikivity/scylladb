@@ -48,6 +48,7 @@
 #include <seastar/core/shared_ptr.hh>
 
 #include <utility>
+#include "seastarx.hh"
 
 using namespace cql3;
 using namespace cql3::expr;

@@ -16,6 +16,7 @@
 #include <fmt/format.h>
 
 #include <seastar/core/shared_ptr.hh>
+#include "seastarx.hh"
 
 namespace sstables {
 

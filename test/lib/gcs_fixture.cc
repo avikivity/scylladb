@@ -29,6 +29,7 @@
 #include "utils/gcp/gcp_credentials.hh"
 #include "utils/UUID_gen.hh"
 #include "utils/http.hh"
+#include "seastarx.hh"
 
 namespace fs = std::filesystem;
 namespace tp = tests::proc;

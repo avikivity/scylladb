@@ -27,6 +27,7 @@
 #include "replica/database.hh"
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/eventually.hh"
+#include "seastarx.hh"
 
 BOOST_AUTO_TEST_SUITE(cluster_config_manager_test)
 

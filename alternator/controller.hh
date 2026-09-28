@@ -10,6 +10,7 @@
 
 #include <seastar/core/sharded.hh>
 #include <seastar/core/smp.hh>
+#include "seastarx.hh"
 
 #include "transport/protocol_server.hh"
 

@@ -16,6 +16,7 @@
 #include <seastar/core/future.hh>
 #include <seastar/core/lowres_clock.hh>
 #include <seastar/util/bool_class.hh>
+#include "seastarx.hh"
 
 #include <atomic>
 #include <chrono>

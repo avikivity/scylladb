@@ -7,6 +7,7 @@
 #include <seastar/util/defer.hh>
 #include <seastar/core/when_all.hh>
 
+#include "seastarx.hh"
 #ifdef SEASTAR_DEBUG
 // Increase tick time to allow debug to process messages
  const auto tick_delay = 200ms;

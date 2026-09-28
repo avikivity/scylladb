@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "seastarx.hh"
 #include "utils/assert.hh"
 #include <seastar/util/closeable.hh>
 #include <seastar/core/seastar.hh>

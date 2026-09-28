@@ -14,6 +14,7 @@
 #include "gc_clock.hh"
 #include "repair/repair.hh"
 #include "tasks/task_manager.hh"
+#include "seastarx.hh"
 
 namespace repair {
 

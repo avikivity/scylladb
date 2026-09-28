@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "seastarx.hh"
 #include <coroutine>
 #include "schema/schema.hh"
 #include "mutation/mutation.hh"

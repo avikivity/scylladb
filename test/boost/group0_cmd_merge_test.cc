@@ -27,6 +27,7 @@
 #include "test/lib/mutation_assertions.hh"
 #include "test/lib/mutation_source_test.hh"
 #include <seastar/core/thread.hh>
+#include "seastarx.hh"
 
 BOOST_AUTO_TEST_SUITE(group0_cmd_merge_test)
 

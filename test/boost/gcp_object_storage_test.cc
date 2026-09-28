@@ -49,6 +49,7 @@
 #include "utils/rjson.hh"
 
 #include <seastar/core/metrics_api.hh>
+#include "seastarx.hh"
 #include <seastar/testing/test_fixture.hh>
 
 using namespace std::string_view_literals;

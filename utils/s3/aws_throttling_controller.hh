@@ -13,6 +13,7 @@
 #include <seastar/core/lowres_clock.hh>
 #include <chrono>
 #include <cstdint>
+#include "seastarx.hh"
 
 namespace s3 {
 

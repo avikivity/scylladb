@@ -35,6 +35,7 @@
 #include "cql3/functions/native_scalar_function.hh"
 #include "exceptions/exceptions.hh"
 #include <seastar/util/defer.hh>
+#include "seastarx.hh"
 
 using namespace cql3;
 using namespace cql3::expr;

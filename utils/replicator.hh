@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "seastarx.hh"
 #include <chrono>
 #include <coroutine>
 #include <cstdint>

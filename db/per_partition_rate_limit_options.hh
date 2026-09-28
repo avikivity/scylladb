@@ -16,6 +16,7 @@
 #include "operation_type.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace db {
 

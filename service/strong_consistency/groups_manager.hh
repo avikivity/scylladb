@@ -19,6 +19,7 @@
 #include <seastar/util/noncopyable_function.hh>
 
 #include <source_location>
+#include "seastarx.hh"
 
 namespace db {
 class system_keyspace;

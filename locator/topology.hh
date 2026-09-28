@@ -26,6 +26,7 @@
 #include "inet_address_vectors.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 struct sort_by_proximity_topology;
 

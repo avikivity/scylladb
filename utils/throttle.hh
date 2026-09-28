@@ -1,5 +1,6 @@
 #pragma once
 
+#include "seastarx.hh"
 #include "utils/assert.hh"
 #include <seastar/core/future.hh>
 #include <optional>

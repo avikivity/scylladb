@@ -30,6 +30,7 @@
 #include <seastar/util/defer.hh>
 #include "dht/i_partitioner.hh"
 #include <optional>
+#include "seastarx.hh"
 
 namespace cql3 {
 

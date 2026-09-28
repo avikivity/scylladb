@@ -26,6 +26,7 @@
 #include "utils/disk_space_monitor.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 class row_level_repair_gossip_helper;
 

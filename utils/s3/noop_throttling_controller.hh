@@ -9,6 +9,7 @@
 #pragma once
 
 #include "utils/s3/throttling_controller.hh"
+#include "seastarx.hh"
 
 #include <seastar/core/future.hh>
 

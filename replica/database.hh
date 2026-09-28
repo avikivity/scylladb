@@ -80,6 +80,7 @@
 #include "service/topology_guard.hh"
 #include "utils/disk_space_monitor.hh"
 #include "db/large_data_handler.hh"
+#include "seastarx.hh"
 
 class cell_locker;
 class cell_locker_stats;

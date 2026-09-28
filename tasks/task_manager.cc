@@ -29,6 +29,7 @@
 #include "utils/error_injection.hh"
 #include "idl/tasks.dist.hh"
 #include <time.h>
+#include "seastarx.hh"
 
 using namespace std::chrono_literals;
 

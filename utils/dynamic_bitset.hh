@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "seastarx.hh"
 #include <cstdint>
 #include <limits>
 #include <vector>

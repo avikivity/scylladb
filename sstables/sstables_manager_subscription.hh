@@ -19,6 +19,7 @@
 
 #include "sstables/generation_type.hh"
 #include "utils/assert.hh"
+#include "seastarx.hh"
 
 namespace bs2 = boost::signals2;
 

@@ -12,6 +12,7 @@
 #include <seastar/core/sstring.hh>
 #include <cstddef>
 #include <string_view>
+#include "seastarx.hh"
 
 using seastar::sstring;
 

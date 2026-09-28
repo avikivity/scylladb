@@ -51,6 +51,7 @@
 #include "utils/checked-file-impl.hh"
 #include "idl/commitlog.dist.impl.hh"
 
+#include "seastarx.hh"
 BOOST_AUTO_TEST_SUITE(commitlog_test)
 
 using namespace db;

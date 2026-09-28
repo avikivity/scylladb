@@ -27,6 +27,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #include <xxhash.h>
+#include "seastarx.hh"
 #pragma GCC diagnostic pop
 
 namespace replica::logstor {

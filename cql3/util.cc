@@ -17,6 +17,7 @@
 
 #include <seastar/core/align.hh>
 #include <seastar/core/posix.hh>
+#include "seastarx.hh"
 
 #include <sys/mman.h>
 #include <ucontext.h>

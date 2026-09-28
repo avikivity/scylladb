@@ -18,6 +18,7 @@
 #include "utils/collection-concepts.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace utils {
 

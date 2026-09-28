@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "seastarx.hh"
 #include <optional>
 #include <string>
 #include <string_view>

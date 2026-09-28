@@ -10,6 +10,7 @@
 #include <seastar/http/reply.hh>
 #include <seastar/core/sstring.hh>
 #include <fmt/format.h>
+#include "seastarx.hh"
 
 namespace vector_search {
 

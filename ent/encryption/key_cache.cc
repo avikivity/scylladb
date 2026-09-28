@@ -10,6 +10,7 @@
 #include <seastar/core/metrics.hh>
 
 #include "key_cache.hh"
+#include "seastarx.hh"
 
 struct key_cache_stats {
     uint64_t key_cache_hits = 0;

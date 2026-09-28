@@ -11,6 +11,7 @@
 #pragma once
 
 #include <seastar/core/sharded.hh>
+#include "seastarx.hh"
 
 namespace tasks {
 class task_manager;

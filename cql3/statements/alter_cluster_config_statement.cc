@@ -25,6 +25,7 @@
 #include "service/client_state.hh"
 #include "service/query_state.hh"
 #include "service/storage_proxy.hh"
+#include "seastarx.hh"
 
 namespace cql3 {
 

@@ -11,6 +11,7 @@
 #include "dht/token.hh"
 #include <seastar/core/smp.hh>
 #include <boost/container/static_vector.hpp>
+#include "seastarx.hh"
 
 namespace dht {
 

@@ -64,6 +64,7 @@
 #include "init.hh"
 #include "key_cache.hh"
 
+#include "seastarx.hh"
 static seastar::logger logg{"encryption"};
 
 namespace encryption {

@@ -14,6 +14,7 @@
 
 #include "cql3/statements/schema_altering_statement.hh"
 #include "utils/UUID.hh"
+#include "seastarx.hh"
 
 namespace cql3 {
 

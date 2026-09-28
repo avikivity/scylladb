@@ -9,6 +9,7 @@
 #pragma once
 
 #include "utils/assert.hh"
+#include "seastarx.hh"
 #include <algorithm>
 #include <list>
 #include <vector>

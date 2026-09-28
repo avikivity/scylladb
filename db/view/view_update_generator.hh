@@ -23,6 +23,7 @@
 #include <seastar/core/gate.hh>
 
 using namespace seastar;
+#include "seastarx.hh"
 
 struct frozen_mutation_and_schema;
 class mutation;

@@ -68,6 +68,7 @@
 //      Tests are run also with 20% random packet drops.
 //      Two test cases are created for each with the macro
 //          RAFT_TEST_CASE(<test name>, <test case>)
+#include "seastarx.hh"
 
 using namespace std::chrono_literals;
 using namespace std::placeholders;

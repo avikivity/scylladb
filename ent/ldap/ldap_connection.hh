@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "seastarx.hh"
 #include <mutex>
 #include <ldap.h>
 #include <memory>

@@ -12,6 +12,7 @@
 #include <vector>
 #include <random>
 
+#include "seastarx.hh"
 namespace vector_search {
 
 template <class T, typename RandomNumberEngine>

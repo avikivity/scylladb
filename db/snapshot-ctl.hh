@@ -24,6 +24,7 @@
 #include <seastar/core/condition-variable.hh>
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace netw { class messaging_service; }
 namespace sstables { class storage_manager; }

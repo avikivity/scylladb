@@ -9,6 +9,7 @@
  */
 
 #include <seastar/core/on_internal_error.hh>
+#include "seastarx.hh"
 
 #include "cql3/prepare_context.hh"
 #include "cql3/column_identifier.hh"

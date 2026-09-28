@@ -21,6 +21,7 @@
 #include "test/lib/simple_schema.hh"
 #include "test/lib/sstable_test_env.hh"
 #include "test/lib/sstable_utils.hh"
+#include "seastarx.hh"
 
 namespace {
 

@@ -15,6 +15,7 @@
 
 #include "utils/object_storage_metrics.hh"
 #include "utils/log.hh"
+#include "seastarx.hh"
 
 static logging::logger oslog("object_storage_metrics");
 

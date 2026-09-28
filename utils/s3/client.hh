@@ -26,6 +26,7 @@
 #include "utils/s3/throttling_controller.hh"
 
 using namespace seastar;
+#include "seastarx.hh"
 class memory_data_sink_buffers;
 
 namespace s3 {

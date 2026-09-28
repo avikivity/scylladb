@@ -43,6 +43,7 @@
 #include "utils/s3/credentials_providers/sts_assume_role_credentials_provider.hh"
 #include "sstables/checksum_utils.hh"
 #include "gc_clock.hh"
+#include "seastarx.hh"
 
 using namespace std::string_view_literals;
 using namespace std::chrono_literals;

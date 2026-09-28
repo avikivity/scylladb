@@ -17,6 +17,7 @@
 #include <seastar/core/smp.hh>
 
 using namespace seastar;
+#include "seastarx.hh"
 
 namespace utils {
 

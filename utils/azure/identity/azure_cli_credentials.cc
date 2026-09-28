@@ -17,6 +17,7 @@
 #include <coroutine>
 #include "utils/exceptions.hh"
 #include "exceptions.hh"
+#include "seastarx.hh"
 #include "azure_cli_credentials.hh"
 
 namespace azure {

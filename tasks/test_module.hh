@@ -15,6 +15,7 @@
 #include <seastar/core/shared_ptr.hh>
 
 #include "task_manager.hh"
+#include "seastarx.hh"
 
 namespace tasks {
 

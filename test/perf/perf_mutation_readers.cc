@@ -8,6 +8,7 @@
 
 
 #include <seastar/core/sleep.hh>
+#include "seastarx.hh"
 #include <seastar/testing/perf_tests.hh>
 #include <seastar/util/closeable.hh>
 

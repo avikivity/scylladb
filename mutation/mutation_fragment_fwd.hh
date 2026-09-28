@@ -10,6 +10,7 @@
 #include <seastar/util/optimized_optional.hh>
 
 using namespace seastar;
+#include "seastarx.hh"
 
 class mutation_fragment;
 class mutation_fragment_v2;

@@ -31,6 +31,7 @@
 #include "service/topology_guard.hh"
 #include "utils/chain_abort_source.hh"
 #include "utils/exponential_backoff_retry.hh"
+#include "seastarx.hh"
 
 #include <seastar/core/abort_source.hh>
 

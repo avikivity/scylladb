@@ -47,6 +47,7 @@
 #include <seastar/core/coroutine.hh>
 #include <seastar/coroutine/maybe_yield.hh>
 #include <boost/range/algorithm/find_end.hpp>
+#include "seastarx.hh"
 #include <charconv>
 #include <stdexcept>
 
