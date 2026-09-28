@@ -3065,7 +3065,7 @@ def write_build_file(f,
         # Wrapper modules for third-party libraries whose headers include the
         # standard library textually; like abseil, they keep those includes
         # in their global module fragment. modules/<name>.cppm exports <name>.
-        wrapper_modules = ['rapidjson']
+        wrapper_modules = ['rapidjson', 'jsoncpp']
         wrapper_module_pcms = {name: f'$builddir/{mode}/modules/{name}.pcm' for name in wrapper_modules}
         wrapper_module_objs = [f'$builddir/{mode}/modules/{name}.o' for name in wrapper_modules]
         for name, obj in zip(wrapper_modules, wrapper_module_objs):
