@@ -29,7 +29,7 @@
 #include <seastar/testing/thread_test_case.hh>
 #include <cstdio>
 #include <sstream>
-#include <cryptopp/sha.h>
+import cryptopp;
 #include "utils/io-wrappers.hh"
 import boost;
 
