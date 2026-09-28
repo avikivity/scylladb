@@ -26,6 +26,8 @@
 #include <sys/uio.h>
 #include <sys/stat.h>
 
+namespace seastar::http::internal { sstring url_encode(std::string_view in); }
+
 #include "utils/rest/client.hh"
 #include "utils/exponential_backoff_retry.hh"
 #include "utils/error_injection.hh"

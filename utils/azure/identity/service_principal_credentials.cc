@@ -15,6 +15,8 @@ import boost;
 #include <seastar/util/file.hh>
 #include "seastarx.hh"
 
+namespace seastar::http::internal { sstring url_encode(std::string_view in); }
+
 #include "db/config.hh"
 #include "types/types.hh"
 #include "utils/base64.hh"
