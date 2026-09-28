@@ -3062,6 +3062,19 @@ def write_build_file(f,
         f.write(f'  pcm = {abseil_pcm}\n')
         f.write(f'  module_flags =\n')
 
+        # Wrapper modules for third-party libraries whose headers include the
+        # standard library textually; like abseil, they keep those includes
+        # in their global module fragment. modules/<name>.cppm exports <name>.
+        wrapper_modules = ['rapidjson']
+        wrapper_module_pcms = {name: f'$builddir/{mode}/modules/{name}.pcm' for name in wrapper_modules}
+        wrapper_module_objs = [f'$builddir/{mode}/modules/{name}.o' for name in wrapper_modules]
+        for name, obj in zip(wrapper_modules, wrapper_module_objs):
+            pcm = wrapper_module_pcms[name]
+            f.write(f'build {obj} | {pcm}: cxx_build_module.{mode} modules/{name}.cppm\n')
+            f.write(f'  pcm = {pcm}\n')
+            f.write(f'  module_flags =\n')
+        wrapper_module_flags = ' '.join(f'-fmodule-file={name}={pcm}' for name, pcm in wrapper_module_pcms.items())
+
         # fmt module — built by fmt's own CMake (FMT_MODULE=ON in
         # configure_fmt()); we just consume the BMI and object it emits.
         fmt_pcm = f'$builddir/{mode}/fmt/CMakeFiles/fmt-module.dir/fmt.pcm'
@@ -3115,10 +3128,10 @@ def write_build_file(f,
             f'-fmodule-file=boost:{part}={pcm}'
             for part, pcm in zip(boost_partitions, boost_partition_pcms)
         )
-        module_flags = f'-fmodule-file=std={std_pcm} -fmodule-file=std.compat={std_compat_pcm} -fmodule-file=seastar={seastar_pcm} -fmodule-file=abseil={abseil_pcm} -fmodule-file=fmt={fmt_pcm} {boost_consumer_flags}'
+        module_flags = f'-fmodule-file=std={std_pcm} -fmodule-file=std.compat={std_compat_pcm} -fmodule-file=seastar={seastar_pcm} -fmodule-file=abseil={abseil_pcm} {wrapper_module_flags} -fmodule-file=fmt={fmt_pcm} {boost_consumer_flags}'
         f.write(f'module_flags_{mode} = {module_flags}\n')
 
-        all_module_pcms = f'{std_pcm} {std_compat_pcm} {abseil_pcm} {fmt_pcm} {boost_pcm} {all_partition_pcm_deps}'
+        all_module_pcms = f'{std_pcm} {std_compat_pcm} {abseil_pcm} {" ".join(wrapper_module_pcms.values())} {fmt_pcm} {boost_pcm} {all_partition_pcm_deps}'
         seastar_dep = f'$builddir/{mode}/seastar/libseastar.{seastar_lib_ext}'
 
         compiles = {}
@@ -3166,6 +3179,7 @@ def write_build_file(f,
             objs.append(std_obj)
             objs.append(std_compat_obj)
             objs.append(abseil_obj)
+            objs.extend(wrapper_module_objs)
             objs.append(fmt_obj)
             objs.extend(boost_all_objs)
             if binary in cpp_apps:

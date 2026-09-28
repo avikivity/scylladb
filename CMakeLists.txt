@@ -379,6 +379,26 @@ list(APPEND scylla_cxx_module_targets scylla-abseilmodule)
 list(APPEND scylla_cxx_module_flags
   -fmodule-file=abseil=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/scylla-abseilmodule.dir/abseil.pcm)
 
+# C++20 modules: wrappers for third-party libraries whose headers include
+# the standard library textually; like abseil, they keep those includes in
+# their global module fragment. modules/<name>.cppm exports <name>.
+set(scylla_wrapper_modules rapidjson)
+foreach(name IN LISTS scylla_wrapper_modules)
+  add_library(scylla-${name}module STATIC)
+  target_sources(scylla-${name}module
+    PUBLIC
+      FILE_SET CXX_MODULES FILES
+        modules/${name}.cppm)
+  # rapidjson.cppm includes utils/rjson_config.hh.
+  target_include_directories(scylla-${name}module PRIVATE ${PROJECT_SOURCE_DIR})
+  target_link_libraries(scylla-${name}module PUBLIC scylla-stdmodule)
+  set_target_properties(scylla-${name}module PROPERTIES CXX_SCAN_FOR_MODULES ON)
+  list(APPEND scylla_wrapper_module_targets scylla-${name}module)
+  list(APPEND scylla_cxx_module_targets scylla-${name}module)
+  list(APPEND scylla_cxx_module_flags
+    -fmodule-file=${name}=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/scylla-${name}module.dir/${name}.pcm)
+endforeach()
+
 # C++20 modules: fmt formatting library module.
 # Built by fmt's own CMake (FMT_MODULE=ON above) as the fmt::fmt-module
 # target; we just consume it. Scylla disables module scanning globally, so
@@ -474,6 +494,7 @@ target_link_libraries(scylla-main
     zstd::zstd_static
     scylla-stdmodule
     scylla-abseilmodule
+    ${scylla_wrapper_module_targets}
     fmt::fmt-module
     scylla-boostmodule
 )

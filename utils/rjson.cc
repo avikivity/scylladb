@@ -19,6 +19,10 @@ namespace rjson {
 
 allocator the_allocator;
 
+void throw_assertion_failure(const char* condition) {
+    throw rjson::error(fmt::format("JSON assert failed on condition '{}', at: {}", condition, current_backtrace_tasklocal()));
+}
+
 // chunked_content_stream is a wrapper of a chunked_content which
 // presents the Stream concept that the rapidjson library expects as input
 // for its parser (https://rapidjson.org/classrapidjson_1_1_stream.html).
