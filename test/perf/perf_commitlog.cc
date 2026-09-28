@@ -8,7 +8,7 @@
 
 #include <fstream>
 
-#include <json/json.h>
+import jsoncpp;
 
 #include <seastar/testing/test_runner.hh>
 

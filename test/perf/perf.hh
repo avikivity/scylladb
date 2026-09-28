@@ -18,7 +18,7 @@
 #include <chrono>
 #include <iosfwd>
 #include <vector>
-#include <json/json.h>
+import jsoncpp;
 
 template <typename Func>
 void time_it(Func func, int iterations = 5, int iterations_between_clock_readings = 1000) {
