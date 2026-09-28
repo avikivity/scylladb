@@ -8,8 +8,16 @@
  */
 import boost;
 
-#define CPP_JWT_USE_VENDORED_NLOHMANN_JSON
-#include <jwt/jwt.hpp>
+import jwt_cpp;
+
+// <cstdlib> pulls <bits/c++config.h> in normal linkage before the OpenSSL
+// headers include it inside their extern "C" block (which would otherwise
+// re-declare __glibcxx_assert_fail etc. with C linkage, clashing with the
+// std module).
+#include <cstdlib>
+#include <openssl/bio.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
 
 #include "seastarx.hh"
 
