@@ -9,7 +9,7 @@
 #include <algorithm>
 
 #include "utils/assert.hh"
-#include <json/json.h>
+import jsoncpp;
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/reader_concurrency_semaphore.hh"
 #include "test/perf/perf.hh"

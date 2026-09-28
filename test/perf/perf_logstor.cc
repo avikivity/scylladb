@@ -271,7 +271,7 @@ import fmt;
 #include <variant>
 #include <vector>
 
-#include <json/json.h>
+import jsoncpp;
 
 #include <seastar/testing/test_runner.hh>
 

@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <numeric>
 #include <sstream>
-#include <json/json.h>
+import jsoncpp;
 
 #include "test/lib/cql_test_env.hh"
 #include "test/perf/perf.hh"
