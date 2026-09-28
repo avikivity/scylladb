@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
 #include "compress.hh"
 #include "schema/schema_fwd.hh"
 #include "utils/updateable_value.hh"

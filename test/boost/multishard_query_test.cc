@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "utils/assert.hh"
 #include "replica/multishard_query.hh"
 #include "schema/schema_registry.hh"
@@ -36,6 +35,7 @@ import fmt;
 #include <utility>
 #include <algorithm>
 
+import fmt;
 namespace {
 
 sstring create_vnodes_keyspace(cql_test_env& env) {

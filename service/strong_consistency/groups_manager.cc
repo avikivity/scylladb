@@ -24,16 +24,10 @@
 #include "idl/strong_consistency/groups_manager.dist.hh"
 #include "utils/error_injection.hh"
 #include "utils/on_internal_error.hh"
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/as_future.hh>
 #include "service/topology_guard.hh"
 #include "utils/chain_abort_source.hh"
 #include "utils/exponential_backoff_retry.hh"
 #include "seastarx.hh"
-
-#include <seastar/core/abort_source.hh>
 
 namespace service::strong_consistency {
 

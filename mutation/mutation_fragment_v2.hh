@@ -12,7 +12,6 @@
 #include "position_in_partition.hh"
 
 #include <optional>
-#include <seastar/util/optimized_optional.hh>
 
 #include "reader_permit.hh"
 

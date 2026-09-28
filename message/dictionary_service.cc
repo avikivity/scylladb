@@ -2,7 +2,6 @@
 #include "service/raft/raft_group0.hh"
 #include "gms/feature_service.hh"
 #include "service/raft/raft_group0_client.hh"
-#include <seastar/core/coroutine.hh>
 #include "db/system_keyspace.hh"
 
 dictionary_service::dictionary_service(

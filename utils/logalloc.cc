@@ -12,20 +12,6 @@
 #include <coroutine>
 #include <sys/mman.h>
 
-#include <seastar/core/memory.hh>
-#include <seastar/core/align.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/util/alloc_failure_injector.hh>
-#include <seastar/util/backtrace.hh>
-#include <seastar/util/later.hh>
-#include <seastar/core/on_internal_error.hh>
-
 #include "utils/assert.hh"
 #include "utils/logalloc.hh"
 #include "utils/log.hh"

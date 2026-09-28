@@ -12,9 +12,7 @@
 #include <exception>
 #include <variant>
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/sstring.hh>
+import seastar;
 
 namespace replica {
 

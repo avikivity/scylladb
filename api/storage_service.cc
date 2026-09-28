@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "storage_service.hh"
 #include "api/api.hh"
 #include "api/api-doc/column_family.json.hh"
@@ -35,12 +34,6 @@ import fmt;
 #include "gms/gossiper.hh"
 #include "db/system_keyspace.hh"
 #include "db/snapshot_types.hh"
-#include <seastar/http/exception.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/exception.hh>
 #include "repair/row_level.hh"
 #include "locator/snitch_base.hh"
 #include "locator/tablets.hh"
@@ -65,6 +58,7 @@ import fmt;
 #include "api/validate.hh"
 import boost;
 
+import fmt;
 using namespace seastar::httpd;
 using namespace std::chrono_literals;
 

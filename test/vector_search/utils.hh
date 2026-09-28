@@ -12,13 +12,6 @@
 #include "types/types.hh"
 #include "test/lib/cql_test_env.hh"
 #include "db/config.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/http/httpd.hh>
-#include <seastar/net/api.hh>
-#include <seastar/util/tmp_file.hh>
 #include <functional>
 #include <chrono>
 

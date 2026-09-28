@@ -10,7 +10,6 @@
 
 #include "bytes.hh"
 #include "utils/chunked_vector.hh"
-#include <seastar/core/enum.hh>
 #include <unordered_map>
 #include <variant>
 #include <type_traits>

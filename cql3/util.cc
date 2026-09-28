@@ -15,8 +15,6 @@
 
 #ifdef DEBUG
 
-#include <seastar/core/align.hh>
-#include <seastar/core/posix.hh>
 #include "seastarx.hh"
 
 #include <sys/mman.h>

@@ -49,8 +49,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <algorithm>
-#include <seastar/core/byteorder.hh>
-#include <seastar/core/temporary_buffer.hh>
 
 #include "seastarx.hh"
 

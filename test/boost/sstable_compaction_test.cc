@@ -6,16 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <iterator>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/align.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/loop.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/core/coroutine.hh>
 
 #include "sstables/generation_type.hh"
 #include "sstables/sstables.hh"
@@ -78,6 +69,7 @@ import boost;
 #include "sstables/object_storage_client.hh"
 #include "sstables/sstable_version.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(sstable_compaction_test)
 
 namespace fs = std::filesystem;

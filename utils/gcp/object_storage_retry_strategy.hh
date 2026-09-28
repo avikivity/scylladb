@@ -8,7 +8,6 @@
 
 #pragma once
 #include "utils/exponential_backoff_retry.hh"
-#include <seastar/http/retry_strategy.hh>
 
 namespace utils::gcp::storage {
 

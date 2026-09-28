@@ -11,7 +11,6 @@
 #include "utils/rjson.hh"
 
 #include <fnmatch.h>
-#include <seastar/core/on_internal_error.hh>
 import fmt;
 
 namespace audit {

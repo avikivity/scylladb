@@ -13,12 +13,6 @@
 #include "sstables/sstables_manager.hh"
 
 #include <rapidjson/document.h>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/metrics_api.hh>
-#include <seastar/core/relabel_config.hh>
-#include <seastar/http/exception.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/util/short_streams.hh>
 
 #include "utils/log.hh"
 import boost;

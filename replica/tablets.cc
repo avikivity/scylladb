@@ -6,9 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
-#include <seastar/coroutine/maybe_yield.hh>
-
 #include "types/types.hh"
 #include "types/tuple.hh"
 #include "types/list.hh"
@@ -27,6 +24,7 @@ import fmt;
 #include "compaction/compaction_manager.hh"
 #include "dht/fixed_shard.hh"
 
+import fmt;
 namespace replica {
 
 using namespace locator;

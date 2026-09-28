@@ -9,12 +9,7 @@
 #pragma once
 
 #include "vint-serialization.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/iostream.hh>
 #include "sstables/progress_monitor.hh"
-#include <seastar/core/byteorder.hh>
-#include <seastar/util/variant_utils.hh>
-#include <seastar/net/byteorder.hh>
 #include "bytes.hh"
 #include "reader_permit.hh"
 #include "utils/fragmented_temporary_buffer.hh"

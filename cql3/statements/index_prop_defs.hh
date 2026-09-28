@@ -12,7 +12,6 @@
 
 #include "cql3/statements/view_prop_defs.hh"
 #include "property_definitions.hh"
-#include <seastar/core/sstring.hh>
 #include "schema/schema_fwd.hh"
 
 #include <unordered_map>

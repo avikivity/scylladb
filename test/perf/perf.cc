@@ -7,8 +7,6 @@
  */
 
 #include "perf.hh"
-#include <seastar/core/reactor.hh>
-#include <seastar/core/memory.hh>
 #include "seastarx.hh"
 #include "reader_concurrency_semaphore.hh"
 #include "schema/schema.hh"

@@ -8,11 +8,7 @@
 
 #pragma once
 
-#include <seastar/core/future-util.hh>
-#include <seastar/core/coroutine.hh>
 #include "keys/keys.hh"
-#include <seastar/core/do_with.hh>
-#include <seastar/core/byteorder.hh>
 #include "index_reader.hh"
 #include "sstables/mx/partition_reversing_data_source.hh"
 

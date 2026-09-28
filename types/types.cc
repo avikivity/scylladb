@@ -18,8 +18,6 @@ import boost;
 #include "concrete_types.hh"
 #include <exception>
 #include <iterator>
-#include <seastar/core/format.hh>
-#include <seastar/core/shared_ptr.hh>
 #include "types/types.hh"
 #include "utils/assert.hh"
 #include "utils/serialization.hh"
@@ -31,7 +29,6 @@ import boost;
 #include <concepts>
 #include <ctime>
 #include <cstdlib>
-#include <seastar/net/inet_address.hh>
 #include <type_traits>
 #include <unordered_set>
 #include "utils/big_decimal.hh"

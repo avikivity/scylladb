@@ -22,8 +22,6 @@
 
 import boost;
 
-#include <seastar/util/defer.hh>
-
 #include "utils/assert.hh"
 #include "utils/chunked_vector.hh"
 #include "seastarx.hh"

@@ -10,7 +10,6 @@
 #include "timeout_config.hh"
 #include "db/config.hh"
 #include <chrono>
-#include <seastar/core/future.hh>
 
 using namespace std::chrono_literals;
 

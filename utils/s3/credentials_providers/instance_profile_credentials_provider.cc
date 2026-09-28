@@ -14,10 +14,6 @@
 #include "utils/rjson.hh"
 #include <rapidjson/document.h>
 #include <rapidjson/error/en.h>
-#include <seastar/http/client.hh>
-#include <seastar/http/request.hh>
-#include <seastar/util/short_streams.hh>
-
 
 namespace aws {
 

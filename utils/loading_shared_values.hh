@@ -11,10 +11,6 @@
 #include <optional>
 #include "utils/assert.hh"
 #include <vector>
-#include <seastar/core/shared_future.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/bitops.hh>
 #include "seastarx.hh"
 import boost;
 

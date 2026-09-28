@@ -7,13 +7,11 @@
  */
 #pragma once
 
-#include <seastar/core/sstring.hh>
 #include <optional>
 #include "utils/assert.hh"
 #include "utils/managed_bytes.hh"
 #include "utils/chunked_string.hh"
 #include "bytes_ostream.hh"
-#include <seastar/core/simple-stream.hh>
 #include "bytes_ostream.hh"
 #include "utils/fragment_range.hh"
 #include <variant>

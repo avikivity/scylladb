@@ -10,8 +10,6 @@
 #include "replica/database.hh"
 #include "schema/schema_builder.hh"
 #include "test/perf/perf.hh"
-#include <seastar/core/app-template.hh>
-#include <seastar/core/reactor.hh>
 
 #include <seastar/testing/linux_perf_event.hh>
 #include <stdexcept>

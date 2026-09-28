@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include <seastar/net/inet_address.hh>
-#include <seastar/core/sstring.hh>
 #include "seastarx.hh"
 #include "utils/loading_shared_values.hh"
 

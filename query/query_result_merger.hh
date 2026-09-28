@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
 #include "query-result.hh"
 
 namespace query {

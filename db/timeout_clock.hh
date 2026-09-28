@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/semaphore.hh>
+import seastar;
 
 namespace db {
 using timeout_clock = seastar::lowres_clock;

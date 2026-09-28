@@ -12,9 +12,6 @@
 #include <map>
 #include <vector>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-
 #include "cql3/query_processor.hh"
 #include "cql3/untyped_result_set.hh"
 #include "db/consistency_level_type.hh"

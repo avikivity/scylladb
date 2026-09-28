@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "test/lib/scylla_tests_cmdline_options.hh"
 #include "test/lib/test_services.hh"
 #include "test/lib/sstable_test_env.hh"
@@ -25,11 +24,11 @@ import fmt;
 #include "utils/overloaded_functor.hh"
 #include <filesystem>
 #include <iostream>
-#include <seastar/util/defer.hh>
 #include "sstables/generation_type.hh"
 import boost;
 #include "sstables/storage.hh"
 
+import fmt;
 static const sstring some_keyspace("ks");
 static const sstring some_column_family("cf");
 

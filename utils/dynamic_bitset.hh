@@ -13,8 +13,6 @@
 #include <limits>
 #include <vector>
 
-#include <seastar/core/bitops.hh>
-
 namespace utils {
 
 class dynamic_bitset {

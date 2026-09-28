@@ -7,13 +7,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #define BOOST_TEST_MODULE string_format
 
 #include <boost/test/unit_test.hpp>
 
 #include "utils/to_string.hh"
 
+import fmt;
 // Test scylla's string formatters and printers defined in utils/to_string.hh
 
 void verify_parenthesis(std::string_view sv) {

@@ -14,9 +14,6 @@
 #include <utility>
 #include <vector>
 
-#include <seastar/core/format.hh>
-#include <seastar/core/sstring.hh>
-
 #include "cql3/statements/property_definitions.hh"
 #include "cql3/statements/request_validations.hh"
 #include "db/cluster_config_registry.hh"

@@ -23,7 +23,7 @@
   #endif
 #endif
 
-#include <seastar/core/align.hh>
+import seastar;
 
 #include <functional>
 #include <optional>

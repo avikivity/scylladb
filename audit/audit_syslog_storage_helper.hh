@@ -7,7 +7,6 @@
  */
 #pragma once
 
-#include <seastar/net/api.hh>
 #include "seastarx.hh"
 
 #include "audit/audit.hh"

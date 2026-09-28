@@ -10,12 +10,6 @@
 #include <cstdint>
 #include <exception>
 #include <optional>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
 #include "cdc/log.hh"
 #include "exceptions/exceptions.hh"

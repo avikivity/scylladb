@@ -7,7 +7,6 @@
  */
 #include "fsm.hh"
 #include <random>
-#include <seastar/core/coroutine.hh>
 #include <ranges>
 #include "raft/raft.hh"
 #include "utils/assert.hh"

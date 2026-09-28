@@ -6,13 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <filesystem>
 #include <set>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/units.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/util/closeable.hh>
 
 #include "init.hh"
 #include "compaction/compaction.hh"
@@ -58,7 +53,7 @@ import fmt;
 #include "locator/host_id.hh"
 #include "mutation_writer/token_group_based_splitting_writer.hh"
 
-using namespace seastar;
+import fmt;
 using namespace sstables;
 
 using json_writer = mutation_json::json_writer;

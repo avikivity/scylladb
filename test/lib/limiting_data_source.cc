@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <utility>
 
-using namespace seastar;
 #include "seastarx.hh"
 
 future<temporary_buffer<char>> limiting_data_source_impl::do_get() {

@@ -13,10 +13,7 @@
 #include <memory>
 #include <vector>
 #include <optional>
-#include <seastar/core/future.hh>
-#include <seastar/core/smp.hh>
 
-using namespace seastar;
 #include "seastarx.hh"
 
 namespace utils {

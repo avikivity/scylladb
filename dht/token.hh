@@ -13,7 +13,6 @@
 #include "utils/chunked_vector.hh"
 
 #include <limits>
-#include <seastar/net/byteorder.hh>
 #include <functional>
 #include <utility>
 #include <compare>

@@ -6,8 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/metrics.hh>
-#include <seastar/util/defer.hh>
 #include <numeric>
 #include <variant>
 #include "utils/log.hh"
@@ -16,7 +14,6 @@
 #include "advanced_rpc_compressor_protocol.hh"
 #include "stream_compressor.hh"
 #include "dict_trainer.hh"
-#include <seastar/core/on_internal_error.hh>
 
 namespace netw {
 

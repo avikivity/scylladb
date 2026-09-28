@@ -8,12 +8,10 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import fmt;
 #include "db/consistency_level.hh"
 #include "db/consistency_level_validations.hh"
 
 #include "exceptions/exceptions.hh"
-#include <seastar/core/sstring.hh>
 #include "locator/host_id.hh"
 #include "schema/schema.hh"
 #include "replica/database.hh"
@@ -22,6 +20,7 @@ import fmt;
 #include "locator/network_topology_strategy.hh"
 #include "heat_load_balance.hh"
 
+import fmt;
 namespace db {
 
 logging::logger cl_logger("consistency");

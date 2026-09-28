@@ -10,8 +10,6 @@
 #include "cql3/statements/property_definitions.hh"
 #include "utils/assert.hh"
 #include "utils/error_injection.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
 #include "table_helper.hh"
 #include "cql3/query_processor.hh"
 #include "cql3/statements/create_table_statement.hh"

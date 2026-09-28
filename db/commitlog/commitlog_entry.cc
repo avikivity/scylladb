@@ -14,7 +14,6 @@
 #include "idl/mutation.dist.impl.hh"
 #include "idl/raft_storage.dist.hh"
 #include "idl/raft_storage.dist.impl.hh"
-#include <seastar/core/simple-stream.hh>
 
 template<typename Output>
 void commitlog_mutation_entry_writer::serialize(Output& out) const {

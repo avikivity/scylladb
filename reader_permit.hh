@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/util/optimized_optional.hh>
 #include "seastarx.hh"
 
 #include "db/timeout_clock.hh"

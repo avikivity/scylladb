@@ -10,8 +10,6 @@
 
 #include <iosfwd>
 
-#include <seastar/util/optimized_optional.hh>
-
 #include <ranges>
 
 #include "schema/schema_fwd.hh"

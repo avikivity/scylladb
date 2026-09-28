@@ -8,15 +8,10 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import abseil;
-import fmt;
 #include <algorithm>
 #include <coroutine>
 #include <functional>
 #include <random>
-
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
 #include "locator/network_topology_strategy.hh"
 #include "locator/load_sketch.hh"
@@ -27,6 +22,8 @@ import fmt;
 #include "utils/hash.hh"
 import boost;
 
+import abseil;
+import fmt;
 namespace std {
 
 size_t hash<locator::endpoint_dc_rack>::operator()(const locator::endpoint_dc_rack& v) const {

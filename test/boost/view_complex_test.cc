@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 
 #include "replica/database.hh"
@@ -21,6 +20,7 @@ import fmt;
 
 #include "db/config.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(view_complex_test)
 
 using namespace std::literals::chrono_literals;

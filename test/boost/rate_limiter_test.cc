@@ -8,16 +8,10 @@
 
 #include <chrono>
 #include <cstdint>
-#include <seastar/core/manual_clock.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/util/later.hh>
 #include <seastar/testing/test_case.hh>
 
 #include "db/rate_limiter.hh"
 
-using namespace seastar;
 using test_rate_limiter = db::generic_rate_limiter<seastar::manual_clock>;
 
 future<> step_seconds(int seconds) {

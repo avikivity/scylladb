@@ -14,7 +14,6 @@
 #include "db/extensions.hh"
 
 #include <algorithm>
-#include <seastar/util/closeable.hh>
 
 sstable_manager_service::sstable_manager_service(const db::config& dbcfg, sstable_compressor_factory& scf)
     : corrupt_data_handler(db::corrupt_data_handler::register_metrics::no)

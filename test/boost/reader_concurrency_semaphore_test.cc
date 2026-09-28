@@ -6,10 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "utils/assert.hh"
-#include <seastar/util/closeable.hh>
-#include <seastar/core/file.hh>
 #include "reader_concurrency_semaphore.hh"
 #include "sstables/sstables_manager.hh"
 #include "reader_concurrency_semaphore_group.hh"
@@ -24,8 +21,6 @@ import fmt;
 #include "test/lib/test_utils.hh"
 #include "test/lib/tmpdir.hh"
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
 #include <seastar/testing/on_internal_error.hh>
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
@@ -36,6 +31,7 @@ import fmt;
 #include "replica/database.hh" // new_reader_base_cost is there :(
 #include "db/config.hh"
 
+import fmt;
 // Provides access to private members of reader_concurrency_semaphore for testing.
 struct reader_concurrency_semaphore_tester {
     static void signal(reader_concurrency_semaphore& sem, reader_resources r) {

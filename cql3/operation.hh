@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_ptr.hh>
 #include "cql3/cql3_type.hh"
 #include "data_dictionary/data_dictionary.hh"
 #include "update_parameters.hh"

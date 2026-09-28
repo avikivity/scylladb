@@ -7,17 +7,6 @@
  */
 
 import fmt;
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/map_reduce.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/shared_mutex.hh>
-#include <seastar/core/timer.hh>
-#include <seastar/core/units.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/switch_to.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/rpc/rpc.hh>
-#include <seastar/util/short_streams.hh> 
 #include "sstables_loader.hh"
 #include "db/config.hh"
 #include "dht/auto_refreshing_sharder.hh"
@@ -47,6 +36,7 @@ import fmt;
 #include <algorithm>
 #include <set>
 
+import fmt;
 static logging::logger llog("sstables_loader");
 
 namespace {

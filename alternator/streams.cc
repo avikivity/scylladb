@@ -11,7 +11,6 @@
 #include <generator>
 #include <time.h>
 
-#include <seastar/json/formatter.hh>
 #include "seastarx.hh"
 
 #include "db/config.hh"

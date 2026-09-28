@@ -14,7 +14,6 @@
 #include "gms/feature.hh"
 #include "raft/raft.hh"
 #include "utils/updateable_value.hh"
-#include <seastar/core/gate.hh>
 
 namespace cql3 { class query_processor; }
 

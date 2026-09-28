@@ -10,7 +10,6 @@
 
 #include "sstables/sstables.hh"
 #include "sstables/sstable_set.hh"
-#include <seastar/core/shared_ptr.hh>
 #include "sstables/shared_sstable.hh"
 
 struct incremental_repair_meta {

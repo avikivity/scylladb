@@ -16,10 +16,6 @@
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/sharded.hh>
 
 #include "db/cluster_config_manager.hh"
 #include "db/cluster_config_registry.hh"

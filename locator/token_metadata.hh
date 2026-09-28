@@ -18,10 +18,6 @@
 #include <optional>
 #include <memory>
 #include "utils/interval.hh"
-#include <seastar/core/shared_future.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/sharded.hh>
 #include "utils/chunked_vector.hh"
 #include "utils/phased_barrier.hh"
 #include "service/topology_state_machine.hh"

@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 #include "raft/raft.hh"
 
 namespace service {

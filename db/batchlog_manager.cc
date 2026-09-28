@@ -11,14 +11,6 @@
 #include <chrono>
 #include <exception>
 #include <ranges>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/do_with.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
 
 #include "batchlog_manager.hh"
 #include "batchlog.hh"

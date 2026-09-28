@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include <seastar/core/iostream.hh>
-#include <seastar/core/temporary_buffer.hh>
+import seastar;
 
 #include <cstdlib>
 #include <cstdint>

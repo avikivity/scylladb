@@ -13,7 +13,6 @@
 #pragma once
 
 #include "sstables/shared_sstable.hh"
-#include <seastar/core/future.hh>
 
 class mutation_reader;
 class reader_permit;

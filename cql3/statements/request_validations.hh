@@ -11,7 +11,6 @@
 #pragma once
 
 #include "exceptions/exceptions.hh"
-#include <seastar/core/format.hh>
 
 #include <set>
 

@@ -11,8 +11,6 @@
 #include <stdexcept>
 #include <algorithm>
 
-#include <seastar/core/format.hh>
-
 // Arrays for quickly converting to and from an integer between 0 and 63,
 // and the character used in base64 encoding to represent it.
 static class base64_chars {

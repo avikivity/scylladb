@@ -9,7 +9,6 @@
 #pragma once
 
 // Seastar features.
-#include <seastar/util/bool_class.hh>
 
 // Scylla includes.
 #include "locator/host_id.hh"

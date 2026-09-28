@@ -17,7 +17,6 @@
 #include "gc_clock.hh"
 #include "utils/UUID.hh"
 #include "compaction_group_view.hh"
-#include <seastar/core/abort_source.hh>
 #include "sstables/basic_info.hh"
 
 namespace compaction {

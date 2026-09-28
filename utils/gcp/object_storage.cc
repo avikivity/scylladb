@@ -15,14 +15,6 @@
 #include <numeric>
 #include <deque>
 
-#include <seastar/core/align.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/units.hh>
-#include <seastar/http/client.hh>
-#include <seastar/util/short_streams.hh>
 #include <sys/uio.h>
 #include <sys/stat.h>
 

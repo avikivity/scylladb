@@ -8,8 +8,6 @@
 
 #include "cql3/statements/alter_cluster_config_statement.hh"
 
-#include <seastar/core/coroutine.hh>
-
 #include "cql3/statements/prepared_statement.hh"
 #include "cql3/statements/cf_prop_defs.hh"
 #include "cql3/query_processor.hh"

@@ -25,10 +25,6 @@
 
 #include "gms/inet_address_serializer.hh"
 
-#include <seastar/core/loop.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-
 namespace service {
 
 raft_sys_table_storage::raft_sys_table_storage(cql3::query_processor& qp, raft::group_id gid, raft::server_id server_id)

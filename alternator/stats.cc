@@ -8,7 +8,6 @@
 
 #include "stats.hh"
 #include "utils/histogram_metrics_helper.hh"
-#include <seastar/core/metrics.hh>
 #include "utils/labels.hh"
 
 namespace alternator {

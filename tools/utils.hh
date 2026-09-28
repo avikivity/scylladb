@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/app-template.hh>
 #include "seastarx.hh"
 import boost;
 

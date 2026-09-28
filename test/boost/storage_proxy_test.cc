@@ -7,8 +7,6 @@
  */
 
 
-import fmt;
-#include <seastar/core/thread.hh>
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
@@ -23,6 +21,7 @@ import fmt;
 #include "schema/schema_builder.hh"
 #include "utils/error_injection.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(storage_proxy_test)
 
 // Returns random keys sorted in ring order.

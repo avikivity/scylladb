@@ -21,7 +21,6 @@
 
 #include <vector>
 #include <unordered_set>
-#include <seastar/util/noncopyable_function.hh>
 
 #include "replica/database_fwd.hh"
 #include "db_clock.hh"

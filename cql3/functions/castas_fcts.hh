@@ -11,7 +11,6 @@
 #pragma once
 
 #include "cql3/functions/function.hh"
-#include <seastar/core/format.hh>
 
 namespace cql3 {
 namespace functions {

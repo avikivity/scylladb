@@ -17,7 +17,6 @@
 #include "utils/div_ceil.hh"
 #include "utils/pretty_printers.hh"
 
-#include <seastar/util/defer.hh>
 #include <coroutine>
 
 #include <optional>

@@ -6,15 +6,14 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #undef SEASTAR_TESTING_MAIN
-#include <seastar/util/defer.hh>
 #include <seastar/testing/thread_test_case.hh>
 #include "sstables/sstable_compressor_factory.hh"
 #include "test/lib/log.hh"
 #include "test/lib/random_utils.hh"
 #include "test/lib/test_utils.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(sstable_compressor_factory_test)
 
 // 1. Create a random message.

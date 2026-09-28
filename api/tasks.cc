@@ -6,9 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
-#include <seastar/core/coroutine.hh>
-
 #include "api/api.hh"
 #include "api/storage_service.hh"
 #include "api/validate.hh"
@@ -19,6 +16,7 @@ import fmt;
 #include "tasks/task_manager.hh"
 #include "replica/database.hh"
 
+import fmt;
 using namespace seastar::httpd;
 
 extern logging::logger apilog;

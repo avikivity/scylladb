@@ -5,7 +5,6 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-import fmt;
 #include <iterator>
 #include <source_location>
 
@@ -34,14 +33,6 @@ import fmt;
 #include "utils/assert.hh"
 #include "utils/error_injection.hh"
 
-#include <seastar/core/smp.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/util/log.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/rpc/rpc_types.hh>
 #include <stdexcept>
 #include <csignal>
 #include <unordered_set>
@@ -49,6 +40,7 @@ import fmt;
 #include "idl/group0.dist.hh"
 #include "idl/migration_manager.dist.hh"
 
+import fmt;
 // Used to implement 'wait for any task to finish'.
 //
 // Pass a copy of this object to each task in a set of tasks.

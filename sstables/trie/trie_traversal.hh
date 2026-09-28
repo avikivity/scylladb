@@ -10,8 +10,6 @@
 
 #include "node_reader.hh"
 #include "utils/small_vector.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/coroutine.hh>
 #include "common.hh"
 #include "utils/assert.hh"
 #include "comparable_bytes_iterator.hh"

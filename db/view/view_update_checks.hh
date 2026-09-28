@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/future.hh>
 #include "streaming/stream_reason.hh"
 #include "locator/token_metadata_fwd.hh"
 #include "seastarx.hh"

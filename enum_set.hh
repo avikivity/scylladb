@@ -9,7 +9,6 @@
 #pragma once
 
 #include "utils/assert.hh"
-#include <seastar/core/bitset-iter.hh>
 #include "seastarx.hh"
 
 #include <algorithm>
@@ -20,6 +19,7 @@
 #include <type_traits>
 #include <limits>
 #include <bitset>
+import seastar;
 import boost;
 
 /**

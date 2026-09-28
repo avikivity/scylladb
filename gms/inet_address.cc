@@ -8,14 +8,8 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <seastar/net/inet_address.hh>
-#include <seastar/net/dns.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/future.hh>
 #include "inet_address.hh"
 import boost;
-
-using namespace seastar;
 
 static_assert(std::is_nothrow_default_constructible_v<gms::inet_address>);
 static_assert(std::is_nothrow_copy_constructible_v<gms::inet_address>);

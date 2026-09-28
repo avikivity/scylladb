@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/http/httpd.hh>
 #include "seastarx.hh"
 #include "utils/rjson.hh"
 

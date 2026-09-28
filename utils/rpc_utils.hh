@@ -10,8 +10,6 @@
 #pragma once
 
 #include "utils/tuple_utils.hh"
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sharded.hh>
 
 namespace utils {
     namespace internal {

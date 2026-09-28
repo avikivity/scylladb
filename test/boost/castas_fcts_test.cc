@@ -17,7 +17,6 @@
 #include "test/lib/cql_assertions.hh"
 #include "test/lib/exception_utils.hh"
 
-#include <seastar/core/future-util.hh>
 #include "transport/messages/result_message.hh"
 #include "utils/chunked_string.hh"
 

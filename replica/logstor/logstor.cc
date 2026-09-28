@@ -6,10 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 #include "replica/logstor/logstor.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/util/log.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/metrics.hh>
 #include "query/query-request.hh"
 #include "readers/from_mutations.hh"
 #include "readers/forwardable.hh"
@@ -17,7 +13,6 @@
 #include "replica/logstor/key_utils.hh"
 #include "replica/logstor/segment_manager.hh"
 #include "replica/logstor/types.hh"
-#include <seastar/core/when_all.hh>
 #include "utils/managed_bytes.hh"
 #include <algorithm>
 #include <queue>

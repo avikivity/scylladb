@@ -5,9 +5,9 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-import fmt;
 #include "raft.hh"
 
+import fmt;
 namespace raft {
 
 seastar::logger logger("raft");

@@ -7,7 +7,6 @@
  */
 
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 import boost;
 
@@ -18,7 +17,6 @@ import boost;
 #include "test/lib/cql_assertions.hh"
 #include "test/lib/test_utils.hh"
 
-#include <seastar/core/future-util.hh>
 #include "transport/messages/result_message.hh"
 #include "types/map.hh"
 #include "types/list.hh"
@@ -27,6 +25,7 @@ import boost;
 #include "compaction/compaction_manager.hh"
 #include "schema/schema_builder.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(cql_query_large_test)
 
 using namespace std::literals::chrono_literals;

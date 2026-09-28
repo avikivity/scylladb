@@ -13,14 +13,6 @@
 // Seastar features.
 #include <chrono>
 #include <exception>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/file-types.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/seastar.hh>
 
 // Scylla includes.
 #include "db/hints/internal/common.hh"

@@ -16,11 +16,11 @@
 #include <iosfwd>
 #include <compare>
 
-#include <seastar/core/sstring.hh>
 #include "bytes_fwd.hh"
 #include "utils/assert.hh"
 #include "utils/hashing.hh"
 #include "utils/serialization.hh"
+import fmt;
 
 namespace utils {
 

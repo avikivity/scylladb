@@ -7,8 +7,6 @@
  */
 
 import boost;
-#include <seastar/util/short_streams.hh>
-#include <seastar/util/closeable.hh>
 #include "seastarx.hh"
 
 #undef SEASTAR_TESTING_MAIN

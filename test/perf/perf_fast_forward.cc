@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <algorithm>
 
 #include "utils/assert.hh"
@@ -14,26 +13,21 @@ import fmt;
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/reader_concurrency_semaphore.hh"
 #include "test/perf/perf.hh"
-#include <seastar/core/app-template.hh>
 #include "schema/schema_builder.hh"
 #include "replica/database.hh"
 #include "release.hh"
 #include "db/config.hh"
 #include "partition_slice_builder.hh"
-#include <seastar/core/reactor.hh>
-#include <seastar/core/memory.hh>
-#include <seastar/core/units.hh>
 #include <seastar/testing/random.hh>
 #include <seastar/testing/test_runner.hh>
-#include <seastar/util/closeable.hh>
 #include "compaction/compaction_manager.hh"
 #include "transport/messages/result_message.hh"
 #include "sstables/partition_index_cache.hh"
 #include <fstream>
 import boost;
 
+import fmt;
 using namespace std::chrono_literals;
-using namespace seastar;
 namespace fs = std::filesystem;
 using int_range = interval<int>;
 
@@ -1315,10 +1309,15 @@ public:
                 return a + b.aio_reads() + b.aio_writes();
             }) / (result.empty() ? 1 : result.size());
 
-            std::ranges::sort(result, std::ranges::less(), std::mem_fn(&test_result::fragment_rate));
-            auto median = result[result.size() / 2];
-            auto fragment_rate_min = result[0].fragment_rate();
-            auto fragment_rate_max = result[result.size() - 1].fragment_rate();
+            std::vector<const test_result*> sorted_result;
+            sorted_result.reserve(result.size());
+            for (const auto& r : result) {
+                sorted_result.push_back(&r);
+            }
+            std::ranges::sort(sorted_result, std::ranges::less(), [] (const test_result* r) { return r->fragment_rate(); });
+            auto median = *sorted_result[sorted_result.size() / 2];
+            auto fragment_rate_min = sorted_result.front()->fragment_rate();
+            auto fragment_rate_max = sorted_result.back()->fragment_rate();
 
             std::vector<double> deviation;
             for (auto& r : result) {
@@ -1839,7 +1838,7 @@ void populate(const std::vector<dataset*>& datasets, cql_test_env& env, const ta
                         metrics_snapshot before;
                         cf.flush().get();
                         auto r = test_result(std::move(before), std::exchange(fragments, 0));
-                        r.set_params({format("{:d}", flush_threshold / MB)});
+                        r.set_params({format("{:d}", flush_threshold / seastar::MB)});
                         rc.add(std::move(r));
                     }
                 }
@@ -1975,7 +1974,7 @@ int scylla_fast_forward_main(int argc, char** argv) {
         ("list-tests", "Show available test groups")
         ("list-datasets", "Show available datasets")
         ("populate", "populate the table")
-        ("flush-threshold", bpo::value<size_t>()->default_value(300 * MB), "Memtable size threshold for sstable flush. Used during population.")
+        ("flush-threshold", bpo::value<size_t>()->default_value(300 * seastar::MB), "Memtable size threshold for sstable flush. Used during population.")
         ("verbose", "Enables more logging")
         ("trace", "Enables trace-level logging")
         ("enable-cache", "Enables cache")

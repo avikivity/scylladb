@@ -12,8 +12,6 @@
 
 #include "gms/inet_address.hh"
 
-#include <seastar/core/sstring.hh>
-#include <seastar/net/api.hh>
 #include "service/client_routes.hh"
 
 namespace cql_transport {

@@ -8,13 +8,6 @@
  */
 
 #pragma once
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/http/url.hh>
-#include <seastar/http/client.hh>
-#include <seastar/http/request.hh>
-#include <seastar/http/reply.hh>
-#include <seastar/http/exception.hh>
 
 #include "utils/rjson.hh"
 

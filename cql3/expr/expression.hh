@@ -9,7 +9,6 @@
 #pragma once
 
 #include <ostream>
-#include <seastar/core/shared_ptr.hh>
 #include <variant>
 #include <concepts>
 #include <algorithm>

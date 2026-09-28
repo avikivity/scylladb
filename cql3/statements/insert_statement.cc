@@ -27,7 +27,6 @@
 #include "types/user.hh"
 #include "types/concrete_types.hh"
 #include "validation.hh"
-#include <seastar/util/defer.hh>
 #include "dht/i_partitioner.hh"
 #include <optional>
 #include "seastarx.hh"

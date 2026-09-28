@@ -10,17 +10,10 @@
 import fmt;
 #include "gms/generation-number.hh"
 #include "gms/inet_address.hh"
-#include <seastar/core/shard_id.hh>
 #include "message/msg_addr.hh"
 #include "utils/assert.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/exception.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/all.hh>
 
 #include "message/messaging_service.hh"
-#include <seastar/core/sharded.hh>
 #include <coroutine>
 #include "gms/gossiper.hh"
 #include "service/storage_service.hh"
@@ -31,7 +24,6 @@ import fmt;
 #include "gms/gossip_digest_ack.hh"
 #include "gms/gossip_digest_ack2.hh"
 #include "query/query-result.hh"
-#include <seastar/rpc/rpc.hh>
 #include "mutation/canonical_mutation.hh"
 #include "db/config.hh"
 #include "db/view/view_update_backlog.hh"
@@ -127,9 +119,6 @@ import fmt;
 #include "idl/gossip.dist.impl.hh"
 #include "idl/migration_manager.dist.impl.hh"
 #include "idl/snapshot_backup.dist.impl.hh"
-#include <seastar/rpc/lz4_compressor.hh>
-#include <seastar/rpc/lz4_fragmented_compressor.hh>
-#include <seastar/rpc/multi_algo_compressor_factory.hh>
 #include "partition_range_compat.hh"
 #include "mutation/frozen_mutation.hh"
 #include "streaming/stream_manager.hh"
@@ -147,6 +136,7 @@ import fmt;
 #include "utils/error_injection.hh"
 #include "idl/sstables_loader.dist.impl.hh"
 
+import fmt;
 namespace netw {
 
 static_assert(!std::is_default_constructible_v<msg_addr>);

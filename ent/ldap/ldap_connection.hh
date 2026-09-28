@@ -15,13 +15,6 @@
 #include <memory>
 #include <unordered_map>
 
-#include <seastar/core/gate.hh>
-#include <seastar/core/iostream.hh>
-#include <seastar/core/posix.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/net/api.hh>
-
 #include "utils/sequential_producer.hh"
 
 /// Functor to invoke ldap_msgfree.

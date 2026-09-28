@@ -6,16 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <exception>
-#include <seastar/util/defer.hh>
 #include "dht/auto_refreshing_sharder.hh"
 #include "db/view/view_building_worker.hh"
 #include "gms/endpoint_state.hh"
 #include "repair/repair.hh"
 #include "message/messaging_service.hh"
 #include "repair/task_manager_module.hh"
-#include <seastar/coroutine/exception.hh>
 #include "sstables/sstables.hh"
 #include "sstables/sstables_manager.hh"
 #include "mutation/mutation_fragment.hh"
@@ -26,11 +23,6 @@ import fmt;
 #include "utils/xx_hasher.hh"
 #include "utils/UUID.hh"
 #include "replica/database.hh"
-#include <seastar/util/bool_class.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
 #include <list>
 #include <vector>
 #include <algorithm>
@@ -43,9 +35,6 @@ import fmt;
 #include "utils/to_string.hh"
 #include "service/migration_manager.hh"
 #include "streaming/consumer.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/all.hh>
-#include <seastar/coroutine/as_future.hh>
 #include "db/system_keyspace.hh"
 #include "service/storage_proxy.hh"
 #include "db/batchlog_manager.hh"
@@ -68,6 +57,7 @@ import fmt;
 #include "gms/feature_service.hh"
 import boost;
 
+import fmt;
 extern logging::logger rlogger;
 
 static bool inject_rpc_stream_error = false;

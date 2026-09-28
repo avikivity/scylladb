@@ -10,8 +10,6 @@
 
 #include <optional>
 
-#include <seastar/core/sstring.hh>
-
 #include "cql3/statements/schema_altering_statement.hh"
 #include "utils/UUID.hh"
 #include "seastarx.hh"

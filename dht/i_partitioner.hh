@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 #include "keys/keys.hh"
 #include <memory>
 #include <utility>

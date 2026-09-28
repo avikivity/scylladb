@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/with_timeout.hh>
 #include <seastar/testing/test_case.hh>
 #include "test/lib/cql_test_env.hh"
 import fmt;

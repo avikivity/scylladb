@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 #include "sstables/generation_type.hh"
 
 namespace sstables {

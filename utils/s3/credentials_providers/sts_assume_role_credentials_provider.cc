@@ -15,10 +15,6 @@
 #include "utils/s3/default_aws_retry_strategy.hh"
 
 #include <rapidxml.h>
-#include <seastar/core/coroutine.hh>
-#include <seastar/http/client.hh>
-#include <seastar/http/request.hh>
-#include <seastar/util/short_streams.hh>
 
 namespace aws {
 

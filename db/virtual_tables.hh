@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
 #include <map>
 #include "schema/schema_fwd.hh"
 

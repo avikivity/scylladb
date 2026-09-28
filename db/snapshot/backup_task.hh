@@ -15,11 +15,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <seastar/core/gate.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/shard_id.hh>
-#include <seastar/core/sharded.hh>
-
 #include "utils/upload_progress.hh"
 #include "utils/small_vector.hh"
 #include "tasks/task_manager.hh"

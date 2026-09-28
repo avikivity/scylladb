@@ -24,9 +24,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <seastar/core/future.hh>
-#include <seastar/util/noncopyable_function.hh>
-
 #include "utils/rjson.hh"
 #include "schema/schema_fwd.hh"
 #include "types/types.hh"

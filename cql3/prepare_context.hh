@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_ptr.hh>
 #include "seastarx.hh"
 
 #include <optional>

@@ -7,7 +7,6 @@
  */
 
 #pragma once
-#include <seastar/http/retry_strategy.hh>
 #include "seastarx.hh"
 #include <chrono>
 #include <exception>

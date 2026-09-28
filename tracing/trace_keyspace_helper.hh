@@ -9,8 +9,6 @@
  */
 #pragma once
 
-#include <seastar/core/gate.hh>
-#include <seastar/core/metrics_registration.hh>
 #include "tracing/tracing.hh"
 #include "table_helper.hh"
 #include "cql3/values.hh"

@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
 #include "cdc/metadata.hh"
 #include "cdc/generation_id.hh"
 

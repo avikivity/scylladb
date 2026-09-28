@@ -12,7 +12,6 @@
 #include "message/messaging_service.hh"
 #include "db/config.hh"
 
-#include <seastar/core/file.hh>
 import boost;
 
 namespace locator {

@@ -7,7 +7,6 @@
  */
 
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 #include <cstdlib>
 #include <iostream>
@@ -15,12 +14,12 @@ import fmt;
 #include "test/lib/scylla_test_case.hh"
 #include "test/lib/test_utils.hh"
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/core/future-util.hh>
 #include <yaml-cpp/yaml.h>
 #include "db/config.hh"
 #include "db/object_storage_endpoint_param.hh"
 #include "utils/updateable_value.hh"
 
+import fmt;
 using namespace db;
 
 SEASTAR_THREAD_TEST_CASE(test_updateable_value_basics) {

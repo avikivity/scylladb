@@ -25,10 +25,6 @@
 
 #include <memory>
 #include <ranges>
-#include <seastar/core/reactor.hh>
-#include <seastar/util/log.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/util/noncopyable_function.hh>
 
 namespace gms {
 class feature_service;

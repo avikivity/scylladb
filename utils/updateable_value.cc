@@ -9,7 +9,6 @@
 
 
 #include "updateable_value.hh"
-#include <seastar/core/seastar.hh>
 
 namespace utils {
 

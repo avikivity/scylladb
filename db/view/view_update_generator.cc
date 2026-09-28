@@ -8,9 +8,7 @@
 
 #include "db/view/view_update_backlog.hh"
 #include "db/view/node_view_update_backlog.hh"
-#include <seastar/core/timed_out_error.hh>
 #include "gms/inet_address.hh"
-#include <seastar/util/defer.hh>
 #include "replica/database.hh"
 #include "view_update_generator.hh"
 #include "utils/error_injection.hh"

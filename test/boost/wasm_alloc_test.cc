@@ -10,10 +10,7 @@
 #include "lang/wasm.hh"
 #include "lang/wasm_instance_cache.hh"
 #include "rust/wasmtime_bindings.hh"
-#include <seastar/core/reactor.hh>
-#include <seastar/core/signal.hh>
 #include "test/lib/scylla_test_case.hh"
-#include <seastar/core/coroutine.hh>
 
 // This test file can contain only a single test case which uses the wasmtime
 // runtime. This is because the wasmtime runtime registers a signal handler

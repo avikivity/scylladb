@@ -11,10 +11,7 @@
 #include <sys/uio.h>
 #include "seastarx.hh"
 #include <seastar/util/internal/iovec_utils.hh>
-#include <seastar/util/memory-data-sink.hh>
-#include <seastar/util/memory-data-source.hh>
 
-using namespace seastar;
 #include <cassert>
 #include <coroutine>
 #include <memory>
@@ -138,7 +135,7 @@ file create_file_for_sink(data_sink sink) {
         }
 
         future<size_t> write_dma(uint64_t pos, std::vector<iovec> iov, io_intent*) override {
-            internal::sanitize_iovecs(iov, _disk_read_dma_alignment);
+            seastar::internal::sanitize_iovecs(iov, _disk_read_dma_alignment);
             size_t res = 0;
             for (auto& iv : iov) {
                 res += co_await do_write_dma(pos + res, iv.iov_base, iv.iov_len);
@@ -323,4 +320,3 @@ seastar::data_source create_ranged_source(data_source src, uint64_t offset, std:
     }
     return data_source(std::make_unique<ranged_data_source>(std::move(src), offset, len));
 }
-

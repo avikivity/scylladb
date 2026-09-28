@@ -7,8 +7,6 @@
  */
 
 #pragma once
-#include <seastar/http/reply.hh>
-#include <seastar/core/sstring.hh>
 #include "seastarx.hh"
 import fmt;
 

@@ -6,8 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
-#include <seastar/core/coroutine.hh>
 #include <filesystem>
 #include <iostream>
 #include <ranges>
@@ -21,7 +19,7 @@ import fmt;
 #include "ent/encryption/symmetric_key.hh"
 #include "ent/encryption/local_file_provider.hh"
 
-using namespace seastar;
+import fmt;
 using namespace tools::utils;
 
 namespace bpo = boost::program_options;

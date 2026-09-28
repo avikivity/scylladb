@@ -12,7 +12,6 @@
 
 #include "cql3/statements/schema_altering_statement.hh"
 
-#include <seastar/core/shared_ptr.hh>
 #include <optional>
 #include <memory>
 

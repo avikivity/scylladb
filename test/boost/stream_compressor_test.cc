@@ -6,18 +6,14 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/util/alloc_failure_injector.hh>
 #include "message/stream_compressor.hh"
 #include "test/lib/log.hh"
 #include "test/lib/random_utils.hh"
 #include "test/lib/scylla_test_case.hh"
 #include "utils/small_vector.hh"
-#include <seastar/core/reactor.hh>
-#include <seastar/core/thread.hh>
 #include "seastarx.hh"
 import fmt;
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/defer.hh>
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>

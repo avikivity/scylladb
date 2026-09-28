@@ -9,11 +9,8 @@
 /*
  */
 
-import fmt;
 #include <vector>
 #include <chrono>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/on_internal_error.hh>
 #include "sstables/shared_sstable.hh"
 #include "sstables/sstables.hh"
 #include "compaction_strategy.hh"
@@ -32,6 +29,7 @@ import fmt;
 #include "incremental_compaction_strategy.hh"
 #include "sstables/sstable_set_impl.hh"
 
+import fmt;
 namespace compaction {
 
 logging::logger leveled_manifest::logger("LeveledManifest");

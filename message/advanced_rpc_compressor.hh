@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/condition-variable.hh>
-#include <seastar/rpc/rpc_types.hh>
 #include <utility>
 #include "utils/refcounted.hh"
 #include "utils/updateable_value.hh"

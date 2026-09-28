@@ -14,12 +14,7 @@
 #include "utils/exceptions.hh"
 #include "utils/s3/client.hh"
 #include <cstdlib>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/units.hh>
-#include <seastar/http/httpd.hh>
-#include <seastar/util/closeable.hh>
 
-using namespace seastar;
 using namespace std::string_view_literals;
 
 enum class failure_policy : uint8_t {

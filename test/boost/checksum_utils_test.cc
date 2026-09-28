@@ -11,7 +11,6 @@
 #include <boost/test/unit_test.hpp>
 #include "sstables/checksum_utils.hh"
 #include "test/lib/make_random_string.hh"
-#include <seastar/core/format.hh>
 
 template<typename ReferenceImpl, typename Impl>
 static

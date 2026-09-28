@@ -8,10 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
-
 #include "locator/abstract_replication_strategy.hh"
 #include "locator/token_metadata.hh"
 #include "message/messaging_service_fwd.hh"

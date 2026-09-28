@@ -11,9 +11,6 @@
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/on_internal_error.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/util/later.hh>
 #include <sstream>
 
 #include "audit/audit.hh"

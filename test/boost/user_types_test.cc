@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
@@ -21,6 +20,7 @@ import fmt;
 #include "db/config.hh"
 #include "types/vector.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(user_types_test)
 
 // Specifies that the given 'cql' query fails with the 'msg' message.

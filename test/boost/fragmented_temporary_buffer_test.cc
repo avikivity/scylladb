@@ -6,8 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/thread.hh>
-#include <seastar/util/memory-data-source.hh>
 #include "test/lib/scylla_test_case.hh"
 
 #include "utils/assert.hh"

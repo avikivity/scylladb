@@ -43,9 +43,6 @@
 #include "utils/error_injection.hh"
 #include "utils/base64.hh"
 #include "vector_search/vector_store_client.hh"
-#include <seastar/core/abort_on_expiry.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include "seastarx.hh"
 #include <charconv>
 #include <stdexcept>

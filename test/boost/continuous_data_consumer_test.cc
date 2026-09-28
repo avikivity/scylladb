@@ -17,10 +17,6 @@
 #include "sstables/processing_result_generator.hh"
 
 #include <boost/test/unit_test.hpp>
-#include <seastar/core/iostream.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/util/memory-data-source.hh>
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
 #include <random>

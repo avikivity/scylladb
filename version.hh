@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/format.hh>
 #include "seastarx.hh"
 #include <cstdint>
 #include <tuple>

@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include <seastar/http/reply.hh>
-
 #include "utils/rjson.hh"
 
 namespace azure {

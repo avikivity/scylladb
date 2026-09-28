@@ -13,7 +13,6 @@ import fmt;
 
 #include "test/lib/cql_test_env.hh"
 #include "test/perf/perf.hh"
-#include <seastar/core/app-template.hh>
 #include <seastar/testing/test_runner.hh>
 #include "test/lib/random_utils.hh"
 #include "db/config.hh"
@@ -32,11 +31,10 @@ import fmt;
 #include "keys/keys.hh"
 #include "dht/i_partitioner.hh"
 #include "replica/database.hh"
-#include <seastar/core/sleep.hh>
-#include <seastar/core/sharded.hh>
 #include "seastarx.hh"
 import boost;
 
+import fmt;
 static const sstring table_name = "cf";
 
 static bytes make_key(uint64_t sequence) {

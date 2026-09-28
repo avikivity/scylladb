@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/file.hh>
-#include <seastar/core/seastar.hh>
 #include <cstdint>
 #include <vector>
 #include <sys/uio.h>

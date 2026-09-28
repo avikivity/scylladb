@@ -8,9 +8,6 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import fmt;
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/on_internal_error.hh>
 #include <stdexcept>
 #include <vector>
 #include "alter_keyspace_statement.hh"
@@ -19,7 +16,6 @@ import fmt;
 #include "locator/abstract_replication_strategy.hh"
 #include "mutation/canonical_mutation.hh"
 #include "prepared_statement.hh"
-#include <seastar/coroutine/exception.hh>
 #include "service/migration_manager.hh"
 #include "service/storage_proxy.hh"
 #include "service/topology_mutation.hh"
@@ -37,6 +33,7 @@ import fmt;
 #include "db/schema_tables.hh"
 #include "cql3/untyped_result_set.hh"
 
+import fmt;
 using namespace std::string_literals;
 
 static logging::logger mylogger("alter_keyspace");

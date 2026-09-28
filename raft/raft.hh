@@ -11,9 +11,6 @@
 #include <vector>
 #include <unordered_set>
 #include <functional>
-#include <seastar/core/future.hh>
-#include <seastar/util/log.hh>
-#include <seastar/core/abort_source.hh>
 #include <source_location>
 #include "seastarx.hh"
 #include "bytes_ostream.hh"

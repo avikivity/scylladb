@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include <seastar/core/abort_source.hh>
 #include "db/system_keyspace.hh"
 #include "locator/tablets.hh"
 #include "mutation/canonical_mutation.hh"

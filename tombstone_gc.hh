@@ -10,7 +10,6 @@
 
 #include <span>
 #include <tuple>
-#include <seastar/core/shared_ptr.hh>
 #include "gc_clock.hh"
 #include "db/commitlog/replay_position.hh"
 #include "dht/token.hh"

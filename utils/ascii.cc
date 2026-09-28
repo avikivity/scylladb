@@ -11,7 +11,6 @@
 #include "ascii.hh"
 #include "utils/managed_bytes.hh"
 #include "utils/fragment_range.hh"
-#include <seastar/core/byteorder.hh>
 
 namespace utils {
 

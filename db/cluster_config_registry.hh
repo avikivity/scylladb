@@ -14,9 +14,6 @@
 #include <string_view>
 #include <variant>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-
 #include "enum_set.hh"
 #include "seastarx.hh"
 

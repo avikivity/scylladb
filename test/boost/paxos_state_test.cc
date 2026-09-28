@@ -11,8 +11,6 @@
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/sleep.hh>
 #include "seastarx.hh"
 
 #include <string_view>

@@ -8,9 +8,7 @@
 
 #include <string_view>
 #include "test/lib/scylla_test_case.hh"
-#include <seastar/net/inet_address.hh>
 #include "utils/UUID_gen.hh"
-#include <seastar/net/ip.hh>
 #include "types/types.hh"
 #include "types/tuple.hh"
 #include "keys/compound.hh"

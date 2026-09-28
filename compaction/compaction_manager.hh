@@ -8,15 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/shared_future.hh>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/rwlock.hh>
 #include "sstables/shared_sstable.hh"
 #include "utils/exponential_backoff_retry.hh"
 #include "utils/updateable_value.hh"

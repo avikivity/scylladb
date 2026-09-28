@@ -10,12 +10,6 @@
 
 #include "exceptions.hh"
 #include <memory>
-#include <seastar/core/file.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/iostream.hh>
-#include <seastar/core/temporary_buffer.hh>
 #include "seastarx.hh"
 #include "sstables/checksum_utils.hh"
 

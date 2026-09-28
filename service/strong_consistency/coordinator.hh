@@ -12,8 +12,6 @@
 #include "mutation/mutation.hh"
 #include "query/query-result.hh"
 #include "utils/histogram.hh"
-#include <seastar/core/metrics.hh>
-#include <seastar/util/noncopyable_function.hh>
 
 namespace gms {
 

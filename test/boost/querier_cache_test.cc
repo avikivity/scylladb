@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <algorithm>
 
 #include "replica/querier.hh"
@@ -19,16 +18,14 @@ import fmt;
 #include "test/lib/eventually.hh"
 #include "db/config.hh"
 
-#include <seastar/core/sleep.hh>
-#include <seastar/core/thread.hh>
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/closeable.hh>
 
 #include "readers/from_mutations.hh"
 #include "readers/empty.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(querier_cache_test)
 
 using namespace std::chrono_literals;

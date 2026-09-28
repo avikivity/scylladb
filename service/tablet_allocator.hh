@@ -14,7 +14,6 @@
 #include "locator/abstract_replication_strategy.hh"
 #include "tablet_allocator_fwd.hh"
 #include "locator/token_metadata_fwd.hh"
-#include <seastar/core/metrics.hh>
 
 namespace db {
 class system_keyspace;

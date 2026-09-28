@@ -11,11 +11,6 @@
 #include "auth/saslauthd_authenticator.hh"
 
 #include <algorithm>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/net/api.hh>
-#include <seastar/net/socket_defs.hh>
-#include <seastar/util/log.hh>
 #include <system_error>
 #include "auth/config.hh"
 #include "common.hh"
@@ -69,7 +64,7 @@ constexpr size_t len_size = sizeof(htons(0));
 
 char* pack(std::string_view s, char* p) {
     uint16_t size = s.size();
-    produce_be(p, size);
+    seastar::produce_be(p, size);
     memcpy(p, s.data(), size);
     return p + size;
 }

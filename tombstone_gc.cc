@@ -19,7 +19,6 @@
 #include "data_dictionary/data_dictionary.hh"
 #include "gms/feature_service.hh"
 #include "compaction/compaction_manager.hh"
-#include <seastar/coroutine/maybe_yield.hh>
 import boost;
 
 extern logging::logger dblog;

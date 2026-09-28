@@ -6,13 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 #include "test/lib/scylla_test_case.hh"
 
 #include "utils/allocation_strategy.hh"
 #include "utils/intrusive-array.hh"
 
+import fmt;
 class element {
     bool _head = false;
     bool _tail = false;

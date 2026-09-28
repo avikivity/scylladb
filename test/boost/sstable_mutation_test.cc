@@ -9,16 +9,12 @@
 #include <algorithm>
 
 #include <boost/test/unit_test.hpp>
-#include <seastar/net/inet_address.hh>
 #include "sstables/generation_type.hh"
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/closeable.hh>
 
 #include "test/boost/sstable_test.hh"
 #include "sstables/key.hh"
-#include <seastar/core/do_with.hh>
-#include <seastar/core/thread.hh>
 #include "sstables/sstables.hh"
 #include "replica/database.hh"
 #include "mutation/timestamp.hh"

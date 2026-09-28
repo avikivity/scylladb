@@ -7,7 +7,6 @@
  */
 
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 #include <iterator>
 #include <cstdint>
@@ -18,12 +17,11 @@ import fmt;
 #include "test/lib/cql_assertions.hh"
 #include "test/lib/test_utils.hh"
 
-#include <seastar/core/future-util.hh>
-#include <seastar/core/metrics_api.hh>
 #include "transport/messages/result_message.hh"
 #include "cql3/query_processor.hh"
 #include "cql3/untyped_result_set.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(query_processor_test)
 
 SEASTAR_TEST_CASE(test_execute_internal_insert) {

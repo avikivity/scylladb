@@ -11,11 +11,7 @@
 #include "aws_error.hh"
 #include "throttling_controller.hh"
 
-#include <seastar/core/sleep.hh>
-
 #include <algorithm>
-#include <seastar/http/exception.hh>
-#include <seastar/util/short_streams.hh>
 #include <utility>
 #include "utils/log.hh"
 

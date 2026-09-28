@@ -9,7 +9,6 @@
 
 #include "dht/i_partitioner.hh"
 #include <functional>
-#include <seastar/coroutine/maybe_yield.hh>
 #include <optional>
 #include "dht/token.hh"
 #include "types.hh"

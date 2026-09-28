@@ -51,13 +51,10 @@
 #include <tuple>
 #include <cassert>
 
-#include <seastar/core/shared_ptr.hh>
 #include "utils/assert.hh"
 #include "utils/chunked_vector.hh"
 
 namespace utils {
-
-using namespace seastar;
 
 template <class T, class Hash = std::hash<T>, class KeyEqual = std::equal_to<T>>
 class space_saving_top_k {

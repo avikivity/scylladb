@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/util/defer.hh>
 #include <cassert>
 #include <vector>
 #include "utils/assert.hh"

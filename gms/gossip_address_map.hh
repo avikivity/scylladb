@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include <seastar/core/lowres_clock.hh>
-
 #include "service/address_map.hh"
 
 namespace gms {

@@ -8,7 +8,6 @@
 
 #include "messaging_service.hh"
 #include "message/messaging_service.hh"
-#include <seastar/rpc/rpc_types.hh>
 #include "api/api-doc/messaging_service.json.hh"
 #include "api/api-doc/error_injection.json.hh"
 #include "api/api.hh"

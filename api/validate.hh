@@ -10,7 +10,6 @@
 
 #include "locator/host_id.hh"
 #include "locator/token_metadata.hh"
-#include <seastar/core/sstring.hh>
 #include <cstdint>
 #include <cstdlib>
 #include <stdexcept>

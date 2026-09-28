@@ -12,7 +12,6 @@
 #include <cstdint>
 #include <optional>
 #include <concepts>
-#include <seastar/core/format.hh>
 
 #include "sstables/component_type.hh"
 #include "seastarx.hh"

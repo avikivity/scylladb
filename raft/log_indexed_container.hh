@@ -11,7 +11,6 @@
 #include <concepts>
 #include <optional>
 #include <type_traits>
-#include <seastar/util/defer.hh>
 import boost;
 
 #include "utils/assert.hh"

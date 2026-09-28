@@ -16,8 +16,6 @@
 #include "cql3/query_processor.hh"
 #include "db/commitlog/raft_commitlog_replay_buffer.hh"
 
-#include <seastar/util/noncopyable_function.hh>
-
 #include <source_location>
 #include "seastarx.hh"
 

@@ -14,10 +14,7 @@
 #include "seastarx.hh"
 #include "messaging_service_fwd.hh"
 #include "msg_addr.hh"
-#include <seastar/core/sharded.hh>
-#include <seastar/core/sstring.hh>
 #include "gms/inet_address.hh"
-#include <seastar/rpc/rpc_types.hh>
 #include <unordered_map>
 #include "utils/interval.hh"
 #include "schema/schema_fwd.hh"
@@ -34,7 +31,6 @@
 #include <vector>
 #include <optional>
 #include <array>
-#include <seastar/net/tls.hh>
 import abseil;
 
 // forward declarations

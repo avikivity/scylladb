@@ -6,11 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
-#include <seastar/core/seastar.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/util/closeable.hh>
 #include "init.hh"
 #include "supervisor.hh"
 #include "directories.hh"
@@ -19,6 +14,7 @@ import fmt;
 #include "utils/disk-error-handler.hh"
 #include "utils/lister.hh"
 
+import fmt;
 namespace utils {
 
 static future<> disk_sanity(fs::path path, bool developer_mode) {

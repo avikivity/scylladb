@@ -15,7 +15,6 @@ import fmt;
 #include "replica/database.hh"
 #include "db/config.hh"
 #include <sstream>
-#include <seastar/http/exception.hh>
 import boost;
 
 namespace api {

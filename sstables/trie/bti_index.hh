@@ -9,7 +9,6 @@
 #pragma once
 
 #include <memory>
-#include <seastar/core/shared_ptr.hh>
 #include "sstables/abstract_index_reader.hh"
 
 namespace sstables {

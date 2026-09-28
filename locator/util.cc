@@ -9,7 +9,6 @@
 #include "replica/database.hh"
 #include "gms/gossiper.hh"
 #include "utils/chunked_vector.hh"
-#include <seastar/coroutine/maybe_yield.hh>
 
 namespace locator {
 

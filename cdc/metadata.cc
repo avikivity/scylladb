@@ -14,8 +14,6 @@
 #include "utils/stall_free.hh"
 #include "cdc/metadata.hh"
 
-#include <seastar/coroutine/maybe_yield.hh>
-
 extern logging::logger cdc_log;
 
 static api::timestamp_type to_ts(db_clock::time_point tp) {

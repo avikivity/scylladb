@@ -12,7 +12,6 @@
 #include <set>
 #include <string_view>
 #include <vector>
-#include <seastar/core/shared_ptr.hh>
 #include "seastarx.hh"
 #include "schema/schema_fwd.hh"
 

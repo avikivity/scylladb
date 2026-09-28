@@ -9,9 +9,6 @@
 #include "auth/common.hh"
 
 #include <optional>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sharded.hh>
 
 #include "mutation/canonical_mutation.hh"
 #include "mutation/timestamp.hh"

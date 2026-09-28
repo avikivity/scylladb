@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include <seastar/net/ipv4_address.hh>
-#include <seastar/net/inet_address.hh>
-#include <seastar/net/socket_defs.hh>
 #include <optional>
 #include <functional>
 

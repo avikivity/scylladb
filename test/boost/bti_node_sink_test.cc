@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <seastar/testing/thread_test_case.hh>
 
 #include <ranges>
@@ -18,6 +17,7 @@ import fmt;
 // For instantiation of `writer_node::recalc_sizes`.
 #include "sstables/trie/writer_node.impl.hh" // IWYU pragma: keep
 
+import fmt;
 // Calling BOOST_REQUIRE unconditionally is stupidly expensive.
 // Checking the condition first, and only calling the BOOST assertions
 // if the condition is false, makes the test orders of magnitude faster.

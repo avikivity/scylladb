@@ -6,13 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
-#include <seastar/core/app-template.hh>
-#include <seastar/core/thread.hh>
 #include <algorithm>
 #include <vector>
 #include <random>
-#include <boost/program_options.hpp>
 #include "perf.hh"
 
 using per_key_t = int64_t;
@@ -32,8 +28,6 @@ struct perf_key_tri_compare {
 
 #include "utils/assert.hh"
 #include "utils/bptree.hh"
-
-using namespace seastar;
 
 /* On node size 32 and less linear search works better */
 using test_bplus_tree = bplus::tree<per_key_t, unsigned long, perf_key_compare, 4, bplus::key_search::linear>;

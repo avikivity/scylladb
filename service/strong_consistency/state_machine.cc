@@ -6,9 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/shard_id.hh>
-#include <seastar/core/on_internal_error.hh>
 #include "state_machine.hh"
 #include "db/schema_tables.hh"
 #include "mutation/frozen_mutation.hh"

@@ -10,7 +10,6 @@
 
 #include <span>
 #include "types/types.hh"
-#include <seastar/core/future.hh>
 #include "db/functions/function_name.hh"
 #include "rust/wasmtime_bindings.hh"
 #include "lang/wasm_instance_cache.hh"

@@ -8,8 +8,6 @@
 
 #include <boost/test/unit_test.hpp>
 #include <seastar/testing/test_case.hh>
-#include <seastar/http/reply.hh>
-#include <seastar/core/sleep.hh>
 #include <system_error>
 #include "seastarx.hh"
 

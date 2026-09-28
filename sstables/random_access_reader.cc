@@ -6,9 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+#include "sstables/random_access_reader.hh"
 #include <exception>
 
-#include "sstables/random_access_reader.hh"
 #include "utils/disk-error-handler.hh"
 #include "utils/log.hh"
 

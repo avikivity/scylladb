@@ -5,7 +5,6 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-import abseil;
 #include "replica/logstor/segment_manager.hh"
 #include "replica/logstor/ondisk.hh"
 #include "replica/logstor/segment_io.hh"
@@ -21,31 +20,6 @@ import abseil;
 #include <chrono>
 #include <system_error>
 #include <linux/if_link.h>
-#include <seastar/core/file.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/simple-stream.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/loop.hh>
-#include <seastar/core/scheduling.hh>
-#include <seastar/core/when_all.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/exception.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/circular_buffer.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/util/memory-data-source.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/exception.hh>
 #include "replica/logstor/write_buffer.hh"
 #include "utils/checked-file-impl.hh"
 #include "utils/dynamic_bitset.hh"
@@ -53,6 +27,7 @@ import abseil;
 #include "utils/lister.hh"
 #include "replica/database.hh"
 
+import abseil;
 namespace replica::logstor {
 
 using file_id_t = uint64_t;

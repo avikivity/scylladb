@@ -16,8 +16,6 @@
 #include <unordered_map>
 #include "streaming/stream_reason.hh"
 #include "service/topology_guard.hh"
-#include <seastar/core/sharded.hh>
-#include <seastar/core/abort_source.hh>
 
 namespace streaming { class stream_manager; }
 namespace gms { class gossiper; }

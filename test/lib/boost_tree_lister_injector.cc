@@ -6,13 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "test/lib/boost_test_tree_lister.hh"
 
 #include <boost/test/framework.hpp>
 #include <boost/test/tree/traverse.hpp>
 #include <boost/test/unit_test_suite.hpp>
 
+import fmt;
 namespace {
 
 /// Traverse the test tree and collect information about

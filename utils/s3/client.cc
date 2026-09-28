@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <exception>
 #include <algorithm>
 #include <cctype>
@@ -24,23 +23,6 @@ import fmt;
 #else
 #include <rapidxml/rapidxml.hpp>
 #endif
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/iostream.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/pipe.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/units.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/coroutine/exception.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/util/lazy.hh>
-#include <seastar/http/request.hh>
-#include <seastar/http/exception.hh>
 
 namespace seastar::http::internal { sstring url_encode(std::string_view in); }
 #include "default_aws_retry_strategy.hh"
@@ -61,6 +43,7 @@ namespace seastar::http::internal { sstring url_encode(std::string_view in); }
 #include "db_clock.hh"
 #include "utils/log.hh"
 
+import fmt;
 using namespace std::chrono_literals;
 using namespace aws;
 template <>

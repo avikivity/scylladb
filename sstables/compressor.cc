@@ -11,12 +11,6 @@
 #include <lz4.h>
 #include <zlib.h>
 #include <snappy-c.h>
-#include <seastar/util/log.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/weak_ptr.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/reactor.hh>
 #include "utils/reusable_buffer.hh"
 #include "sstables/compress.hh"
 #include "sstables/exceptions.hh"

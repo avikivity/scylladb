@@ -5,13 +5,13 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-import fmt;
 #include <vector>
 #include <list>
 #include <random>
 #include <ranges>
 #include "heat_load_balance.hh"
 
+import fmt;
 logging::logger hr_logger("heat_load_balance");
 
 // Return a uniformly-distributed random number in [0,1)

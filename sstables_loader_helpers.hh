@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/future.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include "dht/i_partitioner_fwd.hh"
 #include "dht/token.hh"
 #include "sstables/generation_type.hh"

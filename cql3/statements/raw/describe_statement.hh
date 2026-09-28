@@ -16,7 +16,6 @@
 
 #include <memory>
 #include <optional>
-#include <seastar/core/sstring.hh>
 
 namespace cql3 {
 

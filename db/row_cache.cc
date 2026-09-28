@@ -6,15 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "db/row_cache.hh"
-#include <seastar/core/memory.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/util/defer.hh>
 #include "replica/memtable.hh"
 #include <sys/sdt.h>
 #include "read_context.hh"
@@ -31,6 +23,7 @@ import fmt;
 #include "utils/chunked_vector.hh"
 import boost;
 
+import fmt;
 namespace cache {
 
 logging::logger clogger("cache");

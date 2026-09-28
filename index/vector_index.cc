@@ -22,7 +22,6 @@
 #include "types/types.hh"
 #include "utils/rjson.hh"
 #include <ranges>
-#include <seastar/core/sstring.hh>
 import boost;
 
 namespace secondary_index {

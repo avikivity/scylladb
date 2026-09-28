@@ -5,11 +5,6 @@
 #include "utils/assert.hh"
 #include "dirty_memory_manager.hh"
 #include "database.hh" // for memtable_list
-#include <seastar/core/metrics_api.hh>
-#include <seastar/util/later.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include "seastarx.hh"
 
 extern logging::logger dblog;

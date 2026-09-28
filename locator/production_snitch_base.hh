@@ -14,7 +14,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <seastar/core/sstring.hh>
 #include "snitch_base.hh"
 
 namespace locator {

@@ -12,9 +12,6 @@
 
 #include "service/migration_listener.hh"
 #include "gms/endpoint_state.hh"
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/timed_out_error.hh>
 #include "gms/inet_address.hh"
 #include "gms/feature.hh"
 #include "gms/i_endpoint_state_change_subscriber.hh"

@@ -10,11 +10,6 @@
 
 #include <utility>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/core/when_all.hh>
-
 #include "cql3/query_processor.hh"
 #include "cql3/untyped_result_set.hh"
 #include "db/cluster_config_registry.hh"

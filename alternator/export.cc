@@ -7,7 +7,6 @@
  */
 
 #include "alternator/export.hh"
-#include <seastar/core/coroutine.hh>
 #include "alternator/error.hh"
 #include "alternator/executor.hh"
 #include "alternator/executor_util.hh"

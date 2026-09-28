@@ -6,15 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "db/view/view_building_worker.hh"
 #include "sstables/shared_sstable.hh"
 #include "utils/assert.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/util/closeable.hh>
 #include "distributed_loader.hh"
 #include "replica/database.hh"
 #include "replica/global_table_ptr.hh"
@@ -36,6 +30,7 @@ import fmt;
 #include <unordered_map>
 #include "db/view/view_builder.hh"
 
+import fmt;
 extern logging::logger dblog;
 
 static const std::unordered_set<std::string_view> system_keyspaces = {

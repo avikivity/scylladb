@@ -8,16 +8,10 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import fmt;
 #include <random>
 #include <algorithm>
 #include <ranges>
 
-#include <seastar/core/sleep.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/util/later.hh>
-#include <seastar/coroutine/try_future.hh>
-#include <seastar/util/defer.hh>
 #include "gms/inet_address.hh"
 #include "inet_address_vectors.hh"
 #include "locator/host_id.hh"
@@ -32,10 +26,8 @@ import fmt;
 #include "mutation/frozen_mutation.hh"
 #include "mutation/async_utils.hh"
 #include "query/query_result_merger.hh"
-#include <seastar/core/do_with.hh>
 #include "message/messaging_service.hh"
 #include "gms/gossiper.hh"
-#include <seastar/core/future-util.hh>
 #include "db/read_repair_decision.hh"
 #include "db/config.hh"
 #include "db/batchlog.hh"
@@ -50,9 +42,6 @@ import fmt;
 #include "schema/schema.hh"
 #include "query_ranges_to_vnodes.hh"
 #include "schema/schema_registry.hh"
-#include <seastar/util/lazy.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/execution_stage.hh>
 #include "db/timeout_clock.hh"
 #include "replica/multishard_query.hh"
 #include "replica/database.hh"
@@ -68,10 +57,6 @@ import fmt;
 #include "db/large_data_handler.hh"
 #include "service/topology_mutation.hh"
 #include "locator/token_metadata.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/all.hh>
 #include <type_traits>
 #include "locator/abstract_replication_strategy.hh"
 #include "service/paxos/cas_request.hh"
@@ -99,6 +84,7 @@ import fmt;
 #include "debug.hh"
 import boost;
 
+import fmt;
 namespace bi = boost::intrusive;
 
 template<typename T = void>

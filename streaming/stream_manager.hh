@@ -12,8 +12,6 @@
 #include "streaming/stream_fwd.hh"
 #include "streaming/progress_info.hh"
 #include "streaming/stream_reason.hh"
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sharded.hh>
 #include "utils/updateable_value.hh"
 #include "utils/serialized_action.hh"
 #include "gms/i_endpoint_state_change_subscriber.hh"
@@ -22,8 +20,6 @@
 #include "gms/application_state.hh"
 #include "service/topology_guard.hh"
 #include "readers/mutation_reader.hh"
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/metrics_registration.hh>
 
 namespace db {
 class config;

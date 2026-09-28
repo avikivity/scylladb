@@ -7,25 +7,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "db/hints/manager.hh"
 
 // Seastar features.
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/file-types.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/shared_mutex.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/coroutine/exception.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/util/file.hh>
 
 // Boost features.
 
@@ -52,6 +36,7 @@ import fmt;
 #include <exception>
 #include <variant>
 
+import fmt;
 namespace db::hints {
 
 using namespace internal;

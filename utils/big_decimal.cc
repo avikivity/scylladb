@@ -11,7 +11,6 @@
 #include <cassert>
 #include <cmath>
 #include "marshal_exception.hh"
-#include <seastar/core/format.hh>
 
 #ifdef __clang__
 

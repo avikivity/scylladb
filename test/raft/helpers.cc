@@ -12,7 +12,6 @@
 
 #include "raft/raft.hh"
 #include "utils/assert.hh"
-#include <seastar/core/sharded.hh>
 
 #include "helpers.hh"
 

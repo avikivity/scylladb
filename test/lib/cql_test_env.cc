@@ -6,11 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <iterator>
 #include <random>
-#include <seastar/core/thread.hh>
-#include <seastar/util/defer.hh>
 #include <boost/test/unit_test.hpp>
 #include "gms/generation-number.hh"
 #include "db/view/view_building_worker.hh"
@@ -25,12 +22,6 @@ import fmt;
 #include "cql3/statements/modification_statement.hh"
 #include "cql3/cql_config.hh"
 #include "timeout_config.hh"
-#include <seastar/core/sharded.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/scheduling.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/coroutine.hh>
 #include "service/client_routes.hh"
 #include "service/migration_manager.hh"
 #include "service/qos/raft_service_level_distributed_data_accessor.hh"
@@ -89,6 +80,7 @@ import fmt;
 
 #include <sys/time.h>
 
+import fmt;
 using namespace std::chrono_literals;
 
 future<scheduling_groups> get_scheduling_groups() {
@@ -873,7 +865,7 @@ private:
             // currently giving back false always, we can't simply do this though. Thus this ugly loop.
             // Adding the stop defer before actually creating the service should be fine.
 
-            auto stop_ms_func = [this] { _ms.stop().get(); };
+            auto stop_ms_func = [this] noexcept { _ms.stop().get(); };
             using stop_type = decltype(stop_ms_func);
             std::optional<decltype(defer_verbose_shutdown("", stop_type(stop_ms_func)))> stop_ms;
 

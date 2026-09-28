@@ -7,7 +7,6 @@
  */
 
 import fmt;
-#include <seastar/core/thread.hh>
 
 #include "db/config.hh"
 #include "db/extensions.hh"

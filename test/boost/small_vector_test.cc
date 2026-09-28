@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #define BOOST_TEST_MODULE small_vector
 
 #include <boost/test/unit_test.hpp>
@@ -16,6 +15,7 @@ import fmt;
 
 #include "utils/small_vector.hh"
 
+import fmt;
 template<typename T, size_t N>
 void check_equivalent(const utils::small_vector<T, N>& a, const std::vector<T>& b) {
     BOOST_REQUIRE_EQUAL(a.size(), b.size());

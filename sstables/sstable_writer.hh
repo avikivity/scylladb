@@ -9,7 +9,6 @@
 #pragma once
 
 #include <memory>
-#include <seastar/core/smp.hh>
 #include "schema/schema_fwd.hh"
 #include "mutation/mutation_fragment.hh"
 #include "mutation/mutation_fragment_v2.hh"

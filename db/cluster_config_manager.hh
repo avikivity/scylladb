@@ -15,12 +15,6 @@
 #include <cstdint>
 #include <vector>
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/sharded.hh>
-
 #include "service/migration_listener.hh"
 #include "seastarx.hh"
 #include "utils/UUID.hh"

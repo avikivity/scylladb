@@ -13,12 +13,7 @@
 #include "test/lib/scylla_test_case.hh"
 #include "test/lib/limiting_data_source.hh"
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/core/iostream.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/core/thread.hh>
 #include <cstdint>
-
-using namespace seastar;
 
 namespace {
 

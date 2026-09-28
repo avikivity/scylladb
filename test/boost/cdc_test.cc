@@ -6,9 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <iostream>
-#include <seastar/util/defer.hh>
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
@@ -39,6 +37,7 @@ import fmt;
 #include "utils/UUID_gen.hh"
 #include "utils/to_string.hh"
 
+import fmt;
 using namespace std::string_literals;
 
 namespace cdc {

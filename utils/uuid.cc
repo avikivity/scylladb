@@ -7,16 +7,13 @@
  */
 
 
-import fmt;
 #include "UUID.hh"
-#include <seastar/net/byteorder.hh>
 #include <random>
 #include <string>
-#include <seastar/core/format.hh>
-#include <seastar/core/sstring.hh>
 #include "marshal_exception.hh"
 import boost;
 
+import fmt;
 namespace utils {
 
 UUID

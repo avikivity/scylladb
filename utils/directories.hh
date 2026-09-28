@@ -10,12 +10,9 @@
 
 #include <set>
 #include <vector>
-#include <seastar/core/future.hh>
-#include <seastar/util/bool_class.hh>
 #include "utils/file_lock.hh"
 #include "utils/lister.hh"
 
-using namespace seastar;
 #include "seastarx.hh"
 
 namespace db {

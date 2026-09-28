@@ -6,11 +6,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "mutation/timestamp.hh"
 
 #include "clocks-impl.hh"
 
+import fmt;
 std::atomic<int64_t> clocks_offset;
 
 std::string format_timestamp(api::timestamp_type ts) {

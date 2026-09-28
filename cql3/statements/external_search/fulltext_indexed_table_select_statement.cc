@@ -23,8 +23,7 @@
 #include "types/types.hh"
 #include "utils/assert.hh"
 
-#include <seastar/core/future.hh>
-#include <seastar/coroutine/exception.hh>
+import seastar;
 
 namespace cql3::statements {
 

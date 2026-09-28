@@ -9,8 +9,6 @@
 #pragma once
 
 #include <list>
-#include <seastar/net/byteorder.hh>
-#include <seastar/util/backtrace.hh>
 
 #include "utils/fragment_range.hh"
 #include "utils/bit_cast.hh"

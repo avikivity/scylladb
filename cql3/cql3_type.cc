@@ -512,7 +512,7 @@ sstring maybe_quote(const std::string_view identifier) {
         }
     }
     if (num_quotes == 0) {
-        return make_sstring("\"", identifier, "\"");
+        return sstring("\"") + sstring(identifier) + sstring("\"");
     }
     static const boost::regex double_quote_re("\"");
     std::string result;
@@ -529,14 +529,14 @@ static sstring quote_with(const std::string_view str) {
 
     // quote empty string
     if (str.empty()) {
-        return make_sstring(quote_str, quote_str);
+        return sstring(quote_str) + sstring(quote_str);
     }
     size_t num_quotes = 0;
     for (char c : str) {
         num_quotes += (c == C);
     }
     if (num_quotes == 0) {
-        return make_sstring(quote_str, str, quote_str);
+        return sstring(quote_str) + sstring(str) + sstring(quote_str);
     }
 
     static const std::string double_quote_str{C, C};

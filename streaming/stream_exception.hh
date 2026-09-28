@@ -11,7 +11,6 @@
 #pragma once
 
 #include "streaming/stream_state.hh"
-#include <seastar/core/sstring.hh>
 #include <exception>
 
 namespace streaming {

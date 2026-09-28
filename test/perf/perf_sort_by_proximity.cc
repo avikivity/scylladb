@@ -7,12 +7,6 @@
  */
 
 #include <algorithm>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/rpc/rpc_types.hh>
 #include "inet_address_vectors.hh"
 #include "seastarx.hh"
 

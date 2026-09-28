@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include <seastar/core/lowres_clock.hh>
-
 #include <unordered_map>
 #include <list>
 

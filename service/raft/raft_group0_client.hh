@@ -12,10 +12,6 @@
 
 #include <memory>
 #include <optional>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/coroutine/generator.hh>
 
 #include "service/raft/group0_fwd.hh"
 #include "service/raft/raft_timeout.hh"

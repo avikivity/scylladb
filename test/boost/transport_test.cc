@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "test/lib/scylla_test_case.hh"
 
 #include "transport/request.hh"
@@ -16,6 +15,7 @@ import fmt;
 #include "test/lib/random_utils.hh"
 #include "test/lib/test_utils.hh"
 
+import fmt;
 namespace cql3 {
 
 bool operator==(const cql3::raw_value_view& a, const cql3::raw_value_view& b) {

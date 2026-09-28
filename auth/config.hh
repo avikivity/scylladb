@@ -12,8 +12,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include <seastar/core/sstring.hh>
-
 #include "utils/updateable_value.hh"
 
 namespace auth {

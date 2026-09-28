@@ -7,7 +7,6 @@
  */
 
 
-import fmt;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 
@@ -22,6 +21,7 @@ import fmt;
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/test_utils.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(statement_restrictions_test)
 
 using namespace cql3;

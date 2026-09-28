@@ -7,17 +7,16 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
 
-#include <seastar/core/format.hh>
 #include <string>
 
 #include "utils/double-decker.hh"
 #include "utils/logalloc.hh"
 #include "test/lib/random_utils.hh"
 
+import fmt;
 class compound_key {
 public:
     int key;

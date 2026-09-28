@@ -6,13 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #define BOOST_TEST_MODULE utils
 #include <boost/test/unit_test.hpp>
 #include <ranges>
 
 #include "utils/lru_string_map.hh"
 
+import fmt;
 class mapped_object {
     int _v;
 public:

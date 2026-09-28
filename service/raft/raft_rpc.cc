@@ -6,8 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 #include "service/raft/raft_rpc.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/units.hh>
 #include "gms/inet_address.hh"
 #include "serializer_impl.hh"
 #include "message/msg_addr.hh"

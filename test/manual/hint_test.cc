@@ -14,10 +14,6 @@
 
 #include <seastar/testing/test_case.hh>
 
-#include <seastar/core/future-util.hh>
-#include <seastar/core/do_with.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/seastar.hh>
 #include "utils/UUID_gen.hh"
 #include "test/lib/test_utils.hh"
 #include "test/lib/tmpdir.hh"

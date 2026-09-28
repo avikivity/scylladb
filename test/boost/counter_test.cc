@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <random>
 
-#include <seastar/core/thread.hh>
 #include <seastar/testing/random.hh>
 
 #include "test/lib/scylla_test_case.hh"

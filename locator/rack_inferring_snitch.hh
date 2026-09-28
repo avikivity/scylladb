@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 #include "gms/inet_address.hh"
 #include "snitch_base.hh"
 

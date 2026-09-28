@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/shared_ptr.hh>
-
 class service_permit {
     seastar::lw_shared_ptr<seastar::semaphore_units<>> _permit;
     service_permit(seastar::semaphore_units<>&& u) : _permit(seastar::make_lw_shared<seastar::semaphore_units<>>(std::move(u))) {}
