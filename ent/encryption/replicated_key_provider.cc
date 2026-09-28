@@ -6,7 +6,6 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-import fmt;
 #include <unordered_map>
 #include <stdexcept>
 #include <regex>
@@ -14,12 +13,6 @@ import fmt;
 
 #include <openssl/evp.h>
 #include <openssl/rand.h>
-
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/coroutine.hh>
 
 #include "utils/to_string.hh"
 
@@ -44,6 +37,7 @@ import fmt;
 #include "locator/everywhere_replication_strategy.hh"
 #include "release.hh"
 
+import fmt;
 namespace encryption {
 
 static auto constexpr TABLENAME = "encrypted_keys";

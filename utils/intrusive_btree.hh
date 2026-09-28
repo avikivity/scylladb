@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/util/alloc_failure_injector.hh>
 #include <cassert>
 #include "utils/assert.hh"
 #include "utils/collection-concepts.hh"

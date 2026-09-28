@@ -12,8 +12,6 @@
 #include "locator/token_metadata.hh"
 #include "locator/tablets.hh"
 
-#include <seastar/core/sstring.hh>
-
 namespace locator {
 
 /// Trait class which allows replication strategies to work in a mode which

@@ -11,9 +11,6 @@
 #include "vector_search/vector_store_client.hh"
 #include "utils/rjson.hh"
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/future.hh>
-
 #include <cstdint>
 #include <expected>
 #include <optional>

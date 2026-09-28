@@ -7,17 +7,13 @@
  */
 
 #include <chrono>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/with_timeout.hh>
 #include <seastar/testing/test_case.hh>
-#include <seastar/util/log.hh>
 
 #include "transport/generic_server.hh"
 #include "utils/assert.hh"
 
 using namespace generic_server;
 using namespace logging;
-using namespace seastar;
 using namespace std::literals::chrono_literals;
 
 static logger test_logger("test_server");

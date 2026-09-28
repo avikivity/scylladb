@@ -10,7 +10,6 @@
 
 #include <ranges>
 
-#include <seastar/core/format.hh>
 #include <stdexcept>
 #include <algorithm>
 #include <format>

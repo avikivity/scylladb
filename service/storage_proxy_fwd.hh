@@ -7,7 +7,6 @@
  */
 #pragma once
 
-#include <seastar/util/bool_class.hh>
 #include "seastarx.hh"
 
 namespace service {

@@ -27,12 +27,6 @@
 #include "utils/rjson.hh"
 #include "utils/s3/client.hh"
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/timer.hh>
-#include <seastar/util/defer.hh>
 #include <seastar/testing/test_fixture.hh>
 
 #include "utils/base64.hh"

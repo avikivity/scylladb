@@ -10,11 +10,8 @@
 
 #include <chrono>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
 #include <stdexcept>
 #include <unordered_map>
-#include <seastar/core/metrics.hh>
 
 #include "utils/log.hh"
 #include "raft/raft.hh"

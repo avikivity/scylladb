@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/shard_id.hh>
-#include <seastar/core/sstring.hh>
 #include <vector>
 #include <unordered_map>
 #include "sstables/basic_info.hh"

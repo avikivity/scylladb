@@ -10,7 +10,6 @@
 #pragma once
 
 #include <string>
-#include <seastar/json/json_elements.hh>
 #include <cstdint>
 #include "seastarx.hh"
 

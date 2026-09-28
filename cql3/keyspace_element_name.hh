@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 #include <string_view>
 #include "seastarx.hh"
 

@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/future.hh>
 #include <cstdint>
 #include "seastarx.hh"
 

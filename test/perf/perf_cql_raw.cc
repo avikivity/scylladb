@@ -6,29 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <cstdlib>
 #include <limits>
 #include <memory>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/signal.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/byteorder.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/when_all.hh>
-#include <seastar/net/api.hh>
-#include <seastar/net/socket_defs.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/util/log.hh>
 #include <signal.h>
 
 #include "db/config.hh"
@@ -41,8 +21,8 @@ import fmt;
 #include <stack>
 import boost;
 
+import fmt;
 namespace perf {
-using namespace seastar;
 namespace bpo = boost::program_options;
 using namespace cql_transport;
 

@@ -19,7 +19,6 @@
 #include <ranges>
 #include <type_traits>
 
-#include <seastar/util/defer.hh>
 import fmt;
 
 template <typename Comparator, typename T>

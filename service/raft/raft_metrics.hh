@@ -8,8 +8,6 @@
 #pragma once
 
 #include <vector>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/sstring.hh>
 #include "raft/raft.hh"
 #include "service/raft/raft_rpc.hh"
 

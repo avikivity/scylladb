@@ -9,7 +9,6 @@
 
 #include "audit/audit.hh"
 #include "audit/audit_rule.hh"
-#include <seastar/core/future.hh>
 
 namespace audit {
 

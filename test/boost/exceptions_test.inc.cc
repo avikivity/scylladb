@@ -19,9 +19,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include "seastarx.hh"
-#include <seastar/core/future.hh>
 #include <seastar/testing/test_case.hh>
-#include <seastar/util/log.hh>
 
 #include "utils/assert.hh"
 #include "utils/exceptions.hh"

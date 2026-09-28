@@ -7,7 +7,6 @@
  */
 
 #undef SEASTAR_TESTING_MAIN
-#include <seastar/util/closeable.hh>
 #include <seastar/testing/test_case.hh>
 
 #include <map>

@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/util/noncopyable_function.hh>
-
 #include "mutation/mutation_partition.hh"
 #include "utils/phased_barrier.hh"
 #include "utils/histogram.hh"

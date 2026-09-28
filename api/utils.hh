@@ -15,11 +15,6 @@
 #include <string_view>
 #include <type_traits>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/http/exception.hh>
-#include <seastar/http/request.hh>
-#include <seastar/util/bool_class.hh>
-
 #include "gms/inet_address.hh"
 #include "seastarx.hh"
 #include "utils/UUID.hh"

@@ -6,9 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/exception.hh>
-
 #include <ranges>
 
 #include "compaction_manager.hh"

@@ -7,7 +7,6 @@
  */
 
 #include <boost/test/unit_test.hpp>
-#include <seastar/core/smp.hh>
 #include "seastarx.hh"
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>

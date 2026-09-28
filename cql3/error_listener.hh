@@ -11,7 +11,6 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <seastar/core/sstring.hh>
 #include <antlr3.hpp>
 
 namespace cql3 {

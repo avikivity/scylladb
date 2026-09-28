@@ -13,7 +13,6 @@
 #include "types/types.hh"
 #include "types/user.hh"
 #include "utils/assert.hh"
-#include <seastar/core/coroutine.hh>
 #include "cql3/query_options.hh"
 #include "cql3/cql_config.hh"
 #include "cql3/query_processor.hh"

@@ -15,11 +15,7 @@
 
 import fmt;
 
-#include <seastar/core/aligned_buffer.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/seastar.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/defer.hh>
 
 #include "replica/logstor/segment_file.hh"
 #include "test/lib/eventually.hh"

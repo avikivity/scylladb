@@ -7,7 +7,6 @@
  */
 
 #pragma once
-#include <seastar/core/sstring.hh>
 #include <map>
 #include "seastarx.hh"
 

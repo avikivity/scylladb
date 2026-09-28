@@ -9,8 +9,6 @@
 #pragma once
 
 #include "disk_types.hh"
-#include <seastar/core/enum.hh>
-#include <seastar/core/weak_ptr.hh>
 #include "bytes.hh"
 #include "gc_clock.hh"
 #include "locator/host_id.hh"

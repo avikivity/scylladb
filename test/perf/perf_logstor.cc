@@ -273,19 +273,7 @@ import fmt;
 
 #include <json/json.h>
 
-#include <seastar/core/align.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/loop.hh>
-#include <seastar/core/memory.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/simple-stream.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include <seastar/testing/test_runner.hh>
-#include <seastar/util/closeable.hh>
 
 #include "dht/i_partitioner.hh"
 #include "keys/keys.hh"

@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include <seastar/core/weak_ptr.hh>
-
 #include "compress.hh"
 #include "sstables/types.hh"
 #include "utils/i_filter.hh"

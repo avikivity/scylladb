@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "locator/abstract_replication_strategy.hh"
 #include "locator/tablet_replication_strategy.hh"
 #include "locator/local_strategy.hh"
@@ -14,15 +13,13 @@ import fmt;
 #include "locator/network_topology_strategy.hh"
 #include "locator/everywhere_replication_strategy.hh"
 #include "exceptions/exceptions.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
 #include "replica/database.hh"
 #include "utils/stall_free.hh"
 
 #include <variant>
 import boost;
 
+import fmt;
 namespace locator {
 
 using ring_mapping_underlying_type = boost::icl::interval_map<token, std::unordered_set<locator::host_id>>;

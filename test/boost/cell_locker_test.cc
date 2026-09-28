@@ -8,8 +8,6 @@
 
 #include "test/lib/scylla_test_case.hh"
 
-#include <seastar/core/thread.hh>
-
 #include "replica/cell_locking.hh"
 #include "mutation/mutation.hh"
 #include "schema/schema_builder.hh"

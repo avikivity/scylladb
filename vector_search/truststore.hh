@@ -9,11 +9,6 @@
 #pragma once
 #include "utils/updateable_value.hh"
 #include "utils/log.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/net/tls.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/gate.hh>
 #include <unordered_map>
 
 namespace vector_search {

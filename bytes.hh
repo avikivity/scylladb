@@ -9,7 +9,6 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <seastar/core/sstring.hh>
 #include "utils/hashing.hh"
 #include <optional>
 #include <iosfwd>

@@ -14,8 +14,6 @@
 #include "query-result.hh"
 #include "query-result-writer.hh"
 #include "query-result-set.hh"
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/thread.hh>
 #include "bytes.hh"
 #include "mutation/mutation_partition_serializer.hh"
 #include "query-result-reader.hh"
@@ -25,6 +23,7 @@
 #include "utils/assert.hh"
 #include "utils/overloaded_functor.hh"
 
+import fmt;
 namespace query {
 
 static logging::logger qlogger("query");

@@ -8,7 +8,6 @@
 #pragma once
 
 #include <utility>
-#include <seastar/core/shard_id.hh>
 #include "seastarx.hh"
 #include "schema/schema.hh"
 #include "locator/abstract_replication_strategy.hh"

@@ -32,8 +32,6 @@
 
 #pragma once
 
-#include <seastar/core/thread.hh>
-#include <seastar/util/log.hh>
 #include <map>
 #include <set>
 #include "bytes.hh"

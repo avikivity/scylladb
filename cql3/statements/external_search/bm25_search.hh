@@ -15,8 +15,6 @@
 #include "schema/schema.hh"
 #include "vector_search/vector_store_client.hh"
 
-#include <seastar/core/future.hh>
-
 #include <optional>
 #include <span>
 

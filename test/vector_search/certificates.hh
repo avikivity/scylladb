@@ -7,8 +7,6 @@
  */
 
 #pragma once
-#include <seastar/core/seastar.hh>
-#include <seastar/net/tls.hh>
 import fmt;
 
 namespace test::vector_search {

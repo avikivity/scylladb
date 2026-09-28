@@ -11,9 +11,6 @@
 #include <memory>
 #include "seastarx.hh"
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-
 /*
     Lends a test a bucket of its own on the run's S3 server, and takes it away
     again afterwards, so that a test neither inherits the objects of every test

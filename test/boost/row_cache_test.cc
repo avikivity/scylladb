@@ -7,12 +7,7 @@
  */
 
 
-import fmt;
 #include <boost/test/unit_test.hpp>
-#include <seastar/core/sleep.hh>
-#include <seastar/util/backtrace.hh>
-#include <seastar/util/alloc_failure_injector.hh>
-#include <seastar/util/closeable.hh>
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
@@ -25,7 +20,6 @@ import fmt;
 #include "schema/schema_builder.hh"
 #include "test/lib/simple_schema.hh"
 #include "db/row_cache.hh"
-#include <seastar/core/thread.hh>
 #include "replica/memtable.hh"
 #include "partition_slice_builder.hh"
 #include "mutation/mutation_rebuilder.hh"
@@ -46,6 +40,7 @@ import fmt;
 #include "readers/empty.hh"
 #include <seastar/testing/thread_test_case.hh>
 
+import fmt;
 using namespace std::chrono_literals;
 
 static schema_ptr make_schema() {

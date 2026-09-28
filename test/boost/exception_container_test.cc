@@ -9,9 +9,6 @@
 #include "utils/exception_container.hh"
 
 #include "test/lib/scylla_test_case.hh"
-#include <seastar/core/sstring.hh>
-
-using namespace seastar;
 
 class foo_exception : public std::exception {
 public:

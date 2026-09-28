@@ -9,17 +9,11 @@
 #include <algorithm>
 #include <vector>
 
-#include <seastar/core/format.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/http/client.hh>
-
 #include "utils/object_storage_metrics.hh"
 #include "utils/log.hh"
 #include "seastarx.hh"
 
 static logging::logger oslog("object_storage_metrics");
-
-using namespace seastar;
 
 utils::http_client_metrics::http_client_metrics(const seastar::http::client& http, object_storage_metrics_labels labels) {
     namespace sm = seastar::metrics;

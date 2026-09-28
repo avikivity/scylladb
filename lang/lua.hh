@@ -10,7 +10,6 @@
 
 #include "types/types.hh"
 #include "utils/updateable_value.hh"
-#include <seastar/core/future.hh>
 
 namespace db {
 class config;

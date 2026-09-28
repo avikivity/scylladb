@@ -10,7 +10,6 @@
 
 #include "utils/assert.hh"
 #include <boost/test/unit_test.hpp>
-#include <seastar/util/backtrace.hh>
 #include "readers/mutation_reader.hh"
 #include "mutation_assertions.hh"
 #include "schema/schema.hh"

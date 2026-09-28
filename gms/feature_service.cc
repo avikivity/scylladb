@@ -4,9 +4,6 @@
  * Copyright (C) 2020-present ScyllaDB
  */
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/smp.hh>
 #include "db/schema_features.hh"
 #include "utils/log.hh"
 #include "gms/feature.hh"

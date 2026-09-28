@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "utils/assert.hh"
 #include <set>
 #include <iterator>
@@ -14,11 +13,8 @@ import fmt;
 
 #include <boost/test/unit_test.hpp>
 
-#include <seastar/core/thread.hh>
-#include <seastar/core/reactor.hh>
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/closeable.hh>
 
 #include "sstables/sstables.hh"
 #include "compaction/compaction_manager.hh"
@@ -47,6 +43,7 @@ import fmt;
 #include "utils/chunked_string.hh"
 import boost;
 
+import fmt;
 using namespace sstables;
 
 class sstable_assertions final : public sstables::test {

@@ -9,7 +9,6 @@
 #pragma once
 
 
-#include <seastar/core/shared_ptr.hh>
 #include "types/types.hh"
 #include "schema/schema.hh"
 

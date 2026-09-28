@@ -15,7 +15,6 @@
 #include "types/tuple.hh"
 #include "types/types.hh"
 #include "utils/log.hh"
-#include <seastar/core/on_internal_error.hh>
 
 #include <algorithm>
 #include <cctype>

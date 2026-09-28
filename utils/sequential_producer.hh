@@ -9,7 +9,6 @@
 #pragma once
 
 #include <functional>
-#include <seastar/core/shared_future.hh>
 #include <stdexcept>
 
 /// Invokes a factory to produce an object, but sequentially: only one fiber at a time may be executing the

@@ -11,7 +11,6 @@
 #include <cstdint>
 #include <functional>
 #include "seastarx.hh"
-#include <seastar/core/iostream.hh>
 
 namespace sstables {
 

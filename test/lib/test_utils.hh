@@ -11,12 +11,10 @@
 #include <filesystem>
 #include <mutex>
 
-#include <seastar/core/future.hh>
 #include <string>
 #include <boost/test/unit_test.hpp>
 import fmt;
 
-using namespace seastar;
 #include "seastarx.hh"
 
 // Thread safe alternatives to BOOST_REQUIRE_*, BOOST_CHECK_* and BOOST_FAIL().

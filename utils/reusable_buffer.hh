@@ -13,9 +13,6 @@
 #include "utils/fragmented_temporary_buffer.hh"
 #include "utils/managed_bytes.hh"
 #include "utils/result.hh"
-#include <seastar/core/timer.hh>
-#include <seastar/core/memory.hh>
-#include <seastar/core/reactor.hh>
 #include <bit>
 #include <concepts>
 

@@ -12,10 +12,6 @@
 #include <unordered_map>
 #include <string_view>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future.hh>
-#include <seastar/util/log.hh>
-
 #include "utils/updateable_value.hh"
 
 #include "seastarx.hh"

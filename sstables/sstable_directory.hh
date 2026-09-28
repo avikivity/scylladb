@@ -9,9 +9,6 @@
 #pragma once
 
 #include <filesystem>
-#include <seastar/core/file.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/semaphore.hh>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>

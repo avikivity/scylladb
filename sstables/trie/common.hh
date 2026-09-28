@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/util/log.hh>
 #include <cstddef>
 #include <cassert>
 #include <span>

@@ -8,8 +8,6 @@
 
 #include "test/lib/scylla_test_case.hh"
 
-#include <seastar/util/defer.hh>
-#include <seastar/core/memory.hh>
 #include "utils/base64.hh"
 #include "utils/rjson.hh"
 #include "alternator/serialization.hh"
@@ -23,9 +21,6 @@
 #include "alternator/streams.hh"
 #include "schema/schema_builder.hh"
 #include "types/types.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/core/sleep.hh>
 
 namespace alternator {
     const cdc::stream_id& find_parent_shard_in_previous_generation(db_clock::time_point prev_timestamp, const utils::chunked_vector<cdc::stream_id>& prev_streams, const cdc::stream_id& child);

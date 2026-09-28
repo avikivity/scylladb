@@ -7,13 +7,6 @@
  */
 
 #include <cstdint>
-#include <seastar/core/app-template.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/net/socket_defs.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/thread.hh>
 
 #include "db/config.hh"
 #include "transport/generic_server.hh"

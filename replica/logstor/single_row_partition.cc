@@ -6,9 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 #include "replica/logstor/single_row_partition.hh"
-#include <seastar/core/format.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/util/log.hh>
 #include "keys/keys.hh"
 #include "mutation/mutation.hh"
 #include "mutation/mutation_partition.hh"

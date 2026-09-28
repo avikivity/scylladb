@@ -6,9 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
-#include <seastar/core/memory.hh>
-#include <seastar/util/alloc_failure_injector.hh>
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/testing/test_case.hh>
 #include <xxhash.h>
@@ -19,6 +16,7 @@ import fmt;
 #include "utils/bit_cast.hh"
 #include "sstables/trie/trie_writer.hh"
 
+import fmt;
 using namespace sstables::trie;
 
 inline const_bytes string_as_bytes(std::string_view sv) {

@@ -11,7 +11,6 @@
 #include <vector>
 #include <compare>
 #include <boost/test/unit_test.hpp>
-#include <seastar/util/variant_utils.hh>
 #include <variant>
 #include "test/lib/log.hh"
 

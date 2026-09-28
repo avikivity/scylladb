@@ -15,10 +15,6 @@
 #include <ranges>
 #include <algorithm>
 
-#include <seastar/core/loop.hh>
-#include <seastar/core/timer.hh>
-#include <seastar/core/gate.hh>
-
 #include "exceptions/exceptions.hh"
 #include "utils/assert.hh"
 #include "utils/loading_shared_values.hh"

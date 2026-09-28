@@ -9,8 +9,6 @@
 #pragma once
 
 #include <type_traits>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/enum.hh>
 #include <array>
 #include <unordered_map>
 #include "seastarx.hh"

@@ -17,7 +17,6 @@
 #include "schema/schema_builder.hh"
 #include "types/set.hh"
 #include "types/list.hh"
-#include <seastar/core/thread.hh>
 #include "test/lib/test_services.hh"
 #include "test/lib/sstable_test_env.hh"
 #include "test/lib/sstable_utils.hh"

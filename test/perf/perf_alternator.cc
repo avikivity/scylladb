@@ -9,18 +9,7 @@
 #include <functional>
 #include <algorithm>
 #include <vector>
-#include <seastar/core/abort_source.hh>
 #include <signal.h>
-#include <seastar/core/future.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/http/client.hh>
-#include <seastar/http/request.hh>
-#include <seastar/http/reply.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/core/smp.hh>
 #include <tuple>
 
 #include "db/config.hh"
@@ -31,7 +20,6 @@ import boost;
 
 namespace perf {
 
-using namespace seastar;
 namespace bpo = boost::program_options;
 
 struct test_config {

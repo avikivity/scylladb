@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/util/log.hh>
 import fmt;
 
 #include "utils/allocation_strategy.hh"

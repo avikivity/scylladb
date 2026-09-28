@@ -18,13 +18,6 @@
 #include <utility>
 #include <vector>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/loop.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-
 #include "replica/logstor/ondisk.hh"
 #include "utils/checked-file-impl.hh"
 #include "utils/disk-error-handler.hh"

@@ -9,12 +9,10 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import fmt;
 #include "storage_service.hh"
 #include "db/view/view_building_worker.hh"
 #include "utils/chunked_vector.hh"
 #include "utils/chain_abort_source.hh"
-#include <seastar/core/shard_id.hh>
 #include "db/view/view_building_coordinator.hh"
 #include "utils/disk_space_monitor.hh"
 #include "compaction/task_manager_module.hh"
@@ -22,7 +20,6 @@ import fmt;
 #include "raft/raft.hh"
 #include "auth/cache.hh"
 #include <ranges>
-#include <seastar/core/sleep.hh>
 #include "service/qos/raft_service_level_distributed_data_accessor.hh"
 #include "service/qos/service_level_controller.hh"
 #include "locator/token_metadata.hh"
@@ -32,15 +29,11 @@ import fmt;
 #include <chrono>
 #include <exception>
 #include <optional>
-#include <seastar/core/sharded.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/coroutine/as_future.hh>
 #include "gms/endpoint_state.hh"
 #include "locator/snitch_base.hh"
 #include "db/system_keyspace.hh"
 #include "db/system_distributed_keyspace.hh"
 #include "db/consistency_level.hh"
-#include <seastar/core/when_all.hh>
 #include "service/tablet_allocator.hh"
 #include "locator/types.hh"
 #include "locator/tablets.hh"
@@ -48,10 +41,8 @@ import fmt;
 #include "mutation_writer/multishard_writer.hh"
 #include "locator/tablet_metadata_guard.hh"
 #include "replica/tablet_mutation_builder.hh"
-#include <seastar/core/smp.hh>
 #include "mutation/canonical_mutation.hh"
 #include "mutation/async_utils.hh"
-#include <seastar/core/on_internal_error.hh>
 #include "service/strong_consistency/groups_manager.hh"
 #include "service/raft/group0_state_machine.hh"
 #include "service/raft/raft_group0_client.hh"
@@ -66,7 +57,6 @@ import fmt;
 #include "service/raft/raft_group0.hh"
 #include "gms/gossiper.hh"
 #include "gms/feature_service.hh"
-#include <seastar/core/thread.hh>
 #include <algorithm>
 #include <bit>
 #include "locator/local_strategy.hh"
@@ -77,7 +67,6 @@ import fmt;
 #include "service/paxos/paxos_state.hh"
 #include "dht/range_streamer.hh"
 #include "transport/server.hh"
-#include <seastar/core/rwlock.hh>
 #include "db/batchlog_manager.hh"
 #include "db/commitlog/commitlog.hh"
 #include "db/hints/manager.hh"
@@ -92,17 +81,11 @@ import fmt;
 #include "db/view/view_builder.hh"
 #include "replica/database.hh"
 #include "replica/tablets.hh"
-#include <seastar/core/metrics.hh>
 #include "cdc/generation.hh"
 #include "cdc/generation_service.hh"
 #include "repair/repair.hh"
 #include "repair/row_level.hh"
 #include "gms/generation-number.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/exception.hh>
 #include "utils/pretty_printers.hh"
 #include "utils/stall_free.hh"
 #include "utils/error_injection.hh"
@@ -131,6 +114,7 @@ import fmt;
 #include <utility>
 import boost;
 
+import fmt;
 using token = dht::token;
 using UUID = utils::UUID;
 using inet_address = gms::inet_address;

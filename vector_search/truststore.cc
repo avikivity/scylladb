@@ -7,7 +7,6 @@
  */
 
 #include "truststore.hh"
-#include <seastar/core/smp.hh>
 #include <unordered_set>
 
 namespace vector_search {

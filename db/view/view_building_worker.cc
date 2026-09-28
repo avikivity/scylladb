@@ -8,10 +8,6 @@
 
 #include <iterator>
 #include <ranges>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/core/semaphore.hh>
 #include <stdexcept>
 #include <unordered_set>
 #include <utility>

@@ -10,7 +10,6 @@
 #include "utils/s3/creds.hh"
 #include <functional>
 #include <memory>
-#include <seastar/core/future.hh>
 
 namespace seastar::http { class retry_strategy; }
 

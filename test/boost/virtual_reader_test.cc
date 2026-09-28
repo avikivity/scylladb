@@ -20,7 +20,6 @@
 #include "db/size_estimates_virtual_reader.hh"
 #include "db/system_keyspace.hh"
 #include "db/view/view_builder.hh"
-#include <seastar/core/future-util.hh>
 
 BOOST_AUTO_TEST_SUITE(virtual_reader_test)
 

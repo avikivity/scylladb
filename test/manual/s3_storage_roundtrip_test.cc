@@ -9,9 +9,6 @@
 #include "test/lib/scylla_test_case.hh"
 
 #include <exception>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/util/defer.hh>
 #include "alternator/export.hh"
 #include "utils/rjson.hh"
 #include "utils/s3/client.hh"

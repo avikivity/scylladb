@@ -23,7 +23,6 @@
 #pragma once
 
 #include <memory>
-#include <seastar/core/seastar.hh>
 
 #include "schema/schema.hh"
 #include "schema/schema_builder.hh"

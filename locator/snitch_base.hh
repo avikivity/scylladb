@@ -15,8 +15,6 @@
 #include "gms/endpoint_state.hh"
 #include "locator/types.hh"
 #include "gms/inet_address.hh"
-#include <seastar/core/thread.hh>
-#include <seastar/core/sharded.hh>
 #include "utils/log.hh"
 import boost;
 

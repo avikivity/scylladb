@@ -7,12 +7,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <fcntl.h>
-#include <seastar/core/align.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/byteorder.hh>
-#include <seastar/core/iostream.hh>
 #include <cassert>
 #include <utility>
 #include <coroutine>
@@ -22,9 +17,8 @@ import fmt;
 #include "utils/serialization.hh"
 #include "encrypted_file_impl.hh"
 
+import fmt;
 namespace encryption {
-
-using namespace seastar;
 
 static inline bool is_aligned(size_t n, size_t a) {
     return (n & (a - 1)) == 0;

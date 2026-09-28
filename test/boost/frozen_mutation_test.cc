@@ -11,7 +11,6 @@
 
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/closeable.hh>
 
 #include "mutation/frozen_mutation.hh"
 #include "mutation/async_utils.hh"
@@ -23,9 +22,6 @@
 #include "test/lib/reader_concurrency_semaphore.hh"
 #include "types/map.hh"
 
-#include <seastar/core/thread.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/memory.hh>
 #include "readers/from_mutations.hh"
 #include "readers/mutation_fragment_v1_stream.hh"
 

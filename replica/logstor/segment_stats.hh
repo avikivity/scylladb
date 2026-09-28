@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <seastar/core/metrics_types.hh>
 
 namespace replica::logstor {
 

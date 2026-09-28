@@ -6,16 +6,10 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <exception>
 #include <string>
 #include <optional>
 #include <coroutine>
-
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/iostream.hh>
 
 #include "utils/log.hh"
 
@@ -32,10 +26,9 @@ import fmt;
 #include "utils/http.hh"
 #include "utils/object_storage_metrics.hh"
 
-#include <seastar/core/metrics.hh>
 #include "seastarx.hh"
 
-using namespace seastar;
+import fmt;
 using namespace sstables;
 using namespace utils;
 

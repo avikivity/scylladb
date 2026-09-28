@@ -12,15 +12,6 @@
 #include <regex>
 #include <iostream>
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/with_timeout.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/http/client.hh>
-#include <seastar/http/reply.hh>
-#include <seastar/http/request.hh>
-#include <seastar/util/short_streams.hh>
-
 #include "gcs_fixture.hh"
 #include "tmpdir.hh"
 #include "proc_utils.hh"

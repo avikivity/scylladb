@@ -8,8 +8,6 @@
 
 #include "duration.hh"
 
-#include <seastar/core/format.hh>
-
 #include <cctype>
 #include <optional>
 #include <limits>

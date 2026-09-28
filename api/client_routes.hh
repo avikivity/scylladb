@@ -8,8 +8,6 @@
  */
 #pragma once
 
-#include <seastar/core/sharded.hh>
-#include <seastar/json/json_elements.hh>
 #include "api/api_init.hh"
 
 namespace api {

@@ -7,11 +7,8 @@
  */
 
 
-import fmt;
-#include <seastar/core/thread.hh>
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/closeable.hh>
 
 #include "mutation/mutation.hh"
 #include "mutation/mutation_fragment.hh"
@@ -40,6 +37,7 @@ import fmt;
 #include "readers/compacting.hh"
 #include "readers/nonforwardable.hh"
 
+import fmt;
 struct mock_consumer {
     struct result {
         ssize_t _depth;

@@ -10,7 +10,6 @@
 
 #include "utils/estimated_histogram.hh"
 #include "utils/histogram.hh"
-#include <seastar/core/metrics.hh>
 #include "locator/host_id.hh"
 
 namespace locator { class topology; }

@@ -9,8 +9,6 @@
 #include "mutation_writer/timestamp_based_splitting_writer.hh"
 
 #include <optional>
-#include <seastar/core/shared_mutex.hh>
-#include <seastar/core/when_all.hh>
 
 #include "mutation_writer/feed_writers.hh"
 

@@ -11,9 +11,6 @@
 #include "mutation/timestamp.hh"
 #include "transport/messages/result_message_base.hh"
 
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
-
 namespace service {
 class query_state;
 }

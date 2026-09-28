@@ -10,10 +10,6 @@
 #include <memory>
 #include <regex>
 
-#include <seastar/core/with_timeout.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/net/inet_address.hh>
 #include "seastarx.hh"
 
 #include "gcp_kms_fixture.hh"

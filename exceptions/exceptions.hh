@@ -15,8 +15,6 @@
 #include "db/write_type.hh"
 #include "db/operation_type.hh"
 #include <stdexcept>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/lowres_clock.hh>
 #include <unordered_map>
 #include "bytes_fwd.hh"
 

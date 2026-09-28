@@ -11,9 +11,6 @@
 #include <map>
 #include <optional>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/util/bool_class.hh>
 #include "seastarx.hh"
 
 class compression_parameters;

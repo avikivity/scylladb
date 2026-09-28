@@ -8,6 +8,7 @@
 
 #include "debug.hh"
 
+import seastar;
 namespace debug {
 
 seastar::sharded<replica::database>* volatile the_database = nullptr;

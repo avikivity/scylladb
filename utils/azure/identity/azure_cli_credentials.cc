@@ -7,12 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/when_all.hh>
-#include <seastar/core/with_timeout.hh>
-#include <seastar/util/process.hh>
-#include <seastar/util/short_streams.hh>
-
 #include "utils/rjson.hh"
 #include <coroutine>
 #include "utils/exceptions.hh"
@@ -98,7 +92,7 @@ future<> azure_cli_credentials::do_refresh(const resource_type& resource_uri) {
     }).finally(seastar::coroutine::lambda([&] -> future<> {
         auto wstatus = co_await process.wait();
         auto* exited = std::get_if<process::wait_exited>(&wstatus);
-        auto* signaled = std::get_if<experimental::process::wait_signaled>(&wstatus);
+        auto* signaled = std::get_if<process::wait_signaled>(&wstatus);
         if (exited && exited->exit_code != EXIT_SUCCESS) {
             az_creds_logger.debug("[{}] Azure CLI failed with exit status ({}): {}", *this, exited->exit_code, error);
             throw auth_error(seastar::format("Azure CLI failed with exit status ({})", exited->exit_code));

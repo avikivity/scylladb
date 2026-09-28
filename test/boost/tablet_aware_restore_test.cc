@@ -11,13 +11,9 @@
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/s3_fixture.hh"
 #include "utils/assert.hh"
-#include <seastar/core/sstring.hh>
 
-#include <seastar/core/future.hh>
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/test_fixture.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/util/short_streams.hh>
 
 #include "db/config.hh"
 #include "db/consistency_level_type.hh"

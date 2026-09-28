@@ -5,7 +5,6 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
-import abseil;
 #include "server.hh"
 
 #include "utils/assert.hh"
@@ -13,16 +12,7 @@ import abseil;
 #include "utils/exceptions.hh"
 #include <ranges>
 #include <map>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/shared_future.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/exception.hh>
-#include <seastar/core/pipe.hh>
-#include <seastar/rpc/rpc_types.hh>
 #include <list>
-#include <seastar/core/gate.hh>
 
 #include "fsm.hh"
 #include "log_indexed_container.hh"
@@ -32,6 +22,7 @@ import abseil;
 #include "utils/exceptions.hh"
 import boost;
 
+import abseil;
 using namespace std::chrono_literals;
 
 namespace raft {

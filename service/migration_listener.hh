@@ -11,8 +11,6 @@
 #pragma once
 
 #include <vector>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
 #include "utils/atomic_vector.hh"
 #include "utils/chunked_vector.hh"
 

@@ -10,8 +10,6 @@
 
 #include "utils/assert.hh"
 
-#include <seastar/util/variant_utils.hh>
-
 #include "bytes_ostream.hh"
 #include <boost/test/unit_test.hpp>
 #include "serializer_impl.hh"

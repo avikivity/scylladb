@@ -13,14 +13,9 @@
 // BTI index reader operations on it, checking that the results
 // are consistent with a "reference" index on the same dataset.
 
-import fmt;
 #include <generator>
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/testing/test_case.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/util/defer.hh>
 #include "sstables/mx/types.hh"
 #include "sstables/trie/bti_index.hh"
 #include "sstables/trie/bti_index_internal.hh"
@@ -34,6 +29,7 @@ import fmt;
 #include "utils/i_filter.hh"
 #include "utils/memory_data_sink.hh"
 
+import fmt;
 struct clustering_index_entry {
     sstables::clustering_info first_ck;
     sstables::clustering_info last_ck;

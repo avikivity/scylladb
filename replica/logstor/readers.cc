@@ -14,8 +14,6 @@
 #include <algorithm>
 #include <queue>
 #include <vector>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/when_all.hh>
 #include "mutation/mutation_fragment.hh"
 #include "query/query-request.hh"
 #include "readers/forwardable.hh"

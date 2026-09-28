@@ -21,9 +21,6 @@
 
 #include <unordered_map>
 
-#include <seastar/core/rwlock.hh>
-#include <seastar/core/future.hh>
-
 #include "db/timeout_clock.hh"
 #include "schema/schema_fwd.hh"
 #include "dht/i_partitioner_fwd.hh"

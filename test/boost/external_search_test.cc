@@ -46,8 +46,6 @@
 #include "types/types.hh"
 #include "types/vector.hh"
 
-#include <seastar/core/shared_ptr.hh>
-
 #include <cmath>
 #include <utility>
 #include "seastarx.hh"

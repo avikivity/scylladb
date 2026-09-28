@@ -14,8 +14,6 @@
 #include <string_view>
 #include <optional>
 
-#include <seastar/core/seastar.hh>
-#include <seastar/core/sleep.hh>
 #include <variant>
 
 #include "auth/authenticated_user.hh"

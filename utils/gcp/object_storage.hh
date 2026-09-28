@@ -14,12 +14,6 @@
 #include <functional>
 #include <unordered_map>
 
-#include <seastar/core/file.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/iostream.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/net/tls.hh>
-
 #include "utils/rjson.hh"
 #include "utils/object_storage_metrics.hh"
 #include "utils/chunked_vector.hh"

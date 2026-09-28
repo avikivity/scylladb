@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "bti_index.hh"
 #include "bti_index_internal.hh"
 #include "sstables/consumer.hh"
@@ -15,8 +14,8 @@ import fmt;
 #include "trie_traversal.hh"
 #include "bti_key_translation.hh"
 #include "utils/i_filter.hh"
-#include <seastar/core/fstream.hh>
 
+import fmt;
 template <>
 struct fmt::formatter<sstables::trie::trail_entry> : fmt::formatter<string_view> {
     auto format(const sstables::trie::trail_entry& r, fmt::format_context& ctx) const

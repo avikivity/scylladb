@@ -28,8 +28,6 @@
 
 #include <cstdint>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/net/byteorder.hh>
 #include "seastarx.hh"
 
 class UTFDataFormatException { };

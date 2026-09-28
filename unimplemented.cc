@@ -8,8 +8,6 @@
 
 #include <unordered_map>
 #include "unimplemented.hh"
-#include <seastar/core/sstring.hh>
-#include <seastar/core/enum.hh>
 #include "utils/log.hh"
 #include "seastarx.hh"
 

@@ -12,8 +12,6 @@
 #include "dht/i_partitioner_fwd.hh"
 #include "query/query-request.hh"
 
-#include <seastar/core/sstring.hh>
-
 #include <optional>
 #include <unordered_map>
 #include <vector>

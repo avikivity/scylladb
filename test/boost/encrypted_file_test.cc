@@ -9,14 +9,6 @@
 #include <limits>
 #include <random>
 
-#include <seastar/core/align.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/fstream.hh>
-
 #include <seastar/testing/test_case.hh>
 
 #include "ent/encryption/encryption.hh"
@@ -28,8 +20,6 @@
 #include "test/lib/exception_utils.hh"
 #include "test/lib/limiting_data_source.hh"
 #include "utils/io-wrappers.hh"
-
-#include <seastar/util/memory-data-source.hh>
 
 using namespace encryption;
 

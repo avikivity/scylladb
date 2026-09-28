@@ -7,8 +7,6 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-#include <seastar/core/sleep.hh>
-#include <seastar/util/defer.hh>
 #include "gms/inet_address.hh"
 #include "load_meter.hh"
 #include "load_broadcaster.hh"

@@ -6,13 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <filesystem>
 #include <set>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/units.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/util/closeable.hh>
 
 #include "init.hh"
 #include "compaction/compaction.hh"
@@ -69,7 +64,7 @@ import fmt;
 #include "utils/overloaded_functor.hh"
 #include "utils/pretty_printers.hh"
 
-using namespace seastar;
+import fmt;
 using namespace sstables;
 
 using json_writer = mutation_json::json_writer;

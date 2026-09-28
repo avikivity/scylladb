@@ -12,7 +12,6 @@
 #include "exceptions/exceptions.hh"
 #include <bit>
 #include <span>
-#include <seastar/core/byteorder.hh>
 
 namespace cql3 {
 namespace functions {

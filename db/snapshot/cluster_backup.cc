@@ -9,9 +9,6 @@
 
 #include <array>
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include "seastarx.hh"
 
 #include "cluster_backup.hh"

@@ -10,14 +10,9 @@
 #include "wasm_instance_cache.hh"
 #include "types/concrete_types.hh"
 #include "db/config.hh"
-#include <seastar/core/byteorder.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/util/defer.hh>
 #include "seastarx.hh"
 #include "rust/cxx.h"
 #include "rust/wasmtime_bindings.hh"
-#include <seastar/coroutine/exception.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 #include "lang/wasm_alien_thread_runner.hh"
 
 logging::logger wasm_logger("wasm");

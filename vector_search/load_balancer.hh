@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_ptr.hh>
 #include <vector>
 #include <random>
 

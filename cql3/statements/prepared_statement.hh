@@ -12,9 +12,6 @@
 
 #include "audit/audit.hh"
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/weak_ptr.hh>
-#include <seastar/core/checked_ptr.hh>
 #include <algorithm>
 #include <array>
 #include <vector>

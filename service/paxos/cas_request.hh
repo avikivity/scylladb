@@ -11,7 +11,6 @@
 
 #include "cdc/log.hh"
 #include "mutation/timestamp.hh"
-#include <seastar/core/sharded.hh>
 
 class mutation;
 

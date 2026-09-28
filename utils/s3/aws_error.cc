@@ -15,8 +15,6 @@
 #include "aws_error.hh"
 #include "utils/exceptions.hh"
 #include "utils/log.hh"
-#include <seastar/util/log.hh>
-#include <seastar/http/exception.hh>
 #include <memory>
 
 namespace s3 {

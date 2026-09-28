@@ -11,14 +11,7 @@
 #include "utils.hh"
 #include "utils/assert.hh"
 #include "utils/rjson.hh"
-#include <seastar/http/request.hh>
 #include <chrono>
-#include <seastar/core/future.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/http/function_handlers.hh>
-#include <seastar/http/httpd.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/net/api.hh>
 #include <cstdint>
 #include <memory>
 #include <vector>

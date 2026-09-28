@@ -10,8 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/abort_source.hh>
-
 #include "auth/authorizer.hh"
 #include "service/migration_manager.hh"
 #include "service/raft/raft_group0_client.hh"

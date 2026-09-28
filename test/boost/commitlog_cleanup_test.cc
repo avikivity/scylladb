@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include "test/lib/cql_test_env.hh"
@@ -15,6 +14,7 @@ import fmt;
 #include "db/config.hh"
 #include "db/system_keyspace.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(commitlog_cleanup_test)
 
 // Test that `canonical_token_range(tr)` contains the same tokens as `tr`.

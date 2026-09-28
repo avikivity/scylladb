@@ -7,10 +7,6 @@
  */
 
 #include "perf.hh"
-#include <seastar/core/reactor.hh>
-#include <seastar/core/map_reduce.hh>
-#include <seastar/core/memory.hh>
-#include <seastar/core/smp.hh>
 #include <ranges>
 #include "seastarx.hh"
 #include "reader_concurrency_semaphore.hh"

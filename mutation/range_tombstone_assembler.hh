@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/format.hh>
-
 #include "mutation/mutation_fragment_v2.hh"
 
 /// Converts a stream of range_tombstone_change fragments to an equivalent stream of range_tombstone objects.

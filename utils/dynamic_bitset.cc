@@ -6,8 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/bitops.hh>
-#include <seastar/core/align.hh>
 #include <ranges>
 
 #include "utils/dynamic_bitset.hh"

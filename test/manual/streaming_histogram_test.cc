@@ -10,7 +10,6 @@
 
 #include <boost/test/unit_test.hpp>
 #include "utils/streaming_histogram.hh"
-#include <seastar/core/format.hh>
 #include <map>
 #include <cmath>
 

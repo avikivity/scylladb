@@ -9,12 +9,7 @@
 #include "rjson.hh"
 #include <coroutine>
 #include <iomanip>
-#include <seastar/core/format.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/iostream.hh>
 #ifdef SANITIZE
-#include <seastar/core/memory.hh>
 #endif
 
 #include <rapidjson/stream.h>

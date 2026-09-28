@@ -11,7 +11,6 @@
 
 #include "schema/frozen_schema.hh"
 #include "mutation/mutation.hh"
-#include <seastar/core/future.hh>
 #include "service/storage_proxy.hh"
 #include "query/query-result-set.hh"
 #include "db/schema_tables.hh"
@@ -22,7 +21,6 @@
 #include "replica/global_table_ptr.hh"
 #include "replica/tables_metadata_lock.hh"
 
-#include <seastar/core/sharded.hh>
 #include <unordered_map>
 
 namespace db {

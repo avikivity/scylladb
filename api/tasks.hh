@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
 #include "db/snapshot-ctl.hh"
 
 namespace seastar::httpd {

@@ -10,10 +10,6 @@
 #include <filesystem>
 #include <memory>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/scheduling.hh>
-#include <seastar/coroutine/as_future.hh>
-
 #include "db/cache_tracker.hh"
 #include "mutation/mutation.hh"
 #include "reader_concurrency_semaphore.hh"

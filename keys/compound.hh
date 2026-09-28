@@ -16,7 +16,6 @@
 #include "utils/assert.hh"
 #include "utils/serialization.hh"
 #include "exceptions/exceptions.hh"
-#include <seastar/util/backtrace.hh>
 
 enum class allow_prefixes { no, yes };
 

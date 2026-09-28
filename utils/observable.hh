@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/util/noncopyable_function.hh>
 #include "seastarx.hh"
 #include <vector>
 #include <algorithm>

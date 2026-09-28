@@ -11,10 +11,6 @@
 #include "utils/exceptions.hh"
 #include <random>
 #include <expected>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/core/lowres_clock.hh>
-
-using namespace seastar;
 
 namespace vector_search {
 namespace {

@@ -7,7 +7,6 @@
  */
 
 #include "transport/server.hh"
-#include <seastar/core/gate.hh>
 #include "transport/response.hh"
 #include "gms/gossiper.hh"
 

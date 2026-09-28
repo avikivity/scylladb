@@ -11,7 +11,6 @@
 #include "exceptions/exceptions.hh"
 #include "db/tablet_options.hh"
 #include "gms/feature_service.hh"
-#include <seastar/core/bitops.hh>
 #include "utils/log.hh"
 
 extern logging::logger dblog;

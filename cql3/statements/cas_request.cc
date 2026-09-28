@@ -11,7 +11,6 @@
 #include "mutation/mutation.hh"
 #include "modification_statement.hh"
 #include "cas_request.hh"
-#include <seastar/core/sleep.hh>
 #include "cql3/result_set.hh"
 #include "cql3/expr/evaluate.hh"
 #include "cql3/expr/expr-utils.hh"

@@ -10,7 +10,6 @@
 
 #include <unordered_map>
 #include <vector>
-#include <seastar/core/sstring.hh>
 
 #include "cql3/description.hh"
 #include "schema/schema.hh"

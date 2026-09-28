@@ -26,9 +26,6 @@
 #include "idl/raft_storage.dist.impl.hh"
 
 #include <algorithm>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/coroutine/maybe_yield.hh>
 
 namespace db {
 

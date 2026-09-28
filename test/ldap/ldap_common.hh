@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include <seastar/net/socket_defs.hh>
-
 // Common values used in multiple LDAP tests.
 namespace {
 

@@ -15,9 +15,6 @@
 #include "utils/serialized_action.hh"
 #include "audit/audit_rule.hh"
 #include "audit/preprocessed_audit_rules.hh"
-#include <seastar/core/sharded.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/util/log.hh>
 
 #include "enum_set.hh"
 

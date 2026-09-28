@@ -11,8 +11,6 @@
 
 #include <yaml-cpp/node/convert.h>
 
-#include <seastar/core/smp.hh>
-
 #include "config_file.hh"
 import boost;
 

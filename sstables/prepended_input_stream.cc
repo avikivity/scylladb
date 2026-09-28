@@ -8,7 +8,6 @@
 
 #include "prepended_input_stream.hh"
 
-using namespace seastar;
 #include <cstdint>
 #include <memory>
 #include <utility>

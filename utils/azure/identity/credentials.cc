@@ -7,8 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/coroutine.hh>
-
 #include "credentials.hh"
 #include <coroutine>
 

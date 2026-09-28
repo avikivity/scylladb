@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
 #include "api/api_init.hh"
 #include "gms/gossiper.hh"
 

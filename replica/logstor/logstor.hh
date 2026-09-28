@@ -7,10 +7,7 @@
  */
 #pragma once
 
-#include <seastar/core/future.hh>
-#include <seastar/core/temporary_buffer.hh>
 #include <map>
-#include <seastar/core/scheduling.hh>
 #include "db/cache_tracker.hh"
 #include "readers/mutation_reader.hh"
 #include "readers/mutation_reader_fwd.hh"

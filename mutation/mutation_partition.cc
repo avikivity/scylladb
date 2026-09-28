@@ -6,10 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-
 #include "mutation_partition.hh"
 #include "db/large_data_cache_tracker.hh"
 #include "keys/clustering_interval_set.hh"
@@ -24,7 +20,6 @@
 #include "timestamp.hh"
 #include "view_info.hh"
 #include "mutation_cleaner.hh"
-#include <seastar/core/execution_stage.hh>
 #include "types/map.hh"
 #include "compaction/compaction_garbage_collector.hh"
 #include "keys/clustering_key_filter.hh"

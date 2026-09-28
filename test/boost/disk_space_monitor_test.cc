@@ -6,7 +6,6 @@
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/defer.hh>
 
 #include "test/lib/log.hh"
 #include "test/lib/tmpdir.hh"

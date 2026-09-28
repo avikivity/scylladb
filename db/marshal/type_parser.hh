@@ -12,8 +12,6 @@
 
 #include "types/types.hh"
 
-#include <seastar/core/sstring.hh>
-
 namespace db {
 
 namespace marshal {

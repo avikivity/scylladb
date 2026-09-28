@@ -10,14 +10,9 @@
 
 #include <list>
 #include <algorithm>
-#include <seastar/core/thread.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/do_with.hh>
 #include <functional>
 #include "utils/collection-concepts.hh"
 
-using namespace seastar;
 #include "seastarx.hh"
 
 namespace utils {

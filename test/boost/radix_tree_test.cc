@@ -7,7 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
@@ -20,8 +19,8 @@ import fmt;
 #include <array>
 #include <numeric>
 
+import fmt;
 using namespace compact_radix_tree;
-using namespace seastar;
 
 class test_data {
     unsigned long _val;

@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "test/lib/log.hh"
 #include "test/lib/key_utils.hh"
 #include <seastar/testing/thread_test_case.hh>
@@ -16,6 +15,7 @@ import fmt;
 #include <generator>
 #include <numeric>
 
+import fmt;
 namespace trie = sstables::trie;
 
 using trie::const_bytes;

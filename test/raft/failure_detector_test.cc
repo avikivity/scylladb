@@ -7,9 +7,6 @@
  */
 
 #include <ranges>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/sleep.hh>
 #include <seastar/testing/test_case.hh>
 
 #include "service/direct_failure_detector/failure_detector.hh"

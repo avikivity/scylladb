@@ -19,7 +19,6 @@
 #include "db/system_distributed_keyspace.hh"
 #include "replica/database.hh"
 #include "utils/overloaded_functor.hh"
-#include <seastar/core/coroutine.hh>
 #include "service/paxos/paxos_state.hh"
 
 thread_local api::timestamp_type service::client_state::_last_timestamp_micros = 0;

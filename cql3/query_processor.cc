@@ -13,13 +13,6 @@
 #include "cql3/statements/schema_altering_statement.hh"
 #include "transport/messages/result_message.hh"
 
-#include <seastar/core/metrics.hh>
-#include <seastar/core/memory.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/try_future.hh>
-
 #include "auth/authenticated_user.hh"
 #include "service/storage_proxy.hh"
 #include "service/migration_manager.hh"

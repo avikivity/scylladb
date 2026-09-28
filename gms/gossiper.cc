@@ -8,7 +8,6 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import fmt;
 #include "gms/inet_address.hh"
 #include "gms/endpoint_state.hh"
 #include "gms/gossip_digest.hh"
@@ -25,22 +24,11 @@ import fmt;
 #include "db/system_keyspace.hh"
 #include <algorithm>
 #include <ranges>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/exception.hh>
-#include <seastar/coroutine/switch_to.hh>
 #include <chrono>
 #include "locator/host_id.hh"
 #include <utility>
 #include "gms/generation-number.hh"
 #include "locator/token_metadata.hh"
-#include <seastar/core/shard_id.hh>
-#include <seastar/rpc/rpc_types.hh>
 #include "utils/assert.hh"
 #include "utils/exceptions.hh"
 #include "utils/error_injection.hh"
@@ -50,6 +38,7 @@ import fmt;
 #include "utils/labels.hh"
 import boost;
 
+import fmt;
 namespace gms {
 
 using clk = gossiper::clk;

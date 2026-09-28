@@ -6,9 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/net/dns.hh>
-
 #include "controller.hh"
 #include "server.hh"
 #include "executor.hh"
@@ -19,8 +16,6 @@
 #include "auth/service.hh"
 #include "service/qos/service_level_controller.hh"
 #include "vector_search/vector_store_client.hh"
-
-using namespace seastar;
 
 namespace alternator {
 

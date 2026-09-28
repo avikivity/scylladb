@@ -7,7 +7,6 @@
  */
 #include "utils/assert.hh"
 #include "tracker.hh"
-#include <seastar/core/coroutine.hh>
 
 namespace raft {
 

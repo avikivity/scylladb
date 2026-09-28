@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <seastar/core/metrics.hh>
+import seastar;
 
 extern seastar::metrics::label level_label;
 /*!

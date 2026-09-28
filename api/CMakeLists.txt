@@ -14,7 +14,7 @@ function(generate_swagger)
       ${generator}
     OUTPUT ${header_out} ${source_out}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${args_OUT_DIR}
-    COMMAND ${generator} --create-cc -f ${args_IN_FILE} -o ${header_out})
+    COMMAND ${generator} --module-seastar --create-cc -f ${args_IN_FILE} -o ${header_out})
 
   add_custom_target(${args_TARGET}
     DEPENDS

@@ -7,11 +7,8 @@
  */
 
 
-import fmt;
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/loop.hh>
 
 #include "db/config.hh"
 #include "locator/tablets.hh"
@@ -28,6 +25,7 @@ import fmt;
 #include "readers/from_mutations.hh"
 #include "service/storage_service.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(sstable_set_test)
 
 using namespace sstables;

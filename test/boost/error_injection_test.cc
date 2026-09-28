@@ -8,10 +8,8 @@
 
 #include <seastar/testing/on_internal_error.hh>
 #include "test/lib/cql_test_env.hh"
-#include <seastar/core/manual_clock.hh>
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
-#include <seastar/rpc/rpc_types.hh>
 #include "utils/error_injection.hh"
 #include "db/timeout_clock.hh"
 #include "test/lib/cql_assertions.hh"

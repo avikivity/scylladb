@@ -7,7 +7,6 @@
  */
 
 #include <exception>
-#include <seastar/core/coroutine.hh>
 #include "auth/authentication_options.hh"
 #include "auth/authorizer.hh"
 #include "auth/resource.hh"
@@ -15,11 +14,6 @@
 
 #include <algorithm>
 #include <chrono>
-
-#include <seastar/core/future-util.hh>
-#include <seastar/core/shard_id.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/shared_ptr.hh>
 
 #include "auth/allow_all_authenticator.hh"
 #include "auth/allow_all_authorizer.hh"
@@ -46,9 +40,6 @@
 #include "db/functions/function_name.hh"
 #include "utils/log.hh"
 #include "schema/schema_fwd.hh"
-#include <seastar/core/future.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
 #include <variant>
 #include "service/migration_manager.hh"
 #include "service/raft/raft_group0_client.hh"

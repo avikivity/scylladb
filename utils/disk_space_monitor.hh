@@ -11,14 +11,10 @@
 #include <filesystem>
 #include <any>
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/util/optimized_optional.hh>
-#include <seastar/core/condition-variable.hh>
-
 #include "seastarx.hh"
 import boost;
+
+namespace bi = boost::intrusive;
 #include "utils/updateable_value.hh"
 #include "utils/phased_barrier.hh"
 

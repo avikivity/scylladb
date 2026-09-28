@@ -9,8 +9,6 @@
 #pragma once
 #include "vector_search/vector_store_client.hh"
 #include "utils.hh"
-#include <seastar/core/future.hh>
-#include <seastar/net/inet_address.hh>
 #include <optional>
 #include <chrono>
 #include <vector>

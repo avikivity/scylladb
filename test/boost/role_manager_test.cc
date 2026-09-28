@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "auth/standard_role_manager.hh"
 #include "auth/config.hh"
 
@@ -16,6 +15,7 @@ import fmt;
 #include "test/lib/test_utils.hh"
 #include "test/lib/cql_test_env.hh"
 
+import fmt;
 BOOST_AUTO_TEST_SUITE(role_manager_test)
 
 auto make_manager(cql_test_env& env) {

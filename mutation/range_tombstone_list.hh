@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/util/defer.hh>
 #include "range_tombstone.hh"
 #include "query/query-request.hh"
 #include "utils/assert.hh"
@@ -18,6 +17,8 @@
 import boost;
 
 class position_in_partition_view;
+
+namespace bi = boost::intrusive;
 
 class range_tombstone_entry {
     range_tombstone _tombstone;

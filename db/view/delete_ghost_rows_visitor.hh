@@ -9,8 +9,6 @@
 #include "query/query-result-reader.hh"
 #include "replica/database_fwd.hh"
 #include "db/timeout_clock.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
 
 namespace service {
 class storage_proxy;

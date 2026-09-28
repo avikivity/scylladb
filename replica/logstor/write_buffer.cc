@@ -9,13 +9,6 @@
 
 #include <chrono>
 
-#include <seastar/core/align.hh>
-#include <seastar/core/aligned_buffer.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/simple-stream.hh>
-#include <seastar/core/timed_out_error.hh>
-#include <seastar/core/with_scheduling_group.hh>
-#include <seastar/coroutine/as_future.hh>
 
 #include "dht/token.hh"
 #include "replica/exceptions.hh"

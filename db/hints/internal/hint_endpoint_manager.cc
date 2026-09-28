@@ -9,13 +9,6 @@
 #include "db/hints/internal/hint_endpoint_manager.hh"
 
 // Seastar features.
-#include <seastar/core/do_with.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/shared_mutex.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/coroutine/exception.hh>
 
 // Scylla includes.
 #include "db/hints/internal/common.hh"

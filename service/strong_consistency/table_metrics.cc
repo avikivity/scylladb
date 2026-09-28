@@ -8,7 +8,6 @@
 
 #include "service/strong_consistency/table_metrics.hh"
 
-#include <seastar/core/metrics.hh>
 #include "service/raft/raft_metrics.hh"
 
 namespace service::strong_consistency {

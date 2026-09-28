@@ -10,11 +10,6 @@
 import fmt;
 #include <ranges>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/core/loop.hh>
-#include <seastar/core/on_internal_error.hh>
 #include "system_keyspace.hh"
 #include "cql3/untyped_result_set.hh"
 #include "cql3/query_processor.hh"
@@ -30,7 +25,6 @@ import fmt;
 #include "utils/error_injection.hh"
 #include "utils/hashers.hh"
 #include "utils/log.hh"
-#include <seastar/core/enum.hh>
 #include "gms/inet_address.hh"
 #include "message/messaging_service.hh"
 #include "mutation_query.hh"

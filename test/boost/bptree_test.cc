@@ -7,7 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 
 #include <seastar/testing/thread_test_case.hh>
@@ -17,6 +16,7 @@ import fmt;
 #include "bptree_validation.hh"
 #include "tree_test_key.hh"
 
+import fmt;
 struct int_compare {
     bool operator()(const int& a, const int& b) const noexcept { return a < b; }
 };

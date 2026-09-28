@@ -16,8 +16,6 @@
 #include "gms/generation-number.hh"
 #include "gms/version_generator.hh"
 
-using namespace seastar;
-
 using test_tagged_int = utils::tagged_integer<struct test_int_tag, int>;
 
 SEASTAR_THREAD_TEST_CASE(test_tagged_integer_ops) {

@@ -14,11 +14,6 @@
 #include <stdexcept>
 #include <unordered_set>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/switch_to.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
 #include "db/snapshot-ctl.hh"
 #include "db/snapshot/backup_task.hh"
 #include "db/snapshot/cluster_backup.hh"

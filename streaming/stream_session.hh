@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
 #include "message/messaging_service_fwd.hh"
 #include "streaming/stream_session_state.hh"
 #include "streaming/stream_transfer_task.hh"

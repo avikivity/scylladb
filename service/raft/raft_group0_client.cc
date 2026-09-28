@@ -10,9 +10,6 @@
 
 #include <functional>
 #include <optional>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/when_any.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
 #include "raft_group0_client.hh"
 #include "raft_group_registry.hh"
 

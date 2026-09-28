@@ -10,7 +10,6 @@
 
 #include <filesystem>
 #include <map>
-#include <seastar/core/future.hh>
 
 #include "data_dictionary/storage_options.hh"
 #include "db_clock.hh"

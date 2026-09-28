@@ -13,8 +13,6 @@
 #include "replica/logstor/index.hh"
 #include "replica/logstor/single_row_partition.hh"
 #include "db/cache_tracker.hh"
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/util/defer.hh>
 #include <variant>
 #include "schema/schema_builder.hh"
 #include "test/lib/logstor_test_utils.hh"

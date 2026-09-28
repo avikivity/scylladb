@@ -8,10 +8,6 @@
  */
 #pragma once
 #include <chrono>
-#include <seastar/core/lowres_clock.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/timer.hh>
-#include <seastar/util/noncopyable_function.hh>
 #include "service/paxos/proposal.hh"
 #include "utils/log.hh"
 #include "utils/digest_algorithm.hh"

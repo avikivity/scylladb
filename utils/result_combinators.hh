@@ -9,7 +9,6 @@
 #pragma once
 
 #include <utility>
-#include <seastar/core/future.hh>
 #include "utils/result.hh"
 #include "seastarx.hh"
 

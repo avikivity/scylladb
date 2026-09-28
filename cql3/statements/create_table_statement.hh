@@ -19,9 +19,6 @@
 
 #include "utils/chunked_vector.hh"
 
-#include <seastar/core/shared_ptr.hh>
-
-#include <seastar/util/indirect.hh>
 #include <unordered_map>
 #include <vector>
 #include <set>

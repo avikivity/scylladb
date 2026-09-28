@@ -11,8 +11,6 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 
-#include <seastar/core/bitops.hh>
-
 #include "utils/rolling_max_tracker.hh"
 
 // Helper: compute the expected current_max for a given raw value.

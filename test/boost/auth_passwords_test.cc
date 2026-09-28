@@ -16,8 +16,6 @@
 #include "auth/passwords.hh"
 
 #include <boost/test/unit_test.hpp>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/coroutine.hh>
 
 #include "seastarx.hh"
 

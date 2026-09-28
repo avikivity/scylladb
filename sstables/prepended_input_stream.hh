@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/iostream.hh>
-#include <seastar/core/temporary_buffer.hh>
 #include "seastarx.hh"
 
 /// \brief Creates an input_stream to read from a supplied buffer first

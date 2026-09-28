@@ -6,10 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/app-template.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/reactor.hh>
 #include <random>
 
 #include "test/perf/perf_sstable.hh"

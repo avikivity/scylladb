@@ -8,11 +8,8 @@
 
 #include <memory>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/smp.hh>
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
-#include <seastar/util/defer.hh>
 
 #include "sstables/sstables.hh"
 #include "sstables/sstables_manager.hh"

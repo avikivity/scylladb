@@ -6,11 +6,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "consumed_capacity.hh"
 #include "error.hh"
 #include "utils/rjson.hh"
 
+import fmt;
 namespace alternator {
 
 /*

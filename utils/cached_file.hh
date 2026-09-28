@@ -19,11 +19,6 @@
 #include "tracing/trace_state.hh"
 #include "utils/cached_file_stats.hh"
 
-#include <seastar/core/file.hh>
-#include <seastar/core/layered_file.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-
-using namespace seastar;
 #include "seastarx.hh"
 
 /// \brief A read-through cache of a file.

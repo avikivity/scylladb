@@ -11,11 +11,8 @@
 
 #include <chrono>
 
-#include <seastar/core/future.hh>
-
 #include "utils/log.hh"
 
-using namespace seastar;
 #include "seastarx.hh"
 import fmt;
 

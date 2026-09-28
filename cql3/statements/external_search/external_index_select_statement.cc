@@ -23,9 +23,7 @@
 #include "query/query_result_merger.hh"
 #include "service/storage_proxy.hh"
 #include "utils/result_loop.hh"
-
-#include <seastar/core/future.hh>
-#include <seastar/coroutine/exception.hh>
+import seastar;
 
 #include <algorithm>
 #include <utility>

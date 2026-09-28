@@ -14,16 +14,11 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/test/unit_test_log.hpp>
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/util/log.hh>
-
 #include "test/lib/s3_fixture.hh"
 #include "test/lib/test_utils.hh"
 
 #include "utils/s3/client.hh"
 #include "seastarx.hh"
-
-using namespace seastar;
 
 // S3 bucket names are 3-63 characters of lowercase alphanumerics and hyphens,
 // with no leading, trailing or consecutive hyphen. The pid keeps the name

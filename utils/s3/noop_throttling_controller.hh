@@ -11,8 +11,6 @@
 #include "utils/s3/throttling_controller.hh"
 #include "seastarx.hh"
 
-#include <seastar/core/future.hh>
-
 namespace s3 {
 
 // A do-nothing throttling controller: acquire() never waits and outcome

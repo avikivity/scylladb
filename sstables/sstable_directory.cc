@@ -8,10 +8,6 @@
 
 import fmt;
 #include <type_traits>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/util/file.hh>
-#include <seastar/util/lazy.hh>
 #include "sstables/sstable_directory.hh"
 #include "sstables/sstables.hh"
 #include "sstables/sstables_manager.hh"

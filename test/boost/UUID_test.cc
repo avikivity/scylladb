@@ -13,7 +13,6 @@
 #include <utility>
 #include "utils/UUID_gen.hh"
 #include "clocks-impl.hh"
-#include <seastar/util/defer.hh>
 #include "marshal_exception.hh"
 
 BOOST_AUTO_TEST_CASE(test_generation_of_name_based_UUID) {

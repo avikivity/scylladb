@@ -11,7 +11,6 @@
 #include "gms/endpoint_state.hh"
 #include "utils/assert.hh"
 #include "gms/i_endpoint_state_change_subscriber.hh"
-#include <seastar/core/on_internal_error.hh>
 #include "utils/error_injection.hh"
 #include "utils/log.hh"
 import boost;

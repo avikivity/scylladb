@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/coroutine.hh>
 #include <coroutine>
 #include "sstables/consumer.hh"
 

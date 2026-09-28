@@ -6,12 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <cstdlib>
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/net/api.hh>
 
 #include "utils/to_string.hh"
 
@@ -23,6 +20,7 @@ import fmt;
 #include "test/lib/test_utils.hh"
 #include "seastarx.hh"
 
+import fmt;
 const auto sockpath = std::getenv("SASLAUTHD_MUX_PATH");
 
 using exceptions::authentication_exception;

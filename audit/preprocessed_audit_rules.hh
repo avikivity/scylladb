@@ -11,8 +11,6 @@
 #include "audit/audit_rule.hh"
 #include "seastarx.hh"
 #include "utils/hash.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
 
 #include <cstdint>
 #include <string_view>

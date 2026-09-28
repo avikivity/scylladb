@@ -17,10 +17,6 @@
 #include <variant>
 #include <vector>
 
-#include <seastar/core/sharded.hh>
-#include <seastar/core/smp.hh>
-#include <seastar/core/thread.hh>
-
 #include "gms/feature_service.hh"
 #include "types/types.hh"
 #include "utils/chunked_string.hh"

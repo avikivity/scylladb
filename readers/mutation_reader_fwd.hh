@@ -7,9 +7,7 @@
  */
 
 #pragma once
-#include <seastar/util/bool_class.hh>
 
-using namespace seastar;
 #include "seastarx.hh"
 
 class mutation_source;

@@ -9,8 +9,6 @@
 #include <utility>
 #include <algorithm>
 #include <unordered_set>
-#include <seastar/core/thread.hh>
-#include <seastar/core/metrics.hh>
 
 #include "cdc/log.hh"
 #include "cdc/generation.hh"

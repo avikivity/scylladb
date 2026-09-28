@@ -1,12 +1,7 @@
-import fmt;
 #include <boost/test/unit_test.hpp>
 #include <memory>
 #include <utility>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/do_with.hh>
-#include <seastar/core/sharded.hh>
 #include "sstables/sstables.hh"
 #include "test/lib/scylla_test_case.hh"
 #include "test/lib/s3_fixture.hh"
@@ -23,6 +18,7 @@ import fmt;
 #include "test/lib/gcs_fixture.hh"
 #include "db/config.hh"
 
+import fmt;
 using namespace sstables;
 
 static schema_builder get_schema_builder() {

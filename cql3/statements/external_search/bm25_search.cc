@@ -17,8 +17,6 @@
 #include "exceptions/exceptions.hh"
 #include "types/types.hh"
 
-#include <seastar/coroutine/exception.hh>
-
 namespace cql3::statements::bm25_search {
 
 namespace {

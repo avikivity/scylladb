@@ -9,7 +9,6 @@
 #pragma once
 #include "bytes.hh"
 #include "schema/schema_fwd.hh"
-#include <seastar/core/future.hh>
 #include "replica/database_fwd.hh"
 #include "keys/keys.hh"
 #include "keys/compound_compat.hh"

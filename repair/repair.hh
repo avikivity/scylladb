@@ -12,12 +12,6 @@
 #include <unordered_map>
 #include <exception>
 
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/core/future.hh>
-
 #include "gms/inet_address.hh"
 #include "service/topology_guard.hh"
 #include "streaming/stream_reason.hh"

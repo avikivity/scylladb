@@ -10,9 +10,6 @@
 
 #include <functional>
 #include <unordered_set>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/weak_ptr.hh>
 #include "raft/server.hh"
 #include "service/raft/raft_rpc.hh"
 #include "seastarx.hh"

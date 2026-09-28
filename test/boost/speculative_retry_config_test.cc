@@ -7,7 +7,6 @@
  */
 
 #include <boost/test/unit_test.hpp>
-#include <seastar/core/shared_ptr.hh>
 #include "seastarx.hh"
 
 #include "db/config.hh"

@@ -3,8 +3,6 @@
 #include <map>
 #include <optional>
 
-#include <seastar/core/sstring.hh>
-
 #include "seastarx.hh"
 
 namespace cql3 {

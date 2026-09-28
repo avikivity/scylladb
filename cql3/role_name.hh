@@ -13,8 +13,6 @@
 #include <string_view>
 #include <iosfwd>
 
-#include <seastar/core/sstring.hh>
-
 #include "seastarx.hh"
 
 namespace cql3 {

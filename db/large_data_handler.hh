@@ -12,8 +12,6 @@
 #include <cstdint>
 #include <optional>
 #include <type_traits>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/future.hh>
 #include "seastarx.hh"
 #include "bytes.hh"
 #include "utils/managed_bytes.hh"

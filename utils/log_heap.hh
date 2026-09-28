@@ -10,7 +10,6 @@
 #pragma once
 
 #include <limits>
-#include <seastar/core/bitops.hh>
 #include "seastarx.hh"
 import boost;
 

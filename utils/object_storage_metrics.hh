@@ -11,7 +11,6 @@
 #include <cstdint>
 #include <string>
 
-#include <seastar/core/metrics_registration.hh>
 #include "seastarx.hh"
 
 namespace seastar::http {

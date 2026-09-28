@@ -7,7 +7,6 @@
 
 #pragma once
 #include <vector>
-#include <seastar/core/sstring.hh>
 
 #include "seastarx.hh"
 #include "gms/inet_address.hh"

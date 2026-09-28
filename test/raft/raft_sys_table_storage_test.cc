@@ -8,7 +8,6 @@
 
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/on_internal_error.hh>
-#include <seastar/core/coroutine.hh>
 
 #include "db/config.hh"
 #include "raft/raft.hh"

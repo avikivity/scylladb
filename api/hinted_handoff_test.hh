@@ -10,8 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
-
 namespace service {
 class storage_proxy;
 }

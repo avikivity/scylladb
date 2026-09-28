@@ -15,7 +15,6 @@ import boost;
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/cql_assertions.hh"
 
-#include <seastar/core/future-util.hh>
 #include "types/set.hh"
 #include "utils/chunked_string.hh"
 

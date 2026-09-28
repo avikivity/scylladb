@@ -7,16 +7,12 @@
  */
 
 
-#include <seastar/core/thread.hh>
-
 #include <string_view>
 #include <variant>
 
 #undef SEASTAR_TESTING_MAIN
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/lowres_clock.hh>
 #include "init.hh"
 #include "data_dictionary/user_types_metadata.hh"
 #include "schema/schema_registry.hh"

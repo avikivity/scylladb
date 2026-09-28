@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 #include <cstdint>
 #include <vector>
 #include <unordered_map>

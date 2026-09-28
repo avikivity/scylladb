@@ -13,9 +13,6 @@
 #include <string>
 #include <chrono>
 
-#include <seastar/core/future.hh>
-#include <seastar/net/tls.hh>
-
 #include "utils/rjson.hh"
 
 namespace rest {

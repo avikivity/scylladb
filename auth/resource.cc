@@ -8,7 +8,6 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import fmt;
 #include "auth/resource.hh"
 
 #include <algorithm>
@@ -22,6 +21,7 @@ import fmt;
 #include "utils/log.hh"
 import boost;
 
+import fmt;
 namespace auth {
 
 static logging::logger logger("auth_resource");

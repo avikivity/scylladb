@@ -6,11 +6,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #undef SEASTAR_TESTING_MAIN
 #include "utils/to_string.hh"
 #include "replication.hh"
 
+import fmt;
 seastar::logger tlogger("test");
 
 seastar::semaphore snapshot_sync(0);

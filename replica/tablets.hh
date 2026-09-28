@@ -16,8 +16,6 @@
 #include "mutation/canonical_mutation.hh"
 #include "replica/database_fwd.hh"
 
-#include <seastar/core/future.hh>
-
 #include <vector>
 
 

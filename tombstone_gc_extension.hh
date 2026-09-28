@@ -9,8 +9,6 @@
 
 #include <map>
 
-#include <seastar/core/sstring.hh>
-
 #include "bytes.hh"
 #include "schema/schema.hh"
 #include "serializer_impl.hh"

@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include <seastar/util/bool_class.hh>
-
-using namespace seastar;
 #include "seastarx.hh"
 
 using maintenance_socket_enabled = bool_class<class maintenance_socket_enabled_tag>;

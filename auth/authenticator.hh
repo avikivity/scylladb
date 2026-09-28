@@ -16,9 +16,6 @@
 #include <optional>
 #include <functional>
 
-#include <seastar/core/future.hh>
-#include <seastar/core/sstring.hh>
-
 #include "auth/authentication_options.hh"
 #include "auth/resource.hh"
 #include "auth/sasl_challenge.hh"

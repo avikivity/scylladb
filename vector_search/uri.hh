@@ -7,7 +7,6 @@
  */
 
 #pragma once
-#include <seastar/core/sstring.hh>
 #include <cstdint>
 
 namespace vector_search {

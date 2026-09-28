@@ -7,9 +7,6 @@
  */
 #include "test/lib/scylla_test_case.hh"
 
-#include <seastar/net/inet_address.hh>
-#include <seastar/net/ipv4_address.hh>
-#include <seastar/util/lazy.hh>
 #include <vector>
 
 #include "bytes_ostream.hh"

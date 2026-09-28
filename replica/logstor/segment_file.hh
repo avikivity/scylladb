@@ -14,17 +14,6 @@
 #include <string_view>
 #include <vector>
 
-#include <seastar/core/aligned_buffer.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/scheduling.hh>
-#include <seastar/core/shard_id.hh>
-#include <seastar/core/shared_future.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/util/log.hh>
-
 import fmt;
 
 #include "seastarx.hh"

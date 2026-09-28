@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #define BOOST_TEST_MODULE core
 
 #include <boost/test/unit_test.hpp>
@@ -16,6 +15,7 @@ import fmt;
 #include <algorithm>
 #include <optional>
 
+import fmt;
 //---------------------------------------------------------------------------------------------
 
 using top_k_t = utils::space_saving_top_k<unsigned>;

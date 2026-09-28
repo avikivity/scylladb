@@ -16,9 +16,6 @@
 #include "test/lib/mutation_reader_assertions.hh"
 #include "test/lib/reader_concurrency_semaphore.hh"
 #include "test/boost/sstable_test.hh"
-#include <seastar/core/reactor.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/coroutine.hh>
 
 using namespace sstables;
 using namespace std::chrono_literals;

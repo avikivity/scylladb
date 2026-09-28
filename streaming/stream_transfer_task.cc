@@ -32,7 +32,6 @@ import fmt;
 #include "gms/feature_service.hh"
 #include "utils/error_injection.hh"
 #include "idl/streaming.dist.hh"
-#include <seastar/coroutine/maybe_yield.hh>
 import boost;
 
 namespace streaming {

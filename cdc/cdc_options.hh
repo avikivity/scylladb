@@ -11,7 +11,6 @@
 #include <cstdint>
 #include <map>
 #include <optional>
-#include <seastar/core/sstring.hh>
 #include "seastarx.hh"
 import fmt;
 

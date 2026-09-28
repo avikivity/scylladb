@@ -7,25 +7,22 @@
  */
 
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 #include <cstdlib>
 
-#include <seastar/core/future.hh>
-#include <seastar/util/closeable.hh>
 #include "seastarx.hh"
 
 #include "service/qos/qos_common.hh"
 #include "test/lib/scylla_test_case.hh"
 #include "test/lib/test_utils.hh"
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/core/future-util.hh>
 #include "service/qos/service_level_controller.hh"
 #include "service/qos/qos_configuration_change_subscriber.hh"
 #include "locator/token_metadata.hh"
 #include "auth/service.hh"
 #include "utils/overloaded_functor.hh"
 
+import fmt;
 using namespace qos;
 struct add_op {
     sstring name;

@@ -11,7 +11,6 @@
 #include <filesystem>
 #include <map>
 #include <variant>
-#include <seastar/core/sstring.hh>
 #include "schema/schema_fwd.hh"
 #include "utils/s3/utils/manip_s3.hh"
 #include "seastarx.hh"

@@ -6,19 +6,16 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include <boost/test/unit_test.hpp>
 #include <boost/test/tools/output_test_stream.hpp>
 #include <chrono>
-#include <seastar/util/closeable.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/sleep.hh>
 #include "test/lib/scylla_test_case.hh"
 #include "test/lib/test_utils.hh"
 #include "locator/token_metadata.hh"
 #include "locator/simple_strategy.hh"
 #include "locator/everywhere_replication_strategy.hh"
 
+import fmt;
 using namespace locator;
 
 namespace {

@@ -6,9 +6,8 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "bytes.hh"
-#include <seastar/core/format.hh>
+import fmt;
 
 static inline int8_t hex_to_int(unsigned char c) {
     switch (c) {

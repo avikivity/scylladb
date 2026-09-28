@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
-
 #include "seastarx.hh"
 
 class marshal_exception : public std::exception {

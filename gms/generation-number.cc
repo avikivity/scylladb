@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "utils/assert.hh"
 #include <cassert>
 #include <chrono>
@@ -14,6 +13,7 @@ import fmt;
 
 #include "generation-number.hh"
 
+import fmt;
 namespace gms {
 
 generation_type get_generation_number() {

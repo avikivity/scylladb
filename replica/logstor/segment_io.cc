@@ -8,11 +8,6 @@
 
 #include "replica/logstor/segment_io.hh"
 
-#include <seastar/core/align.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/simple-stream.hh>
-#include <seastar/util/log.hh>
-
 #include "serializer_impl.hh"
 
 namespace replica::logstor {

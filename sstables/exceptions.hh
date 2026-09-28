@@ -15,7 +15,6 @@
 #include <exception>
 #include <optional>
 #include <string_view>
-#include <seastar/core/format.hh>
 
 #include "sstables/component_type.hh"
 #include "sstables/generation_type.hh"

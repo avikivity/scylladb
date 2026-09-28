@@ -10,8 +10,6 @@
 
 #include "utils/s3/aws_error.hh"
 #include <boost/test/unit_test.hpp>
-#include <seastar/core/sstring.hh>
-#include <seastar/http/exception.hh>
 
 enum class message_style : uint8_t { singular = 1, plural = 2 };
 

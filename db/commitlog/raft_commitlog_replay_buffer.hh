@@ -9,7 +9,6 @@
 #pragma once
 
 #include <unordered_map>
-#include <seastar/core/future.hh>
 #include "utils/chunked_vector.hh"
 #include "raft/raft.hh"
 #include "db/commitlog/replay_position.hh"

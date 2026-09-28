@@ -9,7 +9,6 @@
 #include "raft_service_level_distributed_data_accessor.hh"
 #include "cql3/query_processor.hh"
 #include "db/consistency_level_type.hh"
-#include <seastar/core/abort_source.hh>
 #include "exceptions/exceptions.hh"
 #include "service/raft/raft_group0_client.hh"
 #include "db/system_keyspace.hh"

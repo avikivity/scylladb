@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
-#include <seastar/http/reply.hh>
-#include <seastar/util/bool_class.hh>
 #include <cstdint>
 #include <optional>
 #include <exception>

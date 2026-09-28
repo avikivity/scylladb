@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/file.hh>
 #include "tracing/trace_state.hh"
 
 namespace tracing {

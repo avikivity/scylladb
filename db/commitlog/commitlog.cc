@@ -7,7 +7,6 @@
  * SPDX-License-Identifier: (LicenseRef-ScyllaDB-Source-Available-1.1 and Apache-2.0)
  */
 
-import fmt;
 #include <stdexcept>
 #include <string>
 #include <sys/stat.h>
@@ -18,25 +17,6 @@ import fmt;
 #include <exception>
 #include <filesystem>
 #include <concepts>
-
-#include <seastar/core/align.hh>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/metrics.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/rwlock.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/core/fstream.hh>
-#include <seastar/core/memory.hh>
-#include <seastar/core/chunked_fifo.hh>
-#include <seastar/core/queue.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/coroutine/switch_to.hh>
-#include <seastar/net/byteorder.hh>
-#include <seastar/util/defer.hh>
 
 #include "seastarx.hh"
 
@@ -58,6 +38,7 @@ import fmt;
 #include "utils/error_injection.hh"
 import boost;
 
+import fmt;
 static logging::logger clogger("commitlog");
 
 using namespace std::chrono_literals;

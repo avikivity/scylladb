@@ -9,7 +9,6 @@
 
 #include "seastarx.hh"
 #include "enum_set.hh"
-#include <seastar/core/sstring.hh>
 
 #include <algorithm>
 #include <array>

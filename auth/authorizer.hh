@@ -15,8 +15,6 @@
 #include <tuple>
 #include <vector>
 
-#include <seastar/core/future.hh>
-
 #include "auth/permission.hh"
 #include "auth/resource.hh"
 #include "service/raft/raft_group0_client.hh"

@@ -8,13 +8,10 @@
 
 #pragma once
 
-#include <seastar/core/iostream.hh>
-#include <seastar/core/fstream.hh>
 #include "sstables/types.hh"
 #include "sstables/component_type.hh"
 #include "checksum_utils.hh"
 #include "vint-serialization.hh"
-#include <seastar/core/byteorder.hh>
 #include "version.hh"
 #include "mutation/counters.hh"
 #include "dht/i_partitioner_fwd.hh"

@@ -9,7 +9,6 @@
 
 #include <concepts>
 #include <optional>
-#include <seastar/core/reactor.hh>
 
 namespace utils {
 

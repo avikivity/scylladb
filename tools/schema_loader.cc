@@ -9,9 +9,6 @@
 import fmt;
 #include "utils/assert.hh"
 #include <algorithm>
-#include <seastar/core/fstream.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/util/short_streams.hh>
 
 #include "cdc/cdc_partitioner.hh"
 #include "cdc/log.hh"

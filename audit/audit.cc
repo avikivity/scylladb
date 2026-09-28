@@ -6,8 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/future-util.hh>
-#include <seastar/core/on_internal_error.hh>
 #include "audit/audit.hh"
 #include "audit/audit_rule.hh"
 #include "audit/preprocessed_audit_rules.hh"

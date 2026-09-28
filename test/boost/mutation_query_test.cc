@@ -7,7 +7,6 @@
  */
 
 
-import fmt;
 #include "utils/assert.hh"
 
 #include <boost/test/unit_test.hpp>
@@ -24,14 +23,13 @@ import fmt;
 
 #include "replica/querier.hh"
 #include "mutation_query.hh"
-#include <seastar/core/do_with.hh>
-#include <seastar/core/thread.hh>
 #include "schema/schema_builder.hh"
 #include "partition_slice_builder.hh"
 #include "readers/from_mutations.hh"
 #include "mutation/mutation_rebuilder.hh"
 #include "readers/mutation_source.hh"
 
+import fmt;
 using namespace std::literals::chrono_literals;
 
 static schema_ptr make_schema() {

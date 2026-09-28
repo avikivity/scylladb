@@ -14,13 +14,7 @@
 #include "utils/result_try.hh"
 
 #include "test/lib/scylla_test_case.hh"
-#include <seastar/core/sstring.hh>
-#include <seastar/core/map_reduce.hh>
-#include <seastar/util/later.hh>
 #include <seastar/testing/thread_test_case.hh>
-#include <seastar/util/later.hh>
-
-using namespace seastar;
 
 class foo_exception : public std::exception {
 public:

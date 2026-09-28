@@ -8,7 +8,6 @@
 
 #include "db/timeout_clock.hh"
 
-#include <seastar/util/closeable.hh>
 #include "test/lib/scylla_test_case.hh"
 #include <seastar/testing/thread_test_case.hh>
 #include "utils/hashers.hh"

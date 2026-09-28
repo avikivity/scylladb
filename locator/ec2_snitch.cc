@@ -1,9 +1,4 @@
 #include "locator/ec2_snitch.hh"
-#include <seastar/core/seastar.hh>
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/do_with.hh>
-#include <seastar/http/reply.hh>
 #include <coroutine>
 
 #include "utils/assert.hh"

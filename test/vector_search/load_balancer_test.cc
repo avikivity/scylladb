@@ -10,7 +10,6 @@
 #include <seastar/testing/test_case.hh>
 #include <random>
 
-using namespace seastar;
 using namespace vector_search;
 
 BOOST_AUTO_TEST_CASE(next_returns_nullptr_on_empty_container) {

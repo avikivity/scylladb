@@ -11,7 +11,6 @@
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
-#include <seastar/core/sstring.hh>
 #include "gms/inet_address.hh"
 #include "db/commitlog/replay_position.hh"
 #include "locator/host_id.hh"

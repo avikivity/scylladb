@@ -11,14 +11,11 @@
 #include "locator/token_metadata.hh"
 #include "utils/log.hh"
 #include "message/messaging_service.hh"
-#include <seastar/coroutine/maybe_yield.hh>
 #include "streaming/stream_session.hh"
 #include "streaming/prepare_message.hh"
 #include "streaming/stream_result_future.hh"
 #include "streaming/stream_manager.hh"
 #include "dht/auto_refreshing_sharder.hh"
-#include <seastar/core/sleep.hh>
-#include <seastar/core/thread.hh>
 #include "streaming/stream_blob.hh"
 #include "streaming/stream_session_state.hh"
 #include "streaming/table_check.hh"

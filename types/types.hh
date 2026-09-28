@@ -17,19 +17,11 @@
 #include <type_traits>
 #include <unordered_set>
 
-#include <seastar/core/sstring.hh>
-#include <seastar/core/shared_ptr.hh>
 #include "utils/UUID.hh"
-#include <seastar/net/byteorder.hh>
-#include <seastar/util/bool_class.hh>
 #include "db_clock.hh"
 #include "bytes.hh"
 #include "duration.hh"
 #include "marshal_exception.hh"
-#include <seastar/net/ipv4_address.hh>
-#include <seastar/net/ipv6_address.hh>
-#include <seastar/net/inet_address.hh>
-#include <seastar/util/backtrace.hh>
 #include "utils/hashing.hh"
 #include "utils/fragmented_temporary_buffer.hh"
 #include "utils/exceptions.hh"

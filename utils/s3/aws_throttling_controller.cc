@@ -8,8 +8,6 @@
 
 #include "utils/s3/aws_throttling_controller.hh"
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/sleep.hh>
 #include <chrono>
 #include "seastarx.hh"
 

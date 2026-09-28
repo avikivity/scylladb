@@ -9,7 +9,6 @@
 #pragma once
 
 #include "seastarx.hh"
-#include <seastar/core/sstring.hh>
 
 namespace alternator {
 // We use the table tag TTL_TAG_KEY ("system:ttl_attribute") to remember

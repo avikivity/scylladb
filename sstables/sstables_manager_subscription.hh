@@ -11,9 +11,6 @@
 
 #include <optional>
 
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/gate.hh>
-
 #include "sstables/generation_type.hh"
 #include "utils/assert.hh"
 import boost;

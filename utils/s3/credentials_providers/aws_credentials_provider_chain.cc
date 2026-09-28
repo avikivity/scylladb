@@ -9,7 +9,6 @@
 #include "aws_credentials_provider_chain.hh"
 #include <coroutine>
 #include "utils/log.hh"
-#include <seastar/core/coroutine.hh>
 
 namespace aws {
 static logging::logger cpc_logger("cred_provider_chain");

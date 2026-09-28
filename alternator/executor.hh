@@ -8,12 +8,8 @@
 
 #pragma once
 
-#include <seastar/core/future.hh>
 #include "audit/audit.hh"
 #include "seastarx.hh"
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
-#include <seastar/util/noncopyable_function.hh>
 
 #include "service/migration_manager.hh"
 #include "service/client_state.hh"

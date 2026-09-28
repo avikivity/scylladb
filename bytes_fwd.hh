@@ -8,13 +8,11 @@
 
 #pragma once
 
-#include <seastar/core/sstring.hh>
 #include <cstdint>
 #include <optional>
 
 #include "utils/mutable_view.hh"
 
-using namespace seastar;
 #include "seastarx.hh"
 
 using bytes = basic_sstring<int8_t, uint32_t, 31, false>;

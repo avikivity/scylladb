@@ -6,15 +6,9 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "ldap_role_manager.hh"
 
 #include <ldap.h>
-#include <seastar/core/seastar.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/net/dns.hh>
-#include <seastar/util/log.hh>
-#include <seastar/core/coroutine.hh>
 #include <vector>
 
 #include "common.hh"
@@ -27,6 +21,7 @@ import fmt;
 #include "utils/exponential_backoff_retry.hh"
 import boost;
 
+import fmt;
 namespace {
 
 logger mylog{"ldap_role_manager"}; // `log` is taken by math.

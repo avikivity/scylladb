@@ -10,9 +10,6 @@
 
 #pragma once
 
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/gate.hh>
-#include <seastar/rpc/rpc_types.hh>
 #include "locator/host_id.hh"
 #include "utils/atomic_vector.hh"
 #include "utils/UUID.hh"
@@ -28,9 +25,6 @@
 #include <optional>
 #include <chrono>
 #include <set>
-#include <seastar/core/metrics_registration.hh>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/scheduling.hh>
 #include "locator/token_metadata.hh"
 #include "locator/types.hh"
 #include "gms/gossip_address_map.hh"

@@ -38,15 +38,6 @@
 #include "utils/overloaded_functor.hh"
 #include "utils/rjson.hh"
 #include "utils/s3/client.hh"
-#include <seastar/core/coroutine.hh>
-#include <seastar/core/iostream.hh>
-#include <seastar/core/on_internal_error.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/switch_to.hh>
-#include <seastar/util/defer.hh>
-#include <seastar/util/log.hh>
 
 #include <algorithm>
 #include <array>

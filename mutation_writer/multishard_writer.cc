@@ -14,9 +14,6 @@
 #include "readers/foreign.hh"
 #include "readers/queue.hh"
 #include <vector>
-#include <seastar/core/future-util.hh>
-#include <seastar/core/queue.hh>
-#include <seastar/core/smp.hh>
 
 namespace mutation_writer {
 

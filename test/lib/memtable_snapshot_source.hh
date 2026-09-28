@@ -13,10 +13,6 @@
 #include "replica/memtable.hh"
 #include "utils/phased_barrier.hh"
 #include "test/lib/reader_concurrency_semaphore.hh"
-#include <seastar/core/circular_buffer.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/condition-variable.hh>
-#include <seastar/util/closeable.hh>
 
 // in-memory snapshottable mutation source.
 // Must be destroyed in a seastar thread.

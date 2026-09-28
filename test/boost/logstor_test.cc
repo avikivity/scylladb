@@ -16,13 +16,6 @@
 #include <map>
 #include <span>
 #include <vector>
-#include <seastar/core/memory.hh>
-#include <seastar/util/closeable.hh>
-#include <seastar/core/semaphore.hh>
-#include <seastar/core/format.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/util/memory-data-source.hh>
-#include <seastar/util/defer.hh>
 
 #include "mutation/canonical_mutation.hh"
 #include "replica/exceptions.hh"
@@ -43,7 +36,6 @@
 #include "db/schema_tables.hh"
 #include "gms/feature_service.hh"
 #include "init.hh"
-#include <seastar/core/simple-stream.hh>
 #include "partition_slice_builder.hh"
 #include "test/lib/logstor_test_utils.hh"
 #include "test/lib/mutation_assertions.hh"

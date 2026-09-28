@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "alternator/error.hh"
 #include "auth/common.hh"
 #include "utils/log.hh"
@@ -20,8 +19,8 @@ import fmt;
 #include "cql3/selection/selection.hh"
 #include "cql3/result_set.hh"
 #include "types/types.hh"
-#include <seastar/core/coroutine.hh>
 
+import fmt;
 namespace alternator {
 
 static logging::logger alogger("alternator-auth");

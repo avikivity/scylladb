@@ -10,10 +10,6 @@
 #include <algorithm>
 #include <exception>
 #include <ranges>
-#include <seastar/core/abort_source.hh>
-#include <seastar/coroutine/maybe_yield.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/core/on_internal_error.hh>
 #include "db/view/view_building_coordinator.hh"
 #include "db/view/view_build_status.hh"
 #include "locator/tablets.hh"

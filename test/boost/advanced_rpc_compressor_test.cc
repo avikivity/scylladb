@@ -6,14 +6,11 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <seastar/core/manual_clock.hh>
-#include <seastar/util/closeable.hh>
 #include "test/lib/random_utils.hh"
 #include "test/lib/scylla_test_case.hh"
 #include "message/advanced_rpc_compressor.hh"
 #include "message/advanced_rpc_compressor_protocol.hh"
 
-using namespace seastar;
 using namespace std::chrono_literals;
 
 static netw::dict_ptr make_dict(uint64_t timestamp, std::vector<std::byte> content = {}) {

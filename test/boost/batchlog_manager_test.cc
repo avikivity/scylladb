@@ -17,8 +17,6 @@
 #include "test/lib/error_injection.hh"
 #include "test/lib/log.hh"
 
-#include <seastar/core/future-util.hh>
-#include <seastar/core/shared_ptr.hh>
 #include "cql3/statements/batch_statement.hh"
 #include "cql3/query_processor.hh"
 #include "cql3/untyped_result_set.hh"

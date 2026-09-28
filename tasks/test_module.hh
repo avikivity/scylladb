@@ -12,8 +12,6 @@
 
 #include <unordered_map>
 
-#include <seastar/core/shared_ptr.hh>
-
 #include "task_manager.hh"
 #include "seastarx.hh"
 

@@ -10,7 +10,6 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <seastar/net/inet_address.hh>
 import boost;
 
 #undef SEASTAR_TESTING_MAIN
@@ -19,7 +18,6 @@ import boost;
 #include "test/lib/cql_test_env.hh"
 #include "test/lib/cql_assertions.hh"
 
-#include <seastar/core/future-util.hh>
 #include "transport/messages/result_message.hh"
 #include "types/vector.hh"
 #include "utils/assert.hh"

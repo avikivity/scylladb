@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <seastar/core/sharded.hh>
 #include "cql3/functions/user_function.hh"
 
 namespace lang {

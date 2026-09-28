@@ -10,8 +10,6 @@
 
 #include <functional>
 #include <filesystem>
-#include <seastar/core/file.hh>
-#include <seastar/util/bool_class.hh>
 #include "enum_set.hh"
 #include "seastarx.hh"
 

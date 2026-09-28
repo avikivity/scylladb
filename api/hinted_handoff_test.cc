@@ -10,8 +10,6 @@
 
 #ifndef SCYLLA_BUILD_MODE_RELEASE
 
-#include <seastar/core/coroutine.hh>
-
 #include "api/api.hh"
 #include "api/api-doc/hinted_handoff_test.json.hh"
 #include "hinted_handoff_test.hh"

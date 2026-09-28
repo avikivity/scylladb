@@ -15,11 +15,6 @@
 #include <span>
 #include <variant>
 #include <vector>
-#include <seastar/core/abort_source.hh>
-#include <seastar/core/future.hh>
-#include <seastar/core/shared_ptr.hh>
-#include <seastar/core/sstring.hh>
-#include <seastar/util/noncopyable_function.hh>
 #include "schema/schema_fwd.hh"
 #include "service_permit.hh"
 #include "utils/rjson.hh"

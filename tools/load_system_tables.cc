@@ -8,9 +8,6 @@
 
 #include "tools/load_system_tables.hh"
 
-#include <seastar/core/thread.hh>
-#include <seastar/util/closeable.hh>
-
 #include "utils/log.hh"
 #include "db/schema_tables.hh"
 #include "db/system_keyspace.hh"

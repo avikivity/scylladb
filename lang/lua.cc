@@ -15,7 +15,6 @@
 #include "utils/utf8.hh"
 #include "utils/ascii.hh"
 #include "utils/date.h"
-#include <seastar/core/align.hh>
 #include <lua.hpp>
 #include "seastarx.hh"
 
@@ -36,7 +35,6 @@ import boost;
 #    define LUA_505_PLUS(x...)
 #endif
 
-using namespace seastar;
 using namespace lua;
 
 static logging::logger lua_logger("lua");

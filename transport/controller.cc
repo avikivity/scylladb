@@ -12,11 +12,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "transport/controller.hh"
-#include <seastar/core/sharded.hh>
-#include <seastar/net/socket_defs.hh>
-#include <seastar/net/unix_address.hh>
-#include <seastar/core/file-types.hh>
-#include <seastar/core/with_scheduling_group.hh>
 #include "transport/server.hh"
 #include "service/memory_limiter.hh"
 #include "db/config.hh"
@@ -24,8 +19,6 @@
 #include "utils/log.hh"
 #include "cql3/query_processor.hh"
 #include "message/messaging_service.hh"
-
-using namespace seastar;
 
 namespace cql_transport {
 
@@ -211,7 +204,7 @@ future<> controller::start_listening_on_maintenance_socket(sharded<cql_server>& 
 
     if (_config.maintenance_socket_group.is_set()) {
         auto group_name = _config.maintenance_socket_group();
-        std::optional<struct group_details> grp = co_await seastar::getgrnam(group_name.c_str());
+        std::optional<seastar::group_details> grp = co_await seastar::getgrnam(group_name.c_str());
 
         if (!grp.has_value()) {
             throw std::runtime_error(format("Group id of {} not found. Make sure the group exists.", group_name));

@@ -8,7 +8,6 @@
 
 #include "alternator/http_compression.hh"
 #include "alternator/server.hh"
-#include <seastar/coroutine/maybe_yield.hh>
 #include <zlib.h>
 
 static logging::logger slogger("alternator-http-compression");

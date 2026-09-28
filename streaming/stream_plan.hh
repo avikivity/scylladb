@@ -11,7 +11,6 @@
 #pragma once
 
 #include "utils/UUID_gen.hh"
-#include <seastar/core/sstring.hh>
 #include "gms/inet_address.hh"
 #include "query/query-request.hh"
 #include "streaming/stream_fwd.hh"

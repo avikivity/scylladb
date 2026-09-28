@@ -9,7 +9,6 @@
 
 #include "dht/i_partitioner.hh"
 #include <functional>
-#include <seastar/coroutine/maybe_yield.hh>
 #include <optional>
 #include "dht/token.hh"
 #include "types.hh"
@@ -21,7 +20,6 @@
 #include "utils/small_vector.hh"
 #include <utility>
 #include <variant>
-#include <seastar/util/bool_class.hh>
 #include "replica/logstor/cache.hh"
 
 namespace replica::logstor {

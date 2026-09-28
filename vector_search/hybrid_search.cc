@@ -13,10 +13,6 @@
 #include "utils/chain_abort_source.hh"
 #include "utils/overloaded_functor.hh"
 
-#include <seastar/coroutine/as_future.hh>
-#include <seastar/coroutine/exception.hh>
-#include <seastar/coroutine/parallel_for_each.hh>
-
 #include <cmath>
 #include <map>
 #include <optional>

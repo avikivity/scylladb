@@ -11,8 +11,6 @@
 
 #include <functional>
 #include <memory>
-#include <seastar/core/future.hh>
-#include <seastar/core/sharded.hh>
 
 #include "schema/schema_fwd.hh"
 #include "seastarx.hh"

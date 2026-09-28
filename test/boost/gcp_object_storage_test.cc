@@ -16,18 +16,6 @@
 #include <filesystem>
 #include <boost/test/unit_test.hpp>
 
-#include <seastar/coroutine/parallel_for_each.hh>
-#include <seastar/core/thread.hh>
-#include <seastar/core/reactor.hh>
-#include <seastar/core/file.hh>
-#include <seastar/core/sleep.hh>
-#include <seastar/core/with_timeout.hh>
-#include <seastar/http/client.hh>
-#include <seastar/http/reply.hh>
-#include <seastar/http/request.hh>
-#include <seastar/util/short_streams.hh>
-#include <seastar/util/log.hh>
-
 #include "ent/encryption/symmetric_key.hh"
 #include "ent/encryption/encrypted_file_impl.hh"
 #include "test/lib/scylla_test_case.hh"
@@ -47,8 +35,6 @@
 #include "utils/rjson.hh"
 #include "utils/exceptions.hh"
 
-#include <seastar/core/metrics_api.hh>
-#include <seastar/util/defer.hh>
 #include "seastarx.hh"
 #include <seastar/testing/test_fixture.hh>
 import boost;
