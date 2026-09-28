@@ -12,9 +12,7 @@
 #include "utils/simple_hashers.hh"
 #include "utils/managed_bytes.hh"
 
-#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-#include <cryptopp/md5.h>
-#include <cryptopp/sha.h>
+import cryptopp;
 
 static_assert(Hasher<hasher>);
 
