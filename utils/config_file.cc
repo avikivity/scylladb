@@ -9,9 +9,10 @@
 
 #include <unordered_map>
 
-#include <yaml-cpp/yaml.h>
+import yaml_cpp;
 
 #include <ranges>
+#include <set>
 
 #include "config_file.hh"
 #include "config_file_impl.hh"

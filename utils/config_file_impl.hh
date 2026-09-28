@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <yaml-cpp/node/convert.h>
+import yaml_cpp;
 
 #include "config_file.hh"
 import boost;
