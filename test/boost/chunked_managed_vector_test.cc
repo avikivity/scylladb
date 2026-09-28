@@ -17,9 +17,7 @@
 #include "utils/lsa/chunked_managed_vector.hh"
 #include "utils/managed_ref.hh"
 #include "test/lib/log.hh"
-
-#include <boost/range/algorithm/equal.hpp>
-#include <boost/range/algorithm/reverse.hpp>
+import boost;
 
 using namespace logalloc;
 

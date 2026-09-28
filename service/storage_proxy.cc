@@ -44,8 +44,6 @@ import fmt;
 #include "db/system_keyspace.hh"
 #include "db/system_distributed_keyspace.hh"
 #include "exceptions/exceptions.hh"
-#include <boost/intrusive/list.hpp>
-#include <boost/outcome/result.hpp>
 #include "utils/assert.hh"
 #include "utils/chunked_vector.hh"
 #include "utils/latency.hh"
@@ -99,6 +97,7 @@ import fmt;
 #include "tools/build_info.hh"
 #include "utils/labels.hh"
 #include "debug.hh"
+import boost;
 
 namespace bi = boost::intrusive;
 

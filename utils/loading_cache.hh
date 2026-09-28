@@ -15,9 +15,6 @@
 #include <ranges>
 #include <algorithm>
 
-#include <boost/intrusive/list.hpp>
-#include <boost/intrusive/parent_from_member.hpp>
-
 #include <seastar/core/loop.hh>
 #include <seastar/core/timer.hh>
 #include <seastar/core/gate.hh>
@@ -27,6 +24,7 @@
 #include "utils/loading_shared_values.hh"
 #include "utils/chunked_vector.hh"
 #include "utils/log.hh"
+import boost;
 
 namespace bi = boost::intrusive;
 

@@ -8,7 +8,6 @@
 
 #include "utils/assert.hh"
 #include <iterator>
-#include <boost/regex.hpp>
 
 #include "cql3_type.hh"
 #include "cql3/util.hh"
@@ -22,6 +21,7 @@
 #include "types/list.hh"
 #include "types/vector.hh"
 #include "types/concrete_types.hh"
+import boost;
 
 namespace cql3 {
 

@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include <boost/dynamic_bitset.hpp>  // IWYU pragma: keep
 #include "cdc/log.hh"
 #include "replica/database_fwd.hh"
 #include "mutation/timestamp.hh"
+import boost;
 
 class mutation;
 

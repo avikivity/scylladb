@@ -9,8 +9,6 @@
 #include "test/lib/random_utils.hh"
 #include "test/lib/log.hh"
 
-#include <boost/range/algorithm/copy.hpp>
-
 #include "utils/assert.hh"
 #include "utils/reusable_buffer.hh"
 #include <seastar/core/manual_clock.hh>
@@ -18,6 +16,7 @@
 #include <seastar/util/later.hh>
 #include <seastar/core/coroutine.hh>
 #include <bit>
+import boost;
 
 using namespace seastar;
 

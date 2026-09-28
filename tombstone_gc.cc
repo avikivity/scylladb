@@ -7,7 +7,6 @@
  */
 
 #include <chrono>
-#include <boost/icl/interval.hpp>
 #include "schema/schema.hh"
 #include "gc_clock.hh"
 #include "tombstone_gc.hh"
@@ -21,6 +20,7 @@
 #include "gms/feature_service.hh"
 #include "compaction/compaction_manager.hh"
 #include <seastar/coroutine/maybe_yield.hh>
+import boost;
 
 extern logging::logger dblog;
 

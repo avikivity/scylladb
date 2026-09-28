@@ -5,6 +5,7 @@
 /*
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
+#include <typeindex>
 
 #include "init.hh"
 #include "gms/inet_address.hh"

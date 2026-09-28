@@ -26,11 +26,7 @@ import fmt;
 #include <functional>
 #include <iterator>
 #include <chrono>
-#include <boost/regex.hpp>
 #include <string>
-#include <boost/algorithm/string/trim_all.hpp>
-#include <boost/algorithm/string/case_conv.hpp>
-#include <boost/functional/hash.hpp>
 #include "service/raft/raft_group0_client.hh"
 #include "service/storage_service.hh"
 #include "service/topology_state_machine.hh"
@@ -67,6 +63,7 @@ import fmt;
 #include "utils/user_provided_param.hh"
 #include "sstable_dict_autotrainer.hh"
 #include "api/validate.hh"
+import boost;
 
 using namespace seastar::httpd;
 using namespace std::chrono_literals;

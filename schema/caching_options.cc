@@ -7,10 +7,10 @@
  */
 
 #include "caching_options.hh"
-#include <boost/lexical_cast.hpp>
 #include <map>
 #include "exceptions/exceptions.hh"
 #include "utils/rjson.hh"
+import boost;
 
 caching_options::caching_options(sstring k, sstring r, bool enabled)
         : _key_cache(k), _row_cache(r), _enabled(enabled) {

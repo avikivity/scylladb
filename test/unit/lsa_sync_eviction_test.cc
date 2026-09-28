@@ -20,6 +20,7 @@
 #include "utils/log.hh"
 
 #include <random>
+import boost;
 
 int main(int argc, char** argv) {
     namespace bpo = boost::program_options;

@@ -6,14 +6,13 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <boost/range/algorithm/heap_algorithm.hpp>
-
 #include "mutation_fragment.hh"
 #include "mutation_fragment_v2.hh"
 #include "keys/clustering_interval_set.hh"
 #include "utils/assert.hh"
 #include "utils/hashing.hh"
 #include "utils/xx_hasher.hh"
+import boost;
 
 partition_region parse_partition_region(std::string_view s) {
     if (s == "partition_start") {

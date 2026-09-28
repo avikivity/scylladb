@@ -58,7 +58,6 @@ import fmt;
 #include <seastar/core/loop.hh>
 #include <seastar/core/when_all.hh>
 #include <seastar/coroutine/maybe_yield.hh>
-#include <boost/range/algorithm/find_end.hpp>
 #include <string_view>
 #include <unordered_set>
 #include "service/storage_proxy.hh"
@@ -77,6 +76,7 @@ import fmt;
 #include "vector_search/vector_store_client.hh"
 #include "utils/simple_value_with_expiry.hh"
 #include "service/paxos/paxos_state.hh"
+import boost;
 
 using namespace std::chrono_literals;
 

@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <boost/intrusive/parent_from_member.hpp>
 #include <seastar/util/alloc_failure_injector.hh>
 #include <cassert>
 #include "utils/assert.hh"
@@ -16,6 +15,7 @@
 #include "utils/neat-object-id.hh"
 #include "utils/allocation_strategy.hh"
 import fmt;
+import boost;
 
 namespace intrusive_b {
 

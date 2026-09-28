@@ -11,14 +11,10 @@
 // Basic utilities which allow to start working with boost::outcome::result
 // in conjunction with our exception_container.
 
-#include <boost/outcome/bad_access.hpp>
-#include <boost/outcome/basic_result.hpp>
-#include <boost/outcome/config.hpp>
-#include <boost/outcome/policy/base.hpp>
-#include <boost/outcome/result.hpp>
 #include "utils/exception_container.hh"
+import boost;
 
-namespace bo = BOOST_OUTCOME_V2_NAMESPACE;
+namespace bo = boost::outcome_v2;
 
 namespace utils {
 

@@ -21,6 +21,7 @@
 #include "converting_mutation_partition_applier.hh"
 #include "types/concrete_types.hh"
 #include "types/user.hh"
+import boost;
 
 using namespace db;
 

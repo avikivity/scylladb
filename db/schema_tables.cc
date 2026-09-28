@@ -58,9 +58,6 @@ import fmt;
 #include <seastar/core/loop.hh>
 #include <seastar/core/on_internal_error.hh>
 
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/range/join.hpp>
-
 #include "compaction/compaction_strategy.hh"
 #include "view_info.hh"
 #include "cql_type_parser.hh"
@@ -84,6 +81,7 @@ import fmt;
 #include "cql3/column_specification.hh"
 #include "types/types.hh"
 #include "mutation/async_utils.hh"
+import boost;
 
 using namespace db;
 using namespace std::chrono_literals;

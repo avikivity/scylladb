@@ -10,7 +10,6 @@
 
 #include <deque>
 #include <functional>
-#include <boost/intrusive/list.hpp>
 #include <seastar/core/future.hh>
 #include <seastar/core/gate.hh>
 #include <seastar/core/condition-variable.hh>
@@ -20,6 +19,7 @@
 #include "reader_permit.hh"
 #include "utils/updateable_value.hh"
 #include "dht/i_partitioner_fwd.hh"
+import boost;
 
 namespace bi = boost::intrusive;
 

@@ -9,8 +9,6 @@
 
 import fmt;
 #include <random>
-#include <boost/range/algorithm_ext/push_back.hpp>
-#include <boost/range/combine.hpp>
 #include "compaction/compaction_garbage_collector.hh"
 #include "mutation_query.hh"
 #include "utils/assert.hh"
@@ -60,6 +58,7 @@ import fmt;
 #include "keys/clustering_key_filter.hh"
 #include "readers/from_mutations.hh"
 #include "readers/from_fragments.hh"
+import boost;
 
 using namespace std::chrono_literals;
 

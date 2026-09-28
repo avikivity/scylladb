@@ -7,14 +7,14 @@
 
 #pragma once
 
-#include <boost/signals2/dummy_mutex.hpp>
-#include <boost/signals2/signal_type.hpp>
 #include <type_traits>
 #include <concepts>
+#include <functional>
 
 #include <seastar/core/future.hh>
 
 #include "seastarx.hh"
+import boost;
 
 namespace bs2 = boost::signals2;
 

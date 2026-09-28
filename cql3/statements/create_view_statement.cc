@@ -15,8 +15,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <boost/regex.hpp>
-
 #include <seastar/core/coroutine.hh>
 #include "cql3/column_identifier.hh"
 #include "cql3/restrictions/statement_restrictions.hh"
@@ -33,6 +31,7 @@
 #include "service/migration_manager.hh"
 #include "replica/database.hh"
 #include "cql3/cql_config.hh"
+import boost;
 
 namespace cql3 {
 

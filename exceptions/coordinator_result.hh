@@ -9,9 +9,9 @@
 #pragma once
 
 #include "exceptions.hh"
-#include <boost/outcome/result.hpp>
 #include "utils/exception_container.hh"
 #include "utils/result.hh"
+import boost;
 
 namespace exceptions {
 

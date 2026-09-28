@@ -12,13 +12,12 @@
 #include "gms/feature.hh"
 #include "gms/feature_service.hh"
 #include "db/system_keyspace.hh"
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include "gms/gossiper.hh"
 #include "gms/i_endpoint_state_change_subscriber.hh"
 #include "utils/assert.hh"
 #include "utils/error_injection.hh"
 #include "service/storage_service.hh"
+import boost;
 
 namespace gms {
 

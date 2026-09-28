@@ -9,7 +9,6 @@
 #include "resource_manager.hh"
 #include "manager.hh"
 #include "utils/log.hh"
-#include <boost/range/algorithm/for_each.hpp>
 #include "utils/disk-error-handler.hh"
 #include "seastarx.hh"
 #include <seastar/core/sleep.hh>
@@ -17,6 +16,7 @@
 #include <seastar/core/when_all.hh>
 #include "utils/div_ceil.hh"
 #include "utils/lister.hh"
+import boost;
 
 namespace db {
 namespace hints {

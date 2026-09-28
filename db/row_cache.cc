@@ -16,7 +16,6 @@ import fmt;
 #include <seastar/coroutine/as_future.hh>
 #include <seastar/util/defer.hh>
 #include "replica/memtable.hh"
-#include <boost/version.hpp>
 #include <sys/sdt.h>
 #include "read_context.hh"
 #include "real_dirty_memory_accounter.hh"
@@ -30,6 +29,7 @@ import fmt;
 #include "utils/updateable_value.hh"
 #include "utils/labels.hh"
 #include "utils/chunked_vector.hh"
+import boost;
 
 namespace cache {
 

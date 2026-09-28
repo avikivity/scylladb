@@ -23,11 +23,11 @@ import fmt;
 #include "replica/compaction_group.hh"
 #include "utils/assert.hh"
 #include "utils/overloaded_functor.hh"
-#include <boost/program_options.hpp>
 #include <filesystem>
 #include <iostream>
 #include <seastar/util/defer.hh>
 #include "sstables/generation_type.hh"
+import boost;
 #include "sstables/storage.hh"
 
 static const sstring some_keyspace("ks");

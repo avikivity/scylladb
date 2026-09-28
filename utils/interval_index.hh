@@ -20,7 +20,7 @@
 #include <utility>
 #include <vector>
 
-#include <boost/container/static_vector.hpp>
+import boost;
 
 #include <seastar/util/defer.hh>
 

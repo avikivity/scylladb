@@ -9,8 +9,6 @@
 import fmt;
 #include "db/consistency_level_type.hh"
 #include "utils/assert.hh"
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
 #include <json/json.h>
 
 #include "test/lib/cql_test_env.hh"
@@ -37,6 +35,7 @@ import fmt;
 #include <seastar/core/sleep.hh>
 #include <seastar/core/sharded.hh>
 #include "seastarx.hh"
+import boost;
 
 static const sstring table_name = "cf";
 

@@ -11,7 +11,6 @@
 #include "audit/audit_rule.hh"
 #include "seastarx.hh"
 #include "utils/hash.hh"
-#include <boost/dynamic_bitset.hpp>
 #include <seastar/core/future.hh>
 #include <seastar/core/sstring.hh>
 
@@ -20,6 +19,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+import boost;
 
 namespace audit {
 

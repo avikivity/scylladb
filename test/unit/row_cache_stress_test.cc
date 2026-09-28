@@ -6,7 +6,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
 #include "seastarx.hh"
 #include "test/lib/simple_schema.hh"
 #include "test/lib/log.hh"
@@ -21,6 +20,8 @@ import fmt;
 #include "test/lib/memtable_snapshot_source.hh"
 #include <seastar/core/reactor.hh>
 
+import fmt;
+import boost;
 static thread_local bool cancelled = false;
 
 using namespace std::chrono_literals;

@@ -12,6 +12,7 @@
 #include <boost/test/unit_test.hpp>
 #include "utils/histogram.hh"
 #include <algorithm>
+#include <iterator>
 #include <sstream>
 
 using duration = utils::time_estimated_histogram::duration;

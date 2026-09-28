@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+#include <iomanip>
 #include "types/json_utils.hh"
 #include "types/concrete_types.hh"
 #include "mutation/counters.hh"
@@ -22,8 +23,7 @@
 #include "exceptions/exceptions.hh"
 #include <limits>
 #include <utility>
-#include <boost/algorithm/string/trim_all.hpp>
-#include <boost/algorithm/string.hpp>
+import boost;
 
 static inline bool is_control_char(char c) {
     return c >= 0 && c <= 0x1F;

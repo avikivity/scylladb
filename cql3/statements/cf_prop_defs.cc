@@ -30,8 +30,7 @@
 #include "db/config.hh"
 #include "db/cluster_config_registry.hh"
 #include "cql3/statements/cluster_config_props.hh"
-
-#include <boost/algorithm/string/predicate.hpp>
+import boost;
 
 namespace cql3 {
 

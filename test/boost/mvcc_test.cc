@@ -8,7 +8,6 @@
 
 
 #include "utils/assert.hh"
-#include <boost/range/size.hpp>
 #include <seastar/core/thread.hh>
 #include <seastar/util/defer.hh>
 
@@ -26,6 +25,7 @@
 #include "test/lib/log.hh"
 #include "test/boost/range_tombstone_list_assertions.hh"
 #include "real_dirty_memory_accounter.hh"
+import boost;
 
 using namespace std::chrono_literals;
 

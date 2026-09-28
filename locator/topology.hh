@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <boost/functional/hash.hpp>
 #include <cstddef>
 #include <functional>
 #include <unordered_set>
@@ -27,6 +26,7 @@
 
 using namespace seastar;
 #include "seastarx.hh"
+import boost;
 
 struct sort_by_proximity_topology;
 

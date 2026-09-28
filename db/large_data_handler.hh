@@ -14,7 +14,6 @@
 #include <type_traits>
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/future.hh>
-#include <boost/intrusive/set.hpp>
 #include "seastarx.hh"
 #include "bytes.hh"
 #include "utils/managed_bytes.hh"
@@ -28,6 +27,7 @@
 #include "utils/updateable_value.hh"
 #include "utils/pluggable.hh"
 #include "db/large_data_cache_tracker.hh"
+import boost;
 
 namespace sstables {
 class sstable;

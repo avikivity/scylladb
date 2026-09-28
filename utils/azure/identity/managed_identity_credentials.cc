@@ -7,8 +7,6 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-#include <boost/regex.hpp>
-
 #include <seastar/net/dns.hh>
 #include <seastar/core/gate.hh>
 #include <seastar/core/sleep.hh>
@@ -18,6 +16,7 @@
 #include "utils/rest/client.hh"
 #include "exceptions.hh"
 #include "managed_identity_credentials.hh"
+import boost;
 
 namespace azure {
 

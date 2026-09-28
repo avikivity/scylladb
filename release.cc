@@ -11,10 +11,8 @@
 #include "build_mode.hh"
 #include <vector>
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-
 #include <seastar/core/format.hh>
+import boost;
 
 static const char scylla_version_str[] = SCYLLA_VERSION;
 static const char scylla_release_str[] = SCYLLA_RELEASE;

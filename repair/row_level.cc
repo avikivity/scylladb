@@ -36,7 +36,6 @@ import fmt;
 #include <algorithm>
 #include <random>
 #include <optional>
-#include <boost/intrusive/list.hpp>
 #include "gms/i_endpoint_state_change_subscriber.hh"
 #include "gms/gossiper.hh"
 #include "repair/row_level.hh"
@@ -67,6 +66,7 @@ import fmt;
 #include "utils/error_injection.hh"
 #include "locator/tablets.hh"
 #include "gms/feature_service.hh"
+import boost;
 
 extern logging::logger rlogger;
 

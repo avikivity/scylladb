@@ -29,11 +29,6 @@ import fmt;
 #include "utils/error_injection.hh"
 #include "utils/from_chars_exactly.hh"
 
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/range/algorithm_ext.hpp>
-
 #include <limits>
 
 #include <seastar/core/gate.hh>
@@ -55,6 +50,7 @@ import fmt;
 #include "idl/node_ops.dist.hh"
 #include "utils/user_provided_param.hh"
 #include "utils/labels.hh"
+import boost;
 
 using namespace std::chrono_literals;
 

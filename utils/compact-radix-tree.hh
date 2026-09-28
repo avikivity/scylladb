@@ -14,8 +14,8 @@
 #include "utils/assert.hh"
 #include "utils/allocation_strategy.hh"
 #include "utils/array-search.hh"
-#include <boost/intrusive/parent_from_member.hpp>
 import fmt;
+import boost;
 
 class size_calculator;
 

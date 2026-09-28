@@ -22,8 +22,6 @@ import fmt;
 #include <seastar/core/shard_id.hh>
 #include <seastar/core/sharded.hh>
 
-#include <boost/range/join.hpp>
-
 #include "absl-flat_hash_map.hh"
 #include "service/storage_service.hh"
 #include "mutation/frozen_mutation.hh"
@@ -58,6 +56,7 @@ import fmt;
 #include "types/list.hh"
 #include "types/set.hh"
 #include "mutation/async_utils.hh"
+import boost;
 
 namespace db {
 

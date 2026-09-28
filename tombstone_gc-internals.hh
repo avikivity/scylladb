@@ -4,7 +4,7 @@
 #pragma once
 
 #include "tombstone_gc.hh"
-#include <boost/icl/interval_map.hpp>
+import boost;
 
 /**
  * Holds a repair history entry for a given token range.

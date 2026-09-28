@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
-import fmt;
+#include <iomanip>
 #include <limits>
 #include <memory>
 #include <stdexcept>
