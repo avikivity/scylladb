@@ -7,6 +7,7 @@
  */
 
 #include "expression.hh"
+#include "cql3/query_options.hh"
 
 #include "cql3/expr/evaluate.hh"
 #include "cql3/expr/expr-utils.hh"

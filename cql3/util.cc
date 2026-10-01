@@ -6,6 +6,7 @@
 
 #include "utils/assert.hh"
 #include "util.hh"
+#include "cql3/do_with_parser.hh"
 #include "cql_config.hh"
 #include "cql3/expr/expr-utils.hh"
 #include "db_clock.hh"
@@ -239,6 +240,33 @@ sstring rename_columns_in_where_clause(const std::string_view& where_clause, std
     }
 
     return relations_to_where_clause(expr::conjunction{std::move(new_relations)});
+}
+
+
+std::unique_ptr<statements::raw::parsed_statement> parse_statement(utils::chunked_string_view cql, dialect d) {
+    return do_with_parser(cql, d, std::mem_fn(&cql3_parser::CqlParser::query));
+}
+
+std::vector<std::unique_ptr<statements::raw::parsed_statement>> parse_statements(utils::chunked_string_view cql, dialect d) {
+    return do_with_parser(cql, d, std::mem_fn(&cql3_parser::CqlParser::queries));
+}
+
+std::unique_ptr<statements::raw::select_statement> parse_select_statement(utils::chunked_string_view cql, dialect d) {
+    return do_with_parser(cql, d, std::mem_fn(&cql3_parser::CqlParser::selectStatement));
+}
+
+expr::expression parse_term(utils::chunked_string_view cql, dialect d) {
+    return do_with_parser(cql, d, std::mem_fn(&cql3_parser::CqlParser::term));
+}
+
+::shared_ptr<column_identifier::raw> parse_column_identifier(utils::chunked_string_view cql, dialect d) {
+    return do_with_parser(cql, d, std::mem_fn(&cql3_parser::CqlParser::cident));
+}
+
+::shared_ptr<cql3_type::raw> parse_internal_type(utils::chunked_string_view cql, dialect d) {
+    return do_with_parser(cql, d, [] (cql3_parser::CqlParser& parser) {
+        return parser.comparator_type(true);
+    });
 }
 
 }

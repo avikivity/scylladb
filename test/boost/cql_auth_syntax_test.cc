@@ -13,7 +13,7 @@
 #include <boost/test/unit_test.hpp>
 #include <seastar/core/shared_ptr.hh>
 
-#include "cql3/CqlParser.hpp"
+#include "cql3/do_with_parser.hh"
 #include "cql3/role_options.hh"
 #include "cql3/statements/raw/parsed_statement.hh"
 #include "cql3/util.hh"

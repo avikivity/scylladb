@@ -20,6 +20,7 @@
 #include "index/target_parser.hh"
 #include "types/concrete_types.hh"
 #include "types/types.hh"
+#include "utils/rjson.hh"
 #include <ranges>
 #include <seastar/core/sstring.hh>
 #include <boost/algorithm/string.hpp>
@@ -385,7 +386,7 @@ bool vector_index::is_local(const sstring& target_string) {
 }
 
 bool vector_index::is_vector_index_on_column(const index_metadata& im, const sstring& target_name) {
-    auto target_it = im.options().find(cql3_parser::index_target::target_option_name);
+    auto target_it = im.options().find(cql3::statements::index_target::target_option_name);
     return target_it != im.options().end() && secondary_index_manager::is_custom_index<vector_index>(im)
             && get_target_column(target_it->second) == target_name;
 }

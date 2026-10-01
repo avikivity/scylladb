@@ -15,8 +15,8 @@
 #include <seastar/core/sstring.hh>
 
 #include "cql3/column_identifier.hh"
-#include "cql3/CqlParser.hpp"
-#include "cql3/error_collector.hh"
+#include "cql3/cql3_type.hh"
+#include "cql3/statements/raw/parsed_statement.hh"
 #include "cql3/statements/raw/select_statement.hh"
 #include "cql3/dialect.hh"
 
@@ -33,16 +33,23 @@ namespace cql3 {
 namespace util {
 
 
-void do_with_parser_impl(utils::chunked_string_view cql, dialect d, noncopyable_function<void (cql3_parser::CqlParser& p)> func);
+// Type-erased entry points into the CQL parser. They keep the generated parser,
+// and with it the ANTLR3 runtime, out of the translation units that only need
+// to parse something. See cql3/do_with_parser.hh for direct access to the parser.
 
-template <typename Func, typename Result = cql3_parser::unwrap_uninitialized_t<std::invoke_result_t<Func, cql3_parser::CqlParser&>>>
-Result do_with_parser(utils::chunked_string_view cql, dialect d, Func&& f) {
-    std::optional<Result> ret;
-    do_with_parser_impl(cql, d, [&] (cql3_parser::CqlParser& parser) {
-        ret.emplace(f(parser));
-    });
-    return std::move(*ret);
-}
+std::unique_ptr<statements::raw::parsed_statement> parse_statement(utils::chunked_string_view cql, dialect d);
+
+std::vector<std::unique_ptr<statements::raw::parsed_statement>> parse_statements(utils::chunked_string_view cql, dialect d);
+
+std::unique_ptr<statements::raw::select_statement> parse_select_statement(utils::chunked_string_view cql, dialect d);
+
+expr::expression parse_term(utils::chunked_string_view cql, dialect d);
+
+::shared_ptr<column_identifier::raw> parse_column_identifier(utils::chunked_string_view cql, dialect d);
+
+// Parses a type as stored in the schema tables (the parser's comparator_type
+// rule in internal mode).
+::shared_ptr<cql3_type::raw> parse_internal_type(utils::chunked_string_view cql, dialect d);
 
 sstring relations_to_where_clause(const expr::expression& e);
 
