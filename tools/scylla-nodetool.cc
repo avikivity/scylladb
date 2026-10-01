@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+#include <string.h> // strerror_r()
 import fmt;
 #include <algorithm>
 #include <cctype>

@@ -8,10 +8,7 @@
 
 #pragma once
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
-#include <xxhash.h>
-#pragma GCC diagnostic pop
+import xxhash;
 
 #include "utils/hashing.hh"
 

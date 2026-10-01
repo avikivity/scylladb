@@ -19,11 +19,8 @@
 #include <random>
 #include <vector>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
-#include <xxhash.h>
+import xxhash;
 #include "seastarx.hh"
-#pragma GCC diagnostic pop
 
 namespace replica::logstor {
 
