@@ -14,7 +14,10 @@
 #include "cql3/description.hh"
 #include "scalar_function.hh"
 #include "lang/lua.hh"
-#include "lang/wasm.hh"
+
+namespace wasm {
+struct context;
+}
 
 namespace cql3 {
 namespace functions {
@@ -34,7 +37,12 @@ public:
         lua::runtime_config cfg;
     };
 
-    using context = std::variant<lua_context, wasm::context>;
+    // Held by pointer so that this header doesn't need lang/wasm.hh, which
+    // brings in the generated Rust bindings and their textual standard
+    // library includes. std::shared_ptr captures the deleter where the
+    // context is created (lang/manager.cc), so destroying a user_function
+    // doesn't need the complete type.
+    using context = std::variant<lua_context, std::shared_ptr<wasm::context>>;
 
 private:
     std::vector<sstring> _arg_names;
