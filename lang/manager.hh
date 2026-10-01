@@ -9,21 +9,17 @@
 #pragma once
 
 #include <seastar/core/sharded.hh>
-#include "rust/wasmtime_bindings.hh"
-#include "lang/wasm_instance_cache.hh"
-#include "lang/wasm_alien_thread_runner.hh"
 #include "cql3/functions/user_function.hh"
-
-namespace wasm {
-struct context;
-}
 
 namespace lang {
 
 class manager : public seastar::peering_sharded_service<manager> {
-    std::shared_ptr<rust::Box<wasmtime::Engine>> _engine;
-    std::optional<wasm::instance_cache> _instance_cache;
-    std::shared_ptr<wasm::alien_thread_runner> _alien_runner;
+    // The Wasm engine, instance cache and alien thread runner. They are
+    // defined in lang/manager.cc, so that this header doesn't need the
+    // generated Rust bindings, which include standard library headers
+    // textually.
+    struct wasm_runtime;
+    std::unique_ptr<wasm_runtime> _wasm;
 
 public:
     const uint64_t wasm_yield_fuel;
@@ -52,11 +48,10 @@ public:
         lua_config lua;
     };
     manager(config);
+    ~manager();
     future<> start();
     future<> stop();
-    void remove(const db::functions::function_name& name, const std::vector<data_type>& arg_types) noexcept {
-        _instance_cache->remove(name, arg_types);
-    }
+    void remove(const db::functions::function_name& name, const std::vector<data_type>& arg_types) noexcept;
 
     using context = std::optional<cql3::functions::user_function::context>;
     future<context> create(sstring language, sstring name, const std::vector<sstring>& arg_names, std::string script);

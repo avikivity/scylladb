@@ -61,13 +61,13 @@ managed_bytes_opt user_function::execute(std::span<const managed_bytes_opt> para
             }
             return lua::run_script(lua::bitcode_view{ctx.bitcode}, values, return_type(), ctx.cfg).get();
         },
-        [&] (wasm::context& ctx) -> bytes_opt {
+        [&] (std::shared_ptr<wasm::context>& ctx) -> bytes_opt {
             // FIXME: change wasm::run_script to accept fragmented buffers
             auto linear_parameters = parameters
                     | std::views::transform([] (const managed_bytes_opt& parameter) { return to_bytes_opt(parameter); })
                     | std::ranges::to<std::vector>();
             try {
-                return wasm::run_script(name(), ctx, arg_types(), linear_parameters, return_type(), _called_on_null_input).get();
+                return wasm::run_script(name(), *ctx, arg_types(), linear_parameters, return_type(), _called_on_null_input).get();
             } catch (const wasm::exception& e) {
                 throw exceptions::invalid_request_exception(format("UDF error: {}", e.what()));
             }
