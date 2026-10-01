@@ -11,6 +11,7 @@
 #include "cql3/statements/view_prop_defs.hh"
 #include "exceptions/exceptions.hh"
 #include "utils/assert.hh"
+#include "cql3/selection/raw_selector.hh"
 #include <unordered_set>
 #include <vector>
 

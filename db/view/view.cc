@@ -86,6 +86,10 @@
 #include "locator/host_id.hh"
 #include "cartesian_product.hh"
 #include "idl/view.dist.hh"
+#include "cql3/query_options.hh"
+#include "cql3/query_processor.hh"
+#include "cql3/selection/selection.hh"
+#include "service/query_state.hh"
 
 using namespace std::chrono_literals;
 

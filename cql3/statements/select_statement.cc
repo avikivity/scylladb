@@ -21,6 +21,7 @@
 #include "cql3/statements/raw/select_statement.hh"
 #include "cql3/query_processor.hh"
 #include "cql3/statements/prune_materialized_view_statement.hh"
+#include "cql3/selection/raw_selector.hh"
 
 #include "exceptions/exceptions.hh"
 #include <seastar/core/future.hh>
@@ -2867,7 +2868,7 @@ std::unique_ptr<cql3::statements::raw::select_statement> build_select_statement(
     }
     // The database is talking to itself here, over a statement which was already validated when the
     // user submitted it, so the client-facing dialect limits must not be applied again.
-    return do_with_parser(out.str(), internal_dialect(), std::mem_fn(&cql3_parser::CqlParser::selectStatement));
+    return util::parse_select_statement(out.str(), internal_dialect());
 }
 
 }

@@ -15,7 +15,6 @@
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/thread.hh>
 
-#include "cql3/CqlParser.hpp"
 #include "exceptions/exceptions.hh"
 #include "service/raft/raft_group0_client.hh"
 

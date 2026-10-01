@@ -9,6 +9,7 @@
 #include <seastar/core/on_internal_error.hh>
 #include <map>
 #include "bytes_ostream.hh"
+#include "cql3/statements/index_target.hh"
 #include "cql3/description.hh"
 #include "db/tablet_options.hh"
 #include "db/view/view.hh"
@@ -1028,7 +1029,7 @@ static void describe_index_columns(fragmented_ostringstream& os, bool is_local, 
     auto target_str = secondary_index::target_parser::get_target_column_name_from_string(
         index_metadata.options().at(cql3::statements::index_target::target_option_name)
     );
-    auto base_column_name = cql3_parser::index_target::column_name_from_target_string(target_str);
+    auto base_column_name = cql3::statements::index_target::column_name_from_target_string(target_str);
     auto base_column = base_schema->get_column_definition(to_bytes(base_column_name));
     if (!base_column) {
         on_internal_error(dblog, format("Couldn't find base column {} in table {} for index {}", base_column_name, base_schema->cf_name(), index_name));

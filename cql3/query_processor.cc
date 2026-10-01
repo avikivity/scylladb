@@ -9,6 +9,9 @@
  */
 
 #include "cql3/query_processor.hh"
+#include "cql3/statements/alter_keyspace_statement.hh"
+#include "cql3/statements/schema_altering_statement.hh"
+#include "transport/messages/result_message.hh"
 
 #include <seastar/core/metrics.hh>
 #include <seastar/core/memory.hh>
@@ -24,7 +27,6 @@
 #include "service/raft/raft_group0_client.hh"
 #include "service/storage_service.hh"
 #include "service/strong_consistency/coordinator.hh"
-#include "cql3/CqlParser.hpp"
 #include "cql3/statements/batch_statement.hh"
 #include "cql3/statements/modification_statement.hh"
 #include "cql3/util.hh"
@@ -853,7 +855,7 @@ query_processor::parse_statement(utils::chunked_string_view query, dialect d) {
                 }
             });
         }
-        auto statement = util::do_with_parser(query, d, std::mem_fn(&cql3_parser::CqlParser::query));
+        auto statement = util::parse_statement(query, d);
         if (!statement) {
             throw exceptions::syntax_exception("Parsing failed");
         }
@@ -871,7 +873,7 @@ query_processor::parse_statement(utils::chunked_string_view query, dialect d) {
 std::vector<std::unique_ptr<raw::parsed_statement>>
 query_processor::parse_statements(utils::chunked_string_view queries, dialect d) {
     try {
-        auto statements = util::do_with_parser(queries, d, std::mem_fn(&cql3_parser::CqlParser::queries));
+        auto statements = util::parse_statements(queries, d);
         if (statements.empty()) {
             throw exceptions::syntax_exception("Parsing failed");
         }

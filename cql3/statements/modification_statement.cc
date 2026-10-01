@@ -19,6 +19,7 @@
 #include "cql3/util.hh"
 #include "validation.hh"
 #include "db/consistency_level_validations.hh"
+#include "cql3/operation.hh"
 #include <optional>
 #include <seastar/core/shared_ptr.hh>
 #include "transport/messages/result_message.hh"
