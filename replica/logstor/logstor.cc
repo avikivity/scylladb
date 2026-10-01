@@ -15,11 +15,8 @@
 #include "utils/managed_bytes.hh"
 #include <random>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
-#include <xxhash.h>
+import xxhash;
 #include "seastarx.hh"
-#pragma GCC diagnostic pop
 
 namespace replica::logstor {
 

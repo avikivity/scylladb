@@ -7,6 +7,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+#include <string.h> // strsignal()
 #include "utils/rjson.hh"
 #include <coroutine>
 #include "utils/exceptions.hh"

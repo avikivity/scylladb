@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: LicenseRef-ScyllaDB-Source-Available-1.1
  */
 
+#include <strings.h> // strcasecmp()
 #include "api/api-doc/error_injection.json.hh"
 #include "api/api_init.hh"
 #include "api/utils.hh"

@@ -8,7 +8,7 @@
 
 import fmt;
 #include <seastar/testing/random.hh>
-#include <xxhash.h>
+import xxhash;
 #include "readers/from_mutations.hh"
 #include "schema/schema_builder.hh"
 #include "sstables/sstable_writer.hh"

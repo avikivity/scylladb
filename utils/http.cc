@@ -6,6 +6,7 @@
  * Copyright (C) 2025-present ScyllaDB
  */
 
+#include <strings.h> // strcasecmp()
 #include "http.hh"
 #include "rest/client.hh"
 

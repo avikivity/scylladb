@@ -11,10 +11,7 @@
 #include "bytes_fwd.hh"
 #include "utils/serialization.hh"
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
-#include <xxhash.h>
-#pragma GCC diagnostic pop
+import xxhash;
 
 #include <array>
 

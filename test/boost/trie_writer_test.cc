@@ -8,7 +8,7 @@
 
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/testing/test_case.hh>
-#include <xxhash.h>
+import xxhash;
 #include <numeric>
 #include "test/lib/log.hh"
 #include "test/lib/test_utils.hh"
