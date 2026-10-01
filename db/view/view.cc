@@ -319,7 +319,6 @@ bool clustering_prefix_matches(data_dictionary::database db, const schema& base,
         ck_columns.push_back(&column);
     }
     auto selection = cql3::selection::selection::for_columns(base.shared_from_this(), ck_columns);
-    uint64_t zero = 0;
     auto dummy_options = cql3::query_options({ });
     // FIXME: pass nullptrs for some of  these dummies
     return cql3::expr::is_satisfied_by(
@@ -2577,7 +2576,6 @@ static future<> announce_with_raft(
         as.check();
 
         auto guard = co_await group0_client.start_operation(as);
-        auto timestamp = guard.write_timestamp();
 
         auto mut = co_await mutation_gen(guard.write_timestamp());
         utils::chunked_vector<canonical_mutation> cmuts;
@@ -2891,7 +2889,6 @@ future<> view_builder::generate_mutations_on_node_left(replica::database& db, db
     // When a node is removed, we delete all its rows from the view_build_status table together with
     // the topology update operation.
 
-    auto& qp = sys_ks.query_processor();
     muts.reserve(muts.size() + db.get_views().size());
     // We expect the table to have a row for each existing view, so generate delete mutations for all views.
     for (auto& view : db.get_views()) {

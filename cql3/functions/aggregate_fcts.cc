@@ -327,21 +327,6 @@ aggregate_fcts::make_count_function(data_type input_type) {
         });
 }
 
-// Drops the first arg type from the types declaration (which denotes the accumulator)
-// in order to compute the actual type of given user-defined-aggregate (UDA)
-static std::vector<data_type> state_arg_types_to_uda_arg_types(const std::vector<data_type>& arg_types) {
-    if(arg_types.size() < 2) {
-        on_internal_error(cql3::functions::log, "State function for user-defined aggregates needs at least two arguments");
-    }
-    std::vector<data_type> types;
-    types.insert(types.end(), std::next(arg_types.begin()), arg_types.end());
-    return types;
-}
-
-static data_type uda_return_type(const ::shared_ptr<scalar_function>& ffunc, const ::shared_ptr<scalar_function>& sfunc) {
-    return ffunc ? ffunc->return_type() : sfunc->return_type();
-}
-
 user_aggregate::user_aggregate(function_name fname, managed_bytes_opt initcond, ::shared_ptr<scalar_function> sfunc, ::shared_ptr<scalar_function> reducefunc, ::shared_ptr<scalar_function> finalfunc)
         : aggregate_function(db::functions::stateless_aggregate_function{
                 .name = fname,

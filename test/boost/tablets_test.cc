@@ -9,6 +9,7 @@
 
 
 #include "utils/UUID.hh"
+#include "cql3/statements/ks_prop_defs.hh"
 #include <boost/test/tools/old/interface.hpp>
 #include <seastar/core/shard_id.hh>
 #include <seastar/coroutine/as_future.hh>
@@ -2486,7 +2487,7 @@ SEASTAR_THREAD_TEST_CASE(test_no_conflicting_internode_and_intra_merge_colocatio
         // RackB: NodeC (balanced, with intra-node misalignment for co-location)
         auto rackA = topo.rack();
         auto hostA = topo.add_node(node_state::normal, 2, rackA);
-        auto hostB = topo.add_node(node_state::normal, 2, rackA);
+        topo.add_node(node_state::normal, 2, rackA);
 
         auto rackB = topo.start_new_rack();
         auto hostC = topo.add_node(node_state::normal, 2, rackB);
@@ -2991,7 +2992,7 @@ SEASTAR_THREAD_TEST_CASE(test_colocation_skipped_on_excluded_nodes) {
         auto host1 = topo.add_node(node_state::normal, 2, rack1);
 
         // host2 has 1 shard so that rack2 doesn't need co-location and if any, it will be on host1
-        auto host2 = topo.add_node(node_state::normal, 1, rack2);
+        topo.add_node(node_state::normal, 1, rack2);
 
         auto ks_name = add_keyspace_racks(e, {{topo.dc(), {rack1.rack, rack2.rack}}}, 8);
         auto table1 = add_table(e, ks_name).get();
@@ -3039,7 +3040,7 @@ SEASTAR_THREAD_TEST_CASE(test_no_intranode_migration_on_draining_node) {
         // host which is decommissioned has more shards so that it has spare streaming capacity
         // to be used by potential intra-node migration.
         auto host1 = topo.add_node(node_state::normal, 5, rack1);
-        auto host2 = topo.add_node(node_state::normal, 1, rack1);
+        topo.add_node(node_state::normal, 1, rack1);
 
         auto ks_name = add_keyspace_racks(e, {{topo.dc(), {rack1.rack}}}, 16);
         auto table1 = add_table(e, ks_name).get();
@@ -3401,11 +3402,11 @@ SEASTAR_THREAD_TEST_CASE(test_replacing_last_node_in_rack_with_rack_list_rf) {
         auto rack2 = topo.start_new_rack();
         auto dc = topo.dc();
 
-        auto host1 = topo.add_node(node_state::normal, 1, rack1);
+        topo.add_node(node_state::normal, 1, rack1);
         auto host2 = topo.add_node(node_state::normal, 1, rack2);
 
         auto ks_name = add_keyspace_racks(e, {{dc, {rack1.rack, rack2.rack}}});
-        auto table = add_table(e, ks_name).get();
+        add_table(e, ks_name).get();
 
         topo.set_node_state(host2, node_state::left);
 
@@ -3427,9 +3428,9 @@ SEASTAR_THREAD_TEST_CASE(test_per_shard_goal_shrinks_respecting_rack_allocation)
         auto rack3 = topo.start_new_rack();
         auto dc = topo.dc();
 
-        auto host1 = topo.add_node(node_state::normal, 1, rack1);
-        auto host2 = topo.add_node(node_state::normal, 1, rack2);
-        auto host3 = topo.add_node(node_state::normal, 1, rack3);
+        topo.add_node(node_state::normal, 1, rack1);
+        topo.add_node(node_state::normal, 1, rack2);
+        topo.add_node(node_state::normal, 1, rack3);
 
         auto& stats = topo.get_shared_load_stats();
         auto ks1 = add_keyspace_racks(e, {{dc, {rack1.rack}}});
@@ -5266,9 +5267,9 @@ SEASTAR_THREAD_TEST_CASE(test_load_balancer_ignores_hosts_with_incomplete_stats)
         scoped_logger_level lb_log("load_balancer", seastar::log_level::debug);
 
         topology_builder topo(e);
-        auto host1 = topo.add_node(node_state::normal, 2);
+        topo.add_node(node_state::normal, 2);
         auto host2 = topo.add_node(node_state::normal, 2);
-        auto host3 = topo.add_node(node_state::normal, 2);
+        topo.add_node(node_state::normal, 2);
 
         auto ks_name = add_keyspace(e, {{topo.dc(), 1}}, 16);
         auto table1 = add_table(e, ks_name).get();
@@ -7706,7 +7707,6 @@ SEASTAR_THREAD_TEST_CASE(test_tablets_describe_ring) {
     do_with_cql_env_thread([] (auto& e) {
         topology_builder topo(e);
 
-        auto& db = e.local_db();
         auto& ss = e.get_storage_service().local();
         auto& gossiper = ss.gossiper();
         auto& am = gossiper.get_mutable_address_map();
@@ -8051,7 +8051,7 @@ SEASTAR_THREAD_TEST_CASE(test_load_balancing_with_dropped_table) {
         unsigned shard_count = 2;
         auto host1 = topo.add_node(node_state::normal, shard_count);
         auto host2 = topo.add_node(node_state::normal, shard_count);
-        auto host3 = topo.add_node(node_state::normal, shard_count);
+        topo.add_node(node_state::normal, shard_count);
 
         auto ks_name = add_keyspace(e, {{topo.dc(), 1}}, 4);
         auto table1 = add_table(e, ks_name).get();
@@ -8311,7 +8311,7 @@ SEASTAR_THREAD_TEST_CASE(test_migration_target_pow2_near_goal) {
         // With goal=10, RF=1, 1 shard/node: budget is 10 tablets/shard.
         // Create the table with 8 tablets to leave very little room.
         auto ks_pressure = add_keyspace(e, {{topo.dc(), rf}}, 8);
-        auto t_pressure = add_table(e, ks_pressure).get();
+        add_table(e, ks_pressure).get();
 
         // Create a reference table in a separate keyspace under the same
         // pressure conditions. Read its tablet count, then drop it to avoid
@@ -8375,7 +8375,6 @@ SEASTAR_THREAD_TEST_CASE(test_migration_target_pow2_from_size) {
             32ULL * 1024 * 1024 * 1024,   // 32 GiB
         };
 
-        auto& stm = e.shared_token_metadata().local();
 
         for (auto S : test_sizes) {
             testlog.info("Testing size_per_table parity with size = {} bytes", S);
